@@ -204,7 +204,8 @@ router.get('/', authenticate, (req, res) => {
     if (!user) continue;
 
     const startOvertime = user.start_overtime || 0;
-    const userFrom = clampFrom(mainRange.from, getEarliestTargetDate(db, uid));
+    const earliest = getEarliestTargetDate(db, uid);
+    const userFrom = clampFrom(mainRange.from, earliest);
 
     // Liegt der gesamte Zeitraum vor der User-Erstellung? → alles 0
     if (userFrom > mainRange.to) {
@@ -217,6 +218,7 @@ router.get('/', authenticate, (req, res) => {
       continue;
     }
 
+    // Ist/Soll für den gewählten Zeitraum
     const entries = db.prepare(
       'SELECT date, time_from, time_to, break_minutes, net_hours, user_id, project_id, project_text FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date'
     ).all(uid, userFrom, mainRange.to);
@@ -224,6 +226,17 @@ router.get('/', authenticate, (req, res) => {
     const ist = calcActualHours(entries);
     const soll = calcTargetHours(db, uid, userFrom, mainRange.to);
     const ueber = ist - soll;
+
+    // Kumulierte Überstunden: vom allerersten Tag bis Ende des gewählten Zeitraums
+    let ueberGesamt = startOvertime;
+    if (earliest) {
+      const allEntries = db.prepare(
+        'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date'
+      ).all(uid, earliest, mainRange.to);
+      const gesamtIst = calcActualHours(allEntries);
+      const gesamtSoll = calcTargetHours(db, uid, earliest, mainRange.to);
+      ueberGesamt = startOvertime + gesamtIst - gesamtSoll;
+    }
 
     // Projekt-Aufschlüsselung
     const projectMap = {};
@@ -244,7 +257,7 @@ router.get('/', authenticate, (req, res) => {
 
     // Timeline-Daten — Zeitraum pro Bucket auf User-Erstellung clampen
     const timelineData = timeline.map(t => {
-      const tFrom = clampFrom(t.from, getEarliestTargetDate(db, uid));
+      const tFrom = clampFrom(t.from, earliest);
       if (tFrom > t.to) return { label: t.label, ist: 0, soll: 0 };
       const tEntriesRows = db.prepare(
         'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ?'
@@ -262,7 +275,7 @@ router.get('/', authenticate, (req, res) => {
       soll: Math.round(soll * 100) / 100,
       ueber: Math.round(ueber * 100) / 100,
       start_overtime: startOvertime,
-      ueber_gesamt: Math.round((ueber + startOvertime) * 100) / 100,
+      ueber_gesamt: Math.round(ueberGesamt * 100) / 100,
       projects: Object.values(projectMap).sort((a, b) => b.hours - a.hours),
       timeline: timelineData,
     });

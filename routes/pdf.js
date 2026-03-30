@@ -224,36 +224,46 @@ router.get('/export', authenticate, (req, res) => {
       statsUserIds = uniqueUsers;
     }
 
-    // Pro-User Soll/Ist berechnen (Zeitraum vor User-Erstellung ausblenden)
+    // Pro-User Soll/Ist berechnen
     const userStats = [];
     for (const uid of statsUserIds) {
       const u = db.prepare('SELECT id, name, start_overtime FROM users WHERE id = ?').get(uid);
       if (!u) continue;
-      const userFrom = clampFrom(date_from, getEarliestTargetDate(db, uid));
+      const earliest = getEarliestTargetDate(db, uid);
+      const userFrom = clampFrom(date_from, earliest);
+      const startOT = u.start_overtime || 0;
       if (userFrom > date_to) {
-        userStats.push({ name: u.name, ist: 0, soll: 0, ueber: 0, start_overtime: u.start_overtime || 0 });
+        userStats.push({ name: u.name, ist: 0, soll: 0, ueber: 0, ueber_gesamt: startOT });
         continue;
       }
+      // Zeitraum-spezifisch
       const userEntries = entries.filter(e => e.user_id === uid && e.date >= userFrom);
       const ist = calcActualHours(userEntries);
       const soll = calcTargetHours(db, uid, userFrom, date_to);
-      userStats.push({ name: u.name, ist, soll, ueber: ist - soll, start_overtime: u.start_overtime || 0 });
+      // Kumuliert: vom allerersten Tag bis date_to
+      let ueberGesamt = startOT;
+      if (earliest) {
+        const allEntries = db.prepare(
+          'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ?'
+        ).all(uid, earliest, date_to);
+        ueberGesamt = startOT + calcActualHours(allEntries) - calcTargetHours(db, uid, earliest, date_to);
+      }
+      userStats.push({ name: u.name, ist, soll, ueber: ist - soll, ueber_gesamt: Math.round(ueberGesamt * 100) / 100 });
     }
 
     const totalSoll = userStats.reduce((s, u) => s + u.soll, 0);
     const totalUeber = totalNet - totalSoll;
-    const totalStartOT = userStats.reduce((s, u) => s + u.start_overtime, 0);
+    const totalUeberGesamt = userStats.reduce((s, u) => s + u.ueber_gesamt, 0);
 
     // Zusammenfassung Text
     doc.font('Helvetica').fontSize(9);
     doc.text(`Soll-Stunden: ${fmtH(totalSoll)}`, 40, y);
     y += 14;
     const prefix = totalUeber >= 0 ? '+' : '';
-    doc.text(`Differenz: ${prefix}${fmtH(totalUeber)}`, 40, y);
-    if (totalStartOT) {
-      y += 14;
-      doc.text(`Gesamt inkl. Start-Überstunden: ${prefix}${fmtH(totalUeber + totalStartOT)}`, 40, y);
-    }
+    doc.text(`Differenz (Zeitraum): ${prefix}${fmtH(totalUeber)}`, 40, y);
+    y += 14;
+    const prefixG = totalUeberGesamt >= 0 ? '+' : '';
+    doc.text(`Überstunden gesamt: ${prefixG}${fmtH(totalUeberGesamt)}`, 40, y);
 
     // === STATISTIK-SEITE ===
     doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
