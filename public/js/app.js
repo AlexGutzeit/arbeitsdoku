@@ -1442,8 +1442,7 @@ function renderPlanningTimeline(entries, canEdit) {
           <span class="tl-e-time">${esc(e.time_from)} - ${esc(e.time_to)}</span>
           <span>${actionsHtml}</span>
         </div>
-        ${projLabel ? `<span class="tl-e-project">${esc(projLabel)}</span>` : ''}
-        ${e.client ? `<span class="tl-e-client">${esc(e.client)}</span>` : ''}
+        ${projLabel || e.client ? `<span class="tl-e-project">${esc(projLabel)}${projLabel && e.client ? ' – ' : ''}${esc(e.client || '')}</span>` : ''}
         ${e.description && height > 50 ? `<span class="tl-e-desc">${esc(e.description)}</span>` : ''}
       </div>`;
     });
@@ -1516,7 +1515,8 @@ function renderPlanningGrid(entries, range, view, canEdit) {
         const cellEntries = lookup[day + '_' + col.id] || [];
         bodyHtml += `<td class="grid-cell" data-plan-jump="${day}">`;
         cellEntries.forEach(e => {
-          bodyHtml += `<div class="grid-plan-entry">${e.time_from}-${e.time_to} ${esc(e.project_name || e.project_text || '')}</div>`;
+          const proj = e.project_name || e.project_text || '';
+          bodyHtml += `<div class="grid-plan-entry">${e.time_from}-${e.time_to} ${esc(proj)}${proj && e.client ? ' – ' : ''}${esc(e.client || '')}</div>`;
         });
         bodyHtml += '</td>';
       });
