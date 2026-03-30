@@ -485,6 +485,7 @@ async function renderDashboardContent() {
 
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
+  mainEl.classList.add('main-wide');
 
   // Filter (nur Projekt + Suche, Mitarbeiter werden per Chips gesteuert)
   const filtersHtml = `
@@ -1262,6 +1263,7 @@ async function renderPlanning() {
 async function renderPlanningContent() {
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
+  mainEl.classList.add('main-wide');
 
   const view = S.planningView || 'day';
   const d = S.planningDate || new Date();

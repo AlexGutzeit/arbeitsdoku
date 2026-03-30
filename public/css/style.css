@@ -169,6 +169,7 @@ body {
 
 /* === Main Content === */
 .main { padding: 1rem; max-width: 1400px; margin: 0 auto; }
+.main.main-wide { max-width: none; }
 
 /* === Cards === */
 .card {
@@ -1316,7 +1317,10 @@ table.data-table .actions button { margin-left: 0.25rem; }
 
 /* Alle Texte dürfen nie aus Containern laufen */
 .main { overflow-x: hidden; }
+.main.main-wide { overflow-x: auto; }
 .main * { max-width: 100%; }
+.main.main-wide .timeline-wrapper,
+.main.main-wide .grid-wrapper { max-width: none; }
 
 /* Karten und Container auf kleinen Bildschirmen */
 @media (max-width: 480px) {
