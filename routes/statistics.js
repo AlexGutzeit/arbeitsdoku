@@ -291,6 +291,31 @@ router.get('/', authenticate, (req, res) => {
   });
 });
 
+// Kumulierte Überstunden: start_overtime + alle Differenzen vom ersten Arbeitstag bis heute
+router.get('/overtime', authenticate, (req, res) => {
+  const db = getDb();
+  const uid = req.user.role === 'mitarbeiter' ? req.user.id : (req.query.user_id ? Number(req.query.user_id) : req.user.id);
+  if (req.user.role === 'mitarbeiter' && uid !== req.user.id) {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  const user = db.prepare('SELECT id, start_overtime FROM users WHERE id = ?').get(uid);
+  if (!user) return res.status(404).json({ error: 'User nicht gefunden' });
+
+  const startOvertime = user.start_overtime || 0;
+  const earliest = getEarliestTargetDate(db, uid);
+  if (!earliest) return res.json({ overtime: startOvertime });
+
+  const today = fmtDate(new Date());
+  const entries = db.prepare(
+    'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date'
+  ).all(uid, earliest, today);
+
+  const ist = calcActualHours(entries);
+  const soll = calcTargetHours(db, uid, earliest, today);
+  const overtime = Math.round((startOvertime + ist - soll) * 100) / 100;
+  res.json({ overtime });
+});
+
 // Soll-Stunden für einen Zeitraum berechnen
 router.get('/target-hours', authenticate, (req, res) => {
   const db = getDb();

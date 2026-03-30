@@ -511,16 +511,22 @@ async function renderDashboardContent() {
   const totalNetAll = calcActualHours(allVisibleEntries);
 
   let targetHours = 0;
+  let cumulativeOvertime = 0;
   if (S.user.role === 'mitarbeiter') {
     try {
-      const th = await api('GET', `/api/statistics/target-hours?date_from=${range.from}&date_to=${range.to}`);
+      const [th, ot] = await Promise.all([
+        api('GET', `/api/statistics/target-hours?date_from=${range.from}&date_to=${range.to}`),
+        api('GET', '/api/statistics/overtime'),
+      ]);
       if (th) targetHours = th.target_hours;
+      if (ot) cumulativeOvertime = ot.overtime;
     } catch (e) {}
   }
 
   const diff = totalNetAll - targetHours;
   const diffClass = diff >= 0 ? 'positive' : 'negative';
   const diffSign = diff >= 0 ? '+' : '';
+  const otClass = cumulativeOvertime >= 0 ? 'positive' : 'negative';
 
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
@@ -588,7 +594,11 @@ async function renderDashboardContent() {
       </div>
       <div class="summary-card ${diffClass}">
         <div class="value">${diff >= 0 ? '+' : ''}${fmtH(diff)}</div>
-        <div class="label">${diff >= 0 ? 'Überstunden' : 'Unterstunden'}</div>
+        <div class="label">${diff >= 0 ? 'Über' : 'Unter'} (Zeitraum)</div>
+      </div>
+      <div class="summary-card ${otClass}">
+        <div class="value">${cumulativeOvertime >= 0 ? '+' : ''}${fmtH(cumulativeOvertime)}</div>
+        <div class="label">Überstunden gesamt</div>
       </div>` : `
       <div class="summary-card">
         <div class="value">${visibleEntries.length}</div>
