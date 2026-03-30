@@ -808,7 +808,7 @@ function renderWeekGridHtml(entries, range) {
           const regieHtml = regieHtmlBadge(e);
           bodyHtml += `<div class="grid-entry" data-entry-id="${e.id}" style="border-left-color:${bg}">
             <span class="grid-e-time">${esc(e.time_from)}-${esc(e.time_to)}</span>
-            <span class="grid-e-proj">${esc(e.project_name || e.project_text || '')}</span>
+            <span class="grid-e-proj">${esc(e.project_name || e.project_text || '')}${e.client ? ' – ' + esc(e.client) : ''}</span>
             <span class="grid-e-hours">${fmtH(e.net_hours)}</span>
             <span class="grid-e-regie">${regieHtml}</span>
           </div>`;
