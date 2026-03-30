@@ -1749,6 +1749,7 @@ async function renderTools() {
         <div class="tool-actions">
           ${actions}
           <button class="btn btn-sm btn-outline tool-history" data-id="${t.id}" data-name="${esc(t.name)}">Historie</button>
+          ${canManage ? `<button class="btn btn-sm btn-outline tool-edit" data-id="${t.id}" data-name="${esc(t.name)}">&#9998;</button>` : ''}
           ${canManage ? `<button class="btn btn-sm btn-danger tool-delete" data-id="${t.id}">&#10005;</button>` : ''}
         </div>
       </div>`;
@@ -1824,6 +1825,17 @@ async function renderTools() {
         toast('Werkzeug übernommen', 'success');
         renderTools();
       } catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Bearbeiten
+  mainEl.querySelectorAll('.tool-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const newName = prompt('Werkzeug umbenennen:', btn.dataset.name);
+      if (newName === null || !newName.trim()) return;
+      api('PUT', `/api/tools/${btn.dataset.id}`, { name: newName.trim() })
+        .then(() => { toast('Werkzeug umbenannt', 'success'); renderTools(); })
+        .catch(e => toast(e.message, 'error'));
     });
   });
 

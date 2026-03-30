@@ -45,6 +45,19 @@ router.post('/', authenticate, authorize('chef'), (req, res) => {
   res.status(201).json({ tool });
 });
 
+// Werkzeug umbenennen (nur Chef/Admin)
+router.put('/:id', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Name ist ein Pflichtfeld' });
+  }
+  const tool = db.prepare('SELECT * FROM tools WHERE id = ?').get(req.params.id);
+  if (!tool) return res.status(404).json({ error: 'Werkzeug nicht gefunden' });
+  db.prepare('UPDATE tools SET name = ? WHERE id = ?').run(name.trim(), req.params.id);
+  res.json({ success: true });
+});
+
 // Werkzeug löschen (nur Chef/Admin)
 router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
