@@ -1855,11 +1855,12 @@ async function renderTools() {
   mainEl.querySelectorAll('.tool-history').forEach(btn => {
     btn.addEventListener('click', async () => {
       const modal = document.getElementById('tool-history-modal');
+      const toolId = btn.dataset.id;
       document.getElementById('history-title').textContent = `Historie: ${btn.dataset.name}`;
       document.getElementById('history-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
       modal.style.display = '';
       try {
-        const data = await api('GET', `/api/tools/${btn.dataset.id}/history`);
+        const data = await api('GET', `/api/tools/${toolId}/history`);
         if (data && data.history.length > 0) {
           document.getElementById('history-content').innerHTML = `<table class="table" style="font-size:0.85rem;">
             <thead><tr><th>Wer</th><th>Entnommen</th><th>Zurück</th></tr></thead>
@@ -1868,7 +1869,17 @@ async function renderTools() {
               <td>${fmtDT(h.checked_out_at)}</td>
               <td>${h.returned_at ? fmtDT(h.returned_at) : '<em>unterwegs</em>'}</td>
             </tr>`).join('')}</tbody>
-          </table>`;
+          </table>
+          ${isAdmin() ? `<button class="btn btn-danger btn-sm" id="clear-history" data-id="${toolId}" style="margin-top:0.5rem;">Historie zurücksetzen</button>` : ''}`;
+          document.getElementById('clear-history')?.addEventListener('click', async () => {
+            if (!confirm('Komplette Historie dieses Werkzeugs wirklich löschen?')) return;
+            try {
+              await api('DELETE', `/api/tools/${toolId}/history`);
+              toast('Historie zurückgesetzt', 'success');
+              modal.style.display = 'none';
+              renderTools();
+            } catch (e) { toast(e.message, 'error'); }
+          });
         } else {
           document.getElementById('history-content').innerHTML = '<p style="color:var(--text-light);padding:1rem;">Noch keine Einträge.</p>';
         }

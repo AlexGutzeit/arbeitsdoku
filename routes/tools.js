@@ -68,6 +68,15 @@ router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
   res.json({ success: true });
 });
 
+// Werkzeug-Historie zurücksetzen (nur Admin)
+router.delete('/:id/history', authenticate, authorize(), (req, res) => {
+  const db = getDb();
+  const tool = db.prepare('SELECT * FROM tools WHERE id = ?').get(req.params.id);
+  if (!tool) return res.status(404).json({ error: 'Werkzeug nicht gefunden' });
+  db.prepare('DELETE FROM tool_checkouts WHERE tool_id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
 // Werkzeug entnehmen
 router.post('/:id/checkout', authenticate, (req, res) => {
   const db = getDb();
