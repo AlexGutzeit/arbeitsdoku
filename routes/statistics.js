@@ -60,6 +60,42 @@ function getEarliestTargetDate(db, userId) {
   return row?.earliest || null;
 }
 
+// Tatsächliche Arbeitszeit: überlappende Einträge nicht doppelt zählen
+function calcActualHours(entries) {
+  const groups = {};
+  for (const e of entries) {
+    const key = `${e.user_id}_${e.date}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(e);
+  }
+  let total = 0;
+  for (const key of Object.keys(groups)) {
+    const group = groups[key];
+    const intervals = group.map(e => {
+      const [fh, fm] = e.time_from.split(':').map(Number);
+      const [th, tm] = e.time_to.split(':').map(Number);
+      return { from: fh * 60 + fm, to: th * 60 + tm, breakMin: e.break_minutes || 0 };
+    }).filter(i => i.to > i.from).sort((a, b) => a.from - b.from);
+    if (!intervals.length) continue;
+    const merged = [{ from: intervals[0].from, to: intervals[0].to }];
+    let totalBreak = intervals[0].breakMin;
+    for (let i = 1; i < intervals.length; i++) {
+      const cur = intervals[i];
+      const last = merged[merged.length - 1];
+      totalBreak += cur.breakMin;
+      if (cur.from <= last.to) {
+        last.to = Math.max(last.to, cur.to);
+      } else {
+        merged.push({ from: cur.from, to: cur.to });
+      }
+    }
+    const bruttoMin = merged.reduce((s, i) => s + (i.to - i.from), 0);
+    const netMin = Math.max(0, bruttoMin - totalBreak);
+    total += netMin / 60;
+  }
+  return Math.round(total * 100) / 100;
+}
+
 // Effektiven Startzeitpunkt für einen User ermitteln (max von range.from und frühestem Soll-Stunden-Datum)
 function clampFrom(from, earliest) {
   if (!earliest) return from;
@@ -182,10 +218,10 @@ router.get('/', authenticate, (req, res) => {
     }
 
     const entries = db.prepare(
-      'SELECT date, net_hours, project_id, project_text FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date'
+      'SELECT date, time_from, time_to, break_minutes, net_hours, user_id, project_id, project_text FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date'
     ).all(uid, userFrom, mainRange.to);
 
-    const ist = entries.reduce((s, e) => s + e.net_hours, 0);
+    const ist = calcActualHours(entries);
     const soll = calcTargetHours(db, uid, userFrom, mainRange.to);
     const ueber = ist - soll;
 
@@ -210,10 +246,10 @@ router.get('/', authenticate, (req, res) => {
     const timelineData = timeline.map(t => {
       const tFrom = clampFrom(t.from, getEarliestTargetDate(db, uid));
       if (tFrom > t.to) return { label: t.label, ist: 0, soll: 0 };
-      const tEntries = db.prepare(
-        'SELECT SUM(net_hours) as total FROM entries WHERE user_id = ? AND date >= ? AND date <= ?'
-      ).get(uid, tFrom, t.to);
-      const tIst = tEntries?.total || 0;
+      const tEntriesRows = db.prepare(
+        'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ?'
+      ).all(uid, tFrom, t.to);
+      const tIst = calcActualHours(tEntriesRows);
       const tSoll = calcTargetHours(db, uid, tFrom, t.to);
       return { label: t.label, ist: Math.round(tIst * 100) / 100, soll: Math.round(tSoll * 100) / 100 };
     });
@@ -394,6 +430,7 @@ function getISOWeek(date) {
 
 module.exports = router;
 module.exports.calcTargetHours = calcTargetHours;
+module.exports.calcActualHours = calcActualHours;
 module.exports.fmtDate = fmtDate;
 module.exports.getEarliestTargetDate = getEarliestTargetDate;
 module.exports.clampFrom = clampFrom;

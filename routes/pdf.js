@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
-const { calcTargetHours, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
+const { calcTargetHours, calcActualHours, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
 
 function fmtH(val) {
   const neg = val < 0;
@@ -136,7 +136,6 @@ router.get('/export', authenticate, (req, res) => {
 
   // Einträge
   doc.font('Helvetica').fontSize(7);
-  let totalNet = 0;
   let lastDate = null;
   const tableW = filteredCols.reduce((s, c) => s + c.width, 0);
 
@@ -194,9 +193,10 @@ router.get('/export', authenticate, (req, res) => {
       x += cell.width;
     }
 
-    totalNet += entry.net_hours;
     y += rowH + 1;
   }
+
+  const totalNet = calcActualHours(entries);
 
   // -- Zusammenfassung --
   y += 10;
@@ -235,7 +235,7 @@ router.get('/export', authenticate, (req, res) => {
         continue;
       }
       const userEntries = entries.filter(e => e.user_id === uid && e.date >= userFrom);
-      const ist = userEntries.reduce((s, e) => s + e.net_hours, 0);
+      const ist = calcActualHours(userEntries);
       const soll = calcTargetHours(db, uid, userFrom, date_to);
       userStats.push({ name: u.name, ist, soll, ueber: ist - soll, start_overtime: u.start_overtime || 0 });
     }
@@ -491,10 +491,10 @@ function buildTimeline(db, userIds, dateFrom, dateTo) {
     for (const uid of userIds) {
       const tFrom = clampFrom(t.from, getEarliestTargetDate(db, uid));
       if (tFrom > t.to) continue;
-      const row = db.prepare(
-        'SELECT SUM(net_hours) as total FROM entries WHERE user_id = ? AND date >= ? AND date <= ?'
-      ).get(uid, tFrom, t.to);
-      ist += row?.total || 0;
+      const rows = db.prepare(
+        'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ?'
+      ).all(uid, tFrom, t.to);
+      ist += calcActualHours(rows);
       soll += calcTargetHours(db, uid, tFrom, t.to);
     }
     return { label: t.label, ist: Math.round(ist * 100) / 100, soll: Math.round(soll * 100) / 100 };

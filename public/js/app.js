@@ -58,6 +58,45 @@ function fmtH(val) {
 
 const REGIE_LABELS = { 0: 'Nein', 1: 'Ja', 2: 'pauschal', 3: 'Büro', 4: 'Lager', 5: 'Intern' };
 
+// Tatsächliche Arbeitszeit berechnen (überlappende Einträge nicht doppelt zählen)
+function calcActualHours(entries) {
+  // Gruppieren nach User + Datum
+  const groups = {};
+  for (const e of entries) {
+    const key = `${e.user_id}_${e.date}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(e);
+  }
+  let total = 0;
+  for (const key of Object.keys(groups)) {
+    const group = groups[key];
+    // Intervalle als Minuten ab Mitternacht + Pausenminuten
+    const intervals = group.map(e => {
+      const [fh, fm] = e.time_from.split(':').map(Number);
+      const [th, tm] = e.time_to.split(':').map(Number);
+      return { from: fh * 60 + fm, to: th * 60 + tm, breakMin: e.break_minutes || 0 };
+    }).filter(i => i.to > i.from).sort((a, b) => a.from - b.from);
+    if (!intervals.length) continue;
+    // Intervalle mergen
+    const merged = [{ from: intervals[0].from, to: intervals[0].to }];
+    let totalBreak = intervals[0].breakMin;
+    for (let i = 1; i < intervals.length; i++) {
+      const cur = intervals[i];
+      const last = merged[merged.length - 1];
+      totalBreak += cur.breakMin;
+      if (cur.from <= last.to) {
+        last.to = Math.max(last.to, cur.to);
+      } else {
+        merged.push({ from: cur.from, to: cur.to });
+      }
+    }
+    const bruttoMin = merged.reduce((s, i) => s + (i.to - i.from), 0);
+    const netMin = Math.max(0, bruttoMin - totalBreak);
+    total += netMin / 60;
+  }
+  return Math.round(total * 100) / 100;
+}
+
 function entryTooltipHtml(e) {
   const rv = e.has_regie || 0;
   const regieText = rv === 0 ? 'Nein' : rv === 1 ? ('Ja – ' + (e.regie_user_name || '')) : REGIE_LABELS[rv] || 'Ja';
@@ -461,7 +500,7 @@ async function renderDashboardContent() {
   if (canViewAll() && S.hiddenEmployees && S.hiddenEmployees.size > 0) {
     visibleEntries = S.entries.filter(e => !S.hiddenEmployees.has(e.user_id));
   }
-  const totalNet = visibleEntries.reduce((s, e) => s + e.net_hours, 0);
+  const totalNet = calcActualHours(visibleEntries);
   const weekdays = countWeekdays(range.from, range.to);
 
   // Soll/Ist: immer auf Basis ALLER Einträge (ohne Projekt-/Suchfilter)
@@ -469,7 +508,7 @@ async function renderDashboardContent() {
   if (canViewAll() && S.hiddenEmployees && S.hiddenEmployees.size > 0) {
     allVisibleEntries = S.allEntries.filter(e => !S.hiddenEmployees.has(e.user_id));
   }
-  const totalNetAll = allVisibleEntries.reduce((s, e) => s + e.net_hours, 0);
+  const totalNetAll = calcActualHours(allVisibleEntries);
 
   let targetHours = 0;
   if (S.user.role === 'mitarbeiter') {
@@ -809,7 +848,7 @@ function renderWeekGridHtml(entries, range) {
     bodyHtml += `<td class="grid-row-header"><strong>${dayNamesShort[di]}</strong><br><span class="grid-date">${formatDateDE(day)}</span></td>`;
     columns.forEach((col) => {
       const cellEntries = lookup[day + '_' + col.id] || [];
-      const totalH = cellEntries.reduce((s, e) => s + e.net_hours, 0);
+      const totalH = calcActualHours(cellEntries);
       bodyHtml += `<td class="grid-cell" data-jump-date="${day}">`;
       if (cellEntries.length > 0) {
         cellEntries.forEach(e => {
@@ -866,7 +905,7 @@ function renderMonthGridHtml(entries, range) {
     bodyHtml += `<td class="grid-row-header"><strong>KW ${w.kw}</strong><br><span class="grid-date">${formatDateDE(w.from)} -<br>${formatDateDE(w.to)}</span></td>`;
     columns.forEach(col => {
       const cellEntries = lookup[w.kw + '_' + col.id] || [];
-      const totalH = cellEntries.reduce((s, e) => s + e.net_hours, 0);
+      const totalH = calcActualHours(cellEntries);
       const days = new Set(cellEntries.map(e => e.date)).size;
       // Klick auf Zelle → erster Tag der KW
       bodyHtml += `<td class="grid-cell" data-jump-date="${w.from}">`;
@@ -880,7 +919,7 @@ function renderMonthGridHtml(entries, range) {
         Object.keys(byDay).sort().forEach(day => {
           const dayEntries = byDay[day];
           const dn = getDayNameShort(day);
-          const dayH = dayEntries.reduce((s, e) => s + e.net_hours, 0);
+          const dayH = calcActualHours(dayEntries);
           bodyHtml += `<div class="grid-kw-day" data-jump-date="${day}">
             <span class="grid-kw-dayname">${dn}</span>
             <span class="grid-kw-dayhours">${fmtH(dayH)}</span>
