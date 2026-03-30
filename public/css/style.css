@@ -1076,6 +1076,10 @@ table.data-table .actions button { margin-left: 0.25rem; }
   .tool-actions { width: 100%; justify-content: flex-end; margin-top: 0.5rem; }
 }
 
+/* Entry Tooltip */
+.entry-tooltip { position: fixed; z-index: 2000; background: #1e293b; color: #f1f5f9; padding: 0.6rem 0.8rem; border-radius: 8px; font-size: 0.8rem; line-height: 1.5; max-width: 320px; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.entry-tooltip strong { color: #fff; }
+
 .input-with-btn { display: flex; gap: 0.25rem; align-items: center; }
 .input-with-btn input { flex: 1; }
 .btn-nav { font-size: 1.1rem; padding: 0.3rem 0.5rem; line-height: 1; white-space: nowrap; }

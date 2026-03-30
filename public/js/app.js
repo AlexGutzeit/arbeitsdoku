@@ -58,6 +58,45 @@ function fmtH(val) {
 
 const REGIE_LABELS = { 0: 'Nein', 1: 'Ja', 2: 'pauschal', 3: 'Büro', 4: 'Lager', 5: 'Intern' };
 
+function entryTooltipHtml(e) {
+  const rv = e.has_regie || 0;
+  const regieText = rv === 0 ? 'Nein' : rv === 1 ? ('Ja – ' + (e.regie_user_name || '')) : REGIE_LABELS[rv] || 'Ja';
+  const lines = [
+    `<strong>${esc(e.project_name || e.project_text || 'Kein Projekt')}</strong>`,
+    `Zeit: ${esc(e.time_from)} - ${esc(e.time_to)} (${fmtH(e.net_hours)} netto)`,
+    e.break_minutes ? `Pause: ${e.break_minutes} min` : '',
+    e.address ? `Ort: ${esc(e.address)}` : '',
+    e.client ? `Kunde: ${esc(e.client)}` : '',
+    e.description ? `Beschreibung: ${esc(e.description)}` : '',
+    `Regie: ${regieText}`,
+    e.user_name ? `Mitarbeiter: ${esc(e.user_name)}` : '',
+  ];
+  return lines.filter(l => l).join('<br>');
+}
+
+// Globaler Tooltip
+let tooltipEl = null;
+function initTooltip() {
+  if (tooltipEl) return;
+  tooltipEl = document.createElement('div');
+  tooltipEl.className = 'entry-tooltip';
+  tooltipEl.style.display = 'none';
+  document.body.appendChild(tooltipEl);
+}
+function showTooltip(html, x, y) {
+  initTooltip();
+  tooltipEl.innerHTML = html;
+  tooltipEl.style.display = '';
+  const rect = tooltipEl.getBoundingClientRect();
+  const maxX = window.innerWidth - rect.width - 10;
+  const maxY = window.innerHeight - rect.height - 10;
+  tooltipEl.style.left = Math.max(5, Math.min(x + 12, maxX)) + 'px';
+  tooltipEl.style.top = Math.max(5, Math.min(y + 12, maxY)) + 'px';
+}
+function hideTooltip() {
+  if (tooltipEl) tooltipEl.style.display = 'none';
+}
+
 function regieHtmlBadge(entry, extraStyle) {
   const v = entry.has_regie || 0;
   if (v === 0) return `<span class="regie-badge regie-no"${extraStyle ? ' style="' + extraStyle + '"' : ''}>&#10008; Nein</span>`;
@@ -554,6 +593,19 @@ async function renderDashboardContent() {
   mainEl.querySelectorAll('.tl-entry[data-entry-id]').forEach(el => {
     el.addEventListener('click', () => navigate('/entry/' + el.dataset.entryId));
   });
+  // Tooltip für Einträge (Tag + Woche)
+  const entryMap = {};
+  visibleEntries.forEach(e => { entryMap[e.id] = e; });
+  mainEl.querySelectorAll('[data-entry-id]').forEach(el => {
+    el.addEventListener('mouseenter', (ev) => {
+      const e = entryMap[el.dataset.entryId];
+      if (e) showTooltip(entryTooltipHtml(e), ev.clientX, ev.clientY);
+    });
+    el.addEventListener('mousemove', (ev) => {
+      if (tooltipEl && tooltipEl.style.display !== 'none') showTooltip(tooltipEl.innerHTML, ev.clientX, ev.clientY);
+    });
+    el.addEventListener('mouseleave', hideTooltip);
+  });
   // Grid-Zellen klick → Tagansicht (innerstes data-jump-date gewinnt)
   mainEl.querySelectorAll('[data-jump-date]').forEach(el => {
     el.addEventListener('click', (e) => {
@@ -754,7 +806,7 @@ function renderWeekGridHtml(entries, range) {
         cellEntries.forEach(e => {
           const bg = e.project_id ? colorFor(e.project_id) : '#64748b';
           const regieHtml = regieHtmlBadge(e);
-          bodyHtml += `<div class="grid-entry" style="border-left-color:${bg}">
+          bodyHtml += `<div class="grid-entry" data-entry-id="${e.id}" style="border-left-color:${bg}">
             <span class="grid-e-time">${esc(e.time_from)}-${esc(e.time_to)}</span>
             <span class="grid-e-proj">${esc(e.project_name || e.project_text || '')}</span>
             <span class="grid-e-hours">${fmtH(e.net_hours)}</span>
