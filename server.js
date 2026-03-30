@@ -50,8 +50,22 @@ app.use((err, req, res, next) => {
 });
 
 // Server starten (async wegen sql.js)
+function cleanupToolHistory() {
+  try {
+    const { getDb } = require('./database/init');
+    const db = getDb();
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 3);
+    const cutoffStr = cutoff.toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+    const result = db.prepare('DELETE FROM tool_checkouts WHERE returned_at IS NOT NULL AND returned_at < ?').run(cutoffStr);
+    if (result.changes > 0) console.log(`Werkzeug-Historie: ${result.changes} alte Einträge bereinigt.`);
+  } catch (e) {}
+}
+
 async function start() {
   await initDatabase();
+  cleanupToolHistory();
+  setInterval(cleanupToolHistory, 24 * 60 * 60 * 1000); // täglich
   app.listen(PORT, () => {
     console.log(`Arbeitsdoku-Server läuft auf http://localhost:${PORT}`);
   });
