@@ -606,6 +606,10 @@ async function renderDashboardContent() {
     });
     el.addEventListener('mouseleave', hideTooltip);
   });
+  // Nav-Buttons in Übersichten
+  mainEl.querySelectorAll('.nav-to-addr').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); hideTooltip(); openNav(btn.dataset.addr); });
+  });
   // Grid-Zellen klick → Tagansicht (innerstes data-jump-date gewinnt)
   mainEl.querySelectorAll('[data-jump-date]').forEach(el => {
     el.addEventListener('click', (e) => {
@@ -731,8 +735,12 @@ function renderTimelineHtml(entries) {
 
       const regieTag = regieHtmlBadge(e, 'font-size:0.65rem;');
       const projClientLabel = projLabel + (projLabel && e.client ? ' – ' : '') + (e.client || '');
+      const navBtn = e.address ? `<button class="nav-to-addr tl-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : '';
       bodyHtml += `<div class="tl-entry" data-entry-id="${e.id}" style="top:${top}px;height:${height}px;background:${bg};left:${leftPct}%;width:${widthPct}%;right:auto;">
-        <span class="tl-e-time">${esc(e.time_from)} - ${esc(e.time_to)}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="tl-e-time">${esc(e.time_from)} - ${esc(e.time_to)}</span>
+          ${navBtn}
+        </div>
         ${projClientLabel ? `<span class="tl-e-project">${esc(projClientLabel)}</span>` : ''}
         ${e.description && height > 50 ? `<span class="tl-e-desc">${esc(e.description)}</span>` : ''}
         ${e.break_minutes > 0 && height > 40 ? `<span class="tl-e-break">Pause: ${e.break_minutes} min</span>` : ''}
@@ -807,7 +815,7 @@ function renderWeekGridHtml(entries, range) {
           const bg = e.project_id ? colorFor(e.project_id) : '#64748b';
           const regieHtml = regieHtmlBadge(e);
           bodyHtml += `<div class="grid-entry" data-entry-id="${e.id}" style="border-left-color:${bg}">
-            <span class="grid-e-time">${esc(e.time_from)}-${esc(e.time_to)}</span>
+            <span class="grid-e-time">${esc(e.time_from)}-${esc(e.time_to)} ${e.address ? `<button class="nav-to-addr grid-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}</span>
             <span class="grid-e-proj">${esc(e.project_name || e.project_text || '')}${e.client ? ' – ' + esc(e.client) : ''}</span>
             <span class="grid-e-hours">${fmtH(e.net_hours)}</span>
             <span class="grid-e-regie">${regieHtml}</span>
@@ -1347,6 +1355,10 @@ async function renderPlanningContent() {
       } catch (e2) { toast(e2.message, 'error'); }
     });
   });
+  // Nav-Buttons in Planungsübersicht
+  mainEl.querySelectorAll('.nav-to-addr').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openNav(btn.dataset.addr); });
+  });
   // Grid cell click → jump to day
   mainEl.querySelectorAll('[data-plan-jump]').forEach(el => {
     el.addEventListener('click', (e) => {
@@ -1434,7 +1446,9 @@ function renderPlanningTimeline(entries, canEdit) {
 
       let actionsHtml = '';
       if (canEdit && height > 30) {
-        actionsHtml = `<button type="button" class="plan-action-btn plan-edit-btn" data-id="${e.id}" title="Bearbeiten">&#9998;</button><button type="button" class="plan-action-btn plan-del-btn" data-id="${e.id}" title="Löschen">&#10005;</button>`;
+        actionsHtml = `${e.address ? `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}<button type="button" class="plan-action-btn plan-edit-btn" data-id="${e.id}" title="Bearbeiten">&#9998;</button><button type="button" class="plan-action-btn plan-del-btn" data-id="${e.id}" title="Löschen">&#10005;</button>`;
+      } else if (e.address) {
+        actionsHtml = `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>`;
       }
 
       bodyHtml += `<div class="tl-plan-entry" data-planning-id="${e.id}" style="top:${top}px;height:${height}px;left:${leftPct}%;width:${widthPct}%;right:auto;" title="Klicken zum Übernehmen">
@@ -1516,7 +1530,7 @@ function renderPlanningGrid(entries, range, view, canEdit) {
         bodyHtml += `<td class="grid-cell" data-plan-jump="${day}">`;
         cellEntries.forEach(e => {
           const proj = e.project_name || e.project_text || '';
-          bodyHtml += `<div class="grid-plan-entry">${e.time_from}-${e.time_to} ${esc(proj)}${proj && e.client ? ' – ' : ''}${esc(e.client || '')}</div>`;
+          bodyHtml += `<div class="grid-plan-entry">${e.time_from}-${e.time_to} ${e.address ? `<button class="nav-to-addr grid-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''} ${esc(proj)}${proj && e.client ? ' – ' : ''}${esc(e.client || '')}</div>`;
         });
         bodyHtml += '</td>';
       });

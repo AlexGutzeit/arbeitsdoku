@@ -1083,6 +1083,8 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .input-with-btn { display: flex; gap: 0.25rem; align-items: center; }
 .input-with-btn input { flex: 1; }
 .btn-nav { font-size: 1.1rem; padding: 0.3rem 0.5rem; line-height: 1; white-space: nowrap; }
+.tl-nav-btn, .grid-nav-btn { background: none; border: none; cursor: pointer; font-size: 0.85rem; padding: 0; line-height: 1; opacity: 0.8; }
+.tl-nav-btn:hover, .grid-nav-btn:hover { opacity: 1; }
 .welcome-task-actions { display: flex; gap: 0.25rem; align-items: center; flex-shrink: 0; }
 
 @media (max-width: 768px) {
