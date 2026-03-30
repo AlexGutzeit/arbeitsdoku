@@ -4,9 +4,18 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Alte Historie-Einträge bereinigen (älter als 3 Monate, nur abgeschlossene)
+function cleanupHistory(db) {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 3);
+  const cutoffStr = cutoff.toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+  db.prepare('DELETE FROM tool_checkouts WHERE returned_at IS NOT NULL AND returned_at < ?').run(cutoffStr);
+}
+
 // Alle Werkzeuge mit aktuellem Status abrufen
 router.get('/', authenticate, (req, res) => {
   const db = getDb();
+  cleanupHistory(db);
   const tools = db.prepare(`
     SELECT t.*,
       tc.id as checkout_id, tc.user_id as checked_out_by, tc.checked_out_at,
