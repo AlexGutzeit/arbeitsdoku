@@ -221,6 +221,7 @@ function render() {
   else if (route.startsWith('/planning/edit/')) renderPlanningForm(route.split('/').pop());
   else if (route.startsWith('/planning/replan/')) renderPlanningForm(null, route.split('/').pop());
   else if (route.startsWith('/planning/accept/')) renderEntryForm(null, null, route.split('/').pop());
+  else if (route === '/tools') renderTools();
   else if (route === '/bulletin') renderBulletin();
   else if (route === '/bulletin/new') renderBulletinForm();
   else if (route.startsWith('/bulletin/edit/')) renderBulletinForm(route.split('/').pop());
@@ -312,6 +313,9 @@ function layout(content, activeNav) {
         </a>
         <a href="#/bulletin" class="${activeNav === 'bulletin' ? 'active' : ''}">
           <span class="icon">&#128204;</span> Schwarzes Brett
+        </a>
+        <a href="#/tools" class="${activeNav === 'tools' ? 'active' : ''}">
+          <span class="icon">&#128295;</span> Werkzeugliste
         </a>
         <a href="#/statistics" class="${activeNav === 'statistics' ? 'active' : ''}">
           <span class="icon">&#128200;</span> Statistik
@@ -1688,6 +1692,184 @@ async function renderPlanningForm(editId, replanId) {
       toast('Planung gelöscht', 'success');
       navigate('/planning');
     } catch (err) { toast(err.message, 'error'); }
+  });
+}
+
+// --- Werkzeugliste ---
+async function renderTools() {
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'tools');
+  bindLayout();
+  const fab = document.getElementById('fab-new');
+  if (fab) fab.style.display = 'none';
+
+  const mainEl = document.querySelector('.main');
+  if (!mainEl) return;
+
+  let tools = [];
+  try {
+    const data = await api('GET', '/api/tools');
+    if (data) tools = data.tools;
+  } catch (e) {}
+
+  const canManage = S.user.role === 'admin' || S.user.role === 'chef';
+
+  const fmtDT = (dt) => {
+    if (!dt) return '';
+    const [d, t] = dt.split(' ');
+    const [y, m, dd] = d.split('-');
+    return `${dd}.${m}.${y} ${t ? t.slice(0, 5) : ''}`;
+  };
+
+  let toolsHtml = '';
+  if (tools.length === 0) {
+    toolsHtml = '<p style="color:var(--text-light)">Noch keine Werkzeuge angelegt.</p>';
+  } else {
+    toolsHtml = tools.map(t => {
+      const isOut = !!t.checkout_id;
+      const isMine = isOut && t.checked_out_by === S.user.id;
+      const statusClass = isOut ? 'tool-out' : 'tool-in';
+      const statusText = isOut
+        ? `${esc(t.checked_out_by_name)} seit ${fmtDT(t.checked_out_at)}`
+        : 'Im Lager';
+
+      let actions = '';
+      if (!isOut) {
+        actions = `<button class="btn btn-sm btn-primary tool-checkout" data-id="${t.id}">Entnehmen</button>`;
+      } else if (isMine) {
+        actions = `<button class="btn btn-sm btn-success tool-return" data-id="${t.id}">Zurückgeben</button>`;
+      } else {
+        actions = `<button class="btn btn-sm btn-outline tool-takeover" data-id="${t.id}">Übernehmen</button>`;
+      }
+
+      return `<div class="tool-item ${statusClass}">
+        <div class="tool-info">
+          <strong>${esc(t.name)}</strong>
+          <span class="tool-status">${statusText}</span>
+        </div>
+        <div class="tool-actions">
+          ${actions}
+          <button class="btn btn-sm btn-outline tool-history" data-id="${t.id}" data-name="${esc(t.name)}">Historie</button>
+          ${canManage ? `<button class="btn btn-sm btn-danger tool-delete" data-id="${t.id}">&#10005;</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  mainEl.innerHTML = `
+    <div class="card" style="max-width:800px;margin:0 auto;">
+      <div class="card-header">
+        <h2>&#128295; Werkzeugliste</h2>
+      </div>
+      ${canManage ? `
+      <div class="form-row" style="margin-bottom:1rem;gap:0.5rem;">
+        <input type="text" class="form-control" id="tool-name" placeholder="Werkzeugname" style="flex:1;">
+        <button class="btn btn-primary" id="tool-add">Hinzufügen</button>
+      </div>` : ''}
+      <div id="tools-list">${toolsHtml}</div>
+    </div>
+    <div id="tool-history-modal" class="modal-overlay" style="display:none;">
+      <div class="card" style="max-width:500px;margin:2rem auto;max-height:80vh;overflow-y:auto;">
+        <div class="card-header">
+          <h3 id="history-title">Historie</h3>
+          <button class="btn btn-outline btn-sm" id="history-close">Schließen</button>
+        </div>
+        <div id="history-content"></div>
+      </div>
+    </div>`;
+
+  // Werkzeug hinzufügen
+  document.getElementById('tool-add')?.addEventListener('click', async () => {
+    const nameEl = document.getElementById('tool-name');
+    const name = nameEl.value.trim();
+    if (!name) { toast('Bitte einen Namen eingeben', 'error'); return; }
+    try {
+      await api('POST', '/api/tools', { name });
+      toast('Werkzeug hinzugefügt', 'success');
+      renderTools();
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  document.getElementById('tool-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('tool-add')?.click();
+  });
+
+  // Entnehmen
+  mainEl.querySelectorAll('.tool-checkout').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api('POST', `/api/tools/${btn.dataset.id}/checkout`);
+        toast('Werkzeug entnommen', 'success');
+        renderTools();
+      } catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Zurückgeben
+  mainEl.querySelectorAll('.tool-return').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api('POST', `/api/tools/${btn.dataset.id}/return`);
+        toast('Werkzeug zurückgegeben', 'success');
+        renderTools();
+      } catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Übernehmen
+  mainEl.querySelectorAll('.tool-takeover').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Werkzeug von anderem Mitarbeiter übernehmen?')) return;
+      try {
+        await api('POST', `/api/tools/${btn.dataset.id}/takeover`);
+        toast('Werkzeug übernommen', 'success');
+        renderTools();
+      } catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Löschen
+  mainEl.querySelectorAll('.tool-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Werkzeug wirklich löschen?')) return;
+      try {
+        await api('DELETE', `/api/tools/${btn.dataset.id}`);
+        toast('Werkzeug gelöscht', 'success');
+        renderTools();
+      } catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Historie
+  mainEl.querySelectorAll('.tool-history').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const modal = document.getElementById('tool-history-modal');
+      document.getElementById('history-title').textContent = `Historie: ${btn.dataset.name}`;
+      document.getElementById('history-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      modal.style.display = '';
+      try {
+        const data = await api('GET', `/api/tools/${btn.dataset.id}/history`);
+        if (data && data.history.length > 0) {
+          document.getElementById('history-content').innerHTML = `<table class="table" style="font-size:0.85rem;">
+            <thead><tr><th>Wer</th><th>Entnommen</th><th>Zurück</th></tr></thead>
+            <tbody>${data.history.map(h => `<tr>
+              <td>${esc(h.user_name)}</td>
+              <td>${fmtDT(h.checked_out_at)}</td>
+              <td>${h.returned_at ? fmtDT(h.returned_at) : '<em>unterwegs</em>'}</td>
+            </tr>`).join('')}</tbody>
+          </table>`;
+        } else {
+          document.getElementById('history-content').innerHTML = '<p style="color:var(--text-light);padding:1rem;">Noch keine Einträge.</p>';
+        }
+      } catch (e) { document.getElementById('history-content').innerHTML = '<p>Fehler beim Laden.</p>'; }
+    });
+  });
+
+  // Modal schließen
+  document.getElementById('history-close')?.addEventListener('click', () => {
+    document.getElementById('tool-history-modal').style.display = 'none';
+  });
+  document.getElementById('tool-history-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'tool-history-modal') e.target.style.display = 'none';
   });
 }
 

@@ -36,6 +36,7 @@ app.use('/api/backup', require('./routes/backup'));
 app.use('/api/statistics', require('./routes/statistics'));
 app.use('/api/planning', require('./routes/planning'));
 app.use('/api/bulletin', require('./routes/bulletin'));
+app.use('/api/tools', require('./routes/tools'));
 
 // SPA-Fallback
 app.get('*', (req, res) => {

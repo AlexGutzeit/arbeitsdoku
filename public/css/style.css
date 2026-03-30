@@ -1061,6 +1061,21 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .regie-no { color: #b91c1c; background: #fee2e2; }
 .grid-e-regie { display: block; margin-top: 0.15rem; }
 
+/* Werkzeugliste */
+.tool-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 8px; border: 1px solid var(--border); gap: 0.5rem; }
+.tool-in { background: #dcfce7; border-color: #86efac; }
+.tool-out { background: #fee2e2; border-color: #fca5a5; }
+.tool-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
+.tool-info strong { font-size: 0.95rem; }
+.tool-status { font-size: 0.8rem; color: var(--text-light); }
+.tool-actions { display: flex; gap: 0.35rem; align-items: center; flex-shrink: 0; flex-wrap: wrap; }
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 1rem; }
+
+@media (max-width: 600px) {
+  .tool-item { flex-direction: column; align-items: flex-start; }
+  .tool-actions { width: 100%; justify-content: flex-end; margin-top: 0.5rem; }
+}
+
 .input-with-btn { display: flex; gap: 0.25rem; align-items: center; }
 .input-with-btn input { flex: 1; }
 .btn-nav { font-size: 1.1rem; padding: 0.3rem 0.5rem; line-height: 1; white-space: nowrap; }

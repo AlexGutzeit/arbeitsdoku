@@ -232,6 +232,26 @@ async function initDatabase() {
     );
   `);
 
+  // Werkzeugliste
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tools (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS tool_checkouts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tool_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      checked_out_at TEXT NOT NULL,
+      returned_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (tool_id) REFERENCES tools(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+
   // Migration: target_hours_per_day → target_hours_per_week
   try {
     const cols = db.prepare("PRAGMA table_info(users)").all();
