@@ -730,10 +730,10 @@ function renderTimelineHtml(entries) {
       const widthPct = laneW - 1; // 1% gap
 
       const regieTag = regieHtmlBadge(e, 'font-size:0.65rem;');
+      const projClientLabel = projLabel + (projLabel && e.client ? ' – ' : '') + (e.client || '');
       bodyHtml += `<div class="tl-entry" data-entry-id="${e.id}" style="top:${top}px;height:${height}px;background:${bg};left:${leftPct}%;width:${widthPct}%;right:auto;">
         <span class="tl-e-time">${esc(e.time_from)} - ${esc(e.time_to)}</span>
-        ${projLabel ? `<span class="tl-e-project">${esc(projLabel)}</span>` : ''}
-        ${e.client ? `<span class="tl-e-client">${esc(e.client)}</span>` : ''}
+        ${projClientLabel ? `<span class="tl-e-project">${esc(projClientLabel)}</span>` : ''}
         ${e.description && height > 50 ? `<span class="tl-e-desc">${esc(e.description)}</span>` : ''}
         ${e.break_minutes > 0 && height > 40 ? `<span class="tl-e-break">Pause: ${e.break_minutes} min</span>` : ''}
         ${height > 35 ? regieTag : ''}
