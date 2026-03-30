@@ -1862,12 +1862,12 @@ async function renderTools() {
       try {
         const data = await api('GET', `/api/tools/${toolId}/history`);
         if (data && data.history.length > 0) {
-          document.getElementById('history-content').innerHTML = `<table class="table" style="font-size:0.85rem;">
-            <thead><tr><th>Wer</th><th>Entnommen</th><th>Zurück</th></tr></thead>
+          document.getElementById('history-content').innerHTML = `<table class="table" style="font-size:0.85rem;width:100%;border-collapse:separate;border-spacing:0;">
+            <thead><tr><th style="text-align:left;padding:0.5rem 0.75rem;border-bottom:2px solid var(--border);">Wer</th><th style="text-align:left;padding:0.5rem 0.75rem;border-bottom:2px solid var(--border);">Entnommen</th><th style="text-align:left;padding:0.5rem 0.75rem;border-bottom:2px solid var(--border);">Zurück</th></tr></thead>
             <tbody>${data.history.map(h => `<tr>
-              <td>${esc(h.user_name)}</td>
-              <td>${fmtDT(h.checked_out_at)}</td>
-              <td>${h.returned_at ? fmtDT(h.returned_at) : '<em>unterwegs</em>'}</td>
+              <td style="padding:0.4rem 0.75rem;border-bottom:1px solid var(--border);">${esc(h.user_name)}</td>
+              <td style="padding:0.4rem 0.75rem;border-bottom:1px solid var(--border);white-space:nowrap;">${fmtDT(h.checked_out_at)}</td>
+              <td style="padding:0.4rem 0.75rem;border-bottom:1px solid var(--border);white-space:nowrap;">${h.returned_at ? fmtDT(h.returned_at) : '<em>unterwegs</em>'}</td>
             </tr>`).join('')}</tbody>
           </table>
           ${isAdmin() ? `<button class="btn btn-danger btn-sm" id="clear-history" data-id="${toolId}" style="margin-top:0.5rem;">Historie zurücksetzen</button>` : ''}`;
