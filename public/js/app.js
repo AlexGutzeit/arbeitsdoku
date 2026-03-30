@@ -591,7 +591,7 @@ async function renderDashboardContent() {
   });
   // Entry clicks (timeline blocks → edit)
   mainEl.querySelectorAll('.tl-entry[data-entry-id]').forEach(el => {
-    el.addEventListener('click', () => navigate('/entry/' + el.dataset.entryId));
+    el.addEventListener('click', () => { hideTooltip(); navigate('/entry/' + el.dataset.entryId); });
   });
   // Tooltip für Einträge (Tag + Woche)
   const entryMap = {};
