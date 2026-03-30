@@ -177,10 +177,10 @@ const PALETTE = ['#4f46e5','#059669','#d97706','#dc2626','#7c3aed','#2563eb','#d
 function colorFor(id, fallback) { return id ? PALETTE[(id - 1) % PALETTE.length] : (fallback || '#64748b'); }
 
 // Timeline-Konstanten
-const TL_HOUR_PX = 60;
-const TL_START_HOUR = 6;
-const TL_END_HOUR = 18;
-const TL_SCROLL_TO_HOUR = 7; // Kernarbeitszeit Start
+const TL_HOUR_PX = 50;
+const TL_START_HOUR = 0;
+const TL_END_HOUR = 24;
+const TL_SCROLL_TO_HOUR = 6; // Scroll-Position: 6 Uhr oben sichtbar
 
 function isChefOrAdmin() {
   return S.user && (S.user.role === 'admin' || S.user.role === 'chef');
