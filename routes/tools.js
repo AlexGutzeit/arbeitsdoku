@@ -90,7 +90,7 @@ router.post('/:id/checkout', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Werkzeug ist bereits entnommen' });
   }
 
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const now = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
   db.prepare('INSERT INTO tool_checkouts (tool_id, user_id, checked_out_at) VALUES (?, ?, ?)').run(toolId, req.user.id, now);
   res.json({ success: true });
 });
@@ -109,7 +109,7 @@ router.post('/:id/return', authenticate, (req, res) => {
     return res.status(403).json({ error: 'Nur der aktuelle Besitzer kann zurückgeben' });
   }
 
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const now = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
   db.prepare('UPDATE tool_checkouts SET returned_at = ? WHERE id = ?').run(now, checkout.id);
   res.json({ success: true });
 });
@@ -127,7 +127,7 @@ router.post('/:id/takeover', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Du hast das Werkzeug bereits' });
   }
 
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const now = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
   // Altes Checkout abschließen
   db.prepare('UPDATE tool_checkouts SET returned_at = ? WHERE id = ?').run(now, checkout.id);
   // Neues Checkout für übernehmenden User
