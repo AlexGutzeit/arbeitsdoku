@@ -363,6 +363,7 @@ textarea.form-control { resize: vertical; min-height: 60px; }
   color: var(--text);
 }
 .date-nav button:hover { border-color: var(--primary); color: var(--primary); }
+.date-today-btn { width: auto !important; padding: 0 0.6rem !important; font-size: 0.75rem !important; font-weight: 600; }
 .date-nav .current-period {
   font-weight: 600;
   font-size: 0.95rem;

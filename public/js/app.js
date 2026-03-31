@@ -581,6 +581,7 @@ async function renderDashboardContent() {
       <button id="date-prev">&#8249;</button>
       <span class="current-period">${getPeriodLabel()}</span>
       <button id="date-next">&#8250;</button>
+      <button id="date-today" class="date-today-btn">Jetzt</button>
     </div>
     <div class="summary-grid">
       <div class="summary-card">
@@ -622,6 +623,7 @@ async function renderDashboardContent() {
   // Date nav
   document.getElementById('date-prev')?.addEventListener('click', () => { navDate(-1); renderDashboardContent(); });
   document.getElementById('date-next')?.addEventListener('click', () => { navDate(1); renderDashboardContent(); });
+  document.getElementById('date-today')?.addEventListener('click', () => { S.currentDate = new Date(); renderDashboardContent(); });
   // Filters
   document.getElementById('filter-project')?.addEventListener('change', (e) => { S.filterProjectId = e.target.value; renderDashboardContent(); });
   document.getElementById('filter-regie')?.addEventListener('change', (e) => { S.filterRegie = e.target.value; renderDashboardContent(); });
@@ -1357,6 +1359,7 @@ async function renderPlanningContent() {
       <button id="plan-prev">&#8249;</button>
       <span class="current-period">${label}</span>
       <button id="plan-next">&#8250;</button>
+      <button id="plan-today" class="date-today-btn">Jetzt</button>
     </div>
     ${contentHtml}`;
 
@@ -1382,6 +1385,10 @@ async function renderPlanningContent() {
     else if (v === 'week') dd.setDate(dd.getDate() + 7);
     else dd.setMonth(dd.getMonth() + 1);
     S.planningDate = new Date(dd);
+    renderPlanningContent();
+  });
+  document.getElementById('plan-today')?.addEventListener('click', () => {
+    S.planningDate = new Date();
     renderPlanningContent();
   });
 
@@ -3142,6 +3149,7 @@ async function renderStatisticsContent() {
         <button id="stats-prev">&#8249;</button>
         <span class="current-period">${stats.range.label}</span>
         <button id="stats-next">&#8250;</button>
+        <button id="stats-today" class="date-today-btn">Jetzt</button>
       </div>` : `<div class="date-nav"><span class="current-period">${stats.range.label}</span></div>`}
       ${chipsHtml}
       <div class="stats-summary">
@@ -3211,6 +3219,10 @@ async function renderStatisticsContent() {
     });
     document.getElementById('stats-next')?.addEventListener('click', () => {
       navStatsDate(1);
+      renderStatisticsContent();
+    });
+    document.getElementById('stats-today')?.addEventListener('click', () => {
+      S.statsDate = new Date();
       renderStatisticsContent();
     });
   }
