@@ -318,13 +318,13 @@ router.get('/overtime', authenticate, (req, res) => {
   const earliest = getEarliestTargetDate(db, uid);
   if (!earliest) return res.json({ overtime: startOvertime });
 
-  const today = fmtDate(new Date());
+  const dateTo = req.query.date_to || fmtDate(new Date());
   const entries = db.prepare(
     'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date'
-  ).all(uid, earliest, today);
+  ).all(uid, earliest, dateTo);
 
   const ist = calcActualHours(entries);
-  const soll = calcTargetHours(db, uid, earliest, today);
+  const soll = calcTargetHours(db, uid, earliest, dateTo);
   const overtime = Math.round((startOvertime + ist - soll) * 100) / 100;
   res.json({ overtime });
 });

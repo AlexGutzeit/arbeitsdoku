@@ -516,7 +516,7 @@ async function renderDashboardContent() {
     try {
       const [th, ot] = await Promise.all([
         api('GET', `/api/statistics/target-hours?date_from=${range.from}&date_to=${range.to}`),
-        api('GET', '/api/statistics/overtime'),
+        api('GET', `/api/statistics/overtime?date_to=${range.to}`),
       ]);
       if (th) targetHours = th.target_hours;
       if (ot) cumulativeOvertime = ot.overtime;
