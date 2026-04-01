@@ -296,6 +296,7 @@ function render() {
   else if (route === '/statistics') renderStatistics();
   else if (route === '/planning') renderPlanning();
   else if (route === '/planning/new') renderPlanningForm();
+  else if (route.startsWith('/planning/edit-group/')) renderPlanningForm(null, null, route.split('/').pop());
   else if (route.startsWith('/planning/edit/')) renderPlanningForm(route.split('/').pop());
   else if (route.startsWith('/planning/replan/')) renderPlanningForm(null, route.split('/').pop());
   else if (route.startsWith('/planning/accept/')) renderEntryForm(null, null, route.split('/').pop());
@@ -1400,7 +1401,14 @@ async function renderPlanningContent() {
     });
   });
   mainEl.querySelectorAll('.plan-edit-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => { e.stopPropagation(); navigate('/planning/edit/' + btn.dataset.id); });
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (btn.dataset.group) {
+        navigate('/planning/edit-group/' + btn.dataset.group);
+      } else {
+        navigate('/planning/edit/' + btn.dataset.id);
+      }
+    });
   });
   mainEl.querySelectorAll('.plan-del-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -1504,7 +1512,7 @@ function renderPlanningTimeline(entries, canEdit) {
 
       let actionsHtml = '';
       if (canEdit && height > 30) {
-        actionsHtml = `${e.address ? `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}<button type="button" class="plan-action-btn plan-edit-btn" data-id="${e.id}" title="Bearbeiten">&#9998;</button><button type="button" class="plan-action-btn plan-del-btn" data-id="${e.id}" title="Löschen">&#10005;</button>`;
+        actionsHtml = `${e.address ? `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}<button type="button" class="plan-action-btn plan-edit-btn" data-id="${e.id}" data-group="${e.group_id || ''}" title="Bearbeiten">&#9998;</button><button type="button" class="plan-action-btn plan-del-btn" data-id="${e.id}" title="Löschen">&#10005;</button>`;
       } else if (e.address) {
         actionsHtml = `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>`;
       }
@@ -1650,9 +1658,11 @@ function renderPlanningGrid(entries, range, view, canEdit) {
 }
 
 // --- Planning Form ---
-async function renderPlanningForm(editId, replanId) {
+async function renderPlanningForm(editId, replanId, editGroupId) {
   let entry = null;
   let replanEntry = null;
+  let groupEntries = null;
+  let groupAssigned = null;
 
   try {
     const pData = await api('GET', '/api/projects');
@@ -1675,14 +1685,119 @@ async function renderPlanningForm(editId, replanId) {
     } catch (e) { toast(e.message, 'error'); navigate('/planning'); return; }
   }
 
+  if (editGroupId) {
+    try {
+      const data = await api('GET', '/api/planning/group/' + editGroupId);
+      if (data) { groupEntries = data.entries; groupAssigned = data.assigned_users; }
+    } catch (e) { toast(e.message, 'error'); navigate('/planning'); return; }
+  }
+
   const isEdit = !!entry;
+  const isGroupEdit = !!groupEntries;
   const source = replanEntry;
-  const title = isEdit ? 'Planung bearbeiten' : (source ? 'Auftrag erneut planen' : 'Neue Planung');
-  const assignedIds = entry ? entry.assigned_users.map(u => u.user_id) : (source ? source.assigned_users.map(u => u.user_id) : []);
+  const ref = entry || (groupEntries && groupEntries[0]) || source;
+  const title = isEdit ? 'Planung bearbeiten' : (isGroupEdit ? 'Planungsgruppe bearbeiten' : (source ? 'Auftrag erneut planen' : 'Neue Planung'));
+  const assignedIds = entry ? entry.assigned_users.map(u => u.user_id) : (groupAssigned ? groupAssigned.map(u => u.user_id) : (source ? source.assigned_users.map(u => u.user_id) : []));
   const workers = getWorkerUsers();
 
+  // Tage-State für dynamische Liste
+  let planDays = [];
+  if (isGroupEdit) {
+    planDays = groupEntries.map(e => ({ date: e.date, time_from: e.time_from, time_to: e.time_to, break_minutes: e.break_minutes }));
+  } else if (isEdit) {
+    planDays = [{ date: entry.date, time_from: entry.time_from, time_to: entry.time_to, break_minutes: entry.break_minutes }];
+  } else if (!source) {
+    const today = formatDateISO(new Date());
+    planDays = [{ date: today, time_from: '07:00', time_to: '15:30', break_minutes: 30 }];
+  }
+
+  function renderDayRows() {
+    if (!planDays.length) return '<div class="empty-state" style="padding:1rem;font-size:0.85rem;">Keine Tage ausgewählt</div>';
+    const dayNames = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+    return planDays.map((d, i) => {
+      const dt = new Date(d.date + 'T12:00:00');
+      const dn = dayNames[dt.getDay()];
+      return `<div class="plan-day-row" data-idx="${i}">
+        <button type="button" class="btn btn-danger btn-sm plan-day-del" data-idx="${i}" title="Tag entfernen">&#10005;</button>
+        <span class="plan-day-label">${dn}, ${formatDateDE(d.date)}</span>
+        <input type="time" class="form-control plan-day-from" data-idx="${i}" value="${d.time_from}">
+        <span>–</span>
+        <input type="time" class="form-control plan-day-to" data-idx="${i}" value="${d.time_to}">
+        <span>Pause</span>
+        <input type="number" class="form-control plan-day-break" data-idx="${i}" value="${d.break_minutes}" min="0" step="5" style="width:60px">
+        <span>min</span>
+      </div>`;
+    }).join('');
+  }
+
+  function getDateRange() {
+    if (!planDays.length) return { from: formatDateISO(new Date()), to: formatDateISO(new Date()) };
+    const sorted = planDays.map(d => d.date).sort();
+    return { from: sorted[0], to: sorted[sorted.length - 1] };
+  }
+
+  function generateWeekdays(from, to) {
+    const days = [];
+    const start = new Date(from + 'T12:00:00');
+    const end = new Date(to + 'T12:00:00');
+    const cur = new Date(start);
+    const maxDays = 100; // ~3 Monate Sicherheit
+    let count = 0;
+    while (cur <= end && count < maxDays) {
+      const dow = cur.getDay();
+      if (dow !== 0 && dow !== 6) {
+        days.push(formatDateISO(cur));
+      }
+      cur.setDate(cur.getDate() + 1);
+      count++;
+    }
+    return days;
+  }
+
+  function rebuildDaysFromRange() {
+    const from = document.getElementById('pf-date-from').value;
+    const to = document.getElementById('pf-date-to').value;
+    if (!from || !to || from > to) return;
+    // Prüfe 3-Monats-Limit
+    const diffMs = new Date(to + 'T12:00:00') - new Date(from + 'T12:00:00');
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    if (diffDays > 93) { toast('Maximaler Zeitraum: 3 Monate', 'error'); return; }
+    const newDates = generateWeekdays(from, to);
+    // Bestehende Zeiten beibehalten wenn Tag schon existiert
+    const existing = {};
+    planDays.forEach(d => { existing[d.date] = d; });
+    planDays = newDates.map(date => existing[date] || { date, time_from: '07:00', time_to: '15:30', break_minutes: 30 });
+    refreshDayList();
+  }
+
+  function refreshDayList() {
+    const container = document.getElementById('plan-days-list');
+    if (container) container.innerHTML = renderDayRows();
+    bindDayEvents();
+  }
+
+  function bindDayEvents() {
+    document.querySelectorAll('.plan-day-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        planDays.splice(Number(btn.dataset.idx), 1);
+        refreshDayList();
+      });
+    });
+    document.querySelectorAll('.plan-day-from').forEach(inp => {
+      inp.addEventListener('change', () => { planDays[Number(inp.dataset.idx)].time_from = inp.value; });
+    });
+    document.querySelectorAll('.plan-day-to').forEach(inp => {
+      inp.addEventListener('change', () => { planDays[Number(inp.dataset.idx)].time_to = inp.value; });
+    });
+    document.querySelectorAll('.plan-day-break').forEach(inp => {
+      inp.addEventListener('change', () => { planDays[Number(inp.dataset.idx)].break_minutes = parseInt(inp.value) || 0; });
+    });
+  }
+
+  const dateRange = getDateRange();
+
   const content = `
-    <div class="card" style="max-width:600px;margin:0 auto;">
+    <div class="card" style="max-width:700px;margin:0 auto;">
       <div class="card-header">
         <h2>${title}</h2>
         <button class="btn btn-outline btn-sm" id="back-btn">Zurück</button>
@@ -1696,55 +1811,60 @@ async function renderPlanningForm(editId, replanId) {
             `).join('')}
           </div>
         </div>
-        <div class="form-group">
-          <label>Datum</label>
-          <input type="date" class="form-control" id="pf-date" value="${entry ? entry.date : (source ? '' : formatDateISO(new Date()))}" ${!source ? 'required' : ''}>
-        </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Von</label>
-            <input type="time" class="form-control" id="pf-from" value="${entry ? entry.time_from : '07:00'}" required>
+            <label>Von-Datum</label>
+            <input type="date" class="form-control" id="pf-date-from" value="${dateRange.from}">
           </div>
           <div class="form-group">
-            <label>Bis</label>
-            <input type="time" class="form-control" id="pf-to" value="${entry ? entry.time_to : '15:30'}" required>
+            <label>Bis-Datum</label>
+            <input type="date" class="form-control" id="pf-date-to" value="${dateRange.to}">
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;">
+            <button type="button" class="btn btn-outline btn-sm" id="pf-gen-days">Tage generieren</button>
           </div>
         </div>
         <div class="form-group">
-          <label>Pause (Minuten)</label>
-          <input type="number" class="form-control" id="pf-break" value="${entry ? entry.break_minutes : 30}" min="0" step="5">
+          <label>Tage</label>
+          <div id="plan-days-list" class="plan-days-list">
+            ${renderDayRows()}
+          </div>
+          <div class="plan-day-add" style="margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center;">
+            <input type="date" class="form-control" id="pf-add-day" style="width:auto;">
+            <button type="button" class="btn btn-outline btn-sm" id="pf-add-day-btn">+ Tag hinzufügen</button>
+          </div>
         </div>
         <div class="form-group">
           <label>Adresse / Arbeitsort</label>
           <div class="input-with-btn">
-            <input type="text" class="form-control" id="pf-address" value="${esc(entry?.address || source?.address || '')}" placeholder="z.B. Musterstraße 1, 12345 Berlin">
+            <input type="text" class="form-control" id="pf-address" value="${esc(ref?.address || '')}" placeholder="z.B. Musterstraße 1, 12345 Berlin">
             <button type="button" class="btn btn-outline btn-sm btn-nav" id="pf-nav" title="Navigation starten">&#128506;</button>
           </div>
         </div>
         <div class="form-group">
           <label>Kunde</label>
-          <input type="text" class="form-control" id="pf-client" value="${esc(entry?.client || source?.client || '')}" placeholder="Kundenname">
+          <input type="text" class="form-control" id="pf-client" value="${esc(ref?.client || '')}" placeholder="Kundenname">
         </div>
         <div class="form-row">
           <div class="form-group">
             <label>Projekt (Auswahl)</label>
             <select class="form-control" id="pf-project">
               <option value="">-- Kein Projekt --</option>
-              ${S.projects.map(p => `<option value="${p.id}" ${p.id == (entry?.project_id || source?.project_id || '') ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+              ${S.projects.map(p => `<option value="${p.id}" ${p.id == (ref?.project_id || '') ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
             <label>Oder Freitext</label>
-            <input type="text" class="form-control" id="pf-project-text" value="${(entry?.project_id || source?.project_id) ? '' : esc(entry?.project_text || source?.project_text || '')}" placeholder="Projektname" ${(entry?.project_id || source?.project_id) ? 'disabled' : ''}>
+            <input type="text" class="form-control" id="pf-project-text" value="${ref?.project_id ? '' : esc(ref?.project_text || '')}" placeholder="Projektname" ${ref?.project_id ? 'disabled' : ''}>
           </div>
         </div>
         <div class="form-group">
           <label>Beschreibung</label>
-          <textarea class="form-control" id="pf-desc" rows="3" placeholder="Was soll gemacht werden?">${esc(entry?.description || source?.description || '')}</textarea>
+          <textarea class="form-control" id="pf-desc" rows="3" placeholder="Was soll gemacht werden?">${esc(ref?.description || '')}</textarea>
         </div>
-        <button type="submit" class="btn btn-primary btn-block">${isEdit ? 'Speichern' : 'Planung erstellen'}</button>
+        <button type="submit" class="btn btn-primary btn-block">${(isEdit || isGroupEdit) ? 'Speichern' : 'Planung erstellen'}</button>
         ${isEdit ? `<button type="button" class="btn btn-outline btn-block" id="replan-entry" style="margin-top:0.5rem">Auftrag erneut planen</button>` : ''}
-        ${isEdit ? '<button type="button" class="btn btn-danger btn-block" id="delete-planning" style="margin-top:0.5rem">Planung löschen</button>' : ''}
+        ${(isEdit || isGroupEdit) ? '<button type="button" class="btn btn-danger btn-block" id="delete-planning" style="margin-top:0.5rem">Planung löschen</button>' : ''}
       </form>
     </div>`;
 
@@ -1752,8 +1872,26 @@ async function renderPlanningForm(editId, replanId) {
   bindLayout();
   const fab = document.getElementById('fab-new');
   if (fab) fab.style.display = 'none';
+  bindDayEvents();
 
   document.getElementById('back-btn').addEventListener('click', () => navigate('/planning'));
+
+  // Tage generieren aus Datumsbereich
+  document.getElementById('pf-gen-days').addEventListener('click', rebuildDaysFromRange);
+  document.getElementById('pf-date-from').addEventListener('change', rebuildDaysFromRange);
+  document.getElementById('pf-date-to').addEventListener('change', rebuildDaysFromRange);
+
+  // Tag hinzufügen
+  document.getElementById('pf-add-day-btn').addEventListener('click', () => {
+    const dateInput = document.getElementById('pf-add-day');
+    const newDate = dateInput.value;
+    if (!newDate) { toast('Bitte Datum auswählen', 'error'); return; }
+    if (planDays.some(d => d.date === newDate)) { toast('Tag bereits vorhanden', 'error'); return; }
+    planDays.push({ date: newDate, time_from: '07:00', time_to: '15:30', break_minutes: 30 });
+    planDays.sort((a, b) => a.date.localeCompare(b.date));
+    dateInput.value = '';
+    refreshDayList();
+  });
 
   // Projekt-Auswahl: Adresse übernehmen + Freitext steuern
   document.getElementById('pf-project').addEventListener('change', (e) => {
@@ -1779,12 +1917,9 @@ async function renderPlanningForm(editId, replanId) {
     e.preventDefault();
     const checked = [...document.querySelectorAll('input[name="assigned"]:checked')].map(cb => Number(cb.value));
     if (!checked.length) { toast('Mindestens einen Mitarbeiter zuweisen', 'error'); return; }
+    if (!planDays.length) { toast('Mindestens einen Tag hinzufügen', 'error'); return; }
 
-    const body = {
-      date: document.getElementById('pf-date').value,
-      time_from: document.getElementById('pf-from').value,
-      time_to: document.getElementById('pf-to').value,
-      break_minutes: parseInt(document.getElementById('pf-break').value) || 0,
+    const common = {
       address: document.getElementById('pf-address').value,
       client: document.getElementById('pf-client').value,
       project_id: document.getElementById('pf-project').value || null,
@@ -1795,10 +1930,22 @@ async function renderPlanningForm(editId, replanId) {
 
     try {
       if (isEdit) {
-        await api('PUT', '/api/planning/' + editId, body);
+        // Einzeleintrag bearbeiten
+        const day = planDays[0];
+        await api('PUT', '/api/planning/' + editId, { ...common, date: day.date, time_from: day.time_from, time_to: day.time_to, break_minutes: day.break_minutes });
         toast('Planung aktualisiert', 'success');
+      } else if (isGroupEdit) {
+        // Gruppe aktualisieren
+        await api('PUT', '/api/planning/group/' + editGroupId, { ...common, days: planDays });
+        toast('Planungsgruppe aktualisiert', 'success');
       } else {
-        await api('POST', '/api/planning', body);
+        // Neue Planung (einzeln oder Gruppe)
+        if (planDays.length === 1) {
+          const day = planDays[0];
+          await api('POST', '/api/planning', { ...common, date: day.date, time_from: day.time_from, time_to: day.time_to, break_minutes: day.break_minutes });
+        } else {
+          await api('POST', '/api/planning', { ...common, days: planDays });
+        }
         toast('Planung erstellt', 'success');
       }
       navigate('/planning');
@@ -1812,7 +1959,11 @@ async function renderPlanningForm(editId, replanId) {
   document.getElementById('delete-planning')?.addEventListener('click', async () => {
     if (!confirm('Planung wirklich löschen?')) return;
     try {
-      await api('DELETE', '/api/planning/' + editId);
+      if (isGroupEdit) {
+        await api('DELETE', '/api/planning/group/' + editGroupId);
+      } else {
+        await api('DELETE', '/api/planning/' + editId);
+      }
       toast('Planung gelöscht', 'success');
       navigate('/planning');
     } catch (err) { toast(err.message, 'error'); }

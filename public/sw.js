@@ -1,4 +1,4 @@
-const CACHE_VERSION = 85;
+const CACHE_VERSION = 86;
 const CACHE_NAME = 'arbeitsdoku-v' + CACHE_VERSION;
 
 // Install: NICHT sofort aktivieren — warten bis User bestätigt oder App neu startet

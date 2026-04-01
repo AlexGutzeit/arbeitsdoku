@@ -346,6 +346,15 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: group_id für Planungsgruppen
+  try {
+    const planCols = db.prepare("PRAGMA table_info(planning_entries)").all();
+    if (!planCols.some(c => c.name === 'group_id')) {
+      db.exec("ALTER TABLE planning_entries ADD COLUMN group_id TEXT");
+      console.log('Migration: group_id in planning_entries hinzugefügt.');
+    }
+  } catch (e) {}
+
   // Seed-Daten nur wenn DB leer
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {

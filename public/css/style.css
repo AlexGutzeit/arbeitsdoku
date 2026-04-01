@@ -1444,3 +1444,17 @@ table.data-table .actions button { margin-left: 0.25rem; }
   white-space: nowrap;
 }
 #sw-update-btn:hover { opacity: 0.9; }
+
+/* Planungs-Tageszeilen */
+.plan-days-list { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; max-height: 400px; overflow-y: auto; }
+.plan-day-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.plan-day-row:last-child { border-bottom: none; }
+.plan-day-label { font-weight: 600; font-size: 0.82rem; min-width: 110px; }
+.plan-day-row input[type="time"] { width: 100px; padding: 0.3rem; font-size: 0.82rem; }
+.plan-day-row input[type="number"] { padding: 0.3rem; font-size: 0.82rem; }
+.plan-day-row span { font-size: 0.82rem; color: var(--text-light); }
+.plan-day-del { padding: 0.1rem 0.4rem !important; font-size: 0.7rem !important; line-height: 1; }
+@media (max-width: 600px) {
+  .plan-day-label { min-width: 90px; font-size: 0.78rem; }
+  .plan-day-row input[type="time"] { width: 85px; }
+}
