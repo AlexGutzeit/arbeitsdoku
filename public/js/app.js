@@ -1795,6 +1795,97 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
   }
 
   const dateRange = getDateRange();
+  let multiMode = isGroupEdit || planDays.length > 1;
+
+  function renderSingleDaySection() {
+    const day = planDays[0] || { date: formatDateISO(new Date()), time_from: '07:00', time_to: '15:30', break_minutes: 30 };
+    return `
+      <div class="form-row">
+        <div class="form-group">
+          <label>Datum</label>
+          <input type="date" class="form-control" id="pf-single-date" value="${day.date}">
+        </div>
+        <div class="form-group">
+          <label>Von</label>
+          <input type="time" class="form-control" id="pf-single-from" value="${day.time_from}">
+        </div>
+        <div class="form-group">
+          <label>Bis</label>
+          <input type="time" class="form-control" id="pf-single-to" value="${day.time_to}">
+        </div>
+        <div class="form-group">
+          <label>Pause (min)</label>
+          <input type="number" class="form-control" id="pf-single-break" value="${day.break_minutes}" min="0" step="5" style="width:80px">
+        </div>
+      </div>`;
+  }
+
+  function renderMultiDaySection() {
+    const dr = getDateRange();
+    return `
+      <div class="form-row">
+        <div class="form-group">
+          <label>Von-Datum</label>
+          <input type="date" class="form-control" id="pf-date-from" value="${dr.from}">
+        </div>
+        <div class="form-group">
+          <label>Bis-Datum</label>
+          <input type="date" class="form-control" id="pf-date-to" value="${dr.to}">
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;">
+          <button type="button" class="btn btn-outline btn-sm" id="pf-gen-days">Tage generieren</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Tage</label>
+        <div id="plan-days-list" class="plan-days-list">
+          ${renderDayRows()}
+        </div>
+        <div class="plan-day-add" style="margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center;">
+          <input type="date" class="form-control" id="pf-add-day" style="width:auto;">
+          <button type="button" class="btn btn-outline btn-sm" id="pf-add-day-btn">+ Tag hinzufügen</button>
+        </div>
+      </div>`;
+  }
+
+  function refreshDateSection() {
+    const container = document.getElementById('plan-date-section');
+    if (!container) return;
+    container.innerHTML = multiMode ? renderMultiDaySection() : renderSingleDaySection();
+    bindDateSectionEvents();
+  }
+
+  function bindDateSectionEvents() {
+    if (multiMode) {
+      document.getElementById('pf-gen-days')?.addEventListener('click', rebuildDaysFromRange);
+      document.getElementById('pf-date-from')?.addEventListener('change', rebuildDaysFromRange);
+      document.getElementById('pf-date-to')?.addEventListener('change', rebuildDaysFromRange);
+      document.getElementById('pf-add-day-btn')?.addEventListener('click', () => {
+        const dateInput = document.getElementById('pf-add-day');
+        const newDate = dateInput.value;
+        if (!newDate) { toast('Bitte Datum auswählen', 'error'); return; }
+        if (planDays.some(d => d.date === newDate)) { toast('Tag bereits vorhanden', 'error'); return; }
+        planDays.push({ date: newDate, time_from: '07:00', time_to: '15:30', break_minutes: 30 });
+        planDays.sort((a, b) => a.date.localeCompare(b.date));
+        dateInput.value = '';
+        refreshDayList();
+      });
+      bindDayEvents();
+    } else {
+      // Einzeltag-Inputs live in planDays[0] syncen
+      const syncSingle = () => {
+        const d = document.getElementById('pf-single-date')?.value;
+        const f = document.getElementById('pf-single-from')?.value;
+        const t = document.getElementById('pf-single-to')?.value;
+        const b = parseInt(document.getElementById('pf-single-break')?.value) || 0;
+        planDays = [{ date: d, time_from: f, time_to: t, break_minutes: b }];
+      };
+      document.getElementById('pf-single-date')?.addEventListener('change', syncSingle);
+      document.getElementById('pf-single-from')?.addEventListener('change', syncSingle);
+      document.getElementById('pf-single-to')?.addEventListener('change', syncSingle);
+      document.getElementById('pf-single-break')?.addEventListener('change', syncSingle);
+    }
+  }
 
   const content = `
     <div class="card" style="max-width:700px;margin:0 auto;">
@@ -1811,28 +1902,16 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
             `).join('')}
           </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Von-Datum</label>
-            <input type="date" class="form-control" id="pf-date-from" value="${dateRange.from}">
-          </div>
-          <div class="form-group">
-            <label>Bis-Datum</label>
-            <input type="date" class="form-control" id="pf-date-to" value="${dateRange.to}">
-          </div>
-          <div class="form-group" style="display:flex;align-items:flex-end;">
-            <button type="button" class="btn btn-outline btn-sm" id="pf-gen-days">Tage generieren</button>
-          </div>
+        <div class="plan-mode-toggle">
+          <span class="${!multiMode ? 'active' : ''}" id="lbl-single">Einzeltag</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="pf-multi-toggle" ${multiMode ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="${multiMode ? 'active' : ''}" id="lbl-multi">Mehrere Tage</span>
         </div>
-        <div class="form-group">
-          <label>Tage</label>
-          <div id="plan-days-list" class="plan-days-list">
-            ${renderDayRows()}
-          </div>
-          <div class="plan-day-add" style="margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center;">
-            <input type="date" class="form-control" id="pf-add-day" style="width:auto;">
-            <button type="button" class="btn btn-outline btn-sm" id="pf-add-day-btn">+ Tag hinzufügen</button>
-          </div>
+        <div id="plan-date-section">
+          ${multiMode ? renderMultiDaySection() : renderSingleDaySection()}
         </div>
         <div class="form-group">
           <label>Adresse / Arbeitsort</label>
@@ -1872,25 +1951,19 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
   bindLayout();
   const fab = document.getElementById('fab-new');
   if (fab) fab.style.display = 'none';
-  bindDayEvents();
+  bindDateSectionEvents();
 
   document.getElementById('back-btn').addEventListener('click', () => navigate('/planning'));
 
-  // Tage generieren aus Datumsbereich
-  document.getElementById('pf-gen-days').addEventListener('click', rebuildDaysFromRange);
-  document.getElementById('pf-date-from').addEventListener('change', rebuildDaysFromRange);
-  document.getElementById('pf-date-to').addEventListener('change', rebuildDaysFromRange);
-
-  // Tag hinzufügen
-  document.getElementById('pf-add-day-btn').addEventListener('click', () => {
-    const dateInput = document.getElementById('pf-add-day');
-    const newDate = dateInput.value;
-    if (!newDate) { toast('Bitte Datum auswählen', 'error'); return; }
-    if (planDays.some(d => d.date === newDate)) { toast('Tag bereits vorhanden', 'error'); return; }
-    planDays.push({ date: newDate, time_from: '07:00', time_to: '15:30', break_minutes: 30 });
-    planDays.sort((a, b) => a.date.localeCompare(b.date));
-    dateInput.value = '';
-    refreshDayList();
+  // Toggle Einzeltag / Mehrere Tage
+  document.getElementById('pf-multi-toggle').addEventListener('change', (e) => {
+    multiMode = e.target.checked;
+    document.getElementById('lbl-single').classList.toggle('active', !multiMode);
+    document.getElementById('lbl-multi').classList.toggle('active', multiMode);
+    if (multiMode && planDays.length === 0) {
+      planDays = [{ date: formatDateISO(new Date()), time_from: '07:00', time_to: '15:30', break_minutes: 30 }];
+    }
+    refreshDateSection();
   });
 
   // Projekt-Auswahl: Adresse übernehmen + Freitext steuern
