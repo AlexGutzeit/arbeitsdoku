@@ -1,9 +1,9 @@
-const CACHE_VERSION = 84;
+const CACHE_VERSION = 85;
 const CACHE_NAME = 'arbeitsdoku-v' + CACHE_VERSION;
 
-// Install: sofort aktivieren
+// Install: NICHT sofort aktivieren — warten bis User bestätigt oder App neu startet
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  // kein skipWaiting() hier — wird per Nachricht oder beim nächsten App-Start aktiviert
 });
 
 // Activate: alle alten Caches löschen
@@ -13,6 +13,13 @@ self.addEventListener('activate', (event) => {
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
+});
+
+// Auf SKIP_WAITING-Nachricht vom Client reagieren (Button "Jetzt aktualisieren")
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Fetch: Network-first für alles, Cache nur als Offline-Fallback

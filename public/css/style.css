@@ -1430,3 +1430,17 @@ table.data-table .actions button { margin-left: 0.25rem; }
 @media (max-width: 640px) {
   .table-wrap { margin: 0 -0.5rem; padding: 0 0.5rem; }
 }
+
+/* Update-Banner */
+#sw-update-banner {
+  position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%);
+  background: #1e293b; color: #f1f5f9; padding: 0.7rem 1.2rem;
+  border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  z-index: 9999; font-size: 0.85rem; display: flex; align-items: center; gap: 0.8rem;
+}
+#sw-update-btn {
+  background: var(--primary); color: #fff; border: none; border-radius: 6px;
+  padding: 0.4rem 0.8rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  white-space: nowrap;
+}
+#sw-update-btn:hover { opacity: 0.9; }

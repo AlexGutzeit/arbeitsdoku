@@ -10,21 +10,34 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <title>Arbeitsdokumentation</title>
-  <link rel="stylesheet" href="/css/style.css?v=84">
+  <link rel="stylesheet" href="/css/style.css?v=85">
 </head>
 <body>
   <div id="app"></div>
-  <script src="/js/app.js?v=84"></script>
+  <script src="/js/app.js?v=85"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').then(reg => {
-        // Alle 60 Sekunden nach neuem Service Worker suchen
         setInterval(() => reg.update(), 60000);
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              // Neuer SW wartet — Banner zeigen
+              const b = document.createElement('div');
+              b.id = 'sw-update-banner';
+              b.innerHTML = 'Neue Version verfügbar <button id="sw-update-btn">Jetzt aktualisieren</button>';
+              document.body.appendChild(b);
+              document.getElementById('sw-update-btn').addEventListener('click', () => {
+                nw.postMessage({ type: 'SKIP_WAITING' });
+              });
+            }
+          });
+        });
       });
-      // Bei neuem Service Worker automatisch neu laden
-      let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) { refreshing = true; location.reload(); }
+        location.reload();
       });
     }
   </script>
