@@ -2054,9 +2054,12 @@ async function renderTools() {
   if (!mainEl) return;
 
   let tools = [];
+  let projects = [];
   try {
     const data = await api('GET', '/api/tools');
     if (data) tools = data.tools;
+    const pData = await api('GET', '/api/projects');
+    if (pData) projects = pData.projects;
   } catch (e) {}
 
   const canManage = S.user.role === 'admin' || S.user.role === 'chef';
@@ -2068,6 +2071,32 @@ async function renderTools() {
     return `${dd}.${m}.${y} ${t ? t.slice(0, 5) : ''}`;
   };
 
+  const projectOptions = `<option value="">-- Kein Projekt --</option>` +
+    projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+
+  function checkoutFormHtml(toolId, confirmLabel, endpoint) {
+    return `<div class="tool-checkout-form" id="tcf-${toolId}" style="display:none;">
+      <div class="form-row">
+        <div class="form-group" style="flex:1;min-width:140px;">
+          <label>Projekt</label>
+          <select class="form-control" id="tcf-proj-${toolId}">${projectOptions}</select>
+        </div>
+        <div class="form-group" style="flex:1;min-width:120px;">
+          <label>Oder Freitext</label>
+          <input type="text" class="form-control" id="tcf-text-${toolId}" placeholder="Projektname">
+        </div>
+        <div class="form-group" style="flex:2;min-width:160px;">
+          <label>Adresse</label>
+          <input type="text" class="form-control" id="tcf-addr-${toolId}" placeholder="Adresse (optional)">
+        </div>
+        <div style="display:flex;gap:0.4rem;align-items:flex-end;padding-bottom:0.1rem;">
+          <button class="btn btn-outline btn-sm tcf-cancel" data-id="${toolId}">Abbrechen</button>
+          <button class="btn btn-primary btn-sm tcf-confirm" data-id="${toolId}" data-endpoint="${endpoint}">${confirmLabel}</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
   let toolsHtml = '';
   if (tools.length === 0) {
     toolsHtml = '<p style="color:var(--text-light)">Noch keine Werkzeuge angelegt.</p>';
@@ -2076,23 +2105,36 @@ async function renderTools() {
       const isOut = !!t.checkout_id;
       const isMine = isOut && t.checked_out_by === S.user.id;
       const statusClass = isOut ? 'tool-out' : 'tool-in';
+
+      const locationParts = [
+        t.checkout_project_name || t.checkout_project_text || '',
+        t.checkout_address || ''
+      ].filter(Boolean);
+      const locationHtml = isOut && locationParts.length
+        ? `<span style="font-size:0.78rem;color:var(--text-light);">&#128205; ${esc(locationParts.join(' / '))}</span>`
+        : '';
+
       const statusText = isOut
         ? `${esc(t.checked_out_by_name)} seit ${fmtDT(t.checked_out_at)}`
         : 'Im Lager';
 
       let actions = '';
+      let inlineForm = '';
       if (!isOut) {
         actions = `<button class="btn btn-sm btn-primary tool-checkout" data-id="${t.id}">Entnehmen</button>`;
+        inlineForm = checkoutFormHtml(t.id, '&#10003; Entnehmen', 'checkout');
       } else if (isMine) {
         actions = `<button class="btn btn-sm btn-success tool-return" data-id="${t.id}">Zurückgeben</button>`;
       } else {
         actions = `<button class="btn btn-sm btn-outline tool-takeover" data-id="${t.id}">Übernehmen</button>`;
+        inlineForm = checkoutFormHtml(t.id, '&#10003; Übernehmen', 'takeover');
       }
 
       return `<div class="tool-item ${statusClass}">
         <div class="tool-info">
           <strong>${esc(t.name)}</strong>
           <span class="tool-status">${statusText}</span>
+          ${locationHtml}
         </div>
         <div class="tool-actions">
           ${actions}
@@ -2100,6 +2142,7 @@ async function renderTools() {
           ${canManage ? `<button class="btn btn-sm btn-outline tool-edit" data-id="${t.id}" data-name="${esc(t.name)}">&#9998;</button>` : ''}
           ${canManage ? `<button class="btn btn-sm btn-danger tool-delete" data-id="${t.id}">&#10005;</button>` : ''}
         </div>
+        ${inlineForm}
       </div>`;
     }).join('');
   }
@@ -2142,14 +2185,53 @@ async function renderTools() {
     if (e.key === 'Enter') document.getElementById('tool-add')?.click();
   });
 
-  // Entnehmen
-  mainEl.querySelectorAll('.tool-checkout').forEach(btn => {
+  // Entnehmen / Übernehmen — Inline-Form öffnen
+  mainEl.querySelectorAll('.tool-checkout, .tool-takeover').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById(`tcf-${btn.dataset.id}`);
+      if (!form) return;
+      form.style.display = form.style.display === 'none' ? '' : 'none';
+      // Projekt-Dropdown und Freitext verknüpfen
+      const projSel = document.getElementById(`tcf-proj-${btn.dataset.id}`);
+      const projText = document.getElementById(`tcf-text-${btn.dataset.id}`);
+      const addrInp = document.getElementById(`tcf-addr-${btn.dataset.id}`);
+      if (projSel && !projSel._bound) {
+        projSel._bound = true;
+        projSel.addEventListener('change', () => {
+          const proj = projects.find(p => p.id == projSel.value);
+          if (proj) {
+            if (proj.address) addrInp.value = proj.address;
+            projText.value = '';
+            projText.disabled = true;
+          } else {
+            projText.disabled = false;
+          }
+        });
+      }
+    });
+  });
+
+  // Inline-Form Bestätigen
+  mainEl.querySelectorAll('.tcf-confirm').forEach(btn => {
     btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const endpoint = btn.dataset.endpoint;
+      const project_id = document.getElementById(`tcf-proj-${id}`)?.value || null;
+      const project_text = document.getElementById(`tcf-text-${id}`)?.value || null;
+      const address = document.getElementById(`tcf-addr-${id}`)?.value || null;
       try {
-        await api('POST', `/api/tools/${btn.dataset.id}/checkout`);
-        toast('Werkzeug entnommen', 'success');
+        await api('POST', `/api/tools/${id}/${endpoint}`, { project_id: project_id || null, project_text, address });
+        toast(endpoint === 'checkout' ? 'Werkzeug entnommen' : 'Werkzeug übernommen', 'success');
         renderTools();
       } catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Inline-Form Abbrechen
+  mainEl.querySelectorAll('.tcf-cancel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById(`tcf-${btn.dataset.id}`);
+      if (form) form.style.display = 'none';
     });
   });
 
@@ -2159,18 +2241,6 @@ async function renderTools() {
       try {
         await api('POST', `/api/tools/${btn.dataset.id}/return`);
         toast('Werkzeug zurückgegeben', 'success');
-        renderTools();
-      } catch (e) { toast(e.message, 'error'); }
-    });
-  });
-
-  // Übernehmen
-  mainEl.querySelectorAll('.tool-takeover').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('Werkzeug von anderem Mitarbeiter übernehmen?')) return;
-      try {
-        await api('POST', `/api/tools/${btn.dataset.id}/takeover`);
-        toast('Werkzeug übernommen', 'success');
         renderTools();
       } catch (e) { toast(e.message, 'error'); }
     });
@@ -2210,13 +2280,19 @@ async function renderTools() {
       try {
         const data = await api('GET', `/api/tools/${toolId}/history`);
         if (data && data.history.length > 0) {
+          const th = `<th style="text-align:left;padding:0.5rem 0.75rem;border-bottom:2px solid var(--border);">`;
+          const td = `padding:0.4rem 0.75rem;border-bottom:1px solid var(--border);`;
           document.getElementById('history-content').innerHTML = `<table class="table" style="font-size:0.85rem;width:100%;border-collapse:separate;border-spacing:0;">
-            <thead><tr><th style="text-align:left;padding:0.5rem 0.75rem;border-bottom:2px solid var(--border);">Wer</th><th style="text-align:left;padding:0.5rem 0.75rem;border-bottom:2px solid var(--border);">Entnommen</th><th style="text-align:left;padding:0.5rem 0.75rem;border-bottom:2px solid var(--border);">Zurück</th></tr></thead>
-            <tbody>${data.history.map(h => `<tr>
-              <td style="padding:0.4rem 0.75rem;border-bottom:1px solid var(--border);">${esc(h.user_name)}</td>
-              <td style="padding:0.4rem 0.75rem;border-bottom:1px solid var(--border);white-space:nowrap;">${fmtDT(h.checked_out_at)}</td>
-              <td style="padding:0.4rem 0.75rem;border-bottom:1px solid var(--border);white-space:nowrap;">${h.returned_at ? fmtDT(h.returned_at) : '<em>unterwegs</em>'}</td>
-            </tr>`).join('')}</tbody>
+            <thead><tr>${th}Wer</th>${th}Entnommen</th>${th}Zurück</th>${th}Projekt / Ort</th></tr></thead>
+            <tbody>${data.history.map(h => {
+              const loc = [h.project_name || h.project_text || '', h.address || ''].filter(Boolean).join(' / ');
+              return `<tr>
+                <td style="${td}">${esc(h.user_name)}</td>
+                <td style="${td}white-space:nowrap;">${fmtDT(h.checked_out_at)}</td>
+                <td style="${td}white-space:nowrap;">${h.returned_at ? fmtDT(h.returned_at) : '<em>unterwegs</em>'}</td>
+                <td style="${td}font-size:0.8rem;color:var(--text-light);">${loc ? esc(loc) : '–'}</td>
+              </tr>`;
+            }).join('')}</tbody>
           </table>
           ${isAdmin() ? `<button class="btn btn-danger btn-sm" id="clear-history" data-id="${toolId}" style="margin-top:0.5rem;">Historie zurücksetzen</button>` : ''}`;
           document.getElementById('clear-history')?.addEventListener('click', async () => {

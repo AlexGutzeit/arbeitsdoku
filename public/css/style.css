@@ -1064,7 +1064,12 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .grid-e-regie { display: block; margin-top: 0.15rem; }
 
 /* Werkzeugliste */
-.tool-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 8px; border: 1px solid var(--border); gap: 0.5rem; }
+.tool-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 8px; border: 1px solid var(--border); gap: 0.5rem; flex-wrap: wrap; }
+.tool-checkout-form { width: 100%; flex-basis: 100%; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.08); margin-top: 0.25rem; }
+.tool-checkout-form .form-row { margin: 0; gap: 0.5rem; flex-wrap: wrap; }
+.tool-checkout-form .form-group { margin: 0; }
+.tool-checkout-form label { font-size: 0.78rem; margin-bottom: 0.2rem; }
+.tool-checkout-form .form-control { font-size: 0.85rem; padding: 0.3rem 0.5rem; }
 .tool-in { background: #dcfce7; border-color: #86efac; }
 .tool-out { background: #fee2e2; border-color: #fca5a5; }
 .tool-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }

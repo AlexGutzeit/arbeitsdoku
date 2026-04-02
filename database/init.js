@@ -355,6 +355,17 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: Projekt/Ort in tool_checkouts
+  try {
+    const tcCols = db.prepare("PRAGMA table_info(tool_checkouts)").all();
+    if (!tcCols.some(c => c.name === 'project_id')) {
+      db.exec("ALTER TABLE tool_checkouts ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL");
+      db.exec("ALTER TABLE tool_checkouts ADD COLUMN project_text TEXT");
+      db.exec("ALTER TABLE tool_checkouts ADD COLUMN address TEXT");
+      console.log('Migration: Projekt/Ort in tool_checkouts hinzugefügt.');
+    }
+  } catch (e) {}
+
   // Seed-Daten nur wenn DB leer
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {

@@ -10,10 +10,15 @@ router.get('/', authenticate, (req, res) => {
   const tools = db.prepare(`
     SELECT t.*,
       tc.id as checkout_id, tc.user_id as checked_out_by, tc.checked_out_at,
-      u.name as checked_out_by_name
+      tc.project_id as checkout_project_id,
+      tc.project_text as checkout_project_text,
+      tc.address as checkout_address,
+      u.name as checked_out_by_name,
+      p.name as checkout_project_name
     FROM tools t
     LEFT JOIN tool_checkouts tc ON tc.tool_id = t.id AND tc.returned_at IS NULL
     LEFT JOIN users u ON tc.user_id = u.id
+    LEFT JOIN projects p ON tc.project_id = p.id
     ORDER BY t.name ASC
   `).all();
   res.json({ tools });
@@ -23,9 +28,10 @@ router.get('/', authenticate, (req, res) => {
 router.get('/:id/history', authenticate, (req, res) => {
   const db = getDb();
   const history = db.prepare(`
-    SELECT tc.*, u.name as user_name
+    SELECT tc.*, u.name as user_name, p.name as project_name
     FROM tool_checkouts tc
     JOIN users u ON tc.user_id = u.id
+    LEFT JOIN projects p ON tc.project_id = p.id
     WHERE tc.tool_id = ?
     ORDER BY tc.checked_out_at DESC
     LIMIT 50
@@ -84,14 +90,16 @@ router.post('/:id/checkout', authenticate, (req, res) => {
   const tool = db.prepare('SELECT * FROM tools WHERE id = ?').get(toolId);
   if (!tool) return res.status(404).json({ error: 'Werkzeug nicht gefunden' });
 
-  // Prüfen ob schon ausgeliehen
   const existing = db.prepare('SELECT * FROM tool_checkouts WHERE tool_id = ? AND returned_at IS NULL').get(toolId);
   if (existing) {
     return res.status(400).json({ error: 'Werkzeug ist bereits entnommen' });
   }
 
+  const { project_id, project_text, address } = req.body;
   const now = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
-  db.prepare('INSERT INTO tool_checkouts (tool_id, user_id, checked_out_at) VALUES (?, ?, ?)').run(toolId, req.user.id, now);
+  db.prepare(
+    'INSERT INTO tool_checkouts (tool_id, user_id, checked_out_at, project_id, project_text, address) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(toolId, req.user.id, now, project_id || null, project_text || null, address || null);
   res.json({ success: true });
 });
 
@@ -104,7 +112,6 @@ router.post('/:id/return', authenticate, (req, res) => {
   if (!checkout) {
     return res.status(400).json({ error: 'Werkzeug ist nicht entnommen' });
   }
-  // Nur der User der es hat oder Admin/Chef darf zurückgeben
   if (checkout.user_id !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'chef') {
     return res.status(403).json({ error: 'Nur der aktuelle Besitzer kann zurückgeben' });
   }
@@ -127,11 +134,12 @@ router.post('/:id/takeover', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Du hast das Werkzeug bereits' });
   }
 
+  const { project_id, project_text, address } = req.body;
   const now = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
-  // Altes Checkout abschließen
   db.prepare('UPDATE tool_checkouts SET returned_at = ? WHERE id = ?').run(now, checkout.id);
-  // Neues Checkout für übernehmenden User
-  db.prepare('INSERT INTO tool_checkouts (tool_id, user_id, checked_out_at) VALUES (?, ?, ?)').run(toolId, req.user.id, now);
+  db.prepare(
+    'INSERT INTO tool_checkouts (tool_id, user_id, checked_out_at, project_id, project_text, address) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(toolId, req.user.id, now, project_id || null, project_text || null, address || null);
   res.json({ success: true });
 });
 
