@@ -50,9 +50,9 @@ function esc(str) {
 
 function fmtH(val) {
   const neg = val < 0;
-  const abs = Math.abs(val);
-  const h = Math.floor(abs);
-  const m = Math.round((abs - h) * 60);
+  const totalMin = Math.round(Math.abs(val) * 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
   return (neg ? '-' : '') + h + ':' + String(m).padStart(2, '0');
 }
 

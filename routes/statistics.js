@@ -362,6 +362,9 @@ router.post('/targets/:userId', authenticate, (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'chef') {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
+  const userId = parseInt(req.params.userId, 10);
+  if (!userId || userId < 1) return res.status(400).json({ error: 'Ungültige Benutzer-ID' });
+
   const db = getDb();
   const { hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from } = req.body;
   if (!valid_from) {
@@ -371,7 +374,7 @@ router.post('/targets/:userId', authenticate, (req, res) => {
   const hpw = (hours_mon || 0) + (hours_tue || 0) + (hours_wed || 0) + (hours_thu || 0) + (hours_fri || 0);
 
   db.prepare('INSERT INTO user_target_hours (user_id, hours_per_week, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-    Number(req.params.userId), hpw, hours_mon || 0, hours_tue || 0, hours_wed || 0, hours_thu || 0, hours_fri || 0, valid_from
+    userId, hpw, hours_mon || 0, hours_tue || 0, hours_wed || 0, hours_thu || 0, hours_fri || 0, valid_from
   );
 
   const latest = db.prepare(
