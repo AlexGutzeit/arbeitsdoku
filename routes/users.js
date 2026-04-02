@@ -8,7 +8,7 @@ const router = express.Router();
 // Einfache Benutzerliste (id + name) für alle authentifizierten User (z.B. Regie-Dropdown)
 router.get('/list', authenticate, (req, res) => {
   const db = getDb();
-  const users = db.prepare("SELECT id, name FROM users WHERE role != 'admin' ORDER BY name").all();
+  const users = db.prepare("SELECT id, name, role FROM users WHERE role != 'admin' ORDER BY name").all();
   res.json({ users });
 });
 

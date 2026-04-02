@@ -1305,7 +1305,7 @@ async function renderPlanning() {
   try {
     const pData = await api('GET', '/api/projects');
     if (pData) S.projects = pData.projects;
-    const uData = await api('GET', '/api/users');
+    const uData = await api('GET', '/api/users/list');
     if (uData) S.users = uData.users;
   } catch (e) {}
 
@@ -1667,7 +1667,7 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
   try {
     const pData = await api('GET', '/api/projects');
     if (pData) S.projects = pData.projects;
-    const uData = await api('GET', '/api/users');
+    const uData = await api('GET', '/api/users/list');
     if (uData) S.users = uData.users;
   } catch (e) {}
 
