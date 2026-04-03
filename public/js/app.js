@@ -3934,7 +3934,7 @@ function showOrderForm(editOrder, orders, manage) {
         </div>
         <div class="form-group" style="width:100px">
           <label>Einheit</label>
-          <input type="text" id="of-unit" class="form-control" value="${esc(unit)}" placeholder="Stk, Rollen…">
+          <input type="text" id="of-unit" class="form-control" value="${esc(unit)}" placeholder="Stk, Bund…">
         </div>
         <div class="form-group" style="flex:1;min-width:150px">
           <label>Produkt *</label>
