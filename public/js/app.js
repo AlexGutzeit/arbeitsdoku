@@ -423,7 +423,7 @@ function layout(content, activeNav) {
     <div class="main">${content}</div>
     ${activeNav === 'planning' ? (canEditPlanning() ? '<button class="fab" id="fab-new" title="Neue Planung">+</button>' : '')
     : activeNav === 'bulletin' ? (canEditBulletin() ? '<button class="fab" id="fab-new" title="Neuer Eintrag">+</button>' : '')
-    : activeNav === 'welcome' ? ''
+    : activeNav === 'welcome' || activeNav === 'orders' || activeNav === 'statistics' ? ''
     : (showNewEntry ? '<button class="fab" id="fab-new" title="Neuer Eintrag">+</button>' : '')}
   `;
 }
