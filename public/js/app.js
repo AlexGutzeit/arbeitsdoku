@@ -301,6 +301,7 @@ function render() {
   else if (route.startsWith('/planning/replan/')) renderPlanningForm(null, route.split('/').pop());
   else if (route.startsWith('/planning/accept/')) renderEntryForm(null, null, route.split('/').pop());
   else if (route === '/tools') renderTools();
+  else if (route === '/orders') renderOrders();
   else if (route === '/bulletin') renderBulletin();
   else if (route === '/bulletin/new') renderBulletinForm();
   else if (route.startsWith('/bulletin/edit/')) renderBulletinForm(route.split('/').pop());
@@ -395,6 +396,9 @@ function layout(content, activeNav) {
         </a>
         <a href="#/tools" class="${activeNav === 'tools' ? 'active' : ''}">
           <span class="icon">&#128295;</span> Werkzeugliste
+        </a>
+        <a href="#/orders" class="${activeNav === 'orders' ? 'active' : ''}">
+          <span class="icon">&#128722;</span> Bestellungen
         </a>
         <a href="#/statistics" class="${activeNav === 'statistics' ? 'active' : ''}">
           <span class="icon">&#128200;</span> Statistik
@@ -3807,6 +3811,213 @@ function drawTimeChart(canvas, timeline, users) {
   canvas.addEventListener('touchstart', e => { showTooltip(e.touches[0].clientX); }, { passive: true });
   canvas.addEventListener('touchmove', e => { showTooltip(e.touches[0].clientX); }, { passive: true });
   canvas.addEventListener('touchend', () => { setTimeout(() => { tooltip.style.display = 'none'; }, 2000); });
+}
+
+// --- Bestellungen ---
+async function renderOrders() {
+  $app().innerHTML = layout('<div class="loading">Laden…</div>', 'orders');
+  bindLayout();
+
+  const manage = isChefOrAdmin() || S.user.role === 'buchhalter';
+  let orders = [];
+  try {
+    const data = await api('GET', '/api/orders');
+    if (!data) return;
+    orders = data.orders;
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  const mainEl = document.querySelector('.main');
+  mainEl.innerHTML = `
+    <div class="card" style="max-width:900px;margin:0 auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h2>Bestellungen</h2>
+        <button class="btn btn-primary" id="order-add-btn">+ Hinzuf&uuml;gen</button>
+      </div>
+      <div id="order-form-area"></div>
+      <div id="order-list">${renderOrderList(orders, manage)}</div>
+      <div style="margin-top:2rem">
+        <button class="btn btn-outline" id="toggle-ordered" style="width:100%">Letzte Bestellungen anzeigen</button>
+        <div id="ordered-list" style="display:none;margin-top:1rem"></div>
+      </div>
+    </div>
+  `;
+
+  // + Hinzufügen
+  document.getElementById('order-add-btn').addEventListener('click', () => {
+    showOrderForm(null, orders, manage);
+  });
+
+  // Letzte Bestellungen toggle
+  const toggleBtn = document.getElementById('toggle-ordered');
+  let orderedLoaded = false;
+  toggleBtn.addEventListener('click', async () => {
+    const area = document.getElementById('ordered-list');
+    if (area.style.display !== 'none') {
+      area.style.display = 'none';
+      toggleBtn.textContent = 'Letzte Bestellungen anzeigen';
+      return;
+    }
+    if (!orderedLoaded) {
+      area.innerHTML = '<div class="loading">Laden…</div>';
+      try {
+        const data = await api('GET', '/api/orders/ordered');
+        if (!data) return;
+        area.innerHTML = renderOrderedList(data.orders);
+        bindOrderedEvents(data.orders);
+        orderedLoaded = true;
+      } catch (e) { toast(e.message, 'error'); return; }
+    }
+    area.style.display = 'block';
+    toggleBtn.textContent = 'Letzte Bestellungen ausblenden';
+  });
+
+  bindOrderEvents(orders, manage);
+}
+
+function renderOrderList(orders, manage) {
+  if (!orders.length) return '<p style="color:#94a3b8;text-align:center">Keine offenen Bestellungen</p>';
+  return orders.map(o => {
+    const isOwn = o.user_id === S.user.id;
+    const canEdit = isOwn || manage;
+    const created = o.created_at ? formatDateTimeDE(o.created_at) : '';
+    return `<div class="order-item" data-id="${o.id}">
+      <div class="order-content">
+        <div class="order-product"><strong>${esc(o.quantity)}${o.unit ? ' ' + esc(o.unit) : 'x'}</strong> ${esc(o.product)}</div>
+        ${o.comment ? `<div class="order-comment">${esc(o.comment)}</div>` : ''}
+        <div class="order-meta">von ${esc(o.user_name)} am ${created}</div>
+      </div>
+      <div class="order-actions">
+        ${canEdit ? `<button class="btn btn-sm order-edit-btn" data-id="${o.id}" title="Bearbeiten">&#9998;</button>` : ''}
+        ${canEdit ? `<button class="btn btn-sm btn-danger order-del-btn" data-id="${o.id}" title="L&ouml;schen">&times;</button>` : ''}
+        ${manage ? `<button class="btn btn-sm btn-primary order-mark-btn" data-id="${o.id}">Bestellt</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderOrderedList(orders) {
+  if (!orders.length) return '<p style="color:#94a3b8;text-align:center">Keine Bestellungen im letzten Monat</p>';
+  const isAdmin = S.user.role === 'admin';
+  return orders.map(o => {
+    const orderedDate = o.ordered_at ? formatDateTimeDE(o.ordered_at) : '';
+    return `<div class="order-item order-done" data-id="${o.id}">
+      <div class="order-content">
+        <div class="order-product"><strong>${esc(o.quantity)}${o.unit ? ' ' + esc(o.unit) : 'x'}</strong> ${esc(o.product)}</div>
+        ${o.comment ? `<div class="order-comment">${esc(o.comment)}</div>` : ''}
+        <div class="order-meta">bestellt am ${orderedDate}${o.ordered_by_name ? ' von ' + esc(o.ordered_by_name) : ''}</div>
+      </div>
+      ${isAdmin ? `<div class="order-actions"><button class="btn btn-sm btn-danger ordered-del-btn" data-id="${o.id}">&times;</button></div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function formatDateTimeDE(dt) {
+  if (!dt) return '';
+  const d = new Date(dt + (dt.includes('T') || dt.includes('Z') ? '' : 'Z'));
+  const day = String(d.getDate()).padStart(2, '0');
+  const mon = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}.${mon}.${d.getFullYear()}`;
+}
+
+function showOrderForm(editOrder, orders, manage) {
+  const area = document.getElementById('order-form-area');
+  const qty = editOrder ? editOrder.quantity : 1;
+  const unit = editOrder ? (editOrder.unit || '') : '';
+  const product = editOrder ? editOrder.product : '';
+  const comment = editOrder ? (editOrder.comment || '') : '';
+  area.innerHTML = `
+    <form id="order-form" class="order-form" style="margin-bottom:1rem">
+      <div class="form-row" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end">
+        <div class="form-group" style="width:70px">
+          <label>Anzahl</label>
+          <input type="number" id="of-qty" class="form-control" value="${qty}" min="1" required>
+        </div>
+        <div class="form-group" style="width:100px">
+          <label>Einheit</label>
+          <input type="text" id="of-unit" class="form-control" value="${esc(unit)}" placeholder="Stk, Rollen…">
+        </div>
+        <div class="form-group" style="flex:1;min-width:150px">
+          <label>Produkt *</label>
+          <input type="text" id="of-product" class="form-control" value="${esc(product)}" required>
+        </div>
+        <div class="form-group" style="flex:1;min-width:150px">
+          <label>Kommentar</label>
+          <input type="text" id="of-comment" class="form-control" value="${esc(comment)}">
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+        <button type="submit" class="btn btn-primary">${editOrder ? 'Speichern' : 'Hinzuf\u00fcgen'}</button>
+        <button type="button" class="btn btn-outline" id="of-cancel">Abbrechen</button>
+      </div>
+    </form>
+  `;
+
+  document.getElementById('of-product').focus();
+  document.getElementById('of-cancel').addEventListener('click', () => { area.innerHTML = ''; });
+
+  document.getElementById('order-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+      quantity: parseInt(document.getElementById('of-qty').value, 10),
+      unit: document.getElementById('of-unit').value.trim(),
+      product: document.getElementById('of-product').value.trim(),
+      comment: document.getElementById('of-comment').value.trim()
+    };
+    try {
+      if (editOrder) {
+        await api('PUT', '/api/orders/' + editOrder.id, body);
+        toast('Aktualisiert', 'success');
+      } else {
+        await api('POST', '/api/orders', body);
+        toast('Hinzugef\u00fcgt', 'success');
+      }
+      renderOrders();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+}
+
+function bindOrderEvents(orders, manage) {
+  // Bearbeiten
+  document.querySelectorAll('.order-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const o = orders.find(x => x.id === Number(btn.dataset.id));
+      if (o) showOrderForm(o, orders, manage);
+    });
+  });
+  // Löschen
+  document.querySelectorAll('.order-del-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Eintrag l\u00f6schen?')) return;
+      try {
+        await api('DELETE', '/api/orders/' + btn.dataset.id);
+        toast('Gel\u00f6scht', 'success');
+        renderOrders();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+  // Bestellt markieren
+  document.querySelectorAll('.order-mark-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api('POST', '/api/orders/' + btn.dataset.id + '/order');
+        toast('Als bestellt markiert', 'success');
+        renderOrders();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+}
+
+function bindOrderedEvents(orders) {
+  document.querySelectorAll('.ordered-del-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Eintrag endg\u00fcltig l\u00f6schen?')) return;
+      try {
+        await api('DELETE', '/api/orders/' + btn.dataset.id);
+        toast('Gel\u00f6scht', 'success');
+        btn.closest('.order-item').remove();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
 }
 
 // --- Init ---

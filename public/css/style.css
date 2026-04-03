@@ -1472,3 +1472,15 @@ table.data-table .actions button { margin-left: 0.25rem; }
   .plan-day-label { min-width: 90px; font-size: 0.78rem; }
   .plan-day-row input[type="time"] { width: 85px; }
 }
+
+/* === Bestellungen === */
+.order-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 0.5rem; }
+.order-item:hover { border-color: var(--primary); }
+.order-content { flex: 1; min-width: 0; }
+.order-product { font-size: 0.95rem; }
+.order-comment { font-size: 0.85rem; color: #64748b; margin-top: 2px; }
+.order-meta { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; }
+.order-actions { display: flex; gap: 0.25rem; flex-shrink: 0; align-items: center; }
+.order-done { opacity: 0.5; background: #f8fafc; }
+.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; min-width: unset; }
+.order-form .form-group label { font-size: 0.8rem; margin-bottom: 2px; }

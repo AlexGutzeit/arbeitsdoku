@@ -1,0 +1,138 @@
+const express = require('express');
+const { getDb } = require('../database/init');
+const { authenticate } = require('../middleware/auth');
+
+const router = express.Router();
+
+function canManage(role) {
+  return ['admin', 'chef', 'buchhalter'].includes(role);
+}
+
+// Alte bestellte Einträge aufräumen (> 1 Monat)
+function cleanup(db) {
+  db.prepare("DELETE FROM orders WHERE ordered_at IS NOT NULL AND ordered_at < datetime('now', '-1 month')").run();
+}
+
+// Offene Bestellungen
+router.get('/', authenticate, (req, res) => {
+  const db = getDb();
+  cleanup(db);
+  const orders = db.prepare(`
+    SELECT o.*, u.name as user_name
+    FROM orders o
+    JOIN users u ON o.user_id = u.id
+    WHERE o.ordered_at IS NULL
+    ORDER BY o.created_at ASC
+  `).all();
+  res.json({ orders });
+});
+
+// Letzte Bestellungen (bestellt, max 1 Monat)
+router.get('/ordered', authenticate, (req, res) => {
+  const db = getDb();
+  cleanup(db);
+  const orders = db.prepare(`
+    SELECT o.*, u.name as user_name, ob.name as ordered_by_name
+    FROM orders o
+    JOIN users u ON o.user_id = u.id
+    LEFT JOIN users ob ON o.ordered_by = ob.id
+    WHERE o.ordered_at IS NOT NULL
+    ORDER BY o.ordered_at DESC
+  `).all();
+  res.json({ orders });
+});
+
+// Neuen Eintrag erstellen
+router.post('/', authenticate, (req, res) => {
+  const { quantity, unit, product, comment } = req.body;
+  if (!product || !product.trim()) {
+    return res.status(400).json({ error: 'Produkt ist erforderlich' });
+  }
+  const qty = parseInt(quantity, 10);
+  if (!qty || qty < 1) {
+    return res.status(400).json({ error: 'Anzahl muss mindestens 1 sein' });
+  }
+
+  const db = getDb();
+  const result = db.prepare(
+    'INSERT INTO orders (quantity, unit, product, comment, user_id) VALUES (?, ?, ?, ?, ?)'
+  ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, req.user.id);
+
+  const order = db.prepare(`
+    SELECT o.*, u.name as user_name
+    FROM orders o JOIN users u ON o.user_id = u.id
+    WHERE o.id = ?
+  `).get(result.lastInsertRowid);
+  res.status(201).json({ order });
+});
+
+// Eintrag bearbeiten
+router.put('/:id', authenticate, (req, res) => {
+  const db = getDb();
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
+
+  if (!canManage(req.user.role) && order.user_id !== req.user.id) {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+
+  const { quantity, unit, product, comment } = req.body;
+  if (!product || !product.trim()) {
+    return res.status(400).json({ error: 'Produkt ist erforderlich' });
+  }
+  const qty = parseInt(quantity, 10);
+  if (!qty || qty < 1) {
+    return res.status(400).json({ error: 'Anzahl muss mindestens 1 sein' });
+  }
+
+  db.prepare(
+    'UPDATE orders SET quantity = ?, unit = ?, product = ?, comment = ? WHERE id = ?'
+  ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, req.params.id);
+
+  const updated = db.prepare(`
+    SELECT o.*, u.name as user_name
+    FROM orders o JOIN users u ON o.user_id = u.id
+    WHERE o.id = ?
+  `).get(req.params.id);
+  res.json({ order: updated });
+});
+
+// Eintrag löschen
+router.delete('/:id', authenticate, (req, res) => {
+  const db = getDb();
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
+
+  // Offene Einträge: Ersteller oder Chef/Admin/Buchhalter
+  // Bestellte Einträge: nur Admin
+  if (order.ordered_at) {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Keine Berechtigung' });
+    }
+  } else {
+    if (!canManage(req.user.role) && order.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Keine Berechtigung' });
+    }
+  }
+
+  db.prepare('DELETE FROM orders WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// Als bestellt markieren
+router.post('/:id/order', authenticate, (req, res) => {
+  if (!canManage(req.user.role)) {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+
+  const db = getDb();
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
+  if (order.ordered_at) return res.status(400).json({ error: 'Bereits bestellt' });
+
+  db.prepare("UPDATE orders SET ordered_at = datetime('now'), ordered_by = ? WHERE id = ?")
+    .run(req.user.id, req.params.id);
+  res.json({ success: true });
+});
+
+module.exports = router;

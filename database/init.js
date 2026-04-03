@@ -232,6 +232,23 @@ async function initDatabase() {
     );
   `);
 
+  // Bestellliste
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      unit TEXT,
+      product TEXT NOT NULL,
+      comment TEXT,
+      user_id INTEGER NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      ordered_at TEXT,
+      ordered_by INTEGER,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (ordered_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+  `);
+
   // Werkzeugliste
   db.exec(`
     CREATE TABLE IF NOT EXISTS tools (
