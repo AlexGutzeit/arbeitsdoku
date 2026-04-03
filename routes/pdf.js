@@ -104,17 +104,17 @@ router.get('/export', authenticate, (req, res) => {
 
   // -- Tabelle --
   const cols = [
-    { label: 'Datum', width: 70 },
-    { label: 'Von', width: 45 },
-    { label: 'Bis', width: 45 },
-    { label: 'Pause', width: 45 },
-    { label: 'Netto', width: 50 },
-    { label: 'Mitarbeiter', width: 95 },
-    { label: 'Arbeitsort', width: 110 },
-    { label: 'Kunde', width: 80 },
-    { label: 'Projekt', width: 90 },
+    { label: 'Datum', width: 58 },
+    { label: 'Von', width: 28 },
+    { label: 'Bis', width: 28 },
+    { label: 'Pause', width: 33 },
+    { label: 'Netto', width: 35 },
+    { label: 'Mitarbeiter', width: 90 },
+    { label: 'Arbeitsort', width: 105 },
+    { label: 'Kunde', width: 75 },
+    { label: 'Projekt', width: 82 },
     { label: 'Beschreibung', width: 110 },
-    { label: 'Regie', width: 75 },
+    { label: 'Regie', width: 117 },
   ];
 
   // Mitarbeiter-Spalte nur wenn mehrere MA
