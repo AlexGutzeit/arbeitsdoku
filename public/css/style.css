@@ -2,9 +2,9 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
-  --primary-light: #e0e7ff;
+  --primary: #5DB635;
+  --primary-hover: #4a9229;
+  --primary-light: #e6f7dd;
   --bg: #f1f5f9;
   --card: #ffffff;
   --text: #1e293b;
@@ -39,7 +39,7 @@ body {
   justify-content: center;
   min-height: 100vh;
   padding: 1rem;
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #5DB635 0%, #1C4A28 100%);
 }
 .login-card {
   background: var(--card);
@@ -263,7 +263,7 @@ body {
   transition: border-color 0.15s;
   -webkit-appearance: none;
 }
-.form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+.form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(93,182,53,0.15); }
 select.form-control { cursor: pointer; }
 textarea.form-control { resize: vertical; min-height: 60px; }
 .form-row {
