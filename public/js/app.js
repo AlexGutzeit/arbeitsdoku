@@ -3957,7 +3957,7 @@ function showOrderForm(editOrder, orders, manage) {
       <div class="form-row" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-top:0.25rem">
         <div class="form-group" style="width:70px">
           <label>Anzahl</label>
-          <input type="number" id="of-qty" class="form-control" value="${qty}" min="1" placeholder="-">
+          <input type="number" id="of-qty" class="form-control" value="${qty}" min="0" placeholder="-">
         </div>
         <div class="form-group" style="width:100px">
           <label>Einheit</label>
@@ -3984,9 +3984,10 @@ function showOrderForm(editOrder, orders, manage) {
   document.getElementById('order-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const qtyVal = document.getElementById('of-qty').value.trim();
+    const qtyNum = qtyVal ? parseInt(qtyVal, 10) : 0;
     const locVal = document.getElementById('of-location').value;
     const body = {
-      quantity: qtyVal ? parseInt(qtyVal, 10) : null,
+      quantity: qtyNum > 0 ? qtyNum : null,
       unit: document.getElementById('of-unit').value.trim(),
       product: document.getElementById('of-product').value.trim(),
       comment: document.getElementById('of-comment').value.trim(),
