@@ -236,7 +236,7 @@ async function initDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      quantity INTEGER NOT NULL DEFAULT 1,
+      quantity INTEGER,
       unit TEXT,
       product TEXT NOT NULL,
       comment TEXT,
@@ -244,6 +244,8 @@ async function initDatabase() {
       created_at TEXT DEFAULT (datetime('now')),
       ordered_at TEXT,
       ordered_by INTEGER,
+      project_id INTEGER,
+      location_text TEXT DEFAULT 'Lager',
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (ordered_by) REFERENCES users(id) ON DELETE SET NULL
     );
@@ -369,6 +371,41 @@ async function initDatabase() {
     if (!planCols.some(c => c.name === 'group_id')) {
       db.exec("ALTER TABLE planning_entries ADD COLUMN group_id TEXT");
       console.log('Migration: group_id in planning_entries hinzugefügt.');
+    }
+  } catch (e) {}
+
+  // Migration: orders – quantity nullable + location-Spalten
+  try {
+    const orderCols = db.prepare("PRAGMA table_info(orders)").all();
+    const qtyCol = orderCols.find(c => c.name === 'quantity');
+    if (qtyCol && qtyCol.notnull) {
+      // quantity von NOT NULL auf nullable ändern (erfordert Tabellen-Neuerstellung)
+      db.exec(`
+        CREATE TABLE orders_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          quantity INTEGER,
+          unit TEXT,
+          product TEXT NOT NULL,
+          comment TEXT,
+          user_id INTEGER NOT NULL,
+          created_at TEXT DEFAULT (datetime('now')),
+          ordered_at TEXT,
+          ordered_by INTEGER,
+          project_id INTEGER,
+          location_text TEXT DEFAULT 'Lager',
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (ordered_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+        INSERT INTO orders_new (id, quantity, unit, product, comment, user_id, created_at, ordered_at, ordered_by)
+          SELECT id, quantity, unit, product, comment, user_id, created_at, ordered_at, ordered_by FROM orders;
+        DROP TABLE orders;
+        ALTER TABLE orders_new RENAME TO orders;
+      `);
+      console.log('Migration: orders – quantity nullable + location-Spalten hinzugefügt.');
+    } else if (!orderCols.some(c => c.name === 'project_id')) {
+      db.exec("ALTER TABLE orders ADD COLUMN project_id INTEGER");
+      db.exec("ALTER TABLE orders ADD COLUMN location_text TEXT DEFAULT 'Lager'");
+      console.log('Migration: location-Spalten in orders hinzugefügt.');
     }
   } catch (e) {}
 

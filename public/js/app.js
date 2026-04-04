@@ -3821,9 +3821,13 @@ async function renderOrders() {
   const manage = isChefOrAdmin() || S.user.role === 'buchhalter';
   let orders = [];
   try {
-    const data = await api('GET', '/api/orders');
-    if (!data) return;
-    orders = data.orders;
+    const [oData, pData] = await Promise.all([
+      api('GET', '/api/orders'),
+      api('GET', '/api/projects')
+    ]);
+    if (!oData) return;
+    orders = oData.orders;
+    if (pData) S.projects = pData.projects;
   } catch (e) { toast(e.message, 'error'); return; }
 
   const mainEl = document.querySelector('.main');
@@ -3842,12 +3846,10 @@ async function renderOrders() {
     </div>
   `;
 
-  // + Hinzufügen
   document.getElementById('order-add-btn').addEventListener('click', () => {
     showOrderForm(null, orders, manage);
   });
 
-  // Letzte Bestellungen toggle
   const toggleBtn = document.getElementById('toggle-ordered');
   let orderedLoaded = false;
   toggleBtn.addEventListener('click', async () => {
@@ -3874,6 +3876,17 @@ async function renderOrders() {
   bindOrderEvents(orders, manage);
 }
 
+function fmtOrderQty(o) {
+  if (!o.quantity) return '';
+  if (o.unit) return `<strong>${esc(String(o.quantity))} ${esc(o.unit)}</strong> `;
+  return `<strong>${esc(String(o.quantity))}x</strong> `;
+}
+
+function fmtOrderLocation(o) {
+  if (!o.location_text || o.location_text === 'Lager') return '';
+  return ` <span class="order-location">&rarr; ${esc(o.location_text)}</span>`;
+}
+
 function renderOrderList(orders, manage) {
   if (!orders.length) return '<p style="color:#94a3b8;text-align:center">Keine offenen Bestellungen</p>';
   return orders.map(o => {
@@ -3882,7 +3895,7 @@ function renderOrderList(orders, manage) {
     const created = o.created_at ? formatDateTimeDE(o.created_at) : '';
     return `<div class="order-item" data-id="${o.id}">
       <div class="order-content">
-        <div class="order-product"><strong>${esc(o.quantity)}${o.unit ? ' ' + esc(o.unit) : 'x'}</strong> ${esc(o.product)}</div>
+        <div class="order-product">${fmtOrderQty(o)}${esc(o.product)}${fmtOrderLocation(o)}</div>
         ${o.comment ? `<div class="order-comment">${esc(o.comment)}</div>` : ''}
         <div class="order-meta">von ${esc(o.user_name)} am ${created}</div>
       </div>
@@ -3902,7 +3915,7 @@ function renderOrderedList(orders) {
     const orderedDate = o.ordered_at ? formatDateTimeDE(o.ordered_at) : '';
     return `<div class="order-item order-done" data-id="${o.id}">
       <div class="order-content">
-        <div class="order-product"><strong>${esc(o.quantity)}${o.unit ? ' ' + esc(o.unit) : 'x'}</strong> ${esc(o.product)}</div>
+        <div class="order-product">${fmtOrderQty(o)}${esc(o.product)}${fmtOrderLocation(o)}</div>
         ${o.comment ? `<div class="order-comment">${esc(o.comment)}</div>` : ''}
         <div class="order-meta">bestellt am ${orderedDate}${o.ordered_by_name ? ' von ' + esc(o.ordered_by_name) : ''}</div>
       </div>
@@ -3921,21 +3934,17 @@ function formatDateTimeDE(dt) {
 
 function showOrderForm(editOrder, orders, manage) {
   const area = document.getElementById('order-form-area');
-  const qty = editOrder ? editOrder.quantity : 1;
+  const qty = editOrder && editOrder.quantity ? editOrder.quantity : '';
   const unit = editOrder ? (editOrder.unit || '') : '';
   const product = editOrder ? editOrder.product : '';
   const comment = editOrder ? (editOrder.comment || '') : '';
+  const projId = editOrder ? (editOrder.project_id || '') : '';
+  const projectOptions = (S.projects || []).map(p =>
+    `<option value="${p.id}" ${p.id === projId ? 'selected' : ''}>${esc(p.name)}</option>`
+  ).join('');
   area.innerHTML = `
     <form id="order-form" class="order-form" style="margin-bottom:1rem">
       <div class="form-row" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end">
-        <div class="form-group" style="width:70px">
-          <label>Anzahl</label>
-          <input type="number" id="of-qty" class="form-control" value="${qty}" min="1" required>
-        </div>
-        <div class="form-group" style="width:100px">
-          <label>Einheit</label>
-          <input type="text" id="of-unit" class="form-control" value="${esc(unit)}" placeholder="Stk, Bund…">
-        </div>
         <div class="form-group" style="flex:1;min-width:150px">
           <label>Produkt *</label>
           <input type="text" id="of-product" class="form-control" value="${esc(product)}" required>
@@ -3943,6 +3952,23 @@ function showOrderForm(editOrder, orders, manage) {
         <div class="form-group" style="flex:1;min-width:150px">
           <label>Kommentar</label>
           <input type="text" id="of-comment" class="form-control" value="${esc(comment)}">
+        </div>
+      </div>
+      <div class="form-row" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-top:0.25rem">
+        <div class="form-group" style="width:70px">
+          <label>Anzahl</label>
+          <input type="number" id="of-qty" class="form-control" value="${qty}" min="1" placeholder="-">
+        </div>
+        <div class="form-group" style="width:100px">
+          <label>Einheit</label>
+          <input type="text" id="of-unit" class="form-control" value="${esc(unit)}" placeholder="Stk, Bund…">
+        </div>
+        <div class="form-group" style="flex:1;min-width:140px">
+          <label>Verwendungsort</label>
+          <select id="of-location" class="form-control">
+            <option value="" ${!projId ? 'selected' : ''}>Lager</option>
+            ${projectOptions}
+          </select>
         </div>
       </div>
       <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
@@ -3957,11 +3983,14 @@ function showOrderForm(editOrder, orders, manage) {
 
   document.getElementById('order-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const qtyVal = document.getElementById('of-qty').value.trim();
+    const locVal = document.getElementById('of-location').value;
     const body = {
-      quantity: parseInt(document.getElementById('of-qty').value, 10),
+      quantity: qtyVal ? parseInt(qtyVal, 10) : null,
       unit: document.getElementById('of-unit').value.trim(),
       product: document.getElementById('of-product').value.trim(),
-      comment: document.getElementById('of-comment').value.trim()
+      comment: document.getElementById('of-comment').value.trim(),
+      project_id: locVal ? Number(locVal) : null
     };
     try {
       if (editOrder) {

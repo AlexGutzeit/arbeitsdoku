@@ -1484,3 +1484,4 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .order-done { opacity: 0.5; background: #f8fafc; }
 .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; min-width: unset; }
 .order-form .form-group label { font-size: 0.8rem; margin-bottom: 2px; }
+.order-location { color: #64748b; font-size: 0.85rem; }

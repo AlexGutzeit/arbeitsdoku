@@ -13,6 +13,13 @@ function cleanup(db) {
   db.prepare("DELETE FROM orders WHERE ordered_at IS NOT NULL AND ordered_at < datetime('now', '-1 month')").run();
 }
 
+function resolveLocation(db, project_id) {
+  if (!project_id) return { project_id: null, location_text: 'Lager' };
+  const p = db.prepare('SELECT name FROM projects WHERE id = ?').get(project_id);
+  if (!p) return { project_id: null, location_text: 'Lager' };
+  return { project_id: Number(project_id), location_text: p.name };
+}
+
 // Offene Bestellungen
 router.get('/', authenticate, (req, res) => {
   const db = getDb();
@@ -44,19 +51,23 @@ router.get('/ordered', authenticate, (req, res) => {
 
 // Neuen Eintrag erstellen
 router.post('/', authenticate, (req, res) => {
-  const { quantity, unit, product, comment } = req.body;
+  const { quantity, unit, product, comment, project_id } = req.body;
   if (!product || !product.trim()) {
     return res.status(400).json({ error: 'Produkt ist erforderlich' });
   }
-  const qty = parseInt(quantity, 10);
-  if (!qty || qty < 1) {
-    return res.status(400).json({ error: 'Anzahl muss mindestens 1 sein' });
+  let qty = null;
+  if (quantity !== null && quantity !== undefined && quantity !== '') {
+    qty = parseInt(quantity, 10);
+    if (isNaN(qty) || qty < 1) {
+      return res.status(400).json({ error: 'Anzahl muss mindestens 1 sein' });
+    }
   }
 
   const db = getDb();
+  const loc = resolveLocation(db, project_id);
   const result = db.prepare(
-    'INSERT INTO orders (quantity, unit, product, comment, user_id) VALUES (?, ?, ?, ?, ?)'
-  ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, req.user.id);
+    'INSERT INTO orders (quantity, unit, product, comment, user_id, project_id, location_text) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, req.user.id, loc.project_id, loc.location_text);
 
   const order = db.prepare(`
     SELECT o.*, u.name as user_name
@@ -76,18 +87,22 @@ router.put('/:id', authenticate, (req, res) => {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
 
-  const { quantity, unit, product, comment } = req.body;
+  const { quantity, unit, product, comment, project_id } = req.body;
   if (!product || !product.trim()) {
     return res.status(400).json({ error: 'Produkt ist erforderlich' });
   }
-  const qty = parseInt(quantity, 10);
-  if (!qty || qty < 1) {
-    return res.status(400).json({ error: 'Anzahl muss mindestens 1 sein' });
+  let qty = null;
+  if (quantity !== null && quantity !== undefined && quantity !== '') {
+    qty = parseInt(quantity, 10);
+    if (isNaN(qty) || qty < 1) {
+      return res.status(400).json({ error: 'Anzahl muss mindestens 1 sein' });
+    }
   }
 
+  const loc = resolveLocation(db, project_id);
   db.prepare(
-    'UPDATE orders SET quantity = ?, unit = ?, product = ?, comment = ? WHERE id = ?'
-  ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, req.params.id);
+    'UPDATE orders SET quantity = ?, unit = ?, product = ?, comment = ?, project_id = ?, location_text = ? WHERE id = ?'
+  ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, loc.project_id, loc.location_text, req.params.id);
 
   const updated = db.prepare(`
     SELECT o.*, u.name as user_name
@@ -103,8 +118,6 @@ router.delete('/:id', authenticate, (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
 
-  // Offene Einträge: Ersteller oder Chef/Admin/Buchhalter
-  // Bestellte Einträge: nur Admin
   if (order.ordered_at) {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Keine Berechtigung' });
