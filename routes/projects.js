@@ -54,6 +54,7 @@ router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
   db.prepare(`UPDATE planning_entries SET project_text = ? WHERE project_id = ? AND (project_text IS NULL OR project_text = '')`).run(project.name, project.id);
   db.prepare(`UPDATE tool_checkouts SET project_text = ?, project_id = NULL WHERE project_id = ?`).run(project.name, project.id);
   db.prepare(`UPDATE orders SET project_id = NULL WHERE project_id = ?`).run(project.id);
+  db.prepare(`UPDATE notes SET project_text = ?, project_id = NULL WHERE project_id = ? AND (project_text IS NULL OR project_text = '')`).run(project.name, project.id);
 
   db.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
   res.json({ success: true });

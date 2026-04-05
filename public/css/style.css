@@ -1485,3 +1485,33 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; min-width: unset; }
 .order-form .form-group label { font-size: 0.8rem; margin-bottom: 2px; }
 .order-location { color: #64748b; font-size: 0.85rem; }
+
+/* === Notizen === */
+.note-card { padding: 0.85rem; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem; transition: border-color 0.15s; }
+.note-card:hover { border-color: var(--primary); }
+.note-card-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.note-title { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.note-project { font-size: 0.82rem; color: var(--primary); margin-top: 2px; }
+.note-preview { font-size: 0.85rem; color: #64748b; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note-meta { font-size: 0.75rem; color: #94a3b8; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.note-actions { display: flex; gap: 0.25rem; flex-shrink: 0; align-items: center; }
+.note-filters { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.note-filters select, .note-filters input { flex: 1; min-width: 150px; }
+.note-body-textarea { min-height: 200px; resize: vertical; }
+.note-offers-section { background: #fef9e7; border: 1px solid #f0c36d; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+.note-offers-section h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+.note-offer-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); gap: 0.5rem; }
+.note-offer-item:last-child { border-bottom: none; }
+.share-matrix { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
+.share-matrix th { text-align: left; font-size: 0.85rem; padding: 0.4rem; border-bottom: 1px solid var(--border); }
+.share-matrix td { padding: 0.4rem; }
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
+.modal { background: #fff; border-radius: 12px; width: 100%; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+.modal-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
+.modal-header h3 { margin: 0; font-size: 1.1rem; }
+.modal-body { padding: 1rem 1.25rem; max-height: 60vh; overflow-y: auto; }
+@media (max-width: 600px) {
+  .note-filters { flex-direction: column; }
+  .note-card-row { flex-direction: column; }
+  .note-actions { align-self: flex-end; }
+}

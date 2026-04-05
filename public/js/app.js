@@ -302,6 +302,7 @@ function render() {
   else if (route.startsWith('/planning/accept/')) renderEntryForm(null, null, route.split('/').pop());
   else if (route === '/tools') renderTools();
   else if (route === '/orders') renderOrders();
+  else if (route === '/notes') renderNotizen();
   else if (route === '/bulletin') renderBulletin();
   else if (route === '/bulletin/new') renderBulletinForm();
   else if (route.startsWith('/bulletin/edit/')) renderBulletinForm(route.split('/').pop());
@@ -400,6 +401,9 @@ function layout(content, activeNav) {
         <a href="#/orders" class="${activeNav === 'orders' ? 'active' : ''}">
           <span class="icon">&#128722;</span> Bestellungen
         </a>
+        <a href="#/notes" class="${activeNav === 'notes' ? 'active' : ''}">
+          <span class="icon">&#128221;</span> Notizen
+        </a>
         <a href="#/statistics" class="${activeNav === 'statistics' ? 'active' : ''}">
           <span class="icon">&#128200;</span> Statistik
         </a>
@@ -423,6 +427,7 @@ function layout(content, activeNav) {
     <div class="main">${content}</div>
     ${activeNav === 'planning' ? (canEditPlanning() ? '<button class="fab" id="fab-new" title="Neue Planung">+</button>' : '')
     : activeNav === 'bulletin' ? (canEditBulletin() ? '<button class="fab" id="fab-new" title="Neuer Eintrag">+</button>' : '')
+    : activeNav === 'notes' ? '<button class="fab" id="fab-new" title="Neue Notiz">+</button>'
     : activeNav === 'welcome' || activeNav === 'orders' || activeNav === 'statistics' ? ''
     : (showNewEntry ? '<button class="fab" id="fab-new" title="Neuer Eintrag">+</button>' : '')}
   `;
@@ -455,6 +460,7 @@ function bindLayout() {
     const route = getRoute();
     if (route === '/planning') navigate('/planning/new');
     else if (route === '/bulletin') navigate('/bulletin/new');
+    else if (route === '/notes') showNoteForm();
     else navigate('/entry/new');
   });
 }
@@ -4047,6 +4053,412 @@ function bindOrderedEvents(orders) {
         btn.closest('.order-item').remove();
       } catch (err) { toast(err.message, 'error'); }
     });
+  });
+}
+
+// --- Notizen ---
+let _notizen = [];
+let _notizenFilter = { projectId: '', search: '' };
+
+async function renderNotizen() {
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'notes');
+  bindLayout();
+
+  let notes = [], offers = [];
+  try {
+    const [nData, pData, oData] = await Promise.all([
+      api('GET', '/api/notes'),
+      api('GET', '/api/projects'),
+      api('GET', '/api/notes/offers')
+    ]);
+    if (!nData) return;
+    notes = nData.notes || [];
+    if (pData) S.projects = pData.projects;
+    offers = (oData && oData.offers) || [];
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  _notizen = notes;
+  const mainEl = document.querySelector('.main');
+  if (!mainEl) return;
+
+  // Eingehende Angebote
+  let offersHtml = '';
+  if (offers.length) {
+    offersHtml = `<div class="note-offers-section">
+      <h3>Eingehende Notizen</h3>
+      ${offers.map(o => `
+        <div class="note-offer-item" data-offer-id="${o.id}">
+          <div>
+            <strong>${esc(o.title)}</strong>
+            <span class="note-meta">von ${esc(o.from_user_name)}</span>
+          </div>
+          <div class="note-actions">
+            <button class="btn btn-sm btn-primary offer-accept-btn" data-id="${o.id}">Annehmen</button>
+            <button class="btn btn-sm btn-outline offer-decline-btn" data-id="${o.id}">Ablehnen</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+  }
+
+  // Projekte für Filter
+  const projOpts = (S.projects || []).map(p =>
+    `<option value="${p.id}" ${_notizenFilter.projectId == p.id ? 'selected' : ''}>${esc(p.name)}</option>`
+  ).join('');
+
+  mainEl.innerHTML = `
+    <div class="card" style="max-width:900px;margin:0 auto">
+      <h2 style="margin-bottom:1rem">Notizen</h2>
+      ${offersHtml}
+      <div class="note-filters">
+        <select id="note-filter-project" class="form-control">
+          <option value="">Alle Projekte</option>
+          <option value="none" ${_notizenFilter.projectId === 'none' ? 'selected' : ''}>Kein Projekt</option>
+          ${projOpts}
+        </select>
+        <input type="text" id="note-filter-search" class="form-control" placeholder="Suche..." value="${esc(_notizenFilter.search)}">
+      </div>
+      <div id="note-form-area"></div>
+      <div id="note-list">${renderNoteList(notes)}</div>
+    </div>
+  `;
+
+  // Filter-Events
+  document.getElementById('note-filter-project').addEventListener('change', (e) => {
+    _notizenFilter.projectId = e.target.value;
+    document.getElementById('note-list').innerHTML = renderNoteList(filterNotizen());
+    bindNoteEvents();
+  });
+  document.getElementById('note-filter-search').addEventListener('input', (e) => {
+    _notizenFilter.search = e.target.value;
+    document.getElementById('note-list').innerHTML = renderNoteList(filterNotizen());
+    bindNoteEvents();
+  });
+
+  // Offer-Events
+  document.querySelectorAll('.offer-accept-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api('POST', '/api/notes/offers/' + btn.dataset.id + '/accept');
+        toast('Notiz angenommen', 'success');
+        renderNotizen();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+  document.querySelectorAll('.offer-decline-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await api('POST', '/api/notes/offers/' + btn.dataset.id + '/decline');
+        toast('Abgelehnt', 'success');
+        renderNotizen();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+
+  bindNoteEvents();
+}
+
+function filterNotizen() {
+  let list = _notizen;
+  const pf = _notizenFilter.projectId;
+  if (pf === 'none') {
+    list = list.filter(n => !n.project_id && !n.project_text);
+  } else if (pf) {
+    list = list.filter(n => n.project_id == pf);
+  }
+  const sf = _notizenFilter.search.toLowerCase().trim();
+  if (sf) {
+    list = list.filter(n =>
+      (n.title || '').toLowerCase().includes(sf) ||
+      (n.body || '').toLowerCase().includes(sf) ||
+      (n.project_text || '').toLowerCase().includes(sf)
+    );
+  }
+  return list;
+}
+
+function renderNoteList(notes) {
+  if (!notes.length) return '<p style="color:#94a3b8;margin-top:1rem">Keine Notizen</p>';
+  const uid = S.user.id;
+  return notes.map(n => {
+    const isOwner = n.user_id === uid;
+    const canWrite = isOwner || n.access_level === 'write';
+    const projDisplay = n.project_text ? `<div class="note-project">${esc(n.project_text)}</div>` : '';
+    const preview = (n.body || '').length > 120 ? esc(n.body.substring(0, 120)) + '...' : esc(n.body || '');
+    const ownerInfo = !isOwner ? `<span>von ${esc(n.owner_name)}</span>` : '';
+    const sharesInfo = (n.shares && n.shares.length)
+      ? `<span>Geteilt mit: ${n.shares.map(s => esc(s.user_name)).join(', ')}</span>` : '';
+    const accessBadge = !isOwner ? `<span class="badge badge-${n.access_level === 'write' ? 'chef' : 'mitarbeiter'}">${n.access_level === 'write' ? 'Schreibzugriff' : 'Lesezugriff'}</span>` : '';
+
+    return `<div class="note-card" data-id="${n.id}">
+      <div class="note-card-row">
+        <div class="note-content" style="flex:1;min-width:0">
+          <div class="note-title">${esc(n.title)} ${accessBadge}</div>
+          ${projDisplay}
+          <div class="note-preview">${preview}</div>
+          <div class="note-meta">
+            ${ownerInfo}
+            ${sharesInfo}
+            <span>${formatDateDE(n.updated_at)}</span>
+          </div>
+        </div>
+        <div class="note-actions">
+          ${canWrite ? `<button class="btn btn-sm note-edit-btn" data-id="${n.id}" title="Bearbeiten">&#9998;</button>` : ''}
+          ${isOwner ? `<button class="btn btn-sm note-share-btn" data-id="${n.id}" title="Freigabe">&#128101;</button>` : ''}
+          ${isOwner ? `<button class="btn btn-sm note-offer-btn" data-id="${n.id}" title="Weitergeben">&#10145;</button>` : ''}
+          ${isOwner ? `<button class="btn btn-sm btn-danger note-del-btn" data-id="${n.id}" title="L\u00f6schen">&times;</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function bindNoteEvents() {
+  document.querySelectorAll('.note-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const n = _notizen.find(x => x.id === Number(btn.dataset.id));
+      if (n) showNoteForm(n);
+    });
+  });
+  document.querySelectorAll('.note-del-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Notiz wirklich l\u00f6schen?')) return;
+      try {
+        await api('DELETE', '/api/notes/' + btn.dataset.id);
+        toast('Gel\u00f6scht', 'success');
+        renderNotizen();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+  document.querySelectorAll('.note-share-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const n = _notizen.find(x => x.id === Number(btn.dataset.id));
+      if (n) showShareDialog(n);
+    });
+  });
+  document.querySelectorAll('.note-offer-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const n = _notizen.find(x => x.id === Number(btn.dataset.id));
+      if (n) showOfferDialog(n);
+    });
+  });
+}
+
+function showNoteForm(editNote) {
+  const area = document.getElementById('note-form-area');
+  if (!area) return;
+
+  const projId = editNote ? editNote.project_id : null;
+  const projText = editNote ? (editNote.project_text || '') : '';
+  const hasProject = !!projId;
+
+  const projOpts = (S.projects || []).map(p =>
+    `<option value="${p.id}" ${p.id === projId ? 'selected' : ''}>${esc(p.name)}</option>`
+  ).join('');
+
+  area.innerHTML = `
+    <form id="note-form" class="note-form" style="margin-bottom:1rem;padding:1rem;border:1px solid var(--border);border-radius:8px;background:#f8fafc">
+      <div class="form-group">
+        <label>Titel *</label>
+        <input type="text" id="nf-title" class="form-control" value="${editNote ? esc(editNote.title) : ''}" required>
+      </div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+        <div class="form-group" style="flex:1;min-width:150px">
+          <label>Projekt</label>
+          <select id="nf-project" class="form-control">
+            <option value="">-- Kein Projekt --</option>
+            ${projOpts}
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;min-width:150px">
+          <label>Projekt (Freitext)</label>
+          <input type="text" id="nf-project-text" class="form-control" value="${!hasProject ? esc(projText) : ''}" placeholder="z.B. Baustelle XY" ${hasProject ? 'disabled' : ''}>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notiz</label>
+        <textarea id="nf-body" class="form-control note-body-textarea" rows="8">${editNote ? esc(editNote.body || '') : ''}</textarea>
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+        <button type="submit" class="btn btn-primary">${editNote ? 'Speichern' : 'Erstellen'}</button>
+        <button type="button" class="btn btn-outline" id="nf-cancel">Abbrechen</button>
+      </div>
+    </form>
+  `;
+
+  // Projekt-Dropdown / Freitext gegenseitig ausschließen
+  const projSelect = document.getElementById('nf-project');
+  const projTextInput = document.getElementById('nf-project-text');
+  projSelect.addEventListener('change', () => {
+    if (projSelect.value) {
+      projTextInput.value = '';
+      projTextInput.disabled = true;
+    } else {
+      projTextInput.disabled = false;
+    }
+  });
+  projTextInput.addEventListener('input', () => {
+    if (projTextInput.value.trim()) {
+      projSelect.value = '';
+    }
+  });
+
+  document.getElementById('nf-cancel').addEventListener('click', () => { area.innerHTML = ''; });
+  document.getElementById('note-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+      title: document.getElementById('nf-title').value.trim(),
+      body: document.getElementById('nf-body').value,
+      project_id: projSelect.value ? Number(projSelect.value) : null,
+      project_text: projSelect.value ? '' : projTextInput.value.trim()
+    };
+    try {
+      if (editNote) {
+        await api('PUT', '/api/notes/' + editNote.id, body);
+        toast('Gespeichert', 'success');
+      } else {
+        await api('POST', '/api/notes', body);
+        toast('Erstellt', 'success');
+      }
+      renderNotizen();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  document.getElementById('nf-title').focus();
+}
+
+async function showShareDialog(note) {
+  let users = [], shares = [];
+  try {
+    const [uData, sData] = await Promise.all([
+      api('GET', '/api/users/list'),
+      api('GET', '/api/notes/' + note.id + '/shares')
+    ]);
+    users = (uData && uData.users) || [];
+    shares = (sData && sData.shares) || [];
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  // Owner aus Liste entfernen
+  users = users.filter(u => u.id !== note.user_id);
+  if (!users.length) { toast('Keine anderen Benutzer vorhanden', 'info'); return; }
+
+  const shareMap = {};
+  for (const s of shares) shareMap[s.user_id] = s.permission;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:500px">
+      <div class="modal-header">
+        <h3>Freigabe: ${esc(note.title)}</h3>
+      </div>
+      <div class="modal-body">
+        <table class="share-matrix">
+          <thead><tr><th>Benutzer</th><th style="text-align:center">Lesen</th><th style="text-align:center">Schreiben</th></tr></thead>
+          <tbody>
+            ${users.map(u => {
+              const perm = shareMap[u.id] || '';
+              return `<tr data-uid="${u.id}">
+                <td>${esc(u.name)}</td>
+                <td style="text-align:center"><input type="checkbox" class="share-read" data-uid="${u.id}" ${perm === 'read' || perm === 'write' ? 'checked' : ''}></td>
+                <td style="text-align:center"><input type="checkbox" class="share-write" data-uid="${u.id}" ${perm === 'write' ? 'checked' : ''}></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem">
+        <button class="btn btn-outline" id="share-cancel">Abbrechen</button>
+        <button class="btn btn-primary" id="share-save">Speichern</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Write angehakt → Read automatisch mit
+  overlay.querySelectorAll('.share-write').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        overlay.querySelector(`.share-read[data-uid="${cb.dataset.uid}"]`).checked = true;
+      }
+    });
+  });
+  // Read abgehakt → Write automatisch aus
+  overlay.querySelectorAll('.share-read').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (!cb.checked) {
+        overlay.querySelector(`.share-write[data-uid="${cb.dataset.uid}"]`).checked = false;
+      }
+    });
+  });
+
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('#share-cancel').addEventListener('click', close);
+  overlay.querySelector('#share-save').addEventListener('click', async () => {
+    const newShares = [];
+    overlay.querySelectorAll('.share-read').forEach(cb => {
+      if (cb.checked) {
+        const uid = Number(cb.dataset.uid);
+        const isWrite = overlay.querySelector(`.share-write[data-uid="${uid}"]`).checked;
+        newShares.push({ user_id: uid, permission: isWrite ? 'write' : 'read' });
+      }
+    });
+    try {
+      await api('PUT', '/api/notes/' + note.id + '/shares', { shares: newShares });
+      toast('Freigaben gespeichert', 'success');
+      close();
+      renderNotizen();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+}
+
+async function showOfferDialog(note) {
+  let users = [];
+  try {
+    const uData = await api('GET', '/api/users/list');
+    users = (uData && uData.users) || [];
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  users = users.filter(u => u.id !== note.user_id);
+  if (!users.length) { toast('Keine anderen Benutzer vorhanden', 'info'); return; }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <h3>Notiz weitergeben</h3>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:0.75rem;color:#64748b;font-size:0.85rem">W\u00e4hle Empf\u00e4nger f\u00fcr eine Kopie von "${esc(note.title)}":</p>
+        ${users.map(u => `
+          <label style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;cursor:pointer">
+            <input type="checkbox" class="offer-user-cb" value="${u.id}">
+            <span>${esc(u.name)}</span>
+          </label>
+        `).join('')}
+      </div>
+      <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem">
+        <button class="btn btn-outline" id="offer-cancel">Abbrechen</button>
+        <button class="btn btn-primary" id="offer-send">Senden</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('#offer-cancel').addEventListener('click', close);
+  overlay.querySelector('#offer-send').addEventListener('click', async () => {
+    const userIds = [];
+    overlay.querySelectorAll('.offer-user-cb:checked').forEach(cb => userIds.push(Number(cb.value)));
+    if (!userIds.length) { toast('Bitte mindestens einen Empf\u00e4nger w\u00e4hlen', 'error'); return; }
+    try {
+      await api('POST', '/api/notes/' + note.id + '/offer', { user_ids: userIds });
+      toast('Notiz angeboten', 'success');
+      close();
+    } catch (err) { toast(err.message, 'error'); }
   });
 }
 
