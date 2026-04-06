@@ -4059,6 +4059,8 @@ function bindOrderedEvents(orders) {
 // --- Notizen ---
 let _notizen = [];
 let _notizenFilter = { projectId: '', search: '' };
+let _expandedNoteId = null;
+let _editingNoteLockId = null;
 
 async function renderNotizen() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'notes');
@@ -4189,13 +4191,18 @@ function renderNoteList(notes) {
     const sharesInfo = (n.shares && n.shares.length)
       ? `<span>Geteilt mit: ${n.shares.map(s => esc(s.user_name)).join(', ')}</span>` : '';
     const accessBadge = !isOwner ? `<span class="badge badge-${n.access_level === 'write' ? 'chef' : 'mitarbeiter'}">${n.access_level === 'write' ? 'Schreibzugriff' : 'Lesezugriff'}</span>` : '';
+    const isExpanded = _expandedNoteId === n.id;
+    const lockBadge = (n.editing_by && n.editing_by !== uid)
+      ? `<span class="badge badge-lock">&#128274; ${esc(n.editing_by_name || '')}</span>` : '';
 
-    return `<div class="note-card" data-id="${n.id}">
+    return `<div class="note-card ${isExpanded ? 'note-card-expanded' : ''}" data-id="${n.id}">
       <div class="note-card-row">
         <div class="note-content" style="flex:1;min-width:0">
-          <div class="note-title">${esc(n.title)} ${accessBadge}</div>
+          <div class="note-title">${esc(n.title)} ${accessBadge} ${lockBadge}</div>
           ${projDisplay}
-          <div class="note-preview">${preview}</div>
+          ${isExpanded
+            ? `<div class="note-body-full">${esc(n.body || '')}</div>`
+            : `<div class="note-preview">${preview}</div>`}
           <div class="note-meta">
             ${ownerInfo}
             ${sharesInfo}
@@ -4214,14 +4221,29 @@ function renderNoteList(notes) {
 }
 
 function bindNoteEvents() {
+  // Expand/Collapse auf Kachel-Klick
+  document.querySelectorAll('.note-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.note-actions')) return;
+      const noteId = Number(card.dataset.id);
+      _expandedNoteId = (_expandedNoteId === noteId) ? null : noteId;
+      const listEl = document.getElementById('note-list');
+      if (listEl) {
+        listEl.innerHTML = renderNoteList(filterNotizen());
+        bindNoteEvents();
+      }
+    });
+  });
   document.querySelectorAll('.note-edit-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const n = _notizen.find(x => x.id === Number(btn.dataset.id));
-      if (n) showNoteForm(n);
+      if (n) acquireLockAndEdit(n);
     });
   });
   document.querySelectorAll('.note-del-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       if (!confirm('Notiz wirklich l\u00f6schen?')) return;
       try {
         await api('DELETE', '/api/notes/' + btn.dataset.id);
@@ -4231,17 +4253,33 @@ function bindNoteEvents() {
     });
   });
   document.querySelectorAll('.note-share-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const n = _notizen.find(x => x.id === Number(btn.dataset.id));
       if (n) showShareDialog(n);
     });
   });
   document.querySelectorAll('.note-offer-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const n = _notizen.find(x => x.id === Number(btn.dataset.id));
       if (n) showOfferDialog(n);
     });
   });
+}
+
+async function acquireLockAndEdit(note) {
+  const isShared = note.shares && note.shares.length > 0;
+  if (isShared) {
+    try {
+      await api('POST', '/api/notes/' + note.id + '/lock');
+      _editingNoteLockId = note.id;
+    } catch (err) {
+      toast(err.message || 'Notiz ist gerade in Bearbeitung', 'error');
+      return;
+    }
+  }
+  showNoteForm(note);
 }
 
 function showNoteForm(editNote) {
@@ -4303,7 +4341,13 @@ function showNoteForm(editNote) {
     }
   });
 
-  document.getElementById('nf-cancel').addEventListener('click', () => { area.innerHTML = ''; });
+  document.getElementById('nf-cancel').addEventListener('click', async () => {
+    if (_editingNoteLockId) {
+      try { await api('POST', '/api/notes/' + _editingNoteLockId + '/unlock'); } catch(e) {}
+      _editingNoteLockId = null;
+    }
+    area.innerHTML = '';
+  });
   document.getElementById('note-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = {
@@ -4315,6 +4359,7 @@ function showNoteForm(editNote) {
     try {
       if (editNote) {
         await api('PUT', '/api/notes/' + editNote.id, body);
+        _editingNoteLockId = null;
         toast('Gespeichert', 'success');
       } else {
         await api('POST', '/api/notes', body);
@@ -4463,7 +4508,23 @@ async function showOfferDialog(note) {
 }
 
 // --- Init ---
-window.addEventListener('hashchange', render);
+async function releaseCurrentLock() {
+  if (_editingNoteLockId) {
+    try { await api('POST', '/api/notes/' + _editingNoteLockId + '/unlock'); } catch(e) {}
+    _editingNoteLockId = null;
+  }
+}
+window.addEventListener('hashchange', () => { releaseCurrentLock(); render(); });
+window.addEventListener('beforeunload', () => {
+  if (_editingNoteLockId && S.token) {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/notes/' + _editingNoteLockId + '/unlock', false);
+    xhr.setRequestHeader('Authorization', 'Bearer ' + S.token);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    try { xhr.send('{}'); } catch(e) {}
+    _editingNoteLockId = null;
+  }
+});
 window.addEventListener('DOMContentLoaded', () => {
   if (!S.token) navigate('/login');
   render();

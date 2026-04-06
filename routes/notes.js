@@ -3,6 +3,7 @@ const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
+const LOCK_TIMEOUT_MINUTES = 15;
 
 function resolveProject(db, project_id, project_text) {
   if (project_id) {
@@ -21,9 +22,21 @@ function canAccessNote(db, noteId, userId) {
   return { note, access: share.permission };
 }
 
+function clearStaleLock(db, noteId) {
+  const note = db.prepare('SELECT editing_by, editing_since FROM notes WHERE id = ?').get(noteId);
+  if (note && note.editing_by && note.editing_since) {
+    const lockTime = new Date(note.editing_since + 'Z').getTime();
+    if (Date.now() - lockTime > LOCK_TIMEOUT_MINUTES * 60 * 1000) {
+      db.prepare("UPDATE notes SET editing_by = NULL, editing_since = NULL WHERE id = ?").run(noteId);
+      return true;
+    }
+  }
+  return false;
+}
+
 // --- Offers-Routen VOR /:id ---
 
-// Eingehende Angebote (pending) für aktuellen User
+// Eingehende Angebote (pending) fuer aktuellen User
 router.get('/offers', authenticate, (req, res) => {
   const db = getDb();
   const offers = db.prepare(`
@@ -48,10 +61,9 @@ router.post('/offers/:id/accept', authenticate, (req, res) => {
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(offer.note_id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
 
-  const insert = db.prepare(
+  db.prepare(
     "INSERT INTO notes (user_id, title, body, project_id, project_text) VALUES (?, ?, ?, ?, ?)"
-  );
-  insert.run(req.user.id, note.title, note.body, note.project_id, note.project_text);
+  ).run(req.user.id, note.title, note.body, note.project_id, note.project_text);
   db.prepare("UPDATE note_offers SET status = 'accepted' WHERE id = ?").run(offer.id);
   res.json({ success: true });
 });
@@ -68,7 +80,7 @@ router.post('/offers/:id/decline', authenticate, (req, res) => {
   res.json({ success: true });
 });
 
-// Angebot zurückziehen (Absender, nur solange pending)
+// Angebot zurueckziehen (Absender, nur solange pending)
 router.delete('/offers/:id', authenticate, (req, res) => {
   const db = getDb();
   const offer = db.prepare('SELECT * FROM note_offers WHERE id = ?').get(req.params.id);
@@ -89,13 +101,29 @@ router.get('/', authenticate, (req, res) => {
   const notes = db.prepare(`
     SELECT DISTINCT n.*, u.name as owner_name,
       CASE WHEN n.user_id = ? THEN 'owner'
-           ELSE COALESCE(ns.permission, '') END as access_level
+           ELSE COALESCE(ns.permission, '') END as access_level,
+      eu.name as editing_by_name
     FROM notes n
     JOIN users u ON n.user_id = u.id
     LEFT JOIN note_shares ns ON ns.note_id = n.id AND ns.user_id = ?
+    LEFT JOIN users eu ON n.editing_by = eu.id
     WHERE n.user_id = ? OR ns.user_id = ?
     ORDER BY n.updated_at DESC
   `).all(uid, uid, uid, uid);
+
+  // Stale Locks bereinigen
+  const now = Date.now();
+  for (const n of notes) {
+    if (n.editing_by && n.editing_since) {
+      const lockTime = new Date(n.editing_since + 'Z').getTime();
+      if (now - lockTime > LOCK_TIMEOUT_MINUTES * 60 * 1000) {
+        db.prepare("UPDATE notes SET editing_by = NULL, editing_since = NULL WHERE id = ?").run(n.id);
+        n.editing_by = null;
+        n.editing_since = null;
+        n.editing_by_name = null;
+      }
+    }
+  }
 
   // Shares pro Notiz laden (Mitbearbeiter-Anzeige)
   if (notes.length) {
@@ -116,8 +144,6 @@ router.get('/', authenticate, (req, res) => {
     for (const n of notes) {
       n.shares = shareMap[n.id] || [];
     }
-  } else {
-    // no notes
   }
 
   res.json({ notes });
@@ -142,12 +168,56 @@ router.post('/', authenticate, (req, res) => {
   res.status(201).json({ note });
 });
 
+// Bearbeitungssperre setzen
+router.post('/:id/lock', authenticate, (req, res) => {
+  const db = getDb();
+  const { note, access } = canAccessNote(db, req.params.id, req.user.id);
+  if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
+  if (!access || access === 'read') return res.status(403).json({ error: 'Keine Berechtigung' });
+
+  clearStaleLock(db, note.id);
+  const current = db.prepare('SELECT editing_by FROM notes WHERE id = ?').get(note.id);
+
+  if (current.editing_by && current.editing_by !== req.user.id) {
+    const locker = db.prepare('SELECT name FROM users WHERE id = ?').get(current.editing_by);
+    return res.status(409).json({
+      error: 'Notiz ist gerade in Bearbeitung, bitte sp\u00e4ter versuchen.',
+      editing_by_name: locker ? locker.name : 'Unbekannt'
+    });
+  }
+
+  db.prepare("UPDATE notes SET editing_by = ?, editing_since = datetime('now') WHERE id = ?")
+    .run(req.user.id, note.id);
+  res.json({ success: true });
+});
+
+// Bearbeitungssperre aufheben
+router.post('/:id/unlock', authenticate, (req, res) => {
+  const db = getDb();
+  const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
+  if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
+
+  if (note.editing_by && note.editing_by !== req.user.id) {
+    return res.status(403).json({ error: 'Sperre gehoert einem anderen Benutzer' });
+  }
+
+  db.prepare("UPDATE notes SET editing_by = NULL, editing_since = NULL WHERE id = ?").run(note.id);
+  res.json({ success: true });
+});
+
 // Notiz bearbeiten (Owner oder Write-Share)
 router.put('/:id', authenticate, (req, res) => {
   const db = getDb();
   const { note, access } = canAccessNote(db, req.params.id, req.user.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (!access || access === 'read') return res.status(403).json({ error: 'Keine Berechtigung' });
+
+  // Lock-Check
+  clearStaleLock(db, Number(req.params.id));
+  const lockInfo = db.prepare('SELECT editing_by FROM notes WHERE id = ?').get(req.params.id);
+  if (lockInfo.editing_by && lockInfo.editing_by !== req.user.id) {
+    return res.status(409).json({ error: 'Notiz ist gerade von einem anderen Benutzer gesperrt.' });
+  }
 
   const { title, body, project_id, project_text } = req.body;
   if (!title || !title.trim()) {
@@ -156,7 +226,7 @@ router.put('/:id', authenticate, (req, res) => {
 
   const proj = resolveProject(db, project_id, project_text);
   db.prepare(
-    "UPDATE notes SET title = ?, body = ?, project_id = ?, project_text = ?, updated_at = datetime('now') WHERE id = ?"
+    "UPDATE notes SET title = ?, body = ?, project_id = ?, project_text = ?, updated_at = datetime('now'), editing_by = NULL, editing_since = NULL WHERE id = ?"
   ).run(title.trim(), (body || '').trim(), proj.project_id, proj.project_text, req.params.id);
 
   const updated = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
@@ -164,12 +234,17 @@ router.put('/:id', authenticate, (req, res) => {
   res.json({ note: updated });
 });
 
-// Notiz löschen (nur Owner)
+// Notiz loeschen (nur Owner)
 router.delete('/:id', authenticate, (req, res) => {
   const db = getDb();
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
-  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann löschen' });
+  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentuemer kann loeschen' });
+
+  clearStaleLock(db, Number(req.params.id));
+  if (note.editing_by && note.editing_by !== req.user.id) {
+    return res.status(409).json({ error: 'Notiz ist gerade in Bearbeitung und kann nicht geloescht werden.' });
+  }
 
   db.prepare('DELETE FROM notes WHERE id = ?').run(req.params.id);
   res.json({ success: true });
@@ -182,7 +257,7 @@ router.get('/:id/shares', authenticate, (req, res) => {
   const db = getDb();
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
-  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann Freigaben verwalten' });
+  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentuemer kann Freigaben verwalten' });
 
   const shares = db.prepare(`
     SELECT ns.user_id, ns.permission, u.name as user_name
@@ -198,7 +273,7 @@ router.put('/:id/shares', authenticate, (req, res) => {
   const db = getDb();
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
-  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann Freigaben verwalten' });
+  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentuemer kann Freigaben verwalten' });
 
   const { shares } = req.body;
   if (!Array.isArray(shares)) return res.status(400).json({ error: 'shares muss ein Array sein' });
@@ -228,11 +303,11 @@ router.post('/:id/offer', authenticate, (req, res) => {
   const db = getDb();
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
-  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann weitergeben' });
+  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentuemer kann weitergeben' });
 
   const { user_ids } = req.body;
   if (!Array.isArray(user_ids) || !user_ids.length) {
-    return res.status(400).json({ error: 'Mindestens ein Empfänger erforderlich' });
+    return res.status(400).json({ error: 'Mindestens ein Empfaenger erforderlich' });
   }
 
   const insert = db.prepare('INSERT OR IGNORE INTO note_offers (note_id, from_user_id, to_user_id) VALUES (?, ?, ?)');

@@ -457,6 +457,16 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: Edit-Lock-Spalten in notes
+  try {
+    const noteCols = db.prepare("PRAGMA table_info(notes)").all();
+    if (!noteCols.some(c => c.name === 'editing_by')) {
+      db.exec("ALTER TABLE notes ADD COLUMN editing_by INTEGER");
+      db.exec("ALTER TABLE notes ADD COLUMN editing_since TEXT");
+      console.log('Migration: Edit-Lock-Spalten in notes hinzugefuegt.');
+    }
+  } catch (e) {}
+
   // Seed-Daten nur wenn DB leer
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {
