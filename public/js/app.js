@@ -1427,7 +1427,7 @@ async function renderPlanningContent() {
 
   // ⋮ Kontextmenü für Planung
   function closePlanMenus() {
-    mainEl.querySelectorAll('.plan-action-menu').forEach(m => m.remove());
+    document.querySelectorAll('.plan-action-menu').forEach(m => m.remove());
   }
   mainEl.querySelectorAll('.plan-menu-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -1470,9 +1470,7 @@ async function renderPlanningContent() {
       });
     });
   });
-  document.addEventListener('click', closePlanMenus, { once: false });
-  // Cleanup beim Verlassen der Seite
-  window.addEventListener('hashchange', closePlanMenus, { once: true });
+  // Schließen via globalem document-Listener (einmalig im Init registriert)
   // Nav-Buttons in Planungsübersicht
   mainEl.querySelectorAll('.nav-to-addr').forEach(btn => {
     btn.addEventListener('click', (e) => { e.stopPropagation(); openNav(btn.dataset.addr); });
@@ -4557,6 +4555,10 @@ async function releaseCurrentLock() {
     _editingNoteLockId = null;
   }
 }
+// Planungs-Kontextmenü global schließen (einmalig registriert)
+document.addEventListener('click', () => {
+  document.querySelectorAll('.plan-action-menu').forEach(m => m.remove());
+});
 window.addEventListener('hashchange', () => { releaseCurrentLock(); render(); });
 window.addEventListener('beforeunload', () => {
   if (_editingNoteLockId && S.token) {
