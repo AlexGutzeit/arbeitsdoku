@@ -799,16 +799,30 @@ function renderTimelineHtml(entries) {
       const regieTag = regieHtmlBadge(e, 'font-size:0.65rem;');
       const projClientLabel = projLabel + (projLabel && e.client ? ' – ' : '') + (e.client || '');
       const navBtn = e.address ? `<button class="nav-to-addr tl-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : '';
-      bodyHtml += `<div class="tl-entry" data-entry-id="${e.id}" style="top:${top}px;height:${height}px;background:${bg};left:${leftPct}%;width:${widthPct}%;right:auto;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span class="tl-e-time">${esc(e.time_from)} - ${esc(e.time_to)}</span>
+      const isCompact = height < 50;
+      if (isCompact) {
+        // Kompakt-Horizontallayout: alles in einer Zeile
+        const parts = [
+          `<span class="tl-e-time" style="white-space:nowrap;flex-shrink:0">${esc(e.time_from)}-${esc(e.time_to)}</span>`
+        ];
+        if (projClientLabel) parts.push(`<span class="tl-e-sep" style="opacity:0.5;flex-shrink:0">·</span><span class="tl-e-project" style="white-space:nowrap;flex-shrink:1;overflow:hidden;text-overflow:ellipsis">${esc(projClientLabel)}</span>`);
+        if (e.description) parts.push(`<span class="tl-e-sep" style="opacity:0.5;flex-shrink:0">·</span><span class="tl-e-desc" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.description)}</span>`);
+        bodyHtml += `<div class="tl-entry" data-entry-id="${e.id}" style="top:${top}px;height:${height}px;background:${bg};left:${leftPct}%;width:${widthPct}%;right:auto;flex-direction:row;align-items:center;gap:4px;">
+          ${parts.join('')}
           ${navBtn}
-        </div>
-        ${projClientLabel ? `<span class="tl-e-project">${esc(projClientLabel)}</span>` : ''}
-        ${e.description && height > 50 ? `<span class="tl-e-desc">${esc(e.description)}</span>` : ''}
-        ${e.break_minutes > 0 && height > 40 ? `<span class="tl-e-break">Pause: ${e.break_minutes} min</span>` : ''}
-        ${height > 35 ? regieTag : ''}
-      </div>`;
+        </div>`;
+      } else {
+        bodyHtml += `<div class="tl-entry" data-entry-id="${e.id}" style="top:${top}px;height:${height}px;background:${bg};left:${leftPct}%;width:${widthPct}%;right:auto;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="tl-e-time">${esc(e.time_from)} - ${esc(e.time_to)}</span>
+            ${navBtn}
+          </div>
+          ${projClientLabel ? `<span class="tl-e-project">${esc(projClientLabel)}</span>` : ''}
+          ${e.description && height > 50 ? `<span class="tl-e-desc">${esc(e.description)}</span>` : ''}
+          ${e.break_minutes > 0 && height > 40 ? `<span class="tl-e-break">Pause: ${e.break_minutes} min</span>` : ''}
+          ${height > 35 ? regieTag : ''}
+        </div>`;
+      }
     });
 
     const headerLabel = isSingle ? 'Meine Einträge' : esc(col.name);
@@ -1406,31 +1420,59 @@ async function renderPlanningContent() {
   // Click handlers for planning entries
   mainEl.querySelectorAll('.tl-plan-entry[data-planning-id]').forEach(el => {
     el.addEventListener('click', (e) => {
-      if (e.target.closest('.plan-action-btn')) return;
+      if (e.target.closest('.plan-action-btn') || e.target.closest('.plan-menu-btn') || e.target.closest('.plan-action-menu')) return;
       navigate('/planning/accept/' + el.dataset.planningId);
     });
   });
-  mainEl.querySelectorAll('.plan-edit-btn').forEach(btn => {
+
+  // ⋮ Kontextmenü für Planung
+  function closePlanMenus() {
+    mainEl.querySelectorAll('.plan-action-menu').forEach(m => m.remove());
+  }
+  mainEl.querySelectorAll('.plan-menu-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (btn.dataset.group) {
-        navigate('/planning/edit-group/' + btn.dataset.group);
-      } else {
-        navigate('/planning/edit/' + btn.dataset.id);
-      }
+      const existingMenu = document.querySelector('.plan-action-menu[data-for="' + btn.dataset.id + '"]');
+      closePlanMenus();
+      if (existingMenu) return; // Toggle: war offen → schließen
+
+      const menu = document.createElement('div');
+      menu.className = 'plan-action-menu';
+      menu.dataset.for = btn.dataset.id;
+      menu.innerHTML = `
+        <button class="plan-menu-edit" data-id="${btn.dataset.id}" data-group="${btn.dataset.group || ''}">&#9998; Bearbeiten</button>
+        <button class="plan-menu-del" data-id="${btn.dataset.id}">&#10005; L\u00f6schen</button>
+      `;
+      // Positionierung: unterhalb des Buttons, relativ zum Viewport
+      document.body.appendChild(menu);
+      const rect = btn.getBoundingClientRect();
+      menu.style.top = (rect.bottom + window.scrollY + 2) + 'px';
+      menu.style.left = Math.max(4, rect.right + window.scrollX - menu.offsetWidth) + 'px';
+
+      menu.querySelector('.plan-menu-edit').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        closePlanMenus();
+        if (btn.dataset.group) {
+          navigate('/planning/edit-group/' + btn.dataset.group);
+        } else {
+          navigate('/planning/edit/' + btn.dataset.id);
+        }
+      });
+      menu.querySelector('.plan-menu-del').addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        closePlanMenus();
+        if (!confirm('Planung wirklich l\u00f6schen?')) return;
+        try {
+          await api('DELETE', '/api/planning/' + btn.dataset.id);
+          toast('Planung gel\u00f6scht', 'success');
+          renderPlanningContent();
+        } catch (e2) { toast(e2.message, 'error'); }
+      });
     });
   });
-  mainEl.querySelectorAll('.plan-del-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (!confirm('Planung wirklich löschen?')) return;
-      try {
-        await api('DELETE', '/api/planning/' + btn.dataset.id);
-        toast('Planung gelöscht', 'success');
-        renderPlanningContent();
-      } catch (e2) { toast(e2.message, 'error'); }
-    });
-  });
+  document.addEventListener('click', closePlanMenus, { once: false });
+  // Cleanup beim Verlassen der Seite
+  window.addEventListener('hashchange', closePlanMenus, { once: true });
   // Nav-Buttons in Planungsübersicht
   mainEl.querySelectorAll('.nav-to-addr').forEach(btn => {
     btn.addEventListener('click', (e) => { e.stopPropagation(); openNav(btn.dataset.addr); });
@@ -1521,16 +1563,17 @@ function renderPlanningTimeline(entries, canEdit) {
       const widthPct = laneW - 1;
 
       let actionsHtml = '';
-      if (canEdit && height > 30) {
-        actionsHtml = `${e.address ? `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}<button type="button" class="plan-action-btn plan-edit-btn" data-id="${e.id}" data-group="${e.group_id || ''}" title="Bearbeiten">&#9998;</button><button type="button" class="plan-action-btn plan-del-btn" data-id="${e.id}" title="Löschen">&#10005;</button>`;
-      } else if (e.address) {
-        actionsHtml = `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>`;
+      if (e.address) {
+        actionsHtml += `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>`;
+      }
+      if (canEdit) {
+        actionsHtml += `<button type="button" class="plan-menu-btn" data-id="${e.id}" data-group="${e.group_id || ''}" title="Aktionen">&#8942;</button>`;
       }
 
-      bodyHtml += `<div class="tl-plan-entry" data-planning-id="${e.id}" style="top:${top}px;height:${height}px;left:${leftPct}%;width:${widthPct}%;right:auto;" title="Klicken zum Übernehmen">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span class="tl-e-time">${esc(e.time_from)} - ${esc(e.time_to)}</span>
-          <span>${actionsHtml}</span>
+      bodyHtml += `<div class="tl-plan-entry" data-planning-id="${e.id}" style="top:${top}px;height:${height}px;left:${leftPct}%;width:${widthPct}%;right:auto;" title="Klicken zum \u00dcbernehmen">
+        <div style="display:flex;justify-content:space-between;align-items:center;min-width:0;">
+          <span class="tl-e-time" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.time_from)} - ${esc(e.time_to)}</span>
+          <span style="display:flex;gap:2px;flex-shrink:0;">${actionsHtml}</span>
         </div>
         ${projLabel || e.client ? `<span class="tl-e-project">${esc(projLabel)}${projLabel && e.client ? ' – ' : ''}${esc(e.client || '')}</span>` : ''}
         ${e.description && height > 50 ? `<span class="tl-e-desc">${esc(e.description)}</span>` : ''}

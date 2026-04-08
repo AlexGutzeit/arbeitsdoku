@@ -1184,6 +1184,11 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .plan-action-btn:hover { background: rgba(255,255,255,0.95); transform: scale(1.1); }
 .plan-action-btn:active { transform: scale(0.95); }
 .plan-del-btn { color: var(--danger); }
+.plan-menu-btn { background: rgba(255,255,255,0.8); border: none; border-radius: 4px; width: 20px; height: 20px; font-size: 0.95rem; line-height: 1; cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.plan-menu-btn:hover { background: rgba(255,255,255,1); }
+.plan-action-menu { position: fixed; z-index: 500; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.18); padding: 0.3rem 0; min-width: 140px; }
+.plan-action-menu button { display: block; width: 100%; text-align: left; padding: 0.45rem 0.9rem; background: none; border: none; font-size: 0.85rem; cursor: pointer; color: var(--text); }
+.plan-action-menu button:hover { background: var(--primary-light); color: var(--primary); }
 @media (max-width: 600px) {
   .plan-action-btn { min-width: 40px; min-height: 40px; font-size: 1.2rem; }
 }
