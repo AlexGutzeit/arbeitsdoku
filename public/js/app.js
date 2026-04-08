@@ -1825,7 +1825,7 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
   } else if (isEdit) {
     planDays = [{ date: entry.date, time_from: entry.time_from, time_to: entry.time_to, break_minutes: entry.break_minutes }];
   } else if (!source) {
-    const today = formatDateISO(new Date());
+    const today = formatDateISO(S.planningDate || new Date());
     planDays = [{ date: today, time_from: '07:00', time_to: '15:30', break_minutes: 30 }];
   }
 
