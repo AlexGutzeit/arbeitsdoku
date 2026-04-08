@@ -1489,6 +1489,7 @@ async function renderPlanningContent() {
   mainEl.querySelectorAll('.plan-menu-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      hideTooltip();
       const existingMenu = document.querySelector('.plan-action-menu[data-for="' + btn.dataset.id + '"]');
       closePlanMenus();
       if (existingMenu) return; // Toggle: war offen → schließen
@@ -1508,6 +1509,7 @@ async function renderPlanningContent() {
 
       menu.querySelector('.plan-menu-edit').addEventListener('click', (ev) => {
         ev.stopPropagation();
+        hideTooltip();
         closePlanMenus();
         if (btn.dataset.group) {
           navigate('/planning/edit-group/' + btn.dataset.group);
