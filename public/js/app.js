@@ -113,6 +113,19 @@ function entryTooltipHtml(e) {
   return lines.filter(l => l).join('<br>');
 }
 
+function planEntryTooltipHtml(e) {
+  const lines = [
+    `<strong>${esc(e.project_name || e.project_text || 'Kein Projekt')}</strong>`,
+    `Zeit: ${esc(e.time_from)} - ${esc(e.time_to)}`,
+    e.client ? `Kunde: ${esc(e.client)}` : '',
+    e.address ? `Ort: ${esc(e.address)}` : '',
+    e.description ? `Beschreibung: ${esc(e.description)}` : '',
+    (e.assigned && e.assigned.length) ? `Mitarbeiter: ${e.assigned.map(a => esc(a.user_name)).join(', ')}` : '',
+    e.created_by_name ? `Erstellt von: ${esc(e.created_by_name)}` : '',
+  ];
+  return lines.filter(l => l).join('<br>');
+}
+
 // Globaler Tooltip
 let tooltipEl = null;
 function initTooltip() {
@@ -1417,10 +1430,54 @@ async function renderPlanningContent() {
     renderPlanningContent();
   });
 
-  // Click handlers for planning entries
+  // Tooltip + Long-Press für Planning-Einträge
+  const planEntryMap = {};
+  entries.forEach(e => { planEntryMap[e.id] = e; });
+
   mainEl.querySelectorAll('.tl-plan-entry[data-planning-id]').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.closest('.plan-action-btn') || e.target.closest('.plan-menu-btn') || e.target.closest('.plan-action-menu')) return;
+    const e = planEntryMap[el.dataset.planningId];
+
+    // Desktop: Hover-Tooltip
+    el.addEventListener('mouseenter', (ev) => {
+      if (e) showTooltip(planEntryTooltipHtml(e), ev.clientX, ev.clientY);
+    });
+    el.addEventListener('mousemove', (ev) => {
+      if (tooltipEl && tooltipEl.style.display !== 'none') showTooltip(tooltipEl.innerHTML, ev.clientX, ev.clientY);
+    });
+    el.addEventListener('mouseleave', hideTooltip);
+
+    // Mobile: Long-Press (500ms)
+    let pressTimer = null;
+    let pressX = 0, pressY = 0, moved = false;
+    el.addEventListener('touchstart', (ev) => {
+      moved = false;
+      pressX = ev.touches[0].clientX;
+      pressY = ev.touches[0].clientY;
+      pressTimer = setTimeout(() => {
+        if (!moved && e) {
+          hideTooltip();
+          showTooltip(planEntryTooltipHtml(e), pressX, pressY);
+          // Tooltip nach 4 Sekunden automatisch ausblenden
+          setTimeout(hideTooltip, 4000);
+        }
+      }, 500);
+    }, { passive: true });
+    el.addEventListener('touchmove', (ev) => {
+      const dx = ev.touches[0].clientX - pressX;
+      const dy = ev.touches[0].clientY - pressY;
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+        moved = true;
+        clearTimeout(pressTimer);
+      }
+    }, { passive: true });
+    el.addEventListener('touchend', () => {
+      clearTimeout(pressTimer);
+    });
+
+    // Click → Eintrag übernehmen (nur ohne Long-Press)
+    el.addEventListener('click', (ev) => {
+      if (ev.target.closest('.plan-action-btn') || ev.target.closest('.plan-menu-btn') || ev.target.closest('.plan-action-menu')) return;
+      hideTooltip();
       navigate('/planning/accept/' + el.dataset.planningId);
     });
   });
