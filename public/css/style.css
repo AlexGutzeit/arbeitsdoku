@@ -981,6 +981,7 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .form-section-title { font-weight: 600; font-size: 0.85rem; color: #475569; margin-bottom: 0.5rem; display: block; }
 .targets-table { width: 100%; }
 .targets-table td, .targets-table th { padding: 0.3rem 0.4rem; }
+#um-targets-list { overflow-x: auto; }
 .targets-days-table th { font-size: 0.75rem; text-align: center; }
 .targets-days-table td { text-align: center; }
 .targets-days-table input[type="number"] { width: 60px; text-align: center; }
