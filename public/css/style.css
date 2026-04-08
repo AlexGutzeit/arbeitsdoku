@@ -1205,7 +1205,7 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .grid-plan-entry {
   background: var(--warning-light);
   border-left: 3px solid var(--warning);
-  color: #92400e;
+  color: #374151;
   padding: 2px 4px;
   margin-bottom: 2px;
   border-radius: 3px;

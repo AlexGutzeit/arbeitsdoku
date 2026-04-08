@@ -1714,7 +1714,8 @@ function renderPlanningGrid(entries, range, view, canEdit) {
         bodyHtml += `<td class="grid-cell" data-plan-jump="${day}">`;
         cellEntries.forEach(e => {
           const proj = e.project_name || e.project_text || '';
-          bodyHtml += `<div class="grid-plan-entry">${e.time_from}-${e.time_to} ${e.address ? `<button class="nav-to-addr grid-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''} ${esc(proj)}${proj && e.client ? ' – ' : ''}${esc(e.client || '')}</div>`;
+          const ec = e.color || '#f59e0b';
+          bodyHtml += `<div class="grid-plan-entry" style="background:${ec}28;border-left-color:${ec};color:#374151;">${e.time_from}-${e.time_to} ${e.address ? `<button class="nav-to-addr grid-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''} ${esc(proj)}${proj && e.client ? ' – ' : ''}${esc(e.client || '')}</div>`;
         });
         bodyHtml += '</td>';
       });
@@ -1758,7 +1759,8 @@ function renderPlanningGrid(entries, range, view, canEdit) {
         Object.keys(byDay).sort().forEach(day => {
           const dn = getDayNameShort(day);
           const dayCount = byDay[day].length;
-          bodyHtml += `<div class="grid-kw-day grid-plan-entry" data-plan-jump="${day}">
+          const firstColor = byDay[day][0]?.color || '#f59e0b';
+          bodyHtml += `<div class="grid-kw-day grid-plan-entry" data-plan-jump="${day}" style="background:${firstColor}28;border-left-color:${firstColor};color:#374151;">
             <span class="grid-kw-dayname">${dn}</span>
             <span class="grid-kw-dayhours">${dayCount} Planung${dayCount > 1 ? 'en' : ''}</span>
           </div>`;
