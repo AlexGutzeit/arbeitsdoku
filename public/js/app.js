@@ -128,6 +128,7 @@ function planEntryTooltipHtml(e) {
 
 // Globaler Tooltip
 let tooltipEl = null;
+let _tooltipSuppressed = false;
 function initTooltip() {
   if (tooltipEl) return;
   tooltipEl = document.createElement('div');
@@ -136,6 +137,7 @@ function initTooltip() {
   document.body.appendChild(tooltipEl);
 }
 function showTooltip(html, x, y) {
+  if (_tooltipSuppressed) return;
   initTooltip();
   tooltipEl.innerHTML = html;
   tooltipEl.style.display = '';
@@ -147,6 +149,11 @@ function showTooltip(html, x, y) {
 }
 function hideTooltip() {
   if (tooltipEl) tooltipEl.style.display = 'none';
+}
+function suppressTooltip() {
+  hideTooltip();
+  _tooltipSuppressed = true;
+  setTimeout(() => { _tooltipSuppressed = false; }, 500);
 }
 
 function regieHtmlBadge(entry, extraStyle) {
@@ -1769,6 +1776,7 @@ function renderPlanningGrid(entries, range, view, canEdit) {
 
 // --- Planning Form ---
 async function renderPlanningForm(editId, replanId, editGroupId) {
+  suppressTooltip();
   let entry = null;
   let replanEntry = null;
   let groupEntries = null;
