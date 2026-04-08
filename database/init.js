@@ -409,6 +409,10 @@ async function initDatabase() {
       db.exec("ALTER TABLE planning_entries ADD COLUMN group_id TEXT");
       console.log('Migration: group_id in planning_entries hinzugefügt.');
     }
+    if (!planCols.some(c => c.name === 'color')) {
+      db.exec("ALTER TABLE planning_entries ADD COLUMN color TEXT DEFAULT '#f59e0b'");
+      console.log('Migration: color in planning_entries hinzugefügt.');
+    }
   } catch (e) {}
 
   // Migration: orders – quantity nullable + location-Spalten

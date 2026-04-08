@@ -98,7 +98,7 @@ function canPlan(req, res, next) {
 // Planung erstellen (einzeln oder Gruppe)
 router.post('/', authenticate, canPlan, (req, res) => {
   const db = getDb();
-  const { days, address, client, project_id, project_text, description, assigned_user_ids } = req.body;
+  const { days, address, client, project_id, project_text, description, assigned_user_ids, color } = req.body;
 
   // Rückwärtskompatibel: einzelner Eintrag (altes Format)
   if (req.body.date) {
@@ -112,9 +112,9 @@ router.post('/', authenticate, canPlan, (req, res) => {
 
     const insert = db.transaction(() => {
       const result = db.prepare(`
-        INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(req.user.id, date, time_from, time_to, break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '');
+        INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, color)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(req.user.id, date, time_from, time_to, break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', color || '#f59e0b');
 
       const planningId = result.lastInsertRowid;
       for (const userId of assigned_user_ids) {
@@ -149,9 +149,9 @@ router.post('/', authenticate, canPlan, (req, res) => {
     for (const day of days) {
       if (!day.date || !day.time_from || !day.time_to) continue;
       const result = db.prepare(`
-        INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(req.user.id, day.date, day.time_from, day.time_to, day.break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', groupId);
+        INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(req.user.id, day.date, day.time_from, day.time_to, day.break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', groupId, color || '#f59e0b');
 
       const planningId = result.lastInsertRowid;
       for (const userId of assigned_user_ids) {
@@ -169,7 +169,7 @@ router.post('/', authenticate, canPlan, (req, res) => {
 // Gruppe aktualisieren (alle Tage ersetzen) — MUSS vor /:id stehen!
 router.put('/group/:groupId', authenticate, canPlan, (req, res) => {
   const db = getDb();
-  const { days, address, client, project_id, project_text, description, assigned_user_ids } = req.body;
+  const { days, address, client, project_id, project_text, description, assigned_user_ids, color } = req.body;
 
   if (!days || !days.length) {
     return res.status(400).json({ error: 'Mindestens ein Tag ist erforderlich' });
@@ -191,9 +191,9 @@ router.put('/group/:groupId', authenticate, canPlan, (req, res) => {
     for (const day of days) {
       if (!day.date || !day.time_from || !day.time_to) continue;
       const result = db.prepare(`
-        INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(req.user.id, day.date, day.time_from, day.time_to, day.break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', newGroupId);
+        INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(req.user.id, day.date, day.time_from, day.time_to, day.break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', newGroupId, color || '#f59e0b');
 
       const planningId = result.lastInsertRowid;
       for (const uid of assigned_user_ids) {
@@ -214,11 +214,11 @@ router.put('/:id', authenticate, canPlan, (req, res) => {
   const entry = db.prepare('SELECT * FROM planning_entries WHERE id = ?').get(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Planung nicht gefunden' });
 
-  const { date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, assigned_user_ids } = req.body;
+  const { date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, assigned_user_ids, color } = req.body;
 
   const update = db.transaction(() => {
     db.prepare(`
-      UPDATE planning_entries SET date=?, time_from=?, time_to=?, break_minutes=?, address=?, client=?, project_id=?, project_text=?, description=?, updated_at=datetime('now')
+      UPDATE planning_entries SET date=?, time_from=?, time_to=?, break_minutes=?, address=?, client=?, project_id=?, project_text=?, description=?, color=?, updated_at=datetime('now')
       WHERE id=?
     `).run(
       date || entry.date, time_from || entry.time_from, time_to || entry.time_to,
@@ -228,6 +228,7 @@ router.put('/:id', authenticate, canPlan, (req, res) => {
       project_id !== undefined ? (project_id || null) : entry.project_id,
       project_text !== undefined ? project_text : entry.project_text,
       description !== undefined ? description : entry.description,
+      color !== undefined ? color : (entry.color || '#f59e0b'),
       req.params.id
     );
 

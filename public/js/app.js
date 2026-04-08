@@ -1634,7 +1634,8 @@ function renderPlanningTimeline(entries, canEdit) {
         actionsHtml += `<button type="button" class="plan-menu-btn" data-id="${e.id}" data-group="${e.group_id || ''}" title="Aktionen">&#8942;</button>`;
       }
 
-      bodyHtml += `<div class="tl-plan-entry" data-planning-id="${e.id}" style="top:${top}px;height:${height}px;left:${leftPct}%;width:${widthPct}%;right:auto;" title="Klicken zum \u00dcbernehmen">
+      const entryColor = e.color || '#f59e0b';
+      bodyHtml += `<div class="tl-plan-entry" data-planning-id="${e.id}" style="top:${top}px;height:${height}px;left:${leftPct}%;width:${widthPct}%;right:auto;background:${entryColor}28;border-color:${entryColor};color:#374151;" title="Klicken zum \u00dcbernehmen">
         <div style="display:flex;justify-content:space-between;align-items:center;min-width:0;">
           <span class="tl-e-time" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.time_from)} - ${esc(e.time_to)}</span>
           <span style="display:flex;gap:2px;flex-shrink:0;">${actionsHtml}</span>
@@ -2059,6 +2060,20 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
           <label>Beschreibung</label>
           <textarea class="form-control" id="pf-desc" rows="3" placeholder="Was soll gemacht werden?">${esc(ref?.description || '')}</textarea>
         </div>
+        <div class="form-group">
+          <label>Farbe</label>
+          <div class="color-picker-row">
+            <input type="color" id="pf-color" class="color-picker-input" value="${ref?.color || '#f59e0b'}">
+            <span class="color-swatches">
+              <span class="color-swatch" data-color="#f59e0b" style="background:#f59e0b" title="Orange"></span>
+              <span class="color-swatch" data-color="#3b82f6" style="background:#3b82f6" title="Blau"></span>
+              <span class="color-swatch" data-color="#22c55e" style="background:#22c55e" title="Gr\u00fcn"></span>
+              <span class="color-swatch" data-color="#ef4444" style="background:#ef4444" title="Rot"></span>
+              <span class="color-swatch" data-color="#a855f7" style="background:#a855f7" title="Lila"></span>
+              <span class="color-swatch" data-color="#14b8a6" style="background:#14b8a6" title="T\u00fcrkis"></span>
+            </span>
+          </div>
+        </div>
         <button type="submit" class="btn btn-primary btn-block">${(isEdit || isGroupEdit) ? 'Speichern' : 'Planung erstellen'}</button>
         ${isEdit ? `<button type="button" class="btn btn-outline btn-block" id="replan-entry" style="margin-top:0.5rem">Auftrag erneut planen</button>` : ''}
         ${(isEdit || isGroupEdit) ? '<button type="button" class="btn btn-danger btn-block" id="delete-planning" style="margin-top:0.5rem">Planung löschen</button>' : ''}
@@ -2070,6 +2085,12 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
   const fab = document.getElementById('fab-new');
   if (fab) fab.style.display = 'none';
   bindDateSectionEvents();
+
+  document.querySelectorAll('.color-swatch').forEach(s => {
+    s.addEventListener('click', () => {
+      document.getElementById('pf-color').value = s.dataset.color;
+    });
+  });
 
   document.getElementById('back-btn').addEventListener('click', () => navigate('/planning'));
 
@@ -2116,6 +2137,7 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
       project_id: document.getElementById('pf-project').value || null,
       project_text: document.getElementById('pf-project-text').value,
       description: document.getElementById('pf-desc').value,
+      color: document.getElementById('pf-color').value,
       assigned_user_ids: checked,
     };
 

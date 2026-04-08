@@ -1140,11 +1140,17 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .planning-user-checkboxes { display: flex; flex-direction: column; gap: 0.4rem; }
 .planning-user-checkboxes label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer; }
 /* Planning Timeline Entries */
+.color-picker-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.25rem; }
+.color-picker-input { width: 40px; height: 36px; border: none; padding: 2px; cursor: pointer; border-radius: 6px; background: none; }
+.color-swatches { display: flex; gap: 0.35rem; align-items: center; }
+.color-swatch { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color 0.15s; flex-shrink: 0; }
+.color-swatch:hover { border-color: #374151; }
+
 .tl-plan-entry {
   position: absolute;
   border-radius: 6px;
   padding: 4px 8px;
-  color: #92400e;
+  color: #374151;
   background: var(--warning-light);
   border: 2px solid var(--warning);
   font-size: 0.75rem;
