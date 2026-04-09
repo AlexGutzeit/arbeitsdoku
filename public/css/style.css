@@ -1521,7 +1521,7 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .share-matrix th { text-align: left; font-size: 0.85rem; padding: 0.4rem; border-bottom: 1px solid var(--border); }
 .share-matrix td { padding: 0.4rem; }
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
-.modal { background: #fff; border-radius: 12px; width: 100%; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+.modal { background: #fff; border-radius: 12px; width: 100%; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
 .modal-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
 .modal-header h3 { margin: 0; font-size: 1.1rem; }
 .modal-body { padding: 1rem 1.25rem; max-height: 60vh; overflow-y: auto; }
