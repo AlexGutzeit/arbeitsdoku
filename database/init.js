@@ -402,6 +402,11 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: password_plain leeren (Sicherheit)
+  try {
+    db.exec("UPDATE users SET password_plain = NULL WHERE password_plain IS NOT NULL");
+  } catch (e) {}
+
   // Migration: group_id für Planungsgruppen
   try {
     const planCols = db.prepare("PRAGMA table_info(planning_entries)").all();
