@@ -2853,8 +2853,6 @@ async function renderUsers() {
     S.users = data.users;
   } catch (e) { toast(e.message, 'error'); return; }
 
-  const showPw = S.user.role === 'admin' || S.user.role === 'chef';
-
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
     <div class="card">
@@ -2868,7 +2866,6 @@ async function renderUsers() {
             <tr>
               <th>Name</th>
               <th>Benutzername</th>
-              ${showPw ? '<th>Passwort</th>' : ''}
               <th>Rolle</th>
               <th>Soll h/Woche</th>
               <th>Aktionen</th>
@@ -2879,7 +2876,6 @@ async function renderUsers() {
               <tr>
                 <td>${esc(u.name)}</td>
                 <td>${esc(u.username)}</td>
-                ${showPw ? `<td class="pw-cell"><span class="pw-text">••••••</span><span class="pw-plain" style="display:none">${esc(u.password_plain || '')}</span><button type="button" class="pw-toggle" title="Passwort anzeigen">&#128065;</button></td>` : ''}
                 <td><span class="badge badge-${u.role}">${roleName(u.role)}</span></td>
                 <td>${u.target_hours_per_week}</td>
                 <td class="actions">
@@ -2892,20 +2888,6 @@ async function renderUsers() {
         </table>
       </div>
     </div>`;
-
-  // Passwort anzeigen/verstecken per Auge-Toggle
-  mainEl.querySelectorAll('.pw-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const cell = btn.closest('.pw-cell');
-      const dots = cell.querySelector('.pw-text');
-      const plain = cell.querySelector('.pw-plain');
-      const visible = plain.style.display !== 'none';
-      dots.style.display = visible ? '' : 'none';
-      plain.style.display = visible ? 'none' : '';
-      btn.innerHTML = visible ? '&#128065;' : '&#128064;';
-      btn.title = visible ? 'Passwort anzeigen' : 'Passwort verbergen';
-    });
-  });
 
   document.getElementById('add-user-btn').addEventListener('click', () => showUserModal());
 
@@ -2945,13 +2927,22 @@ async function showUserModal(user) {
           <label>Benutzername</label>
           <input type="text" class="form-control" id="um-username" value="${esc(user?.username || '')}" required>
         </div>
+        ${isEdit ? `
         <div class="form-group">
-          <label>Passwort${isEdit ? ' (leer lassen = unverändert)' : ''}</label>
-          <div class="pw-input-wrap">
-            <input type="password" class="form-control" id="um-password" value="${isEdit ? (user?.password_plain || '') : ''}" ${isEdit ? '' : 'required'}>
-            <button type="button" class="pw-toggle-btn" id="um-pw-toggle" title="Passwort anzeigen">&#128065;</button>
+          <button type="button" class="btn btn-outline btn-sm" id="um-reset-pw-btn">&#128274; Passwort zurücksetzen</button>
+          <div id="um-reset-pw-form" style="display:none;margin-top:0.5rem;">
+            <input type="password" class="form-control" id="um-pw-new" placeholder="Neues Passwort" style="margin-bottom:0.4rem;">
+            <input type="password" class="form-control" id="um-pw-repeat" placeholder="Wiederholen">
+            <div style="display:flex;gap:0.5rem;margin-top:0.4rem;">
+              <button type="button" class="btn btn-primary btn-sm" id="um-pw-save">Speichern</button>
+              <button type="button" class="btn btn-outline btn-sm" id="um-pw-cancel">Abbrechen</button>
+            </div>
           </div>
-        </div>
+        </div>` : `
+        <div class="form-group">
+          <label>Passwort</label>
+          <input type="password" class="form-control" id="um-password" required>
+        </div>`}
         <div class="form-row">
           <div class="form-group">
             <label>Rolle</label>
@@ -3017,18 +3008,31 @@ async function showUserModal(user) {
   document.getElementById('um-cancel').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
-  // Passwort-Toggle im Modal
-  document.getElementById('um-pw-toggle')?.addEventListener('click', () => {
-    const inp = document.getElementById('um-password');
-    const btn = document.getElementById('um-pw-toggle');
-    if (inp.type === 'password') {
-      inp.type = 'text';
-      btn.innerHTML = '&#128064;';
-    } else {
-      inp.type = 'password';
-      btn.innerHTML = '&#128065;';
-    }
-  });
+  // Passwort zurücksetzen (nur bei Bearbeitung)
+  if (isEdit) {
+    document.getElementById('um-reset-pw-btn').addEventListener('click', () => {
+      document.getElementById('um-reset-pw-form').style.display = '';
+      document.getElementById('um-pw-new').focus();
+    });
+    document.getElementById('um-pw-cancel').addEventListener('click', () => {
+      document.getElementById('um-reset-pw-form').style.display = 'none';
+      document.getElementById('um-pw-new').value = '';
+      document.getElementById('um-pw-repeat').value = '';
+    });
+    document.getElementById('um-pw-save').addEventListener('click', async () => {
+      const pw1 = document.getElementById('um-pw-new').value;
+      const pw2 = document.getElementById('um-pw-repeat').value;
+      if (!pw1) { toast('Passwort eingeben', 'error'); return; }
+      if (pw1 !== pw2) { toast('Passwörter stimmen nicht überein', 'error'); return; }
+      try {
+        await api('POST', `/api/users/${user.id}/reset-password`, { password: pw1 });
+        toast('Passwort gesetzt', 'success');
+        document.getElementById('um-reset-pw-form').style.display = 'none';
+        document.getElementById('um-pw-new').value = '';
+        document.getElementById('um-pw-repeat').value = '';
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  }
 
   // Soll-Stunden-Verlauf laden (nur bei Bearbeitung)
   if (isEdit) {
@@ -3072,14 +3076,12 @@ async function showUserModal(user) {
       body.hours_fri = parseFloat(document.getElementById('um-h-fri').value) || 0;
       body.target_hours_per_week = body.hours_mon + body.hours_tue + body.hours_wed + body.hours_thu + body.hours_fri;
     }
-    const pw = document.getElementById('um-password').value;
-    if (pw) body.password = pw;
-
     try {
       if (isEdit) {
         await api('PUT', '/api/users/' + user.id, body);
         toast('Mitarbeiter aktualisiert', 'success');
       } else {
+        const pw = document.getElementById('um-password').value;
         if (!pw) { toast('Passwort erforderlich', 'error'); return; }
         body.password = pw;
         await api('POST', '/api/users', body);

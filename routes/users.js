@@ -18,13 +18,8 @@ router.get('/', authenticate, authorize('chef', 'buchhalter'), (req, res) => {
   let users;
 
   if (req.user.role === 'admin') {
-    // Admin sieht alle Benutzer inkl. Passwörter
-    users = db.prepare('SELECT id, username, password_plain, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users ORDER BY name').all();
-  } else if (req.user.role === 'chef') {
-    // Chef sieht alle außer Admins, mit Passwörtern
-    users = db.prepare("SELECT id, username, password_plain, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
+    users = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users ORDER BY name').all();
   } else {
-    // Buchhalter sieht alle außer Admins, ohne Passwörter
     users = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
   }
 
@@ -36,11 +31,7 @@ router.get('/:id', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   let user;
 
-  if (req.user.role === 'admin' || req.user.role === 'chef') {
-    user = db.prepare('SELECT id, username, password_plain, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users WHERE id = ?').get(req.params.id);
-  } else {
-    user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users WHERE id = ?').get(req.params.id);
-  }
+  user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users WHERE id = ?').get(req.params.id);
 
   if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
   res.json({ user });
@@ -72,8 +63,8 @@ router.post('/', authenticate, authorize('chef'), (req, res) => {
 
   const hash = bcrypt.hashSync(password, 10);
   const result = db.prepare(
-    'INSERT INTO users (username, password_hash, password_plain, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(username, hash, password, name, role, hpw, start_overtime || 0, can_plan ? 1 : 0, can_bulletin ? 1 : 0);
+    'INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(username, hash, name, role, hpw, start_overtime || 0, can_plan ? 1 : 0, can_bulletin ? 1 : 0);
 
   const userId = result.lastInsertRowid;
   const today = new Date().toISOString().slice(0, 10);
@@ -96,22 +87,12 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     return res.status(403).json({ error: 'Admin-Accounts können nur von Admins bearbeitet werden' });
   }
 
-  const { username, password, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin } = req.body;
-
-  // Passwort ändern
-  let hash = user.password_hash;
-  let plain = user.password_plain;
-  if (password) {
-    hash = bcrypt.hashSync(password, 10);
-    plain = password;
-  }
+  const { username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin } = req.body;
 
   db.prepare(
-    'UPDATE users SET username=?, password_hash=?, password_plain=?, name=?, role=?, target_hours_per_week=?, start_overtime=?, can_plan=?, can_bulletin=? WHERE id=?'
+    'UPDATE users SET username=?, name=?, role=?, target_hours_per_week=?, start_overtime=?, can_plan=?, can_bulletin=? WHERE id=?'
   ).run(
     username || user.username,
-    hash,
-    plain,
     name || user.name,
     role || user.role,
     target_hours_per_week !== undefined ? target_hours_per_week : user.target_hours_per_week,
@@ -121,8 +102,25 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     req.params.id
   );
 
-  const updated = db.prepare('SELECT id, username, password_plain, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users WHERE id = ?').get(req.params.id);
+  const updated = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users WHERE id = ?').get(req.params.id);
   res.json({ user: updated });
+});
+
+// Passwort zurücksetzen
+router.post('/:id/reset-password', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+  if (user.role === 'admin' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin-Passwort kann nur von Admins geändert werden' });
+  }
+  const { password } = req.body;
+  if (!password || password.length < 4) {
+    return res.status(400).json({ error: 'Passwort muss mindestens 4 Zeichen haben' });
+  }
+  const hash = bcrypt.hashSync(password, 10);
+  db.prepare('UPDATE users SET password_hash=?, password_plain=NULL WHERE id=?').run(hash, req.params.id);
+  res.json({ success: true });
 });
 
 // Benutzer löschen
