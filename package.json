@@ -4,7 +4,9 @@
   "description": "Arbeitsdokumentations-Webapp",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "PORT=3001 DB_PATH=./data/local.db JWT_SECRET=dev-secret node server.js",
+    "clone-db": "bash scripts/clone-db.sh"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
