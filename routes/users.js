@@ -119,7 +119,7 @@ router.post('/:id/reset-password', authenticate, authorize('chef'), (req, res) =
     return res.status(400).json({ error: 'Passwort muss mindestens 4 Zeichen haben' });
   }
   const hash = bcrypt.hashSync(password, 10);
-  db.prepare('UPDATE users SET password_hash=?, password_plain=NULL WHERE id=?').run(hash, req.params.id);
+  db.prepare("UPDATE users SET password_hash=?, password_plain='' WHERE id=?").run(hash, req.params.id);
   res.json({ success: true });
 });
 

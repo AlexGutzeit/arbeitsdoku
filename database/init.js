@@ -404,7 +404,7 @@ async function initDatabase() {
 
   // Migration: password_plain leeren (Sicherheit)
   try {
-    db.exec("UPDATE users SET password_plain = NULL WHERE password_plain IS NOT NULL");
+    db.exec("UPDATE users SET password_plain = '' WHERE password_plain IS NOT NULL AND password_plain != ''");
   } catch (e) {}
 
   // Migration: group_id für Planungsgruppen
