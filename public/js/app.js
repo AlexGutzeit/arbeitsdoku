@@ -182,11 +182,10 @@ function formatDateDE(d) {
 function formatDateTimeDE(dt) {
   if (!dt) return '';
   const d = new Date(dt.replace(' ', 'T') + 'Z');
-  return d.toLocaleString('de-DE', {
-    timeZone: 'Europe/Berlin',
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
+  if (isNaN(d.getTime())) return dt;
+  const berlin = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(berlin.getDate())}.${pad(berlin.getMonth() + 1)}.${berlin.getFullYear()}, ${pad(berlin.getHours())}:${pad(berlin.getMinutes())}`;
 }
 
 function formatDateISO(date) {
