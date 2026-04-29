@@ -179,6 +179,15 @@ function formatDateDE(d) {
   const [y, m, day] = d.split('-');
   return `${day}.${m}.${y}`;
 }
+function formatDateTimeDE(dt) {
+  if (!dt) return '';
+  const d = new Date(dt.replace(' ', 'T') + 'Z');
+  return d.toLocaleString('de-DE', {
+    timeZone: 'Europe/Berlin',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
 
 function formatDateISO(date) {
   const y = date.getFullYear();
@@ -4340,7 +4349,7 @@ function renderNoteList(notes) {
           <div class="note-meta">
             ${ownerInfo}
             ${sharesInfo}
-            <span>${formatDateDE(n.updated_at)}</span>
+            <span>${formatDateTimeDE(n.updated_at)}</span>
           </div>
         </div>
         <div class="note-actions">
