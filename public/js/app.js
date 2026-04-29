@@ -4040,7 +4040,7 @@ function renderOrderList(orders, manage) {
   return orders.map(o => {
     const isOwn = o.user_id === S.user.id;
     const canEdit = isOwn || manage;
-    const created = o.created_at ? formatDateTimeDE(o.created_at) : '';
+    const created = o.created_at ? formatOrderDateDE(o.created_at) : '';
     return `<div class="order-item" data-id="${o.id}">
       <div class="order-content">
         <div class="order-product">${fmtOrderQty(o)}${esc(o.product)}${fmtOrderLocation(o)}</div>
@@ -4060,7 +4060,7 @@ function renderOrderedList(orders) {
   if (!orders.length) return '<p style="color:#94a3b8;text-align:center">Keine Bestellungen im letzten Monat</p>';
   const isAdmin = S.user.role === 'admin';
   return orders.map(o => {
-    const orderedDate = o.ordered_at ? formatDateTimeDE(o.ordered_at) : '';
+    const orderedDate = o.ordered_at ? formatOrderDateDE(o.ordered_at) : '';
     return `<div class="order-item order-done" data-id="${o.id}">
       <div class="order-content">
         <div class="order-product">${fmtOrderQty(o)}${esc(o.product)}${fmtOrderLocation(o)}</div>
@@ -4072,7 +4072,7 @@ function renderOrderedList(orders) {
   }).join('');
 }
 
-function formatDateTimeDE(dt) {
+function formatOrderDateDE(dt) {
   if (!dt) return '';
   const d = new Date(dt + (dt.includes('T') || dt.includes('Z') ? '' : 'Z'));
   const day = String(d.getDate()).padStart(2, '0');
