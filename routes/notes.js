@@ -66,6 +66,7 @@ router.post('/offers/:id/accept', authenticate, (req, res) => {
     "INSERT INTO notes (user_id, title, body, project_id, project_text) VALUES (?, ?, ?, ?, ?)"
   ).run(req.user.id, note.title, note.body, note.project_id, note.project_text);
   db.prepare("UPDATE note_offers SET status = 'accepted' WHERE id = ?").run(offer.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -78,6 +79,7 @@ router.post('/offers/:id/decline', authenticate, (req, res) => {
   if (offer.status !== 'pending') return res.status(400).json({ error: 'Angebot ist nicht mehr offen' });
 
   db.prepare("UPDATE note_offers SET status = 'declined' WHERE id = ?").run(offer.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -90,6 +92,7 @@ router.delete('/offers/:id', authenticate, (req, res) => {
   if (offer.status !== 'pending') return res.status(400).json({ error: 'Angebot ist nicht mehr offen' });
 
   db.prepare('DELETE FROM note_offers WHERE id = ?').run(offer.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -297,6 +300,7 @@ router.put('/:id/shares', authenticate, (req, res) => {
     JOIN users u ON ns.user_id = u.id
     WHERE ns.note_id = ?
   `).all(note.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ shares: updated });
 });
 
@@ -320,6 +324,7 @@ router.post('/:id/offer', authenticate, (req, res) => {
     insert.run(note.id, req.user.id, uid);
   }
 
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
