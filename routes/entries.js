@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
+const { broadcast } = require('../sse');
 
 const router = express.Router();
 
@@ -133,6 +134,7 @@ router.post('/', authenticate, (req, res) => {
   `).run(targetUserId, date, time_from, time_to, break_minutes || 0, net_hours, address || '', client || '', project_id || null, project_text || '', description || '', personal_note || '', has_regie || 0, has_regie === 1 ? (regie_user_id || targetUserId) : null);
 
   const entry = db.prepare('SELECT * FROM entries WHERE id = ?').get(result.lastInsertRowid);
+  broadcast('entries', req.headers['x-tab-id']);
   res.status(201).json({ entry });
 });
 
@@ -179,6 +181,7 @@ router.put('/:id', authenticate, (req, res) => {
     WHERE e.id = ?
   `).get(req.params.id);
 
+  broadcast('entries', req.headers['x-tab-id']);
   res.json({ entry: updated });
 });
 
@@ -190,6 +193,7 @@ router.delete('/:id', authenticate, (req, res) => {
 
   if (req.user.role === 'admin' || entry.user_id === req.user.id) {
     db.prepare('DELETE FROM entries WHERE id = ?').run(req.params.id);
+    broadcast('entries', req.headers['x-tab-id']);
     return res.json({ success: true });
   }
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
+const { broadcast } = require('../sse');
 
 const router = express.Router();
 
@@ -50,6 +51,7 @@ router.post('/', authenticate, canBulletin, (req, res) => {
     WHERE b.id = ?
   `).get(result.lastInsertRowid);
 
+  broadcast('bulletin', req.headers['x-tab-id']);
   res.status(201).json({ entry });
 });
 
@@ -78,6 +80,7 @@ router.put('/:id', authenticate, canBulletin, (req, res) => {
     WHERE b.id = ?
   `).get(req.params.id);
 
+  broadcast('bulletin', req.headers['x-tab-id']);
   res.json({ entry: updated });
 });
 
@@ -88,6 +91,7 @@ router.delete('/:id', authenticate, canBulletin, (req, res) => {
   if (!entry) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
 
   db.prepare('DELETE FROM bulletin_entries WHERE id = ?').run(req.params.id);
+  broadcast('bulletin', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 

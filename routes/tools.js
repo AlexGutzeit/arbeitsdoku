@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
+const { broadcast } = require('../sse');
 
 const router = express.Router();
 
@@ -48,6 +49,7 @@ router.post('/', authenticate, authorize('chef'), (req, res) => {
   }
   const result = db.prepare('INSERT INTO tools (name) VALUES (?)').run(name.trim());
   const tool = db.prepare('SELECT * FROM tools WHERE id = ?').get(result.lastInsertRowid);
+  broadcast('tools', req.headers['x-tab-id']);
   res.status(201).json({ tool });
 });
 
@@ -61,6 +63,7 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   const tool = db.prepare('SELECT * FROM tools WHERE id = ?').get(req.params.id);
   if (!tool) return res.status(404).json({ error: 'Werkzeug nicht gefunden' });
   db.prepare('UPDATE tools SET name = ? WHERE id = ?').run(name.trim(), req.params.id);
+  broadcast('tools', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -71,6 +74,7 @@ router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
   if (!tool) return res.status(404).json({ error: 'Werkzeug nicht gefunden' });
   db.prepare('DELETE FROM tool_checkouts WHERE tool_id = ?').run(req.params.id);
   db.prepare('DELETE FROM tools WHERE id = ?').run(req.params.id);
+  broadcast('tools', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -80,6 +84,7 @@ router.delete('/:id/history', authenticate, authorize(), (req, res) => {
   const tool = db.prepare('SELECT * FROM tools WHERE id = ?').get(req.params.id);
   if (!tool) return res.status(404).json({ error: 'Werkzeug nicht gefunden' });
   db.prepare('DELETE FROM tool_checkouts WHERE tool_id = ?').run(req.params.id);
+  broadcast('tools', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -100,6 +105,7 @@ router.post('/:id/checkout', authenticate, (req, res) => {
   db.prepare(
     'INSERT INTO tool_checkouts (tool_id, user_id, checked_out_at, project_id, project_text, address) VALUES (?, ?, ?, ?, ?, ?)'
   ).run(toolId, req.user.id, now, project_id || null, project_text || null, address || null);
+  broadcast('tools', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -118,6 +124,7 @@ router.post('/:id/return', authenticate, (req, res) => {
 
   const now = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
   db.prepare('UPDATE tool_checkouts SET returned_at = ? WHERE id = ?').run(now, checkout.id);
+  broadcast('tools', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -140,6 +147,7 @@ router.post('/:id/takeover', authenticate, (req, res) => {
   db.prepare(
     'INSERT INTO tool_checkouts (tool_id, user_id, checked_out_at, project_id, project_text, address) VALUES (?, ?, ?, ?, ?, ?)'
   ).run(toolId, req.user.id, now, project_id || null, project_text || null, address || null);
+  broadcast('tools', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 

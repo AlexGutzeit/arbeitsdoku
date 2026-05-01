@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
+const { broadcast } = require('../sse');
 
 const router = express.Router();
 const LOCK_TIMEOUT_MINUTES = 15;
@@ -165,6 +166,7 @@ router.post('/', authenticate, (req, res) => {
   const note = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
     .get(result.lastInsertRowid);
   note.shares = [];
+  broadcast('notes', req.headers['x-tab-id']);
   res.status(201).json({ note });
 });
 
@@ -231,6 +233,7 @@ router.put('/:id', authenticate, (req, res) => {
 
   const updated = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
     .get(req.params.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ note: updated });
 });
 
@@ -247,6 +250,7 @@ router.delete('/:id', authenticate, (req, res) => {
   }
 
   db.prepare('DELETE FROM notes WHERE id = ?').run(req.params.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
