@@ -12,7 +12,7 @@ router.get('/', authenticate, (req, res) => {
   const notesSince    = req.query.notes_since    || '2000-01-01 00:00:00';
 
   const bulletin = db.prepare(
-    "SELECT COUNT(*) as n FROM bulletin_entries WHERE updated_at > ? AND created_by != ?"
+    "SELECT COUNT(*) as n FROM bulletin_entries WHERE updated_at > ? AND COALESCE(updated_by, created_by) != ?"
   ).get(bulletinSince, uid).n;
 
   const sharedNotes = db.prepare(`
