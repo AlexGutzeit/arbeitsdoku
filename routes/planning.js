@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
+const { broadcast } = require('../sse');
 
 const router = express.Router();
 
@@ -131,6 +132,7 @@ router.post('/', authenticate, canPlan, (req, res) => {
       WHERE pa.planning_id = ?
     `).all(planningId);
 
+    broadcast('planning', req.headers['x-tab-id']);
     return res.status(201).json({ entry: { ...entry, assigned_users: assigned } });
   }
 
@@ -163,6 +165,7 @@ router.post('/', authenticate, canPlan, (req, res) => {
   });
 
   const ids = insert();
+  broadcast('planning', req.headers['x-tab-id']);
   res.status(201).json({ success: true, count: ids.length, group_id: groupId });
 });
 
@@ -205,6 +208,7 @@ router.put('/group/:groupId', authenticate, canPlan, (req, res) => {
   });
 
   const ids = update();
+  broadcast('planning', req.headers['x-tab-id']);
   res.json({ success: true, count: ids.length, group_id: days.length > 1 ? groupId : null });
 });
 
@@ -253,6 +257,7 @@ router.put('/:id', authenticate, canPlan, (req, res) => {
     WHERE pa.planning_id = ?
   `).all(req.params.id);
 
+  broadcast('planning', req.headers['x-tab-id']);
   res.json({ entry: { ...updated, assigned_users: assigned } });
 });
 
@@ -261,6 +266,7 @@ router.delete('/group/:groupId', authenticate, canPlan, (req, res) => {
   const db = getDb();
   const result = db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(req.params.groupId);
   if (result.changes === 0) return res.status(404).json({ error: 'Gruppe nicht gefunden' });
+  broadcast('planning', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -276,6 +282,7 @@ router.delete('/:id', authenticate, canPlan, (req, res) => {
   } else {
     db.prepare('DELETE FROM planning_entries WHERE id = ?').run(req.params.id);
   }
+  broadcast('planning', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 

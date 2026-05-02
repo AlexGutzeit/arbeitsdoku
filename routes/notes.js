@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
+const { broadcast } = require('../sse');
 
 const router = express.Router();
 const LOCK_TIMEOUT_MINUTES = 15;
@@ -65,6 +66,7 @@ router.post('/offers/:id/accept', authenticate, (req, res) => {
     "INSERT INTO notes (user_id, title, body, project_id, project_text) VALUES (?, ?, ?, ?, ?)"
   ).run(req.user.id, note.title, note.body, note.project_id, note.project_text);
   db.prepare("UPDATE note_offers SET status = 'accepted' WHERE id = ?").run(offer.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -77,6 +79,7 @@ router.post('/offers/:id/decline', authenticate, (req, res) => {
   if (offer.status !== 'pending') return res.status(400).json({ error: 'Angebot ist nicht mehr offen' });
 
   db.prepare("UPDATE note_offers SET status = 'declined' WHERE id = ?").run(offer.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -89,6 +92,7 @@ router.delete('/offers/:id', authenticate, (req, res) => {
   if (offer.status !== 'pending') return res.status(400).json({ error: 'Angebot ist nicht mehr offen' });
 
   db.prepare('DELETE FROM note_offers WHERE id = ?').run(offer.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -165,6 +169,7 @@ router.post('/', authenticate, (req, res) => {
   const note = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
     .get(result.lastInsertRowid);
   note.shares = [];
+  broadcast('notes', req.headers['x-tab-id']);
   res.status(201).json({ note });
 });
 
@@ -231,6 +236,7 @@ router.put('/:id', authenticate, (req, res) => {
 
   const updated = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
     .get(req.params.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ note: updated });
 });
 
@@ -247,6 +253,7 @@ router.delete('/:id', authenticate, (req, res) => {
   }
 
   db.prepare('DELETE FROM notes WHERE id = ?').run(req.params.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -293,6 +300,7 @@ router.put('/:id/shares', authenticate, (req, res) => {
     JOIN users u ON ns.user_id = u.id
     WHERE ns.note_id = ?
   `).all(note.id);
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ shares: updated });
 });
 
@@ -310,12 +318,16 @@ router.post('/:id/offer', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Mindestens ein Empfaenger erforderlich' });
   }
 
-  const insert = db.prepare('INSERT OR IGNORE INTO note_offers (note_id, from_user_id, to_user_id) VALUES (?, ?, ?)');
+  const insert = db.prepare(
+    "INSERT INTO note_offers (note_id, from_user_id, to_user_id) VALUES (?, ?, ?) " +
+    "ON CONFLICT(note_id, to_user_id) DO UPDATE SET status = 'pending', from_user_id = excluded.from_user_id, created_at = datetime('now')"
+  );
   for (const uid of user_ids) {
     if (uid === req.user.id) continue;
     insert.run(note.id, req.user.id, uid);
   }
 
+  broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 

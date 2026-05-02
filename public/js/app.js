@@ -6,6 +6,8 @@
 const S = {
   token: localStorage.getItem('token'),
   user: JSON.parse(localStorage.getItem('user') || 'null'),
+  tabId: Math.random().toString(36).slice(2),
+  sse: null,
   entries: [],
   users: [],
   projects: [],
@@ -23,6 +25,7 @@ const S = {
 async function api(method, url, body, isFormData) {
   const opts = { method, headers: {} };
   if (S.token) opts.headers['Authorization'] = 'Bearer ' + S.token;
+  opts.headers['X-Tab-Id'] = S.tabId;
   if (body && !isFormData) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
@@ -375,6 +378,7 @@ async function handleLogin(e) {
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     navigate('/welcome');
+    initSSE();
   } catch (err) {
     const el = document.getElementById('login-error');
     el.textContent = err.message;
@@ -383,11 +387,29 @@ async function handleLogin(e) {
 }
 
 function logout() {
+  if (S.sse) { S.sse.close(); S.sse = null; }
   S.token = null;
   S.user = null;
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   navigate('/login');
+}
+
+function initSSE() {
+  if (S.sse) return;
+  S.sse = new EventSource('/api/events?token=' + encodeURIComponent(S.token));
+  S.sse.onmessage = function(e) {
+    let p; try { p = JSON.parse(e.data); } catch (_) { return; }
+    if (p.originTab === S.tabId) return;
+    const route = getRoute();
+    if (p.type === 'orders'   && route === '/orders')                              renderOrders();
+    if (p.type === 'notes'    && route === '/notes' && !_editingNoteLockId)        renderNotizen();
+    if (p.type === 'bulletin' && route === '/bulletin')                            renderBulletin();
+    if (p.type === 'planning' && route === '/planning')                            renderPlanningContent();
+    if (p.type === 'tools'    && route === '/tools')                               renderTools();
+    if (p.type === 'entries'  && route === '/statistics')                          renderStatistics();
+    if ((p.type === 'planning' || p.type === 'bulletin') && route === '/welcome')  renderWelcome();
+  };
 }
 
 // --- Layout ---
@@ -4481,7 +4503,7 @@ function showNoteForm(editNote) {
       try { await api('POST', '/api/notes/' + _editingNoteLockId + '/unlock'); } catch(e) {}
       _editingNoteLockId = null;
     }
-    area.innerHTML = '';
+    renderNotizen();
   });
   document.getElementById('note-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -4667,4 +4689,5 @@ window.addEventListener('beforeunload', () => {
 window.addEventListener('DOMContentLoaded', () => {
   if (!S.token) navigate('/login');
   render();
+  if (S.token) initSSE();
 });

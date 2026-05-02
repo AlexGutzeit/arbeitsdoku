@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
+const { broadcast } = require('../sse');
 
 const router = express.Router();
 
@@ -74,6 +75,7 @@ router.post('/', authenticate, (req, res) => {
     FROM orders o JOIN users u ON o.user_id = u.id
     WHERE o.id = ?
   `).get(result.lastInsertRowid);
+  broadcast('orders', req.headers['x-tab-id']);
   res.status(201).json({ order });
 });
 
@@ -109,6 +111,7 @@ router.put('/:id', authenticate, (req, res) => {
     FROM orders o JOIN users u ON o.user_id = u.id
     WHERE o.id = ?
   `).get(req.params.id);
+  broadcast('orders', req.headers['x-tab-id']);
   res.json({ order: updated });
 });
 
@@ -129,6 +132,7 @@ router.delete('/:id', authenticate, (req, res) => {
   }
 
   db.prepare('DELETE FROM orders WHERE id = ?').run(req.params.id);
+  broadcast('orders', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
@@ -145,6 +149,7 @@ router.post('/:id/order', authenticate, (req, res) => {
 
   db.prepare("UPDATE orders SET ordered_at = datetime('now'), ordered_by = ? WHERE id = ?")
     .run(req.user.id, req.params.id);
+  broadcast('orders', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 

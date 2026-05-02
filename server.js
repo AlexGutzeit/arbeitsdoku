@@ -4,7 +4,10 @@ dns.setDefaultResultOrder('ipv4first');
 const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
+const jwt = require('jsonwebtoken');
 const { initDatabase, saveToFile } = require('./database/init');
+const { JWT_SECRET } = require('./middleware/auth');
+const { addClient, removeClient } = require('./sse');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,6 +42,24 @@ app.use('/api/bulletin', require('./routes/bulletin'));
 app.use('/api/tools', require('./routes/tools'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/notes', require('./routes/notes'));
+
+// SSE – Echtzeit-Updates für alle verbundenen Clients
+app.get('/api/events', (req, res) => {
+  const token = req.query.token;
+  if (!token) return res.status(401).end();
+  try { jwt.verify(token, JWT_SECRET); } catch (_) { return res.status(401).end(); }
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'X-Accel-Buffering': 'no',
+    'Connection': 'keep-alive',
+  });
+  res.flushHeaders();
+  res.write(': connected\n\n');
+  addClient(res);
+  const hb = setInterval(() => { try { res.write(': ping\n\n'); } catch (_) { clearInterval(hb); } }, 30000);
+  req.on('close', () => { clearInterval(hb); removeClient(res); });
+});
 
 // SPA-Fallback
 app.get('*', (req, res) => {
