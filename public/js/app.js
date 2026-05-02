@@ -4503,7 +4503,7 @@ function showNoteForm(editNote) {
       try { await api('POST', '/api/notes/' + _editingNoteLockId + '/unlock'); } catch(e) {}
       _editingNoteLockId = null;
     }
-    area.innerHTML = '';
+    renderNotizen();
   });
   document.getElementById('note-form').addEventListener('submit', async (e) => {
     e.preventDefault();

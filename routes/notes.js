@@ -318,7 +318,10 @@ router.post('/:id/offer', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Mindestens ein Empfaenger erforderlich' });
   }
 
-  const insert = db.prepare('INSERT OR IGNORE INTO note_offers (note_id, from_user_id, to_user_id) VALUES (?, ?, ?)');
+  const insert = db.prepare(
+    "INSERT INTO note_offers (note_id, from_user_id, to_user_id) VALUES (?, ?, ?) " +
+    "ON CONFLICT(note_id, to_user_id) DO UPDATE SET status = 'pending', from_user_id = excluded.from_user_id, created_at = datetime('now')"
+  );
   for (const uid of user_ids) {
     if (uid === req.user.id) continue;
     insert.run(note.id, req.user.id, uid);
