@@ -1,4 +1,4 @@
-const CACHE_VERSION = 117;
+const CACHE_VERSION = 118;
 const CACHE_NAME = 'arbeitsdoku-v' + CACHE_VERSION;
 
 // Install: NICHT sofort aktivieren — warten bis User bestätigt oder App neu startet
@@ -26,11 +26,8 @@ self.addEventListener('message', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // API-Aufrufe immer vom Netzwerk, nie cachen
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
+  // API-Aufrufe: kein respondWith — Browser holt direkt vom Netz (kein SW-Overhead, kein offener Fetch-Stream)
+  if (url.pathname.startsWith('/api/')) return;
 
   // Alles andere: Network-first, bei Fehler aus Cache
   event.respondWith(
