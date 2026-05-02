@@ -4235,6 +4235,7 @@ function bindOrderEvents(orders, manage) {
     btn.addEventListener('click', async () => {
       try {
         await api('POST', '/api/orders/' + btn.dataset.id + '/order');
+        await loadBadges();
         toast('Als bestellt markiert', 'success');
         renderOrders();
       } catch (err) { toast(err.message, 'error'); }
