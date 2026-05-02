@@ -42,6 +42,7 @@ app.use('/api/bulletin', require('./routes/bulletin'));
 app.use('/api/tools', require('./routes/tools'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/notes', require('./routes/notes'));
+app.use('/api/badges', require('./routes/badges'));
 
 // SSE – Echtzeit-Updates für alle verbundenen Clients
 app.get('/api/events', (req, res) => {

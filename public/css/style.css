@@ -165,6 +165,21 @@ body {
 .sidebar nav a:hover { background: var(--primary-light); }
 .sidebar nav a.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
 .sidebar nav a .icon { font-size: 1.2rem; width: 1.5rem; text-align: center; }
+.nav-badge {
+  margin-left: auto;
+  background: #5DB635;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3rem;
+  line-height: 1;
+}
 .sidebar-divider { height: 1px; background: var(--border); margin: 0.5rem 0; }
 
 /* === Main Content === */
