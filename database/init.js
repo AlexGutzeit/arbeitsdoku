@@ -476,6 +476,15 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: updated_by in bulletin_entries
+  try {
+    const bCols = db.prepare("PRAGMA table_info(bulletin_entries)").all();
+    if (!bCols.some(c => c.name === 'updated_by')) {
+      db.exec("ALTER TABLE bulletin_entries ADD COLUMN updated_by INTEGER");
+      console.log('Migration: updated_by in bulletin_entries hinzugefuegt.');
+    }
+  } catch (e) {}
+
   // Seed-Daten nur wenn DB leer
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {

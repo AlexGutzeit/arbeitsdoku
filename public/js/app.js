@@ -19,6 +19,7 @@ const S = {
   filterSearch: '',
   filterRegie: '',
   welcomeWeekOffset: 0,
+  badges: { bulletin: 0, notes: 0, orders: 0 },
 };
 
 // --- API Helper ---
@@ -49,6 +50,34 @@ function esc(str) {
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+function nowDbFormat() {
+  return new Date().toISOString().replace('T', ' ').slice(0, 19);
+}
+
+async function loadBadges() {
+  if (!S.token) return;
+  try {
+    const bs = localStorage.getItem('badge_seen_bulletin') || '2000-01-01 00:00:00';
+    const ns = localStorage.getItem('badge_seen_notes')    || '2000-01-01 00:00:00';
+    const data = await api('GET',
+      '/api/badges?bulletin_since=' + encodeURIComponent(bs) +
+      '&notes_since=' + encodeURIComponent(ns));
+    if (!data) return;
+    Object.assign(S.badges, data);
+    refreshBadges();
+  } catch (_) {}
+}
+
+function refreshBadges() {
+  for (const key of ['bulletin', 'notes', 'orders']) {
+    const el = document.getElementById('nav-badge-' + key);
+    if (!el) continue;
+    const n = S.badges[key] || 0;
+    el.textContent = n > 99 ? '99+' : String(n);
+    el.style.display = n ? '' : 'none';
+  }
 }
 
 function fmtH(val) {
@@ -378,7 +407,10 @@ async function handleLogin(e) {
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     navigate('/welcome');
+    localStorage.setItem('badge_seen_bulletin', nowDbFormat());
+    localStorage.setItem('badge_seen_notes',    nowDbFormat());
     initSSE();
+    loadBadges();
   } catch (err) {
     const el = document.getElementById('login-error');
     el.textContent = err.message;
@@ -400,6 +432,8 @@ function initSSE() {
   S.sse = new EventSource('/api/events?token=' + encodeURIComponent(S.token));
   S.sse.onmessage = function(e) {
     let p; try { p = JSON.parse(e.data); } catch (_) { return; }
+    // Bestellungs-Badge immer aktualisieren (live-Zähler, auch eigene Aktionen)
+    if (p.type === 'orders') loadBadges();
     if (p.originTab === S.tabId) return;
     const route = getRoute();
     if (p.type === 'orders'   && route === '/orders')                              renderOrders();
@@ -409,6 +443,8 @@ function initSSE() {
     if (p.type === 'tools'    && route === '/tools')                               renderTools();
     if (p.type === 'entries'  && route === '/statistics')                          renderStatistics();
     if ((p.type === 'planning' || p.type === 'bulletin') && route === '/welcome')  renderWelcome();
+    if (p.type === 'bulletin' && route !== '/bulletin') loadBadges();
+    if (p.type === 'notes'    && route !== '/notes')    loadBadges();
   };
 }
 
@@ -444,15 +480,18 @@ function layout(content, activeNav) {
         </a>
         <a href="#/bulletin" class="${activeNav === 'bulletin' ? 'active' : ''}">
           <span class="icon">&#128204;</span> Schwarzes Brett
+          <span class="nav-badge" id="nav-badge-bulletin"${S.badges.bulletin ? '' : ' style="display:none"'}>${S.badges.bulletin || ''}</span>
         </a>
         <a href="#/tools" class="${activeNav === 'tools' ? 'active' : ''}">
           <span class="icon">&#128295;</span> Werkzeugliste
         </a>
         <a href="#/orders" class="${activeNav === 'orders' ? 'active' : ''}">
           <span class="icon">&#128722;</span> Bestellungen
+          ${S.user.role === 'chef' ? `<span class="nav-badge" id="nav-badge-orders"${S.badges.orders ? '' : ' style="display:none"'}>${S.badges.orders || ''}</span>` : ''}
         </a>
         <a href="#/notes" class="${activeNav === 'notes' ? 'active' : ''}">
           <span class="icon">&#128221;</span> Notizen
+          <span class="nav-badge" id="nav-badge-notes"${S.badges.notes ? '' : ' style="display:none"'}>${S.badges.notes || ''}</span>
         </a>
         <a href="#/statistics" class="${activeNav === 'statistics' ? 'active' : ''}">
           <span class="icon">&#128200;</span> Statistik
@@ -2732,6 +2771,9 @@ function weatherIcon(code) {
 
 // --- Bulletin Board (Schwarzes Brett) ---
 async function renderBulletin() {
+  localStorage.setItem('badge_seen_bulletin', nowDbFormat());
+  S.badges.bulletin = 0;
+  refreshBadges();
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'bulletin');
   bindLayout();
 
@@ -4193,6 +4235,7 @@ function bindOrderEvents(orders, manage) {
     btn.addEventListener('click', async () => {
       try {
         await api('POST', '/api/orders/' + btn.dataset.id + '/order');
+        await loadBadges();
         toast('Als bestellt markiert', 'success');
         renderOrders();
       } catch (err) { toast(err.message, 'error'); }
@@ -4220,6 +4263,9 @@ let _expandedNoteId = null;
 let _editingNoteLockId = null;
 
 async function renderNotizen() {
+  localStorage.setItem('badge_seen_notes', nowDbFormat());
+  S.badges.notes = 0;
+  refreshBadges();
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'notes');
   bindLayout();
 
@@ -4688,6 +4734,8 @@ window.addEventListener('beforeunload', () => {
 });
 window.addEventListener('DOMContentLoaded', () => {
   if (!S.token) navigate('/login');
+  if (!localStorage.getItem('badge_seen_bulletin')) localStorage.setItem('badge_seen_bulletin', nowDbFormat());
+  if (!localStorage.getItem('badge_seen_notes'))    localStorage.setItem('badge_seen_notes',    nowDbFormat());
   render();
-  if (S.token) initSSE();
+  if (S.token) { initSSE(); loadBadges(); }
 });
