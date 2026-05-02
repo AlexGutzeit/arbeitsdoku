@@ -58,14 +58,16 @@ function nowDbFormat() {
 
 async function loadBadges() {
   if (!S.token) return;
-  const bs = localStorage.getItem('badge_seen_bulletin') || '2000-01-01 00:00:00';
-  const ns = localStorage.getItem('badge_seen_notes')    || '2000-01-01 00:00:00';
-  const data = await api('GET',
-    '/api/badges?bulletin_since=' + encodeURIComponent(bs) +
-    '&notes_since=' + encodeURIComponent(ns));
-  if (!data) return;
-  Object.assign(S.badges, data);
-  refreshBadges();
+  try {
+    const bs = localStorage.getItem('badge_seen_bulletin') || '2000-01-01 00:00:00';
+    const ns = localStorage.getItem('badge_seen_notes')    || '2000-01-01 00:00:00';
+    const data = await api('GET',
+      '/api/badges?bulletin_since=' + encodeURIComponent(bs) +
+      '&notes_since=' + encodeURIComponent(ns));
+    if (!data) return;
+    Object.assign(S.badges, data);
+    refreshBadges();
+  } catch (_) {}
 }
 
 function refreshBadges() {
