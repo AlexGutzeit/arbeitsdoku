@@ -432,6 +432,8 @@ function initSSE() {
   S.sse = new EventSource('/api/events?token=' + encodeURIComponent(S.token));
   S.sse.onmessage = function(e) {
     let p; try { p = JSON.parse(e.data); } catch (_) { return; }
+    // Bestellungs-Badge immer aktualisieren (live-Zähler, auch eigene Aktionen)
+    if (p.type === 'orders') loadBadges();
     if (p.originTab === S.tabId) return;
     const route = getRoute();
     if (p.type === 'orders'   && route === '/orders')                              renderOrders();
@@ -443,7 +445,6 @@ function initSSE() {
     if ((p.type === 'planning' || p.type === 'bulletin') && route === '/welcome')  renderWelcome();
     if (p.type === 'bulletin' && route !== '/bulletin') loadBadges();
     if (p.type === 'notes'    && route !== '/notes')    loadBadges();
-    if (p.type === 'orders')                            loadBadges();
   };
 }
 
