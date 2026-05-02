@@ -15,29 +15,33 @@
   <meta name="msapplication-TileImage" content="/icons/mstile-144x144.png">
   <meta name="msapplication-TileColor" content="#5DB635">
   <title>SenTec</title>
-  <link rel="stylesheet" href="/css/style.css?v=117">
+  <link rel="stylesheet" href="/css/style.css?v=118">
 </head>
 <body>
   <div id="app"></div>
-  <script src="/js/app.js?v=117"></script>
+  <script src="/js/app.js?v=118"></script>
   <script>
     if ('serviceWorker' in navigator) {
+      function showUpdateBanner(reg) {
+        if (document.getElementById('sw-update-banner')) return;
+        const b = document.createElement('div');
+        b.id = 'sw-update-banner';
+        b.innerHTML = 'Neue Version verfügbar <button id="sw-update-btn">Jetzt aktualisieren</button>';
+        document.body.appendChild(b);
+        document.getElementById('sw-update-btn').addEventListener('click', () => {
+          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        });
+      }
+
       navigator.serviceWorker.register('/sw.js').then(reg => {
         setInterval(() => reg.update(), 60000);
+        // SW wartet bereits (z.B. Tab war beim letzten Update offen)
+        if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
         reg.addEventListener('updatefound', () => {
           const nw = reg.installing;
           if (!nw) return;
           nw.addEventListener('statechange', () => {
-            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-              // Neuer SW wartet — Banner zeigen
-              const b = document.createElement('div');
-              b.id = 'sw-update-banner';
-              b.innerHTML = 'Neue Version verfügbar <button id="sw-update-btn">Jetzt aktualisieren</button>';
-              document.body.appendChild(b);
-              document.getElementById('sw-update-btn').addEventListener('click', () => {
-                nw.postMessage({ type: 'SKIP_WAITING' });
-              });
-            }
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(reg);
           });
         });
       });
