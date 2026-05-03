@@ -52,22 +52,19 @@ function esc(str) {
   return d.innerHTML;
 }
 
-function nowDbFormat() {
-  return new Date().toISOString().replace('T', ' ').slice(0, 19);
-}
-
 async function loadBadges() {
   if (!S.token) return;
   try {
-    const bs = localStorage.getItem('badge_seen_bulletin') || '2000-01-01 00:00:00';
-    const ns = localStorage.getItem('badge_seen_notes')    || '2000-01-01 00:00:00';
-    const data = await api('GET',
-      '/api/badges?bulletin_since=' + encodeURIComponent(bs) +
-      '&notes_since=' + encodeURIComponent(ns));
+    const data = await api('GET', '/api/badges');
     if (!data) return;
     Object.assign(S.badges, data);
     refreshBadges();
   } catch (_) {}
+}
+
+function markSeen(topic) {
+  if (!S.token) return;
+  api('POST', '/api/badges/' + topic).catch(() => {});
 }
 
 function refreshBadges() {
@@ -77,6 +74,11 @@ function refreshBadges() {
     const n = S.badges[key] || 0;
     el.textContent = n > 99 ? '99+' : String(n);
     el.style.display = n ? '' : 'none';
+  }
+  const total = (S.badges.bulletin || 0) + (S.badges.notes || 0) + (S.badges.orders || 0);
+  if ('setAppBadge' in navigator) {
+    if (total > 0) navigator.setAppBadge(total).catch(() => {});
+    else navigator.clearAppBadge().catch(() => {});
   }
 }
 
@@ -407,8 +409,8 @@ async function handleLogin(e) {
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     navigate('/welcome');
-    localStorage.setItem('badge_seen_bulletin', nowDbFormat());
-    localStorage.setItem('badge_seen_notes',    nowDbFormat());
+    markSeen('bulletin');
+    markSeen('notes');
     initSSE();
     loadBadges();
   } catch (err) {
@@ -424,6 +426,7 @@ function logout() {
   S.user = null;
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
   navigate('/login');
 }
 
@@ -2771,7 +2774,7 @@ function weatherIcon(code) {
 
 // --- Bulletin Board (Schwarzes Brett) ---
 async function renderBulletin() {
-  localStorage.setItem('badge_seen_bulletin', nowDbFormat());
+  markSeen('bulletin');
   S.badges.bulletin = 0;
   refreshBadges();
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'bulletin');
@@ -4263,7 +4266,7 @@ let _expandedNoteId = null;
 let _editingNoteLockId = null;
 
 async function renderNotizen() {
-  localStorage.setItem('badge_seen_notes', nowDbFormat());
+  markSeen('notes');
   S.badges.notes = 0;
   refreshBadges();
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'notes');
@@ -4734,8 +4737,6 @@ window.addEventListener('beforeunload', () => {
 });
 window.addEventListener('DOMContentLoaded', () => {
   if (!S.token) navigate('/login');
-  if (!localStorage.getItem('badge_seen_bulletin')) localStorage.setItem('badge_seen_bulletin', nowDbFormat());
-  if (!localStorage.getItem('badge_seen_notes'))    localStorage.setItem('badge_seen_notes',    nowDbFormat());
   render();
   if (S.token) { initSSE(); loadBadges(); }
 });

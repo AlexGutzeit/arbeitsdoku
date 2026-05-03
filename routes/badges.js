@@ -4,12 +4,18 @@ const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
+function getSeenAt(db, userId, topic) {
+  const row = db.prepare('SELECT seen_at FROM user_seen WHERE user_id = ? AND topic = ?').get(userId, topic);
+  return row ? row.seen_at : '2000-01-01 00:00:00';
+}
+
 router.get('/', authenticate, (req, res) => {
   const db = getDb();
   const uid = req.user.id;
   const role = req.user.role;
-  const bulletinSince = req.query.bulletin_since || '2000-01-01 00:00:00';
-  const notesSince    = req.query.notes_since    || '2000-01-01 00:00:00';
+
+  const bulletinSince = getSeenAt(db, uid, 'bulletin');
+  const notesSince    = getSeenAt(db, uid, 'notes');
 
   const bulletin = db.prepare(
     "SELECT COUNT(*) as n FROM bulletin_entries WHERE updated_at > ? AND COALESCE(updated_by, created_by) != ?"
@@ -31,12 +37,21 @@ router.get('/', authenticate, (req, res) => {
 
   let orders = 0;
   if (role === 'chef') {
-    orders = db.prepare(
-      "SELECT COUNT(*) as n FROM orders WHERE ordered_at IS NULL"
-    ).get().n;
+    orders = db.prepare("SELECT COUNT(*) as n FROM orders WHERE ordered_at IS NULL").get().n;
   }
 
   res.json({ bulletin, notes: sharedNotes + offers, orders });
+});
+
+router.post('/:topic', authenticate, (req, res) => {
+  const { topic } = req.params;
+  if (!['bulletin', 'notes'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
+  const db = getDb();
+  db.prepare(
+    "INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, ?, datetime('now')) " +
+    "ON CONFLICT(user_id, topic) DO UPDATE SET seen_at = datetime('now')"
+  ).run(req.user.id, topic);
+  res.json({ success: true });
 });
 
 module.exports = router;

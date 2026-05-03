@@ -230,6 +230,14 @@ async function initDatabase() {
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS user_seen (
+      user_id INTEGER NOT NULL,
+      topic   TEXT NOT NULL,
+      seen_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, topic),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   // Bestellliste
