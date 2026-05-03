@@ -1312,6 +1312,7 @@ table.data-table .actions button { margin-left: 0.25rem; }
   box-shadow: var(--shadow);
   border-left: 4px solid var(--primary);
 }
+.bulletin-card--unread { background: var(--primary-light); }
 .bulletin-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
 .bulletin-title { font-size: 1.1rem; font-weight: 600; color: var(--text); }
 .bulletin-meta { font-size: 0.75rem; color: var(--text-lighter); display: flex; flex-wrap: wrap; gap: 0.15rem 0.75rem; margin-top: 0.5rem; }
@@ -1517,6 +1518,7 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .note-card { padding: 0.85rem; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem; transition: border-color 0.15s; cursor: pointer; }
 .note-card:hover { border-color: var(--primary); }
 .note-card-expanded { border-color: var(--primary); background: var(--primary-light); }
+.note-card--unread { border-color: var(--primary); background: var(--primary-light); }
 .note-card-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
 .note-title { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .note-project { font-size: 0.82rem; color: var(--primary); margin-top: 2px; }

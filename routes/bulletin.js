@@ -5,6 +5,11 @@ const { broadcast } = require('../sse');
 
 const router = express.Router();
 
+function getSeenAt(db, userId, topic) {
+  const row = db.prepare('SELECT seen_at FROM user_seen WHERE user_id = ? AND topic = ?').get(userId, topic);
+  return row ? row.seen_at : '2000-01-01 00:00:00';
+}
+
 function canBulletin(req, res, next) {
   if (req.user.role === 'admin' || req.user.role === 'chef' || req.user.can_bulletin) return next();
   return res.status(403).json({ error: 'Keine Berechtigung' });
@@ -27,6 +32,12 @@ router.get('/', authenticate, (req, res) => {
     JOIN users u ON b.created_by = u.id
     ORDER BY b.created_at DESC
   `).all();
+
+  const uid = req.user.id;
+  const since = getSeenAt(db, uid, 'bulletin');
+  for (const e of entries) {
+    e.is_unread = e.updated_at > since && (e.updated_by ?? e.created_by) !== uid;
+  }
 
   res.json({ entries });
 });
