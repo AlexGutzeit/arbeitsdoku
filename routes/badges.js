@@ -23,13 +23,14 @@ router.get('/', authenticate, (req, res) => {
 
   const sharedNotes = db.prepare(`
     SELECT COUNT(DISTINCT id) as n FROM (
-      SELECT n.id FROM notes n WHERE n.user_id = ? AND n.updated_at > ?
+      SELECT n.id FROM notes n
+      WHERE n.user_id = ? AND n.updated_at > ? AND COALESCE(n.updated_by, n.user_id) != ?
       UNION
       SELECT n.id FROM notes n
       JOIN note_shares ns ON ns.note_id = n.id AND ns.user_id = ?
-      WHERE n.updated_at > ? OR ns.created_at > ?
+      WHERE (n.updated_at > ? AND COALESCE(n.updated_by, n.user_id) != ?) OR ns.created_at > ?
     )
-  `).get(uid, notesSince, uid, notesSince, notesSince).n;
+  `).get(uid, notesSince, uid, uid, notesSince, uid, notesSince).n;
 
   const offers = db.prepare(
     "SELECT COUNT(*) as n FROM note_offers WHERE to_user_id = ? AND status = 'pending'"
@@ -48,8 +49,8 @@ router.post('/:topic', authenticate, (req, res) => {
   if (!['bulletin', 'notes'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
   const db = getDb();
   db.prepare(
-    "INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, ?, datetime('now')) " +
-    "ON CONFLICT(user_id, topic) DO UPDATE SET seen_at = datetime('now')"
+    "INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, ?, datetime('now', '+1 second')) " +
+    "ON CONFLICT(user_id, topic) DO UPDATE SET seen_at = datetime('now', '+1 second')"
   ).run(req.user.id, topic);
   res.json({ success: true });
 });

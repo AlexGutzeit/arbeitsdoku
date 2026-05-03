@@ -493,6 +493,15 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: updated_by in notes
+  try {
+    const nCols = db.prepare("PRAGMA table_info(notes)").all();
+    if (!nCols.some(c => c.name === 'updated_by')) {
+      db.exec("ALTER TABLE notes ADD COLUMN updated_by INTEGER");
+      console.log('Migration: updated_by in notes hinzugefuegt.');
+    }
+  } catch (e) {}
+
   // Seed-Daten nur wenn DB leer
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {
