@@ -163,8 +163,8 @@ router.post('/', authenticate, (req, res) => {
   const db = getDb();
   const proj = resolveProject(db, project_id, project_text);
   const result = db.prepare(
-    'INSERT INTO notes (user_id, title, body, project_id, project_text) VALUES (?, ?, ?, ?, ?)'
-  ).run(req.user.id, title.trim(), (body || '').trim(), proj.project_id, proj.project_text);
+    'INSERT INTO notes (user_id, updated_by, title, body, project_id, project_text) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(req.user.id, req.user.id, title.trim(), (body || '').trim(), proj.project_id, proj.project_text);
 
   const note = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
     .get(result.lastInsertRowid);
@@ -231,8 +231,8 @@ router.put('/:id', authenticate, (req, res) => {
 
   const proj = resolveProject(db, project_id, project_text);
   db.prepare(
-    "UPDATE notes SET title = ?, body = ?, project_id = ?, project_text = ?, updated_at = datetime('now'), editing_by = NULL, editing_since = NULL WHERE id = ?"
-  ).run(title.trim(), (body || '').trim(), proj.project_id, proj.project_text, req.params.id);
+    "UPDATE notes SET title = ?, body = ?, project_id = ?, project_text = ?, updated_at = datetime('now'), updated_by = ?, editing_by = NULL, editing_since = NULL WHERE id = ?"
+  ).run(title.trim(), (body || '').trim(), proj.project_id, proj.project_text, req.user.id, req.params.id);
 
   const updated = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
     .get(req.params.id);

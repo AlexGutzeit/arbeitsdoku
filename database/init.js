@@ -230,6 +230,14 @@ async function initDatabase() {
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS user_seen (
+      user_id INTEGER NOT NULL,
+      topic   TEXT NOT NULL,
+      seen_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, topic),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   // Bestellliste
@@ -482,6 +490,15 @@ async function initDatabase() {
     if (!bCols.some(c => c.name === 'updated_by')) {
       db.exec("ALTER TABLE bulletin_entries ADD COLUMN updated_by INTEGER");
       console.log('Migration: updated_by in bulletin_entries hinzugefuegt.');
+    }
+  } catch (e) {}
+
+  // Migration: updated_by in notes
+  try {
+    const nCols = db.prepare("PRAGMA table_info(notes)").all();
+    if (!nCols.some(c => c.name === 'updated_by')) {
+      db.exec("ALTER TABLE notes ADD COLUMN updated_by INTEGER");
+      console.log('Migration: updated_by in notes hinzugefuegt.');
     }
   } catch (e) {}
 
