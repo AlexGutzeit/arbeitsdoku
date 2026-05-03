@@ -150,6 +150,22 @@ router.get('/', authenticate, (req, res) => {
     }
   }
 
+  const notesSince = (() => {
+    const row = db.prepare('SELECT seen_at FROM user_seen WHERE user_id = ? AND topic = ?').get(uid, 'notes');
+    return row ? row.seen_at : '2000-01-01 00:00:00';
+  })();
+
+  for (const n of notes) {
+    const effectiveUpdater = n.updated_by ?? n.user_id;
+    if (n.user_id === uid) {
+      n.is_unread = n.updated_at > notesSince && effectiveUpdater !== uid;
+    } else {
+      const share = (n.shares || []).find(s => s.user_id === uid);
+      const shareNew = share ? share.created_at > notesSince : false;
+      n.is_unread = (n.updated_at > notesSince && effectiveUpdater !== uid) || shareNew;
+    }
+  }
+
   res.json({ notes });
 });
 

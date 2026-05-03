@@ -2772,7 +2772,6 @@ function weatherIcon(code) {
 
 // --- Bulletin Board (Schwarzes Brett) ---
 async function renderBulletin() {
-  markSeen('bulletin');
   S.badges.bulletin = 0;
   refreshBadges();
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'bulletin');
@@ -2781,6 +2780,7 @@ async function renderBulletin() {
   let entries = [];
   try {
     const data = await api('GET', '/api/bulletin');
+    markSeen('bulletin');
     if (data) entries = data.entries;
   } catch (e) {}
 
@@ -2794,7 +2794,7 @@ async function renderBulletin() {
   } else {
     cardsHtml = entries.map(b => {
       const createdDate = formatDateDE(b.created_at?.slice(0, 10) || '');
-      return `<div class="bulletin-card">
+      return `<div class="bulletin-card${b.is_unread ? ' bulletin-card--unread' : ''}">
         <div class="bulletin-header">
           <h3 class="bulletin-title">${esc(b.title)}</h3>
           ${canEdit ? `<div class="bulletin-actions">
@@ -4264,7 +4264,6 @@ let _expandedNoteId = null;
 let _editingNoteLockId = null;
 
 async function renderNotizen() {
-  markSeen('notes');
   S.badges.notes = 0;
   refreshBadges();
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'notes');
@@ -4277,6 +4276,7 @@ async function renderNotizen() {
       api('GET', '/api/projects'),
       api('GET', '/api/notes/offers')
     ]);
+    markSeen('notes');
     if (!nData) return;
     notes = nData.notes || [];
     if (pData) S.projects = pData.projects;
@@ -4399,7 +4399,7 @@ function renderNoteList(notes) {
     const lockBadge = (n.editing_by && n.editing_by !== uid)
       ? `<span class="badge badge-lock">&#128274; ${esc(n.editing_by_name || '')}</span>` : '';
 
-    return `<div class="note-card ${isExpanded ? 'note-card-expanded' : ''}" data-id="${n.id}">
+    return `<div class="note-card${n.is_unread ? ' note-card--unread' : ''}${isExpanded ? ' note-card-expanded' : ''}" data-id="${n.id}">
       <div class="note-card-row">
         <div class="note-content" style="flex:1;min-width:0">
           <div class="note-title">${esc(n.title)} ${accessBadge} ${lockBadge}</div>
