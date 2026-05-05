@@ -863,6 +863,7 @@ function renderTimelineHtml(entries, absences) {
 
   const totalH = (TL_END_HOUR - TL_START_HOUR) * TL_HOUR_PX;
   const isSingle = S.user.role === 'mitarbeiter';
+  const currentDay = formatDateISO(S.currentDate);
 
   // Stundenleiste
   let hoursHtml = '<div class="timeline-hours-body" style="height:' + totalH + 'px">';
@@ -909,7 +910,6 @@ function renderTimelineHtml(entries, absences) {
   // Jetzt-Linie berechnen
   const now = new Date();
   const today = formatDateISO(now);
-  const currentDay = formatDateISO(S.currentDate);
   let nowLineHtml = '';
   if (today === currentDay) {
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
