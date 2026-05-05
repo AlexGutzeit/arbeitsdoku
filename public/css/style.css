@@ -1615,4 +1615,3 @@ table.data-table .actions button { margin-left: 0.25rem; }
 
 /* Manager-für-MA Badge im Card */
 .absence-created-by { font-size: 0.75rem; color: var(--text-lighter); font-style: italic; }
-.absence-card--manager-entry { border-style: dashed; }

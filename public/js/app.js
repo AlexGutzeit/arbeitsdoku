@@ -4971,7 +4971,7 @@ function renderAbsenceCard(a, opts = {}) {
   const canAcknowledge = isManagerRole() && a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at;
   // MA-Akzeptanz/Ablehnung: nur wenn eigener Eintrag vom Manager, noch pending
   const canMaAccept = !isManagerRole() && a.user_id === S.user?.id && isManagerEntry && a.status === 'pending';
-  const extraClass = isManagerEntry ? ' absence-card--manager-entry' : '';
+  const extraClass = '';
 
   return `<div class="absence-card ${absenceStatusClass(a.status)}${extraClass}" data-id="${a.id}">
     <div class="absence-card-header">
