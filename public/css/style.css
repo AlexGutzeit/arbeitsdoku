@@ -1580,7 +1580,7 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .absence-inbox-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.9rem; padding-bottom: 0.75rem; border-bottom: 1px solid #fed7aa; gap: 1rem; }
 .absence-inbox h3 { font-size: 1.05rem; font-weight: 700; margin: 0; }
 .absence-inbox-filter { font-size: 0.85rem; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid #fed7aa; background: #fff; min-width: 170px; }
-.absence-all-header { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-lighter); padding: 1.2rem 0 0.5rem; border-top: 1px solid var(--border); margin-top: 1rem; }
+.absence-all-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-lighter); padding: 1.2rem 0 0.5rem; border-top: 1px solid var(--border); margin-top: 1rem; gap: 1rem; }
 .absence-section { margin-bottom: 1.5rem; }
 .absence-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.95rem; }
 .absence-empty { color: var(--text-lighter); font-size: 0.85rem; padding: 0.5rem 0; }

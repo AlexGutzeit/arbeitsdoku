@@ -5155,6 +5155,7 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
 }
 
 let _inboxUserFilter = '';
+let _allAbsenceUserFilter = '';
 
 async function renderAbsences() {
   const topicToMark = isManagerRole() ? 'absences' : 'absence_status';
@@ -5162,6 +5163,14 @@ async function renderAbsences() {
   refreshBadges();
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'absences');
   bindLayout();
+
+  // S.users nachladen falls noch nicht vorhanden (z.B. direkter Seitenaufruf)
+  if (isManagerRole() && (!S.users || S.users.length <= 1)) {
+    try {
+      const uData = await api('GET', '/api/users');
+      if (uData) S.users = uData.users;
+    } catch(e) {}
+  }
 
   let absences = [];
   try {
@@ -5232,20 +5241,6 @@ async function renderAbsences() {
   cutoffDate.setMonth(cutoffDate.getMonth() - 1);
   const cutoff = cutoffDate.toISOString().substring(0, 10);
 
-  // Alle Abwesenheiten, gruppiert nach Typ, dann nach aktuell/alt
-  const grouped = {};
-  for (const a of absences) {
-    if (!grouped[a.type]) grouped[a.type] = { recent: [], history: {} };
-    const updDate = (a.updated_at || a.created_at || '').substring(0, 10);
-    if (updDate >= cutoff) {
-      grouped[a.type].recent.push(a);
-    } else {
-      // Gruppierung im Verlauf nach Monat/Jahr von date_from
-      const mk = a.date_from.substring(0, 7); // "2026-03"
-      if (!grouped[a.type].history[mk]) grouped[a.type].history[mk] = [];
-      grouped[a.type].history[mk].push(a);
-    }
-  }
 
   const monthNames = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
   function monthLabel(ym) {
@@ -5253,9 +5248,41 @@ async function renderAbsences() {
     return `${monthNames[parseInt(m, 10) - 1]} ${y}`;
   }
 
+  // Alle Abwesenheiten nach User filtern (nur für Manager)
+  const listAbsences = (isManagerRole() && _allAbsenceUserFilter)
+    ? absences.filter(a => String(a.user_id) === String(_allAbsenceUserFilter))
+    : absences;
+
+  // Gefilterte Abwesenheiten neu gruppieren
+  const filteredGrouped = {};
+  for (const a of listAbsences) {
+    if (!filteredGrouped[a.type]) filteredGrouped[a.type] = { recent: [], history: {} };
+    const updDate = (a.updated_at || a.created_at || '').substring(0, 10);
+    if (updDate >= cutoff) {
+      filteredGrouped[a.type].recent.push(a);
+    } else {
+      const mk = a.date_from.substring(0, 7);
+      if (!filteredGrouped[a.type].history[mk]) filteredGrouped[a.type].history[mk] = [];
+      filteredGrouped[a.type].history[mk].push(a);
+    }
+  }
+
+  // User-Filter Dropdown für "Alle Abwesenheiten" (Manager)
+  let allUsersForFilter = [];
+  if (isManagerRole()) {
+    const seenIds = new Set();
+    for (const a of absences) {
+      if (a.user_id && !seenIds.has(a.user_id)) {
+        seenIds.add(a.user_id);
+        allUsersForFilter.push({ id: a.user_id, name: a.user_name || `#${a.user_id}` });
+      }
+    }
+    allUsersForFilter.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   const listHtml = Object.entries(ABSENCE_TYPES).map(([type, info]) => {
     if (type === 'feiertag' && !isManagerRole()) return '';
-    const g = grouped[type] || { recent: [], history: {} };
+    const g = filteredGrouped[type] || { recent: [], history: {} };
     const totalCount = g.recent.length + Object.values(g.history).reduce((s, v) => s + v.length, 0);
     if (totalCount === 0 && !isManagerRole()) return '';
 
@@ -5296,7 +5323,15 @@ async function renderAbsences() {
         <button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>
       </div>
       ${inboxHtml}
-      ${inboxHtml && listHtml ? '<div class="absence-all-header">Alle Abwesenheiten</div>' : ''}
+      ${isManagerRole() ? `
+        <div class="absence-all-header">
+          <span>Alle Abwesenheiten</span>
+          ${allUsersForFilter.length > 1 ? `
+            <select class="absence-inbox-filter" id="all-absence-user-filter">
+              <option value="">Alle Mitarbeiter</option>
+              ${allUsersForFilter.map(u => `<option value="${u.id}" ${_allAbsenceUserFilter == u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
+            </select>` : ''}
+        </div>` : ''}
       ${listHtml || '<p class="absence-empty">Keine Abwesenheiten eingetragen.</p>'}
     </div>`;
 
@@ -5306,6 +5341,10 @@ async function renderAbsences() {
   document.getElementById('absence-new-btn')?.addEventListener('click', () => showAbsenceForm(null, 'krank', null, null, null));
   document.getElementById('inbox-user-filter')?.addEventListener('change', (e) => {
     _inboxUserFilter = e.target.value;
+    renderAbsences();
+  });
+  document.getElementById('all-absence-user-filter')?.addEventListener('change', (e) => {
+    _allAbsenceUserFilter = e.target.value;
     renderAbsences();
   });
   bindAbsenceCardActions(mainEl);
