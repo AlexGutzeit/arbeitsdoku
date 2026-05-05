@@ -5066,13 +5066,13 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
   // Mitarbeiterauswahl für Manager
   let userSelectHtml = '';
   if (isManagerRole() && !editId) {
-    const workers = getWorkerUsers().filter(u => u.id !== S.user.id);
+    const allOtherUsers = S.users.filter(u => u.id !== S.user.id).sort((a, b) => a.name.localeCompare(b.name));
     userSelectHtml = `
       <div class="form-group">
         <label>Für</label>
         <select id="abs-user" class="form-control">
           <option value="${S.user.id}">Für mich selbst</option>
-          ${workers.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}
+          ${allOtherUsers.map(u => `<option value="${u.id}">${esc(u.name)} (${roleName(u.role)})</option>`).join('')}
         </select>
       </div>`;
   }
@@ -5154,6 +5154,8 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
   });
 }
 
+let _inboxUserFilter = '';
+
 async function renderAbsences() {
   const topicToMark = isManagerRole() ? 'absences' : 'absence_status';
   S.badges.absences = 0;
@@ -5193,10 +5195,35 @@ async function renderAbsences() {
       (a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at)
     );
     if (pending.length > 0) {
-      inboxHtml = `<div class="absence-inbox">
-        <h3>📬 Posteingang (${pending.length})</h3>
-        ${pending.map(a => renderAbsenceCard(a)).join('')}
-      </div>`;
+      // Eindeutige User aus dem Posteingang für Filter
+      const inboxUsers = [];
+      const seenUids = new Set();
+      for (const a of pending) {
+        if (a.user_id && !seenUids.has(a.user_id)) {
+          seenUids.add(a.user_id);
+          inboxUsers.push({ id: a.user_id, name: a.user_name || `#${a.user_id}` });
+        }
+      }
+      inboxUsers.sort((a, b) => a.name.localeCompare(b.name));
+
+      const filteredPending = _inboxUserFilter
+        ? pending.filter(a => String(a.user_id) === String(_inboxUserFilter))
+        : pending;
+
+      inboxHtml = `
+        <div class="absence-inbox">
+          <div class="absence-inbox-header">
+            <h3>📬 Posteingang (${pending.length})</h3>
+            ${inboxUsers.length > 1 ? `
+              <select class="absence-inbox-filter" id="inbox-user-filter">
+                <option value="">Alle Mitarbeiter</option>
+                ${inboxUsers.map(u => `<option value="${u.id}" ${_inboxUserFilter == u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
+              </select>` : ''}
+          </div>
+          ${filteredPending.length > 0
+            ? filteredPending.map(a => renderAbsenceCard(a)).join('')
+            : '<p class="absence-empty">Keine Einträge für diesen Mitarbeiter.</p>'}
+        </div>`;
     }
   }
 
@@ -5269,6 +5296,7 @@ async function renderAbsences() {
         <button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>
       </div>
       ${inboxHtml}
+      ${inboxHtml && listHtml ? '<div class="absence-all-header">Alle Abwesenheiten</div>' : ''}
       ${listHtml || '<p class="absence-empty">Keine Abwesenheiten eingetragen.</p>'}
     </div>`;
 
@@ -5276,6 +5304,10 @@ async function renderAbsences() {
     btn.addEventListener('click', () => showAbsenceForm(null, btn.dataset.type, null, null, null));
   });
   document.getElementById('absence-new-btn')?.addEventListener('click', () => showAbsenceForm(null, 'krank', null, null, null));
+  document.getElementById('inbox-user-filter')?.addEventListener('change', (e) => {
+    _inboxUserFilter = e.target.value;
+    renderAbsences();
+  });
   bindAbsenceCardActions(mainEl);
 }
 

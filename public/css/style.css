@@ -1576,8 +1576,11 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .absence-status--active   { background: #dcfce7; color: #166534; }
 .absence-status--approved { background: #dcfce7; color: #166534; }
 .absence-status--rejected { background: #fee2e2; color: #991b1b; }
-.absence-inbox { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; }
-.absence-inbox h3 { font-size: 1rem; margin-bottom: 0.75rem; }
+.absence-inbox { background: #fff7ed; border: 2px solid #fb923c; border-radius: 10px; padding: 1.2rem; margin-bottom: 0.5rem; box-shadow: 0 2px 8px rgba(251,146,60,0.18); }
+.absence-inbox-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.9rem; padding-bottom: 0.75rem; border-bottom: 1px solid #fed7aa; gap: 1rem; }
+.absence-inbox h3 { font-size: 1.05rem; font-weight: 700; margin: 0; }
+.absence-inbox-filter { font-size: 0.85rem; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid #fed7aa; background: #fff; min-width: 170px; }
+.absence-all-header { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-lighter); padding: 1.2rem 0 0.5rem; border-top: 1px solid var(--border); margin-top: 1rem; }
 .absence-section { margin-bottom: 1.5rem; }
 .absence-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.95rem; }
 .absence-empty { color: var(--text-lighter); font-size: 0.85rem; padding: 0.5rem 0; }
