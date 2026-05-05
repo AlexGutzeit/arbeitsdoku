@@ -18,6 +18,7 @@ const S = {
   filterProjectId: '',
   filterSearch: '',
   filterRegie: '',
+  filterAbsenceType: '',
   welcomeWeekOffset: 0,
   badges: { bulletin: 0, notes: 0, orders: 0 },
 };
@@ -641,7 +642,23 @@ async function renderDashboardContent() {
   if (!mainEl) return;
   mainEl.classList.add('main-wide');
 
-  // Filter (nur Projekt + Suche, Mitarbeiter werden per Chips gesteuert)
+  // Abwesenheiten nach Typ filtern
+  const filteredAbsences = S.filterAbsenceType
+    ? absencesForPeriod.filter(a => a.type === S.filterAbsenceType)
+    : absencesForPeriod;
+
+  // Filter (nur Projekt + Suche + Abwesenheitstyp, Mitarbeiter werden per Chips gesteuert)
+  const absenceTypeOptions = [
+    ['', 'Abwesenheit: Alle'],
+    ['krank', '🏥 Krank'],
+    ['urlaub', '🌴 Urlaub'],
+    ['freizeitausgleich', '⏱️ Freizeitausgleich'],
+    ['sonderurlaub', '🎁 Sonderurlaub'],
+    ['feiertag', '🎉 Feiertag'],
+    ['berufsschule', '🏫 Berufsschule'],
+    ['innung', '🔧 Innung'],
+    ['dienstreise', '🚗 Dienstreise'],
+  ];
   const filtersHtml = `
     <div class="filters">
       <select id="filter-project">
@@ -652,6 +669,9 @@ async function renderDashboardContent() {
         <option value="" ${S.filterRegie === '' ? 'selected' : ''}>Regie: Alle</option>
         <option value="1" ${S.filterRegie === '1' ? 'selected' : ''}>Regie: Ja</option>
         <option value="0" ${S.filterRegie === '0' ? 'selected' : ''}>Regie: Nein</option>
+      </select>
+      <select id="filter-absence-type">
+        ${absenceTypeOptions.map(([v, l]) => `<option value="${v}" ${S.filterAbsenceType === v ? 'selected' : ''}>${l}</option>`).join('')}
       </select>
       <input type="search" id="filter-search" placeholder="Suchen..." value="${esc(S.filterSearch)}">
     </div>`;
@@ -689,11 +709,11 @@ async function renderDashboardContent() {
   // Entscheidung: Timeline (Tag), Wochenraster, Monatsraster
   let contentHtml = '';
   if (S.view === 'day') {
-    contentHtml = renderTimelineHtml(visibleEntries, absencesForPeriod);
+    contentHtml = renderTimelineHtml(visibleEntries, filteredAbsences);
   } else if (S.view === 'week') {
-    contentHtml = renderWeekGridHtml(visibleEntries, range, absencesForPeriod);
+    contentHtml = renderWeekGridHtml(visibleEntries, range, filteredAbsences);
   } else {
-    contentHtml = renderMonthGridHtml(visibleEntries, range);
+    contentHtml = renderMonthGridHtml(visibleEntries, range, filteredAbsences);
   }
 
   mainEl.innerHTML = `
@@ -764,6 +784,7 @@ async function renderDashboardContent() {
   // Filters
   document.getElementById('filter-project')?.addEventListener('change', (e) => { S.filterProjectId = e.target.value; renderDashboardContent(); });
   document.getElementById('filter-regie')?.addEventListener('change', (e) => { S.filterRegie = e.target.value; renderDashboardContent(); });
+  document.getElementById('filter-absence-type')?.addEventListener('change', (e) => { S.filterAbsenceType = e.target.value; renderDashboardContent(); });
   let searchTimeout;
   document.getElementById('filter-search')?.addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
@@ -1053,7 +1074,7 @@ function renderWeekGridHtml(entries, range, absences) {
 }
 
 // --- Monatsraster ---
-function renderMonthGridHtml(entries, range) {
+function renderMonthGridHtml(entries, range, absences = []) {
   // Kalenderwochen des Monats ermitteln
   const weeks = getCalendarWeeks(range.from, range.to);
   const columns = getGridColumns(entries);
@@ -1086,23 +1107,43 @@ function renderMonthGridHtml(entries, range) {
       const totalH = calcActualHours(cellEntries);
       const days = new Set(cellEntries.map(e => e.date)).size;
       // Klick auf Zelle → erster Tag der KW
+      // Alle Arbeitstage der KW im Monatsbereich für Abwesenheits-Anzeige sammeln
+      const kwStart = new Date(Math.max(new Date(w.from + 'T12:00:00'), new Date(range.from + 'T12:00:00')));
+      const kwEnd   = new Date(Math.min(new Date(w.to   + 'T12:00:00'), new Date(range.to   + 'T12:00:00')));
+      const allDaysInKW = [];
+      for (let d = new Date(kwStart); d <= kwEnd; d.setDate(d.getDate() + 1)) {
+        const wd = d.getDay();
+        if (wd !== 0 && wd !== 6) allDaysInKW.push(formatDateISO(d));
+      }
+
       bodyHtml += `<td class="grid-cell" data-jump-date="${w.from}">`;
+      // Gruppiere Einträge nach Tag
+      const byDay = {};
+      cellEntries.forEach(e => {
+        if (!byDay[e.date]) byDay[e.date] = [];
+        byDay[e.date].push(e);
+      });
+      // Zeige alle Tage mit Eintrag ODER Abwesenheit
+      const daysToShow = new Set([...Object.keys(byDay), ...allDaysInKW.filter(d => getAbsencesForDay(col.id, d, absences).length > 0)]);
+      const sortedDays = [...daysToShow].sort();
+      sortedDays.forEach(day => {
+        const dayEntries = byDay[day] || [];
+        const dn = getDayNameShort(day);
+        const dayH = calcActualHours(dayEntries);
+        const dayAbsences = getAbsencesForDay(col.id, day, absences);
+        const absChips = dayAbsences.map(a => {
+          const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+          const pendingCls = a.status === 'pending' ? ' grid-absence-chip--pending' : '';
+          return `<span class="grid-absence-chip grid-absence-chip--${a.type}${pendingCls}" title="${t.label}">${t.icon}</span>`;
+        }).join('');
+        bodyHtml += `<div class="grid-kw-day" data-jump-date="${day}">
+          <span class="grid-kw-dayname">${dn}</span>
+          ${absChips ? `<span class="grid-month-abs-chips">${absChips}</span>` : ''}
+          ${dayH > 0 ? `<span class="grid-kw-dayhours">${fmtH(dayH)}</span>` : ''}
+        </div>`;
+      });
       if (cellEntries.length > 0) {
-        // Gruppiere nach Tag für kompakte Darstellung
-        const byDay = {};
-        cellEntries.forEach(e => {
-          if (!byDay[e.date]) byDay[e.date] = [];
-          byDay[e.date].push(e);
-        });
-        Object.keys(byDay).sort().forEach(day => {
-          const dayEntries = byDay[day];
-          const dn = getDayNameShort(day);
-          const dayH = calcActualHours(dayEntries);
-          bodyHtml += `<div class="grid-kw-day" data-jump-date="${day}">
-            <span class="grid-kw-dayname">${dn}</span>
-            <span class="grid-kw-dayhours">${fmtH(dayH)}</span>
-          </div>`;
-        });
+        const days = new Set(cellEntries.map(e => e.date)).size;
         bodyHtml += `<div class="grid-cell-total">${fmtH(totalH)} / ${days} Tage</div>`;
       }
       bodyHtml += '</td>';
@@ -3776,11 +3817,33 @@ async function renderStatisticsContent() {
   if (period !== 'total' && userIds.length === 1) {
     try {
       const uid_param = userIds[0] !== S.user.id ? `&user_id=${userIds[0]}` : '';
-      const sd = await api('GET', `/api/absences/summary?from=${stats.range.from}&to=${stats.range.to}${uid_param}`);
+      const [sd, byDate] = await Promise.all([
+        api('GET', `/api/absences/summary?from=${stats.range.from}&to=${stats.range.to}${uid_param}`),
+        api('GET', `/api/absences/by-date?from=${stats.range.from}&to=${stats.range.to}${uid_param ? `&user_id=${userIds[0]}` : ''}`),
+      ]);
+
+      // Abwesenheitsbänder für Chart vorbereiten (nur approved/active)
+      const absenceColors = {
+        krank: '#dc2626', urlaub: '#1d4ed8', freizeitausgleich: '#7c3aed',
+        sonderurlaub: '#9a3412', berufsschule: '#0369a1', innung: '#0f766e',
+        dienstreise: '#374151', feiertag: '#b45309',
+      };
+      const chartAbsences = (byDate?.absences || [])
+        .filter(a => a.status === 'active' || a.status === 'approved')
+        .map(a => ({ type: a.type, from: a.date_from, to: a.date_to, color: absenceColors[a.type] || '#64748b' }));
+
+      // Chart neu zeichnen mit Abwesenheitsbändern
+      const canvas = document.getElementById('time-chart');
+      const highlightFn = drawTimeChart(canvas, stats.combinedTimeline, stats.users.length > 1 ? null : stats.users, chartAbsences, null);
+      window._statsChartHighlight = highlightFn;
+
       if (sd && Object.keys(sd.summary || {}).length > 0) {
         const typeLabels = { krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA', sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag', berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise' };
         const rows = Object.entries(sd.summary).map(([t, d]) =>
-          `<tr><td>${typeLabels[t] || t}</td><td>${d} ${d === 1 ? 'Tag' : 'Tage'}</td></tr>`
+          `<tr class="abs-hover-row" data-abs-type="${t}" style="cursor:pointer">
+            <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${absenceColors[t]||'#64748b'};margin-right:6px"></span>${typeLabels[t] || t}</td>
+            <td>${d} ${d === 1 ? 'Tag' : 'Tage'}</td>
+          </tr>`
         ).join('');
         const absBlock = document.getElementById('stats-absences-block');
         if (absBlock) {
@@ -3792,6 +3855,16 @@ async function renderStatisticsContent() {
             </table>
             ${sd.urlaubTageJahr > 0 ? `<p style="margin-top:0.5rem;font-size:0.9rem">Urlaubstage genommen (${new Date().getFullYear()}): <strong>${sd.urlaubTageJahr} Arbeitstage</strong></p>` : ''}
           </div>`;
+
+          // Bidirektionales Hover: Tabellenzeile → Chart hervorheben
+          absBlock.querySelectorAll('.abs-hover-row').forEach(row => {
+            row.addEventListener('mouseenter', () => {
+              if (window._statsChartHighlight) window._statsChartHighlight(row.dataset.absType);
+            });
+            row.addEventListener('mouseleave', () => {
+              if (window._statsChartHighlight) window._statsChartHighlight(null);
+            });
+          });
         }
       }
     } catch(e) {}
@@ -3924,8 +3997,15 @@ function drawPieChart(canvas, data) {
   });
 }
 
-function drawTimeChart(canvas, timeline, users) {
-  if (!canvas || !timeline || timeline.length === 0) return;
+function drawTimeChart(canvas, timeline, users, absences = [], highlightType = null) {
+  if (!canvas || !timeline || timeline.length === 0) return null;
+
+  // Alte Event-Listener entfernen (AbortController)
+  if (canvas._chartAC) canvas._chartAC.abort();
+  const ac = new AbortController();
+  canvas._chartAC = ac;
+  const sig = ac.signal;
+
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
 
@@ -3982,6 +4062,38 @@ function drawTimeChart(canvas, timeline, users) {
     ctx.fillStyle = '#94a3b8';
     ctx.fillText(t.label, x, pad.top + ch + 8);
   });
+
+  // Abwesenheitsbänder im Hintergrund zeichnen
+  if (absences.length > 0 && timeline.length > 1) {
+    absences.forEach(ab => {
+      const isHL = highlightType === ab.type;
+      const isDimmed = highlightType !== null && !isHL;
+      const alpha = isDimmed ? 0.05 : (isHL ? 0.35 : 0.15);
+
+      // Finde die Timeline-Indizes die den Abwesenheitszeitraum überschneiden
+      let startX = null, endX = null;
+      timeline.forEach((t, i) => {
+        const tFrom = t.from || t.label;
+        const tTo   = t.to   || t.from || t.label;
+        if (tTo >= ab.from && tFrom <= ab.to) {
+          const x = pad.left + i * xStep;
+          if (startX === null) startX = x - xStep / 2;
+          endX = x + xStep / 2;
+        }
+      });
+      if (startX !== null && endX !== null) {
+        ctx.fillStyle = ab.color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+        ctx.fillRect(Math.max(startX, pad.left), pad.top, Math.min(endX, pad.left + cw) - Math.max(startX, pad.left), ch);
+        if (isHL) {
+          ctx.strokeStyle = ab.color;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 2]);
+          ctx.strokeRect(Math.max(startX, pad.left), pad.top, Math.min(endX, pad.left + cw) - Math.max(startX, pad.left), ch);
+          ctx.setLineDash([]);
+        }
+      }
+    });
+  }
 
   // Soll-Linie (grün, gestrichelt)
   ctx.setLineDash([6, 4]);
@@ -4078,12 +4190,26 @@ function drawTimeChart(canvas, timeline, users) {
     return closest;
   }
 
+  // Abwesenheitstypen für ein Timeline-Datum ermitteln
+  function getAbsencesAtIndex(idx) {
+    const t = timeline[idx];
+    if (!t || !absences.length) return [];
+    const tFrom = t.from || t.label;
+    const tTo   = t.to   || t.from || t.label;
+    return absences.filter(ab => ab.to >= tFrom && ab.from <= tTo);
+  }
+
   function showTooltip(clientX) {
     const idx = findNearest(clientX);
     const t = timeline[idx];
     const diff = t.ist - t.soll;
     const prefix = diff >= 0 ? '+' : '';
-    tooltip.innerHTML = `<strong>${t.label}</strong><br>Ist: ${fmtH(t.ist)}<br>Soll: ${fmtH(t.soll)}<br>Diff: ${prefix}${fmtH(diff)}`;
+    const absHere = getAbsencesAtIndex(idx);
+    const absHtml = absHere.map(ab => {
+      const info = ABSENCE_TYPES[ab.type] || { label: ab.type, icon: '' };
+      return `<br><span style="color:${ab.color}">${info.icon} ${info.label}</span>`;
+    }).join('');
+    tooltip.innerHTML = `<strong>${t.label}</strong><br>Ist: ${fmtH(t.ist)}<br>Soll: ${fmtH(t.soll)}<br>Diff: ${prefix}${fmtH(diff)}${absHtml}`;
     tooltip.style.display = 'block';
 
     const rect = canvas.getBoundingClientRect();
@@ -4096,11 +4222,16 @@ function drawTimeChart(canvas, timeline, users) {
     tooltip.style.top = '30px';
   }
 
-  canvas.addEventListener('mousemove', e => showTooltip(e.clientX));
-  canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
-  canvas.addEventListener('touchstart', e => { showTooltip(e.touches[0].clientX); }, { passive: true });
-  canvas.addEventListener('touchmove', e => { showTooltip(e.touches[0].clientX); }, { passive: true });
-  canvas.addEventListener('touchend', () => { setTimeout(() => { tooltip.style.display = 'none'; }, 2000); });
+  canvas.addEventListener('mousemove', e => showTooltip(e.clientX), { signal: sig });
+  canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; }, { signal: sig });
+  canvas.addEventListener('touchstart', e => { showTooltip(e.touches[0].clientX); }, { passive: true, signal: sig });
+  canvas.addEventListener('touchmove', e => { showTooltip(e.touches[0].clientX); }, { passive: true, signal: sig });
+  canvas.addEventListener('touchend', () => { setTimeout(() => { tooltip.style.display = 'none'; }, 2000); }, { signal: sig });
+
+  // Gibt eine Highlight-Funktion zurück (Typ hervorheben, null = Reset)
+  return (type) => {
+    drawTimeChart(canvas, timeline, users, absences, type);
+  };
 }
 
 // --- Bestellungen ---

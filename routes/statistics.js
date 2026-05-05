@@ -315,6 +315,8 @@ router.get('/', authenticate, (req, res) => {
 
   const combinedTimeline = timeline.map((t, i) => ({
     label: t.label,
+    from: t.from,
+    to: t.to,
     ist: Math.round(userStats.reduce((s, u) => s + u.timeline[i].ist, 0) * 100) / 100,
     soll: Math.round(userStats.reduce((s, u) => s + u.timeline[i].soll, 0) * 100) / 100,
   }));

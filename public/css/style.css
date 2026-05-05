@@ -909,6 +909,15 @@ table.data-table .actions button { margin-left: 0.25rem; }
   font-weight: 700;
   color: var(--primary);
 }
+.grid-month-abs-chips {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.grid-month-abs-chips .grid-absence-chip {
+  font-size: 0.7rem;
+  padding: 0 3px;
+}
 
 /* === Responsive === */
 @media (max-width: 640px) {
