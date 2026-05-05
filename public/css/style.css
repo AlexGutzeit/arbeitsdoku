@@ -1580,6 +1580,32 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .absence-section { margin-bottom: 1.5rem; }
 .absence-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.95rem; }
 .absence-empty { color: var(--text-lighter); font-size: 0.85rem; padding: 0.5rem 0; }
+.absence-history { margin-top: 0.5rem; border-radius: 6px; }
+.absence-history-summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-lighter);
+  font-weight: 500;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  user-select: none;
+  list-style: none;
+}
+.absence-history-summary::-webkit-details-marker { display: none; }
+.absence-history-summary::before { content: '▸ '; font-size: 0.7rem; }
+details[open] .absence-history-summary::before { content: '▾ '; }
+.absence-history-summary:hover { background: var(--bg); }
+.absence-history-body { margin-top: 0.5rem; }
+.absence-history-month-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-lighter);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.4rem 0.5rem 0.2rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.4rem;
+}
 .absence-counter { font-size: 0.85rem; color: var(--text-lighter); }
 .absence-form-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1100; padding: 1rem; }
 .absence-form-card { background: var(--card); border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }

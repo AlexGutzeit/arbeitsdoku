@@ -5186,26 +5186,64 @@ async function renderAbsences() {
     }
   }
 
-  // Alle Abwesenheiten, gruppiert nach Typ
+  // Cutoff: alles was vor mehr als einem Monat zuletzt bearbeitet wurde → Verlauf
+  const cutoffDate = new Date();
+  cutoffDate.setMonth(cutoffDate.getMonth() - 1);
+  const cutoff = cutoffDate.toISOString().substring(0, 10);
+
+  // Alle Abwesenheiten, gruppiert nach Typ, dann nach aktuell/alt
   const grouped = {};
   for (const a of absences) {
-    if (!grouped[a.type]) grouped[a.type] = [];
-    grouped[a.type].push(a);
+    if (!grouped[a.type]) grouped[a.type] = { recent: [], history: {} };
+    const updDate = (a.updated_at || a.created_at || '').substring(0, 10);
+    if (updDate >= cutoff) {
+      grouped[a.type].recent.push(a);
+    } else {
+      // Gruppierung im Verlauf nach Monat/Jahr von date_from
+      const mk = a.date_from.substring(0, 7); // "2026-03"
+      if (!grouped[a.type].history[mk]) grouped[a.type].history[mk] = [];
+      grouped[a.type].history[mk].push(a);
+    }
+  }
+
+  const monthNames = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  function monthLabel(ym) {
+    const [y, m] = ym.split('-');
+    return `${monthNames[parseInt(m, 10) - 1]} ${y}`;
   }
 
   const listHtml = Object.entries(ABSENCE_TYPES).map(([type, info]) => {
     if (type === 'feiertag' && !isManagerRole()) return '';
-    const items = grouped[type] || [];
-    if (items.length === 0 && !isManagerRole()) return '';
+    const g = grouped[type] || { recent: [], history: {} };
+    const totalCount = g.recent.length + Object.values(g.history).reduce((s, v) => s + v.length, 0);
+    if (totalCount === 0 && !isManagerRole()) return '';
+
+    const recentHtml = g.recent.length > 0
+      ? g.recent.map(a => renderAbsenceCard(a)).join('')
+      : (Object.keys(g.history).length === 0 ? '<p class="absence-empty">Keine Einträge</p>' : '');
+
+    const historyKeys = Object.keys(g.history).sort().reverse(); // neueste zuerst
+    const historyCount = Object.values(g.history).reduce((s, v) => s + v.length, 0);
+    const historyHtml = historyKeys.length > 0 ? `
+      <details class="absence-history">
+        <summary class="absence-history-summary">Verlauf (${historyCount})</summary>
+        <div class="absence-history-body">
+          ${historyKeys.map(mk => `
+            <div class="absence-history-month">
+              <div class="absence-history-month-label">${monthLabel(mk)}</div>
+              ${g.history[mk].map(a => renderAbsenceCard(a)).join('')}
+            </div>
+          `).join('')}
+        </div>
+      </details>` : '';
+
     return `<div class="absence-section">
       <div class="absence-section-header">
         <span>${info.icon} ${info.label}</span>
         <button class="btn btn-sm btn-outline absence-new" data-type="${type}">+ Eintragen</button>
       </div>
-      ${items.length === 0
-        ? '<p class="absence-empty">Keine Einträge</p>'
-        : items.map(a => renderAbsenceCard(a)).join('')
-      }
+      ${recentHtml}
+      ${historyHtml}
     </div>`;
   }).join('');
 
