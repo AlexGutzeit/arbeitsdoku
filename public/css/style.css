@@ -1569,6 +1569,7 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .absence-card-dates { font-size: 0.9rem; font-weight: 500; color: var(--text); margin-bottom: 0.2rem; }
 .absence-card-comment { font-size: 0.82rem; color: var(--text-lighter); margin-bottom: 0.3rem; }
 .absence-card-meta { font-size: 0.75rem; color: var(--text-lighter); }
+.absence-card-timestamps { font-size: 0.72rem; color: var(--text-lighter); margin-top: 0.2rem; }
 .absence-card-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.6rem; }
 .absence-status { font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 10px; }
 .absence-status--pending  { background: #fef3c7; color: #92400e; }

@@ -4984,6 +4984,9 @@ function renderAbsenceCard(a, opts = {}) {
     ${a.comment ? `<div class="absence-card-comment">${esc(a.comment)}</div>` : ''}
     ${isManagerEntry && a.created_by_name ? `<div class="absence-created-by">Eingetragen von: ${esc(a.created_by_name)}</div>` : ''}
     ${a.processed_by_name ? `<div class="absence-card-meta">Bearbeitet von ${esc(a.processed_by_name)}</div>` : ''}
+    <div class="absence-card-timestamps">
+      Erstellt: ${formatDateTimeDE(a.created_at)}${a.updated_at && a.updated_at !== a.created_at ? ` &nbsp;·&nbsp; Bearbeitet: ${formatDateTimeDE(a.updated_at)}` : ''}
+    </div>
     <div class="absence-card-actions">
       ${canApprove ? `<button class="btn btn-sm btn-primary absence-approve" data-id="${a.id}">Genehmigen</button>
                       <button class="btn btn-sm btn-danger absence-reject" data-id="${a.id}">Ablehnen</button>` : ''}
