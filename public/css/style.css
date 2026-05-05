@@ -1603,3 +1603,7 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .grid-absence-chip--innung       { background: #d1fae5; color: #065f46; }
 .grid-absence-chip--dienstreise  { background: #e0f2fe; color: #0369a1; }
 .grid-absence-chip--feiertag     { background: #fdf4ff; color: #7e22ce; }
+
+/* Manager-für-MA Badge im Card */
+.absence-created-by { font-size: 0.75rem; color: var(--text-lighter); font-style: italic; }
+.absence-card--manager-entry { border-style: dashed; }

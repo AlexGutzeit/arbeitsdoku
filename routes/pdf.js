@@ -264,6 +264,57 @@ router.get('/export', authenticate, (req, res) => {
     y += 14;
     const prefixG = totalUeberGesamt >= 0 ? '+' : '';
     doc.text(`Überstunden gesamt: ${prefixG}${fmtH(totalUeberGesamt)}`, 40, y);
+    y += 14;
+
+    // Abwesenheitsblock (nur wenn konkreter User)
+    const targetUid = role === 'mitarbeiter' ? req.user.id : (user_id ? Number(user_id) : null);
+    if (targetUid) {
+      const pdfAbsences = db.prepare(`
+        SELECT type, date_from, date_to FROM absences
+        WHERE user_id = ? AND status IN ('active','approved')
+        AND date_from <= ? AND date_to >= ?
+      `).all(targetUid, date_to, date_from);
+
+      if (pdfAbsences.length > 0) {
+        // Arbeitstage pro Typ zählen (begrenzt auf date_from/date_to des Zeitraums)
+        const typeDays = {};
+        for (const ab of pdfAbsences) {
+          const from = ab.date_from > date_from ? ab.date_from : date_from;
+          const to   = ab.date_to < date_to     ? ab.date_to   : date_to;
+          if (from > to) continue;
+          typeDays[ab.type] = (typeDays[ab.type] || 0) + countWeekdays(from, to);
+        }
+
+        if (Object.keys(typeDays).length > 0) {
+          const typeLabels = {
+            krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA',
+            sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag',
+            berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise'
+          };
+          const parts = Object.entries(typeDays).map(([t, d]) => `${d} ${d === 1 ? 'Tag' : 'Tage'} ${typeLabels[t] || t}`);
+          doc.font('Helvetica-Bold').fontSize(9).fillColor('#333').text('Abwesenheiten im Zeitraum:', 40, y);
+          y += 13;
+          doc.font('Helvetica').text(parts.join(', '), 40, y);
+          y += 13;
+
+          // Urlaubstage approved im aktuellen Kalenderjahr
+          const thisYear = new Date().getFullYear().toString();
+          const urlaubRows = db.prepare(`
+            SELECT date_from, date_to FROM absences
+            WHERE user_id = ? AND type = 'urlaub' AND status = 'approved'
+            AND date_from <= ? AND date_to >= ?
+          `).all(targetUid, thisYear + '-12-31', thisYear + '-01-01');
+          let urlaubJahr = 0;
+          for (const ur of urlaubRows) {
+            const f = ur.date_from > (thisYear + '-01-01') ? ur.date_from : (thisYear + '-01-01');
+            const t2 = ur.date_to < (thisYear + '-12-31') ? ur.date_to : (thisYear + '-12-31');
+            if (f <= t2) urlaubJahr += countWeekdays(f, t2);
+          }
+          doc.text(`Urlaubstage genommen (${thisYear}): ${urlaubJahr} Arbeitstage`, 40, y);
+          y += 14;
+        }
+      }
+    }
 
     // === STATISTIK-SEITE ===
     doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });

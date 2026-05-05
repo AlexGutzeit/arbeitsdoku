@@ -533,6 +533,16 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: created_by in absences
+  try {
+    const absCols = db.prepare("PRAGMA table_info(absences)").all();
+    if (!absCols.find(c => c.name === 'created_by')) {
+      db.prepare("ALTER TABLE absences ADD COLUMN created_by INTEGER").run();
+      markDirty();
+      console.log('Migration: created_by in absences hinzugefuegt.');
+    }
+  } catch (e) {}
+
   // Seed-Daten nur wenn DB leer
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {
