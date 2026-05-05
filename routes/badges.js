@@ -49,12 +49,13 @@ router.get('/', authenticate, (req, res) => {
       SELECT COUNT(*) as n FROM absences
       WHERE updated_at > ?
         AND (user_id IS NULL OR user_id != ?)
+        AND COALESCE(created_by, user_id) != ?
         AND (
           status = 'pending'
           OR (status = 'active' AND type IN ('krank','berufsschule','innung')
               AND (notified_at IS NULL OR notified_at > ?))
         )
-    `).get(absencesSince, uid, absencesSince).n;
+    `).get(absencesSince, uid, uid, absencesSince).n;
   } else {
     const statusSince = getSeenAt(db, uid, 'absence_status');
     absences = db.prepare(`

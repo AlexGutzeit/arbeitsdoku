@@ -262,6 +262,11 @@ router.put('/:id', authenticate, (req, res) => {
     } else if (absence.status === 'active' && NOTIFY_CHEF.includes(absence.type)) {
       notifiedAt = null; // Chef erneut benachrichtigen
     }
+  } else if (manager && absence.created_by && absence.created_by !== absence.user_id) {
+    // Manager bearbeitet eigenen Eintrag (für MA) → MA muss erneut akzeptieren
+    if (absence.status === 'approved' || absence.status === 'rejected') {
+      newStatus = 'pending';
+    }
   }
 
   db.prepare(`
