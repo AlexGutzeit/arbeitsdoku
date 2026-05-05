@@ -877,18 +877,33 @@ function renderTimelineHtml(entries, absences) {
   if (isSingle) {
     columns = [{ id: S.user.id, name: S.user.name, entries: entries }];
   } else {
-    // Gruppiere nach Mitarbeiter
+    // Gruppiere nach Mitarbeiter (Zeiteinträge)
     const byUser = {};
     entries.forEach(e => {
       if (!byUser[e.user_id]) byUser[e.user_id] = { id: e.user_id, name: e.user_name, entries: [] };
       byUser[e.user_id].entries.push(e);
     });
-    // Sortiere alphabetisch nach Name
+    // Auch User mit Abwesenheiten am aktuellen Tag einschließen (ohne Zeiteinträge)
+    (absences || []).forEach(a => {
+      if (!a.user_id) return; // Feiertage (global) separat
+      if (a.date_from > currentDay || a.date_to < currentDay) return;
+      if (S.hiddenEmployees && S.hiddenEmployees.has(a.user_id)) return;
+      if (!byUser[a.user_id]) {
+        const u = (S.users || []).find(u => u.id === a.user_id);
+        byUser[a.user_id] = { id: a.user_id, name: u ? u.name : (a.user_name || `#${a.user_id}`), entries: [] };
+      }
+    });
     columns = Object.values(byUser).sort((a, b) => a.name.localeCompare(b.name));
   }
 
   if (columns.length === 0) {
-    return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge an diesem Tag</p></div>';
+    // Noch auf globale Feiertage prüfen
+    const globalAbsences = (absences || []).filter(a => !a.user_id && a.date_from <= currentDay && a.date_to >= currentDay);
+    if (globalAbsences.length === 0) {
+      return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge an diesem Tag</p></div>';
+    }
+    // Feiertag ohne Mitarbeiter-Spalten: als einzelne Spalte darstellen
+    columns = [{ id: null, name: 'Feiertag', entries: [] }];
   }
 
   // Jetzt-Linie berechnen
