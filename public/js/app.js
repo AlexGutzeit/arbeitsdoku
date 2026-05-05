@@ -642,11 +642,6 @@ async function renderDashboardContent() {
   if (!mainEl) return;
   mainEl.classList.add('main-wide');
 
-  // Abwesenheiten nach Typ filtern
-  const filteredAbsences = S.filterAbsenceType
-    ? absencesForPeriod.filter(a => a.type === S.filterAbsenceType)
-    : absencesForPeriod;
-
   // Filter (nur Projekt + Suche + Abwesenheitstyp, Mitarbeiter werden per Chips gesteuert)
   const absenceTypeOptions = [
     ['', 'Abwesenheit: Alle'],
@@ -696,6 +691,11 @@ async function renderDashboardContent() {
     const absData = await api('GET', `/api/absences/by-date?from=${range.from}&to=${range.to}`);
     if (absData) absencesForPeriod = absData.absences;
   } catch (e) {}
+
+  // Abwesenheiten nach Typ filtern
+  const filteredAbsences = S.filterAbsenceType
+    ? absencesForPeriod.filter(a => a.type === S.filterAbsenceType)
+    : absencesForPeriod;
 
   // Abwesenheitssummary für Mitarbeiter (oder eigene Ansicht)
   let absenceSummary = null;
