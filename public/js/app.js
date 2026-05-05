@@ -68,14 +68,14 @@ function markSeen(topic) {
 }
 
 function refreshBadges() {
-  for (const key of ['bulletin', 'notes', 'orders']) {
+  for (const key of ['bulletin', 'notes', 'orders', 'absences']) {
     const el = document.getElementById('nav-badge-' + key);
     if (!el) continue;
     const n = S.badges[key] || 0;
     el.textContent = n > 99 ? '99+' : String(n);
     el.style.display = n ? '' : 'none';
   }
-  const total = (S.badges.bulletin || 0) + (S.badges.notes || 0) + (S.badges.orders || 0);
+  const total = (S.badges.bulletin || 0) + (S.badges.notes || 0) + (S.badges.orders || 0) + (S.badges.absences || 0);
   if ('setAppBadge' in navigator) {
     if (total > 0) navigator.setAppBadge(total).catch(() => {});
     else navigator.clearAppBadge().catch(() => {});
@@ -365,6 +365,8 @@ function render() {
   else if (route === '/tools') renderTools();
   else if (route === '/orders') renderOrders();
   else if (route === '/notes') renderNotizen();
+  else if (route === '/absences') renderAbsences();
+  else if (route.startsWith('/absences/')) renderAbsenceType(route.split('/')[2]);
   else if (route === '/bulletin') renderBulletin();
   else if (route === '/bulletin/new') renderBulletinForm();
   else if (route.startsWith('/bulletin/edit/')) renderBulletinForm(route.split('/').pop());
@@ -444,8 +446,10 @@ function initSSE() {
     if (p.type === 'tools'    && route === '/tools')                               renderTools();
     if (p.type === 'entries'  && route === '/statistics')                          renderStatistics();
     if ((p.type === 'planning' || p.type === 'bulletin') && route === '/welcome')  renderWelcome();
-    if (p.type === 'bulletin' && route !== '/bulletin') loadBadges();
-    if (p.type === 'notes'    && route !== '/notes')    loadBadges();
+    if (p.type === 'bulletin'  && route !== '/bulletin')  loadBadges();
+    if (p.type === 'notes'     && route !== '/notes')     loadBadges();
+    if (p.type === 'absences'  && route.startsWith('/absences')) renderAbsences();
+    if (p.type === 'absences'  && !route.startsWith('/absences')) loadBadges();
   };
 }
 
@@ -493,6 +497,10 @@ function layout(content, activeNav) {
         <a href="#/notes" class="${activeNav === 'notes' ? 'active' : ''}">
           <span class="icon">&#128221;</span> Notizen
           <span class="nav-badge" id="nav-badge-notes"${S.badges.notes ? '' : ' style="display:none"'}>${S.badges.notes || ''}</span>
+        </a>
+        <a href="#/absences" class="${activeNav === 'absences' ? 'active' : ''}">
+          <span class="icon">&#127968;</span> Abwesenheit
+          <span class="nav-badge" id="nav-badge-absences"${S.badges.absences ? '' : ' style="display:none"'}>${S.badges.absences || ''}</span>
         </a>
         <a href="#/statistics" class="${activeNav === 'statistics' ? 'active' : ''}">
           <span class="icon">&#128200;</span> Statistik
@@ -4709,6 +4717,275 @@ async function showOfferDialog(note) {
       close();
     } catch (err) { toast(err.message, 'error'); }
   });
+}
+
+// --- Abwesenheit ---
+
+const ABSENCE_TYPES = {
+  krank:             { label: 'Krank',              icon: '🏥', workflow: 'notify' },
+  urlaub:            { label: 'Urlaub',             icon: '🌴', workflow: 'approve' },
+  freizeitausgleich: { label: 'Freizeitausgleich',  icon: '⏱️', workflow: 'approve' },
+  sonderurlaub:      { label: 'Sonderurlaub',       icon: '🎁', workflow: 'approve' },
+  berufsschule:      { label: 'Berufsschule',       icon: '🏫', workflow: 'notify' },
+  innung:            { label: 'Innung',             icon: '🔧', workflow: 'notify' },
+  dienstreise:       { label: 'Dienstreise',        icon: '🚗', workflow: 'none' },
+  feiertag:          { label: 'Feiertag',           icon: '🎉', workflow: 'none' },
+};
+
+function absenceStatusClass(status) {
+  if (status === 'pending')  return 'absence-card--pending';
+  if (status === 'rejected') return 'absence-card--rejected';
+  return 'absence-card--active';
+}
+
+function absenceStatusLabel(status) {
+  if (status === 'pending')  return '<span class="absence-status absence-status--pending">Offen</span>';
+  if (status === 'rejected') return '<span class="absence-status absence-status--rejected">Abgelehnt</span>';
+  if (status === 'approved') return '<span class="absence-status absence-status--approved">Genehmigt</span>';
+  return '<span class="absence-status absence-status--active">Aktiv</span>';
+}
+
+function formatDateRange(from, to) {
+  if (from === to) return formatDateDE(from);
+  return formatDateDE(from) + ' – ' + formatDateDE(to);
+}
+
+function isManagerRole() {
+  return S.user && (S.user.role === 'admin' || S.user.role === 'chef' || S.user.role === 'buchhalter');
+}
+
+function renderAbsenceCard(a, opts = {}) {
+  const type = ABSENCE_TYPES[a.type] || { label: a.type, icon: '📋' };
+  const canEdit = isManagerRole() || a.user_id === S.user?.id;
+  const canApprove = isManagerRole() && (a.status === 'pending');
+  const canAcknowledge = isManagerRole() && a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at;
+
+  return `<div class="absence-card ${absenceStatusClass(a.status)}" data-id="${a.id}">
+    <div class="absence-card-header">
+      <span class="absence-type-icon">${type.icon}</span>
+      <strong>${esc(type.label)}</strong>
+      ${isManagerRole() && a.user_name ? `<span class="absence-user">${esc(a.user_name)}</span>` : ''}
+      ${absenceStatusLabel(a.status)}
+    </div>
+    <div class="absence-card-dates">${formatDateRange(a.date_from, a.date_to)}</div>
+    ${a.comment ? `<div class="absence-card-comment">${esc(a.comment)}</div>` : ''}
+    ${a.processed_by_name ? `<div class="absence-card-meta">Bearbeitet von ${esc(a.processed_by_name)}</div>` : ''}
+    <div class="absence-card-actions">
+      ${canApprove ? `<button class="btn btn-sm btn-primary absence-approve" data-id="${a.id}">Genehmigen</button>
+                      <button class="btn btn-sm btn-danger absence-reject" data-id="${a.id}">Ablehnen</button>` : ''}
+      ${canAcknowledge ? `<button class="btn btn-sm btn-primary absence-acknowledge" data-id="${a.id}">Quittieren</button>` : ''}
+      ${canEdit ? `<button class="btn btn-sm btn-outline absence-edit" data-id="${a.id}" data-type="${a.type}" data-from="${a.date_from}" data-to="${a.date_to}" data-comment="${esc(a.comment||'')}">Bearbeiten</button>` : ''}
+      ${(isManagerRole() || a.user_id === S.user?.id) ? `<button class="btn btn-sm btn-danger absence-delete" data-id="${a.id}">Löschen</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function bindAbsenceCardActions(container) {
+  container.querySelectorAll('.absence-approve').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/approve'); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-reject').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject'); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-acknowledge').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/acknowledge'); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Abwesenheit wirklich löschen?')) return;
+      try { await api('DELETE', '/api/absences/' + btn.dataset.id); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showAbsenceForm(btn.dataset.id, btn.dataset.type, btn.dataset.from, btn.dataset.to, btn.dataset.comment);
+    });
+  });
+}
+
+function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
+  const mainEl = document.querySelector('.main');
+  if (!mainEl) return;
+
+  const role = S.user?.role;
+  const managerOnly = ['feiertag'];
+  const availableTypes = Object.entries(ABSENCE_TYPES).filter(([t]) => {
+    if (managerOnly.includes(t)) return isManagerRole();
+    return true;
+  });
+
+  const typeOpts = availableTypes.map(([t, info]) =>
+    `<option value="${t}" ${preType === t ? 'selected' : ''}>${info.icon} ${info.label}</option>`
+  ).join('');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const formHtml = `
+    <div class="absence-form-overlay" id="absence-form-overlay">
+      <div class="absence-form-card">
+        <h3>${editId ? 'Abwesenheit bearbeiten' : 'Abwesenheit eintragen'}</h3>
+        <div class="form-group">
+          <label>Typ</label>
+          <select id="abs-type" class="form-control" ${editId ? 'disabled' : ''}>
+            ${typeOpts || `<option value="${preType}">${preType}</option>`}
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Von</label>
+            <input type="date" id="abs-from" class="form-control" value="${preFrom || today}">
+          </div>
+          <div class="form-group">
+            <label>Bis</label>
+            <input type="date" id="abs-to" class="form-control" value="${preTo || today}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Kommentar (optional)</label>
+          <textarea id="abs-comment" class="form-control" rows="2">${preComment || ''}</textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="abs-save">${editId ? 'Speichern' : 'Eintragen'}</button>
+          <button class="btn btn-outline" id="abs-cancel">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const overlay = document.createElement('div');
+  overlay.innerHTML = formHtml;
+  document.body.appendChild(overlay.firstElementChild);
+
+  document.getElementById('abs-cancel').addEventListener('click', () => {
+    document.getElementById('absence-form-overlay')?.remove();
+  });
+
+  document.getElementById('abs-save').addEventListener('click', async () => {
+    const type = editId ? preType : document.getElementById('abs-type').value;
+    const date_from = document.getElementById('abs-from').value;
+    const date_to   = document.getElementById('abs-to').value;
+    const comment   = document.getElementById('abs-comment').value;
+
+    if (!date_from || !date_to) { toast('Datum erforderlich', 'error'); return; }
+    if (date_from > date_to) { toast('Datum von muss vor bis liegen', 'error'); return; }
+
+    try {
+      // Überlappungsprüfung
+      const existing = await api('GET', `/api/absences?from=${date_from}&to=${date_to}`);
+      const overlaps = (existing?.absences || []).filter(a => String(a.id) !== String(editId) && a.user_id === S.user.id);
+      if (overlaps.length > 0) {
+        const proceed = confirm(`Für diesen Zeitraum existiert bereits eine Abwesenheit (${ABSENCE_TYPES[overlaps[0].type]?.label || overlaps[0].type}).\nTrotzdem speichern?`);
+        if (!proceed) return;
+      }
+
+      if (editId) {
+        await api('PUT', '/api/absences/' + editId, { date_from, date_to, comment });
+      } else {
+        await api('POST', '/api/absences', { type, date_from, date_to, comment });
+      }
+      document.getElementById('absence-form-overlay')?.remove();
+      toast(editId ? 'Abwesenheit aktualisiert' : 'Abwesenheit eingetragen', 'success');
+      renderAbsences();
+    } catch(e) { toast(e.message, 'error'); }
+  });
+}
+
+async function renderAbsences() {
+  const topicToMark = isManagerRole() ? 'absences' : 'absence_status';
+  S.badges.absences = 0;
+  refreshBadges();
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'absences');
+  bindLayout();
+
+  let absences = [];
+  try {
+    const data = await api('GET', '/api/absences');
+    markSeen(topicToMark);
+    if (data) absences = data.absences;
+  } catch(e) {}
+
+  const mainEl = document.querySelector('.main');
+  if (!mainEl) return;
+
+  // Urlaubs-Zähler: genehmigte/offene Urlaubstage dieses Jahr
+  const thisYear = new Date().getFullYear().toString();
+  const urlaubTage = absences.filter(a =>
+    a.type === 'urlaub' && (a.status === 'approved' || a.status === 'pending') &&
+    a.date_from.startsWith(thisYear) && (!isManagerRole() || a.user_id === S.user?.id)
+  ).reduce((sum, a) => {
+    const from = new Date(a.date_from + 'T12:00:00');
+    const to   = new Date(a.date_to   + 'T12:00:00');
+    let days = 0;
+    const cur = new Date(from);
+    while (cur <= to) { const d = cur.getDay(); if (d > 0 && d < 6) days++; cur.setDate(cur.getDate()+1); }
+    return sum + days;
+  }, 0);
+
+  // Posteingang für Manager
+  let inboxHtml = '';
+  if (isManagerRole()) {
+    const pending = absences.filter(a =>
+      a.status === 'pending' ||
+      (a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at)
+    );
+    if (pending.length > 0) {
+      inboxHtml = `<div class="absence-inbox">
+        <h3>📬 Posteingang (${pending.length})</h3>
+        ${pending.map(a => renderAbsenceCard(a)).join('')}
+      </div>`;
+    }
+  }
+
+  // Alle Abwesenheiten, gruppiert nach Typ
+  const grouped = {};
+  for (const a of absences) {
+    if (!grouped[a.type]) grouped[a.type] = [];
+    grouped[a.type].push(a);
+  }
+
+  const listHtml = Object.entries(ABSENCE_TYPES).map(([type, info]) => {
+    if (type === 'feiertag' && !isManagerRole()) return '';
+    const items = grouped[type] || [];
+    if (items.length === 0 && !isManagerRole()) return '';
+    return `<div class="absence-section">
+      <div class="absence-section-header">
+        <span>${info.icon} ${info.label}</span>
+        <button class="btn btn-sm btn-outline absence-new" data-type="${type}">+ Eintragen</button>
+      </div>
+      ${items.length === 0
+        ? '<p class="absence-empty">Keine Einträge</p>'
+        : items.map(a => renderAbsenceCard(a)).join('')
+      }
+    </div>`;
+  }).join('');
+
+  mainEl.innerHTML = `
+    <div class="card" style="max-width:900px;margin:0 auto">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+        <h2>🏠 Abwesenheit</h2>
+        ${!isManagerRole() ? `<span class="absence-counter">Urlaub ${thisYear}: <strong>${urlaubTage} Arbeitstage</strong></span>` : ''}
+        <button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>
+      </div>
+      ${inboxHtml}
+      ${listHtml || '<p class="absence-empty">Keine Abwesenheiten eingetragen.</p>'}
+    </div>`;
+
+  mainEl.querySelectorAll('.absence-new').forEach(btn => {
+    btn.addEventListener('click', () => showAbsenceForm(null, btn.dataset.type, null, null, null));
+  });
+  document.getElementById('absence-new-btn')?.addEventListener('click', () => showAbsenceForm(null, 'krank', null, null, null));
+  bindAbsenceCardActions(mainEl);
+}
+
+function renderAbsenceType(type) {
+  if (!ABSENCE_TYPES[type]) { renderAbsences(); return; }
+  showAbsenceForm(null, type, null, null, null);
+  renderAbsences();
 }
 
 // --- Init ---

@@ -41,12 +41,34 @@ router.get('/', authenticate, (req, res) => {
     orders = db.prepare("SELECT COUNT(*) as n FROM orders WHERE ordered_at IS NULL").get().n;
   }
 
-  res.json({ bulletin, notes: sharedNotes + offers, orders });
+  // Abwesenheits-Badge
+  let absences = 0;
+  if (role !== 'mitarbeiter') {
+    const absencesSince = getSeenAt(db, uid, 'absences');
+    absences = db.prepare(`
+      SELECT COUNT(*) as n FROM absences
+      WHERE updated_at > ?
+        AND (user_id IS NULL OR user_id != ?)
+        AND (
+          status = 'pending'
+          OR (status = 'active' AND type IN ('krank','berufsschule','innung')
+              AND (notified_at IS NULL OR notified_at > ?))
+        )
+    `).get(absencesSince, uid, absencesSince).n;
+  } else {
+    const statusSince = getSeenAt(db, uid, 'absence_status');
+    absences = db.prepare(`
+      SELECT COUNT(*) as n FROM absences
+      WHERE user_id = ? AND status IN ('approved','rejected') AND updated_at > ?
+    `).get(uid, statusSince).n;
+  }
+
+  res.json({ bulletin, notes: sharedNotes + offers, orders, absences });
 });
 
 router.post('/:topic', authenticate, (req, res) => {
   const { topic } = req.params;
-  if (!['bulletin', 'notes'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
+  if (!['bulletin', 'notes', 'absences', 'absence_status'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
   const db = getDb();
   db.prepare(
     "INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, ?, datetime('now', '+1 second')) " +

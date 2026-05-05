@@ -238,6 +238,27 @@ async function initDatabase() {
       PRIMARY KEY (user_id, topic),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS absences (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id      INTEGER,
+      type         TEXT NOT NULL CHECK(type IN (
+                     'krank','urlaub','freizeitausgleich','sonderurlaub',
+                     'feiertag','berufsschule','innung','dienstreise'
+                   )),
+      date_from    TEXT NOT NULL,
+      date_to      TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'pending'
+                   CHECK(status IN ('pending','active','approved','rejected')),
+      comment      TEXT DEFAULT '',
+      processed_by INTEGER,
+      processed_at TEXT,
+      notified_at  TEXT,
+      created_at   TEXT DEFAULT (datetime('now')),
+      updated_at   TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL
+    );
   `);
 
   // Bestellliste
@@ -499,6 +520,16 @@ async function initDatabase() {
     if (!nCols.some(c => c.name === 'updated_by')) {
       db.exec("ALTER TABLE notes ADD COLUMN updated_by INTEGER");
       console.log('Migration: updated_by in notes hinzugefuegt.');
+    }
+  } catch (e) {}
+
+  // Migration: vacation_days_per_year in users
+  try {
+    const uCols = db.prepare("PRAGMA table_info(users)").all();
+    if (!uCols.some(c => c.name === 'vacation_days_per_year')) {
+      db.exec("ALTER TABLE users ADD COLUMN vacation_days_per_year INTEGER DEFAULT 30");
+      markDirty();
+      console.log('Migration: vacation_days_per_year in users hinzugefuegt.');
     }
   } catch (e) {}
 

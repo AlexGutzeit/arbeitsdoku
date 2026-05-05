@@ -1547,3 +1547,34 @@ table.data-table .actions button { margin-left: 0.25rem; }
   .note-card-row { flex-direction: column; }
   .note-actions { align-self: flex-end; }
 }
+
+/* === Abwesenheit === */
+.absence-card { padding: 0.9rem; border-radius: 8px; margin-bottom: 0.6rem; border-left: 4px solid #e2e8f0; background: var(--card); box-shadow: var(--shadow); }
+.absence-card--pending  { border-left-color: #f59e0b; background: #fffbeb; }
+.absence-card--active   { border-left-color: #22c55e; background: #f0fdf4; }
+.absence-card--approved { border-left-color: #22c55e; background: #f0fdf4; }
+.absence-card--rejected { border-left-color: #ef4444; background: #fef2f2; }
+.absence-card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; flex-wrap: wrap; }
+.absence-type-icon { font-size: 1.1rem; }
+.absence-user { font-size: 0.8rem; color: var(--text-lighter); margin-left: auto; }
+.absence-card-dates { font-size: 0.9rem; font-weight: 500; color: var(--text); margin-bottom: 0.2rem; }
+.absence-card-comment { font-size: 0.82rem; color: var(--text-lighter); margin-bottom: 0.3rem; }
+.absence-card-meta { font-size: 0.75rem; color: var(--text-lighter); }
+.absence-card-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.6rem; }
+.absence-status { font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 10px; }
+.absence-status--pending  { background: #fef3c7; color: #92400e; }
+.absence-status--active   { background: #dcfce7; color: #166534; }
+.absence-status--approved { background: #dcfce7; color: #166534; }
+.absence-status--rejected { background: #fee2e2; color: #991b1b; }
+.absence-inbox { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem; }
+.absence-inbox h3 { font-size: 1rem; margin-bottom: 0.75rem; }
+.absence-section { margin-bottom: 1.5rem; }
+.absence-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.95rem; }
+.absence-empty { color: var(--text-lighter); font-size: 0.85rem; padding: 0.5rem 0; }
+.absence-counter { font-size: 0.85rem; color: var(--text-lighter); }
+.absence-form-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1100; padding: 1rem; }
+.absence-form-card { background: var(--card); border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+.absence-form-card h3 { margin: 0 0 1rem; }
+.form-row { display: flex; gap: 0.75rem; }
+.form-row .form-group { flex: 1; }
+.form-actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
