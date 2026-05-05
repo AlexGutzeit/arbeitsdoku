@@ -670,12 +670,19 @@ async function renderDashboardContent() {
     </div>`;
   }
 
+  // Abwesenheiten für Timeline/Wochenraster
+  let absencesForPeriod = [];
+  try {
+    const absData = await api('GET', `/api/absences/by-date?from=${range.from}&to=${range.to}`);
+    if (absData) absencesForPeriod = absData.absences;
+  } catch (e) {}
+
   // Entscheidung: Timeline (Tag), Wochenraster, Monatsraster
   let contentHtml = '';
   if (S.view === 'day') {
-    contentHtml = renderTimelineHtml(visibleEntries);
+    contentHtml = renderTimelineHtml(visibleEntries, absencesForPeriod);
   } else if (S.view === 'week') {
-    contentHtml = renderWeekGridHtml(visibleEntries, range);
+    contentHtml = renderWeekGridHtml(visibleEntries, range, absencesForPeriod);
   } else {
     contentHtml = renderMonthGridHtml(visibleEntries, range);
   }
@@ -797,8 +804,8 @@ async function renderDashboardContent() {
 }
 
 // --- Timeline Rendering (Tagansicht) ---
-function renderTimelineHtml(entries) {
-  if (entries.length === 0) {
+function renderTimelineHtml(entries, absences) {
+  if (entries.length === 0 && !(absences || []).length) {
     return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge an diesem Tag</p></div>';
   }
 
@@ -924,8 +931,15 @@ function renderTimelineHtml(entries) {
     });
 
     const headerLabel = isSingle ? 'Meine Einträge' : esc(col.name);
+    const dayAbsences = getAbsencesForDay(col.id, currentDay, absences);
+    const absenceBanners = dayAbsences.map(a => {
+      const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+      const pendingCls = a.status === 'pending' ? ' tl-absence-banner--pending' : '';
+      return `<div class="tl-absence-banner tl-absence-banner--${a.type}${pendingCls}">${t.icon} ${t.label}</div>`;
+    }).join('');
     colsHtml += `<div class="timeline-column">
       <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">${headerLabel}</div>
+      ${absenceBanners}
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
     </div>`;
   });
@@ -941,7 +955,7 @@ function renderTimelineHtml(entries) {
 }
 
 // --- Wochenraster ---
-function renderWeekGridHtml(entries, range) {
+function renderWeekGridHtml(entries, range, absences) {
   const dayNames = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
   const dayNamesShort = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
@@ -984,7 +998,15 @@ function renderWeekGridHtml(entries, range) {
     columns.forEach((col) => {
       const cellEntries = lookup[day + '_' + col.id] || [];
       const totalH = calcActualHours(cellEntries);
+      const dayAbsences = getAbsencesForDay(col.id, day, absences);
       bodyHtml += `<td class="grid-cell" data-jump-date="${day}">`;
+      if (dayAbsences.length > 0) {
+        bodyHtml += `<div class="grid-absence-chips">${dayAbsences.map(a => {
+          const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+          const pendCls = a.status === 'pending' ? ' grid-absence-chip--pending' : '';
+          return `<span class="grid-absence-chip grid-absence-chip--${a.type}${pendCls}">${t.icon} ${t.label}</span>`;
+        }).join('')}</div>`;
+      }
       if (cellEntries.length > 0) {
         cellEntries.forEach(e => {
           const bg = e.project_id ? colorFor(e.project_id) : '#64748b';
@@ -4748,6 +4770,14 @@ function absenceStatusLabel(status) {
 function formatDateRange(from, to) {
   if (from === to) return formatDateDE(from);
   return formatDateDE(from) + ' – ' + formatDateDE(to);
+}
+
+function getAbsencesForDay(userId, date, absences) {
+  return (absences || []).filter(a => {
+    if (a.date_from > date || a.date_to < date) return false;
+    if (a.user_id === null) return true;
+    return a.user_id === userId;
+  });
 }
 
 function isManagerRole() {

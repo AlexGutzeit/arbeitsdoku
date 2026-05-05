@@ -1578,3 +1578,28 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .form-row { display: flex; gap: 0.75rem; }
 .form-row .form-group { flex: 1; }
 .form-actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
+
+/* Timeline-Abwesenheits-Banner */
+.tl-absence-banner { font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 4px; margin: 2px 4px 3px; text-align: center; }
+.tl-absence-banner--pending { opacity: 0.65; }
+.tl-absence-banner--krank        { background: #fee2e2; color: #dc2626; }
+.tl-absence-banner--urlaub       { background: #dbeafe; color: #1d4ed8; }
+.tl-absence-banner--freizeitausgleich { background: #e0e7ff; color: #4338ca; }
+.tl-absence-banner--sonderurlaub { background: #fce7f3; color: #9d174d; }
+.tl-absence-banner--berufsschule { background: #fef3c7; color: #92400e; }
+.tl-absence-banner--innung       { background: #d1fae5; color: #065f46; }
+.tl-absence-banner--dienstreise  { background: #e0f2fe; color: #0369a1; }
+.tl-absence-banner--feiertag     { background: #fdf4ff; color: #7e22ce; }
+
+/* Wochenraster-Abwesenheits-Chips */
+.grid-absence-chips { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 4px; }
+.grid-absence-chip { font-size: 0.65rem; font-weight: 600; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+.grid-absence-chip--pending { opacity: 0.65; }
+.grid-absence-chip--krank        { background: #fee2e2; color: #dc2626; }
+.grid-absence-chip--urlaub       { background: #dbeafe; color: #1d4ed8; }
+.grid-absence-chip--freizeitausgleich { background: #e0e7ff; color: #4338ca; }
+.grid-absence-chip--sonderurlaub { background: #fce7f3; color: #9d174d; }
+.grid-absence-chip--berufsschule { background: #fef3c7; color: #92400e; }
+.grid-absence-chip--innung       { background: #d1fae5; color: #065f46; }
+.grid-absence-chip--dienstreise  { background: #e0f2fe; color: #0369a1; }
+.grid-absence-chip--feiertag     { background: #fdf4ff; color: #7e22ce; }
