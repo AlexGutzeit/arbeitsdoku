@@ -159,8 +159,8 @@ router.put('/:id', authenticate, (req, res) => {
   let notifiedAt = absence.notified_at;
 
   if (isOwner && !manager) {
-    if (absence.status === 'approved') {
-      newStatus = 'pending';
+    if (absence.status === 'approved' || absence.status === 'rejected') {
+      newStatus = 'pending'; // Neu einreichen
     } else if (absence.status === 'active' && NOTIFY_CHEF.includes(absence.type)) {
       notifiedAt = null; // Chef erneut benachrichtigen
     }
@@ -186,6 +186,10 @@ router.delete('/:id', authenticate, (req, res) => {
   const isOwner = absence.user_id === req.user.id;
   if (!isOwner && !isManager(req.user)) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  // MA kann nur pending/active löschen — approved erfordert Manager
+  if (isOwner && !isManager(req.user) && !['pending', 'active'].includes(absence.status)) {
+    return res.status(403).json({ error: 'Genehmigte Abwesenheiten können nur vom Vorgesetzten gelöscht werden' });
   }
 
   db.prepare('DELETE FROM absences WHERE id = ?').run(absence.id);
