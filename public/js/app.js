@@ -699,7 +699,7 @@ async function renderDashboardContent() {
   let absencesForPeriod = [];
   try {
     const absData = await api('GET', `/api/absences/by-date?from=${range.from}&to=${range.to}`);
-    if (absData) absencesForPeriod = absData.absences;
+    if (absData) absencesForPeriod = filterApprovedAbsences(absData.absences);
   } catch (e) {}
 
   // Abwesenheiten nach Typ filtern
@@ -1573,7 +1573,7 @@ async function renderPlanningContent() {
       api('GET', `/api/absences/by-date?from=${r.from}&to=${r.to}`),
     ]);
     if (planData) entries = planData.entries;
-    if (absData) absences = absData.absences;
+    if (absData) absences = filterApprovedAbsences(absData.absences);
   } catch (e) {}
 
   const canEdit = canEditPlanning();
@@ -2746,7 +2746,7 @@ async function renderWelcomeWeek() {
       plannings.sort((a, b) => a.date.localeCompare(b.date) || a.time_from.localeCompare(b.time_from));
     }
     if (absData) {
-      weekAbsences = (absData.absences || []).filter(a =>
+      weekAbsences = filterApprovedAbsences(absData.absences).filter(a =>
         a.user_id === S.user.id || a.user_id === null
       );
     }
@@ -5089,6 +5089,13 @@ function absenceStatusLabel(status) {
 function formatDateRange(from, to) {
   if (from === to) return formatDateDE(from);
   return formatDateDE(from) + ' – ' + formatDateDE(to);
+}
+
+const APPROVAL_REQUIRED_TYPES = ['urlaub', 'sonderurlaub', 'freizeitausgleich'];
+function filterApprovedAbsences(absences) {
+  return (absences || []).filter(a =>
+    !(APPROVAL_REQUIRED_TYPES.includes(a.type) && a.status === 'pending')
+  );
 }
 
 function getAbsencesForDay(userId, date, absences) {
