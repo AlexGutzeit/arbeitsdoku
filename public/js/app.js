@@ -2733,40 +2733,89 @@ async function renderWelcomeWeek() {
   const kwTo = formatDateISO(kwSun);
 
   let plannings = [];
+  let weekAbsences = [];
   try {
-    const data = await api('GET', `/api/planning?date_from=${kwFrom}&date_to=${kwTo}`);
-    if (data) {
-      plannings = data.entries.filter(e =>
+    const [planData, absData] = await Promise.all([
+      api('GET', `/api/planning?date_from=${kwFrom}&date_to=${kwTo}`),
+      api('GET', `/api/absences/by-date?from=${kwFrom}&to=${kwTo}`),
+    ]);
+    if (planData) {
+      plannings = planData.entries.filter(e =>
         e.assigned_users.some(u => u.user_id === S.user.id)
       );
       plannings.sort((a, b) => a.date.localeCompare(b.date) || a.time_from.localeCompare(b.time_from));
     }
+    if (absData) {
+      weekAbsences = (absData.absences || []).filter(a =>
+        a.user_id === S.user.id || a.user_id === null
+      );
+    }
   } catch (e) {}
 
+  // Alle Tage der Woche mit Planungen oder Abwesenheiten zusammenführen
+  const shortDays = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+  const allDays = new Set();
+  plannings.forEach(e => allDays.add(e.date));
+
+  // Abwesenheits-Tage in der KW ermitteln
+  const absencesByDay = {};
+  const kwStartDate = new Date(kwFrom + 'T12:00:00');
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(kwStartDate);
+    d.setDate(d.getDate() + i);
+    const iso = formatDateISO(d);
+    const dayAbs = weekAbsences.filter(a => a.date_from <= iso && a.date_to >= iso);
+    if (dayAbs.length > 0) {
+      absencesByDay[iso] = dayAbs;
+      allDays.add(iso);
+    }
+  }
+
   let planHtml = '';
-  if (plannings.length === 0) {
-    planHtml = '<p style="color:var(--text-light)">Keine Planungen diese Woche.</p>';
+  if (allDays.size === 0) {
+    planHtml = '<p style="color:var(--text-light)">Keine Planungen oder Abwesenheiten diese Woche.</p>';
   } else {
-    const shortDays = ['So','Mo','Di','Mi','Do','Fr','Sa'];
-    planHtml = plannings.map(e => {
-      const d = new Date(e.date + 'T12:00:00');
-      const dayLabel = `${shortDays[d.getDay()]}, ${formatDateDE(e.date)}`;
-      const isToday = e.date === today;
-      const proj = e.project_name || e.project_text || '';
-      const colleagues = e.assigned_users.filter(u => u.user_id !== S.user.id).map(u => u.user_name);
-      return `<div class="welcome-task${isToday ? ' welcome-task-today' : ''}">
-        <div class="welcome-task-time"><strong>${dayLabel}</strong> ${e.time_from} - ${e.time_to}</div>
-        <div class="welcome-task-details">
-          ${proj ? `<span>&#128193; ${esc(proj)}</span>` : ''}
-          ${e.address ? `<span>&#128205; ${esc(e.address)}</span>` : ''}
-          ${e.description ? `<span>${esc(e.description)}</span>` : ''}
-          ${colleagues.length ? `<span>&#128101; mit ${esc(colleagues.join(', '))}</span>` : ''}
-        </div>
-        <div class="welcome-task-actions">
-          ${e.address ? `<button class="btn btn-sm btn-outline btn-nav nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}
-          <button class="btn btn-sm btn-success accept-welcome-plan" data-id="${e.id}">Übernehmen</button>
-        </div>
-      </div>`;
+    const sortedDays = [...allDays].sort();
+    planHtml = sortedDays.map(date => {
+      const d = new Date(date + 'T12:00:00');
+      const dayLabel = `${shortDays[d.getDay()]}, ${formatDateDE(date)}`;
+      const isToday = date === today;
+      const dayPlannings = plannings.filter(e => e.date === date);
+      const dayAbs = absencesByDay[date] || [];
+
+      const absHtml = dayAbs.map(a => {
+        const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '📋' };
+        const multiDay = a.date_from !== a.date_to;
+        const dateRange = multiDay ? ` (${formatDateDE(a.date_from)} – ${formatDateDE(a.date_to)})` : '';
+        const statusLabel = a.status === 'pending' ? ' · Ausstehend' : '';
+        return `<div class="welcome-task welcome-task-absence welcome-task-absence--${a.type}${isToday ? ' welcome-task-today' : ''}">
+          <div class="welcome-task-time"><strong>${dayLabel}</strong></div>
+          <div class="welcome-task-details">
+            <span>${t.icon} ${t.label}${dateRange}${statusLabel}</span>
+            ${a.comment ? `<span>${esc(a.comment)}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+
+      const planningsHtml = dayPlannings.map(e => {
+        const proj = e.project_name || e.project_text || '';
+        const colleagues = e.assigned_users.filter(u => u.user_id !== S.user.id).map(u => u.user_name);
+        return `<div class="welcome-task${isToday ? ' welcome-task-today' : ''}">
+          <div class="welcome-task-time"><strong>${dayLabel}</strong> ${e.time_from} - ${e.time_to}</div>
+          <div class="welcome-task-details">
+            ${proj ? `<span>&#128193; ${esc(proj)}</span>` : ''}
+            ${e.address ? `<span>&#128205; ${esc(e.address)}</span>` : ''}
+            ${e.description ? `<span>${esc(e.description)}</span>` : ''}
+            ${colleagues.length ? `<span>&#128101; mit ${esc(colleagues.join(', '))}</span>` : ''}
+          </div>
+          <div class="welcome-task-actions">
+            ${e.address ? `<button class="btn btn-sm btn-outline btn-nav nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}
+            <button class="btn btn-sm btn-success accept-welcome-plan" data-id="${e.id}">Übernehmen</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      return absHtml + planningsHtml;
     }).join('');
   }
 
