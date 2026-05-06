@@ -351,8 +351,8 @@ router.delete('/:id', authenticate, (req, res) => {
   if (!isOwner && !isManager(req.user)) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
-  // MA kann nur pending/active löschen — approved erfordert Manager
-  if (isOwner && !isManager(req.user) && !['pending', 'active'].includes(absence.status)) {
+  // MA kann pending/active/rejected löschen — nur approved erfordert Manager
+  if (isOwner && !isManager(req.user) && absence.status === 'approved') {
     return res.status(403).json({ error: 'Genehmigte Abwesenheiten können nur vom Vorgesetzten gelöscht werden' });
   }
 
