@@ -1566,9 +1566,14 @@ async function renderPlanningContent() {
   }
 
   let entries = [];
+  let absences = [];
   try {
-    const data = await api('GET', `/api/planning?date_from=${r.from}&date_to=${r.to}`);
-    if (data) entries = data.entries;
+    const [planData, absData] = await Promise.all([
+      api('GET', `/api/planning?date_from=${r.from}&date_to=${r.to}`),
+      api('GET', `/api/absences/by-date?from=${r.from}&to=${r.to}`),
+    ]);
+    if (planData) entries = planData.entries;
+    if (absData) absences = absData.absences;
   } catch (e) {}
 
   const canEdit = canEditPlanning();
@@ -1576,9 +1581,9 @@ async function renderPlanningContent() {
   // Timeline für Tagesansicht
   let contentHtml = '';
   if (view === 'day') {
-    contentHtml = renderPlanningTimeline(entries, canEdit);
+    contentHtml = renderPlanningTimeline(entries, absences, canEdit);
   } else {
-    contentHtml = renderPlanningGrid(entries, r, view, canEdit);
+    contentHtml = renderPlanningGrid(entries, absences, r, view, canEdit);
   }
 
   mainEl.innerHTML = `
@@ -1751,8 +1756,11 @@ async function renderPlanningContent() {
   }
 }
 
-function renderPlanningTimeline(entries, canEdit) {
-  if (entries.length === 0) {
+function renderPlanningTimeline(entries, absences, canEdit) {
+  const currentDay = formatDateISO(S.planningDate || new Date());
+  const dayAbsencesAll = (absences || []).filter(a => a.date_from <= currentDay && a.date_to >= currentDay);
+
+  if (entries.length === 0 && dayAbsencesAll.length === 0) {
     return '<div class="empty-state"><div class="icon">&#128197;</div><p>Keine Planungen für diesen Tag</p></div>';
   }
 
@@ -1766,13 +1774,21 @@ function renderPlanningTimeline(entries, canEdit) {
   }
   hoursHtml += '</div>';
 
-  // Gruppiere nach zugewiesenem Mitarbeiter
+  // Gruppiere nach zugewiesenem Mitarbeiter (Planungseinträge)
   const byUser = {};
   entries.forEach(e => {
     e.assigned_users.forEach(u => {
       if (!byUser[u.user_id]) byUser[u.user_id] = { id: u.user_id, name: u.user_name, entries: [] };
       byUser[u.user_id].entries.push(e);
     });
+  });
+  // User mit Abwesenheiten aber ohne Planung ergänzen
+  dayAbsencesAll.forEach(a => {
+    if (!a.user_id) return;
+    if (!byUser[a.user_id]) {
+      const u = (S.users || []).find(u => u.id === a.user_id);
+      byUser[a.user_id] = { id: a.user_id, name: u ? u.name : (a.user_name || `#${a.user_id}`), entries: [] };
+    }
   });
   const columns = Object.values(byUser).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -1832,8 +1848,15 @@ function renderPlanningTimeline(entries, canEdit) {
       </div>`;
     });
 
+    const colAbsences = getAbsencesForDay(col.id, currentDay, absences);
+    const absenceBanners = colAbsences.map(a => {
+      const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+      return `<div class="tl-absence-banner tl-absence-banner--${a.type}${a.status === 'pending' ? ' tl-absence-banner--pending' : ''}">${t.icon} ${t.label}</div>`;
+    }).join('');
+
     colsHtml += `<div class="timeline-column">
       <div class="tl-col-header" style="color:${colColor}">${esc(col.name)}</div>
+      ${absenceBanners}
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
     </div>`;
   });
@@ -1848,15 +1871,22 @@ function renderPlanningTimeline(entries, canEdit) {
   </div>`;
 }
 
-function renderPlanningGrid(entries, range, view, canEdit) {
+function renderPlanningGrid(entries, absences, range, view, canEdit) {
   const dayNamesShort = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
-  // Spalten = zugewiesene Mitarbeiter (alle die in Planungen vorkommen)
+  // Spalten = zugewiesene Mitarbeiter (Planungen + User mit Abwesenheiten im Zeitraum)
   const colMap = {};
   entries.forEach(e => {
     e.assigned_users.forEach(u => {
       if (!colMap[u.user_id]) colMap[u.user_id] = { id: u.user_id, name: u.user_name };
     });
+  });
+  (absences || []).forEach(a => {
+    if (!a.user_id) return;
+    if (!colMap[a.user_id]) {
+      const u = (S.users || []).find(u => u.id === a.user_id);
+      colMap[a.user_id] = { id: a.user_id, name: u ? u.name : (a.user_name || `#${a.user_id}`) };
+    }
   });
   const columns = Object.values(colMap).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -1898,7 +1928,12 @@ function renderPlanningGrid(entries, range, view, canEdit) {
       bodyHtml += `<td class="grid-row-header"><strong>${dayNamesShort[di]}</strong><br><span class="grid-date">${formatDateDE(day)}</span></td>`;
       columns.forEach(col => {
         const cellEntries = lookup[day + '_' + col.id] || [];
+        const cellAbsences = getAbsencesForDay(col.id, day, absences);
         bodyHtml += `<td class="grid-cell" data-plan-jump="${day}">`;
+        cellAbsences.forEach(a => {
+          const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+          bodyHtml += `<div class="grid-absence-chip grid-absence-chip--${a.type}${a.status === 'pending' ? ' grid-absence-chip--pending' : ''}" title="${t.label}">${t.icon} ${t.label}</div>`;
+        });
         cellEntries.forEach(e => {
           const proj = e.project_name || e.project_text || '';
           const ec = e.color || '#f59e0b';
@@ -1940,19 +1975,51 @@ function renderPlanningGrid(entries, range, view, canEdit) {
     columns.forEach(col => {
       const cellEntries = kwLookup[w.kw + '_' + col.id] || [];
       bodyHtml += `<td class="grid-cell" data-plan-jump="${w.from}">`;
-      if (cellEntries.length > 0) {
-        const byDay = {};
-        cellEntries.forEach(e => { if (!byDay[e.date]) byDay[e.date] = []; byDay[e.date].push(e); });
-        Object.keys(byDay).sort().forEach(day => {
-          const dn = getDayNameShort(day);
-          const dayCount = byDay[day].length;
-          const firstColor = byDay[day][0]?.color || '#f59e0b';
+
+      // Abwesenheits-Chips pro Tag dieser KW
+      const kwDaysWithAbsences = {};
+      (absences || []).forEach(a => {
+        if (a.user_id !== col.id && !(a.user_id === null)) return;
+        if (a.user_id === null && false) return; // Feiertage global
+        if (a.user_id !== col.id) return;
+        // Alle Tage dieser KW die von der Abwesenheit betroffen sind
+        const kwStart = new Date(w.from + 'T12:00:00');
+        const kwEnd   = new Date(w.to   + 'T12:00:00');
+        const abFrom  = new Date(a.date_from + 'T12:00:00');
+        const abTo    = new Date(a.date_to   + 'T12:00:00');
+        const cur = new Date(Math.max(kwStart, abFrom));
+        const end = new Date(Math.min(kwEnd,   abTo));
+        while (cur <= end) {
+          const iso = formatDateISO(cur);
+          if (!kwDaysWithAbsences[iso]) kwDaysWithAbsences[iso] = [];
+          kwDaysWithAbsences[iso].push(a);
+          cur.setDate(cur.getDate() + 1);
+        }
+      });
+
+      // Tage der KW zusammenführen: Planungen + Abwesenheiten
+      const allDays = new Set([
+        ...Object.keys(kwDaysWithAbsences),
+        ...(cellEntries.length > 0 ? cellEntries.map(e => e.date) : []),
+      ]);
+      [...allDays].sort().forEach(day => {
+        const dayAbsences = kwDaysWithAbsences[day] || [];
+        const dayEntries = cellEntries.filter(e => e.date === day);
+        const dn = getDayNameShort(day);
+        if (dayAbsences.length > 0) {
+          dayAbsences.forEach(a => {
+            const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+            bodyHtml += `<div class="grid-absence-chip grid-absence-chip--${a.type}${a.status === 'pending' ? ' grid-absence-chip--pending' : ''}" style="display:flex;gap:4px;" title="${t.label}"><span>${dn}</span><span>${t.icon} ${t.label}</span></div>`;
+          });
+        }
+        if (dayEntries.length > 0) {
+          const firstColor = dayEntries[0]?.color || '#f59e0b';
           bodyHtml += `<div class="grid-kw-day grid-plan-entry" data-plan-jump="${day}" style="background:${firstColor}28;border-left-color:${firstColor};color:#374151;">
             <span class="grid-kw-dayname">${dn}</span>
-            <span class="grid-kw-dayhours">${dayCount} Planung${dayCount > 1 ? 'en' : ''}</span>
+            <span class="grid-kw-dayhours">${dayEntries.length} Planung${dayEntries.length > 1 ? 'en' : ''}</span>
           </div>`;
-        });
-      }
+        }
+      });
       bodyHtml += '</td>';
     });
     bodyHtml += '</tr>';
