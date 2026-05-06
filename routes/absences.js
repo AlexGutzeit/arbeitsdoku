@@ -274,12 +274,15 @@ router.put('/:id', authenticate, (req, res) => {
   // Bei Owner-Edit einer genehmigten/aktiven Abwesenheit → zurück auf pending/re-notify
   let newStatus = absence.status;
   let notifiedAt = absence.notified_at;
+  let newCreatedBy = absence.created_by;
 
   if (isOwner && !manager) {
     if (absence.status === 'approved' || absence.status === 'rejected') {
       newStatus = 'pending'; // Neu einreichen
+      newCreatedBy = absence.user_id; // Für Badge-Query: Eintrag dem MA zuschreiben
     } else if (absence.status === 'active' && NOTIFY_CHEF.includes(absence.type)) {
       notifiedAt = null; // Chef erneut benachrichtigen
+      newCreatedBy = absence.user_id; // Für Badge-Query: Eintrag dem MA zuschreiben
     }
   } else if (manager && absence.created_by && absence.created_by !== absence.user_id) {
     // Manager bearbeitet eigenen Eintrag (für MA) → MA muss erneut akzeptieren
@@ -290,9 +293,9 @@ router.put('/:id', authenticate, (req, res) => {
 
   db.prepare(`
     UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
-      status = ?, notified_at = ?, updated_at = datetime('now')
+      status = ?, notified_at = ?, created_by = ?, updated_at = datetime('now')
     WHERE id = ?
-  `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, absence.id);
+  `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, absence.id);
 
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
