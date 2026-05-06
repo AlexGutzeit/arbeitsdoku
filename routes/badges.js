@@ -41,7 +41,7 @@ router.get('/', authenticate, (req, res) => {
     orders = db.prepare("SELECT COUNT(*) as n FROM orders WHERE ordered_at IS NULL").get().n;
   }
 
-  // Abwesenheits-Badge
+  // Abwesenheits-Badge für Chef/Admin/Buchhalter: neue Items zu bearbeiten
   let absences = 0;
   if (role !== 'mitarbeiter') {
     const absencesSince = getSeenAt(db, uid, 'absences');
@@ -56,11 +56,20 @@ router.get('/', authenticate, (req, res) => {
               AND (notified_at IS NULL OR notified_at > ?))
         )
     `).get(absencesSince, uid, uid, absencesSince).n;
-  } else {
+  }
+
+  // Alle Rollen: eigene Abwesenheiten mit ausstehender Bestätigung (Manager hat Änderungen vorgenommen)
+  const maAckCount = db.prepare(
+    'SELECT COUNT(*) as n FROM absences WHERE user_id = ? AND ma_needs_ack = 1'
+  ).get(uid).n;
+
+  // MA: Status-Änderungen (genehmigt/abgelehnt) an eigenen Abwesenheiten seit letztem Besuch
+  let maStatusCount = 0;
+  if (role === 'mitarbeiter') {
     const statusSince = getSeenAt(db, uid, 'absence_status');
-    absences = db.prepare(`
+    maStatusCount = db.prepare(`
       SELECT COUNT(*) as n FROM absences
-      WHERE user_id = ? AND updated_at > ?
+      WHERE user_id = ? AND updated_at > ? AND ma_needs_ack = 0
       AND (
         status IN ('approved','rejected')
         OR (status = 'pending' AND created_by IS NOT NULL AND created_by != user_id
@@ -69,7 +78,7 @@ router.get('/', authenticate, (req, res) => {
     `).get(uid, statusSince).n;
   }
 
-  res.json({ bulletin, notes: sharedNotes + offers, orders, absences });
+  res.json({ bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount });
 });
 
 router.post('/:topic', authenticate, (req, res) => {

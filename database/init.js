@@ -543,6 +543,16 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: ma_needs_ack in absences (MA muss Manager-Änderungen quittieren)
+  try {
+    const absCols2 = db.prepare("PRAGMA table_info(absences)").all();
+    if (!absCols2.find(c => c.name === 'ma_needs_ack')) {
+      db.prepare("ALTER TABLE absences ADD COLUMN ma_needs_ack INTEGER DEFAULT 0").run();
+      markDirty();
+      console.log('Migration: ma_needs_ack in absences hinzugefuegt.');
+    }
+  } catch (e) {}
+
   // Seed-Daten nur wenn DB leer
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {

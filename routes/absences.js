@@ -271,31 +271,50 @@ router.put('/:id', authenticate, (req, res) => {
   if (!date_from || !date_to) return res.status(400).json({ error: 'Datum von und bis erforderlich' });
   if (date_from > date_to) return res.status(400).json({ error: 'Datum von muss vor Datum bis liegen' });
 
-  // Bei Owner-Edit einer genehmigten/aktiven Abwesenheit → zurück auf pending/re-notify
   let newStatus = absence.status;
   let notifiedAt = absence.notified_at;
   let newCreatedBy = absence.created_by;
 
   if (isOwner && !manager) {
-    if (absence.status === 'approved' || absence.status === 'rejected') {
-      newStatus = 'pending'; // Neu einreichen
-      newCreatedBy = absence.user_id; // Für Badge-Query: Eintrag dem MA zuschreiben
-    } else if (absence.status === 'active' && NOTIFY_CHEF.includes(absence.type)) {
-      notifiedAt = null; // Chef erneut benachrichtigen
-      newCreatedBy = absence.user_id; // Für Badge-Query: Eintrag dem MA zuschreiben
-    }
-  } else if (manager && absence.created_by && absence.created_by !== absence.user_id) {
-    // Manager bearbeitet eigenen Eintrag (für MA) → MA muss erneut akzeptieren
+    // MA bearbeitet eigene Abwesenheit
     if (absence.status === 'approved' || absence.status === 'rejected') {
       newStatus = 'pending';
+      newCreatedBy = absence.user_id;
+    } else if (absence.status === 'active' && NOTIFY_CHEF.includes(absence.type)) {
+      notifiedAt = null;
+      newCreatedBy = absence.user_id;
     }
-  }
+    // MA-Edit: ausstehende Ack-Anforderung entfernen, kein processed_by-Update
+    db.prepare(`
+      UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
+        status = ?, notified_at = ?, created_by = ?, ma_needs_ack = 0,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, absence.id);
 
-  db.prepare(`
-    UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
-      status = ?, notified_at = ?, created_by = ?, updated_at = datetime('now')
-    WHERE id = ?
-  `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, absence.id);
+  } else if (manager && !isOwner) {
+    // Manager bearbeitet Abwesenheit eines anderen Users → MA muss quittieren
+    db.prepare(`
+      UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
+        status = ?, notified_at = ?, created_by = ?, ma_needs_ack = 1,
+        processed_by = ?, processed_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = ?
+    `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, req.user.id, absence.id);
+
+  } else {
+    // Manager bearbeitet eigene Abwesenheit
+    if (manager && absence.created_by && absence.created_by !== absence.user_id) {
+      if (absence.status === 'approved' || absence.status === 'rejected') {
+        newStatus = 'pending';
+      }
+    }
+    db.prepare(`
+      UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
+        status = ?, notified_at = ?, created_by = ?, ma_needs_ack = 0,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, absence.id);
+  }
 
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
@@ -418,7 +437,7 @@ router.post('/:id/reject-ma', authenticate, (req, res) => {
   res.json({ absence: updated });
 });
 
-// POST /api/absences/:id/acknowledge — Krank/Berufsschule/Innung quittieren
+// POST /api/absences/:id/acknowledge — Chef quittiert Krank/Berufsschule/Innung
 router.post('/:id/acknowledge', authenticate, (req, res) => {
   if (!isManager(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
 
@@ -435,6 +454,42 @@ router.post('/:id/acknowledge', authenticate, (req, res) => {
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
+});
+
+// POST /api/absences/:id/acknowledge-ma — MA quittiert/akzeptiert Manager-Änderung
+router.post('/:id/acknowledge-ma', authenticate, (req, res) => {
+  const db = getDb();
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
+  if (absence.user_id !== req.user.id) return res.status(403).json({ error: 'Keine Berechtigung' });
+
+  db.prepare(`
+    UPDATE absences SET ma_needs_ack = 0, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(absence.id);
+
+  broadcast('absences', req.headers['x-tab-id']);
+  res.json({ success: true });
+});
+
+// POST /api/absences/:id/reject-manager-edit — MA lehnt Manager-Änderung ab (Urlaub/FZA)
+router.post('/:id/reject-manager-edit', authenticate, (req, res) => {
+  const db = getDb();
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
+  if (absence.user_id !== req.user.id) return res.status(403).json({ error: 'Keine Berechtigung' });
+  if (!absence.ma_needs_ack) return res.status(400).json({ error: 'Keine ausstehende Manager-Änderung' });
+
+  // Status auf pending → Chef muss neu entscheiden; created_by zurücksetzen für Badge-Query
+  db.prepare(`
+    UPDATE absences SET status = 'pending', ma_needs_ack = 0,
+      created_by = user_id, processed_by = NULL, processed_at = NULL,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).run(absence.id);
+
+  broadcast('absences', req.headers['x-tab-id']);
+  res.json({ success: true });
 });
 
 module.exports = router;

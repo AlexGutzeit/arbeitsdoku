@@ -5113,15 +5113,20 @@ function isManagerRole() {
 function renderAbsenceCard(a, opts = {}) {
   const type = ABSENCE_TYPES[a.type] || { label: a.type, icon: '📋' };
   const canEdit = isManagerRole() || a.user_id === S.user?.id;
-  // Manager-Approve nur wenn NICHT Manager-für-MA-pending (das ist der MA-Akzeptanzflow)
   const isManagerEntry = a.created_by && a.created_by !== a.user_id;
-  const canApprove = isManagerRole() && a.status === 'pending' && !isManagerEntry;
-  const canAcknowledge = isManagerRole() && a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at;
-  // MA-Akzeptanz/Ablehnung: nur wenn eigener Eintrag vom Manager, noch pending
-  const canMaAccept = !isManagerRole() && a.user_id === S.user?.id && isManagerEntry && a.status === 'pending';
-  const extraClass = '';
+  const canApprove = isManagerRole() && a.status === 'pending' && !isManagerEntry && a.user_id !== S.user?.id;
+  const canAcknowledge = isManagerRole() && a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at && a.user_id !== S.user?.id;
+  // MA-Akzeptanz für Manager-eingetragene pending-Einträge
+  const canMaAccept = !isManagerRole() && a.user_id === S.user?.id && isManagerEntry && a.status === 'pending' && !a.ma_needs_ack;
+  // MA quittiert/akzeptiert Manager-Änderung (dates/comment edit)
+  const canMaAck = a.user_id === S.user?.id && !!a.ma_needs_ack;
+  const canMaRejectEdit = canMaAck && APPROVAL_REQUIRED_TYPES.includes(a.type);
 
-  return `<div class="absence-card ${absenceStatusClass(a.status)}${extraClass}" data-id="${a.id}">
+  const maAckBanner = canMaAck
+    ? `<div class="absence-ma-ack-banner">Bearbeitet von: ${esc(a.processed_by_name || 'Vorgesetzter')} — Bitte bestätigen</div>`
+    : '';
+
+  return `<div class="absence-card ${absenceStatusClass(a.status)}${canMaAck ? ' absence-card--needs-ack' : ''}" data-id="${a.id}">
     <div class="absence-card-header">
       <span class="absence-type-icon">${type.icon}</span>
       <strong>${esc(type.label)}</strong>
@@ -5130,10 +5135,11 @@ function renderAbsenceCard(a, opts = {}) {
     </div>
     <div class="absence-card-dates">${formatDateRange(a.date_from, a.date_to)}</div>
     ${a.comment ? `<div class="absence-card-comment">${esc(a.comment)}</div>` : ''}
-    ${isManagerEntry && a.created_by_name ? `<div class="absence-created-by">Eingetragen von: ${esc(a.created_by_name)}</div>` : ''}
-    ${a.processed_by_name ? `<div class="absence-card-meta">Bearbeitet von ${esc(a.processed_by_name)}</div>` : ''}
+    ${isManagerEntry && a.created_by_name && !canMaAck ? `<div class="absence-created-by">Eingetragen von: ${esc(a.created_by_name)}</div>` : ''}
+    ${maAckBanner}
+    ${a.processed_by_name && !canMaAck ? `<div class="absence-card-meta">Bearbeitet von ${esc(a.processed_by_name)}</div>` : ''}
     <div class="absence-card-timestamps">
-      Erstellt: ${formatDateTimeDE(a.created_at)}${a.updated_at && a.updated_at !== a.created_at ? ` &nbsp;·&nbsp; Bearbeitet: ${formatDateTimeDE(a.updated_at)}` : ''}
+      Erstellt: ${formatDateTimeDE(a.created_at)}${a.updated_at && a.updated_at !== a.created_at ? ` &nbsp;·&nbsp; Geändert: ${formatDateTimeDE(a.updated_at)}` : ''}
     </div>
     <div class="absence-card-actions">
       ${canApprove ? `<button class="btn btn-sm btn-primary absence-approve" data-id="${a.id}">Genehmigen</button>
@@ -5141,6 +5147,9 @@ function renderAbsenceCard(a, opts = {}) {
       ${canMaAccept ? `<button class="btn btn-sm btn-primary absence-accept" data-id="${a.id}">Akzeptieren</button>
                        <button class="btn btn-sm btn-danger absence-reject-ma" data-id="${a.id}">Ablehnen</button>` : ''}
       ${canAcknowledge ? `<button class="btn btn-sm btn-primary absence-acknowledge" data-id="${a.id}">Quittieren</button>` : ''}
+      ${canMaAck && !canMaRejectEdit ? `<button class="btn btn-sm btn-primary absence-ack-ma" data-id="${a.id}">Quittieren</button>` : ''}
+      ${canMaRejectEdit ? `<button class="btn btn-sm btn-primary absence-ack-ma" data-id="${a.id}">Akzeptieren</button>
+                           <button class="btn btn-sm btn-danger absence-reject-edit" data-id="${a.id}">Ablehnen</button>` : ''}
       ${canEdit ? `<button class="btn btn-sm btn-outline absence-edit" data-id="${a.id}" data-type="${a.type}" data-from="${a.date_from}" data-to="${a.date_to}" data-comment="${esc(a.comment||'')}">Bearbeiten</button>` : ''}
       ${(isManagerRole() || a.user_id === S.user?.id) ? `<button class="btn btn-sm btn-danger absence-delete" data-id="${a.id}">Löschen</button>` : ''}
     </div>
@@ -5171,6 +5180,16 @@ function bindAbsenceCardActions(container) {
   container.querySelectorAll('.absence-acknowledge').forEach(btn => {
     btn.addEventListener('click', async () => {
       try { await api('POST', '/api/absences/' + btn.dataset.id + '/acknowledge'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-ack-ma').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/acknowledge-ma'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-reject-edit').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject-manager-edit'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-delete').forEach(btn => {
@@ -5317,6 +5336,9 @@ async function renderAbsences() {
     if (data) absences = data.absences;
   } catch(e) {}
 
+  // Eigener Posteingang: Manager hat eigene Abwesenheit bearbeitet → MA muss quittieren
+  const myAckItems = absences.filter(a => a.user_id === S.user?.id && a.ma_needs_ack);
+
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
 
@@ -5334,7 +5356,19 @@ async function renderAbsences() {
     return sum + days;
   }, 0);
 
-  // Posteingang für Manager
+  // Mein Posteingang (für alle Rollen): Manager-Änderungen die quittiert werden müssen
+  let maInboxHtml = '';
+  if (myAckItems.length > 0) {
+    maInboxHtml = `
+      <div class="absence-inbox absence-inbox--user">
+        <div class="absence-inbox-header">
+          <h3>📬 Mein Posteingang (${myAckItems.length})</h3>
+        </div>
+        ${myAckItems.map(a => renderAbsenceCard(a)).join('')}
+      </div>`;
+  }
+
+  // Posteingang für Manager: neue Meldungen von Mitarbeitern
   let inboxHtml = '';
   if (isManagerRole()) {
     const pending = absences.filter(a =>
@@ -5460,6 +5494,7 @@ async function renderAbsences() {
         ${!isManagerRole() ? `<span class="absence-counter">Urlaub ${thisYear}: <strong>${urlaubTage} Arbeitstage</strong></span>` : ''}
         <button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>
       </div>
+      ${maInboxHtml}
       ${inboxHtml}
       ${isManagerRole() ? `
         <div class="absence-all-header">
