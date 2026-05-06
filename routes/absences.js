@@ -155,21 +155,29 @@ router.get('/by-date', authenticate, (req, res) => {
   const uid = req.user.id;
   let sql, params;
 
+  // Genehmigungspflichtige Typen erscheinen erst nach Genehmigung (approved), nicht schon bei pending
+  const APPROVAL_TYPES = "('urlaub','sonderurlaub','freizeitausgleich')";
+
   if (isManager(req.user)) {
-    // Manager: alle Abwesenheiten (auch pending) außer rejected
-    sql = `SELECT a.*, u.name as user_name FROM absences a
-           LEFT JOIN users u ON a.user_id = u.id
-           WHERE a.date_from <= ? AND a.date_to >= ?
-           AND a.status IN ('active','approved','pending')
-           ORDER BY a.date_from`;
-    params = [to, from];
-  } else {
-    // Mitarbeiter: eigene (inkl. pending) + Feiertage (active)
     sql = `SELECT a.*, u.name as user_name FROM absences a
            LEFT JOIN users u ON a.user_id = u.id
            WHERE a.date_from <= ? AND a.date_to >= ?
            AND (
-             (a.user_id = ? AND a.status IN ('active','approved','pending'))
+             (a.status IN ('active','approved'))
+             OR (a.status = 'pending' AND a.type NOT IN ${APPROVAL_TYPES})
+           )
+           ORDER BY a.date_from`;
+    params = [to, from];
+  } else {
+    // Mitarbeiter: eigene + Feiertage (active)
+    sql = `SELECT a.*, u.name as user_name FROM absences a
+           LEFT JOIN users u ON a.user_id = u.id
+           WHERE a.date_from <= ? AND a.date_to >= ?
+           AND (
+             (a.user_id = ? AND (
+               a.status IN ('active','approved')
+               OR (a.status = 'pending' AND a.type NOT IN ${APPROVAL_TYPES})
+             ))
              OR (a.user_id IS NULL AND a.status = 'active')
            )
            ORDER BY a.date_from`;
