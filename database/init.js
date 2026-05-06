@@ -553,6 +553,17 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: proposed_date_from/to — Manager-Vorschlag für genehmigten Urlaub/FZA/Sonderurlaub
+  try {
+    const absCols3 = db.prepare("PRAGMA table_info(absences)").all();
+    if (!absCols3.find(c => c.name === 'proposed_date_from')) {
+      db.prepare("ALTER TABLE absences ADD COLUMN proposed_date_from TEXT").run();
+      db.prepare("ALTER TABLE absences ADD COLUMN proposed_date_to TEXT").run();
+      markDirty();
+      console.log('Migration: proposed_date_from/to in absences hinzugefuegt.');
+    }
+  } catch (e) {}
+
   // Seed-Daten nur wenn DB leer
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {

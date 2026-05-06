@@ -9,6 +9,8 @@ const router = express.Router();
 const AUTO_ACTIVE = ['krank', 'feiertag', 'berufsschule', 'innung', 'dienstreise'];
 // Typen die Chef-Benachrichtigung brauchen (auch nach Edit)
 const NOTIFY_CHEF = ['krank', 'berufsschule', 'innung'];
+// Typen die eine Genehmigung brauchen (Vorschlags-Mechanismus bei Manager-Edit von approved)
+const APPROVAL_REQUIRED = ['urlaub', 'freizeitausgleich', 'sonderurlaub'];
 
 function isManager(user) {
   return user.role === 'admin' || user.role === 'chef' || user.role === 'buchhalter';
@@ -275,8 +277,14 @@ router.put('/:id', authenticate, (req, res) => {
   let notifiedAt = absence.notified_at;
   let newCreatedBy = absence.created_by;
 
+  // Vorschlags-Mechanismus: Manager bearbeitet GENEHMIGTEN Urlaub/FZA/Sonderurlaub
+  // ODER bereits pendenden Vorschlag (proposed_date_from gesetzt) → alte Daten schützen
+  const useProposalMechanism = manager && !isOwner
+    && APPROVAL_REQUIRED.includes(absence.type)
+    && (absence.status === 'approved' || (absence.status === 'pending' && absence.proposed_date_from));
+
   if (isOwner && !manager) {
-    // MA bearbeitet eigene Abwesenheit
+    // MA bearbeitet eigene Abwesenheit → proposed_* immer löschen
     if (absence.status === 'approved' || absence.status === 'rejected') {
       newStatus = 'pending';
       newCreatedBy = absence.user_id;
@@ -284,19 +292,30 @@ router.put('/:id', authenticate, (req, res) => {
       notifiedAt = null;
       newCreatedBy = absence.user_id;
     }
-    // MA-Edit: ausstehende Ack-Anforderung entfernen, kein processed_by-Update
     db.prepare(`
       UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
-        status = ?, notified_at = ?, created_by = ?, ma_needs_ack = 0,
+        status = ?, notified_at = ?, created_by = ?,
+        proposed_date_from = NULL, proposed_date_to = NULL, ma_needs_ack = 0,
         updated_at = datetime('now')
       WHERE id = ?
     `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, absence.id);
 
+  } else if (useProposalMechanism) {
+    // Vorschlag: alte Daten in date_from/date_to bleiben, neue in proposed_*
+    // Status → pending, MA muss zustimmen
+    db.prepare(`
+      UPDATE absences SET proposed_date_from = ?, proposed_date_to = ?,
+        comment = ?, status = 'pending', ma_needs_ack = 1,
+        processed_by = ?, processed_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = ?
+    `).run(date_from, date_to, (comment || '').trim(), req.user.id, absence.id);
+
   } else if (manager && !isOwner) {
-    // Manager bearbeitet Abwesenheit eines anderen Users → MA muss quittieren
+    // Direktes Update: Krank/BS/Innung oder pending Urlaub (ohne vorherigen Vorschlag)
     db.prepare(`
       UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
-        status = ?, notified_at = ?, created_by = ?, ma_needs_ack = 1,
+        status = ?, notified_at = ?, created_by = ?,
+        proposed_date_from = NULL, proposed_date_to = NULL, ma_needs_ack = 1,
         processed_by = ?, processed_at = datetime('now'), updated_at = datetime('now')
       WHERE id = ?
     `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, req.user.id, absence.id);
@@ -310,7 +329,8 @@ router.put('/:id', authenticate, (req, res) => {
     }
     db.prepare(`
       UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
-        status = ?, notified_at = ?, created_by = ?, ma_needs_ack = 0,
+        status = ?, notified_at = ?, created_by = ?,
+        proposed_date_from = NULL, proposed_date_to = NULL, ma_needs_ack = 0,
         updated_at = datetime('now')
       WHERE id = ?
     `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, absence.id);
@@ -463,16 +483,27 @@ router.post('/:id/acknowledge-ma', authenticate, (req, res) => {
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
   if (absence.user_id !== req.user.id) return res.status(403).json({ error: 'Keine Berechtigung' });
 
-  db.prepare(`
-    UPDATE absences SET ma_needs_ack = 0, updated_at = datetime('now')
-    WHERE id = ?
-  `).run(absence.id);
+  if (absence.proposed_date_from) {
+    // MA akzeptiert Vorschlag → proposed Daten übernehmen, Status approved
+    db.prepare(`
+      UPDATE absences SET date_from = proposed_date_from, date_to = proposed_date_to,
+        proposed_date_from = NULL, proposed_date_to = NULL,
+        status = 'approved', ma_needs_ack = 0, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(absence.id);
+  } else {
+    // Krank/BS/Innung quittieren — nur ma_needs_ack löschen
+    db.prepare(`
+      UPDATE absences SET ma_needs_ack = 0, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(absence.id);
+  }
 
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
-// POST /api/absences/:id/reject-manager-edit — MA lehnt Manager-Änderung ab (Urlaub/FZA)
+// POST /api/absences/:id/reject-manager-edit — MA lehnt Manager-Vorschlag ab
 router.post('/:id/reject-manager-edit', authenticate, (req, res) => {
   const db = getDb();
   const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
@@ -480,13 +511,23 @@ router.post('/:id/reject-manager-edit', authenticate, (req, res) => {
   if (absence.user_id !== req.user.id) return res.status(403).json({ error: 'Keine Berechtigung' });
   if (!absence.ma_needs_ack) return res.status(400).json({ error: 'Keine ausstehende Manager-Änderung' });
 
-  // Status auf pending → Chef muss neu entscheiden; created_by zurücksetzen für Badge-Query
-  db.prepare(`
-    UPDATE absences SET status = 'pending', ma_needs_ack = 0,
-      created_by = user_id, processed_by = NULL, processed_at = NULL,
-      updated_at = datetime('now')
-    WHERE id = ?
-  `).run(absence.id);
+  if (absence.proposed_date_from) {
+    // Vorschlag abgelehnt: alte Daten (date_from/to) bleiben, proposed gelöscht
+    // Status → pending damit Chef erneut entscheidet; created_by = user_id für Badge
+    db.prepare(`
+      UPDATE absences SET proposed_date_from = NULL, proposed_date_to = NULL,
+        status = 'pending', ma_needs_ack = 0,
+        created_by = user_id, processed_by = NULL, processed_at = NULL,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).run(absence.id);
+  } else {
+    // Kein Vorschlag — sollte nicht vorkommen (canMaRejectEdit prüft proposed_date_from)
+    db.prepare(`
+      UPDATE absences SET ma_needs_ack = 0, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(absence.id);
+  }
 
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ success: true });

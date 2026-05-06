@@ -5120,11 +5120,30 @@ function renderAbsenceCard(a, opts = {}) {
   const canMaAccept = !isManagerRole() && a.user_id === S.user?.id && isManagerEntry && a.status === 'pending' && !a.ma_needs_ack;
   // MA quittiert/akzeptiert Manager-Änderung (dates/comment edit)
   const canMaAck = a.user_id === S.user?.id && !!a.ma_needs_ack;
-  const canMaRejectEdit = canMaAck && APPROVAL_REQUIRED_TYPES.includes(a.type);
+  // Ablehnen nur wenn Manager einen Datums-Vorschlag gemacht hat (proposed_date_from gesetzt)
+  const canMaRejectEdit = canMaAck && !!a.proposed_date_from;
 
-  const maAckBanner = canMaAck
+  // Vorschlags-Anzeige (für MA-Posteingang UND Manager-Ansicht)
+  const hasProposal = !!a.proposed_date_from;
+  let datesHtml;
+  if (hasProposal) {
+    const who = a.processed_by_name || 'Vorgesetzte/r';
+    datesHtml = `
+      <div class="absence-proposal-block">
+        <div class="absence-proposal-new">${esc(who)} schlägt vor: <strong>${formatDateRange(a.proposed_date_from, a.proposed_date_to)}</strong></div>
+        <div class="absence-proposal-old">Bisheriger Zeitraum: ${formatDateRange(a.date_from, a.date_to)}</div>
+      </div>`;
+  } else {
+    datesHtml = `<div class="absence-card-dates">${formatDateRange(a.date_from, a.date_to)}</div>`;
+  }
+
+  const maAckBanner = canMaAck && !hasProposal
     ? `<div class="absence-ma-ack-banner">Bearbeitet von: ${esc(a.processed_by_name || 'Vorgesetzter')} — Bitte bestätigen</div>`
     : '';
+
+  // Bearbeiten-Button: bei Vorschlag den vorgeschlagenen Zeitraum vorausfüllen
+  const editFrom = hasProposal ? a.proposed_date_from : a.date_from;
+  const editTo   = hasProposal ? a.proposed_date_to   : a.date_to;
 
   return `<div class="absence-card ${absenceStatusClass(a.status)}${canMaAck ? ' absence-card--needs-ack' : ''}" data-id="${a.id}">
     <div class="absence-card-header">
@@ -5133,11 +5152,11 @@ function renderAbsenceCard(a, opts = {}) {
       ${isManagerRole() && a.user_name ? `<span class="absence-user">${esc(a.user_name)}</span>` : ''}
       ${absenceStatusLabel(a.status)}
     </div>
-    <div class="absence-card-dates">${formatDateRange(a.date_from, a.date_to)}</div>
+    ${datesHtml}
     ${a.comment ? `<div class="absence-card-comment">${esc(a.comment)}</div>` : ''}
-    ${isManagerEntry && a.created_by_name && !canMaAck ? `<div class="absence-created-by">Eingetragen von: ${esc(a.created_by_name)}</div>` : ''}
+    ${isManagerEntry && a.created_by_name && !canMaAck && !hasProposal ? `<div class="absence-created-by">Eingetragen von: ${esc(a.created_by_name)}</div>` : ''}
     ${maAckBanner}
-    ${a.processed_by_name && !canMaAck ? `<div class="absence-card-meta">Bearbeitet von ${esc(a.processed_by_name)}</div>` : ''}
+    ${a.processed_by_name && !canMaAck && !hasProposal ? `<div class="absence-card-meta">Bearbeitet von ${esc(a.processed_by_name)}</div>` : ''}
     <div class="absence-card-timestamps">
       Erstellt: ${formatDateTimeDE(a.created_at)}${a.updated_at && a.updated_at !== a.created_at ? ` &nbsp;·&nbsp; Geändert: ${formatDateTimeDE(a.updated_at)}` : ''}
     </div>
@@ -5148,9 +5167,9 @@ function renderAbsenceCard(a, opts = {}) {
                        <button class="btn btn-sm btn-danger absence-reject-ma" data-id="${a.id}">Ablehnen</button>` : ''}
       ${canAcknowledge ? `<button class="btn btn-sm btn-primary absence-acknowledge" data-id="${a.id}">Quittieren</button>` : ''}
       ${canMaAck && !canMaRejectEdit ? `<button class="btn btn-sm btn-primary absence-ack-ma" data-id="${a.id}">Quittieren</button>` : ''}
-      ${canMaRejectEdit ? `<button class="btn btn-sm btn-primary absence-ack-ma" data-id="${a.id}">Akzeptieren</button>
+      ${canMaRejectEdit ? `<button class="btn btn-sm btn-success absence-ack-ma" data-id="${a.id}">Akzeptieren</button>
                            <button class="btn btn-sm btn-danger absence-reject-edit" data-id="${a.id}">Ablehnen</button>` : ''}
-      ${canEdit ? `<button class="btn btn-sm btn-outline absence-edit" data-id="${a.id}" data-type="${a.type}" data-from="${a.date_from}" data-to="${a.date_to}" data-comment="${esc(a.comment||'')}">Bearbeiten</button>` : ''}
+      ${canEdit ? `<button class="btn btn-sm btn-outline absence-edit" data-id="${a.id}" data-type="${a.type}" data-from="${editFrom}" data-to="${editTo}" data-comment="${esc(a.comment||'')}">Bearbeiten</button>` : ''}
       ${(isManagerRole() || a.user_id === S.user?.id) ? `<button class="btn btn-sm btn-danger absence-delete" data-id="${a.id}">Löschen</button>` : ''}
     </div>
   </div>`;

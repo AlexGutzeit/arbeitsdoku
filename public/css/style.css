@@ -1590,6 +1590,10 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .absence-inbox--user .absence-inbox-header { border-bottom-color: #bfdbfe; }
 .absence-card--needs-ack { border-left-color: #3b82f6 !important; background: #eff6ff !important; }
 .absence-ma-ack-banner { font-size: 0.8rem; font-weight: 600; color: #1d4ed8; background: #dbeafe; border-radius: 5px; padding: 4px 10px; margin-bottom: 0.4rem; }
+.absence-proposal-block { margin-bottom: 0.4rem; }
+.absence-proposal-new { font-size: 0.88rem; font-weight: 600; color: #1d4ed8; background: #dbeafe; border-radius: 5px; padding: 4px 10px; margin-bottom: 3px; }
+.absence-proposal-old { font-size: 0.8rem; color: var(--text-lighter); padding: 0 2px; text-decoration: line-through; }
+.btn-success { background: #22c55e; color: #fff; border: none; } .btn-success:hover { background: #16a34a; }
 .absence-inbox-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.9rem; padding-bottom: 0.75rem; border-bottom: 1px solid #fed7aa; gap: 1rem; }
 .absence-inbox h3 { font-size: 1.05rem; font-weight: 700; margin: 0; }
 .absence-inbox-filter { font-size: 0.85rem; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid #fed7aa; background: #fff; min-width: 170px; }
