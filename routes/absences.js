@@ -110,10 +110,21 @@ router.get('/summary', authenticate, (req, res) => {
   `).all(targetUid, to, from);
 
   const summary = {};
+  const uniqueAbsenceDays = new Set(); // dedupliziert Tage mit mehreren Abwesenheitstypen
   for (const row of rows) {
-    const days = countWorkdaysIntersect(row.date_from, row.date_to, from, to);
-    if (days > 0) {
-      summary[row.type] = (summary[row.type] || 0) + days;
+    const effectiveFrom = row.date_from > from ? row.date_from : from;
+    const effectiveTo   = row.date_to   < to   ? row.date_to   : to;
+    if (effectiveFrom > effectiveTo) continue;
+    // Pro Typ: Arbeitstage im Schnittbereich zählen
+    const days = countWorkdays(effectiveFrom, effectiveTo);
+    if (days > 0) summary[row.type] = (summary[row.type] || 0) + days;
+    // Für Gesamttotal: jeden betroffenen Arbeitstag in Set eintragen
+    const cur = new Date(effectiveFrom + 'T12:00:00');
+    const end = new Date(effectiveTo   + 'T12:00:00');
+    while (cur <= end) {
+      const dow = cur.getDay();
+      if (dow !== 0 && dow !== 6) uniqueAbsenceDays.add(cur.toISOString().slice(0, 10));
+      cur.setDate(cur.getDate() + 1);
     }
   }
 
@@ -130,7 +141,7 @@ router.get('/summary', authenticate, (req, res) => {
     urlaubTageJahr += countWorkdaysIntersect(row.date_from, row.date_to, thisYear + '-01-01', thisYear + '-12-31');
   }
 
-  res.json({ summary, urlaubTageJahr });
+  res.json({ summary, totalUniqueDays: uniqueAbsenceDays.size, urlaubTageJahr });
 });
 
 // GET /api/absences/pending — offene Anträge für Manager-Ansicht (Posteingang)

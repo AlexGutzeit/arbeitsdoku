@@ -769,7 +769,7 @@ async function renderDashboardContent() {
         const sum = absenceSummary.summary || {};
         if (Object.keys(sum).length === 0) return '';
         const typeLabels = { krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA', sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag', berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise' };
-        const totalDays = Object.values(sum).reduce((s, v) => s + v, 0);
+        const totalDays = absenceSummary.totalUniqueDays ?? Object.values(sum).reduce((s, v) => s + v, 0);
         const details = Object.entries(sum).map(([t, d]) => `${typeLabels[t] || t}: ${d}`).join(', ');
         return `<div class="summary-card">
           <div class="value">${totalDays}</div>
