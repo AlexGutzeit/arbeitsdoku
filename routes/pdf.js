@@ -58,6 +58,38 @@ router.get('/export', authenticate, (req, res) => {
   sql += ' ORDER BY e.date ASC, e.time_from ASC';
   const entries = db.prepare(sql).all(...params);
 
+  // Abwesenheiten pro Tag aufschlüsseln
+  const targetUidForAbs = role === 'mitarbeiter' ? req.user.id : (user_id ? Number(user_id) : null);
+  const absencesByDate = {};
+  if (targetUidForAbs && date_from && date_to) {
+    const absTypeLabels = {
+      krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'Freizeitausgleich',
+      sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag',
+      berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise',
+    };
+    const absRows = db.prepare(`
+      SELECT type, date_from, date_to, comment FROM absences
+      WHERE (user_id = ? OR user_id IS NULL)
+        AND status IN ('active','approved')
+        AND date_from <= ? AND date_to >= ?
+    `).all(targetUidForAbs, date_to, date_from);
+    for (const ab of absRows) {
+      const f = ab.date_from > date_from ? ab.date_from : date_from;
+      const t = ab.date_to   < date_to   ? ab.date_to   : date_to;
+      const cur = new Date(f + 'T12:00:00');
+      const end = new Date(t + 'T12:00:00');
+      while (cur <= end) {
+        const ds = fmtDate(cur);
+        if (!absencesByDate[ds]) absencesByDate[ds] = [];
+        absencesByDate[ds].push({ label: absTypeLabels[ab.type] || ab.type, comment: ab.comment || '' });
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+  }
+
+  // Alle darzustellenden Daten: Zeiteinträge + Abwesenheitstage zusammenführen
+  const allDates = [...new Set([...entries.map(e => e.date), ...Object.keys(absencesByDate)])].sort();
+
   // Einstellungen laden
   const settingsRows = db.prepare('SELECT key, value FROM settings').all();
   const settings = {};
@@ -134,66 +166,86 @@ router.get('/export', authenticate, (req, res) => {
   doc.moveTo(40, y).lineTo(40 + filteredCols.reduce((s, c) => s + c.width, 0), y).stroke();
   y += 4;
 
-  // Einträge
+  // Einträge + Abwesenheiten gemischt ausgeben
   doc.font('Helvetica').fontSize(7);
   let lastDate = null;
   const tableW = filteredCols.reduce((s, c) => s + c.width, 0);
+  const regieLabels = { 0: 'Nein', 1: 'Ja', 2: 'pauschal', 3: 'Büro', 4: 'Lager', 5: 'Intern' };
 
-  for (const entry of entries) {
+  for (const date of allDates) {
+    const dayEntries = entries.filter(e => e.date === date);
+    const dayAbsences = absencesByDate[date] || [];
+
     // Trennlinie zwischen Tagen
-    if (lastDate && lastDate !== entry.date) {
+    if (lastDate && lastDate !== date) {
       doc.moveTo(40, y).lineTo(40 + tableW, y).lineWidth(0.3).strokeColor('#cbd5e1').stroke();
       y += 2;
     }
-    lastDate = entry.date;
+    lastDate = date;
 
-    if (y > doc.page.height - 80) {
-      doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
-      y = 40;
+    // Zeiteinträge dieses Tages
+    for (const entry of dayEntries) {
+      if (y > doc.page.height - 80) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
+        y = 40;
+      }
+      x = 40;
+      const rowData = [];
+      rowData.push({ text: formatDateDE(entry.date), width: filteredCols[0].width });
+      rowData.push({ text: entry.time_from, width: filteredCols[1].width });
+      rowData.push({ text: entry.time_to, width: filteredCols[2].width });
+      rowData.push({ text: entry.break_minutes + ' min', width: filteredCols[3].width });
+      rowData.push({ text: fmtH(entry.net_hours), width: filteredCols[4].width });
+      let idx = 5;
+      if (showEmployee) { rowData.push({ text: entry.user_name || '', width: filteredCols[idx].width }); idx++; }
+      const rawAddr = entry.address || '';
+      const addr = rawAddr.replace(/,\s*(\d{4,5}\s)/, '\n$1');
+      rowData.push({ text: addr, width: filteredCols[idx].width }); idx++;
+      rowData.push({ text: entry.client || '', width: filteredCols[idx].width }); idx++;
+      rowData.push({ text: entry.project_name || entry.project_text || '', width: filteredCols[idx].width }); idx++;
+      rowData.push({ text: entry.description || '', width: filteredCols[idx].width }); idx++;
+      const rv = entry.has_regie || 0;
+      rowData.push({ text: rv === 0 ? 'Nein' : rv === 1 ? ('Ja – ' + (entry.regie_user_name || '')) : (regieLabels[rv] || 'Ja'), width: filteredCols[idx].width });
+
+      let rowH = 12;
+      for (const cell of rowData) {
+        const cellH = doc.heightOfString(cell.text || ' ', { width: cell.width - 2 });
+        if (cellH > rowH) rowH = cellH;
+      }
+      rowH = Math.min(rowH, 80);
+      doc.fillColor('#333');
+      for (const cell of rowData) {
+        doc.text(cell.text, x, y, { width: cell.width, height: rowH });
+        x += cell.width;
+      }
+      y += rowH + 1;
     }
 
-    x = 40;
-    const rowData = [];
-    rowData.push({ text: formatDateDE(entry.date), width: filteredCols[0].width });
-    rowData.push({ text: entry.time_from, width: filteredCols[1].width });
-    rowData.push({ text: entry.time_to, width: filteredCols[2].width });
-    rowData.push({ text: entry.break_minutes + ' min', width: filteredCols[3].width });
-    rowData.push({ text: fmtH(entry.net_hours), width: filteredCols[4].width });
-
-    let idx = 5;
-    if (showEmployee) {
-      rowData.push({ text: entry.user_name || '', width: filteredCols[idx].width });
-      idx++;
+    // Abwesenheitszeilen dieses Tages
+    for (const ab of dayAbsences) {
+      if (y > doc.page.height - 80) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
+        y = 40;
+      }
+      x = 40;
+      const absText = ab.comment ? `${ab.label} — ${ab.comment}` : ab.label;
+      // Datum
+      doc.fillColor('#64748b').font('Helvetica-Oblique').fontSize(7);
+      doc.text(formatDateDE(date), x, y, { width: filteredCols[0].width }); x += filteredCols[0].width;
+      // Von/Bis/Pause/Netto leer
+      doc.text('', x, y, { width: filteredCols[1].width }); x += filteredCols[1].width;
+      doc.text('', x, y, { width: filteredCols[2].width }); x += filteredCols[2].width;
+      doc.text('', x, y, { width: filteredCols[3].width }); x += filteredCols[3].width;
+      doc.text('', x, y, { width: filteredCols[4].width }); x += filteredCols[4].width;
+      let idx = 5;
+      if (showEmployee) { doc.text('', x, y, { width: filteredCols[idx].width }); x += filteredCols[idx].width; idx++; }
+      // Abwesenheitstext über Arbeitsort+Kunde+Projekt+Beschreibung+Regie
+      const restWidth = filteredCols.slice(idx).reduce((s, c) => s + c.width, 0);
+      const absH = Math.max(12, Math.min(doc.heightOfString(absText, { width: restWidth - 2 }), 40));
+      doc.text(absText, x, y, { width: restWidth, height: absH });
+      doc.font('Helvetica').fillColor('#333').fontSize(7);
+      y += absH + 1;
     }
-    // Adresse: Zeilenumbruch vor PLZ (Zahl nach Komma/Leerzeichen)
-    const rawAddr = entry.address || '';
-    const addr = rawAddr.replace(/,\s*(\d{4,5}\s)/, '\n$1');
-    const addrLines = addr.split('\n').length;
-    rowData.push({ text: addr, width: filteredCols[idx].width });
-    idx++;
-    rowData.push({ text: entry.client || '', width: filteredCols[idx].width });
-    idx++;
-    rowData.push({ text: entry.project_name || entry.project_text || '', width: filteredCols[idx].width });
-    idx++;
-    rowData.push({ text: entry.description || '', width: filteredCols[idx].width });
-    idx++;
-    const regieLabels = { 0: 'Nein', 1: 'Ja', 2: 'pauschal', 3: 'Büro', 4: 'Lager', 5: 'Intern' };
-    const rv = entry.has_regie || 0;
-    const regieText = rv === 0 ? 'Nein' : rv === 1 ? ('Ja – ' + (entry.regie_user_name || '')) : regieLabels[rv] || 'Ja';
-    rowData.push({ text: regieText, width: filteredCols[idx].width });
-
-    let rowH = 12;
-    for (const cell of rowData) {
-      const cellH = doc.heightOfString(cell.text || ' ', { width: cell.width - 2 });
-      if (cellH > rowH) rowH = cellH;
-    }
-    rowH = Math.min(rowH, 80);
-    for (const cell of rowData) {
-      doc.text(cell.text, x, y, { width: cell.width, height: rowH });
-      x += cell.width;
-    }
-
-    y += rowH + 1;
   }
 
   const totalNet = calcActualHours(entries);
