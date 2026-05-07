@@ -178,6 +178,7 @@ router.get('/by-date', authenticate, (req, res) => {
            AND (
              (a.status IN ('active','approved'))
              OR (a.status = 'pending' AND a.type NOT IN ${APPROVAL_TYPES})
+             OR (a.status = 'pending' AND a.proposed_date_from IS NOT NULL)
            )
            ORDER BY a.date_from`;
     params = [to, from];
@@ -190,6 +191,7 @@ router.get('/by-date', authenticate, (req, res) => {
              (a.user_id = ? AND (
                a.status IN ('active','approved')
                OR (a.status = 'pending' AND a.type NOT IN ${APPROVAL_TYPES})
+               OR (a.status = 'pending' AND a.proposed_date_from IS NOT NULL)
              ))
              OR (a.user_id IS NULL AND a.status = 'active')
            )
@@ -511,23 +513,19 @@ router.post('/:id/reject-manager-edit', authenticate, (req, res) => {
   if (absence.user_id !== req.user.id) return res.status(403).json({ error: 'Keine Berechtigung' });
   if (!absence.ma_needs_ack) return res.status(400).json({ error: 'Keine ausstehende Manager-Änderung' });
 
-  if (absence.proposed_date_from) {
-    // Vorschlag abgelehnt: alte Daten (date_from/to) bleiben, proposed gelöscht
-    // Status → pending damit Chef erneut entscheidet; created_by = user_id für Badge
-    db.prepare(`
-      UPDATE absences SET proposed_date_from = NULL, proposed_date_to = NULL,
-        status = 'pending', ma_needs_ack = 0,
-        created_by = user_id, processed_by = NULL, processed_at = NULL,
-        updated_at = datetime('now')
-      WHERE id = ?
-    `).run(absence.id);
-  } else {
-    // Kein Vorschlag — sollte nicht vorkommen (canMaRejectEdit prüft proposed_date_from)
-    db.prepare(`
-      UPDATE absences SET ma_needs_ack = 0, updated_at = datetime('now')
-      WHERE id = ?
-    `).run(absence.id);
+  if (!absence.proposed_date_from) {
+    return res.status(400).json({ error: 'Kein Manager-Vorschlag vorhanden — nur Quittieren möglich' });
   }
+
+  // Vorschlag abgelehnt: alte Daten (date_from/to) bleiben, proposed gelöscht
+  // Status → pending damit Chef erneut entscheidet; created_by = user_id für Badge
+  db.prepare(`
+    UPDATE absences SET proposed_date_from = NULL, proposed_date_to = NULL,
+      status = 'pending', ma_needs_ack = 0,
+      created_by = user_id, processed_by = NULL, processed_at = NULL,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).run(absence.id);
 
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ success: true });

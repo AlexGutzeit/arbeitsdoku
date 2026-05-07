@@ -5094,7 +5094,9 @@ function formatDateRange(from, to) {
 const APPROVAL_REQUIRED_TYPES = ['urlaub', 'sonderurlaub', 'freizeitausgleich'];
 function filterApprovedAbsences(absences) {
   return (absences || []).filter(a =>
-    !(APPROVAL_REQUIRED_TYPES.includes(a.type) && a.status === 'pending')
+    // Pending Urlaub/FZA/Sonderurlaub ausblenden — AUSSER wenn ein Vorschlag hängt
+    // (dann sind alte genehmigte Daten noch gültig und werden angezeigt)
+    !(APPROVAL_REQUIRED_TYPES.includes(a.type) && a.status === 'pending' && !a.proposed_date_from)
   );
 }
 
