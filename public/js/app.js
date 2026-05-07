@@ -1005,8 +1005,10 @@ function renderTimelineHtml(entries, absences) {
       return `<div class="tl-absence-banner tl-absence-banner--${a.type}${pendingCls}">${t.icon} ${t.label}</div>`;
     }).join('');
     colsHtml += `<div class="timeline-column">
-      <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">${headerLabel}</div>
-      ${absenceBanners}
+      <div class="tl-col-sticky">
+        <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">${headerLabel}</div>
+        ${absenceBanners ? `<div class="tl-col-banners">${absenceBanners}</div>` : ''}
+      </div>
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
     </div>`;
   });
@@ -1862,8 +1864,10 @@ function renderPlanningTimeline(entries, absences, canEdit) {
     }).join('');
 
     colsHtml += `<div class="timeline-column">
-      <div class="tl-col-header" style="color:${colColor}">${esc(col.name)}</div>
-      ${absenceBanners}
+      <div class="tl-col-sticky">
+        <div class="tl-col-header" style="color:${colColor}">${esc(col.name)}</div>
+        ${absenceBanners ? `<div class="tl-col-banners">${absenceBanners}</div>` : ''}
+      </div>
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
     </div>`;
   });
