@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
+const { countScheduledDays } = require('./statistics');
 
 const router = express.Router();
 
@@ -114,26 +115,82 @@ router.get('/summary', authenticate, (req, res) => {
     AND date_from <= ? AND date_to >= ?
   `).all(targetUid, to, from);
 
+  // Feiertag-Set einmalig laden
+  const feierRowsQ = db.prepare(
+    "SELECT date_from, date_to FROM absences WHERE type='feiertag' AND status='active' AND date_from <= ? AND date_to >= ?"
+  ).all(to, from);
+  const feierSet = new Set();
+  for (const f of feierRowsQ) {
+    const c = new Date(f.date_from + 'T12:00:00'), e = new Date(f.date_to + 'T12:00:00');
+    while (c <= e) { feierSet.add(c.toISOString().slice(0, 10)); c.setDate(c.getDate() + 1); }
+  }
+  const schedRows = db.prepare(
+    'SELECT hours_mon,hours_tue,hours_wed,hours_thu,hours_fri,valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from ASC'
+  ).all(targetUid);
+  const schKeys = [null, 'hours_mon', 'hours_tue', 'hours_wed', 'hours_thu', 'hours_fri', null];
+
+  // Ist dieser Tag laut Schedule ein Arbeitstag? (kein Feiertag-Check hier)
+  function hasHours(dateStr) {
+    const day = new Date(dateStr + 'T12:00:00').getDay();
+    if (day === 0 || day === 6) return false;
+    let active = schedRows[0];
+    for (const t of schedRows) { if (t.valid_from <= dateStr) active = t; else break; }
+    return active ? (active[schKeys[day]] || 0) > 0 : true;
+  }
+
+  // Krank-/Berufsschule-/Innung-Tage (Feiertage haben Vorrang)
+  const sickSet = new Set();
+  for (const row of rows) {
+    if (!['krank','berufsschule','innung'].includes(row.type)) continue;
+    const ef = row.date_from > from ? row.date_from : from;
+    const et = row.date_to   < to   ? row.date_to   : to;
+    if (ef > et) continue;
+    const c = new Date(ef + 'T12:00:00'), e = new Date(et + 'T12:00:00');
+    while (c <= e) {
+      const ds = c.toISOString().slice(0, 10);
+      if (hasHours(ds) && !feierSet.has(ds)) sickSet.add(ds);
+      c.setDate(c.getDate() + 1);
+    }
+  }
+
+  // Prioritätsbewusstes Zählen: Feiertag > Krank > Urlaub/FZA/Sonderurlaub
+  function countForType(ef, et, absType) {
+    let n = 0;
+    const cur = new Date(ef + 'T12:00:00'), end = new Date(et + 'T12:00:00');
+    while (cur <= end) {
+      const ds = cur.toISOString().slice(0, 10);
+      if (hasHours(ds)) {
+        if (absType === 'feiertag') {
+          n++;
+        } else if (['krank','berufsschule','innung','dienstreise'].includes(absType)) {
+          if (!feierSet.has(ds)) n++;
+        } else { // urlaub, sonderurlaub, freizeitausgleich
+          if (!feierSet.has(ds) && !sickSet.has(ds)) n++;
+        }
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    return n;
+  }
+
   const summary = {};
-  const uniqueAbsenceDays = new Set(); // dedupliziert Tage mit mehreren Abwesenheitstypen
+  const uniqueAbsenceDays = new Set();
   for (const row of rows) {
     const effectiveFrom = row.date_from > from ? row.date_from : from;
     const effectiveTo   = row.date_to   < to   ? row.date_to   : to;
     if (effectiveFrom > effectiveTo) continue;
-    // Pro Typ: Arbeitstage im Schnittbereich zählen
-    const days = countWorkdays(effectiveFrom, effectiveTo);
+    const days = countForType(effectiveFrom, effectiveTo, row.type);
     if (days > 0) summary[row.type] = (summary[row.type] || 0) + days;
-    // Für Gesamttotal: jeden betroffenen Arbeitstag in Set eintragen
     const cur = new Date(effectiveFrom + 'T12:00:00');
     const end = new Date(effectiveTo   + 'T12:00:00');
     while (cur <= end) {
-      const dow = cur.getDay();
-      if (dow !== 0 && dow !== 6) uniqueAbsenceDays.add(cur.toISOString().slice(0, 10));
+      const ds = cur.toISOString().slice(0, 10);
+      if (hasHours(ds)) uniqueAbsenceDays.add(ds);
       cur.setDate(cur.getDate() + 1);
     }
   }
 
-  // Urlaubstage approved im aktuellen Kalenderjahr
+  // urlaubTageJahr: approved Urlaub im aktuellen Jahr, Krank und Feiertage abgezogen
   const thisYear = new Date().getFullYear().toString();
   const urlaubRows = db.prepare(`
     SELECT date_from, date_to FROM absences
@@ -141,9 +198,40 @@ router.get('/summary', authenticate, (req, res) => {
     AND date_from <= ? AND date_to >= ?
   `).all(targetUid, thisYear + '-12-31', thisYear + '-01-01');
 
+  const yearFeierQ = db.prepare(
+    "SELECT date_from, date_to FROM absences WHERE type='feiertag' AND status='active' AND date_from <= ? AND date_to >= ?"
+  ).all(thisYear + '-12-31', thisYear + '-01-01');
+  const yearFeierSet = new Set();
+  for (const f of yearFeierQ) {
+    const c = new Date(f.date_from + 'T12:00:00'), e = new Date(f.date_to + 'T12:00:00');
+    while (c <= e) { yearFeierSet.add(c.toISOString().slice(0, 10)); c.setDate(c.getDate() + 1); }
+  }
+  const yearSickQ = db.prepare(`
+    SELECT date_from, date_to FROM absences
+    WHERE user_id = ? AND type IN ('krank','berufsschule','innung') AND status IN ('active','approved')
+    AND date_from <= ? AND date_to >= ?
+  `).all(targetUid, thisYear + '-12-31', thisYear + '-01-01');
+  const yearSickSet = new Set();
+  for (const row of yearSickQ) {
+    const c = new Date(row.date_from + 'T12:00:00'), e = new Date(row.date_to + 'T12:00:00');
+    while (c <= e) {
+      const ds = c.toISOString().slice(0, 10);
+      if (hasHours(ds) && !yearFeierSet.has(ds)) yearSickSet.add(ds);
+      c.setDate(c.getDate() + 1);
+    }
+  }
+
   let urlaubTageJahr = 0;
   for (const row of urlaubRows) {
-    urlaubTageJahr += countWorkdaysIntersect(row.date_from, row.date_to, thisYear + '-01-01', thisYear + '-12-31');
+    const effFrom = row.date_from > thisYear + '-01-01' ? row.date_from : thisYear + '-01-01';
+    const effTo   = row.date_to   < thisYear + '-12-31' ? row.date_to   : thisYear + '-12-31';
+    if (effFrom > effTo) continue;
+    const cur = new Date(effFrom + 'T12:00:00'), end = new Date(effTo + 'T12:00:00');
+    while (cur <= end) {
+      const ds = cur.toISOString().slice(0, 10);
+      if (hasHours(ds) && !yearFeierSet.has(ds) && !yearSickSet.has(ds)) urlaubTageJahr++;
+      cur.setDate(cur.getDate() + 1);
+    }
   }
 
   res.json({ summary, totalUniqueDays: uniqueAbsenceDays.size, urlaubTageJahr });

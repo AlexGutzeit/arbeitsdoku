@@ -5416,19 +5416,12 @@ async function renderAbsences() {
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
 
-  // Urlaubs-Zähler: genehmigte/offene Urlaubstage dieses Jahr
   const thisYear = new Date().getFullYear().toString();
-  const urlaubTage = absences.filter(a =>
-    a.type === 'urlaub' && (a.status === 'approved' || a.status === 'pending') &&
-    a.date_from.startsWith(thisYear) && (!isManagerRole() || a.user_id === S.user?.id)
-  ).reduce((sum, a) => {
-    const from = new Date(a.date_from + 'T12:00:00');
-    const to   = new Date(a.date_to   + 'T12:00:00');
-    let days = 0;
-    const cur = new Date(from);
-    while (cur <= to) { const d = cur.getDay(); if (d > 0 && d < 6) days++; cur.setDate(cur.getDate()+1); }
-    return sum + days;
-  }, 0);
+  let urlaubTageJahr = 0;
+  try {
+    const sd = await api('GET', `/api/absences/summary?from=${thisYear}-01-01&to=${thisYear}-12-31`);
+    if (sd) urlaubTageJahr = sd.urlaubTageJahr || 0;
+  } catch(e) {}
 
   // Mein Posteingang (für alle Rollen): Manager-Änderungen die quittiert werden müssen
   let maInboxHtml = '';
@@ -5582,7 +5575,7 @@ async function renderAbsences() {
     <div class="card" style="max-width:900px;margin:0 auto">
       <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
         <h2>&#128197; Abwesenheit</h2>
-        ${!isManagerRole() ? `<span class="absence-counter">Urlaub ${thisYear}: <strong>${urlaubTage} Arbeitstage</strong></span>` : ''}
+        ${!isManagerRole() ? `<span class="absence-counter">Urlaub ${thisYear}: <strong>${urlaubTageJahr} Arbeitstage</strong></span>` : ''}
         <button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>
       </div>
       ${maInboxHtml}
