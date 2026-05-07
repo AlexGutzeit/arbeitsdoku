@@ -669,6 +669,25 @@ table.data-table .actions button { margin-left: 0.25rem; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.tl-banner-row {
+  display: flex;
+  padding: 4px 0;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.tl-banner-spacer {
+  width: 48px;
+  min-width: 48px;
+  flex-shrink: 0;
+}
+.tl-banner-col {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 0 4px;
+}
 .tl-col-body {
   position: relative;
 }
