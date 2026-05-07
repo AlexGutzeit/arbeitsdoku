@@ -5245,14 +5245,16 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
   let userSelectHtml = '';
   if (isManagerRole() && !editId) {
     const allOtherUsers = S.users.filter(u => u.id !== S.user.id).sort((a, b) => a.name.localeCompare(b.name));
+    const isFeiertag = preType === 'feiertag';
     userSelectHtml = `
-      <div class="form-group">
+      <div class="form-group" id="abs-user-group"${isFeiertag ? ' style="display:none"' : ''}>
         <label>Für</label>
         <select id="abs-user" class="form-control">
           <option value="${S.user.id}">Für mich selbst</option>
           ${allOtherUsers.map(u => `<option value="${u.id}">${esc(u.name)} (${roleName(u.role)})</option>`).join('')}
         </select>
-      </div>`;
+      </div>
+      <div id="abs-feiertag-hint" class="absence-feiertag-hint"${isFeiertag ? '' : ' style="display:none"'}>Gilt für alle Mitarbeiter</div>`;
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -5295,6 +5297,14 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
 
   document.getElementById('abs-cancel').addEventListener('click', () => {
     document.getElementById('absence-form-overlay')?.remove();
+  });
+
+  document.getElementById('abs-type')?.addEventListener('change', () => {
+    const isFeiertag = document.getElementById('abs-type').value === 'feiertag';
+    const grp = document.getElementById('abs-user-group');
+    const hint = document.getElementById('abs-feiertag-hint');
+    if (grp) grp.style.display = isFeiertag ? 'none' : '';
+    if (hint) hint.style.display = isFeiertag ? '' : 'none';
   });
 
   document.getElementById('abs-save').addEventListener('click', async () => {
