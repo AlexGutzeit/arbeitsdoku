@@ -5383,8 +5383,17 @@ async function renderAbsences() {
     if (data) absences = data.absences;
   } catch(e) {}
 
-  // Eigener Posteingang: Manager hat eigene Abwesenheit bearbeitet → MA muss quittieren
-  const myAckItems = absences.filter(a => a.user_id === S.user?.id && a.ma_needs_ack);
+  // Eigener Posteingang: alle Einträge die eine Aktion des aktuellen Users erfordern
+  const myAckItems = absences.filter(a => {
+    if (a.user_id !== S.user?.id) return false;
+    // Manager hat bestehende Abwesenheit bearbeitet → Quittieren/Akzeptieren nötig
+    if (a.ma_needs_ack) return true;
+    // Manager hat pending Urlaub/FZA/Sonderurlaub für diesen User eingetragen → Akzeptieren/Ablehnen nötig
+    if (!isManagerRole() && a.created_by && a.created_by !== a.user_id
+        && APPROVAL_REQUIRED_TYPES.includes(a.type) && a.status === 'pending') return true;
+    return false;
+  });
+  const myAckItemIds = new Set(myAckItems.map(a => a.id));
 
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
@@ -5468,9 +5477,13 @@ async function renderAbsences() {
   }
 
   // Alle Abwesenheiten nach User filtern (nur für Manager)
-  const listAbsences = (isManagerRole() && _allAbsenceUserFilter)
-    ? absences.filter(a => String(a.user_id) === String(_allAbsenceUserFilter))
-    : absences;
+  // Für Nicht-Manager: Posteingang-Items aus der Hauptliste ausblenden (kein Duplikat)
+  const listAbsences = (() => {
+    const base = (isManagerRole() && _allAbsenceUserFilter)
+      ? absences.filter(a => String(a.user_id) === String(_allAbsenceUserFilter))
+      : absences;
+    return isManagerRole() ? base : base.filter(a => !myAckItemIds.has(a.id));
+  })();
 
   // Gefilterte Abwesenheiten neu gruppieren
   const filteredGrouped = {};
