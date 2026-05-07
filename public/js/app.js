@@ -5517,15 +5517,14 @@ async function renderAbsences() {
       </div>
       ${maInboxHtml}
       ${inboxHtml}
-      ${isManagerRole() ? `
-        <div class="absence-all-header">
-          <span>Alle Abwesenheiten</span>
-          ${allUsersForFilter.length > 1 ? `
-            <select class="absence-inbox-filter" id="all-absence-user-filter">
-              <option value="">Alle Mitarbeiter</option>
-              ${allUsersForFilter.map(u => `<option value="${u.id}" ${_allAbsenceUserFilter == u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
-            </select>` : ''}
-        </div>` : ''}
+      <div class="absence-all-header">
+        <span>Alle Abwesenheiten</span>
+        ${allUsersForFilter.length > 1 ? `
+          <select class="absence-inbox-filter" id="all-absence-user-filter">
+            <option value="">Alle Mitarbeiter</option>
+            ${allUsersForFilter.map(u => `<option value="${u.id}" ${_allAbsenceUserFilter == u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
+          </select>` : ''}
+      </div>
       ${listHtml || '<p class="absence-empty">Keine Abwesenheiten eingetragen.</p>'}
     </div>`;
 
