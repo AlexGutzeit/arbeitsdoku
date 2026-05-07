@@ -5129,8 +5129,9 @@ function renderAbsenceCard(a, opts = {}) {
   const type = ABSENCE_TYPES[a.type] || { label: a.type, icon: '📋' };
   const canEdit = isManagerRole() || a.user_id === S.user?.id;
   const isManagerEntry = a.created_by && a.created_by !== a.user_id;
-  const canApprove = isManagerRole() && a.status === 'pending' && !isManagerEntry && a.user_id !== S.user?.id;
-  const canAcknowledge = isManagerRole() && a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at && a.user_id !== S.user?.id;
+  const isSelfChefAdmin = a.user_id === S.user?.id && ['admin','chef'].includes(S.user?.role);
+  const canApprove = isManagerRole() && a.status === 'pending' && !isManagerEntry && (a.user_id !== S.user?.id || isSelfChefAdmin);
+  const canAcknowledge = isManagerRole() && a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at && (a.user_id !== S.user?.id || isSelfChefAdmin);
   // MA-Akzeptanz für Manager-eingetragene pending-Einträge
   const canMaAccept = !isManagerRole() && a.user_id === S.user?.id && isManagerEntry && a.status === 'pending' && !a.ma_needs_ack;
   // MA quittiert/akzeptiert Manager-Änderung (dates/comment edit)
