@@ -1604,6 +1604,10 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .absence-section-header .absence-new { margin-left: auto; cursor: pointer; }
 .absence-section-chevron { font-size: 0.7rem; color: var(--text-lighter); min-width: 0.8rem; }
 .absence-section-count { font-size: 0.72rem; font-weight: 700; background: var(--border); color: var(--text-lighter); border-radius: 10px; padding: 1px 7px; margin-left: 0.1rem; }
+.absence-count-badge { font-size: 0.7rem; font-weight: 700; border-radius: 10px; padding: 1px 6px; white-space: nowrap; }
+.absence-count-good { background: #dcfce7; color: #15803d; }
+.absence-count-pending { background: #fef3c7; color: #b45309; }
+.absence-count-rejected { background: #fee2e2; color: #b91c1c; }
 .absence-section-body { overflow: hidden; }
 .absence-section-body.collapsed { display: none; }
 .absence-empty { color: var(--text-lighter); font-size: 0.85rem; padding: 0.5rem 0; }

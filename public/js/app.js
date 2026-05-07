@@ -5478,8 +5478,13 @@ async function renderAbsences() {
   const listHtml = Object.entries(ABSENCE_TYPES).map(([type, info]) => {
     if (type === 'feiertag' && !isManagerRole()) return '';
     const g = filteredGrouped[type] || { recent: [], history: {} };
-    const totalCount = g.recent.length + Object.values(g.history).reduce((s, v) => s + v.length, 0);
+    const allEntries = [...g.recent, ...Object.values(g.history).flat()];
+    const totalCount = allEntries.length;
     if (totalCount === 0 && !isManagerRole()) return '';
+
+    const cGood = allEntries.filter(a => a.status === 'approved' || a.status === 'active').length;
+    const cPending = allEntries.filter(a => a.status === 'pending').length;
+    const cRejected = allEntries.filter(a => a.status === 'rejected').length;
 
     const recentHtml = g.recent.length > 0
       ? g.recent.map(a => renderAbsenceCard(a)).join('')
@@ -5506,6 +5511,9 @@ async function renderAbsences() {
         <span class="absence-section-chevron">${collapsed ? '▶' : '▼'}</span>
         <span>${info.icon} ${info.label}</span>
         ${totalCount > 0 ? `<span class="absence-section-count">${totalCount}</span>` : ''}
+        ${cGood > 0 ? `<span class="absence-count-badge absence-count-good">✓ ${cGood}</span>` : ''}
+        ${cPending > 0 ? `<span class="absence-count-badge absence-count-pending">${cPending} offen</span>` : ''}
+        ${cRejected > 0 ? `<span class="absence-count-badge absence-count-rejected">✕ ${cRejected}</span>` : ''}
         <button class="btn btn-sm btn-outline absence-new" data-type="${type}">+ Eintragen</button>
       </div>
       <div class="absence-section-body${collapsed ? ' collapsed' : ''}">
