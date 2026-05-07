@@ -1598,8 +1598,14 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .absence-inbox h3 { font-size: 1.05rem; font-weight: 700; margin: 0; }
 .absence-inbox-filter { font-size: 0.85rem; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid #fed7aa; background: #fff; min-width: 170px; }
 .absence-all-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-lighter); padding: 1.2rem 0 0.5rem; border-top: 1px solid var(--border); margin-top: 1rem; gap: 1rem; }
-.absence-section { margin-bottom: 1.5rem; }
-.absence-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.95rem; }
+.absence-section { margin-bottom: 1rem; }
+.absence-section-header { display: flex; align-items: center; gap: 0.45rem; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.95rem; cursor: pointer; user-select: none; padding: 0.35rem 0.5rem; border-radius: 6px; transition: background 0.15s; }
+.absence-section-header:hover { background: var(--hover); }
+.absence-section-header .absence-new { margin-left: auto; cursor: pointer; }
+.absence-section-chevron { font-size: 0.7rem; color: var(--text-lighter); min-width: 0.8rem; }
+.absence-section-count { font-size: 0.72rem; font-weight: 700; background: var(--border); color: var(--text-lighter); border-radius: 10px; padding: 1px 7px; margin-left: 0.1rem; }
+.absence-section-body { overflow: hidden; }
+.absence-section-body.collapsed { display: none; }
 .absence-empty { color: var(--text-lighter); font-size: 0.85rem; padding: 0.5rem 0; }
 .absence-history { margin-top: 0.5rem; border-radius: 6px; }
 .absence-history-summary {

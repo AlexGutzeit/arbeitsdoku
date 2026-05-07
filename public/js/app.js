@@ -5334,6 +5334,8 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
 
 let _inboxUserFilter = '';
 let _allAbsenceUserFilter = '';
+let _collapsedSections;
+try { _collapsedSections = new Set(JSON.parse(localStorage.getItem('absenceCollapsed') || '[]')); } catch(e) { _collapsedSections = new Set(); }
 
 async function renderAbsences() {
   const topicToMark = isManagerRole() ? 'absences' : 'absence_status';
@@ -5498,13 +5500,18 @@ async function renderAbsences() {
         </div>
       </details>` : '';
 
-    return `<div class="absence-section">
-      <div class="absence-section-header">
+    const collapsed = _collapsedSections.has(type);
+    return `<div class="absence-section" data-section-type="${type}">
+      <div class="absence-section-header absence-section-toggle" data-section-type="${type}">
+        <span class="absence-section-chevron">${collapsed ? '▶' : '▼'}</span>
         <span>${info.icon} ${info.label}</span>
+        ${totalCount > 0 ? `<span class="absence-section-count">${totalCount}</span>` : ''}
         <button class="btn btn-sm btn-outline absence-new" data-type="${type}">+ Eintragen</button>
       </div>
-      ${recentHtml}
-      ${historyHtml}
+      <div class="absence-section-body${collapsed ? ' collapsed' : ''}">
+        ${recentHtml}
+        ${historyHtml}
+      </div>
     </div>`;
   }).join('');
 
@@ -5540,6 +5547,24 @@ async function renderAbsences() {
     _allAbsenceUserFilter = e.target.value;
     renderAbsences();
   });
+
+  // Sektionen auf-/zuklappen
+  mainEl.querySelectorAll('.absence-section-toggle').forEach(header => {
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('.absence-new')) return;
+      const type = header.dataset.sectionType;
+      const section = mainEl.querySelector(`.absence-section[data-section-type="${type}"]`);
+      const body = section?.querySelector('.absence-section-body');
+      const chevron = header.querySelector('.absence-section-chevron');
+      if (!body) return;
+      const isNowCollapsed = !_collapsedSections.has(type);
+      if (isNowCollapsed) { _collapsedSections.add(type); } else { _collapsedSections.delete(type); }
+      body.classList.toggle('collapsed', isNowCollapsed);
+      if (chevron) chevron.textContent = isNowCollapsed ? '▶' : '▼';
+      try { localStorage.setItem('absenceCollapsed', JSON.stringify([..._collapsedSections])); } catch(e) {}
+    });
+  });
+
   bindAbsenceCardActions(mainEl);
 }
 
