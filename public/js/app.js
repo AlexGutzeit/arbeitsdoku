@@ -1760,6 +1760,7 @@ function renderPlanningTimeline(entries, absences, canEdit) {
   const currentDay = formatDateISO(S.planningDate || new Date());
   const dayAbsencesAll = (absences || []).filter(a => a.date_from <= currentDay && a.date_to >= currentDay);
 
+  const globalDayAbsences = dayAbsencesAll.filter(a => !a.user_id);
   if (entries.length === 0 && dayAbsencesAll.length === 0) {
     return '<div class="empty-state"><div class="icon">&#128197;</div><p>Keine Planungen für diesen Tag</p></div>';
   }
@@ -1792,7 +1793,13 @@ function renderPlanningTimeline(entries, absences, canEdit) {
   });
   const columns = Object.values(byUser).sort((a, b) => a.name.localeCompare(b.name));
 
+  const globalBannerHtml = globalDayAbsences.map(a => {
+    const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+    return `<div class="tl-absence-banner tl-absence-banner--${a.type}">${t.icon} ${t.label} <span style="font-weight:400;opacity:0.75">(gilt für alle Mitarbeiter)</span></div>`;
+  }).join('');
+
   if (columns.length === 0) {
+    if (globalBannerHtml) return `<div style="padding:0.75rem">${globalBannerHtml}</div>`;
     return '<div class="empty-state"><div class="icon">&#128197;</div><p>Keine Planungen für diesen Tag</p></div>';
   }
 
@@ -1889,8 +1896,16 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
     }
   });
   const columns = Object.values(colMap).sort((a, b) => a.name.localeCompare(b.name));
+  const globalGridAbsences = (absences || []).filter(a => !a.user_id);
 
   if (columns.length === 0) {
+    if (globalGridAbsences.length > 0) {
+      const banners = globalGridAbsences.map(a => {
+        const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+        return `<div class="tl-absence-banner tl-absence-banner--${a.type}">${t.icon} ${t.label} <span style="font-weight:400;opacity:0.75">(gilt für alle Mitarbeiter)</span></div>`;
+      }).join('');
+      return `<div style="padding:0.75rem">${banners}</div>`;
+    }
     return `<div class="empty-state"><div class="icon">&#128197;</div><p>Keine Planungen für diesen Zeitraum</p></div>`;
   }
 
@@ -1979,9 +1994,7 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
       // Abwesenheits-Chips pro Tag dieser KW
       const kwDaysWithAbsences = {};
       (absences || []).forEach(a => {
-        if (a.user_id !== col.id && !(a.user_id === null)) return;
-        if (a.user_id === null && false) return; // Feiertage global
-        if (a.user_id !== col.id) return;
+        if (a.user_id !== null && a.user_id !== col.id) return;
         // Alle Tage dieser KW die von der Abwesenheit betroffen sind
         const kwStart = new Date(w.from + 'T12:00:00');
         const kwEnd   = new Date(w.to   + 'T12:00:00');

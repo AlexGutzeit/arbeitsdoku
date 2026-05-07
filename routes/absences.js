@@ -107,7 +107,10 @@ router.get('/summary', authenticate, (req, res) => {
 
   const rows = db.prepare(`
     SELECT type, date_from, date_to FROM absences
-    WHERE user_id = ? AND status IN ('active','approved')
+    WHERE (
+      (user_id = ? AND status IN ('active','approved'))
+      OR (user_id IS NULL AND type = 'feiertag' AND status = 'active')
+    )
     AND date_from <= ? AND date_to >= ?
   `).all(targetUid, to, from);
 
