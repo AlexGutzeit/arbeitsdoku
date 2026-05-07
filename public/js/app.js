@@ -922,6 +922,7 @@ function renderTimelineHtml(entries, absences) {
 
   // Spalten-HTML
   let colsHtml = '';
+  const bannerCols = [];
   columns.forEach((col, ci) => {
     const colColor = PALETTE[ci % PALETTE.length];
     let bodyHtml = '';
@@ -999,21 +1000,27 @@ function renderTimelineHtml(entries, absences) {
 
     const headerLabel = isSingle ? 'Meine Einträge' : esc(col.name);
     const dayAbsences = getAbsencesForDay(col.id, currentDay, absences);
-    const absenceBanners = dayAbsences.map(a => {
+    const colBannerHtml = dayAbsences.map(a => {
       const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
       const pendingCls = a.status === 'pending' ? ' tl-absence-banner--pending' : '';
       return `<div class="tl-absence-banner tl-absence-banner--${a.type}${pendingCls}">${t.icon} ${t.label}</div>`;
     }).join('');
+    bannerCols.push(colBannerHtml);
     colsHtml += `<div class="timeline-column">
-      <div class="tl-col-sticky">
-        <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">${headerLabel}</div>
-        ${absenceBanners ? `<div class="tl-col-banners">${absenceBanners}</div>` : ''}
-      </div>
+      <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">${headerLabel}</div>
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
     </div>`;
   });
 
+  const hasAnyBanners = bannerCols.some(b => b);
+  const bannerRowHtml = hasAnyBanners ? `
+    <div class="tl-banner-row">
+      <div class="tl-banner-spacer"></div>
+      ${bannerCols.map(b => `<div class="tl-banner-col">${b}</div>`).join('')}
+    </div>` : '';
+
   return `<div class="timeline-wrapper">
+    ${bannerRowHtml}
     <div class="timeline-scroll">
       <div class="timeline-container">
         <div class="timeline-hours"><div class="tl-col-header" style="visibility:hidden">.</div>${hoursHtml}</div>
@@ -1806,6 +1813,7 @@ function renderPlanningTimeline(entries, absences, canEdit) {
   }
 
   let colsHtml = '';
+  const planBannerCols = [];
   columns.forEach((col, ci) => {
     const colColor = PALETTE[ci % PALETTE.length];
     let bodyHtml = '';
@@ -1858,21 +1866,27 @@ function renderPlanningTimeline(entries, absences, canEdit) {
     });
 
     const colAbsences = getAbsencesForDay(col.id, currentDay, absences);
-    const absenceBanners = colAbsences.map(a => {
+    const planColBannerHtml = colAbsences.map(a => {
       const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
       return `<div class="tl-absence-banner tl-absence-banner--${a.type}${a.status === 'pending' ? ' tl-absence-banner--pending' : ''}">${t.icon} ${t.label}</div>`;
     }).join('');
+    planBannerCols.push(planColBannerHtml);
 
     colsHtml += `<div class="timeline-column">
-      <div class="tl-col-sticky">
-        <div class="tl-col-header" style="color:${colColor}">${esc(col.name)}</div>
-        ${absenceBanners ? `<div class="tl-col-banners">${absenceBanners}</div>` : ''}
-      </div>
+      <div class="tl-col-header" style="color:${colColor}">${esc(col.name)}</div>
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
     </div>`;
   });
 
+  const planHasAnyBanners = planBannerCols.some(b => b);
+  const planBannerRowHtml = planHasAnyBanners ? `
+    <div class="tl-banner-row">
+      <div class="tl-banner-spacer"></div>
+      ${planBannerCols.map(b => `<div class="tl-banner-col">${b}</div>`).join('')}
+    </div>` : '';
+
   return `<div class="timeline-wrapper">
+    ${planBannerRowHtml}
     <div class="timeline-scroll">
       <div class="timeline-container">
         <div class="timeline-hours"><div class="tl-col-header" style="visibility:hidden">.</div>${hoursHtml}</div>
