@@ -73,7 +73,7 @@ router.get('/', authenticate, (req, res) => {
       AND (
         status IN ('approved','rejected')
         OR (status = 'pending' AND created_by IS NOT NULL AND created_by != user_id
-            AND type IN ('urlaub','freizeitausgleich'))
+            AND type IN ('urlaub','freizeitausgleich','sonderurlaub'))
       )
     `).get(uid, statusSince).n;
   }

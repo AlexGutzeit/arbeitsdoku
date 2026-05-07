@@ -240,9 +240,9 @@ router.post('/', authenticate, (req, res) => {
     }
     uid = Number(target_user_id);
     created_by = req.user.id;
-    // urlaub/freizeitausgleich → pending (MA muss akzeptieren)
+    // urlaub/freizeitausgleich/sonderurlaub → pending (MA muss akzeptieren)
     // alle anderen → active (informativ)
-    if (['urlaub', 'freizeitausgleich'].includes(type)) {
+    if (['urlaub', 'freizeitausgleich', 'sonderurlaub'].includes(type)) {
       status = 'pending';
     } else {
       status = 'active';
