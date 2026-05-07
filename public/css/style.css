@@ -909,6 +909,15 @@ table.data-table .actions button { margin-left: 0.25rem; }
   font-weight: 700;
   color: var(--primary);
 }
+.grid-month-abs-chips {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.grid-month-abs-chips .grid-absence-chip {
+  font-size: 0.7rem;
+  padding: 0 3px;
+}
 
 /* === Responsive === */
 @media (max-width: 640px) {
@@ -1253,6 +1262,15 @@ table.data-table .actions button { margin-left: 0.25rem; }
 }
 .welcome-task:last-child { border-bottom: none; }
 .welcome-task-today { background: rgba(79, 70, 229, 0.06); border-radius: 6px; padding: 0.5rem; margin: 0 -0.5rem; }
+.welcome-task-absence { border-left: 3px solid #e2e8f0; padding-left: 0.5rem; }
+.welcome-task-absence--krank        { border-left-color: #dc2626; background: #fef2f2; }
+.welcome-task-absence--urlaub       { border-left-color: #1d4ed8; background: #eff6ff; }
+.welcome-task-absence--freizeitausgleich { border-left-color: #4338ca; background: #eef2ff; }
+.welcome-task-absence--sonderurlaub { border-left-color: #9d174d; background: #fdf2f8; }
+.welcome-task-absence--berufsschule { border-left-color: #92400e; background: #fffbeb; }
+.welcome-task-absence--innung       { border-left-color: #065f46; background: #f0fdf4; }
+.welcome-task-absence--dienstreise  { border-left-color: #0369a1; background: #f0f9ff; }
+.welcome-task-absence--feiertag     { border-left-color: #7e22ce; background: #faf5ff; }
 .welcome-task-time { font-size: 0.8rem; color: var(--primary); font-weight: 600; white-space: nowrap; min-width: 150px; }
 .welcome-task-title { font-size: 0.9rem; }
 .welcome-empty { color: var(--text-lighter); font-size: 0.9rem; padding: 0.5rem 0; }
@@ -1547,3 +1565,111 @@ table.data-table .actions button { margin-left: 0.25rem; }
   .note-card-row { flex-direction: column; }
   .note-actions { align-self: flex-end; }
 }
+
+/* === Abwesenheit === */
+.absence-card { padding: 0.9rem; border-radius: 8px; margin-bottom: 0.6rem; border-left: 4px solid #e2e8f0; background: var(--card); box-shadow: var(--shadow); }
+.absence-card--pending  { border-left-color: #f59e0b; background: #fffbeb; }
+.absence-card--active   { border-left-color: #22c55e; background: #f0fdf4; }
+.absence-card--approved { border-left-color: #22c55e; background: #f0fdf4; }
+.absence-card--rejected { border-left-color: #ef4444; background: #fef2f2; }
+.absence-card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; flex-wrap: wrap; }
+.absence-type-icon { font-size: 1.1rem; }
+.absence-user { font-size: 0.8rem; color: var(--text-lighter); margin-left: auto; }
+.absence-card-dates { font-size: 0.9rem; font-weight: 500; color: var(--text); margin-bottom: 0.2rem; }
+.absence-card-comment { font-size: 0.82rem; color: var(--text-lighter); margin-bottom: 0.3rem; }
+.absence-card-meta { font-size: 0.75rem; color: var(--text-lighter); }
+.absence-card-timestamps { font-size: 0.72rem; color: var(--text-lighter); margin-top: 0.2rem; }
+.absence-card-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.6rem; }
+.absence-status { font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 10px; }
+.absence-status--pending  { background: #fef3c7; color: #92400e; }
+.absence-status--active   { background: #dcfce7; color: #166534; }
+.absence-status--approved { background: #dcfce7; color: #166534; }
+.absence-status--rejected { background: #fee2e2; color: #991b1b; }
+.absence-inbox { background: #fff7ed; border: 2px solid #fb923c; border-radius: 10px; padding: 1.2rem; margin-bottom: 0.5rem; box-shadow: 0 2px 8px rgba(251,146,60,0.18); }
+.absence-inbox--user { background: #eff6ff; border-color: #3b82f6; box-shadow: 0 2px 8px rgba(59,130,246,0.18); }
+.absence-inbox--user .absence-inbox-header { border-bottom-color: #bfdbfe; }
+.absence-card--needs-ack { border-left-color: #3b82f6 !important; background: #eff6ff !important; }
+.absence-ma-ack-banner { font-size: 0.8rem; font-weight: 600; color: #1d4ed8; background: #dbeafe; border-radius: 5px; padding: 4px 10px; margin-bottom: 0.4rem; }
+.absence-proposal-block { margin-bottom: 0.4rem; }
+.absence-proposal-new { font-size: 0.88rem; font-weight: 600; color: #1d4ed8; background: #dbeafe; border-radius: 5px; padding: 4px 10px; margin-bottom: 3px; }
+.absence-proposal-old { font-size: 0.8rem; color: var(--text-lighter); padding: 0 2px; text-decoration: line-through; }
+.btn-success { background: #22c55e; color: #fff; border: none; } .btn-success:hover { background: #16a34a; }
+.absence-inbox-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.9rem; padding-bottom: 0.75rem; border-bottom: 1px solid #fed7aa; gap: 1rem; }
+.absence-inbox h3 { font-size: 1.05rem; font-weight: 700; margin: 0; }
+.absence-inbox-filter { font-size: 0.85rem; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px solid #fed7aa; background: #fff; min-width: 170px; }
+.absence-all-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-lighter); padding: 1.2rem 0 0.5rem; border-top: 1px solid var(--border); margin-top: 1rem; gap: 1rem; }
+.absence-section { margin-bottom: 1rem; }
+.absence-section-header { display: flex; align-items: center; gap: 0.45rem; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.95rem; cursor: pointer; user-select: none; padding: 0.35rem 0.5rem; border-radius: 6px; transition: background 0.15s; }
+.absence-section-header:hover { background: var(--hover); }
+.absence-section-header .absence-new { margin-left: auto; cursor: pointer; }
+.absence-section-chevron { font-size: 0.7rem; color: var(--text-lighter); min-width: 0.8rem; }
+.absence-section-count { font-size: 0.72rem; font-weight: 700; background: var(--border); color: var(--text-lighter); border-radius: 10px; padding: 1px 7px; margin-left: 0.1rem; }
+.absence-count-badge { font-size: 0.7rem; font-weight: 700; border-radius: 10px; padding: 1px 6px; white-space: nowrap; }
+.absence-count-good { background: #dcfce7; color: #15803d; }
+.absence-count-pending { background: #fef3c7; color: #b45309; }
+.absence-count-rejected { background: #fee2e2; color: #b91c1c; }
+.absence-section-body { overflow: hidden; }
+.absence-section-body.collapsed { display: none; }
+.absence-empty { color: var(--text-lighter); font-size: 0.85rem; padding: 0.5rem 0; }
+.absence-history { margin-top: 0.5rem; border-radius: 6px; }
+.absence-history-summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-lighter);
+  font-weight: 500;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  user-select: none;
+  list-style: none;
+}
+.absence-history-summary::-webkit-details-marker { display: none; }
+.absence-history-summary::before { content: '▸ '; font-size: 0.7rem; }
+details[open] .absence-history-summary::before { content: '▾ '; }
+.absence-history-summary:hover { background: var(--bg); }
+.absence-history-body { margin-top: 0.5rem; }
+.absence-history-month-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-lighter);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.4rem 0.5rem 0.2rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.4rem;
+}
+.absence-counter { font-size: 0.85rem; color: var(--text-lighter); }
+.absence-form-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1100; padding: 1rem; }
+.absence-form-card { background: var(--card); border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+.absence-form-card h3 { margin: 0 0 1rem; }
+.absence-feiertag-hint { font-size: 0.85rem; color: #b45309; background: #fef3c7; border-radius: 6px; padding: 0.4rem 0.75rem; margin-bottom: 0.75rem; }
+.form-row { display: flex; gap: 0.75rem; }
+.form-row .form-group { flex: 1; }
+.form-actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
+
+/* Timeline-Abwesenheits-Banner */
+.tl-absence-banner { font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 4px; margin: 2px 4px 3px; text-align: center; }
+.tl-absence-banner--pending { opacity: 0.65; }
+.tl-absence-banner--krank        { background: #fee2e2; color: #dc2626; }
+.tl-absence-banner--urlaub       { background: #dbeafe; color: #1d4ed8; }
+.tl-absence-banner--freizeitausgleich { background: #e0e7ff; color: #4338ca; }
+.tl-absence-banner--sonderurlaub { background: #fce7f3; color: #9d174d; }
+.tl-absence-banner--berufsschule { background: #fef3c7; color: #92400e; }
+.tl-absence-banner--innung       { background: #d1fae5; color: #065f46; }
+.tl-absence-banner--dienstreise  { background: #e0f2fe; color: #0369a1; }
+.tl-absence-banner--feiertag     { background: #fdf4ff; color: #7e22ce; }
+
+/* Wochenraster-Abwesenheits-Chips */
+.grid-absence-chips { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 4px; }
+.grid-absence-chip { font-size: 0.65rem; font-weight: 600; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+.grid-absence-chip--pending { opacity: 0.65; }
+.grid-absence-chip--krank        { background: #fee2e2; color: #dc2626; }
+.grid-absence-chip--urlaub       { background: #dbeafe; color: #1d4ed8; }
+.grid-absence-chip--freizeitausgleich { background: #e0e7ff; color: #4338ca; }
+.grid-absence-chip--sonderurlaub { background: #fce7f3; color: #9d174d; }
+.grid-absence-chip--berufsschule { background: #fef3c7; color: #92400e; }
+.grid-absence-chip--innung       { background: #d1fae5; color: #065f46; }
+.grid-absence-chip--dienstreise  { background: #e0f2fe; color: #0369a1; }
+.grid-absence-chip--feiertag     { background: #fdf4ff; color: #7e22ce; }
+
+/* Manager-für-MA Badge im Card */
+.absence-created-by { font-size: 0.75rem; color: var(--text-lighter); font-style: italic; }

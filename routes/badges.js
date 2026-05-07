@@ -41,12 +41,49 @@ router.get('/', authenticate, (req, res) => {
     orders = db.prepare("SELECT COUNT(*) as n FROM orders WHERE ordered_at IS NULL").get().n;
   }
 
-  res.json({ bulletin, notes: sharedNotes + offers, orders });
+  // Abwesenheits-Badge für Chef/Admin/Buchhalter: neue Items zu bearbeiten
+  let absences = 0;
+  if (role !== 'mitarbeiter') {
+    const absencesSince = getSeenAt(db, uid, 'absences');
+    absences = db.prepare(`
+      SELECT COUNT(*) as n FROM absences
+      WHERE updated_at > ?
+        AND (user_id IS NULL OR user_id != ?)
+        AND COALESCE(created_by, user_id) != ?
+        AND (
+          status = 'pending'
+          OR (status = 'active' AND type IN ('krank','berufsschule','innung')
+              AND (notified_at IS NULL OR notified_at > ?))
+        )
+    `).get(absencesSince, uid, uid, absencesSince).n;
+  }
+
+  // Alle Rollen: eigene Abwesenheiten mit ausstehender Bestätigung (Manager hat Änderungen vorgenommen)
+  const maAckCount = db.prepare(
+    'SELECT COUNT(*) as n FROM absences WHERE user_id = ? AND ma_needs_ack = 1'
+  ).get(uid).n;
+
+  // MA: Status-Änderungen (genehmigt/abgelehnt) an eigenen Abwesenheiten seit letztem Besuch
+  let maStatusCount = 0;
+  if (role === 'mitarbeiter') {
+    const statusSince = getSeenAt(db, uid, 'absence_status');
+    maStatusCount = db.prepare(`
+      SELECT COUNT(*) as n FROM absences
+      WHERE user_id = ? AND updated_at > ? AND ma_needs_ack = 0
+      AND (
+        status IN ('approved','rejected')
+        OR (status = 'pending' AND created_by IS NOT NULL AND created_by != user_id
+            AND type IN ('urlaub','freizeitausgleich','sonderurlaub'))
+      )
+    `).get(uid, statusSince).n;
+  }
+
+  res.json({ bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount });
 });
 
 router.post('/:topic', authenticate, (req, res) => {
   const { topic } = req.params;
-  if (!['bulletin', 'notes'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
+  if (!['bulletin', 'notes', 'absences', 'absence_status'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
   const db = getDb();
   db.prepare(
     "INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, ?, datetime('now', '+1 second')) " +

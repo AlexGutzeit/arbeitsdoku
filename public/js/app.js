@@ -18,9 +18,20 @@ const S = {
   filterProjectId: '',
   filterSearch: '',
   filterRegie: '',
+  filterAbsenceType: '',
   welcomeWeekOffset: 0,
   badges: { bulletin: 0, notes: 0, orders: 0 },
 };
+
+// --- Cross-Tab Broadcast für Abwesenheitsänderungen ---
+const _absenceBroadcast = new BroadcastChannel('arbeitsdoku-absences');
+_absenceBroadcast.onmessage = () => {
+  const h = location.hash;
+  if (h === '#/' || h === '#' || h === '') renderDashboardContent();
+};
+function broadcastAbsenceChange() {
+  try { _absenceBroadcast.postMessage(1); } catch(e) {}
+}
 
 // --- API Helper ---
 async function api(method, url, body, isFormData) {
@@ -68,14 +79,14 @@ function markSeen(topic) {
 }
 
 function refreshBadges() {
-  for (const key of ['bulletin', 'notes', 'orders']) {
+  for (const key of ['bulletin', 'notes', 'orders', 'absences']) {
     const el = document.getElementById('nav-badge-' + key);
     if (!el) continue;
     const n = S.badges[key] || 0;
     el.textContent = n > 99 ? '99+' : String(n);
     el.style.display = n ? '' : 'none';
   }
-  const total = (S.badges.bulletin || 0) + (S.badges.notes || 0) + (S.badges.orders || 0);
+  const total = (S.badges.bulletin || 0) + (S.badges.notes || 0) + (S.badges.orders || 0) + (S.badges.absences || 0);
   if ('setAppBadge' in navigator) {
     if (total > 0) navigator.setAppBadge(total).catch(() => {});
     else navigator.clearAppBadge().catch(() => {});
@@ -365,6 +376,8 @@ function render() {
   else if (route === '/tools') renderTools();
   else if (route === '/orders') renderOrders();
   else if (route === '/notes') renderNotizen();
+  else if (route === '/absences') renderAbsences();
+  else if (route.startsWith('/absences/')) renderAbsenceType(route.split('/')[2]);
   else if (route === '/bulletin') renderBulletin();
   else if (route === '/bulletin/new') renderBulletinForm();
   else if (route.startsWith('/bulletin/edit/')) renderBulletinForm(route.split('/').pop());
@@ -444,8 +457,10 @@ function initSSE() {
     if (p.type === 'tools'    && route === '/tools')                               renderTools();
     if (p.type === 'entries'  && route === '/statistics')                          renderStatistics();
     if ((p.type === 'planning' || p.type === 'bulletin') && route === '/welcome')  renderWelcome();
-    if (p.type === 'bulletin' && route !== '/bulletin') loadBadges();
-    if (p.type === 'notes'    && route !== '/notes')    loadBadges();
+    if (p.type === 'bulletin'  && route !== '/bulletin')  loadBadges();
+    if (p.type === 'notes'     && route !== '/notes')     loadBadges();
+    if (p.type === 'absences'  && route.startsWith('/absences')) renderAbsences();
+    if (p.type === 'absences'  && !route.startsWith('/absences')) loadBadges();
   };
 }
 
@@ -493,6 +508,10 @@ function layout(content, activeNav) {
         <a href="#/notes" class="${activeNav === 'notes' ? 'active' : ''}">
           <span class="icon">&#128221;</span> Notizen
           <span class="nav-badge" id="nav-badge-notes"${S.badges.notes ? '' : ' style="display:none"'}>${S.badges.notes || ''}</span>
+        </a>
+        <a href="#/absences" class="${activeNav === 'absences' ? 'active' : ''}">
+          <span class="icon">&#128197;</span> Abwesenheit
+          <span class="nav-badge" id="nav-badge-absences"${S.badges.absences ? '' : ' style="display:none"'}>${S.badges.absences || ''}</span>
         </a>
         <a href="#/statistics" class="${activeNav === 'statistics' ? 'active' : ''}">
           <span class="icon">&#128200;</span> Statistik
@@ -633,7 +652,18 @@ async function renderDashboardContent() {
   if (!mainEl) return;
   mainEl.classList.add('main-wide');
 
-  // Filter (nur Projekt + Suche, Mitarbeiter werden per Chips gesteuert)
+  // Filter (nur Projekt + Suche + Abwesenheitstyp, Mitarbeiter werden per Chips gesteuert)
+  const absenceTypeOptions = [
+    ['', 'Abwesenheit: Alle'],
+    ['krank', '🏥 Krank'],
+    ['urlaub', '🌴 Urlaub'],
+    ['freizeitausgleich', '⏱️ Freizeitausgleich'],
+    ['sonderurlaub', '🎁 Sonderurlaub'],
+    ['feiertag', '🎉 Feiertag'],
+    ['berufsschule', '🏫 Berufsschule'],
+    ['innung', '🔧 Innung'],
+    ['dienstreise', '🚗 Dienstreise'],
+  ];
   const filtersHtml = `
     <div class="filters">
       <select id="filter-project">
@@ -644,6 +674,9 @@ async function renderDashboardContent() {
         <option value="" ${S.filterRegie === '' ? 'selected' : ''}>Regie: Alle</option>
         <option value="1" ${S.filterRegie === '1' ? 'selected' : ''}>Regie: Ja</option>
         <option value="0" ${S.filterRegie === '0' ? 'selected' : ''}>Regie: Nein</option>
+      </select>
+      <select id="filter-absence-type">
+        ${absenceTypeOptions.map(([v, l]) => `<option value="${v}" ${S.filterAbsenceType === v ? 'selected' : ''}>${l}</option>`).join('')}
       </select>
       <input type="search" id="filter-search" placeholder="Suchen..." value="${esc(S.filterSearch)}">
     </div>`;
@@ -662,14 +695,35 @@ async function renderDashboardContent() {
     </div>`;
   }
 
+  // Abwesenheiten für Timeline/Wochenraster
+  let absencesForPeriod = [];
+  try {
+    const absData = await api('GET', `/api/absences/by-date?from=${range.from}&to=${range.to}`);
+    if (absData) absencesForPeriod = filterApprovedAbsences(absData.absences);
+  } catch (e) {}
+
+  // Abwesenheiten nach Typ filtern
+  const filteredAbsences = S.filterAbsenceType
+    ? absencesForPeriod.filter(a => a.type === S.filterAbsenceType)
+    : absencesForPeriod;
+
+  // Abwesenheitssummary für Mitarbeiter (oder eigene Ansicht)
+  let absenceSummary = null;
+  if (S.user.role === 'mitarbeiter') {
+    try {
+      const sd = await api('GET', `/api/absences/summary?from=${range.from}&to=${range.to}`);
+      if (sd) absenceSummary = sd;
+    } catch(e) {}
+  }
+
   // Entscheidung: Timeline (Tag), Wochenraster, Monatsraster
   let contentHtml = '';
   if (S.view === 'day') {
-    contentHtml = renderTimelineHtml(visibleEntries);
+    contentHtml = renderTimelineHtml(visibleEntries, filteredAbsences);
   } else if (S.view === 'week') {
-    contentHtml = renderWeekGridHtml(visibleEntries, range);
+    contentHtml = renderWeekGridHtml(visibleEntries, range, filteredAbsences);
   } else {
-    contentHtml = renderMonthGridHtml(visibleEntries, range);
+    contentHtml = renderMonthGridHtml(visibleEntries, range, filteredAbsences);
   }
 
   mainEl.innerHTML = `
@@ -710,6 +764,18 @@ async function renderDashboardContent() {
         <div class="value">${new Set(visibleEntries.map(e => e.user_id)).size}</div>
         <div class="label">Mitarbeiter</div>
       </div>`}
+      ${(() => {
+        if (!absenceSummary || S.user.role !== 'mitarbeiter') return '';
+        const sum = absenceSummary.summary || {};
+        if (Object.keys(sum).length === 0) return '';
+        const typeLabels = { krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA', sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag', berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise' };
+        const totalDays = absenceSummary.totalUniqueDays ?? Object.values(sum).reduce((s, v) => s + v, 0);
+        const details = Object.entries(sum).map(([t, d]) => `${typeLabels[t] || t}: ${d}`).join(', ');
+        return `<div class="summary-card">
+          <div class="value">${totalDays}</div>
+          <div class="label">Abwesenheitstage<br><small>${details}</small></div>
+        </div>`;
+      })()}
     </div>
     ${filtersHtml}
     ${chipsHtml}
@@ -728,6 +794,7 @@ async function renderDashboardContent() {
   // Filters
   document.getElementById('filter-project')?.addEventListener('change', (e) => { S.filterProjectId = e.target.value; renderDashboardContent(); });
   document.getElementById('filter-regie')?.addEventListener('change', (e) => { S.filterRegie = e.target.value; renderDashboardContent(); });
+  document.getElementById('filter-absence-type')?.addEventListener('change', (e) => { S.filterAbsenceType = e.target.value; renderDashboardContent(); });
   let searchTimeout;
   document.getElementById('filter-search')?.addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
@@ -789,13 +856,14 @@ async function renderDashboardContent() {
 }
 
 // --- Timeline Rendering (Tagansicht) ---
-function renderTimelineHtml(entries) {
-  if (entries.length === 0) {
+function renderTimelineHtml(entries, absences) {
+  if (entries.length === 0 && !(absences || []).length) {
     return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge an diesem Tag</p></div>';
   }
 
   const totalH = (TL_END_HOUR - TL_START_HOUR) * TL_HOUR_PX;
   const isSingle = S.user.role === 'mitarbeiter';
+  const currentDay = formatDateISO(S.currentDate);
 
   // Stundenleiste
   let hoursHtml = '<div class="timeline-hours-body" style="height:' + totalH + 'px">';
@@ -810,24 +878,38 @@ function renderTimelineHtml(entries) {
   if (isSingle) {
     columns = [{ id: S.user.id, name: S.user.name, entries: entries }];
   } else {
-    // Gruppiere nach Mitarbeiter
+    // Gruppiere nach Mitarbeiter (Zeiteinträge)
     const byUser = {};
     entries.forEach(e => {
       if (!byUser[e.user_id]) byUser[e.user_id] = { id: e.user_id, name: e.user_name, entries: [] };
       byUser[e.user_id].entries.push(e);
     });
-    // Sortiere alphabetisch nach Name
+    // Auch User mit Abwesenheiten am aktuellen Tag einschließen (ohne Zeiteinträge)
+    (absences || []).forEach(a => {
+      if (!a.user_id) return; // Feiertage (global) separat
+      if (a.date_from > currentDay || a.date_to < currentDay) return;
+      if (S.hiddenEmployees && S.hiddenEmployees.has(a.user_id)) return;
+      if (!byUser[a.user_id]) {
+        const u = (S.users || []).find(u => u.id === a.user_id);
+        byUser[a.user_id] = { id: a.user_id, name: u ? u.name : (a.user_name || `#${a.user_id}`), entries: [] };
+      }
+    });
     columns = Object.values(byUser).sort((a, b) => a.name.localeCompare(b.name));
   }
 
   if (columns.length === 0) {
-    return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge an diesem Tag</p></div>';
+    // Noch auf globale Feiertage prüfen
+    const globalAbsences = (absences || []).filter(a => !a.user_id && a.date_from <= currentDay && a.date_to >= currentDay);
+    if (globalAbsences.length === 0) {
+      return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge an diesem Tag</p></div>';
+    }
+    // Feiertag ohne Mitarbeiter-Spalten: als einzelne Spalte darstellen
+    columns = [{ id: null, name: 'Feiertag', entries: [] }];
   }
 
   // Jetzt-Linie berechnen
   const now = new Date();
   const today = formatDateISO(now);
-  const currentDay = formatDateISO(S.currentDate);
   let nowLineHtml = '';
   if (today === currentDay) {
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -916,8 +998,15 @@ function renderTimelineHtml(entries) {
     });
 
     const headerLabel = isSingle ? 'Meine Einträge' : esc(col.name);
+    const dayAbsences = getAbsencesForDay(col.id, currentDay, absences);
+    const absenceBanners = dayAbsences.map(a => {
+      const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+      const pendingCls = a.status === 'pending' ? ' tl-absence-banner--pending' : '';
+      return `<div class="tl-absence-banner tl-absence-banner--${a.type}${pendingCls}">${t.icon} ${t.label}</div>`;
+    }).join('');
     colsHtml += `<div class="timeline-column">
       <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">${headerLabel}</div>
+      ${absenceBanners}
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
     </div>`;
   });
@@ -933,7 +1022,7 @@ function renderTimelineHtml(entries) {
 }
 
 // --- Wochenraster ---
-function renderWeekGridHtml(entries, range) {
+function renderWeekGridHtml(entries, range, absences) {
   const dayNames = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
   const dayNamesShort = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
@@ -976,7 +1065,15 @@ function renderWeekGridHtml(entries, range) {
     columns.forEach((col) => {
       const cellEntries = lookup[day + '_' + col.id] || [];
       const totalH = calcActualHours(cellEntries);
+      const dayAbsences = getAbsencesForDay(col.id, day, absences);
       bodyHtml += `<td class="grid-cell" data-jump-date="${day}">`;
+      if (dayAbsences.length > 0) {
+        bodyHtml += `<div class="grid-absence-chips">${dayAbsences.map(a => {
+          const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+          const pendCls = a.status === 'pending' ? ' grid-absence-chip--pending' : '';
+          return `<span class="grid-absence-chip grid-absence-chip--${a.type}${pendCls}">${t.icon} ${t.label}</span>`;
+        }).join('')}</div>`;
+      }
       if (cellEntries.length > 0) {
         cellEntries.forEach(e => {
           const bg = e.project_id ? colorFor(e.project_id) : '#64748b';
@@ -1002,7 +1099,7 @@ function renderWeekGridHtml(entries, range) {
 }
 
 // --- Monatsraster ---
-function renderMonthGridHtml(entries, range) {
+function renderMonthGridHtml(entries, range, absences = []) {
   // Kalenderwochen des Monats ermitteln
   const weeks = getCalendarWeeks(range.from, range.to);
   const columns = getGridColumns(entries);
@@ -1035,23 +1132,43 @@ function renderMonthGridHtml(entries, range) {
       const totalH = calcActualHours(cellEntries);
       const days = new Set(cellEntries.map(e => e.date)).size;
       // Klick auf Zelle → erster Tag der KW
+      // Alle Arbeitstage der KW im Monatsbereich für Abwesenheits-Anzeige sammeln
+      const kwStart = new Date(Math.max(new Date(w.from + 'T12:00:00'), new Date(range.from + 'T12:00:00')));
+      const kwEnd   = new Date(Math.min(new Date(w.to   + 'T12:00:00'), new Date(range.to   + 'T12:00:00')));
+      const allDaysInKW = [];
+      for (let d = new Date(kwStart); d <= kwEnd; d.setDate(d.getDate() + 1)) {
+        const wd = d.getDay();
+        if (wd !== 0 && wd !== 6) allDaysInKW.push(formatDateISO(d));
+      }
+
       bodyHtml += `<td class="grid-cell" data-jump-date="${w.from}">`;
+      // Gruppiere Einträge nach Tag
+      const byDay = {};
+      cellEntries.forEach(e => {
+        if (!byDay[e.date]) byDay[e.date] = [];
+        byDay[e.date].push(e);
+      });
+      // Zeige alle Tage mit Eintrag ODER Abwesenheit
+      const daysToShow = new Set([...Object.keys(byDay), ...allDaysInKW.filter(d => getAbsencesForDay(col.id, d, absences).length > 0)]);
+      const sortedDays = [...daysToShow].sort();
+      sortedDays.forEach(day => {
+        const dayEntries = byDay[day] || [];
+        const dn = getDayNameShort(day);
+        const dayH = calcActualHours(dayEntries);
+        const dayAbsences = getAbsencesForDay(col.id, day, absences);
+        const absChips = dayAbsences.map(a => {
+          const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+          const pendingCls = a.status === 'pending' ? ' grid-absence-chip--pending' : '';
+          return `<span class="grid-absence-chip grid-absence-chip--${a.type}${pendingCls}" title="${t.label}">${t.icon}</span>`;
+        }).join('');
+        bodyHtml += `<div class="grid-kw-day" data-jump-date="${day}">
+          <span class="grid-kw-dayname">${dn}</span>
+          ${absChips ? `<span class="grid-month-abs-chips">${absChips}</span>` : ''}
+          ${dayH > 0 ? `<span class="grid-kw-dayhours">${fmtH(dayH)}</span>` : ''}
+        </div>`;
+      });
       if (cellEntries.length > 0) {
-        // Gruppiere nach Tag für kompakte Darstellung
-        const byDay = {};
-        cellEntries.forEach(e => {
-          if (!byDay[e.date]) byDay[e.date] = [];
-          byDay[e.date].push(e);
-        });
-        Object.keys(byDay).sort().forEach(day => {
-          const dayEntries = byDay[day];
-          const dn = getDayNameShort(day);
-          const dayH = calcActualHours(dayEntries);
-          bodyHtml += `<div class="grid-kw-day" data-jump-date="${day}">
-            <span class="grid-kw-dayname">${dn}</span>
-            <span class="grid-kw-dayhours">${fmtH(dayH)}</span>
-          </div>`;
-        });
+        const days = new Set(cellEntries.map(e => e.date)).size;
         bodyHtml += `<div class="grid-cell-total">${fmtH(totalH)} / ${days} Tage</div>`;
       }
       bodyHtml += '</td>';
@@ -1449,9 +1566,14 @@ async function renderPlanningContent() {
   }
 
   let entries = [];
+  let absences = [];
   try {
-    const data = await api('GET', `/api/planning?date_from=${r.from}&date_to=${r.to}`);
-    if (data) entries = data.entries;
+    const [planData, absData] = await Promise.all([
+      api('GET', `/api/planning?date_from=${r.from}&date_to=${r.to}`),
+      api('GET', `/api/absences/by-date?from=${r.from}&to=${r.to}`),
+    ]);
+    if (planData) entries = planData.entries;
+    if (absData) absences = filterApprovedAbsences(absData.absences);
   } catch (e) {}
 
   const canEdit = canEditPlanning();
@@ -1459,9 +1581,9 @@ async function renderPlanningContent() {
   // Timeline für Tagesansicht
   let contentHtml = '';
   if (view === 'day') {
-    contentHtml = renderPlanningTimeline(entries, canEdit);
+    contentHtml = renderPlanningTimeline(entries, absences, canEdit);
   } else {
-    contentHtml = renderPlanningGrid(entries, r, view, canEdit);
+    contentHtml = renderPlanningGrid(entries, absences, r, view, canEdit);
   }
 
   mainEl.innerHTML = `
@@ -1634,8 +1756,12 @@ async function renderPlanningContent() {
   }
 }
 
-function renderPlanningTimeline(entries, canEdit) {
-  if (entries.length === 0) {
+function renderPlanningTimeline(entries, absences, canEdit) {
+  const currentDay = formatDateISO(S.planningDate || new Date());
+  const dayAbsencesAll = (absences || []).filter(a => a.date_from <= currentDay && a.date_to >= currentDay);
+
+  const globalDayAbsences = dayAbsencesAll.filter(a => !a.user_id);
+  if (entries.length === 0 && dayAbsencesAll.length === 0) {
     return '<div class="empty-state"><div class="icon">&#128197;</div><p>Keine Planungen für diesen Tag</p></div>';
   }
 
@@ -1649,7 +1775,7 @@ function renderPlanningTimeline(entries, canEdit) {
   }
   hoursHtml += '</div>';
 
-  // Gruppiere nach zugewiesenem Mitarbeiter
+  // Gruppiere nach zugewiesenem Mitarbeiter (Planungseinträge)
   const byUser = {};
   entries.forEach(e => {
     e.assigned_users.forEach(u => {
@@ -1657,9 +1783,23 @@ function renderPlanningTimeline(entries, canEdit) {
       byUser[u.user_id].entries.push(e);
     });
   });
+  // User mit Abwesenheiten aber ohne Planung ergänzen
+  dayAbsencesAll.forEach(a => {
+    if (!a.user_id) return;
+    if (!byUser[a.user_id]) {
+      const u = (S.users || []).find(u => u.id === a.user_id);
+      byUser[a.user_id] = { id: a.user_id, name: u ? u.name : (a.user_name || `#${a.user_id}`), entries: [] };
+    }
+  });
   const columns = Object.values(byUser).sort((a, b) => a.name.localeCompare(b.name));
 
+  const globalBannerHtml = globalDayAbsences.map(a => {
+    const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+    return `<div class="tl-absence-banner tl-absence-banner--${a.type}">${t.icon} ${t.label} <span style="font-weight:400;opacity:0.75">(gilt für alle Mitarbeiter)</span></div>`;
+  }).join('');
+
   if (columns.length === 0) {
+    if (globalBannerHtml) return `<div style="padding:0.75rem">${globalBannerHtml}</div>`;
     return '<div class="empty-state"><div class="icon">&#128197;</div><p>Keine Planungen für diesen Tag</p></div>';
   }
 
@@ -1715,8 +1855,15 @@ function renderPlanningTimeline(entries, canEdit) {
       </div>`;
     });
 
+    const colAbsences = getAbsencesForDay(col.id, currentDay, absences);
+    const absenceBanners = colAbsences.map(a => {
+      const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+      return `<div class="tl-absence-banner tl-absence-banner--${a.type}${a.status === 'pending' ? ' tl-absence-banner--pending' : ''}">${t.icon} ${t.label}</div>`;
+    }).join('');
+
     colsHtml += `<div class="timeline-column">
       <div class="tl-col-header" style="color:${colColor}">${esc(col.name)}</div>
+      ${absenceBanners}
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
     </div>`;
   });
@@ -1731,19 +1878,34 @@ function renderPlanningTimeline(entries, canEdit) {
   </div>`;
 }
 
-function renderPlanningGrid(entries, range, view, canEdit) {
+function renderPlanningGrid(entries, absences, range, view, canEdit) {
   const dayNamesShort = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
-  // Spalten = zugewiesene Mitarbeiter (alle die in Planungen vorkommen)
+  // Spalten = zugewiesene Mitarbeiter (Planungen + User mit Abwesenheiten im Zeitraum)
   const colMap = {};
   entries.forEach(e => {
     e.assigned_users.forEach(u => {
       if (!colMap[u.user_id]) colMap[u.user_id] = { id: u.user_id, name: u.user_name };
     });
   });
+  (absences || []).forEach(a => {
+    if (!a.user_id) return;
+    if (!colMap[a.user_id]) {
+      const u = (S.users || []).find(u => u.id === a.user_id);
+      colMap[a.user_id] = { id: a.user_id, name: u ? u.name : (a.user_name || `#${a.user_id}`) };
+    }
+  });
   const columns = Object.values(colMap).sort((a, b) => a.name.localeCompare(b.name));
+  const globalGridAbsences = (absences || []).filter(a => !a.user_id);
 
   if (columns.length === 0) {
+    if (globalGridAbsences.length > 0) {
+      const banners = globalGridAbsences.map(a => {
+        const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+        return `<div class="tl-absence-banner tl-absence-banner--${a.type}">${t.icon} ${t.label} <span style="font-weight:400;opacity:0.75">(gilt für alle Mitarbeiter)</span></div>`;
+      }).join('');
+      return `<div style="padding:0.75rem">${banners}</div>`;
+    }
     return `<div class="empty-state"><div class="icon">&#128197;</div><p>Keine Planungen für diesen Zeitraum</p></div>`;
   }
 
@@ -1781,7 +1943,12 @@ function renderPlanningGrid(entries, range, view, canEdit) {
       bodyHtml += `<td class="grid-row-header"><strong>${dayNamesShort[di]}</strong><br><span class="grid-date">${formatDateDE(day)}</span></td>`;
       columns.forEach(col => {
         const cellEntries = lookup[day + '_' + col.id] || [];
+        const cellAbsences = getAbsencesForDay(col.id, day, absences);
         bodyHtml += `<td class="grid-cell" data-plan-jump="${day}">`;
+        cellAbsences.forEach(a => {
+          const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+          bodyHtml += `<div class="grid-absence-chip grid-absence-chip--${a.type}${a.status === 'pending' ? ' grid-absence-chip--pending' : ''}" title="${t.label}">${t.icon} ${t.label}</div>`;
+        });
         cellEntries.forEach(e => {
           const proj = e.project_name || e.project_text || '';
           const ec = e.color || '#f59e0b';
@@ -1823,19 +1990,49 @@ function renderPlanningGrid(entries, range, view, canEdit) {
     columns.forEach(col => {
       const cellEntries = kwLookup[w.kw + '_' + col.id] || [];
       bodyHtml += `<td class="grid-cell" data-plan-jump="${w.from}">`;
-      if (cellEntries.length > 0) {
-        const byDay = {};
-        cellEntries.forEach(e => { if (!byDay[e.date]) byDay[e.date] = []; byDay[e.date].push(e); });
-        Object.keys(byDay).sort().forEach(day => {
-          const dn = getDayNameShort(day);
-          const dayCount = byDay[day].length;
-          const firstColor = byDay[day][0]?.color || '#f59e0b';
+
+      // Abwesenheits-Chips pro Tag dieser KW
+      const kwDaysWithAbsences = {};
+      (absences || []).forEach(a => {
+        if (a.user_id !== null && a.user_id !== col.id) return;
+        // Alle Tage dieser KW die von der Abwesenheit betroffen sind
+        const kwStart = new Date(w.from + 'T12:00:00');
+        const kwEnd   = new Date(w.to   + 'T12:00:00');
+        const abFrom  = new Date(a.date_from + 'T12:00:00');
+        const abTo    = new Date(a.date_to   + 'T12:00:00');
+        const cur = new Date(Math.max(kwStart, abFrom));
+        const end = new Date(Math.min(kwEnd,   abTo));
+        while (cur <= end) {
+          const iso = formatDateISO(cur);
+          if (!kwDaysWithAbsences[iso]) kwDaysWithAbsences[iso] = [];
+          kwDaysWithAbsences[iso].push(a);
+          cur.setDate(cur.getDate() + 1);
+        }
+      });
+
+      // Tage der KW zusammenführen: Planungen + Abwesenheiten
+      const allDays = new Set([
+        ...Object.keys(kwDaysWithAbsences),
+        ...(cellEntries.length > 0 ? cellEntries.map(e => e.date) : []),
+      ]);
+      [...allDays].sort().forEach(day => {
+        const dayAbsences = kwDaysWithAbsences[day] || [];
+        const dayEntries = cellEntries.filter(e => e.date === day);
+        const dn = getDayNameShort(day);
+        if (dayAbsences.length > 0) {
+          dayAbsences.forEach(a => {
+            const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
+            bodyHtml += `<div class="grid-absence-chip grid-absence-chip--${a.type}${a.status === 'pending' ? ' grid-absence-chip--pending' : ''}" style="display:flex;gap:4px;" title="${t.label}"><span>${dn}</span><span>${t.icon} ${t.label}</span></div>`;
+          });
+        }
+        if (dayEntries.length > 0) {
+          const firstColor = dayEntries[0]?.color || '#f59e0b';
           bodyHtml += `<div class="grid-kw-day grid-plan-entry" data-plan-jump="${day}" style="background:${firstColor}28;border-left-color:${firstColor};color:#374151;">
             <span class="grid-kw-dayname">${dn}</span>
-            <span class="grid-kw-dayhours">${dayCount} Planung${dayCount > 1 ? 'en' : ''}</span>
+            <span class="grid-kw-dayhours">${dayEntries.length} Planung${dayEntries.length > 1 ? 'en' : ''}</span>
           </div>`;
-        });
-      }
+        }
+      });
       bodyHtml += '</td>';
     });
     bodyHtml += '</tr>';
@@ -2549,40 +2746,89 @@ async function renderWelcomeWeek() {
   const kwTo = formatDateISO(kwSun);
 
   let plannings = [];
+  let weekAbsences = [];
   try {
-    const data = await api('GET', `/api/planning?date_from=${kwFrom}&date_to=${kwTo}`);
-    if (data) {
-      plannings = data.entries.filter(e =>
+    const [planData, absData] = await Promise.all([
+      api('GET', `/api/planning?date_from=${kwFrom}&date_to=${kwTo}`),
+      api('GET', `/api/absences/by-date?from=${kwFrom}&to=${kwTo}`),
+    ]);
+    if (planData) {
+      plannings = planData.entries.filter(e =>
         e.assigned_users.some(u => u.user_id === S.user.id)
       );
       plannings.sort((a, b) => a.date.localeCompare(b.date) || a.time_from.localeCompare(b.time_from));
     }
+    if (absData) {
+      weekAbsences = filterApprovedAbsences(absData.absences).filter(a =>
+        a.user_id === S.user.id || a.user_id === null
+      );
+    }
   } catch (e) {}
 
+  // Alle Tage der Woche mit Planungen oder Abwesenheiten zusammenführen
+  const shortDays = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+  const allDays = new Set();
+  plannings.forEach(e => allDays.add(e.date));
+
+  // Abwesenheits-Tage in der KW ermitteln
+  const absencesByDay = {};
+  const kwStartDate = new Date(kwFrom + 'T12:00:00');
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(kwStartDate);
+    d.setDate(d.getDate() + i);
+    const iso = formatDateISO(d);
+    const dayAbs = weekAbsences.filter(a => a.date_from <= iso && a.date_to >= iso);
+    if (dayAbs.length > 0) {
+      absencesByDay[iso] = dayAbs;
+      allDays.add(iso);
+    }
+  }
+
   let planHtml = '';
-  if (plannings.length === 0) {
-    planHtml = '<p style="color:var(--text-light)">Keine Planungen diese Woche.</p>';
+  if (allDays.size === 0) {
+    planHtml = '<p style="color:var(--text-light)">Keine Planungen oder Abwesenheiten diese Woche.</p>';
   } else {
-    const shortDays = ['So','Mo','Di','Mi','Do','Fr','Sa'];
-    planHtml = plannings.map(e => {
-      const d = new Date(e.date + 'T12:00:00');
-      const dayLabel = `${shortDays[d.getDay()]}, ${formatDateDE(e.date)}`;
-      const isToday = e.date === today;
-      const proj = e.project_name || e.project_text || '';
-      const colleagues = e.assigned_users.filter(u => u.user_id !== S.user.id).map(u => u.user_name);
-      return `<div class="welcome-task${isToday ? ' welcome-task-today' : ''}">
-        <div class="welcome-task-time"><strong>${dayLabel}</strong> ${e.time_from} - ${e.time_to}</div>
-        <div class="welcome-task-details">
-          ${proj ? `<span>&#128193; ${esc(proj)}</span>` : ''}
-          ${e.address ? `<span>&#128205; ${esc(e.address)}</span>` : ''}
-          ${e.description ? `<span>${esc(e.description)}</span>` : ''}
-          ${colleagues.length ? `<span>&#128101; mit ${esc(colleagues.join(', '))}</span>` : ''}
-        </div>
-        <div class="welcome-task-actions">
-          ${e.address ? `<button class="btn btn-sm btn-outline btn-nav nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}
-          <button class="btn btn-sm btn-success accept-welcome-plan" data-id="${e.id}">Übernehmen</button>
-        </div>
-      </div>`;
+    const sortedDays = [...allDays].sort();
+    planHtml = sortedDays.map(date => {
+      const d = new Date(date + 'T12:00:00');
+      const dayLabel = `${shortDays[d.getDay()]}, ${formatDateDE(date)}`;
+      const isToday = date === today;
+      const dayPlannings = plannings.filter(e => e.date === date);
+      const dayAbs = absencesByDay[date] || [];
+
+      const absHtml = dayAbs.map(a => {
+        const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '📋' };
+        const multiDay = a.date_from !== a.date_to;
+        const dateRange = multiDay ? ` (${formatDateDE(a.date_from)} – ${formatDateDE(a.date_to)})` : '';
+        const statusLabel = a.status === 'pending' ? ' · Ausstehend' : '';
+        return `<div class="welcome-task welcome-task-absence welcome-task-absence--${a.type}${isToday ? ' welcome-task-today' : ''}">
+          <div class="welcome-task-time"><strong>${dayLabel}</strong></div>
+          <div class="welcome-task-details">
+            <span>${t.icon} ${t.label}${dateRange}${statusLabel}</span>
+            ${a.comment ? `<span>${esc(a.comment)}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+
+      const planningsHtml = dayPlannings.map(e => {
+        const proj = e.project_name || e.project_text || '';
+        const colleagues = e.assigned_users.filter(u => u.user_id !== S.user.id).map(u => u.user_name);
+        return `<div class="welcome-task${isToday ? ' welcome-task-today' : ''}">
+          <div class="welcome-task-time"><strong>${dayLabel}</strong> ${e.time_from} - ${e.time_to}</div>
+          <div class="welcome-task-details">
+            ${proj ? `<span>&#128193; ${esc(proj)}</span>` : ''}
+            ${e.address ? `<span>&#128205; ${esc(e.address)}</span>` : ''}
+            ${e.description ? `<span>${esc(e.description)}</span>` : ''}
+            ${colleagues.length ? `<span>&#128101; mit ${esc(colleagues.join(', '))}</span>` : ''}
+          </div>
+          <div class="welcome-task-actions">
+            ${e.address ? `<button class="btn btn-sm btn-outline btn-nav nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}
+            <button class="btn btn-sm btn-success accept-welcome-plan" data-id="${e.id}">Übernehmen</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      return absHtml + planningsHtml;
     }).join('');
   }
 
@@ -3714,11 +3960,69 @@ async function renderStatisticsContent() {
           `).join('')}
         </table>
       </div>` : ''}
+      <div id="stats-absences-block"></div>
     </div>`;
 
   // Diagramme zeichnen
   drawPieChart(document.getElementById('pie-chart'), c);
   drawTimeChart(document.getElementById('time-chart'), stats.combinedTimeline, stats.users.length > 1 ? null : stats.users);
+
+  // Abwesenheitsblock nachladen (nur für Mitarbeiter oder Einzeluser-Ansicht)
+  if (period !== 'total' && userIds.length === 1) {
+    try {
+      const uid_param = userIds[0] !== S.user.id ? `&user_id=${userIds[0]}` : '';
+      const [sd, byDate] = await Promise.all([
+        api('GET', `/api/absences/summary?from=${stats.range.from}&to=${stats.range.to}${uid_param}`),
+        api('GET', `/api/absences/by-date?from=${stats.range.from}&to=${stats.range.to}${uid_param ? `&user_id=${userIds[0]}` : ''}`),
+      ]);
+
+      // Abwesenheitsbänder für Chart vorbereiten (nur approved/active)
+      const absenceColors = {
+        krank: '#dc2626', urlaub: '#1d4ed8', freizeitausgleich: '#7c3aed',
+        sonderurlaub: '#9a3412', berufsschule: '#0369a1', innung: '#0f766e',
+        dienstreise: '#374151', feiertag: '#b45309',
+      };
+      const chartAbsences = (byDate?.absences || [])
+        .filter(a => a.status === 'active' || a.status === 'approved')
+        .map(a => ({ type: a.type, from: a.date_from, to: a.date_to, color: absenceColors[a.type] || '#64748b' }));
+
+      // Chart neu zeichnen mit Abwesenheitsbändern
+      const canvas = document.getElementById('time-chart');
+      const highlightFn = drawTimeChart(canvas, stats.combinedTimeline, stats.users.length > 1 ? null : stats.users, chartAbsences, null);
+      window._statsChartHighlight = highlightFn;
+
+      if (sd && Object.keys(sd.summary || {}).length > 0) {
+        const typeLabels = { krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA', sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag', berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise' };
+        const rows = Object.entries(sd.summary).map(([t, d]) =>
+          `<tr class="abs-hover-row" data-abs-type="${t}" style="cursor:pointer">
+            <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${absenceColors[t]||'#64748b'};margin-right:6px"></span>${typeLabels[t] || t}</td>
+            <td>${d} ${d === 1 ? 'Tag' : 'Tage'}</td>
+          </tr>`
+        ).join('');
+        const absBlock = document.getElementById('stats-absences-block');
+        if (absBlock) {
+          absBlock.innerHTML = `<div class="stats-user-details" style="margin-top:1rem">
+            <h3>&#128197; Abwesenheiten im Zeitraum</h3>
+            <table class="data-table">
+              <tr><th>Typ</th><th>Arbeitstage</th></tr>
+              ${rows}
+            </table>
+            ${sd.urlaubTageJahr > 0 ? `<p style="margin-top:0.5rem;font-size:0.9rem">Urlaubstage genommen (${new Date().getFullYear()}): <strong>${sd.urlaubTageJahr} Arbeitstage</strong></p>` : ''}
+          </div>`;
+
+          // Bidirektionales Hover: Tabellenzeile → Chart hervorheben
+          absBlock.querySelectorAll('.abs-hover-row').forEach(row => {
+            row.addEventListener('mouseenter', () => {
+              if (window._statsChartHighlight) window._statsChartHighlight(row.dataset.absType);
+            });
+            row.addEventListener('mouseleave', () => {
+              if (window._statsChartHighlight) window._statsChartHighlight(null);
+            });
+          });
+        }
+      }
+    } catch(e) {}
+  }
 
   // Events
   mainEl.querySelectorAll('[data-period]').forEach(btn => {
@@ -3847,8 +4151,15 @@ function drawPieChart(canvas, data) {
   });
 }
 
-function drawTimeChart(canvas, timeline, users) {
-  if (!canvas || !timeline || timeline.length === 0) return;
+function drawTimeChart(canvas, timeline, users, absences = [], highlightType = null) {
+  if (!canvas || !timeline || timeline.length === 0) return null;
+
+  // Alte Event-Listener entfernen (AbortController)
+  if (canvas._chartAC) canvas._chartAC.abort();
+  const ac = new AbortController();
+  canvas._chartAC = ac;
+  const sig = ac.signal;
+
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
 
@@ -3905,6 +4216,38 @@ function drawTimeChart(canvas, timeline, users) {
     ctx.fillStyle = '#94a3b8';
     ctx.fillText(t.label, x, pad.top + ch + 8);
   });
+
+  // Abwesenheitsbänder im Hintergrund zeichnen
+  if (absences.length > 0 && timeline.length > 1) {
+    absences.forEach(ab => {
+      const isHL = highlightType === ab.type;
+      const isDimmed = highlightType !== null && !isHL;
+      const alpha = isDimmed ? 0.05 : (isHL ? 0.35 : 0.15);
+
+      // Finde die Timeline-Indizes die den Abwesenheitszeitraum überschneiden
+      let startX = null, endX = null;
+      timeline.forEach((t, i) => {
+        const tFrom = t.from || t.label;
+        const tTo   = t.to   || t.from || t.label;
+        if (tTo >= ab.from && tFrom <= ab.to) {
+          const x = pad.left + i * xStep;
+          if (startX === null) startX = x - xStep / 2;
+          endX = x + xStep / 2;
+        }
+      });
+      if (startX !== null && endX !== null) {
+        ctx.fillStyle = ab.color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+        ctx.fillRect(Math.max(startX, pad.left), pad.top, Math.min(endX, pad.left + cw) - Math.max(startX, pad.left), ch);
+        if (isHL) {
+          ctx.strokeStyle = ab.color;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 2]);
+          ctx.strokeRect(Math.max(startX, pad.left), pad.top, Math.min(endX, pad.left + cw) - Math.max(startX, pad.left), ch);
+          ctx.setLineDash([]);
+        }
+      }
+    });
+  }
 
   // Soll-Linie (grün, gestrichelt)
   ctx.setLineDash([6, 4]);
@@ -4001,12 +4344,26 @@ function drawTimeChart(canvas, timeline, users) {
     return closest;
   }
 
+  // Abwesenheitstypen für ein Timeline-Datum ermitteln
+  function getAbsencesAtIndex(idx) {
+    const t = timeline[idx];
+    if (!t || !absences.length) return [];
+    const tFrom = t.from || t.label;
+    const tTo   = t.to   || t.from || t.label;
+    return absences.filter(ab => ab.to >= tFrom && ab.from <= tTo);
+  }
+
   function showTooltip(clientX) {
     const idx = findNearest(clientX);
     const t = timeline[idx];
     const diff = t.ist - t.soll;
     const prefix = diff >= 0 ? '+' : '';
-    tooltip.innerHTML = `<strong>${t.label}</strong><br>Ist: ${fmtH(t.ist)}<br>Soll: ${fmtH(t.soll)}<br>Diff: ${prefix}${fmtH(diff)}`;
+    const absHere = getAbsencesAtIndex(idx);
+    const absHtml = absHere.map(ab => {
+      const info = ABSENCE_TYPES[ab.type] || { label: ab.type, icon: '' };
+      return `<br><span style="color:${ab.color}">${info.icon} ${info.label}</span>`;
+    }).join('');
+    tooltip.innerHTML = `<strong>${t.label}</strong><br>Ist: ${fmtH(t.ist)}<br>Soll: ${fmtH(t.soll)}<br>Diff: ${prefix}${fmtH(diff)}${absHtml}`;
     tooltip.style.display = 'block';
 
     const rect = canvas.getBoundingClientRect();
@@ -4019,11 +4376,16 @@ function drawTimeChart(canvas, timeline, users) {
     tooltip.style.top = '30px';
   }
 
-  canvas.addEventListener('mousemove', e => showTooltip(e.clientX));
-  canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
-  canvas.addEventListener('touchstart', e => { showTooltip(e.touches[0].clientX); }, { passive: true });
-  canvas.addEventListener('touchmove', e => { showTooltip(e.touches[0].clientX); }, { passive: true });
-  canvas.addEventListener('touchend', () => { setTimeout(() => { tooltip.style.display = 'none'; }, 2000); });
+  canvas.addEventListener('mousemove', e => showTooltip(e.clientX), { signal: sig });
+  canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; }, { signal: sig });
+  canvas.addEventListener('touchstart', e => { showTooltip(e.touches[0].clientX); }, { passive: true, signal: sig });
+  canvas.addEventListener('touchmove', e => { showTooltip(e.touches[0].clientX); }, { passive: true, signal: sig });
+  canvas.addEventListener('touchend', () => { setTimeout(() => { tooltip.style.display = 'none'; }, 2000); }, { signal: sig });
+
+  // Gibt eine Highlight-Funktion zurück (Typ hervorheben, null = Reset)
+  return (type) => {
+    drawTimeChart(canvas, timeline, users, absences, type);
+  };
 }
 
 // --- Bestellungen ---
@@ -4709,6 +5071,552 @@ async function showOfferDialog(note) {
       close();
     } catch (err) { toast(err.message, 'error'); }
   });
+}
+
+// --- Abwesenheit ---
+
+const ABSENCE_TYPES = {
+  krank:             { label: 'Krank',              icon: '🏥', workflow: 'notify' },
+  urlaub:            { label: 'Urlaub',             icon: '🌴', workflow: 'approve' },
+  freizeitausgleich: { label: 'Freizeitausgleich',  icon: '⏱️', workflow: 'approve' },
+  sonderurlaub:      { label: 'Sonderurlaub',       icon: '🎁', workflow: 'approve' },
+  berufsschule:      { label: 'Berufsschule',       icon: '🏫', workflow: 'notify' },
+  innung:            { label: 'Innung',             icon: '🔧', workflow: 'notify' },
+  dienstreise:       { label: 'Dienstreise',        icon: '🚗', workflow: 'none' },
+  feiertag:          { label: 'Feiertag',           icon: '🎉', workflow: 'none' },
+};
+
+function absenceStatusClass(status) {
+  if (status === 'pending')  return 'absence-card--pending';
+  if (status === 'rejected') return 'absence-card--rejected';
+  return 'absence-card--active';
+}
+
+function absenceStatusLabel(status) {
+  if (status === 'pending')  return '<span class="absence-status absence-status--pending">Offen</span>';
+  if (status === 'rejected') return '<span class="absence-status absence-status--rejected">Abgelehnt</span>';
+  if (status === 'approved') return '<span class="absence-status absence-status--approved">Genehmigt</span>';
+  return '<span class="absence-status absence-status--active">Aktiv</span>';
+}
+
+function formatDateRange(from, to) {
+  if (from === to) return formatDateDE(from);
+  return formatDateDE(from) + ' – ' + formatDateDE(to);
+}
+
+const APPROVAL_REQUIRED_TYPES = ['urlaub', 'sonderurlaub', 'freizeitausgleich'];
+function filterApprovedAbsences(absences) {
+  return (absences || []).filter(a =>
+    // Pending Urlaub/FZA/Sonderurlaub ausblenden — AUSSER wenn ein Vorschlag hängt
+    // (dann sind alte genehmigte Daten noch gültig und werden angezeigt)
+    !(APPROVAL_REQUIRED_TYPES.includes(a.type) && a.status === 'pending' && !a.proposed_date_from)
+  );
+}
+
+function getAbsencesForDay(userId, date, absences) {
+  return (absences || []).filter(a => {
+    if (a.date_from > date || a.date_to < date) return false;
+    if (a.user_id === null) return true;
+    return a.user_id === userId;
+  });
+}
+
+function isManagerRole() {
+  return S.user && (S.user.role === 'admin' || S.user.role === 'chef' || S.user.role === 'buchhalter');
+}
+
+function renderAbsenceCard(a, opts = {}) {
+  const type = ABSENCE_TYPES[a.type] || { label: a.type, icon: '📋' };
+  const canEdit = isManagerRole() || a.user_id === S.user?.id;
+  const isManagerEntry = a.created_by && a.created_by !== a.user_id;
+  const isSelfChefAdmin = a.user_id === S.user?.id && ['admin','chef'].includes(S.user?.role);
+  const canApprove = isManagerRole() && a.status === 'pending' && !isManagerEntry && (a.user_id !== S.user?.id || isSelfChefAdmin);
+  const canAcknowledge = isManagerRole() && a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at && (a.user_id !== S.user?.id || isSelfChefAdmin);
+  // MA-Akzeptanz für Manager-eingetragene pending-Einträge
+  const canMaAccept = !isManagerRole() && a.user_id === S.user?.id && isManagerEntry && a.status === 'pending' && !a.ma_needs_ack;
+  // MA quittiert/akzeptiert Manager-Änderung (dates/comment edit)
+  const canMaAck = a.user_id === S.user?.id && !!a.ma_needs_ack;
+  // Ablehnen nur wenn Manager einen Datums-Vorschlag gemacht hat (proposed_date_from gesetzt)
+  const canMaRejectEdit = canMaAck && !!a.proposed_date_from;
+
+  // Vorschlags-Anzeige (für MA-Posteingang UND Manager-Ansicht)
+  const hasProposal = !!a.proposed_date_from;
+  let datesHtml;
+  if (hasProposal) {
+    const who = a.processed_by_name || 'Vorgesetzte/r';
+    datesHtml = `
+      <div class="absence-proposal-block">
+        <div class="absence-proposal-new">${esc(who)} schlägt vor: <strong>${formatDateRange(a.proposed_date_from, a.proposed_date_to)}</strong></div>
+        <div class="absence-proposal-old">Bisheriger Zeitraum: ${formatDateRange(a.date_from, a.date_to)}</div>
+      </div>`;
+  } else {
+    datesHtml = `<div class="absence-card-dates">${formatDateRange(a.date_from, a.date_to)}</div>`;
+  }
+
+  const maAckBanner = canMaAck && !hasProposal
+    ? `<div class="absence-ma-ack-banner">Bearbeitet von: ${esc(a.processed_by_name || 'Vorgesetzter')} — Bitte bestätigen</div>`
+    : '';
+
+  // Bearbeiten-Button: bei Vorschlag den vorgeschlagenen Zeitraum vorausfüllen
+  const editFrom = hasProposal ? a.proposed_date_from : a.date_from;
+  const editTo   = hasProposal ? a.proposed_date_to   : a.date_to;
+
+  return `<div class="absence-card ${absenceStatusClass(a.status)}${canMaAck ? ' absence-card--needs-ack' : ''}" data-id="${a.id}">
+    <div class="absence-card-header">
+      <span class="absence-type-icon">${type.icon}</span>
+      <strong>${esc(type.label)}</strong>
+      ${isManagerRole() && a.user_name ? `<span class="absence-user">${esc(a.user_name)}</span>` : ''}
+      ${absenceStatusLabel(a.status)}
+    </div>
+    ${datesHtml}
+    ${a.comment ? `<div class="absence-card-comment">${esc(a.comment)}</div>` : ''}
+    ${isManagerEntry && a.created_by_name && !canMaAck && !hasProposal ? `<div class="absence-created-by">Eingetragen von: ${esc(a.created_by_name)}</div>` : ''}
+    ${maAckBanner}
+    ${a.processed_by_name && !canMaAck && !hasProposal ? `<div class="absence-card-meta">Bearbeitet von ${esc(a.processed_by_name)}</div>` : ''}
+    <div class="absence-card-timestamps">
+      Erstellt: ${formatDateTimeDE(a.created_at)}${a.updated_at && a.updated_at !== a.created_at ? ` &nbsp;·&nbsp; Geändert: ${formatDateTimeDE(a.updated_at)}` : ''}
+    </div>
+    <div class="absence-card-actions">
+      ${canApprove ? `<button class="btn btn-sm btn-primary absence-approve" data-id="${a.id}">Genehmigen</button>
+                      <button class="btn btn-sm btn-danger absence-reject" data-id="${a.id}">Ablehnen</button>` : ''}
+      ${canMaAccept ? `<button class="btn btn-sm btn-primary absence-accept" data-id="${a.id}">Akzeptieren</button>
+                       <button class="btn btn-sm btn-danger absence-reject-ma" data-id="${a.id}">Ablehnen</button>` : ''}
+      ${canAcknowledge ? `<button class="btn btn-sm btn-primary absence-acknowledge" data-id="${a.id}">Quittieren</button>` : ''}
+      ${canMaAck && !canMaRejectEdit ? `<button class="btn btn-sm btn-primary absence-ack-ma" data-id="${a.id}">Quittieren</button>` : ''}
+      ${canMaRejectEdit ? `<button class="btn btn-sm btn-success absence-ack-ma" data-id="${a.id}">Akzeptieren</button>
+                           <button class="btn btn-sm btn-danger absence-reject-edit" data-id="${a.id}">Ablehnen</button>` : ''}
+      ${canEdit ? `<button class="btn btn-sm btn-outline absence-edit" data-id="${a.id}" data-type="${a.type}" data-from="${editFrom}" data-to="${editTo}" data-comment="${esc(a.comment||'')}">Bearbeiten</button>` : ''}
+      ${(isManagerRole() || a.user_id === S.user?.id) ? `<button class="btn btn-sm btn-danger absence-delete" data-id="${a.id}">Löschen</button>` : ''}
+    </div>
+  </div>`;
+}
+
+function bindAbsenceCardActions(container) {
+  container.querySelectorAll('.absence-approve').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/approve'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-reject').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-accept').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/accept', {}); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-reject-ma').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject-ma', {}); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-acknowledge').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/acknowledge'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-ack-ma').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/acknowledge-ma'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-reject-edit').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject-manager-edit'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Abwesenheit wirklich löschen?')) return;
+      try { await api('DELETE', '/api/absences/' + btn.dataset.id); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+    });
+  });
+  container.querySelectorAll('.absence-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showAbsenceForm(btn.dataset.id, btn.dataset.type, btn.dataset.from, btn.dataset.to, btn.dataset.comment);
+    });
+  });
+}
+
+function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
+  const mainEl = document.querySelector('.main');
+  if (!mainEl) return;
+
+  const role = S.user?.role;
+  const managerOnly = ['feiertag'];
+  const availableTypes = Object.entries(ABSENCE_TYPES).filter(([t]) => {
+    if (managerOnly.includes(t)) return isManagerRole();
+    return true;
+  });
+
+  const typeOpts = availableTypes.map(([t, info]) =>
+    `<option value="${t}" ${preType === t ? 'selected' : ''}>${info.icon} ${info.label}</option>`
+  ).join('');
+
+  // Mitarbeiterauswahl für Manager
+  let userSelectHtml = '';
+  if (isManagerRole() && !editId) {
+    const allOtherUsers = S.users.filter(u => u.id !== S.user.id).sort((a, b) => a.name.localeCompare(b.name));
+    const isFeiertag = preType === 'feiertag';
+    userSelectHtml = `
+      <div class="form-group" id="abs-user-group"${isFeiertag ? ' style="display:none"' : ''}>
+        <label>Für</label>
+        <select id="abs-user" class="form-control">
+          <option value="${S.user.id}">Für mich selbst</option>
+          ${allOtherUsers.map(u => `<option value="${u.id}">${esc(u.name)} (${roleName(u.role)})</option>`).join('')}
+        </select>
+      </div>
+      <div id="abs-feiertag-hint" class="absence-feiertag-hint"${isFeiertag ? '' : ' style="display:none"'}>Gilt für alle Mitarbeiter</div>`;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const formHtml = `
+    <div class="absence-form-overlay" id="absence-form-overlay">
+      <div class="absence-form-card">
+        <h3>${editId ? 'Abwesenheit bearbeiten' : 'Abwesenheit eintragen'}</h3>
+        ${userSelectHtml}
+        <div class="form-group">
+          <label>Typ</label>
+          <select id="abs-type" class="form-control" ${editId ? 'disabled' : ''}>
+            ${typeOpts || `<option value="${preType}">${preType}</option>`}
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Von</label>
+            <input type="date" id="abs-from" class="form-control" value="${preFrom || today}">
+          </div>
+          <div class="form-group">
+            <label>Bis</label>
+            <input type="date" id="abs-to" class="form-control" value="${preTo || today}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Kommentar (optional)</label>
+          <textarea id="abs-comment" class="form-control" rows="2">${preComment || ''}</textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="abs-save">${editId ? 'Speichern' : 'Eintragen'}</button>
+          <button class="btn btn-outline" id="abs-cancel">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const overlay = document.createElement('div');
+  overlay.innerHTML = formHtml;
+  document.body.appendChild(overlay.firstElementChild);
+
+  document.getElementById('abs-cancel').addEventListener('click', () => {
+    document.getElementById('absence-form-overlay')?.remove();
+  });
+
+  document.getElementById('abs-type')?.addEventListener('change', () => {
+    const isFeiertag = document.getElementById('abs-type').value === 'feiertag';
+    const grp = document.getElementById('abs-user-group');
+    const hint = document.getElementById('abs-feiertag-hint');
+    if (grp) grp.style.display = isFeiertag ? 'none' : '';
+    if (hint) hint.style.display = isFeiertag ? '' : 'none';
+  });
+
+  document.getElementById('abs-save').addEventListener('click', async () => {
+    const type = editId ? preType : document.getElementById('abs-type').value;
+    const date_from = document.getElementById('abs-from').value;
+    const date_to   = document.getElementById('abs-to').value;
+    const comment   = document.getElementById('abs-comment').value;
+    const target_user_id = document.getElementById('abs-user')?.value
+      ? Number(document.getElementById('abs-user').value)
+      : S.user.id;
+
+    if (!date_from || !date_to) { toast('Datum erforderlich', 'error'); return; }
+    if (date_from > date_to) { toast('Datum von muss vor bis liegen', 'error'); return; }
+
+    try {
+      // Überlappungsprüfung für den gewählten User
+      const existingParams = `from=${date_from}&to=${date_to}` + (target_user_id !== S.user.id ? `&user_id=${target_user_id}` : '');
+      const existing = await api('GET', `/api/absences?${existingParams}`);
+      const overlaps = (existing?.absences || []).filter(a => String(a.id) !== String(editId) && a.user_id === target_user_id);
+      if (overlaps.length > 0) {
+        const proceed = confirm(`Für diesen Zeitraum existiert bereits eine Abwesenheit (${ABSENCE_TYPES[overlaps[0].type]?.label || overlaps[0].type}).\nTrotzdem speichern?`);
+        if (!proceed) return;
+      }
+
+      if (editId) {
+        await api('PUT', '/api/absences/' + editId, { date_from, date_to, comment });
+      } else {
+        await api('POST', '/api/absences', { type, date_from, date_to, comment, target_user_id });
+      }
+      document.getElementById('absence-form-overlay')?.remove();
+      toast(editId ? 'Abwesenheit aktualisiert' : 'Abwesenheit eingetragen', 'success');
+      broadcastAbsenceChange();
+      renderAbsences();
+    } catch(e) { toast(e.message, 'error'); }
+  });
+}
+
+let _inboxUserFilter = '';
+let _allAbsenceUserFilter = '';
+let _collapsedSections;
+try { _collapsedSections = new Set(JSON.parse(localStorage.getItem('absenceCollapsed') || '[]')); } catch(e) { _collapsedSections = new Set(); }
+
+async function renderAbsences() {
+  const topicToMark = isManagerRole() ? 'absences' : 'absence_status';
+  S.badges.absences = 0;
+  refreshBadges();
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'absences');
+  bindLayout();
+
+  // S.users nachladen falls noch nicht vorhanden (z.B. direkter Seitenaufruf)
+  if (isManagerRole() && (!S.users || S.users.length <= 1)) {
+    try {
+      const uData = await api('GET', '/api/users');
+      if (uData) S.users = uData.users;
+    } catch(e) {}
+  }
+
+  let absences = [];
+  try {
+    const data = await api('GET', '/api/absences');
+    markSeen(topicToMark);
+    if (data) absences = data.absences;
+  } catch(e) {}
+
+  // Eigener Posteingang: alle Einträge die eine Aktion des aktuellen Users erfordern
+  const myAckItems = absences.filter(a => {
+    if (a.user_id !== S.user?.id) return false;
+    // Manager hat bestehende Abwesenheit bearbeitet → Quittieren/Akzeptieren nötig
+    if (a.ma_needs_ack) return true;
+    // Manager hat pending Urlaub/FZA/Sonderurlaub für diesen User eingetragen → Akzeptieren/Ablehnen nötig
+    if (!isManagerRole() && a.created_by && a.created_by !== a.user_id
+        && APPROVAL_REQUIRED_TYPES.includes(a.type) && a.status === 'pending') return true;
+    return false;
+  });
+  const myAckItemIds = new Set(myAckItems.map(a => a.id));
+
+  const mainEl = document.querySelector('.main');
+  if (!mainEl) return;
+
+  // Urlaubs-Zähler: genehmigte/offene Urlaubstage dieses Jahr
+  const thisYear = new Date().getFullYear().toString();
+  const urlaubTage = absences.filter(a =>
+    a.type === 'urlaub' && (a.status === 'approved' || a.status === 'pending') &&
+    a.date_from.startsWith(thisYear) && (!isManagerRole() || a.user_id === S.user?.id)
+  ).reduce((sum, a) => {
+    const from = new Date(a.date_from + 'T12:00:00');
+    const to   = new Date(a.date_to   + 'T12:00:00');
+    let days = 0;
+    const cur = new Date(from);
+    while (cur <= to) { const d = cur.getDay(); if (d > 0 && d < 6) days++; cur.setDate(cur.getDate()+1); }
+    return sum + days;
+  }, 0);
+
+  // Mein Posteingang (für alle Rollen): Manager-Änderungen die quittiert werden müssen
+  let maInboxHtml = '';
+  if (myAckItems.length > 0) {
+    maInboxHtml = `
+      <div class="absence-inbox absence-inbox--user">
+        <div class="absence-inbox-header">
+          <h3>📬 Mein Posteingang (${myAckItems.length})</h3>
+        </div>
+        ${myAckItems.map(a => renderAbsenceCard(a)).join('')}
+      </div>`;
+  }
+
+  // Posteingang für Manager: neue Meldungen von Mitarbeitern
+  let inboxHtml = '';
+  if (isManagerRole()) {
+    const pending = absences.filter(a =>
+      a.status === 'pending' ||
+      (a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at)
+    );
+    if (pending.length > 0) {
+      // Eindeutige User aus dem Posteingang für Filter
+      const inboxUsers = [];
+      const seenUids = new Set();
+      for (const a of pending) {
+        if (a.user_id && !seenUids.has(a.user_id)) {
+          seenUids.add(a.user_id);
+          inboxUsers.push({ id: a.user_id, name: a.user_name || `#${a.user_id}` });
+        }
+      }
+      inboxUsers.sort((a, b) => a.name.localeCompare(b.name));
+
+      const filteredPending = _inboxUserFilter
+        ? pending.filter(a => String(a.user_id) === String(_inboxUserFilter))
+        : pending;
+
+      inboxHtml = `
+        <div class="absence-inbox">
+          <div class="absence-inbox-header">
+            <h3>📬 Posteingang (${pending.length})</h3>
+            ${inboxUsers.length > 1 ? `
+              <select class="absence-inbox-filter" id="inbox-user-filter">
+                <option value="">Alle Mitarbeiter</option>
+                ${inboxUsers.map(u => `<option value="${u.id}" ${_inboxUserFilter == u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
+              </select>` : ''}
+          </div>
+          ${filteredPending.length > 0
+            ? filteredPending.map(a => renderAbsenceCard(a)).join('')
+            : '<p class="absence-empty">Keine Einträge für diesen Mitarbeiter.</p>'}
+        </div>`;
+    }
+  }
+
+  // Cutoff: alles was vor mehr als einem Monat zuletzt bearbeitet wurde → Verlauf
+  const cutoffDate = new Date();
+  cutoffDate.setMonth(cutoffDate.getMonth() - 1);
+  const cutoff = cutoffDate.toISOString().substring(0, 10);
+
+
+  const monthNames = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  function monthLabel(ym) {
+    const [y, m] = ym.split('-');
+    return `${monthNames[parseInt(m, 10) - 1]} ${y}`;
+  }
+
+  // Alle Abwesenheiten nach User filtern (nur für Manager)
+  // Für Nicht-Manager: Posteingang-Items aus der Hauptliste ausblenden (kein Duplikat)
+  const listAbsences = (() => {
+    const base = (isManagerRole() && _allAbsenceUserFilter)
+      ? absences.filter(a => String(a.user_id) === String(_allAbsenceUserFilter))
+      : absences;
+    return isManagerRole() ? base : base.filter(a => !myAckItemIds.has(a.id));
+  })();
+
+  // Gefilterte Abwesenheiten neu gruppieren
+  const filteredGrouped = {};
+  for (const a of listAbsences) {
+    if (!filteredGrouped[a.type]) filteredGrouped[a.type] = { recent: [], history: {} };
+    const updDate = (a.updated_at || a.created_at || '').substring(0, 10);
+    if (updDate >= cutoff) {
+      filteredGrouped[a.type].recent.push(a);
+    } else {
+      const mk = a.date_from.substring(0, 7);
+      if (!filteredGrouped[a.type].history[mk]) filteredGrouped[a.type].history[mk] = [];
+      filteredGrouped[a.type].history[mk].push(a);
+    }
+  }
+
+  // User-Filter Dropdown für "Alle Abwesenheiten" (Manager)
+  let allUsersForFilter = [];
+  if (isManagerRole()) {
+    const seenIds = new Set();
+    for (const a of absences) {
+      if (a.user_id && !seenIds.has(a.user_id)) {
+        seenIds.add(a.user_id);
+        allUsersForFilter.push({ id: a.user_id, name: a.user_name || `#${a.user_id}` });
+      }
+    }
+    allUsersForFilter.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const listHtml = Object.entries(ABSENCE_TYPES).map(([type, info]) => {
+    if (type === 'feiertag' && !isManagerRole()) return '';
+    const g = filteredGrouped[type] || { recent: [], history: {} };
+    const allEntries = [...g.recent, ...Object.values(g.history).flat()];
+    const totalCount = allEntries.length;
+    if (totalCount === 0 && !isManagerRole()) return '';
+
+    const cGood = allEntries.filter(a => a.status === 'approved' || a.status === 'active').length;
+    const cPending = allEntries.filter(a => a.status === 'pending').length;
+    const cRejected = allEntries.filter(a => a.status === 'rejected').length;
+
+    const recentHtml = g.recent.length > 0
+      ? g.recent.map(a => renderAbsenceCard(a)).join('')
+      : (Object.keys(g.history).length === 0 ? '<p class="absence-empty">Keine Einträge</p>' : '');
+
+    const historyKeys = Object.keys(g.history).sort().reverse(); // neueste zuerst
+    const historyCount = Object.values(g.history).reduce((s, v) => s + v.length, 0);
+    const historyHtml = historyKeys.length > 0 ? `
+      <details class="absence-history">
+        <summary class="absence-history-summary">Verlauf (${historyCount})</summary>
+        <div class="absence-history-body">
+          ${historyKeys.map(mk => `
+            <div class="absence-history-month">
+              <div class="absence-history-month-label">${monthLabel(mk)}</div>
+              ${g.history[mk].map(a => renderAbsenceCard(a)).join('')}
+            </div>
+          `).join('')}
+        </div>
+      </details>` : '';
+
+    const collapsed = _collapsedSections.has(type);
+    return `<div class="absence-section" data-section-type="${type}">
+      <div class="absence-section-header absence-section-toggle" data-section-type="${type}">
+        <span class="absence-section-chevron">${collapsed ? '▶' : '▼'}</span>
+        <span>${info.icon} ${info.label}</span>
+        ${totalCount > 0 ? `<span class="absence-section-count">${totalCount}</span>` : ''}
+        ${cGood > 0 ? `<span class="absence-count-badge absence-count-good">✓ ${cGood}</span>` : ''}
+        ${cPending > 0 ? `<span class="absence-count-badge absence-count-pending">${cPending} offen</span>` : ''}
+        ${cRejected > 0 ? `<span class="absence-count-badge absence-count-rejected">✕ ${cRejected}</span>` : ''}
+        <button class="btn btn-sm btn-outline absence-new" data-type="${type}">+ Eintragen</button>
+      </div>
+      <div class="absence-section-body${collapsed ? ' collapsed' : ''}">
+        ${recentHtml}
+        ${historyHtml}
+      </div>
+    </div>`;
+  }).join('');
+
+  mainEl.innerHTML = `
+    <div class="card" style="max-width:900px;margin:0 auto">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+        <h2>&#128197; Abwesenheit</h2>
+        ${!isManagerRole() ? `<span class="absence-counter">Urlaub ${thisYear}: <strong>${urlaubTage} Arbeitstage</strong></span>` : ''}
+        <button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>
+      </div>
+      ${maInboxHtml}
+      ${inboxHtml}
+      <div class="absence-all-header">
+        <span>Alle Abwesenheiten</span>
+        ${allUsersForFilter.length > 1 ? `
+          <select class="absence-inbox-filter" id="all-absence-user-filter">
+            <option value="">Alle Mitarbeiter</option>
+            ${allUsersForFilter.map(u => `<option value="${u.id}" ${_allAbsenceUserFilter == u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
+          </select>` : ''}
+      </div>
+      ${listHtml || '<p class="absence-empty">Keine Abwesenheiten eingetragen.</p>'}
+    </div>`;
+
+  mainEl.querySelectorAll('.absence-new').forEach(btn => {
+    btn.addEventListener('click', () => showAbsenceForm(null, btn.dataset.type, null, null, null));
+  });
+  document.getElementById('absence-new-btn')?.addEventListener('click', () => showAbsenceForm(null, 'krank', null, null, null));
+  document.getElementById('inbox-user-filter')?.addEventListener('change', (e) => {
+    _inboxUserFilter = e.target.value;
+    renderAbsences();
+  });
+  document.getElementById('all-absence-user-filter')?.addEventListener('change', (e) => {
+    _allAbsenceUserFilter = e.target.value;
+    renderAbsences();
+  });
+
+  // Sektionen auf-/zuklappen
+  mainEl.querySelectorAll('.absence-section-toggle').forEach(header => {
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('.absence-new')) return;
+      const type = header.dataset.sectionType;
+      const section = mainEl.querySelector(`.absence-section[data-section-type="${type}"]`);
+      const body = section?.querySelector('.absence-section-body');
+      const chevron = header.querySelector('.absence-section-chevron');
+      if (!body) return;
+      const isNowCollapsed = !_collapsedSections.has(type);
+      if (isNowCollapsed) { _collapsedSections.add(type); } else { _collapsedSections.delete(type); }
+      body.classList.toggle('collapsed', isNowCollapsed);
+      if (chevron) chevron.textContent = isNowCollapsed ? '▶' : '▼';
+      try { localStorage.setItem('absenceCollapsed', JSON.stringify([..._collapsedSections])); } catch(e) {}
+    });
+  });
+
+  bindAbsenceCardActions(mainEl);
+}
+
+function renderAbsenceType(type) {
+  if (!ABSENCE_TYPES[type]) { renderAbsences(); return; }
+  showAbsenceForm(null, type, null, null, null);
+  renderAbsences();
 }
 
 // --- Init ---

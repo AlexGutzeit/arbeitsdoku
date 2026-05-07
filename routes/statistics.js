@@ -22,7 +22,7 @@ function countWeekdays(from, to) {
   return count;
 }
 
-// Soll-Stunden für einen Zeitraum berechnen (berücksichtigt Änderungen)
+// Soll-Stunden für einen Zeitraum berechnen (berücksichtigt Änderungen + genehmigte Abwesenheiten)
 function calcTargetHours(db, userId, from, to) {
   const targets = db.prepare(
     'SELECT hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from ASC'
@@ -31,6 +31,28 @@ function calcTargetHours(db, userId, from, to) {
   const dayKeys = [null, 'hours_mon', 'hours_tue', 'hours_wed', 'hours_thu', 'hours_fri', null]; // 0=So, 6=Sa
 
   if (targets.length === 0) return countWeekdays(from, to) * 8;
+
+  // Abwesenheiten laden die Soll → 0 setzen
+  const absences = db.prepare(`
+    SELECT date_from, date_to FROM absences
+    WHERE (
+      (user_id = ? AND type IN ('krank','urlaub','sonderurlaub','berufsschule','innung')
+       AND status IN ('active','approved'))
+      OR (type = 'feiertag' AND status = 'active')
+    )
+    AND date_from <= ? AND date_to >= ?
+  `).all(userId, to, from);
+
+  // Menge der Tage mit Soll=0 ermitteln
+  const zeroSollDays = new Set();
+  for (const a of absences) {
+    const cur = new Date(a.date_from + 'T12:00:00');
+    const end = new Date(a.date_to + 'T12:00:00');
+    while (cur <= end) {
+      zeroSollDays.add(fmtDate(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
 
   let total = 0;
   const startDate = new Date(from + 'T12:00:00');
@@ -41,12 +63,14 @@ function calcTargetHours(db, userId, from, to) {
     const day = cur.getDay();
     if (day !== 0 && day !== 6) {
       const dateStr = fmtDate(cur);
-      let active = targets[0];
-      for (const t of targets) {
-        if (t.valid_from <= dateStr) active = t;
-        else break;
+      if (!zeroSollDays.has(dateStr)) {
+        let active = targets[0];
+        for (const t of targets) {
+          if (t.valid_from <= dateStr) active = t;
+          else break;
+        }
+        total += active[dayKeys[day]] || 0;
       }
-      total += active[dayKeys[day]] || 0;
     }
     cur.setDate(cur.getDate() + 1);
   }
@@ -291,6 +315,8 @@ router.get('/', authenticate, (req, res) => {
 
   const combinedTimeline = timeline.map((t, i) => ({
     label: t.label,
+    from: t.from,
+    to: t.to,
     ist: Math.round(userStats.reduce((s, u) => s + u.timeline[i].ist, 0) * 100) / 100,
     soll: Math.round(userStats.reduce((s, u) => s + u.timeline[i].soll, 0) * 100) / 100,
   }));
