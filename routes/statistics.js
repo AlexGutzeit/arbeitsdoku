@@ -78,6 +78,39 @@ function calcTargetHours(db, userId, from, to) {
   return Math.round(total * 100) / 100;
 }
 
+// Schedule-bewusstes Tageszählen: nur Tage mit > 0 Soll-Stunden, Feiertage ausgeschlossen
+function countScheduledDays(db, userId, from, to) {
+  const targets = db.prepare(
+    'SELECT hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from ASC'
+  ).all(userId);
+  const dayKeys = [null, 'hours_mon', 'hours_tue', 'hours_wed', 'hours_thu', 'hours_fri', null];
+  const feiertage = db.prepare(
+    "SELECT date_from, date_to FROM absences WHERE type = 'feiertag' AND status = 'active' AND date_from <= ? AND date_to >= ?"
+  ).all(to, from);
+  const feierSet = new Set();
+  for (const f of feiertage) {
+    const c = new Date(f.date_from + 'T12:00:00'), e = new Date(f.date_to + 'T12:00:00');
+    while (c <= e) { feierSet.add(c.toISOString().slice(0, 10)); c.setDate(c.getDate() + 1); }
+  }
+  let count = 0;
+  const cur = new Date(from + 'T12:00:00');
+  const end = new Date(to + 'T12:00:00');
+  while (cur <= end) {
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6) {
+      const dateStr = cur.toISOString().slice(0, 10);
+      if (!feierSet.has(dateStr)) {
+        let active = targets[0];
+        for (const t of targets) { if (t.valid_from <= dateStr) active = t; else break; }
+        const h = active ? (active[dayKeys[day]] || 0) : 8;
+        if (h > 0) count++;
+      }
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
 // Frühestes valid_from aus user_target_hours ermitteln
 function getEarliestTargetDate(db, userId) {
   const row = db.prepare('SELECT MIN(valid_from) as earliest FROM user_target_hours WHERE user_id = ?').get(userId);
@@ -498,6 +531,7 @@ function getISOWeek(date) {
 module.exports = router;
 module.exports.calcTargetHours = calcTargetHours;
 module.exports.calcActualHours = calcActualHours;
+module.exports.countScheduledDays = countScheduledDays;
 module.exports.fmtDate = fmtDate;
 module.exports.getEarliestTargetDate = getEarliestTargetDate;
 module.exports.clampFrom = clampFrom;

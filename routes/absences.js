@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
+const { countScheduledDays } = require('./statistics');
 
 const router = express.Router();
 
@@ -114,26 +115,51 @@ router.get('/summary', authenticate, (req, res) => {
     AND date_from <= ? AND date_to >= ?
   `).all(targetUid, to, from);
 
+  // Feiertag-Set und Schedule einmalig laden für effiziente Tages-Prüfung
+  const feierRowsQ = db.prepare(
+    "SELECT date_from, date_to FROM absences WHERE type='feiertag' AND status='active' AND date_from <= ? AND date_to >= ?"
+  ).all(to, from);
+  const feierSet = new Set();
+  for (const f of feierRowsQ) {
+    const c = new Date(f.date_from + 'T12:00:00'), e = new Date(f.date_to + 'T12:00:00');
+    while (c <= e) { feierSet.add(c.toISOString().slice(0, 10)); c.setDate(c.getDate() + 1); }
+  }
+  const schedRows = db.prepare(
+    'SELECT hours_mon,hours_tue,hours_wed,hours_thu,hours_fri,valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from ASC'
+  ).all(targetUid);
+  const schKeys = [null, 'hours_mon', 'hours_tue', 'hours_wed', 'hours_thu', 'hours_fri', null];
+  function isSchDay(dateStr) {
+    const day = new Date(dateStr + 'T12:00:00').getDay();
+    if (day === 0 || day === 6 || feierSet.has(dateStr)) return false;
+    let active = schedRows[0];
+    for (const t of schedRows) { if (t.valid_from <= dateStr) active = t; else break; }
+    return active ? (active[schKeys[day]] || 0) > 0 : true;
+  }
+  function countSchDays(f, t) {
+    let n = 0;
+    const cur = new Date(f + 'T12:00:00'), end = new Date(t + 'T12:00:00');
+    while (cur <= end) { const ds = cur.toISOString().slice(0, 10); if (isSchDay(ds)) n++; cur.setDate(cur.getDate() + 1); }
+    return n;
+  }
+
   const summary = {};
-  const uniqueAbsenceDays = new Set(); // dedupliziert Tage mit mehreren Abwesenheitstypen
+  const uniqueAbsenceDays = new Set();
   for (const row of rows) {
     const effectiveFrom = row.date_from > from ? row.date_from : from;
     const effectiveTo   = row.date_to   < to   ? row.date_to   : to;
     if (effectiveFrom > effectiveTo) continue;
-    // Pro Typ: Arbeitstage im Schnittbereich zählen
-    const days = countWorkdays(effectiveFrom, effectiveTo);
+    const days = countSchDays(effectiveFrom, effectiveTo);
     if (days > 0) summary[row.type] = (summary[row.type] || 0) + days;
-    // Für Gesamttotal: jeden betroffenen Arbeitstag in Set eintragen
     const cur = new Date(effectiveFrom + 'T12:00:00');
     const end = new Date(effectiveTo   + 'T12:00:00');
     while (cur <= end) {
-      const dow = cur.getDay();
-      if (dow !== 0 && dow !== 6) uniqueAbsenceDays.add(cur.toISOString().slice(0, 10));
+      const ds = cur.toISOString().slice(0, 10);
+      if (isSchDay(ds)) uniqueAbsenceDays.add(ds);
       cur.setDate(cur.getDate() + 1);
     }
   }
 
-  // Urlaubstage approved im aktuellen Kalenderjahr
+  // Urlaubstage approved im aktuellen Kalenderjahr (schedule-bewusst)
   const thisYear = new Date().getFullYear().toString();
   const urlaubRows = db.prepare(`
     SELECT date_from, date_to FROM absences
@@ -143,7 +169,9 @@ router.get('/summary', authenticate, (req, res) => {
 
   let urlaubTageJahr = 0;
   for (const row of urlaubRows) {
-    urlaubTageJahr += countWorkdaysIntersect(row.date_from, row.date_to, thisYear + '-01-01', thisYear + '-12-31');
+    const effFrom = row.date_from > thisYear + '-01-01' ? row.date_from : thisYear + '-01-01';
+    const effTo   = row.date_to   < thisYear + '-12-31' ? row.date_to   : thisYear + '-12-31';
+    if (effFrom <= effTo) urlaubTageJahr += countScheduledDays(db, targetUid, effFrom, effTo);
   }
 
   res.json({ summary, totalUniqueDays: uniqueAbsenceDays.size, urlaubTageJahr });

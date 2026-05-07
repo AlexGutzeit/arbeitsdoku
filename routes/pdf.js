@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
-const { calcTargetHours, calcActualHours, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
+const { calcTargetHours, calcActualHours, countScheduledDays, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
 
 function fmtH(val) {
   const neg = val < 0;
@@ -334,7 +334,7 @@ router.get('/export', authenticate, (req, res) => {
           const from = ab.date_from > date_from ? ab.date_from : date_from;
           const to   = ab.date_to < date_to     ? ab.date_to   : date_to;
           if (from > to) continue;
-          typeDays[ab.type] = (typeDays[ab.type] || 0) + countWeekdays(from, to);
+          typeDays[ab.type] = (typeDays[ab.type] || 0) + countScheduledDays(db, targetUid, from, to);
         }
 
         if (Object.keys(typeDays).length > 0) {
@@ -360,7 +360,7 @@ router.get('/export', authenticate, (req, res) => {
           for (const ur of urlaubRows) {
             const f = ur.date_from > (thisYear + '-01-01') ? ur.date_from : (thisYear + '-01-01');
             const t2 = ur.date_to < (thisYear + '-12-31') ? ur.date_to : (thisYear + '-12-31');
-            if (f <= t2) urlaubJahr += countWeekdays(f, t2);
+            if (f <= t2) urlaubJahr += countScheduledDays(db, targetUid, f, t2);
           }
           doc.text(`Urlaubstage genommen (${thisYear}): ${urlaubJahr} Arbeitstage`, 40, y);
           y += 14;
