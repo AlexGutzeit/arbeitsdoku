@@ -1806,7 +1806,8 @@ function renderPlanningTimeline(entries, absences, canEdit) {
 
   const globalBannerHtml = globalDayAbsences.map(a => {
     const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
-    return `<div class="tl-absence-banner tl-absence-banner--${a.type}">${t.icon} ${t.label} <span style="font-weight:400;opacity:0.75">(gilt für alle Mitarbeiter)</span></div>`;
+    const comment = a.comment ? `<span class="tl-absence-comment">${esc(a.comment)}</span>` : '';
+    return `<div class="tl-absence-banner tl-absence-banner--${a.type}">${t.icon} ${t.label} <span style="font-weight:400;opacity:0.75">(gilt für alle Mitarbeiter)</span>${comment}</div>`;
   }).join('');
 
   if (columns.length === 0) {
@@ -1923,7 +1924,8 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
     if (globalGridAbsences.length > 0) {
       const banners = globalGridAbsences.map(a => {
         const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
-        return `<div class="tl-absence-banner tl-absence-banner--${a.type}">${t.icon} ${t.label} <span style="font-weight:400;opacity:0.75">(gilt für alle Mitarbeiter)</span></div>`;
+        const comment = a.comment ? `<span class="tl-absence-comment">${esc(a.comment)}</span>` : '';
+        return `<div class="tl-absence-banner tl-absence-banner--${a.type}">${t.icon} ${t.label} <span style="font-weight:400;opacity:0.75">(gilt für alle Mitarbeiter)</span>${comment}</div>`;
       }).join('');
       return `<div style="padding:0.75rem">${banners}</div>`;
     }
@@ -1968,7 +1970,8 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
         bodyHtml += `<td class="grid-cell" data-plan-jump="${day}">`;
         cellAbsences.forEach(a => {
           const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
-          bodyHtml += `<div class="grid-absence-chip grid-absence-chip--${a.type}${a.status === 'pending' ? ' grid-absence-chip--pending' : ''}" title="${t.label}">${t.icon} ${t.label}</div>`;
+          const comment = a.comment ? `<span class="grid-absence-chip-comment">${esc(a.comment)}</span>` : '';
+          bodyHtml += `<div class="grid-absence-chip grid-absence-chip--${a.type}${a.status === 'pending' ? ' grid-absence-chip--pending' : ''}" title="${t.label}">${t.icon} ${t.label}${comment}</div>`;
         });
         cellEntries.forEach(e => {
           const proj = e.project_name || e.project_text || '';
@@ -2043,7 +2046,8 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
         if (dayAbsences.length > 0) {
           dayAbsences.forEach(a => {
             const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
-            bodyHtml += `<div class="grid-absence-chip grid-absence-chip--${a.type}${a.status === 'pending' ? ' grid-absence-chip--pending' : ''}" style="display:flex;gap:4px;" title="${t.label}"><span>${dn}</span><span>${t.icon} ${t.label}</span></div>`;
+            const comment = a.comment ? `<span class="grid-absence-chip-comment">${esc(a.comment)}</span>` : '';
+            bodyHtml += `<div class="grid-absence-chip grid-absence-chip--${a.type}${a.status === 'pending' ? ' grid-absence-chip--pending' : ''}" style="display:flex;gap:4px;" title="${t.label}"><span>${dn}</span><span>${t.icon} ${t.label}</span>${comment}</div>`;
           });
         }
         if (dayEntries.length > 0) {
