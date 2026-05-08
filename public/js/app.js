@@ -1003,7 +1003,8 @@ function renderTimelineHtml(entries, absences) {
     const colBannerHtml = dayAbsences.map(a => {
       const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
       const pendingCls = a.status === 'pending' ? ' tl-absence-banner--pending' : '';
-      return `<div class="tl-absence-banner tl-absence-banner--${a.type}${pendingCls}">${t.icon} ${t.label}</div>`;
+      const comment = a.comment ? `<span class="tl-absence-comment">${esc(a.comment)}</span>` : '';
+      return `<div class="tl-absence-banner tl-absence-banner--${a.type}${pendingCls}">${t.icon} ${t.label}${comment}</div>`;
     }).join('');
     bannerCols.push(colBannerHtml);
     colsHtml += `<div class="timeline-column">
@@ -1080,7 +1081,8 @@ function renderWeekGridHtml(entries, range, absences) {
         bodyHtml += `<div class="grid-absence-chips">${dayAbsences.map(a => {
           const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
           const pendCls = a.status === 'pending' ? ' grid-absence-chip--pending' : '';
-          return `<span class="grid-absence-chip grid-absence-chip--${a.type}${pendCls}">${t.icon} ${t.label}</span>`;
+          const comment = a.comment ? `<span class="grid-absence-chip-comment">${esc(a.comment)}</span>` : '';
+          return `<span class="grid-absence-chip grid-absence-chip--${a.type}${pendCls}">${t.icon} ${t.label}${comment}</span>`;
         }).join('')}</div>`;
       }
       if (cellEntries.length > 0) {
@@ -1868,7 +1870,8 @@ function renderPlanningTimeline(entries, absences, canEdit) {
     const colAbsences = getAbsencesForDay(col.id, currentDay, absences);
     const planColBannerHtml = colAbsences.map(a => {
       const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
-      return `<div class="tl-absence-banner tl-absence-banner--${a.type}${a.status === 'pending' ? ' tl-absence-banner--pending' : ''}">${t.icon} ${t.label}</div>`;
+      const comment = a.comment ? `<span class="tl-absence-comment">${esc(a.comment)}</span>` : '';
+      return `<div class="tl-absence-banner tl-absence-banner--${a.type}${a.status === 'pending' ? ' tl-absence-banner--pending' : ''}">${t.icon} ${t.label}${comment}</div>`;
     }).join('');
     planBannerCols.push(planColBannerHtml);
 

@@ -1668,6 +1668,7 @@ details[open] .absence-history-summary::before { content: '▾ '; }
 /* Timeline-Abwesenheits-Banner */
 .tl-absence-banner { font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 4px; margin: 2px 4px 3px; text-align: center; }
 .tl-absence-banner--pending { opacity: 0.65; }
+.tl-absence-comment { display: block; font-size: 0.68rem; font-weight: 400; opacity: 0.8; margin-top: 1px; word-break: break-word; }
 .tl-absence-banner--krank        { background: #fee2e2; color: #dc2626; }
 .tl-absence-banner--urlaub       { background: #dbeafe; color: #1d4ed8; }
 .tl-absence-banner--freizeitausgleich { background: #e0e7ff; color: #4338ca; }
@@ -1679,7 +1680,8 @@ details[open] .absence-history-summary::before { content: '▾ '; }
 
 /* Wochenraster-Abwesenheits-Chips */
 .grid-absence-chips { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 4px; }
-.grid-absence-chip { font-size: 0.65rem; font-weight: 600; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+.grid-absence-chip { font-size: 0.65rem; font-weight: 600; padding: 2px 5px; border-radius: 3px; display: inline-flex; flex-direction: column; }
+.grid-absence-chip-comment { font-size: 0.62rem; font-weight: 400; opacity: 0.8; margin-top: 1px; word-break: break-word; }
 .grid-absence-chip--pending { opacity: 0.65; }
 .grid-absence-chip--krank        { background: #fee2e2; color: #dc2626; }
 .grid-absence-chip--urlaub       { background: #dbeafe; color: #1d4ed8; }
