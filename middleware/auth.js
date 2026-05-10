@@ -1,7 +1,11 @@
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../database/init');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'arbeitsdoku-geheim-aendern-in-produktion';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  console.error('FATAL: JWT_SECRET ist nicht gesetzt oder zu kurz (min. 32 Zeichen). Server-Start abgebrochen.');
+  process.exit(1);
+}
 
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;

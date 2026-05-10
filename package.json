@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "PORT=3001 DB_PATH=./data/local.db JWT_SECRET=dev-secret node server.js",
+    "dev": "PORT=3001 DB_PATH=./data/local.db JWT_SECRET=dev-secret-mindestens-32-zeichen-lang node server.js",
     "clone-db": "bash scripts/clone-db.sh"
   },
   "dependencies": {
