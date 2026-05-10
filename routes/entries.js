@@ -116,6 +116,9 @@ router.post('/', authenticate, (req, res) => {
   if (!date || !time_from || !time_to) {
     return res.status(400).json({ error: 'Datum, Von und Bis sind Pflichtfelder' });
   }
+  if (time_from > time_to) {
+    return res.status(400).json({ error: 'Bis-Zeit muss nach Von-Zeit liegen' });
+  }
 
   // Admin erstellt Einträge für andere Benutzer (nicht für sich selbst)
   let targetUserId = req.user.id;
@@ -154,6 +157,9 @@ router.put('/:id', authenticate, (req, res) => {
 
   const newFrom = time_from || entry.time_from;
   const newTo = time_to || entry.time_to;
+  if (newFrom > newTo) {
+    return res.status(400).json({ error: 'Bis-Zeit muss nach Von-Zeit liegen' });
+  }
   const newBreak = break_minutes !== undefined ? break_minutes : entry.break_minutes;
   const net_hours = calculateNetHours(newFrom, newTo, newBreak);
 

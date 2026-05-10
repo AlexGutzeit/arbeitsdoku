@@ -1510,6 +1510,10 @@ async function renderEntryForm(editId, continueId, planningId) {
       if (!userSelect.value) { toast('Bitte einen Mitarbeiter auswählen', 'error'); return; }
       body.user_id = Number(userSelect.value);
     }
+    if (body.time_from > body.time_to) {
+      toast('Bis-Zeit muss nach Von-Zeit liegen', 'error');
+      return;
+    }
 
     try {
       if (isEdit) {
