@@ -83,11 +83,21 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
       }
       dbBuffer = new Uint8Array(dbEntry.getData());
 
-      // Upload-Dateien sammeln
+      // Upload-Dateien sammeln (mit Path-Traversal-Schutz)
+      const uploadsResolved = path.resolve(uploadsDir);
       entries.forEach(e => {
-        if (e.entryName.startsWith('uploads/') && !e.isDirectory) {
-          uploadFiles.push({ name: e.entryName.replace('uploads/', ''), data: e.getData() });
+        if (!e.entryName.startsWith('uploads/') || e.isDirectory) return;
+        const safeName = path.basename(e.entryName);
+        if (!safeName || safeName.includes('..') || safeName.startsWith('.')) {
+          console.warn('Backup-Restore: Eintrag uebersprungen (verdaechtiger Name):', e.entryName);
+          return;
         }
+        const finalPath = path.resolve(uploadsDir, safeName);
+        if (finalPath !== path.join(uploadsResolved, safeName) || !finalPath.startsWith(uploadsResolved + path.sep)) {
+          console.warn('Backup-Restore: Eintrag uebersprungen (Pfad ausserhalb uploads):', e.entryName);
+          return;
+        }
+        uploadFiles.push({ name: safeName, data: e.getData() });
       });
     } else {
       // Reine SQLite-Datei (Abwärtskompatibilität)
