@@ -1,5 +1,6 @@
 const initSqlJs = require('sql.js');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
@@ -572,16 +573,30 @@ async function initDatabase() {
     );
 
     const users = [
-      ['admin', 'admin123', 'Administrator', 'admin', 40],
-      ['chef', 'chef123', 'Chef', 'chef', 40],
-      ['buchhalter', 'buch123', 'Buchhalter', 'buchhalter', 40],
-      ['max', 'max123', 'Max Mustermann', 'mitarbeiter', 40],
+      ['admin',      'Administrator',  'admin',       40],
+      ['chef',       'Chef',           'chef',        40],
+      ['buchhalter', 'Buchhalter',     'buchhalter',  40],
+      ['max',        'Max Mustermann', 'mitarbeiter', 40],
     ];
 
-    for (const [username, password, name, role, hours] of users) {
+    const credentials = [];
+    for (const [username, name, role, hours] of users) {
+      const password = crypto.randomBytes(9).toString('base64url');
       const hash = bcrypt.hashSync(password, 10);
-      insertUser.run(username, hash, password, name, role, hours);
+      insertUser.run(username, hash, '', name, role, hours);
+      credentials.push({ username, password });
     }
+
+    console.log('');
+    console.log('+--------------------------------------------------------+');
+    console.log('| ERST-INIT: Zufaellige Passwoerter generiert            |');
+    console.log('| ! Werden NUR JETZT ausgegeben - bitte notieren !       |');
+    console.log('+--------------------------------------------------------+');
+    for (const c of credentials) {
+      console.log('  ' + c.username.padEnd(12) + ' -> ' + c.password);
+    }
+    console.log('+--------------------------------------------------------+');
+    console.log('');
 
     db.prepare('INSERT INTO projects (name) VALUES (?)').run('Projekt Alpha');
     db.prepare('INSERT INTO projects (name) VALUES (?)').run('Projekt Beta');
