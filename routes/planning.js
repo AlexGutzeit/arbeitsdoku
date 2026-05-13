@@ -218,15 +218,66 @@ router.put('/:id', authenticate, canPlan, (req, res) => {
   const entry = db.prepare('SELECT * FROM planning_entries WHERE id = ?').get(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Planung nicht gefunden' });
 
-  const { date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, assigned_user_ids, color } = req.body;
+  const { days, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, assigned_user_ids, color } = req.body;
+
+  // Neuer Pfad: days[] mit > 1 Tag → Single in Gruppe umwandeln
+  if (Array.isArray(days) && days.length > 1) {
+    if (!assigned_user_ids || !assigned_user_ids.length) {
+      return res.status(400).json({ error: 'Mindestens ein Mitarbeiter muss zugewiesen werden' });
+    }
+
+    const newGroupId = entry.group_id || crypto.randomUUID();
+    const originalCreatedBy = entry.created_by;
+    const originalCreatedAt = entry.created_at;
+
+    const convert = db.transaction(() => {
+      db.prepare('DELETE FROM planning_entries WHERE id = ?').run(req.params.id);
+      const ids = [];
+      for (const day of days) {
+        if (!day.date || !day.time_from || !day.time_to) continue;
+        const result = db.prepare(`
+          INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          originalCreatedBy,
+          day.date, day.time_from, day.time_to, day.break_minutes || 0,
+          address !== undefined ? address : entry.address,
+          client !== undefined ? client : entry.client,
+          project_id !== undefined ? (project_id || null) : entry.project_id,
+          project_text !== undefined ? project_text : entry.project_text,
+          description !== undefined ? description : entry.description,
+          newGroupId,
+          color !== undefined ? color : (entry.color || '#f59e0b'),
+          originalCreatedAt
+        );
+        const planningId = result.lastInsertRowid;
+        for (const uid of assigned_user_ids) {
+          db.prepare('INSERT INTO planning_assignments (planning_id, user_id) VALUES (?, ?)').run(planningId, uid);
+        }
+        ids.push(planningId);
+      }
+      return ids;
+    });
+
+    const ids = convert();
+    broadcast('planning', req.headers['x-tab-id']);
+    return res.json({ success: true, count: ids.length, group_id: newGroupId });
+  }
+
+  // Falls days[] mit genau einem Tag: Werte aus days[0] ziehen (sonst klassisches Format)
+  const useDay = Array.isArray(days) && days.length === 1 ? days[0] : null;
+  const newDate = useDay ? useDay.date : date;
+  const newFrom = useDay ? useDay.time_from : time_from;
+  const newTo = useDay ? useDay.time_to : time_to;
+  const newBreak = useDay ? useDay.break_minutes : break_minutes;
 
   const update = db.transaction(() => {
     db.prepare(`
       UPDATE planning_entries SET date=?, time_from=?, time_to=?, break_minutes=?, address=?, client=?, project_id=?, project_text=?, description=?, color=?, updated_at=datetime('now')
       WHERE id=?
     `).run(
-      date || entry.date, time_from || entry.time_from, time_to || entry.time_to,
-      break_minutes !== undefined ? break_minutes : entry.break_minutes,
+      newDate || entry.date, newFrom || entry.time_from, newTo || entry.time_to,
+      newBreak !== undefined ? newBreak : entry.break_minutes,
       address !== undefined ? address : entry.address,
       client !== undefined ? client : entry.client,
       project_id !== undefined ? (project_id || null) : entry.project_id,

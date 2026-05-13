@@ -2441,9 +2441,8 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
 
     try {
       if (isEdit) {
-        // Einzeleintrag bearbeiten
-        const day = planDays[0];
-        await api('PUT', '/api/planning/' + editId, { ...common, date: day.date, time_from: day.time_from, time_to: day.time_to, break_minutes: day.break_minutes });
+        // Einzeleintrag bearbeiten — bei >1 Tag konvertiert Backend zu Gruppe
+        await api('PUT', '/api/planning/' + editId, { ...common, days: planDays });
         toast('Planung aktualisiert', 'success');
       } else if (isGroupEdit) {
         // Gruppe aktualisieren
