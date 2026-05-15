@@ -922,7 +922,6 @@ function renderTimelineHtml(entries, absences) {
 
   // Spalten-HTML
   let colsHtml = '';
-  const bannerCols = [];
   columns.forEach((col, ci) => {
     const colColor = PALETTE[ci % PALETTE.length];
     let bodyHtml = '';
@@ -1006,22 +1005,17 @@ function renderTimelineHtml(entries, absences) {
       const comment = a.comment ? `<span class="tl-absence-comment">${esc(a.comment)}</span>` : '';
       return `<div class="tl-absence-banner tl-absence-banner--${a.type}${pendingCls}">${t.icon} ${t.label}${comment}</div>`;
     }).join('');
-    bannerCols.push(colBannerHtml);
+    const colBannerWrap = colBannerHtml ? `<div class="tl-col-banner">${colBannerHtml}</div>` : '';
     colsHtml += `<div class="timeline-column">
-      <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">${headerLabel}</div>
+      <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">
+        <div class="tl-col-header-name">${headerLabel}</div>
+        ${colBannerWrap}
+      </div>
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
     </div>`;
   });
 
-  const hasAnyBanners = bannerCols.some(b => b);
-  const bannerRowHtml = hasAnyBanners ? `
-    <div class="tl-banner-row">
-      <div class="tl-banner-spacer"></div>
-      ${bannerCols.map(b => `<div class="tl-banner-col">${b}</div>`).join('')}
-    </div>` : '';
-
   return `<div class="timeline-wrapper">
-    ${bannerRowHtml}
     <div class="timeline-scroll">
       <div class="timeline-container">
         <div class="timeline-hours"><div class="tl-col-header" style="visibility:hidden">.</div>${hoursHtml}</div>
@@ -1820,7 +1814,6 @@ function renderPlanningTimeline(entries, absences, canEdit) {
   }
 
   let colsHtml = '';
-  const planBannerCols = [];
   columns.forEach((col, ci) => {
     const colColor = PALETTE[ci % PALETTE.length];
     let bodyHtml = '';
@@ -1878,23 +1871,19 @@ function renderPlanningTimeline(entries, absences, canEdit) {
       const comment = a.comment ? `<span class="tl-absence-comment">${esc(a.comment)}</span>` : '';
       return `<div class="tl-absence-banner tl-absence-banner--${a.type}${a.status === 'pending' ? ' tl-absence-banner--pending' : ''}">${t.icon} ${t.label}${comment}</div>`;
     }).join('');
-    planBannerCols.push(planColBannerHtml);
+    const planColBannerWrap = planColBannerHtml ? `<div class="tl-col-banner">${planColBannerHtml}</div>` : '';
 
     colsHtml += `<div class="timeline-column">
-      <div class="tl-col-header" style="color:${colColor}">${esc(col.name)}</div>
+      <div class="tl-col-header" style="color:${colColor}">
+        <div class="tl-col-header-name">${esc(col.name)}</div>
+        ${planColBannerWrap}
+      </div>
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
     </div>`;
   });
 
-  const planHasAnyBanners = planBannerCols.some(b => b);
-  const planBannerRowHtml = planHasAnyBanners ? `
-    <div class="tl-banner-row">
-      <div class="tl-banner-spacer"></div>
-      ${planBannerCols.map(b => `<div class="tl-banner-col">${b}</div>`).join('')}
-    </div>` : '';
-
   return `<div class="timeline-wrapper">
-    ${planBannerRowHtml}
+    ${globalBannerHtml ? `<div class="tl-global-banner-row">${globalBannerHtml}</div>` : ''}
     <div class="timeline-scroll">
       <div class="timeline-container">
         <div class="timeline-hours"><div class="tl-col-header" style="visibility:hidden">.</div>${hoursHtml}</div>
