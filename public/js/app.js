@@ -2439,22 +2439,26 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
       assigned_user_ids: checked,
     };
 
+    // Im Single-Modus nur Tag 1 senden, im Multi-Modus alle Tage
+    const daysToSend = multiMode ? planDays : (planDays.length ? [planDays[0]] : []);
+    if (!daysToSend.length) { toast('Mindestens einen Tag hinzufügen', 'error'); return; }
+
     try {
       if (isEdit) {
         // Einzeleintrag bearbeiten — bei >1 Tag konvertiert Backend zu Gruppe
-        await api('PUT', '/api/planning/' + editId, { ...common, days: planDays });
+        await api('PUT', '/api/planning/' + editId, { ...common, days: daysToSend });
         toast('Planung aktualisiert', 'success');
       } else if (isGroupEdit) {
-        // Gruppe aktualisieren
-        await api('PUT', '/api/planning/group/' + editGroupId, { ...common, days: planDays });
+        // Gruppe aktualisieren — bei =1 Tag schrumpft Backend zu Single
+        await api('PUT', '/api/planning/group/' + editGroupId, { ...common, days: daysToSend });
         toast('Planungsgruppe aktualisiert', 'success');
       } else {
         // Neue Planung (einzeln oder Gruppe)
-        if (planDays.length === 1) {
-          const day = planDays[0];
+        if (daysToSend.length === 1) {
+          const day = daysToSend[0];
           await api('POST', '/api/planning', { ...common, date: day.date, time_from: day.time_from, time_to: day.time_to, break_minutes: day.break_minutes });
         } else {
-          await api('POST', '/api/planning', { ...common, days: planDays });
+          await api('POST', '/api/planning', { ...common, days: daysToSend });
         }
         toast('Planung erstellt', 'success');
       }
