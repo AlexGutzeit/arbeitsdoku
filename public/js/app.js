@@ -3757,6 +3757,10 @@ async function renderPdfExport() {
   const now = new Date();
   const weekRange = getWeekRange(now);
   const monthRange = getMonthRange(now);
+  const lastWeekDate = new Date(now); lastWeekDate.setDate(lastWeekDate.getDate() - 7);
+  const lastWeekRange = getWeekRange(lastWeekDate);
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+  const lastMonthRange = getMonthRange(lastMonthDate);
 
   const content = `
     <div class="card" style="max-width:600px;margin:0 auto;">
@@ -3782,7 +3786,9 @@ async function renderPdfExport() {
           <label>Zeitraum</label>
           <select class="form-control" id="pdf-period">
             <option value="week">Aktuelle Woche</option>
+            <option value="lastWeek">Vergangene Woche</option>
             <option value="month" selected>Aktueller Monat</option>
+            <option value="lastMonth">Vergangener Monat</option>
             <option value="custom">Benutzerdefiniert</option>
           </select>
         </div>
@@ -3803,14 +3809,14 @@ async function renderPdfExport() {
   $app().innerHTML = layout(content, 'pdf');
   bindLayout();
 
+  const RANGES = { week: weekRange, lastWeek: lastWeekRange, month: monthRange, lastMonth: lastMonthRange };
+
   document.getElementById('pdf-period').addEventListener('change', (e) => {
     document.getElementById('pdf-custom-dates').style.display = e.target.value === 'custom' ? 'grid' : 'none';
-    if (e.target.value === 'week') {
-      document.getElementById('pdf-from').value = weekRange.from;
-      document.getElementById('pdf-to').value = weekRange.to;
-    } else if (e.target.value === 'month') {
-      document.getElementById('pdf-from').value = monthRange.from;
-      document.getElementById('pdf-to').value = monthRange.to;
+    const r = RANGES[e.target.value];
+    if (r) {
+      document.getElementById('pdf-from').value = r.from;
+      document.getElementById('pdf-to').value = r.to;
     }
   });
 
@@ -3818,8 +3824,7 @@ async function renderPdfExport() {
     e.preventDefault();
     const period = document.getElementById('pdf-period').value;
     let dateFrom, dateTo;
-    if (period === 'week') { dateFrom = weekRange.from; dateTo = weekRange.to; }
-    else if (period === 'month') { dateFrom = monthRange.from; dateTo = monthRange.to; }
+    if (RANGES[period]) { dateFrom = RANGES[period].from; dateTo = RANGES[period].to; }
     else { dateFrom = document.getElementById('pdf-from').value; dateTo = document.getElementById('pdf-to').value; }
 
     const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
