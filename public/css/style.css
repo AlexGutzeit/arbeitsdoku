@@ -660,14 +660,17 @@ table.data-table .actions button { margin-left: 0.25rem; }
   top: 0;
   background: var(--card);
   z-index: 4;
-  padding: 0.6rem 0.5rem;
+  padding: 0.4rem 0.3rem;
   text-align: center;
   font-weight: 600;
   font-size: 0.85rem;
   border-bottom: 2px solid var(--border);
+}
+.tl-col-header-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding: 0 0.2rem;
 }
 .tl-banner-row {
   display: flex;
@@ -687,6 +690,24 @@ table.data-table .actions button { margin-left: 0.25rem; }
   flex-wrap: wrap;
   gap: 2px;
   padding: 0 4px;
+}
+/* Per-User Abwesenheits-Banner als zweite Header-Zeile (sticky mit Header) */
+.tl-col-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 4px;
+}
+.tl-col-banner .tl-absence-banner {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+/* Globaler Banner (z.B. Feiertage) oberhalb aller Spalten */
+.tl-global-banner-row {
+  padding: 4px 8px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
 }
 .tl-col-body {
   position: relative;
