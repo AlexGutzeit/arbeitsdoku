@@ -5483,9 +5483,10 @@ async function renderAbsences() {
     }
   }
 
-  // Cutoff: alles was vor mehr als einem Monat zuletzt bearbeitet wurde → Verlauf
+  // Cutoff: ein Eintrag bleibt "recent" solange das Ende (date_to) noch weniger als 7 Tage
+  // in der Vergangenheit liegt. Pending-Anträge bleiben immer sichtbar.
   const cutoffDate = new Date();
-  cutoffDate.setMonth(cutoffDate.getMonth() - 1);
+  cutoffDate.setDate(cutoffDate.getDate() - 7);
   const cutoff = cutoffDate.toISOString().substring(0, 10);
 
 
@@ -5508,8 +5509,7 @@ async function renderAbsences() {
   const filteredGrouped = {};
   for (const a of listAbsences) {
     if (!filteredGrouped[a.type]) filteredGrouped[a.type] = { recent: [], history: {} };
-    const updDate = (a.updated_at || a.created_at || '').substring(0, 10);
-    if (updDate >= cutoff) {
+    if (a.status === 'pending' || a.date_to >= cutoff) {
       filteredGrouped[a.type].recent.push(a);
     } else {
       const mk = a.date_from.substring(0, 7);
