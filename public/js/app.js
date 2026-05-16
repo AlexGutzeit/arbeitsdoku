@@ -5532,7 +5532,6 @@ async function renderAbsences() {
   }
 
   const listHtml = Object.entries(ABSENCE_TYPES).map(([type, info]) => {
-    if (type === 'feiertag' && !isManagerRole()) return '';
     const g = filteredGrouped[type] || { recent: [], history: {} };
     const allEntries = [...g.recent, ...Object.values(g.history).flat()];
     const totalCount = allEntries.length;
@@ -5570,7 +5569,7 @@ async function renderAbsences() {
         ${cGood > 0 ? `<span class="absence-count-badge absence-count-good">✓ ${cGood}</span>` : ''}
         ${cPending > 0 ? `<span class="absence-count-badge absence-count-pending">${cPending} offen</span>` : ''}
         ${cRejected > 0 ? `<span class="absence-count-badge absence-count-rejected">✕ ${cRejected}</span>` : ''}
-        <button class="btn btn-sm btn-outline absence-new" data-type="${type}">+ Eintragen</button>
+        ${(type === 'feiertag' && !isManagerRole()) ? '' : `<button class="btn btn-sm btn-outline absence-new" data-type="${type}">+ Eintragen</button>`}
       </div>
       <div class="absence-section-body${collapsed ? ' collapsed' : ''}">
         ${recentHtml}
