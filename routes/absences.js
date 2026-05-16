@@ -71,7 +71,8 @@ router.get('/', authenticate, (req, res) => {
   const params = [];
 
   if (!isManager(req.user)) {
-    sql += ' AND user_id = ?';
+    // Eigene Abwesenheiten + globale Feiertage (gelten fuer alle)
+    sql += " AND (user_id = ? OR (type = 'feiertag' AND status = 'active'))";
     params.push(uid);
   } else if (user_id) {
     sql += ' AND user_id = ?';
