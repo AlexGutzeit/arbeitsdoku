@@ -146,7 +146,6 @@ async function initDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      password_plain TEXT NOT NULL,
       name TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('admin','chef','buchhalter','mitarbeiter')),
       target_hours_per_week REAL DEFAULT 40.0,
@@ -432,9 +431,14 @@ async function initDatabase() {
     }
   } catch (e) {}
 
-  // Migration: password_plain leeren (Sicherheit)
+  // Migration: password_plain-Spalte droppen (war Klartext-Passwort-Komfort, durch Passwort-Reset-Button ersetzt)
   try {
-    db.exec("UPDATE users SET password_plain = '' WHERE password_plain IS NOT NULL AND password_plain != ''");
+    const userCols = db.prepare("PRAGMA table_info(users)").all();
+    if (userCols.find(c => c.name === 'password_plain')) {
+      db.exec("ALTER TABLE users DROP COLUMN password_plain");
+      markDirty();
+      console.log('Migration: password_plain-Spalte entfernt.');
+    }
   } catch (e) {}
 
   // Migration: group_id für Planungsgruppen
@@ -569,7 +573,7 @@ async function initDatabase() {
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {
     const insertUser = db.prepare(
-      'INSERT INTO users (username, password_hash, password_plain, name, role, target_hours_per_week) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO users (username, password_hash, name, role, target_hours_per_week) VALUES (?, ?, ?, ?, ?)'
     );
 
     const users = [
@@ -583,7 +587,7 @@ async function initDatabase() {
     for (const [username, name, role, hours] of users) {
       const password = crypto.randomBytes(9).toString('base64url');
       const hash = bcrypt.hashSync(password, 10);
-      insertUser.run(username, hash, '', name, role, hours);
+      insertUser.run(username, hash, name, role, hours);
       credentials.push({ username, password });
     }
 
