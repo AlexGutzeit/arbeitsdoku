@@ -4,6 +4,14 @@ const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const { countScheduledDays } = require('./statistics');
 
+// Validierungs-Helper für ISO-Datum (YYYY-MM-DD, kalendarisch gültig)
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function isValidDate(s) {
+  if (typeof s !== 'string' || !DATE_RE.test(s)) return false;
+  const d = new Date(s + 'T12:00:00');
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
 const router = express.Router();
 
 // Typen die sofort aktiv sind (kein Genehmigungsschritt)
@@ -302,6 +310,9 @@ router.post('/', authenticate, (req, res) => {
   if (!type || !date_from || !date_to) {
     return res.status(400).json({ error: 'Typ, Datum von und bis sind Pflichtfelder' });
   }
+  if (!isValidDate(date_from) || !isValidDate(date_to)) {
+    return res.status(400).json({ error: 'Ungültiges Datumsformat (erwartet YYYY-MM-DD, gültiger Kalendertag)' });
+  }
   if (date_from > date_to) {
     return res.status(400).json({ error: 'Datum von muss vor Datum bis liegen' });
   }
@@ -365,6 +376,9 @@ router.put('/:id', authenticate, (req, res) => {
 
   const { date_from, date_to, comment } = req.body;
   if (!date_from || !date_to) return res.status(400).json({ error: 'Datum von und bis erforderlich' });
+  if (!isValidDate(date_from) || !isValidDate(date_to)) {
+    return res.status(400).json({ error: 'Ungültiges Datumsformat (erwartet YYYY-MM-DD, gültiger Kalendertag)' });
+  }
   if (date_from > date_to) return res.status(400).json({ error: 'Datum von muss vor Datum bis liegen' });
 
   let newStatus = absence.status;
