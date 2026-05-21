@@ -11,6 +11,8 @@ function isValidDate(s) {
   const d = new Date(s + 'T12:00:00');
   return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
+const COMMENT_MAX = 1000;
+function tooLongComment(c) { return typeof c === 'string' && c.length > COMMENT_MAX; }
 
 const router = express.Router();
 
@@ -325,6 +327,9 @@ router.post('/', authenticate, (req, res) => {
   if (date_from > date_to) {
     return res.status(400).json({ error: 'Datum von muss vor Datum bis liegen' });
   }
+  if (tooLongComment(comment)) {
+    return res.status(400).json({ error: `Kommentar zu lang (max. ${COMMENT_MAX} Zeichen)` });
+  }
 
   const validTypes = ['krank','urlaub','freizeitausgleich','sonderurlaub','feiertag','berufsschule','innung','dienstreise'];
   if (!validTypes.includes(type)) {
@@ -389,6 +394,9 @@ router.put('/:id', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Ungültiges Datumsformat (erwartet YYYY-MM-DD, gültiger Kalendertag)' });
   }
   if (date_from > date_to) return res.status(400).json({ error: 'Datum von muss vor Datum bis liegen' });
+  if (tooLongComment(comment)) {
+    return res.status(400).json({ error: `Kommentar zu lang (max. ${COMMENT_MAX} Zeichen)` });
+  }
 
   let newStatus = absence.status;
   let notifiedAt = absence.notified_at;

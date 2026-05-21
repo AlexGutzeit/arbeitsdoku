@@ -935,7 +935,7 @@ function renderTimelineHtml(entries, absences) {
     }
     bodyHtml += nowLineHtml;
     // Einträge - Überlappungen nebeneinander anordnen
-    const sorted = [...col.entries].sort((a, b) => a.time_from.localeCompare(b.time_from));
+    const sorted = [...col.entries].sort((a, b) => a.time_from < b.time_from ? -1 : a.time_from > b.time_from ? 1 : 0);
     // Spalten für Überlappungen berechnen
     const lanes = []; // [{end: minuten, entries: [...]}]
     sorted.forEach(e => {
@@ -1824,7 +1824,7 @@ function renderPlanningTimeline(entries, absences, canEdit) {
     }
 
     // Überlappungen berechnen
-    const sorted = [...col.entries].sort((a, b) => a.time_from.localeCompare(b.time_from));
+    const sorted = [...col.entries].sort((a, b) => a.time_from < b.time_from ? -1 : a.time_from > b.time_from ? 1 : 0);
     const lanes = [];
     sorted.forEach(e => {
       const [fh, fm] = e.time_from.split(':').map(Number);
@@ -2272,7 +2272,7 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
         if (!newDate) { toast('Bitte Datum auswählen', 'error'); return; }
         if (planDays.some(d => d.date === newDate)) { toast('Tag bereits vorhanden', 'error'); return; }
         planDays.push({ date: newDate, time_from: '07:00', time_to: '15:30', break_minutes: 30 });
-        planDays.sort((a, b) => a.date.localeCompare(b.date));
+        planDays.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
         dateInput.value = '';
         refreshDayList();
       });
@@ -2777,7 +2777,11 @@ async function renderWelcomeWeek() {
       plannings = planData.entries.filter(e =>
         e.assigned_users.some(u => u.user_id === S.user.id)
       );
-      plannings.sort((a, b) => a.date.localeCompare(b.date) || a.time_from.localeCompare(b.time_from));
+      plannings.sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+        if (a.time_from !== b.time_from) return a.time_from < b.time_from ? -1 : 1;
+        return 0;
+      });
     }
     if (absData) {
       weekAbsences = filterApprovedAbsences(absData.absences).filter(a =>
