@@ -124,7 +124,7 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
       console.error('DB-Validierung fehlgeschlagen:', e.message);
       if (testDb) testDb.close();
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Ungültige SQLite-Datei: ' + e.message });
+      return res.status(400).json({ error: 'Backup-Datei ungültig oder beschädigt' });
     }
 
     // Sicherungs-Backup der aktuellen Daten erstellen
@@ -168,7 +168,7 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
     });
   } catch (error) {
     console.error('Backup-Wiederherstellung fehlgeschlagen:', error);
-    res.status(500).json({ error: 'Fehler bei der Wiederherstellung: ' + error.message });
+    res.status(500).json({ error: 'Wiederherstellung fehlgeschlagen' });
   }
 });
 
