@@ -11,6 +11,19 @@ function isValidTime(s) { return typeof s === 'string' && TIME_RE.test(s); }
 function isValidBreak(n) {
   return typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 600 && Math.floor(n) === n;
 }
+// Liefert Fehlermeldung, wenn ein String-Feld in req.body laenger ist als sein Limit. null sonst.
+function validateLengths(body, limits) {
+  for (const [field, max] of Object.entries(limits)) {
+    const v = body[field];
+    if (typeof v === 'string' && v.length > max) {
+      return `Feld '${field}' ist zu lang (max. ${max} Zeichen)`;
+    }
+  }
+  return null;
+}
+const ENTRY_LIMITS = {
+  address: 300, client: 200, project_text: 200, description: 2000, personal_note: 2000
+};
 
 // Nettostunden berechnen
 function calculateNetHours(timeFrom, timeTo, breakMinutes) {
@@ -62,6 +75,9 @@ router.get('/', authenticate, (req, res) => {
     params.push(Number(project_id));
   }
   if (search) {
+    if (typeof search === 'string' && search.length > 100) {
+      return res.status(400).json({ error: 'Suchbegriff zu lang (max. 100 Zeichen)' });
+    }
     sql += ' AND (e.description LIKE ? OR e.address LIKE ? OR e.client LIKE ? OR e.project_text LIKE ?)';
     const s = `%${search}%`;
     params.push(s, s, s, s);
@@ -132,6 +148,8 @@ router.post('/', authenticate, (req, res) => {
   if (break_minutes !== undefined && break_minutes !== null && !isValidBreak(break_minutes)) {
     return res.status(400).json({ error: 'Pause muss eine ganze Zahl zwischen 0 und 600 Minuten sein' });
   }
+  const lenErr = validateLengths(req.body, ENTRY_LIMITS);
+  if (lenErr) return res.status(400).json({ error: lenErr });
 
   // Admin erstellt Einträge für andere Benutzer (nicht für sich selbst)
   let targetUserId = req.user.id;
@@ -180,6 +198,8 @@ router.put('/:id', authenticate, (req, res) => {
   if (!isValidBreak(newBreak)) {
     return res.status(400).json({ error: 'Pause muss eine ganze Zahl zwischen 0 und 600 Minuten sein' });
   }
+  const lenErr = validateLengths(req.body, ENTRY_LIMITS);
+  if (lenErr) return res.status(400).json({ error: lenErr });
   const net_hours = calculateNetHours(newFrom, newTo, newBreak);
 
   const newRegie = has_regie !== undefined ? (has_regie || 0) : entry.has_regie;
