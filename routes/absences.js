@@ -264,6 +264,15 @@ router.get('/by-date', authenticate, (req, res) => {
   const db = getDb();
   const { from, to } = req.query;
   if (!from || !to) return res.status(400).json({ error: 'from und to erforderlich' });
+  const fDate = new Date(from + 'T00:00:00');
+  const tDate = new Date(to + 'T00:00:00');
+  if (isNaN(fDate) || isNaN(tDate)) {
+    return res.status(400).json({ error: 'Ungültiges Datumsformat' });
+  }
+  const diffDays = (tDate - fDate) / (1000 * 60 * 60 * 24);
+  if (diffDays < 0 || diffDays > 366) {
+    return res.status(400).json({ error: 'Zeitraum zu groß (max. 366 Tage)' });
+  }
 
   const uid = req.user.id;
   let sql, params;
