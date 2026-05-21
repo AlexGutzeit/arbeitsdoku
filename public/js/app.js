@@ -1786,13 +1786,18 @@ function renderPlanningTimeline(entries, absences, canEdit) {
 
   // Gruppiere nach zugewiesenem Mitarbeiter (Planungseinträge)
   const byUser = {};
+  // 1) Alle echten Mitarbeiter immer als Spalte (auch ohne Planung)
+  (S.users || [])
+    .filter(u => u.role === 'mitarbeiter')
+    .forEach(u => { byUser[u.id] = { id: u.id, name: u.name, entries: [] }; });
+  // 2) Zusätzlich: User aus Planungen (z.B. Chef/Buchhalter, falls verplant)
   entries.forEach(e => {
     e.assigned_users.forEach(u => {
       if (!byUser[u.user_id]) byUser[u.user_id] = { id: u.user_id, name: u.user_name, entries: [] };
       byUser[u.user_id].entries.push(e);
     });
   });
-  // User mit Abwesenheiten aber ohne Planung ergänzen
+  // 3) Zusätzlich: User mit Abwesenheit (falls noch nicht enthalten)
   dayAbsencesAll.forEach(a => {
     if (!a.user_id) return;
     if (!byUser[a.user_id]) {
@@ -1896,8 +1901,11 @@ function renderPlanningTimeline(entries, absences, canEdit) {
 function renderPlanningGrid(entries, absences, range, view, canEdit) {
   const dayNamesShort = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
-  // Spalten = zugewiesene Mitarbeiter (Planungen + User mit Abwesenheiten im Zeitraum)
+  // Spalten = alle Mitarbeiter + zusätzlich verplante/abwesende Chefs/Buchhalter
   const colMap = {};
+  (S.users || [])
+    .filter(u => u.role === 'mitarbeiter')
+    .forEach(u => { colMap[u.id] = { id: u.id, name: u.name }; });
   entries.forEach(e => {
     e.assigned_users.forEach(u => {
       if (!colMap[u.user_id]) colMap[u.user_id] = { id: u.user_id, name: u.user_name };
