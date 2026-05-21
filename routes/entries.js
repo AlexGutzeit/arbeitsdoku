@@ -5,6 +5,13 @@ const { broadcast } = require('../sse');
 
 const router = express.Router();
 
+// Validierungs-Helper
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+function isValidTime(s) { return typeof s === 'string' && TIME_RE.test(s); }
+function isValidBreak(n) {
+  return typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 600 && Math.floor(n) === n;
+}
+
 // Nettostunden berechnen
 function calculateNetHours(timeFrom, timeTo, breakMinutes) {
   const [fh, fm] = timeFrom.split(':').map(Number);
@@ -116,8 +123,14 @@ router.post('/', authenticate, (req, res) => {
   if (!date || !time_from || !time_to) {
     return res.status(400).json({ error: 'Datum, Von und Bis sind Pflichtfelder' });
   }
+  if (!isValidTime(time_from) || !isValidTime(time_to)) {
+    return res.status(400).json({ error: 'Ungültiges Zeitformat (erwartet HH:MM, 00:00 bis 23:59)' });
+  }
   if (time_from > time_to) {
     return res.status(400).json({ error: 'Bis-Zeit muss nach Von-Zeit liegen' });
+  }
+  if (break_minutes !== undefined && break_minutes !== null && !isValidBreak(break_minutes)) {
+    return res.status(400).json({ error: 'Pause muss eine ganze Zahl zwischen 0 und 600 Minuten sein' });
   }
 
   // Admin erstellt Einträge für andere Benutzer (nicht für sich selbst)
@@ -157,10 +170,16 @@ router.put('/:id', authenticate, (req, res) => {
 
   const newFrom = time_from || entry.time_from;
   const newTo = time_to || entry.time_to;
+  if (!isValidTime(newFrom) || !isValidTime(newTo)) {
+    return res.status(400).json({ error: 'Ungültiges Zeitformat (erwartet HH:MM, 00:00 bis 23:59)' });
+  }
   if (newFrom > newTo) {
     return res.status(400).json({ error: 'Bis-Zeit muss nach Von-Zeit liegen' });
   }
   const newBreak = break_minutes !== undefined ? break_minutes : entry.break_minutes;
+  if (!isValidBreak(newBreak)) {
+    return res.status(400).json({ error: 'Pause muss eine ganze Zahl zwischen 0 und 600 Minuten sein' });
+  }
   const net_hours = calculateNetHours(newFrom, newTo, newBreak);
 
   const newRegie = has_regie !== undefined ? (has_regie || 0) : entry.has_regie;
