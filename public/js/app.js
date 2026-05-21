@@ -23,16 +23,6 @@ const S = {
   badges: { bulletin: 0, notes: 0, orders: 0 },
 };
 
-// --- Cross-Tab Broadcast für Abwesenheitsänderungen ---
-const _absenceBroadcast = new BroadcastChannel('arbeitsdoku-absences');
-_absenceBroadcast.onmessage = () => {
-  const h = location.hash;
-  if (h === '#/' || h === '#' || h === '') renderDashboardContent();
-};
-function broadcastAbsenceChange() {
-  try { _absenceBroadcast.postMessage(1); } catch(e) {}
-}
-
 // --- API Helper ---
 async function api(method, url, body, isFormData) {
   const opts = { method, headers: {} };
@@ -459,8 +449,14 @@ function initSSE() {
     if ((p.type === 'planning' || p.type === 'bulletin') && route === '/welcome')  renderWelcome();
     if (p.type === 'bulletin'  && route !== '/bulletin')  loadBadges();
     if (p.type === 'notes'     && route !== '/notes')     loadBadges();
-    if (p.type === 'absences'  && route.startsWith('/absences')) renderAbsences();
-    if (p.type === 'absences'  && !route.startsWith('/absences')) loadBadges();
+    if (p.type === 'absences') {
+      if (route.startsWith('/absences'))       renderAbsences();
+      else if (route === '/' || route === '')  renderDashboardContent();
+      else if (route === '/welcome')           renderWelcome();
+      else if (route === '/planning')          renderPlanningContent();
+      else if (route === '/statistics')        renderStatistics();
+      else                                     loadBadges();
+    }
   };
 }
 
@@ -5232,43 +5228,43 @@ function renderAbsenceCard(a, opts = {}) {
 function bindAbsenceCardActions(container) {
   container.querySelectorAll('.absence-approve').forEach(btn => {
     btn.addEventListener('click', async () => {
-      try { await api('POST', '/api/absences/' + btn.dataset.id + '/approve'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/approve'); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-reject').forEach(btn => {
     btn.addEventListener('click', async () => {
-      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject'); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-accept').forEach(btn => {
     btn.addEventListener('click', async () => {
-      try { await api('POST', '/api/absences/' + btn.dataset.id + '/accept', {}); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/accept', {}); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-reject-ma').forEach(btn => {
     btn.addEventListener('click', async () => {
-      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject-ma', {}); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject-ma', {}); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-acknowledge').forEach(btn => {
     btn.addEventListener('click', async () => {
-      try { await api('POST', '/api/absences/' + btn.dataset.id + '/acknowledge'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/acknowledge'); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-ack-ma').forEach(btn => {
     btn.addEventListener('click', async () => {
-      try { await api('POST', '/api/absences/' + btn.dataset.id + '/acknowledge-ma'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/acknowledge-ma'); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-reject-edit').forEach(btn => {
     btn.addEventListener('click', async () => {
-      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject-manager-edit'); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+      try { await api('POST', '/api/absences/' + btn.dataset.id + '/reject-manager-edit'); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('Abwesenheit wirklich löschen?')) return;
-      try { await api('DELETE', '/api/absences/' + btn.dataset.id); broadcastAbsenceChange(); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+      try { await api('DELETE', '/api/absences/' + btn.dataset.id); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-edit').forEach(btn => {
@@ -5388,7 +5384,7 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
       }
       document.getElementById('absence-form-overlay')?.remove();
       toast(editId ? 'Abwesenheit aktualisiert' : 'Abwesenheit eingetragen', 'success');
-      broadcastAbsenceChange();
+     
       renderAbsences();
     } catch(e) { toast(e.message, 'error'); }
   });
