@@ -63,7 +63,7 @@ router.post('/', authenticate, authorize('chef'), (req, res) => {
 
   const hash = bcrypt.hashSync(password, 10);
   const result = db.prepare(
-    "INSERT INTO users (username, password_hash, password_plain, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin) VALUES (?, ?, '', ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(username, hash, name, role, hpw, start_overtime || 0, can_plan ? 1 : 0, can_bulletin ? 1 : 0);
 
   const userId = result.lastInsertRowid;
@@ -119,7 +119,7 @@ router.post('/:id/reset-password', authenticate, authorize('chef'), (req, res) =
     return res.status(400).json({ error: 'Passwort muss mindestens 4 Zeichen haben' });
   }
   const hash = bcrypt.hashSync(password, 10);
-  db.prepare("UPDATE users SET password_hash=?, password_plain='' WHERE id=?").run(hash, req.params.id);
+  db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(hash, req.params.id);
   res.json({ success: true });
 });
 
