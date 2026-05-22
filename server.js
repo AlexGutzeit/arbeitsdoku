@@ -7,7 +7,8 @@ const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const { initDatabase, saveToFile } = require('./database/init');
 const { JWT_SECRET } = require('./middleware/auth');
-const { addClient, removeClient } = require('./sse');
+const { addClient, removeClient, getClientCount } = require('./sse');
+const { authenticate, authorize } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -63,7 +64,25 @@ app.get('/api/events', (req, res) => {
   res.write(': connected\n\n');
   addClient(res);
   const hb = setInterval(() => { try { res.write(': ping\n\n'); } catch (_) { clearInterval(hb); } }, 30000);
-  req.on('close', () => { clearInterval(hb); removeClient(res); });
+  // Force-Reconnect nach 1h verhindert lange-laufende Phantom-Verbindungen
+  const maxLife = setTimeout(() => { try { res.end(); } catch (_) {} }, 60 * 60 * 1000);
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    clearInterval(hb);
+    clearTimeout(maxLife);
+    removeClient(res);
+  };
+  req.on('close', cleanup);
+  req.on('error', cleanup);
+  res.on('close', cleanup);
+  res.on('error', cleanup);
+});
+
+// Debug-Endpoint: Anzahl offener SSE-Connections (nur Admin)
+app.get('/api/debug/sse', authenticate, authorize('admin'), (req, res) => {
+  res.json({ clients: getClientCount() });
 });
 
 // SPA-Fallback
