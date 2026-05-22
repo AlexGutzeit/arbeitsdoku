@@ -3,6 +3,7 @@ const clients = new Set();
 
 function addClient(res) { clients.add(res); }
 function removeClient(res) { clients.delete(res); }
+function getClientCount() { return clients.size; }
 
 function broadcast(type, originTab) {
   const msg = `data: ${JSON.stringify({ type, originTab: originTab || null })}\n\n`;
@@ -11,4 +12,4 @@ function broadcast(type, originTab) {
   }
 }
 
-module.exports = { addClient, removeClient, broadcast };
+module.exports = { addClient, removeClient, broadcast, getClientCount };
