@@ -273,7 +273,7 @@ router.put('/:id', authenticate, canPlan, (req, res) => {
 
   const update = db.transaction(() => {
     db.prepare(`
-      UPDATE planning_entries SET date=?, time_from=?, time_to=?, break_minutes=?, address=?, client=?, project_id=?, project_text=?, description=?, color=?, updated_at=datetime('now')
+      UPDATE planning_entries SET date=?, time_from=?, time_to=?, break_minutes=?, address=?, client=?, project_id=?, project_text=?, description=?, color=?, updated_at=strftime('%Y-%m-%d %H:%M:%f', 'now')
       WHERE id=?
     `).run(
       newDate || entry.date, newFrom || entry.time_from, newTo || entry.time_to,

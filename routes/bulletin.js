@@ -52,8 +52,8 @@ router.post('/', authenticate, canBulletin, (req, res) => {
   }
 
   const result = db.prepare(`
-    INSERT INTO bulletin_entries (created_by, updated_by, title, text, event_date, auto_delete_date)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO bulletin_entries (created_by, updated_by, title, text, event_date, auto_delete_date, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))
   `).run(req.user.id, req.user.id, title.trim(), text || '', event_date || null, auto_delete_date || null);
 
   const entry = db.prepare(`
@@ -75,7 +75,7 @@ router.put('/:id', authenticate, canBulletin, (req, res) => {
   const { title, text, event_date, auto_delete_date } = req.body;
 
   db.prepare(`
-    UPDATE bulletin_entries SET title=?, text=?, event_date=?, auto_delete_date=?, updated_at=datetime('now'), updated_by=?
+    UPDATE bulletin_entries SET title=?, text=?, event_date=?, auto_delete_date=?, updated_at=strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by=?
     WHERE id=?
   `).run(
     title !== undefined ? title.trim() : entry.title,
