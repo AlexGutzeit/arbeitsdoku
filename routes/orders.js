@@ -147,7 +147,7 @@ router.post('/:id/order', authenticate, (req, res) => {
   if (!order) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
   if (order.ordered_at) return res.status(400).json({ error: 'Bereits bestellt' });
 
-  db.prepare("UPDATE orders SET ordered_at = datetime('now'), ordered_by = ? WHERE id = ?")
+  db.prepare("UPDATE orders SET ordered_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), ordered_by = ? WHERE id = ?")
     .run(req.user.id, req.params.id);
   broadcast('orders', req.headers['x-tab-id']);
   res.json({ success: true });

@@ -149,13 +149,13 @@ async function initDatabase() {
       name TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('admin','chef','buchhalter','mitarbeiter')),
       target_hours_per_week REAL DEFAULT 40.0,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS projects (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS entries (
@@ -172,8 +172,8 @@ async function initDatabase() {
       project_text TEXT DEFAULT '',
       description TEXT DEFAULT '',
       personal_note TEXT DEFAULT '',
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      updated_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
     );
@@ -188,7 +188,7 @@ async function initDatabase() {
       user_id INTEGER NOT NULL,
       hours_per_week REAL NOT NULL,
       valid_from TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -204,8 +204,8 @@ async function initDatabase() {
       project_id INTEGER,
       project_text TEXT DEFAULT '',
       description TEXT DEFAULT '',
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      updated_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
     );
@@ -226,15 +226,15 @@ async function initDatabase() {
       text TEXT DEFAULT '',
       event_date TEXT,
       auto_delete_date TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      updated_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS user_seen (
       user_id INTEGER NOT NULL,
       topic   TEXT NOT NULL,
-      seen_at TEXT DEFAULT (datetime('now')),
+      seen_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       PRIMARY KEY (user_id, topic),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -254,8 +254,8 @@ async function initDatabase() {
       processed_by INTEGER,
       processed_at TEXT,
       notified_at  TEXT,
-      created_at   TEXT DEFAULT (datetime('now')),
-      updated_at   TEXT DEFAULT (datetime('now')),
+      created_at   TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      updated_at   TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL
     );
@@ -270,7 +270,7 @@ async function initDatabase() {
       product TEXT NOT NULL,
       comment TEXT,
       user_id INTEGER NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       ordered_at TEXT,
       ordered_by INTEGER,
       project_id INTEGER,
@@ -285,7 +285,7 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS tools (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS tool_checkouts (
@@ -294,7 +294,7 @@ async function initDatabase() {
       user_id INTEGER NOT NULL,
       checked_out_at TEXT NOT NULL,
       returned_at TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       FOREIGN KEY (tool_id) REFERENCES tools(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -306,8 +306,8 @@ async function initDatabase() {
       body TEXT DEFAULT '',
       project_id INTEGER,
       project_text TEXT DEFAULT '',
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      updated_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
     );
@@ -317,7 +317,7 @@ async function initDatabase() {
       note_id INTEGER NOT NULL,
       user_id INTEGER NOT NULL,
       permission TEXT NOT NULL DEFAULT 'read',
-      created_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       UNIQUE(note_id, user_id)
@@ -329,7 +329,7 @@ async function initDatabase() {
       from_user_id INTEGER NOT NULL,
       to_user_id INTEGER NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
       FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
       FOREIGN KEY (from_user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (to_user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -468,7 +468,7 @@ async function initDatabase() {
           product TEXT NOT NULL,
           comment TEXT,
           user_id INTEGER NOT NULL,
-          created_at TEXT DEFAULT (datetime('now')),
+          created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
           ordered_at TEXT,
           ordered_by INTEGER,
           project_id INTEGER,

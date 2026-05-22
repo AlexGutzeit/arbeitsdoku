@@ -50,12 +50,13 @@ router.get('/', authenticate, (req, res) => {
       WHERE updated_at > ?
         AND (user_id IS NULL OR user_id != ?)
         AND COALESCE(created_by, user_id) != ?
+        AND (processed_by IS NULL OR processed_by != ?)
         AND (
           status = 'pending'
           OR (status = 'active' AND type IN ('krank','berufsschule','innung')
               AND (notified_at IS NULL OR notified_at > ?))
         )
-    `).get(absencesSince, uid, uid, absencesSince).n;
+    `).get(absencesSince, uid, uid, uid, absencesSince).n;
   }
 
   // Alle Rollen: eigene Abwesenheiten mit ausstehender Bestätigung (Manager hat Änderungen vorgenommen)
@@ -86,8 +87,8 @@ router.post('/:topic', authenticate, (req, res) => {
   if (!['bulletin', 'notes', 'absences', 'absence_status'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
   const db = getDb();
   db.prepare(
-    "INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, ?, datetime('now', '+1 second')) " +
-    "ON CONFLICT(user_id, topic) DO UPDATE SET seen_at = datetime('now', '+1 second')"
+    "INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now')) " +
+    "ON CONFLICT(user_id, topic) DO UPDATE SET seen_at = strftime('%Y-%m-%d %H:%M:%f', 'now')"
   ).run(req.user.id, topic);
   res.json({ success: true });
 });

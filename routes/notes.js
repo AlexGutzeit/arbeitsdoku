@@ -63,7 +63,7 @@ router.post('/offers/:id/accept', authenticate, (req, res) => {
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
 
   db.prepare(
-    "INSERT INTO notes (user_id, title, body, project_id, project_text) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO notes (user_id, title, body, project_id, project_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
   ).run(req.user.id, note.title, note.body, note.project_id, note.project_text);
   db.prepare("UPDATE note_offers SET status = 'accepted' WHERE id = ?").run(offer.id);
   broadcast('notes', req.headers['x-tab-id']);
@@ -179,7 +179,7 @@ router.post('/', authenticate, (req, res) => {
   const db = getDb();
   const proj = resolveProject(db, project_id, project_text);
   const result = db.prepare(
-    'INSERT INTO notes (user_id, updated_by, title, body, project_id, project_text) VALUES (?, ?, ?, ?, ?, ?)'
+    "INSERT INTO notes (user_id, updated_by, title, body, project_id, project_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
   ).run(req.user.id, req.user.id, title.trim(), (body || '').trim(), proj.project_id, proj.project_text);
 
   const note = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
@@ -207,7 +207,7 @@ router.post('/:id/lock', authenticate, (req, res) => {
     });
   }
 
-  db.prepare("UPDATE notes SET editing_by = ?, editing_since = datetime('now') WHERE id = ?")
+  db.prepare("UPDATE notes SET editing_by = ?, editing_since = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
     .run(req.user.id, note.id);
   res.json({ success: true });
 });
@@ -247,7 +247,7 @@ router.put('/:id', authenticate, (req, res) => {
 
   const proj = resolveProject(db, project_id, project_text);
   db.prepare(
-    "UPDATE notes SET title = ?, body = ?, project_id = ?, project_text = ?, updated_at = datetime('now'), updated_by = ?, editing_by = NULL, editing_since = NULL WHERE id = ?"
+    "UPDATE notes SET title = ?, body = ?, project_id = ?, project_text = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by = ?, editing_by = NULL, editing_since = NULL WHERE id = ?"
   ).run(title.trim(), (body || '').trim(), proj.project_id, proj.project_text, req.user.id, req.params.id);
 
   const updated = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
@@ -303,7 +303,7 @@ router.put('/:id/shares', authenticate, (req, res) => {
 
   db.prepare('DELETE FROM note_shares WHERE note_id = ?').run(note.id);
 
-  const insert = db.prepare('INSERT INTO note_shares (note_id, user_id, permission) VALUES (?, ?, ?)');
+  const insert = db.prepare("INSERT INTO note_shares (note_id, user_id, permission, created_at) VALUES (?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))");
   for (const s of shares) {
     if (!s.user_id || s.user_id === note.user_id) continue;
     const perm = s.permission === 'write' ? 'write' : 'read';
@@ -336,7 +336,7 @@ router.post('/:id/offer', authenticate, (req, res) => {
 
   const insert = db.prepare(
     "INSERT INTO note_offers (note_id, from_user_id, to_user_id) VALUES (?, ?, ?) " +
-    "ON CONFLICT(note_id, to_user_id) DO UPDATE SET status = 'pending', from_user_id = excluded.from_user_id, created_at = datetime('now')"
+    "ON CONFLICT(note_id, to_user_id) DO UPDATE SET status = 'pending', from_user_id = excluded.from_user_id, created_at = strftime('%Y-%m-%d %H:%M:%f', 'now')"
   );
   for (const uid of user_ids) {
     if (uid === req.user.id) continue;

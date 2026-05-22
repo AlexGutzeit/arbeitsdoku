@@ -450,12 +450,12 @@ function initSSE() {
     if (p.type === 'bulletin'  && route !== '/bulletin')  loadBadges();
     if (p.type === 'notes'     && route !== '/notes')     loadBadges();
     if (p.type === 'absences') {
+      loadBadges();  // immer, damit Nav-Badge auf jeder Route live aktualisiert wird
       if (route.startsWith('/absences'))       renderAbsences();
       else if (route === '/' || route === '')  renderDashboardContent();
       else if (route === '/welcome')           renderWelcome();
       else if (route === '/planning')          renderPlanningContent();
       else if (route === '/statistics')        renderStatistics();
-      else                                     loadBadges();
     }
   };
 }

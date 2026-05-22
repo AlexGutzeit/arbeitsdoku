@@ -369,8 +369,8 @@ router.post('/', authenticate, (req, res) => {
   }
 
   const result = db.prepare(`
-    INSERT INTO absences (user_id, type, date_from, date_to, status, comment, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO absences (user_id, type, date_from, date_to, status, comment, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))
   `).run(uid, type, date_from, date_to, status, (comment || '').trim(), created_by);
 
   const absence = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(result.lastInsertRowid), db);
@@ -421,7 +421,7 @@ router.put('/:id', authenticate, (req, res) => {
       UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
         status = ?, notified_at = ?, created_by = ?,
         proposed_date_from = NULL, proposed_date_to = NULL, ma_needs_ack = 0,
-        updated_at = datetime('now')
+        updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
       WHERE id = ?
     `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, absence.id);
 
@@ -431,7 +431,7 @@ router.put('/:id', authenticate, (req, res) => {
     db.prepare(`
       UPDATE absences SET proposed_date_from = ?, proposed_date_to = ?,
         comment = ?, status = 'pending', ma_needs_ack = 1,
-        processed_by = ?, processed_at = datetime('now'), updated_at = datetime('now')
+        processed_by = ?, processed_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
       WHERE id = ?
     `).run(date_from, date_to, (comment || '').trim(), req.user.id, absence.id);
 
@@ -441,7 +441,7 @@ router.put('/:id', authenticate, (req, res) => {
       UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
         status = ?, notified_at = ?, created_by = ?,
         proposed_date_from = NULL, proposed_date_to = NULL, ma_needs_ack = 1,
-        processed_by = ?, processed_at = datetime('now'), updated_at = datetime('now')
+        processed_by = ?, processed_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
       WHERE id = ?
     `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, req.user.id, absence.id);
 
@@ -456,7 +456,7 @@ router.put('/:id', authenticate, (req, res) => {
       UPDATE absences SET date_from = ?, date_to = ?, comment = ?,
         status = ?, notified_at = ?, created_by = ?,
         proposed_date_from = NULL, proposed_date_to = NULL, ma_needs_ack = 0,
-        updated_at = datetime('now')
+        updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
       WHERE id = ?
     `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, absence.id);
   }
@@ -497,8 +497,8 @@ router.post('/:id/approve', authenticate, (req, res) => {
   const newStatus = AUTO_ACTIVE.includes(absence.type) ? 'active' : 'approved';
 
   db.prepare(`
-    UPDATE absences SET status = ?, processed_by = ?, processed_at = datetime('now'),
-      notified_at = datetime('now'), updated_at = datetime('now')
+    UPDATE absences SET status = ?, processed_by = ?, processed_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
+      notified_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
     WHERE id = ?
   `).run(newStatus, req.user.id, absence.id);
 
@@ -516,8 +516,8 @@ router.post('/:id/reject', authenticate, (req, res) => {
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   db.prepare(`
-    UPDATE absences SET status = 'rejected', processed_by = ?, processed_at = datetime('now'),
-      updated_at = datetime('now')
+    UPDATE absences SET status = 'rejected', processed_by = ?, processed_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
+      updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
     WHERE id = ?
   `).run(req.user.id, absence.id);
 
@@ -544,8 +544,8 @@ router.post('/:id/accept', authenticate, (req, res) => {
   }
 
   db.prepare(`
-    UPDATE absences SET status = 'approved', processed_by = ?, processed_at = datetime('now'),
-      updated_at = datetime('now')
+    UPDATE absences SET status = 'approved', processed_by = ?, processed_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
+      updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
     WHERE id = ?
   `).run(req.user.id, absence.id);
 
@@ -572,8 +572,8 @@ router.post('/:id/reject-ma', authenticate, (req, res) => {
   }
 
   db.prepare(`
-    UPDATE absences SET status = 'rejected', processed_by = ?, processed_at = datetime('now'),
-      updated_at = datetime('now')
+    UPDATE absences SET status = 'rejected', processed_by = ?, processed_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
+      updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
     WHERE id = ?
   `).run(req.user.id, absence.id);
 
@@ -591,8 +591,8 @@ router.post('/:id/acknowledge', authenticate, (req, res) => {
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   db.prepare(`
-    UPDATE absences SET notified_at = datetime('now'), processed_by = ?,
-      processed_at = datetime('now'), updated_at = datetime('now')
+    UPDATE absences SET notified_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), processed_by = ?,
+      processed_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
     WHERE id = ?
   `).run(req.user.id, absence.id);
 
@@ -613,13 +613,13 @@ router.post('/:id/acknowledge-ma', authenticate, (req, res) => {
     db.prepare(`
       UPDATE absences SET date_from = proposed_date_from, date_to = proposed_date_to,
         proposed_date_from = NULL, proposed_date_to = NULL,
-        status = 'approved', ma_needs_ack = 0, updated_at = datetime('now')
+        status = 'approved', ma_needs_ack = 0, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
       WHERE id = ?
     `).run(absence.id);
   } else {
     // Krank/BS/Innung quittieren — nur ma_needs_ack löschen
     db.prepare(`
-      UPDATE absences SET ma_needs_ack = 0, updated_at = datetime('now')
+      UPDATE absences SET ma_needs_ack = 0, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
       WHERE id = ?
     `).run(absence.id);
   }
@@ -646,7 +646,7 @@ router.post('/:id/reject-manager-edit', authenticate, (req, res) => {
     UPDATE absences SET proposed_date_from = NULL, proposed_date_to = NULL,
       status = 'pending', ma_needs_ack = 0,
       created_by = user_id, processed_by = NULL, processed_at = NULL,
-      updated_at = datetime('now')
+      updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
     WHERE id = ?
   `).run(absence.id);
 
