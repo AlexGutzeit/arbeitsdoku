@@ -1,4 +1,4 @@
-const CACHE_VERSION = 158;
+const CACHE_VERSION = 159;
 const CACHE_NAME = 'arbeitsdoku-v' + CACHE_VERSION;
 
 // Install: NICHT sofort aktivieren — warten bis User bestätigt oder App neu startet
@@ -28,6 +28,10 @@ self.addEventListener('fetch', (event) => {
 
   // API-Aufrufe: kein respondWith — Browser holt direkt vom Netz (kein SW-Overhead, kein offener Fetch-Stream)
   if (url.pathname.startsWith('/api/')) return;
+  // Manifest darf NIE gecached werden (Branding-Aenderung wird sonst nicht sichtbar)
+  if (url.pathname === '/manifest.json') return;
+  // Custom-Icons darf nie gecached werden (Icon-Wechsel waere sonst nicht sichtbar)
+  if (url.pathname.startsWith('/uploads/icons/')) return;
 
   // Alles andere: Network-first, bei Fehler aus Cache
   event.respondWith(

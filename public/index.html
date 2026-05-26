@@ -3,23 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#5DB635">
+  <meta name="theme-color" content="{{themeColor}}">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="SenTec">
+  <meta name="apple-mobile-web-app-title" content="{{appName}}">
   <link rel="manifest" href="/manifest.json">
-  <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
-  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
-  <meta name="msapplication-TileImage" content="/icons/mstile-144x144.png">
-  <meta name="msapplication-TileColor" content="#5DB635">
-  <title>SenTec</title>
-  <link rel="stylesheet" href="/css/style.css?v=158">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{iconBase}}/icon-16x16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{iconBase}}/icon-32x32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{iconBase}}/icon-180x180.png">
+  <meta name="msapplication-TileImage" content="{{iconBase}}/icon-144x144.png">
+  <meta name="msapplication-TileColor" content="{{themeColor}}">
+  <title>{{appName}}</title>
+  <style>:root {
+    --primary: {{themeColor}};
+    --primary-hover: color-mix(in srgb, {{themeColor}} 78%, black);
+    --primary-light: color-mix(in srgb, {{themeColor}} 14%, white);
+    --brand-bg: {{bgColor}};
+  }</style>
+  <link rel="stylesheet" href="/css/style.css?v=159">
 </head>
 <body>
   <div id="app"></div>
-  <script src="/js/app.js?v=158"></script>
+  <script src="/js/app.js?v=159"></script>
   <script>
     if ('serviceWorker' in navigator) {
       function showUpdateBanner(reg) {
