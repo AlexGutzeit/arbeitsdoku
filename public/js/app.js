@@ -3631,11 +3631,11 @@ async function renderSettings() {
           <div class="form-row" style="grid-template-columns:120px 1fr;">
             <div class="form-group">
               <label>PLZ</label>
-              <input type="text" class="form-control" id="s-zip" value="${esc(S.settings.company_zip || '')}" placeholder="97491">
+              <input type="text" class="form-control" id="s-zip" value="${esc(S.settings.company_zip || '')}" placeholder="10115">
             </div>
             <div class="form-group">
               <label>Ort</label>
-              <input type="text" class="form-control" id="s-city" value="${esc(S.settings.company_city || '')}" placeholder="Aidhausen">
+              <input type="text" class="form-control" id="s-city" value="${esc(S.settings.company_city || '')}" placeholder="Berlin">
             </div>
           </div>
           <button type="submit" class="btn btn-primary">Speichern</button>
