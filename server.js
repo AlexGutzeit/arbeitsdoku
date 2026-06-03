@@ -21,10 +21,18 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Dynamische Branding-Routes (manifest.json + index.html mit Settings-Tokens)
+// MUSS vor express.static stehen, sonst gewinnt die statische Datei
+const brandingRouter = require('./routes/branding');
+app.use('/', brandingRouter);
+
 // Kein Cache für statische Dateien (Entwicklung)
+// index: false verhindert, dass express.static automatisch index.html ausliefert
+// (die branding-Route uebernimmt das mit Token-Replacements)
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: false,
   lastModified: false,
+  index: false,
   setHeaders: (res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
@@ -85,10 +93,8 @@ app.get('/api/debug/sse', authenticate, authorize('admin'), (req, res) => {
   res.json({ clients: getClientCount() });
 });
 
-// SPA-Fallback
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// SPA-Fallback (gerenderte index.html mit Branding-Tokens)
+app.get('*', (req, res) => brandingRouter.renderIndex(req, res));
 
 // Fehlerbehandlung
 app.use((err, req, res, next) => {

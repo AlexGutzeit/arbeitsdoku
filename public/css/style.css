@@ -39,7 +39,7 @@ body {
   justify-content: center;
   min-height: 100vh;
   padding: 1rem;
-  background: linear-gradient(135deg, #5DB635 0%, #1C4A28 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, #1C4A28 100%);
 }
 .login-card {
   background: var(--card);
@@ -167,7 +167,7 @@ body {
 .sidebar nav a .icon { font-size: 1.2rem; width: 1.5rem; text-align: center; }
 .nav-badge {
   margin-left: auto;
-  background: #5DB635;
+  background: var(--primary);
   color: #fff;
   font-size: 0.68rem;
   font-weight: 700;

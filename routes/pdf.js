@@ -111,7 +111,7 @@ router.get('/export', authenticate, (req, res) => {
 
   if (logoPath && fs.existsSync(logoPath)) {
     try {
-      doc.image(logoPath, doc.page.width - 140, 25, { width: 100, height: 50 });
+      doc.image(logoPath, doc.page.width - 140, 25, { fit: [100, 50], align: 'right', valign: 'top' });
     } catch (e) { /* Logo konnte nicht geladen werden */ }
   }
 

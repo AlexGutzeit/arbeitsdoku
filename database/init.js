@@ -569,6 +569,23 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: Branding-Defaults (White-Label) — fuegt nur Werte ein, die fehlen
+  try {
+    const brandDefaults = [
+      ['app_name', 'Arbeitsdoku'],
+      ['app_short_name', 'Arbeitsdoku'],
+      ['theme_color', '#5DB635'],
+      ['background_color', '#ffffff'],
+    ];
+    const checkStmt = db.prepare('SELECT 1 FROM settings WHERE key = ?');
+    const insStmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+    let added = 0;
+    for (const [k, v] of brandDefaults) {
+      if (!checkStmt.get(k)) { insStmt.run(k, v); added++; }
+    }
+    if (added > 0) { markDirty(); console.log('Migration: ' + added + ' Branding-Default(s) gesetzt.'); }
+  } catch (e) {}
+
   // Seed-Daten nur wenn DB leer
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {

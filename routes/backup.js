@@ -44,16 +44,24 @@ router.get('/download', authenticate, authorize('chef'), (req, res) => {
   // Datenbank hinzufügen
   archive.file(DB_PATH, { name: 'arbeitsdoku.db' });
 
-  // Uploads-Ordner hinzufügen (Logo etc.)
-  if (fs.existsSync(uploadsDir)) {
-    const files = fs.readdirSync(uploadsDir);
-    files.forEach(f => {
-      const filePath = path.join(uploadsDir, f);
-      if (fs.statSync(filePath).isFile()) {
-        archive.file(filePath, { name: 'uploads/' + f });
-      }
-    });
+  // Uploads-Ordner inkl. erlaubter Subordner (icons) rekursiv hinzufuegen
+  function walkUploads(dir, prefix) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir)) {
+      if (entry === 'tmp') continue; // multer-Temp-Ordner ueberspringen
+      const full = path.join(dir, entry);
+      const rel = prefix + '/' + entry;
+      try {
+        const stat = fs.statSync(full);
+        if (stat.isFile()) {
+          archive.file(full, { name: rel });
+        } else if (stat.isDirectory()) {
+          walkUploads(full, rel);
+        }
+      } catch (_) {}
+    }
   }
+  walkUploads(uploadsDir, 'uploads');
 
   archive.finalize();
 });
@@ -84,20 +92,37 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
       dbBuffer = new Uint8Array(dbEntry.getData());
 
       // Upload-Dateien sammeln (mit Path-Traversal-Schutz)
+      // Erlaubt: uploads/<file> (root) und uploads/<allowedSubdir>/<file>
       const uploadsResolved = path.resolve(uploadsDir);
+      const ALLOWED_SUBDIRS = ['icons'];
       entries.forEach(e => {
         if (!e.entryName.startsWith('uploads/') || e.isDirectory) return;
-        const safeName = path.basename(e.entryName);
-        if (!safeName || safeName.includes('..') || safeName.startsWith('.')) {
+        const rel = e.entryName.slice('uploads/'.length); // z.B. "logo.jpg" oder "icons/master.png"
+        if (rel.includes('..') || rel.startsWith('.') || rel.startsWith('/')) {
           console.warn('Backup-Restore: Eintrag uebersprungen (verdaechtiger Name):', e.entryName);
           return;
         }
-        const finalPath = path.resolve(uploadsDir, safeName);
-        if (finalPath !== path.join(uploadsResolved, safeName) || !finalPath.startsWith(uploadsResolved + path.sep)) {
+        const parts = rel.split('/');
+        let safeRel;
+        if (parts.length === 1) {
+          safeRel = path.basename(parts[0]);
+        } else if (parts.length === 2 && ALLOWED_SUBDIRS.includes(parts[0])) {
+          const subFile = path.basename(parts[1]);
+          if (!subFile || subFile.startsWith('.')) {
+            console.warn('Backup-Restore: Eintrag uebersprungen (Subfile-Name verdaechtig):', e.entryName);
+            return;
+          }
+          safeRel = parts[0] + '/' + subFile;
+        } else {
+          console.warn('Backup-Restore: Eintrag uebersprungen (Subpfad nicht erlaubt):', e.entryName);
+          return;
+        }
+        const finalPath = path.resolve(uploadsDir, safeRel);
+        if (!finalPath.startsWith(uploadsResolved + path.sep)) {
           console.warn('Backup-Restore: Eintrag uebersprungen (Pfad ausserhalb uploads):', e.entryName);
           return;
         }
-        uploadFiles.push({ name: safeName, data: e.getData() });
+        uploadFiles.push({ name: safeRel, data: e.getData() });
       });
     } else {
       // Reine SQLite-Datei (Abwärtskompatibilität)
@@ -148,11 +173,13 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
     // DB wiederherstellen
     fs.writeFileSync(DB_PATH, Buffer.from(dbBuffer));
 
-    // Uploads wiederherstellen
+    // Uploads wiederherstellen (Subordner werden bei Bedarf angelegt)
     if (uploadFiles.length > 0) {
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
       uploadFiles.forEach(f => {
-        fs.writeFileSync(path.join(uploadsDir, f.name), f.data);
+        const target = path.join(uploadsDir, f.name);
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, f.data);
       });
     }
 

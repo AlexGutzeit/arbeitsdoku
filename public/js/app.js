@@ -3631,11 +3631,11 @@ async function renderSettings() {
           <div class="form-row" style="grid-template-columns:120px 1fr;">
             <div class="form-group">
               <label>PLZ</label>
-              <input type="text" class="form-control" id="s-zip" value="${esc(S.settings.company_zip || '')}" placeholder="97491">
+              <input type="text" class="form-control" id="s-zip" value="${esc(S.settings.company_zip || '')}" placeholder="10115">
             </div>
             <div class="form-group">
               <label>Ort</label>
-              <input type="text" class="form-control" id="s-city" value="${esc(S.settings.company_city || '')}" placeholder="Aidhausen">
+              <input type="text" class="form-control" id="s-city" value="${esc(S.settings.company_city || '')}" placeholder="Berlin">
             </div>
           </div>
           <button type="submit" class="btn btn-primary">Speichern</button>
@@ -3651,6 +3651,51 @@ async function renderSettings() {
           ` : ''}
           <input type="file" class="form-control" id="s-logo" accept=".png,.jpg,.jpeg">
           <button type="button" class="btn btn-outline btn-sm" id="upload-logo" style="margin-top:0.5rem;">Logo hochladen</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-bottom:1rem;">App-Branding</h2>
+        <div class="warning-box" style="margin-bottom:1rem;">
+          App-Name, Farben und Icon der installierten PWA-App. Nach dem Speichern muss die App auf jedem Gerät einmal neu geladen werden (Pull-to-Refresh oder Browser-Reload). Bei bereits installierter PWA (Homescreen-Icon) ggf. neu installieren.
+        </div>
+        <form id="brand-form">
+          <div class="form-group">
+            <label>App-Name (Browser-Titel + PWA)</label>
+            <input type="text" class="form-control" id="b-app-name" maxlength="60" value="${esc(S.settings.app_name || '')}" placeholder="Arbeitsdoku">
+          </div>
+          <div class="form-group">
+            <label>Short-Name (max. 12 Zeichen, fuer Homescreen-Icon)</label>
+            <input type="text" class="form-control" id="b-app-short" maxlength="12" value="${esc(S.settings.app_short_name || '')}" placeholder="Arbeitsdoku">
+          </div>
+          <div class="form-row" style="grid-template-columns:1fr 1fr;">
+            <div class="form-group">
+              <label>Theme-Farbe</label>
+              <input type="color" class="form-control" id="b-theme" value="${esc(S.settings.theme_color || '#5DB635')}" style="height:42px;padding:4px;">
+            </div>
+            <div class="form-group">
+              <label>Hintergrund (PWA-Splash)</label>
+              <input type="color" class="form-control" id="b-bg" value="${esc(S.settings.background_color || '#ffffff')}" style="height:42px;padding:4px;">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Branding speichern</button>
+        </form>
+        <hr style="margin:1.5rem 0;border:none;border-top:1px solid var(--border);">
+        <div class="form-group">
+          <label>App-Icon (PNG/JPG, mind. 256x256 Pixel)</label>
+          ${S.settings.app_icon_master ? `
+            <div style="margin-bottom:0.75rem;display:flex;align-items:center;gap:0.75rem;">
+              <img src="${esc(S.settings.app_icon_master)}?t=${Date.now()}" style="width:64px;height:64px;border-radius:12px;border:1px solid var(--border);" alt="App-Icon">
+              <button class="btn btn-sm btn-danger" id="delete-app-icon" type="button">Auf Standard zuruecksetzen</button>
+            </div>
+          ` : `
+            <div style="margin-bottom:0.75rem;display:flex;align-items:center;gap:0.75rem;">
+              <img src="/icons/icon-128x128.png?t=${Date.now()}" style="width:64px;height:64px;border-radius:12px;border:1px solid var(--border);opacity:0.6;" alt="Standard-Icon">
+              <span style="color:var(--text-light);font-size:0.85rem;">Standard-Icon aktiv</span>
+            </div>
+          `}
+          <input type="file" class="form-control" id="b-icon" accept=".png,.jpg,.jpeg">
+          <button type="button" class="btn btn-outline btn-sm" id="upload-app-icon" style="margin-top:0.5rem;">Icon hochladen</button>
         </div>
       </div>
 
@@ -3704,6 +3749,48 @@ async function renderSettings() {
       await api('DELETE', '/api/settings/logo');
       toast('Logo entfernt', 'success');
       renderSettings();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  // Brand-Form (App-Name + Short-Name + Theme-Color + Background-Color)
+  document.getElementById('brand-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const appName = document.getElementById('b-app-name').value.trim();
+    const shortName = document.getElementById('b-app-short').value.trim();
+    const themeColor = document.getElementById('b-theme').value;
+    const bgColor = document.getElementById('b-bg').value;
+    try {
+      await api('PUT', '/api/settings', {
+        app_name: appName,
+        app_short_name: shortName,
+        theme_color: themeColor,
+        background_color: bgColor,
+      });
+      toast('Branding gespeichert — App wird neu geladen', 'success');
+      setTimeout(() => location.reload(), 800);
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  // App-Icon hochladen
+  document.getElementById('upload-app-icon').addEventListener('click', async () => {
+    const fileInput = document.getElementById('b-icon');
+    if (!fileInput.files.length) { toast('Bitte eine Datei auswaehlen', 'error'); return; }
+    const fd = new FormData();
+    fd.append('icon', fileInput.files[0]);
+    try {
+      await api('POST', '/api/settings/app-icon', fd, true);
+      toast('Icon hochgeladen — App wird neu geladen', 'success');
+      setTimeout(() => location.reload(), 800);
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  // App-Icon zuruecksetzen
+  document.getElementById('delete-app-icon')?.addEventListener('click', async () => {
+    if (!confirm('App-Icon auf Standard zuruecksetzen?')) return;
+    try {
+      await api('DELETE', '/api/settings/app-icon');
+      toast('Icon zurueckgesetzt — App wird neu geladen', 'success');
+      setTimeout(() => location.reload(), 800);
     } catch (err) { toast(err.message, 'error'); }
   });
 
