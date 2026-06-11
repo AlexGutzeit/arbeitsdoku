@@ -527,9 +527,14 @@ function layout(content, activeNav) {
           <span class="icon">&#128220;</span> Audit-Log
         </a>` : ''}
         ${showAudit ? `
-        <div class="nav-group-label"><span class="icon">&#128465;</span> Papierkorb</div>
-        <a href="#/deleted-entries" class="nav-subitem ${activeNav === 'deleted-entries' ? 'active' : ''}">Einträge</a>
-        <a href="#/deleted-absences" class="nav-subitem ${activeNav === 'deleted-absences' ? 'active' : ''}">Abwesenheiten</a>
+        <div class="nav-group${(activeNav === 'deleted-entries' || activeNav === 'deleted-absences') ? ' open' : ''}" id="nav-papierkorb">
+          <div class="nav-group-label" id="nav-papierkorb-label">
+            <span class="icon">&#128465;</span> Papierkorb
+            <span class="nav-caret">&#9656;</span>
+          </div>
+          <a href="#/deleted-entries" class="nav-subitem ${activeNav === 'deleted-entries' ? 'active' : ''}">Einträge</a>
+          <a href="#/deleted-absences" class="nav-subitem ${activeNav === 'deleted-absences' ? 'active' : ''}">Abwesenheiten</a>
+        </div>
         ` : ''}
       </nav>
     </div>
@@ -572,6 +577,12 @@ function bindLayout() {
       overlay.classList.remove('open');
     });
   });
+  // Papierkorb-Gruppe per Tippen auf-/zuklappen (Touch-Geraete; Desktop nutzt zusaetzlich Hover via CSS)
+  const pkLabel = document.getElementById('nav-papierkorb-label');
+  if (pkLabel) pkLabel.addEventListener('click', () => {
+    document.getElementById('nav-papierkorb')?.classList.toggle('open');
+  });
+
   if (logoutBtn) logoutBtn.addEventListener('click', logout);
   if (fab) fab.addEventListener('click', () => {
     const route = getRoute();
