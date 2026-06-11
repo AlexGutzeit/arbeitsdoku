@@ -356,6 +356,7 @@ function render() {
   else if (route === '/projects') renderProjects();
   else if (route === '/settings') renderSettings();
   else if (route === '/audit') renderAudit();
+  else if (route === '/deleted-entries') renderDeletedEntries();
   else if (route === '/pdf') renderPdfExport();
   else if (route === '/statistics') renderStatistics();
   else if (route === '/planning') renderPlanning();
@@ -523,6 +524,9 @@ function layout(content, activeNav) {
         </a>` : ''}
         ${showAudit ? `<a href="#/audit" class="${activeNav === 'audit' ? 'active' : ''}">
           <span class="icon">&#128220;</span> Audit-Log
+        </a>` : ''}
+        ${showAudit ? `<a href="#/deleted-entries" class="${activeNav === 'deleted-entries' ? 'active' : ''}">
+          <span class="icon">&#128465;</span> Gelöschte Einträge
         </a>` : ''}
       </nav>
     </div>
@@ -3943,6 +3947,66 @@ async function renderAudit() {
         </div>
       </div>
     </div>`;
+}
+
+// --- Gelöschte Einträge (Papierkorb, nur Admin) ---
+async function renderDeletedEntries() {
+  if (!isAdmin()) { navigate('/'); return; }
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-entries');
+  bindLayout();
+
+  let data;
+  try {
+    data = await api('GET', '/api/entries/deleted');
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  const entries = (data && data.entries) || [];
+  const rows = entries.map(e => {
+    const proj = e.project_name || e.project_text || '';
+    return `<tr>
+      <td style="white-space:nowrap;">${esc(e.date)}</td>
+      <td>${esc(e.user_name)}</td>
+      <td style="white-space:nowrap;">${esc(e.time_from)}–${esc(e.time_to)}</td>
+      <td>${esc(proj)}</td>
+      <td style="color:var(--text-light);">${esc(String(e.deleted_at || '').slice(0, 19))}</td>
+      <td>${esc(e.deleted_by_name || '—')}</td>
+      <td style="color:var(--text-light);">${esc(e.delete_reason || '')}</td>
+      <td><button class="btn btn-outline btn-sm restore-entry" data-id="${e.id}" type="button">Wiederherstellen</button></td>
+    </tr>`;
+  }).join('');
+
+  const mainEl = document.querySelector('.main');
+  mainEl.innerHTML = `
+    <div style="max-width:1100px;margin:0 auto;">
+      <div class="card">
+        <h2 style="margin-bottom:0.5rem;">Gelöschte Einträge</h2>
+        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
+          Soft-gelöschte Zeiteinträge bleiben für die Revisionssicherheit (GoBD) erhalten und sind hier einsehbar.
+          Wiederherstellen setzt den Eintrag zurück; der Vorgang wird im Änderungsverlauf protokolliert.
+        </p>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;font-size:0.88rem;">
+            <thead><tr>
+              <th>Datum</th><th>Mitarbeiter</th><th>Zeit</th><th>Projekt</th>
+              <th>Gelöscht am</th><th>Gelöscht von</th><th>Begründung</th><th></th>
+            </tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" style="color:var(--text-light);">Keine gelöschten Einträge.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+  mainEl.querySelectorAll('.restore-entry').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Diesen Eintrag wiederherstellen?')) return;
+      const reason = prompt('Begründung für die Wiederherstellung (optional):') || '';
+      try {
+        await api('POST', '/api/entries/' + btn.dataset.id + '/restore', { reason: reason.trim() });
+        toast('Eintrag wiederhergestellt', 'success');
+        renderDeletedEntries();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
 }
 
 // --- PDF Export ---

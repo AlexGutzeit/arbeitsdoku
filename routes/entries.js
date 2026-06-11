@@ -106,6 +106,24 @@ router.get('/', authenticate, (req, res) => {
   res.json({ entries });
 });
 
+// Gelöschte Einträge (Papierkorb) — nur Admin. MUSS vor GET '/:id' stehen.
+router.get('/deleted', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT e.*, u.name as user_name, du.name as deleted_by_name, p.name as project_name,
+           (SELECT h.reason FROM entry_history h
+            WHERE h.entry_id = e.id AND h.action = 'delete'
+            ORDER BY h.changed_at DESC, h.id DESC LIMIT 1) as delete_reason
+    FROM entries e
+    JOIN users u ON e.user_id = u.id
+    LEFT JOIN users du ON e.deleted_by = du.id
+    LEFT JOIN projects p ON e.project_id = p.id
+    WHERE e.deleted_at IS NOT NULL
+    ORDER BY e.deleted_at DESC
+  `).all();
+  res.json({ entries: rows });
+});
+
 // Einzelnen Eintrag abrufen
 router.get('/:id', authenticate, (req, res) => {
   const db = getDb();
@@ -280,6 +298,20 @@ router.get('/:id/history', authenticate, authorize('chef'), (req, res) => {
     try { r.snapshot = JSON.parse(r.snapshot); } catch (_) { r.snapshot = null; }
   }
   res.json({ history: rows });
+});
+
+// Gelöschten Eintrag wiederherstellen — nur Admin. Wird als History-Eintrag protokolliert.
+router.post('/:id/restore', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  const entry = db.prepare('SELECT * FROM entries WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Gelöschter Eintrag nicht gefunden' });
+
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  // Vorher-Abbild (geloeschter Zustand) festhalten, dann wiederherstellen
+  recordEntryHistory(db, entry, 'restore', req.user.id, reason);
+  db.prepare('UPDATE entries SET deleted_at = NULL, deleted_by = NULL WHERE id = ?').run(req.params.id);
+  broadcast('entries', req.headers['x-tab-id']);
+  res.json({ success: true });
 });
 
 module.exports = router;
