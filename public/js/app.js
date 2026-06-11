@@ -5561,10 +5561,41 @@ function renderAbsenceCard(a, opts = {}) {
       ${canEdit ? `<button class="btn btn-sm btn-outline absence-edit" data-id="${a.id}" data-type="${a.type}" data-from="${editFrom}" data-to="${editTo}" data-comment="${esc(a.comment||'')}">Bearbeiten</button>` : ''}
       ${(isManagerRole() || a.user_id === S.user?.id) ? `<button class="btn btn-sm btn-danger absence-delete" data-id="${a.id}">Löschen</button>` : ''}
     </div>
+    ${isChefOrAdmin() ? `
+    <details class="absence-changelog" data-id="${a.id}">
+      <summary>Änderungsverlauf</summary>
+      <div class="absence-changelog-body" data-id="${a.id}"></div>
+    </details>` : ''}
   </div>`;
 }
 
 function bindAbsenceCardActions(container) {
+  // Änderungsverlauf (chef/admin): beim ersten Aufklappen laden
+  container.querySelectorAll('details.absence-changelog').forEach(d => {
+    d.addEventListener('toggle', async () => {
+      if (!d.open) return;
+      const body = d.querySelector('.absence-changelog-body');
+      if (body.dataset.loaded) return;
+      body.dataset.loaded = '1';
+      body.textContent = 'Lade…';
+      try {
+        const data = await api('GET', '/api/absences/' + d.dataset.id + '/history');
+        const hist = (data && data.history) || [];
+        if (!hist.length) { body.textContent = 'Keine Änderungen protokolliert.'; return; }
+        body.innerHTML = hist.map(h => {
+          const s = h.snapshot || {};
+          const act = h.action === 'delete' ? 'Gelöscht' : (h.action === 'restore' ? 'Wiederhergestellt' : 'Geändert');
+          const vorher = formatDateRange(s.date_from, s.date_to) + (s.status ? `, Status ${esc(s.status)}` : '');
+          return `<div class="absence-changelog-row">
+            <strong>${act}</strong> am ${esc(String(h.changed_at || '').slice(0, 19))} von ${esc(h.changed_by_name || '—')}
+            ${h.reason ? ` — <em>${esc(h.reason)}</em>` : ''}
+            <br><span class="absence-changelog-before">Vorher: ${vorher}</span>
+          </div>`;
+        }).join('');
+      } catch (e) { body.textContent = 'Fehler: ' + e.message; }
+    });
+  });
+
   container.querySelectorAll('.absence-approve').forEach(btn => {
     btn.addEventListener('click', async () => {
       try { await api('POST', '/api/absences/' + btn.dataset.id + '/approve'); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
