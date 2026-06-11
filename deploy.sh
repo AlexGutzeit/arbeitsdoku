@@ -14,6 +14,6 @@ rsync -az --delete public/ alexg@10.83.27.2:/home/alexg/arbeitsdoku/public/
 rsync -az database/ alexg@10.83.27.2:/home/alexg/arbeitsdoku/database/
 rsync -az routes/ alexg@10.83.27.2:/home/alexg/arbeitsdoku/routes/
 rsync -az middleware/ alexg@10.83.27.2:/home/alexg/arbeitsdoku/middleware/
-rsync -az server.js package.json alexg@10.83.27.2:/home/alexg/arbeitsdoku/
+rsync -az server.js audit.js package.json package-lock.json alexg@10.83.27.2:/home/alexg/arbeitsdoku/
 ssh alexg@10.83.27.2 "systemctl --user restart arbeitsdoku"
 echo "Erfolgreich deployed."
