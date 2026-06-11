@@ -2,6 +2,13 @@
 // recordEntryHistory: schreibt ein unveraenderliches Vorher-Abbild eines Zeiteintrags.
 // logAudit: protokolliert sicherheits-/betriebsrelevante Ereignisse.
 
+// Zeitstempel "YYYY-MM-DD HH:MM:SS" in Europe/Berlin (beruecksichtigt Sommer-/Winterzeit).
+// SQLites strftime('now') liefert UTC — daher erzeugen wir die Zeit explizit in JS,
+// konsistent mit dem Rest der App (z.B. cleanupToolHistory in server.js).
+function berlinNow() {
+  return new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+}
+
 // Felder, die im Snapshot eines Eintrags festgehalten werden (Vorher-Zustand).
 const ENTRY_SNAPSHOT_FIELDS = [
   'id', 'user_id', 'date', 'time_from', 'time_to', 'break_minutes', 'net_hours',
@@ -18,8 +25,8 @@ function recordEntryHistory(db, oldEntry, action, changedBy, reason) {
   for (const f of ENTRY_SNAPSHOT_FIELDS) snap[f] = oldEntry[f];
   try {
     db.prepare(
-      'INSERT INTO entry_history (entry_id, action, changed_by, reason, snapshot) VALUES (?, ?, ?, ?, ?)'
-    ).run(oldEntry.id, action, changedBy || null, reason || '', JSON.stringify(snap));
+      'INSERT INTO entry_history (entry_id, action, changed_by, changed_at, reason, snapshot) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(oldEntry.id, action, changedBy || null, berlinNow(), reason || '', JSON.stringify(snap));
   } catch (e) {
     // Audit darf den eigentlichen Vorgang nie blockieren — nur loggen.
     console.error('entry_history konnte nicht geschrieben werden:', e.message);
@@ -36,8 +43,8 @@ function logAudit(db, opts) {
   }
   try {
     db.prepare(
-      'INSERT INTO audit_logs (user_id, username, action, details, ip) VALUES (?, ?, ?, ?, ?)'
-    ).run(o.userId || null, o.username || '', o.action, details || '', o.ip || '');
+      'INSERT INTO audit_logs (ts, user_id, username, action, details, ip) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(berlinNow(), o.userId || null, o.username || '', o.action, details || '', o.ip || '');
   } catch (e) {
     console.error('audit_logs konnte nicht geschrieben werden:', e.message);
   }
