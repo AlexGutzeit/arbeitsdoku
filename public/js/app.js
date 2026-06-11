@@ -1525,11 +1525,15 @@ async function renderEntryForm(editId, continueId, planningId) {
       return;
     }
 
-    // GoBD: Begruendung bei Bearbeitung eines fremden Eintrags (nur Admin)
-    if (isEdit && isForeign) {
-      const reason = prompt('Begründung für die Änderung dieses fremden Eintrags (GoBD-Pflicht):');
-      if (reason === null || !reason.trim()) { toast('Begründung erforderlich', 'error'); return; }
-      body.reason = reason.trim();
+    // GoBD: Begruendung abfragen — bei fremdem Eintrag Pflicht, bei eigenem optional
+    if (isEdit) {
+      const reason = prompt(isForeign
+        ? 'Begründung für die Änderung dieses fremden Eintrags (Pflicht):'
+        : 'Begründung für die Änderung (optional):');
+      if (isForeign && (reason === null || !reason.trim())) {
+        toast('Begründung erforderlich', 'error'); return;
+      }
+      body.reason = (reason || '').trim();
     }
 
     try {
@@ -1549,15 +1553,17 @@ async function renderEntryForm(editId, continueId, planningId) {
     navigate('/entry/continue/' + editId);
   });
 
-  // Delete (Soft-Delete; bei fremdem Eintrag Begruendung erforderlich)
+  // Delete (Soft-Delete; Begruendung abfragen — fremd Pflicht, eigen optional)
   document.getElementById('delete-entry')?.addEventListener('click', async () => {
     if (!confirm('Eintrag wirklich löschen?')) return;
     const body = {};
-    if (isForeign) {
-      const reason = prompt('Begründung für das Löschen dieses fremden Eintrags (GoBD-Pflicht):');
-      if (reason === null || !reason.trim()) { toast('Begründung erforderlich', 'error'); return; }
-      body.reason = reason.trim();
+    const reason = prompt(isForeign
+      ? 'Begründung für das Löschen dieses fremden Eintrags (Pflicht):'
+      : 'Begründung für das Löschen (optional):');
+    if (isForeign && (reason === null || !reason.trim())) {
+      toast('Begründung erforderlich', 'error'); return;
     }
+    body.reason = (reason || '').trim();
     try {
       await api('DELETE', '/api/entries/' + editId, body);
       toast('Eintrag gelöscht', 'success');
