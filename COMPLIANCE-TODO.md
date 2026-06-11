@@ -17,6 +17,9 @@ einsetzbar ist. Rollout-Modell: **Self-Hosting je Kunde** (jede Firma = eigener 
 - [x] Admin-Ansichten „Audit-Log" + „Gelöschte Einträge" (Papierkorb mit Wiederherstellen)
 - [x] Zeitstempel in Europe/Berlin
 - [x] Schließt Bug B20
+- [x] **Abwesenheiten** ebenso revisionssicher (Soft-Delete + Verlauf + Papierkorb), da
+  sie den Soll-/Überstundensaldo beeinflussen. Scope: saldorelevante Änderungen (Löschen +
+  Datum/Edit); Status-Übergänge (genehmigen/ablehnen) nicht versioniert.
 
 ---
 
