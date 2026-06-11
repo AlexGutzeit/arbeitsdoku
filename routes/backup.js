@@ -7,6 +7,7 @@ const AdmZip = require('adm-zip');
 const dbModule = require('../database/init');
 const { getDb, saveToFile, reloadFromFile, DB_PATH } = dbModule;
 const { authenticate, authorize } = require('../middleware/auth');
+const { logAudit } = require('../audit');
 
 const router = express.Router();
 
@@ -27,6 +28,8 @@ router.get('/download', authenticate, authorize('chef'), (req, res) => {
   if (!fs.existsSync(DB_PATH)) {
     return res.status(404).json({ error: 'Datenbank nicht gefunden' });
   }
+
+  logAudit(getDb(), { userId: req.user.id, username: req.user.username, action: 'backup_download', ip: req.ip });
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `arbeitsdoku_backup_${timestamp}.zip`;
@@ -187,6 +190,13 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
 
     // DB neu laden
     reloadFromFile(DB_PATH);
+
+    // Audit in die wiederhergestellte DB schreiben (ensureAuditSchema hat audit_logs garantiert)
+    logAudit(getDb(), {
+      userId: req.user.id, username: req.user.username, action: 'backup_restore',
+      details: `Safety-Backup: ${path.basename(safetyZipPath)}, ${uploadFiles.length} Upload-Datei(en)`,
+      ip: req.ip,
+    });
 
     res.json({
       success: true,

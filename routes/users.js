@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
+const { logAudit } = require('../audit');
 
 const router = express.Router();
 
@@ -73,6 +74,8 @@ router.post('/', authenticate, authorize('chef'), (req, res) => {
   ).run(userId, hpw, hMon, hTue, hWed, hThu, hFri, today);
 
   const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users WHERE id = ?').get(userId);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_create',
+    details: `Neuer Benutzer: ${username} (${role}), id=${userId}`, ip: req.ip });
   res.status(201).json({ user });
 });
 
@@ -103,6 +106,8 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   );
 
   const updated = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, created_at FROM users WHERE id = ?').get(req.params.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_update',
+    details: `Benutzer geaendert: ${updated.username} (id=${req.params.id})`, ip: req.ip });
   res.json({ user: updated });
 });
 
@@ -120,6 +125,8 @@ router.post('/:id/reset-password', authenticate, authorize('chef'), (req, res) =
   }
   const hash = bcrypt.hashSync(password, 10);
   db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(hash, req.params.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_password_reset',
+    details: `Passwort zurueckgesetzt fuer: ${user.username} (id=${req.params.id})`, ip: req.ip });
   res.json({ success: true });
 });
 
@@ -134,6 +141,8 @@ router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
   }
 
   db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_delete',
+    details: `Benutzer geloescht: ${user.username} (${user.role}, id=${req.params.id})`, ip: req.ip });
   res.json({ success: true });
 });
 

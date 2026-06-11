@@ -201,7 +201,7 @@ router.get('/', authenticate, (req, res) => {
   } else {
     // Gesamt: ab erstem Eintrag
     const first = db.prepare(
-      'SELECT MIN(date) as min_date FROM entries WHERE user_id IN (' + targetUserIds.map(() => '?').join(',') + ')'
+      'SELECT MIN(date) as min_date FROM entries WHERE user_id IN (' + targetUserIds.map(() => '?').join(',') + ') AND deleted_at IS NULL'
     ).get(...targetUserIds);
     const from = first?.min_date || fmtDate(refDate);
     const to = fmtDate(refDate);
@@ -277,7 +277,7 @@ router.get('/', authenticate, (req, res) => {
 
     // Ist/Soll für den gewählten Zeitraum
     const entries = db.prepare(
-      'SELECT date, time_from, time_to, break_minutes, net_hours, user_id, project_id, project_text FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date'
+      'SELECT date, time_from, time_to, break_minutes, net_hours, user_id, project_id, project_text FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL ORDER BY date'
     ).all(uid, userFrom, mainRange.to);
 
     const ist = calcActualHours(entries);
@@ -288,7 +288,7 @@ router.get('/', authenticate, (req, res) => {
     let ueberGesamt = startOvertime;
     if (earliest) {
       const allEntries = db.prepare(
-        'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date'
+        'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL ORDER BY date'
       ).all(uid, earliest, mainRange.to);
       const gesamtIst = calcActualHours(allEntries);
       const gesamtSoll = calcTargetHours(db, uid, earliest, mainRange.to);
@@ -317,7 +317,7 @@ router.get('/', authenticate, (req, res) => {
       const tFrom = clampFrom(t.from, earliest);
       if (tFrom > t.to) return { label: t.label, ist: 0, soll: 0 };
       const tEntriesRows = db.prepare(
-        'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ?'
+        'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL'
       ).all(uid, tFrom, t.to);
       const tIst = calcActualHours(tEntriesRows);
       const tSoll = calcTargetHours(db, uid, tFrom, t.to);
@@ -379,7 +379,7 @@ router.get('/overtime', authenticate, (req, res) => {
 
   const dateTo = req.query.date_to || fmtDate(new Date());
   const entries = db.prepare(
-    'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date'
+    'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL ORDER BY date'
   ).all(uid, earliest, dateTo);
 
   const ist = calcActualHours(entries);

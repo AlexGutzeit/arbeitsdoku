@@ -30,7 +30,7 @@ router.get('/export', authenticate, (req, res) => {
     JOIN users u ON e.user_id = u.id
     LEFT JOIN projects p ON e.project_id = p.id
     LEFT JOIN users ru ON e.regie_user_id = ru.id
-    WHERE 1=1
+    WHERE 1=1 AND e.deleted_at IS NULL
   `;
   const params = [];
 
@@ -296,7 +296,7 @@ router.get('/export', authenticate, (req, res) => {
       let ueberGesamt = startOT;
       if (earliest) {
         const allEntries = db.prepare(
-          'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ?'
+          'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL'
         ).all(uid, earliest, date_to);
         ueberGesamt = startOT + calcActualHours(allEntries) - calcTargetHours(db, uid, earliest, date_to);
       }
@@ -605,7 +605,7 @@ function buildTimeline(db, userIds, dateFrom, dateTo) {
       const tFrom = clampFrom(t.from, getEarliestTargetDate(db, uid));
       if (tFrom > t.to) continue;
       const rows = db.prepare(
-        'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ?'
+        'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL'
       ).all(uid, tFrom, t.to);
       ist += calcActualHours(rows);
       soll += calcTargetHours(db, uid, tFrom, t.to);
