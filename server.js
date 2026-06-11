@@ -57,6 +57,7 @@ app.use('/api/notes', require('./routes/notes'));
 app.use('/api/badges', require('./routes/badges'));
 app.use('/api/absences', require('./routes/absences'));
 app.use('/api/audit', require('./routes/audit'));
+app.use('/api/documents', require('./routes/documents'));
 
 // SSE – Echtzeit-Updates für alle verbundenen Clients
 app.get('/api/events', (req, res) => {

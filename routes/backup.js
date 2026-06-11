@@ -15,6 +15,7 @@ const backupDir = path.join(__dirname, '..', 'backups');
 if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
 const uploadsDir = path.join(__dirname, '..', 'uploads');
+const documentsDir = path.join(__dirname, '..', 'storage', 'documents');
 
 const upload = multer({
   dest: path.join(backupDir, 'temp'),
@@ -66,6 +67,9 @@ router.get('/download', authenticate, authorize('chef'), (req, res) => {
   }
   walkUploads(uploadsDir, 'uploads');
 
+  // Dokumenten-Ablage zusaetzlich sichern (Prefix 'documents/'); uploads bleibt unveraendert
+  walkUploads(documentsDir, 'documents');
+
   archive.finalize();
 });
 
@@ -81,6 +85,7 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
 
     let dbBuffer;
     let uploadFiles = []; // [{name, data}]
+    let documentFiles = []; // [{name, data}] — Dokumenten-Ablage (storage/documents/)
 
     if (isZip) {
       const zip = new AdmZip(req.file.path);
@@ -126,6 +131,24 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
           return;
         }
         uploadFiles.push({ name: safeRel, data: e.getData() });
+      });
+
+      // Dokumenten-Ablage sammeln: documents/<basename> (flach, Path-Traversal-Schutz)
+      const docsResolved = path.resolve(documentsDir);
+      entries.forEach(e => {
+        if (!e.entryName.startsWith('documents/') || e.isDirectory) return;
+        const rel = e.entryName.slice('documents/'.length);
+        if (!rel || rel.includes('/') || rel.includes('..') || rel.startsWith('.')) {
+          console.warn('Backup-Restore: Dokument uebersprungen (verdaechtiger Name):', e.entryName);
+          return;
+        }
+        const safeName = path.basename(rel);
+        const finalPath = path.resolve(documentsDir, safeName);
+        if (!finalPath.startsWith(docsResolved + path.sep)) {
+          console.warn('Backup-Restore: Dokument uebersprungen (Pfad ausserhalb storage):', e.entryName);
+          return;
+        }
+        documentFiles.push({ name: safeName, data: e.getData() });
       });
     } else {
       // Reine SQLite-Datei (Abwärtskompatibilität)
@@ -186,6 +209,14 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
       });
     }
 
+    // Dokumenten-Ablage wiederherstellen
+    if (documentFiles.length > 0) {
+      if (!fs.existsSync(documentsDir)) fs.mkdirSync(documentsDir, { recursive: true });
+      documentFiles.forEach(f => {
+        fs.writeFileSync(path.join(documentsDir, f.name), f.data);
+      });
+    }
+
     fs.unlinkSync(req.file.path);
 
     // DB neu laden
@@ -194,13 +225,13 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
     // Audit in die wiederhergestellte DB schreiben (ensureAuditSchema hat audit_logs garantiert)
     logAudit(getDb(), {
       userId: req.user.id, username: req.user.username, action: 'backup_restore',
-      details: `Safety-Backup: ${path.basename(safetyZipPath)}, ${uploadFiles.length} Upload-Datei(en)`,
+      details: `Safety-Backup: ${path.basename(safetyZipPath)}, ${uploadFiles.length} Upload-Datei(en), ${documentFiles.length} Dokument(e)`,
       ip: req.ip,
     });
 
     res.json({
       success: true,
-      message: `Backup erfolgreich wiederhergestellt (DB + ${uploadFiles.length} Datei${uploadFiles.length !== 1 ? 'en' : ''})`,
+      message: `Backup erfolgreich wiederhergestellt (DB + ${uploadFiles.length} Datei${uploadFiles.length !== 1 ? 'en' : ''} + ${documentFiles.length} Dokument${documentFiles.length !== 1 ? 'e' : ''})`,
       safetyBackup: path.basename(safetyZipPath)
     });
   } catch (error) {

@@ -368,6 +368,30 @@ async function initDatabase() {
       reason TEXT DEFAULT '',
       snapshot TEXT
     );
+
+    -- Dokumenten-Ablage: Ordner (verschachtelt via parent_id) + Dokumente (Datei flach in storage/documents/)
+    CREATE TABLE IF NOT EXISTS doc_folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      parent_id INTEGER,
+      created_by INTEGER,
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      FOREIGN KEY (parent_id) REFERENCES doc_folders(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      folder_id INTEGER,
+      original_name TEXT NOT NULL,
+      stored_name TEXT NOT NULL,
+      mime TEXT DEFAULT '',
+      size INTEGER DEFAULT 0,
+      title TEXT DEFAULT '',
+      uploaded_by INTEGER,
+      uploaded_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      FOREIGN KEY (folder_id) REFERENCES doc_folders(id) ON DELETE CASCADE,
+      FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
+    );
   `);
 
   // Migration: target_hours_per_day → target_hours_per_week

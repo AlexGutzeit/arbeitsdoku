@@ -358,6 +358,7 @@ function render() {
   else if (route === '/audit') renderAudit();
   else if (route === '/deleted-entries') renderDeletedEntries();
   else if (route === '/deleted-absences') renderDeletedAbsences();
+  else if (route === '/documents' || route.startsWith('/documents/')) renderDocuments();
   else if (route === '/pdf') renderPdfExport();
   else if (route === '/statistics') renderStatistics();
   else if (route === '/planning') renderPlanning();
@@ -508,6 +509,9 @@ function layout(content, activeNav) {
         <a href="#/notes" class="${activeNav === 'notes' ? 'active' : ''}">
           <span class="icon">&#128221;</span> Notizen
           <span class="nav-badge" id="nav-badge-notes"${S.badges.notes ? '' : ' style="display:none"'}>${S.badges.notes || ''}</span>
+        </a>
+        <a href="#/documents" class="${activeNav === 'documents' ? 'active' : ''}">
+          <span class="icon">&#128193;</span> Dokumente
         </a>
         <a href="#/absences" class="${activeNav === 'absences' ? 'active' : ''}">
           <span class="icon">&#128197;</span> Abwesenheit
@@ -4086,6 +4090,159 @@ async function renderDeletedAbsences() {
         toast('Abwesenheit wiederhergestellt', 'success');
         renderDeletedAbsences();
       } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+}
+
+// --- Dokumente (Ablage) ---
+function docFileIcon(name) {
+  const ext = (name || '').toLowerCase().split('.').pop();
+  if (ext === 'pdf') return '📄';
+  if (['doc', 'docx'].includes(ext)) return '📝';
+  if (['xls', 'xlsx'].includes(ext)) return '📊';
+  if (['ppt', 'pptx'].includes(ext)) return '📈';
+  if (['png', 'jpg', 'jpeg'].includes(ext)) return '🖼️';
+  return '📎';
+}
+function docFormatSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function downloadDocument(id, name) {
+  try {
+    const res = await fetch('/api/documents/' + id + '/download', { headers: { 'Authorization': 'Bearer ' + S.token } });
+    if (!res.ok) throw new Error('Download fehlgeschlagen');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name || 'dokument';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function renderDocuments() {
+  const route = getRoute();
+  const m = route.match(/^\/documents\/(\d+)/);
+  const folderId = m ? Number(m[1]) : null;
+
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'documents');
+  bindLayout();
+
+  let data;
+  try {
+    data = await api('GET', '/api/documents' + (folderId ? '?folder_id=' + folderId : ''));
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  const manage = isChefOrAdmin();
+  const crumbs = [{ id: null, name: 'Dokumente' }].concat(data.breadcrumb || []);
+  const breadcrumbHtml = crumbs.map((c, i) => {
+    const last = i === crumbs.length - 1;
+    return last
+      ? `<span class="doc-crumb-current">${esc(c.name)}</span>`
+      : `<a href="#/documents${c.id ? '/' + c.id : ''}">${esc(c.name)}</a>`;
+  }).join('<span class="doc-crumb-sep"> / </span>');
+
+  const folderRows = (data.folders || []).map(f => `
+    <div class="doc-row">
+      <a class="doc-link" href="#/documents/${f.id}"><span class="doc-icon">📁</span> ${esc(f.name)}</a>
+      <span class="doc-meta">${f.subfolder_count} Ordner · ${f.document_count} Dateien</span>
+      ${manage ? `<span class="doc-actions">
+        <button class="btn btn-sm btn-outline doc-folder-rename" data-id="${f.id}" data-name="${esc(f.name)}">Umbenennen</button>
+        <button class="btn btn-sm btn-danger doc-folder-delete" data-id="${f.id}" data-name="${esc(f.name)}">Löschen</button>
+      </span>` : ''}
+    </div>`).join('');
+
+  const docRows = (data.documents || []).map(d => {
+    const label = d.title || d.original_name;
+    return `<div class="doc-row">
+      <span class="doc-link"><span class="doc-icon">${docFileIcon(d.original_name)}</span> ${esc(label)}</span>
+      <span class="doc-meta">${docFormatSize(d.size)}${d.uploaded_by_name ? ` · ${esc(d.uploaded_by_name)}` : ''}</span>
+      <span class="doc-actions">
+        <button class="btn btn-sm btn-primary doc-download" data-id="${d.id}" data-name="${esc(d.original_name)}">Herunterladen</button>
+        ${manage ? `<button class="btn btn-sm btn-danger doc-delete" data-id="${d.id}" data-name="${esc(label)}">Löschen</button>` : ''}
+      </span>
+    </div>`;
+  }).join('');
+
+  const mainEl = document.querySelector('.main');
+  mainEl.innerHTML = `
+    <div style="max-width:900px;margin:0 auto;">
+      <div class="card">
+        <div class="doc-breadcrumb">${breadcrumbHtml}</div>
+        ${manage ? `<div class="doc-toolbar">
+          <button class="btn btn-sm btn-outline" id="doc-new-folder">+ Neuer Ordner</button>
+          <button class="btn btn-sm btn-primary" id="doc-upload-btn">⬆ Datei hochladen</button>
+          <input type="file" id="doc-file-input" style="display:none" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg">
+          <span class="doc-toolbar-hint">PDF, Word, Excel, PowerPoint, PNG, JPG — max. 5 MB</span>
+        </div>` : ''}
+        <div class="doc-list">
+          ${folderRows}${docRows}
+          ${(!folderRows && !docRows) ? '<p class="absence-empty">Dieser Ordner ist leer.</p>' : ''}
+        </div>
+      </div>
+    </div>`;
+
+  // Downloads (alle Rollen)
+  mainEl.querySelectorAll('.doc-download').forEach(btn => {
+    btn.addEventListener('click', () => downloadDocument(btn.dataset.id, btn.dataset.name));
+  });
+
+  if (!manage) return;
+
+  // Neuer Ordner
+  document.getElementById('doc-new-folder')?.addEventListener('click', async () => {
+    const name = prompt('Name des neuen Ordners:');
+    if (name === null || !name.trim()) return;
+    try {
+      await api('POST', '/api/documents/folders', { name: name.trim(), parent_id: folderId });
+      renderDocuments();
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Ordner umbenennen
+  mainEl.querySelectorAll('.doc-folder-rename').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = prompt('Neuer Name:', btn.dataset.name);
+      if (name === null || !name.trim()) return;
+      try { await api('PUT', '/api/documents/folders/' + btn.dataset.id, { name: name.trim() }); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Ordner löschen (rekursiv)
+  mainEl.querySelectorAll('.doc-folder-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Ordner „${btn.dataset.name}" mit allen Unterordnern und Dokumenten löschen?`)) return;
+      try { await api('DELETE', '/api/documents/folders/' + btn.dataset.id); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Datei hochladen
+  const fileInput = document.getElementById('doc-file-input');
+  document.getElementById('doc-upload-btn')?.addEventListener('click', () => fileInput.click());
+  fileInput?.addEventListener('change', async () => {
+    if (!fileInput.files.length) return;
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    if (folderId) fd.append('folder_id', folderId);
+    try {
+      await api('POST', '/api/documents/upload', fd, true);
+      toast('Datei hochgeladen', 'success');
+      renderDocuments();
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Dokument löschen
+  mainEl.querySelectorAll('.doc-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Dokument „${btn.dataset.name}" löschen?`)) return;
+      try { await api('DELETE', '/api/documents/' + btn.dataset.id); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
     });
   });
 }
