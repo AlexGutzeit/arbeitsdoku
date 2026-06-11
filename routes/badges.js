@@ -48,6 +48,7 @@ router.get('/', authenticate, (req, res) => {
     absences = db.prepare(`
       SELECT COUNT(*) as n FROM absences
       WHERE updated_at > ?
+        AND deleted_at IS NULL
         AND (user_id IS NULL OR user_id != ?)
         AND COALESCE(created_by, user_id) != ?
         AND (processed_by IS NULL OR processed_by != ?)
@@ -61,7 +62,7 @@ router.get('/', authenticate, (req, res) => {
 
   // Alle Rollen: eigene Abwesenheiten mit ausstehender Bestätigung (Manager hat Änderungen vorgenommen)
   const maAckCount = db.prepare(
-    'SELECT COUNT(*) as n FROM absences WHERE user_id = ? AND ma_needs_ack = 1'
+    'SELECT COUNT(*) as n FROM absences WHERE user_id = ? AND ma_needs_ack = 1 AND deleted_at IS NULL'
   ).get(uid).n;
 
   // MA: Status-Änderungen (genehmigt/abgelehnt) an eigenen Abwesenheiten seit letztem Besuch
@@ -71,6 +72,7 @@ router.get('/', authenticate, (req, res) => {
     maStatusCount = db.prepare(`
       SELECT COUNT(*) as n FROM absences
       WHERE user_id = ? AND updated_at > ? AND ma_needs_ack = 0
+      AND deleted_at IS NULL
       AND (
         status IN ('approved','rejected')
         OR (status = 'pending' AND created_by IS NOT NULL AND created_by != user_id

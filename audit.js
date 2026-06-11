@@ -33,6 +33,27 @@ function recordEntryHistory(db, oldEntry, action, changedBy, reason) {
   }
 }
 
+// Felder, die im Snapshot einer Abwesenheit festgehalten werden (Vorher-Zustand).
+const ABSENCE_SNAPSHOT_FIELDS = [
+  'id', 'user_id', 'type', 'date_from', 'date_to', 'status', 'comment',
+  'processed_by', 'processed_at', 'notified_at', 'created_by',
+  'proposed_date_from', 'proposed_date_to', 'ma_needs_ack', 'created_at', 'updated_at',
+];
+
+// Schreibt ein Vorher-Abbild einer Abwesenheit in absence_history (append-only).
+function recordAbsenceHistory(db, oldAbsence, action, changedBy, reason) {
+  if (!oldAbsence) return;
+  const snap = {};
+  for (const f of ABSENCE_SNAPSHOT_FIELDS) snap[f] = oldAbsence[f];
+  try {
+    db.prepare(
+      'INSERT INTO absence_history (absence_id, action, changed_by, changed_at, reason, snapshot) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(oldAbsence.id, action, changedBy || null, berlinNow(), reason || '', JSON.stringify(snap));
+  } catch (e) {
+    console.error('absence_history konnte nicht geschrieben werden:', e.message);
+  }
+}
+
 // Protokolliert ein Ereignis in audit_logs.
 // opts: { userId, username, action, details, ip }
 function logAudit(db, opts) {
@@ -50,4 +71,4 @@ function logAudit(db, opts) {
   }
 }
 
-module.exports = { recordEntryHistory, logAudit, berlinNow, ENTRY_SNAPSHOT_FIELDS };
+module.exports = { recordEntryHistory, recordAbsenceHistory, logAudit, berlinNow, ENTRY_SNAPSHOT_FIELDS, ABSENCE_SNAPSHOT_FIELDS };

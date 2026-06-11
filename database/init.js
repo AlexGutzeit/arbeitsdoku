@@ -357,6 +357,17 @@ async function initDatabase() {
       details TEXT DEFAULT '',
       ip TEXT DEFAULT ''
     );
+
+    -- Revisionssicherheit (GoBD): Aenderungsverlauf von Abwesenheiten (Loeschen + Datums-/Edit-Aenderung)
+    CREATE TABLE IF NOT EXISTS absence_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      absence_id INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      changed_by INTEGER,
+      changed_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      reason TEXT DEFAULT '',
+      snapshot TEXT
+    );
   `);
 
   // Migration: target_hours_per_day → target_hours_per_week
@@ -602,6 +613,17 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: Soft-Delete-Spalten in absences (Revisionssicherheit GoBD)
+  try {
+    const aCols = db.prepare("PRAGMA table_info(absences)").all();
+    if (!aCols.find(c => c.name === 'deleted_at')) {
+      db.prepare("ALTER TABLE absences ADD COLUMN deleted_at TEXT").run();
+      db.prepare("ALTER TABLE absences ADD COLUMN deleted_by INTEGER").run();
+      markDirty();
+      console.log('Migration: deleted_at/deleted_by in absences hinzugefuegt.');
+    }
+  } catch (e) {}
+
   // Migration: Branding-Defaults (White-Label) — fuegt nur Werte ein, die fehlen
   try {
     const brandDefaults = [
@@ -687,11 +709,25 @@ function ensureAuditSchema(targetDb) {
         details TEXT DEFAULT '',
         ip TEXT DEFAULT ''
       );
+      CREATE TABLE IF NOT EXISTS absence_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        absence_id INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        changed_by INTEGER,
+        changed_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        reason TEXT DEFAULT '',
+        snapshot TEXT
+      );
     `);
     const eCols = targetDb.prepare("PRAGMA table_info(entries)").all();
     if (!eCols.find(c => c.name === 'deleted_at')) {
       targetDb.prepare("ALTER TABLE entries ADD COLUMN deleted_at TEXT").run();
       targetDb.prepare("ALTER TABLE entries ADD COLUMN deleted_by INTEGER").run();
+    }
+    const aCols = targetDb.prepare("PRAGMA table_info(absences)").all();
+    if (!aCols.find(c => c.name === 'deleted_at')) {
+      targetDb.prepare("ALTER TABLE absences ADD COLUMN deleted_at TEXT").run();
+      targetDb.prepare("ALTER TABLE absences ADD COLUMN deleted_by INTEGER").run();
     }
   } catch (e) {
     console.error('ensureAuditSchema fehlgeschlagen:', e.message);

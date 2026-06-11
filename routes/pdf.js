@@ -72,6 +72,7 @@ router.get('/export', authenticate, (req, res) => {
       WHERE (user_id = ? OR user_id IS NULL)
         AND status IN ('active','approved')
         AND date_from <= ? AND date_to >= ?
+        AND deleted_at IS NULL
     `).all(targetUidForAbs, date_to, date_from);
     for (const ab of absRows) {
       const f = ab.date_from > date_from ? ab.date_from : date_from;
@@ -325,6 +326,7 @@ router.get('/export', authenticate, (req, res) => {
         SELECT type, date_from, date_to FROM absences
         WHERE user_id = ? AND status IN ('active','approved')
         AND date_from <= ? AND date_to >= ?
+        AND deleted_at IS NULL
       `).all(targetUid, date_to, date_from);
 
       if (pdfAbsences.length > 0) {
@@ -355,6 +357,7 @@ router.get('/export', authenticate, (req, res) => {
             SELECT date_from, date_to FROM absences
             WHERE user_id = ? AND type = 'urlaub' AND status = 'approved'
             AND date_from <= ? AND date_to >= ?
+            AND deleted_at IS NULL
           `).all(targetUid, thisYear + '-12-31', thisYear + '-01-01');
           let urlaubJahr = 0;
           for (const ur of urlaubRows) {

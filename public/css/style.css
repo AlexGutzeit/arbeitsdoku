@@ -181,6 +181,26 @@ body {
   line-height: 1;
 }
 .sidebar-divider { height: 1px; background: var(--border); margin: 0.5rem 0; }
+.nav-group-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem;
+  color: var(--text-light);
+  font-size: 0.95rem;
+  cursor: pointer;
+  user-select: none;
+}
+.nav-group-label:hover { background: var(--primary-light); }
+.nav-group-label .icon { font-size: 1.2rem; width: 1.5rem; text-align: center; }
+.nav-caret { margin-left: auto; font-size: 0.7rem; transition: transform 0.15s; }
+/* Unterpunkte versteckt; sichtbar bei Hover ueber die Gruppe oder wenn aufgeklappt (.open) */
+.nav-group .nav-subitem { display: none; }
+.nav-group:hover .nav-subitem,
+.nav-group.open .nav-subitem { display: flex; }
+.nav-group:hover .nav-caret,
+.nav-group.open .nav-caret { transform: rotate(90deg); }
+.sidebar nav a.nav-subitem { padding-left: 2.6rem; font-size: 0.9rem; }
 
 /* === Main Content === */
 .main { padding: 1rem; max-width: 1400px; margin: 0 auto; }
@@ -1620,6 +1640,17 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .absence-card-meta { font-size: 0.75rem; color: var(--text-lighter); }
 .absence-card-timestamps { font-size: 0.72rem; color: var(--text-lighter); margin-top: 0.2rem; }
 .absence-card-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.6rem; }
+.absence-changelog { margin-top: 0.6rem; border-top: 1px solid var(--border); padding-top: 0.4rem; }
+.absence-changelog > summary {
+  cursor: pointer; font-size: 0.78rem; color: var(--text-light); list-style: none; user-select: none;
+}
+.absence-changelog > summary::-webkit-details-marker { display: none; }
+.absence-changelog > summary::before { content: '▸ '; font-size: 0.7rem; }
+.absence-changelog[open] > summary::before { content: '▾ '; }
+.absence-changelog-body { font-size: 0.78rem; color: var(--text-light); margin-top: 0.4rem; }
+.absence-changelog-row { padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
+.absence-changelog-row:last-child { border-bottom: none; }
+.absence-changelog-before { color: var(--text-lighter); }
 .absence-status { font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 10px; }
 .absence-status--pending  { background: #fef3c7; color: #92400e; }
 .absence-status--active   { background: #dcfce7; color: #166534; }

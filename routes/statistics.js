@@ -41,6 +41,7 @@ function calcTargetHours(db, userId, from, to) {
       OR (type = 'feiertag' AND status = 'active')
     )
     AND date_from <= ? AND date_to >= ?
+    AND deleted_at IS NULL
   `).all(userId, to, from);
 
   // Menge der Tage mit Soll=0 ermitteln
@@ -85,7 +86,7 @@ function countScheduledDays(db, userId, from, to) {
   ).all(userId);
   const dayKeys = [null, 'hours_mon', 'hours_tue', 'hours_wed', 'hours_thu', 'hours_fri', null];
   const feiertage = db.prepare(
-    "SELECT date_from, date_to FROM absences WHERE type = 'feiertag' AND status = 'active' AND date_from <= ? AND date_to >= ?"
+    "SELECT date_from, date_to FROM absences WHERE type = 'feiertag' AND status = 'active' AND date_from <= ? AND date_to >= ? AND deleted_at IS NULL"
   ).all(to, from);
   const feierSet = new Set();
   for (const f of feiertage) {
