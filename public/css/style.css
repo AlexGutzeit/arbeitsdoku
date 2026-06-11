@@ -181,6 +181,16 @@ body {
   line-height: 1;
 }
 .sidebar-divider { height: 1px; background: var(--border); margin: 0.5rem 0; }
+.nav-group-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem 0.35rem;
+  color: var(--text-light);
+  font-size: 0.95rem;
+}
+.nav-group-label .icon { font-size: 1.2rem; width: 1.5rem; text-align: center; }
+.sidebar nav a.nav-subitem { padding-left: 2.6rem; font-size: 0.9rem; }
 
 /* === Main Content === */
 .main { padding: 1rem; max-width: 1400px; margin: 0 auto; }

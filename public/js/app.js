@@ -526,12 +526,11 @@ function layout(content, activeNav) {
         ${showAudit ? `<a href="#/audit" class="${activeNav === 'audit' ? 'active' : ''}">
           <span class="icon">&#128220;</span> Audit-Log
         </a>` : ''}
-        ${showAudit ? `<a href="#/deleted-entries" class="${activeNav === 'deleted-entries' ? 'active' : ''}">
-          <span class="icon">&#128465;</span> Gelöschte Einträge
-        </a>` : ''}
-        ${showAudit ? `<a href="#/deleted-absences" class="${activeNav === 'deleted-absences' ? 'active' : ''}">
-          <span class="icon">&#128465;</span> Gelöschte Abwesenheiten
-        </a>` : ''}
+        ${showAudit ? `
+        <div class="nav-group-label"><span class="icon">&#128465;</span> Papierkorb</div>
+        <a href="#/deleted-entries" class="nav-subitem ${activeNav === 'deleted-entries' ? 'active' : ''}">Einträge</a>
+        <a href="#/deleted-absences" class="nav-subitem ${activeNav === 'deleted-absences' ? 'active' : ''}">Abwesenheiten</a>
+        ` : ''}
       </nav>
     </div>
     <div class="header">
