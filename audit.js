@@ -50,4 +50,4 @@ function logAudit(db, opts) {
   }
 }
 
-module.exports = { recordEntryHistory, logAudit, ENTRY_SNAPSHOT_FIELDS };
+module.exports = { recordEntryHistory, logAudit, berlinNow, ENTRY_SNAPSHOT_FIELDS };

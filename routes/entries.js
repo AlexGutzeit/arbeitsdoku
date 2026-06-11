@@ -2,7 +2,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
-const { recordEntryHistory } = require('../audit');
+const { recordEntryHistory, berlinNow } = require('../audit');
 
 const router = express.Router();
 
@@ -274,8 +274,8 @@ router.delete('/:id', authenticate, (req, res) => {
     }
     // Vorher-Abbild festhalten, dann Soft-Delete (Zeile bleibt fuer Pruefung erhalten)
     recordEntryHistory(db, entry, 'delete', req.user.id, reason);
-    db.prepare("UPDATE entries SET deleted_at=strftime('%Y-%m-%d %H:%M:%f', 'now'), deleted_by=? WHERE id=?")
-      .run(req.user.id, req.params.id);
+    db.prepare("UPDATE entries SET deleted_at=?, deleted_by=? WHERE id=?")
+      .run(berlinNow(), req.user.id, req.params.id);
     broadcast('entries', req.headers['x-tab-id']);
     return res.json({ success: true });
   }
