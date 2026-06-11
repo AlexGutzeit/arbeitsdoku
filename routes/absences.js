@@ -1,8 +1,9 @@
 const express = require('express');
 const { getDb } = require('../database/init');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const { countScheduledDays } = require('./statistics');
+const { recordAbsenceHistory, berlinNow } = require('../audit');
 
 // Validierungs-Helper für ISO-Datum (YYYY-MM-DD, kalendarisch gültig)
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -77,7 +78,7 @@ router.get('/', authenticate, (req, res) => {
   const uid = req.user.id;
   const { type, from, to, user_id } = req.query;
 
-  let sql = 'SELECT * FROM absences WHERE 1=1';
+  let sql = 'SELECT * FROM absences WHERE 1=1 AND deleted_at IS NULL';
   const params = [];
 
   if (!isManager(req.user)) {
@@ -124,11 +125,12 @@ router.get('/summary', authenticate, (req, res) => {
       OR (user_id IS NULL AND type = 'feiertag' AND status = 'active')
     )
     AND date_from <= ? AND date_to >= ?
+    AND deleted_at IS NULL
   `).all(targetUid, to, from);
 
   // Feiertag-Set einmalig laden
   const feierRowsQ = db.prepare(
-    "SELECT date_from, date_to FROM absences WHERE type='feiertag' AND status='active' AND date_from <= ? AND date_to >= ?"
+    "SELECT date_from, date_to FROM absences WHERE type='feiertag' AND status='active' AND date_from <= ? AND date_to >= ? AND deleted_at IS NULL"
   ).all(to, from);
   const feierSet = new Set();
   for (const f of feierRowsQ) {
@@ -207,10 +209,11 @@ router.get('/summary', authenticate, (req, res) => {
     SELECT date_from, date_to FROM absences
     WHERE user_id = ? AND type = 'urlaub' AND status = 'approved'
     AND date_from <= ? AND date_to >= ?
+    AND deleted_at IS NULL
   `).all(targetUid, thisYear + '-12-31', thisYear + '-01-01');
 
   const yearFeierQ = db.prepare(
-    "SELECT date_from, date_to FROM absences WHERE type='feiertag' AND status='active' AND date_from <= ? AND date_to >= ?"
+    "SELECT date_from, date_to FROM absences WHERE type='feiertag' AND status='active' AND date_from <= ? AND date_to >= ? AND deleted_at IS NULL"
   ).all(thisYear + '-12-31', thisYear + '-01-01');
   const yearFeierSet = new Set();
   for (const f of yearFeierQ) {
@@ -221,6 +224,7 @@ router.get('/summary', authenticate, (req, res) => {
     SELECT date_from, date_to FROM absences
     WHERE user_id = ? AND type IN ('krank','berufsschule','innung') AND status IN ('active','approved')
     AND date_from <= ? AND date_to >= ?
+    AND deleted_at IS NULL
   `).all(targetUid, thisYear + '-12-31', thisYear + '-01-01');
   const yearSickSet = new Set();
   for (const row of yearSickQ) {
@@ -254,8 +258,10 @@ router.get('/pending', authenticate, (req, res) => {
   const db = getDb();
   const absences = db.prepare(`
     SELECT * FROM absences
-    WHERE status = 'pending'
-       OR (status = 'active' AND type IN ('krank','berufsschule','innung') AND notified_at IS NULL)
+    WHERE deleted_at IS NULL AND (
+      status = 'pending'
+      OR (status = 'active' AND type IN ('krank','berufsschule','innung') AND notified_at IS NULL)
+    )
     ORDER BY updated_at DESC
   `).all().map(a => withUserName(a, db));
   res.json({ absences });
@@ -286,6 +292,7 @@ router.get('/by-date', authenticate, (req, res) => {
     sql = `SELECT a.*, u.name as user_name FROM absences a
            LEFT JOIN users u ON a.user_id = u.id
            WHERE a.date_from <= ? AND a.date_to >= ?
+           AND a.deleted_at IS NULL
            AND (
              (a.status IN ('active','approved'))
              OR (a.status = 'pending' AND a.type NOT IN ${APPROVAL_TYPES})
@@ -298,6 +305,7 @@ router.get('/by-date', authenticate, (req, res) => {
     sql = `SELECT a.*, u.name as user_name FROM absences a
            LEFT JOIN users u ON a.user_id = u.id
            WHERE a.date_from <= ? AND a.date_to >= ?
+           AND a.deleted_at IS NULL
            AND (
              (a.user_id = ? AND (
                a.status IN ('active','approved')
@@ -373,7 +381,7 @@ router.post('/', authenticate, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))
   `).run(uid, type, date_from, date_to, status, (comment || '').trim(), created_by);
 
-  const absence = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(result.lastInsertRowid), db);
+  const absence = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(result.lastInsertRowid), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.status(201).json({ absence });
 });
@@ -381,12 +389,18 @@ router.post('/', authenticate, (req, res) => {
 // PUT /api/absences/:id — Abwesenheit bearbeiten
 router.put('/:id', authenticate, (req, res) => {
   const db = getDb();
-  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   const isOwner = absence.user_id === req.user.id;
   const manager = isManager(req.user);
   if (!isOwner && !manager) return res.status(403).json({ error: 'Keine Berechtigung' });
+
+  // GoBD: Bearbeiten einer fremden Abwesenheit (Manager) erfordert eine Begruendung
+  const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+  if (!isOwner && !reason) {
+    return res.status(400).json({ error: 'Begründung erforderlich beim Bearbeiten einer fremden Abwesenheit' });
+  }
 
   const { date_from, date_to, comment } = req.body;
   if (!date_from || !date_to) return res.status(400).json({ error: 'Datum von und bis erforderlich' });
@@ -397,6 +411,9 @@ router.put('/:id', authenticate, (req, res) => {
   if (tooLongComment(comment)) {
     return res.status(400).json({ error: `Kommentar zu lang (max. ${COMMENT_MAX} Zeichen)` });
   }
+
+  // GoBD: Vorher-Abbild festhalten, bevor irgendein UPDATE-Zweig die Daten ueberschreibt
+  recordAbsenceHistory(db, absence, 'update', req.user.id, reason);
 
   let newStatus = absence.status;
   let notifiedAt = absence.notified_at;
@@ -461,7 +478,7 @@ router.put('/:id', authenticate, (req, res) => {
     `).run(date_from, date_to, (comment || '').trim(), newStatus, notifiedAt, newCreatedBy, absence.id);
   }
 
-  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(absence.id), db);
+  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
 });
@@ -469,7 +486,7 @@ router.put('/:id', authenticate, (req, res) => {
 // DELETE /api/absences/:id
 router.delete('/:id', authenticate, (req, res) => {
   const db = getDb();
-  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   const isOwner = absence.user_id === req.user.id;
@@ -481,7 +498,63 @@ router.delete('/:id', authenticate, (req, res) => {
     return res.status(403).json({ error: 'Genehmigte Abwesenheiten können nur vom Vorgesetzten gelöscht werden' });
   }
 
-  db.prepare('DELETE FROM absences WHERE id = ?').run(absence.id);
+  // GoBD: Loeschen einer fremden Abwesenheit (Manager) erfordert Begruendung
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  if (!isOwner && !reason) {
+    return res.status(400).json({ error: 'Begründung erforderlich beim Löschen einer fremden Abwesenheit' });
+  }
+
+  // Vorher-Abbild festhalten, dann Soft-Delete (Zeile bleibt fuer Pruefung erhalten)
+  recordAbsenceHistory(db, absence, 'delete', req.user.id, reason);
+  db.prepare("UPDATE absences SET deleted_at = ?, deleted_by = ? WHERE id = ?")
+    .run(berlinNow(), req.user.id, absence.id);
+  broadcast('absences', req.headers['x-tab-id']);
+  res.json({ success: true });
+});
+
+// Aenderungsverlauf einer Abwesenheit (chef + admin) — GoBD-Nachvollziehbarkeit
+router.get('/:id/history', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT h.id, h.absence_id, h.action, h.changed_by, h.changed_at, h.reason, h.snapshot,
+           u.name as changed_by_name
+    FROM absence_history h
+    LEFT JOIN users u ON h.changed_by = u.id
+    WHERE h.absence_id = ?
+    ORDER BY h.changed_at DESC, h.id DESC
+  `).all(req.params.id);
+  for (const r of rows) {
+    try { r.snapshot = JSON.parse(r.snapshot); } catch (_) { r.snapshot = null; }
+  }
+  res.json({ history: rows });
+});
+
+// Gelöschte Abwesenheiten (Papierkorb) — nur Admin
+router.get('/deleted/list', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT a.*, u.name as user_name, du.name as deleted_by_name,
+           (SELECT h.reason FROM absence_history h
+            WHERE h.absence_id = a.id AND h.action = 'delete'
+            ORDER BY h.changed_at DESC, h.id DESC LIMIT 1) as delete_reason
+    FROM absences a
+    LEFT JOIN users u ON a.user_id = u.id
+    LEFT JOIN users du ON a.deleted_by = du.id
+    WHERE a.deleted_at IS NOT NULL
+    ORDER BY a.deleted_at DESC
+  `).all();
+  res.json({ absences: rows });
+});
+
+// Gelöschte Abwesenheit wiederherstellen — nur Admin
+router.post('/:id/restore', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id);
+  if (!absence) return res.status(404).json({ error: 'Gelöschte Abwesenheit nicht gefunden' });
+
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  recordAbsenceHistory(db, absence, 'restore', req.user.id, reason);
+  db.prepare('UPDATE absences SET deleted_at = NULL, deleted_by = NULL WHERE id = ?').run(req.params.id);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ success: true });
 });
@@ -491,7 +564,7 @@ router.post('/:id/approve', authenticate, (req, res) => {
   if (!isManager(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
 
   const db = getDb();
-  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   const newStatus = AUTO_ACTIVE.includes(absence.type) ? 'active' : 'approved';
@@ -502,7 +575,7 @@ router.post('/:id/approve', authenticate, (req, res) => {
     WHERE id = ?
   `).run(newStatus, req.user.id, absence.id);
 
-  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(absence.id), db);
+  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
 });
@@ -512,7 +585,7 @@ router.post('/:id/reject', authenticate, (req, res) => {
   if (!isManager(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
 
   const db = getDb();
-  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   db.prepare(`
@@ -521,7 +594,7 @@ router.post('/:id/reject', authenticate, (req, res) => {
     WHERE id = ?
   `).run(req.user.id, absence.id);
 
-  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(absence.id), db);
+  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
 });
@@ -529,7 +602,7 @@ router.post('/:id/reject', authenticate, (req, res) => {
 // POST /api/absences/:id/accept — MA akzeptiert Manager-eingetragenen Urlaub/FZA
 router.post('/:id/accept', authenticate, (req, res) => {
   const db = getDb();
-  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   // Nur wenn: eigener Eintrag, von Manager eingetragen, noch pending
@@ -549,7 +622,7 @@ router.post('/:id/accept', authenticate, (req, res) => {
     WHERE id = ?
   `).run(req.user.id, absence.id);
 
-  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(absence.id), db);
+  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
 });
@@ -557,7 +630,7 @@ router.post('/:id/accept', authenticate, (req, res) => {
 // POST /api/absences/:id/reject-ma — MA lehnt Manager-eingetragenen Urlaub/FZA ab
 router.post('/:id/reject-ma', authenticate, (req, res) => {
   const db = getDb();
-  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   // Nur wenn: eigener Eintrag, von Manager eingetragen, noch pending
@@ -577,7 +650,7 @@ router.post('/:id/reject-ma', authenticate, (req, res) => {
     WHERE id = ?
   `).run(req.user.id, absence.id);
 
-  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(absence.id), db);
+  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
 });
@@ -587,7 +660,7 @@ router.post('/:id/acknowledge', authenticate, (req, res) => {
   if (!isManager(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
 
   const db = getDb();
-  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   db.prepare(`
@@ -596,7 +669,7 @@ router.post('/:id/acknowledge', authenticate, (req, res) => {
     WHERE id = ?
   `).run(req.user.id, absence.id);
 
-  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ?').get(absence.id), db);
+  const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
 });
@@ -604,7 +677,7 @@ router.post('/:id/acknowledge', authenticate, (req, res) => {
 // POST /api/absences/:id/acknowledge-ma — MA quittiert/akzeptiert Manager-Änderung
 router.post('/:id/acknowledge-ma', authenticate, (req, res) => {
   const db = getDb();
-  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
   if (absence.user_id !== req.user.id) return res.status(403).json({ error: 'Keine Berechtigung' });
 
@@ -631,7 +704,7 @@ router.post('/:id/acknowledge-ma', authenticate, (req, res) => {
 // POST /api/absences/:id/reject-manager-edit — MA lehnt Manager-Vorschlag ab
 router.post('/:id/reject-manager-edit', authenticate, (req, res) => {
   const db = getDb();
-  const absence = db.prepare('SELECT * FROM absences WHERE id = ?').get(req.params.id);
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
   if (absence.user_id !== req.user.id) return res.status(403).json({ error: 'Keine Berechtigung' });
   if (!absence.ma_needs_ack) return res.status(400).json({ error: 'Keine ausstehende Manager-Änderung' });

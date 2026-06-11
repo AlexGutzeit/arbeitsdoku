@@ -357,6 +357,7 @@ function render() {
   else if (route === '/settings') renderSettings();
   else if (route === '/audit') renderAudit();
   else if (route === '/deleted-entries') renderDeletedEntries();
+  else if (route === '/deleted-absences') renderDeletedAbsences();
   else if (route === '/pdf') renderPdfExport();
   else if (route === '/statistics') renderStatistics();
   else if (route === '/planning') renderPlanning();
@@ -527,6 +528,9 @@ function layout(content, activeNav) {
         </a>` : ''}
         ${showAudit ? `<a href="#/deleted-entries" class="${activeNav === 'deleted-entries' ? 'active' : ''}">
           <span class="icon">&#128465;</span> Gelöschte Einträge
+        </a>` : ''}
+        ${showAudit ? `<a href="#/deleted-absences" class="${activeNav === 'deleted-absences' ? 'active' : ''}">
+          <span class="icon">&#128465;</span> Gelöschte Abwesenheiten
         </a>` : ''}
       </nav>
     </div>
@@ -4015,6 +4019,67 @@ async function renderDeletedEntries() {
   });
 }
 
+// --- Gelöschte Abwesenheiten (Papierkorb, nur Admin) ---
+async function renderDeletedAbsences() {
+  if (!isAdmin()) { navigate('/'); return; }
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-absences');
+  bindLayout();
+
+  let data;
+  try {
+    data = await api('GET', '/api/absences/deleted/list');
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  const absences = (data && data.absences) || [];
+  const rows = absences.map(a => {
+    const t = ABSENCE_TYPES[a.type];
+    const typeLabel = t ? `${t.icon} ${t.label}` : a.type;
+    return `<tr>
+      <td>${esc(typeLabel)}</td>
+      <td>${esc(a.user_name || '—')}</td>
+      <td style="white-space:nowrap;">${esc(a.date_from)}${a.date_to !== a.date_from ? '–' + esc(a.date_to) : ''}</td>
+      <td>${esc(a.status)}</td>
+      <td style="color:var(--text-light);">${esc(String(a.deleted_at || '').slice(0, 19))}</td>
+      <td>${esc(a.deleted_by_name || '—')}</td>
+      <td style="color:var(--text-light);">${esc(a.delete_reason || '')}</td>
+      <td><button class="btn btn-outline btn-sm restore-absence" data-id="${a.id}" type="button">Wiederherstellen</button></td>
+    </tr>`;
+  }).join('');
+
+  const mainEl = document.querySelector('.main');
+  mainEl.innerHTML = `
+    <div style="max-width:1100px;margin:0 auto;">
+      <div class="card">
+        <h2 style="margin-bottom:0.5rem;">Gelöschte Abwesenheiten</h2>
+        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
+          Soft-gelöschte Abwesenheiten (Urlaub, Krankheit, FZA …) bleiben für die Revisionssicherheit (GoBD)
+          erhalten. Wiederherstellen setzt sie zurück; der Vorgang wird im Verlauf protokolliert.
+        </p>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;font-size:0.88rem;">
+            <thead><tr>
+              <th>Typ</th><th>Mitarbeiter</th><th>Zeitraum</th><th>Status</th>
+              <th>Gelöscht am</th><th>Gelöscht von</th><th>Begründung</th><th></th>
+            </tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" style="color:var(--text-light);">Keine gelöschten Abwesenheiten.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+  mainEl.querySelectorAll('.restore-absence').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Diese Abwesenheit wiederherstellen?')) return;
+      const reason = prompt('Begründung für die Wiederherstellung (optional):') || '';
+      try {
+        await api('POST', '/api/absences/' + btn.dataset.id + '/restore', { reason: reason.trim() });
+        toast('Abwesenheit wiederhergestellt', 'success');
+        renderDeletedAbsences();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+}
+
 // --- PDF Export ---
 async function renderPdfExport() {
   try {
@@ -5528,7 +5593,9 @@ function bindAbsenceCardActions(container) {
   container.querySelectorAll('.absence-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('Abwesenheit wirklich löschen?')) return;
-      try { await api('DELETE', '/api/absences/' + btn.dataset.id); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+      // Begruendung optional (eigene), Pflicht bei fremder — Backend erzwingt das
+      const reason = prompt('Begründung für das Löschen (bei fremder Abwesenheit Pflicht):') || '';
+      try { await api('DELETE', '/api/absences/' + btn.dataset.id, { reason: reason.trim() }); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-edit').forEach(btn => {
@@ -5642,7 +5709,9 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
       }
 
       if (editId) {
-        await api('PUT', '/api/absences/' + editId, { date_from, date_to, comment });
+        // Begruendung optional (eigene), Pflicht bei fremder — Backend erzwingt das
+        const reason = prompt('Begründung für die Änderung (bei fremder Abwesenheit Pflicht):') || '';
+        await api('PUT', '/api/absences/' + editId, { date_from, date_to, comment, reason: reason.trim() });
       } else {
         await api('POST', '/api/absences', { type, date_from, date_to, comment, target_user_id });
       }
