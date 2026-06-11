@@ -1,7 +1,8 @@
 const express = require('express');
 const { getDb } = require('../database/init');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
+const { recordEntryHistory, berlinNow } = require('../audit');
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ router.get('/', authenticate, (req, res) => {
     JOIN users u ON e.user_id = u.id
     LEFT JOIN projects p ON e.project_id = p.id
     LEFT JOIN users ru ON e.regie_user_id = ru.id
-    WHERE 1=1
+    WHERE 1=1 AND e.deleted_at IS NULL
   `;
   const params = [];
 
@@ -105,6 +106,24 @@ router.get('/', authenticate, (req, res) => {
   res.json({ entries });
 });
 
+// Gelöschte Einträge (Papierkorb) — nur Admin. MUSS vor GET '/:id' stehen.
+router.get('/deleted', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT e.*, u.name as user_name, du.name as deleted_by_name, p.name as project_name,
+           (SELECT h.reason FROM entry_history h
+            WHERE h.entry_id = e.id AND h.action = 'delete'
+            ORDER BY h.changed_at DESC, h.id DESC LIMIT 1) as delete_reason
+    FROM entries e
+    JOIN users u ON e.user_id = u.id
+    LEFT JOIN users du ON e.deleted_by = du.id
+    LEFT JOIN projects p ON e.project_id = p.id
+    WHERE e.deleted_at IS NOT NULL
+    ORDER BY e.deleted_at DESC
+  `).all();
+  res.json({ entries: rows });
+});
+
 // Einzelnen Eintrag abrufen
 router.get('/:id', authenticate, (req, res) => {
   const db = getDb();
@@ -113,7 +132,7 @@ router.get('/:id', authenticate, (req, res) => {
     FROM entries e
     JOIN users u ON e.user_id = u.id
     LEFT JOIN projects p ON e.project_id = p.id
-    WHERE e.id = ?
+    WHERE e.id = ? AND e.deleted_at IS NULL
   `).get(req.params.id);
 
   if (!entry) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
@@ -175,13 +194,20 @@ router.post('/', authenticate, (req, res) => {
 // Eintrag bearbeiten
 router.put('/:id', authenticate, (req, res) => {
   const db = getDb();
-  const entry = db.prepare('SELECT * FROM entries WHERE id = ?').get(req.params.id);
+  const entry = db.prepare('SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
 
   if (!entry) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
 
   // Zugriffskontrolle: Admin alle, andere nur eigene
   if (req.user.role !== 'admin' && entry.user_id !== req.user.id) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+
+  // GoBD: Aenderung eines fremden Eintrags (nur Admin moeglich) erfordert eine Begruendung
+  const isForeign = entry.user_id !== req.user.id;
+  const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+  if (isForeign && !reason) {
+    return res.status(400).json({ error: 'Begründung erforderlich beim Bearbeiten eines fremden Eintrags' });
   }
 
   const { date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, personal_note, has_regie, regie_user_id } = req.body;
@@ -204,6 +230,9 @@ router.put('/:id', authenticate, (req, res) => {
 
   const newRegie = has_regie !== undefined ? (has_regie || 0) : entry.has_regie;
   const newRegieUser = has_regie !== undefined ? (has_regie === 1 ? (regie_user_id || entry.regie_user_id) : null) : entry.regie_user_id;
+
+  // GoBD: Vorher-Abbild unveraenderlich festhalten, bevor ueberschrieben wird
+  recordEntryHistory(db, entry, 'update', req.user.id, reason);
 
   db.prepare(`
     UPDATE entries SET date=?, time_from=?, time_to=?, break_minutes=?, net_hours=?, address=?, client=?, project_id=?, project_text=?, description=?, personal_note=?, has_regie=?, regie_user_id=?, updated_at=strftime('%Y-%m-%d %H:%M:%f', 'now')
@@ -230,19 +259,59 @@ router.put('/:id', authenticate, (req, res) => {
   res.json({ entry: updated });
 });
 
-// Eintrag löschen (Mitarbeiter eigene, Admin alle)
+// Eintrag löschen (Mitarbeiter eigene, Admin alle) — Soft-Delete fuer Revisionssicherheit
 router.delete('/:id', authenticate, (req, res) => {
   const db = getDb();
-  const entry = db.prepare('SELECT * FROM entries WHERE id = ?').get(req.params.id);
+  const entry = db.prepare('SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
 
   if (req.user.role === 'admin' || entry.user_id === req.user.id) {
-    db.prepare('DELETE FROM entries WHERE id = ?').run(req.params.id);
+    // GoBD: Loeschen eines fremden Eintrags (nur Admin) erfordert Begruendung
+    const isForeign = entry.user_id !== req.user.id;
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (isForeign && !reason) {
+      return res.status(400).json({ error: 'Begründung erforderlich beim Löschen eines fremden Eintrags' });
+    }
+    // Vorher-Abbild festhalten, dann Soft-Delete (Zeile bleibt fuer Pruefung erhalten)
+    recordEntryHistory(db, entry, 'delete', req.user.id, reason);
+    db.prepare("UPDATE entries SET deleted_at=?, deleted_by=? WHERE id=?")
+      .run(berlinNow(), req.user.id, req.params.id);
     broadcast('entries', req.headers['x-tab-id']);
     return res.json({ success: true });
   }
 
   return res.status(403).json({ error: 'Keine Berechtigung' });
+});
+
+// Aenderungsverlauf eines Eintrags (chef + admin) — GoBD-Nachvollziehbarkeit
+router.get('/:id/history', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT h.id, h.entry_id, h.action, h.changed_by, h.changed_at, h.reason, h.snapshot,
+           u.name as changed_by_name
+    FROM entry_history h
+    LEFT JOIN users u ON h.changed_by = u.id
+    WHERE h.entry_id = ?
+    ORDER BY h.changed_at DESC, h.id DESC
+  `).all(req.params.id);
+  for (const r of rows) {
+    try { r.snapshot = JSON.parse(r.snapshot); } catch (_) { r.snapshot = null; }
+  }
+  res.json({ history: rows });
+});
+
+// Gelöschten Eintrag wiederherstellen — nur Admin. Wird als History-Eintrag protokolliert.
+router.post('/:id/restore', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  const entry = db.prepare('SELECT * FROM entries WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Gelöschter Eintrag nicht gefunden' });
+
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  // Vorher-Abbild (geloeschter Zustand) festhalten, dann wiederherstellen
+  recordEntryHistory(db, entry, 'restore', req.user.id, reason);
+  db.prepare('UPDATE entries SET deleted_at = NULL, deleted_by = NULL WHERE id = ?').run(req.params.id);
+  broadcast('entries', req.headers['x-tab-id']);
+  res.json({ success: true });
 });
 
 module.exports = router;

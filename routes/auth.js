@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const { getDb } = require('../database/init');
 const { authenticate, JWT_SECRET } = require('../middleware/auth');
+const { logAudit } = require('../audit');
 
 const router = express.Router();
 
@@ -26,13 +27,16 @@ router.post('/login', loginLimiter, (req, res) => {
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   if (!user) {
+    logAudit(db, { username, action: 'login_failed', details: 'Benutzer unbekannt', ip: req.ip });
     return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
   }
 
   if (!bcrypt.compareSync(password, user.password_hash)) {
+    logAudit(db, { userId: user.id, username, action: 'login_failed', details: 'Falsches Passwort', ip: req.ip });
     return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
   }
 
+  logAudit(db, { userId: user.id, username: user.username, action: 'login_success', ip: req.ip });
   const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
 
   res.json({

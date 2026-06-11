@@ -355,6 +355,8 @@ function render() {
   else if (route === '/users') renderUsers();
   else if (route === '/projects') renderProjects();
   else if (route === '/settings') renderSettings();
+  else if (route === '/audit') renderAudit();
+  else if (route === '/deleted-entries') renderDeletedEntries();
   else if (route === '/pdf') renderPdfExport();
   else if (route === '/statistics') renderStatistics();
   else if (route === '/planning') renderPlanning();
@@ -465,6 +467,7 @@ function layout(content, activeNav) {
   const showUsers = canManageUsers();
   const showProjects = canManageProjects();
   const showSettings = canSeeSettings();
+  const showAudit = isAdmin();
   const showNewEntry = canCreateEntries();
 
   return `
@@ -518,6 +521,12 @@ function layout(content, activeNav) {
         </a>
         ${showSettings ? `<a href="#/settings" class="${activeNav === 'settings' ? 'active' : ''}">
           <span class="icon">&#9881;</span> Einstellungen
+        </a>` : ''}
+        ${showAudit ? `<a href="#/audit" class="${activeNav === 'audit' ? 'active' : ''}">
+          <span class="icon">&#128220;</span> Audit-Log
+        </a>` : ''}
+        ${showAudit ? `<a href="#/deleted-entries" class="${activeNav === 'deleted-entries' ? 'active' : ''}">
+          <span class="icon">&#128465;</span> Gelöschte Einträge
         </a>` : ''}
       </nav>
     </div>
@@ -1333,6 +1342,9 @@ async function renderEntryForm(editId, continueId, planningId) {
   const allUsers = regieUsers.length > 0 ? regieUsers : [{ id: S.user.id, name: S.user.name }];
   const showNotes = S.user.role === 'admin' || S.user.role === 'mitarbeiter';
   const canDelete = isEdit && (S.user.role === 'admin' || entry.user_id === S.user.id);
+  // GoBD: Bearbeiten/Loeschen eines fremden Eintrags (nur Admin) erfordert eine Begruendung
+  const isForeign = isEdit && !!entry && entry.user_id !== S.user.id;
+  const showHistory = isEdit && isChefOrAdmin();
 
   const content = `
     <div class="card" style="max-width:600px;margin:0 auto;">
@@ -1428,7 +1440,15 @@ async function renderEntryForm(editId, continueId, planningId) {
         ${isEdit ? `<button type="button" class="btn btn-outline btn-block" id="continue-entry" style="margin-top:0.5rem">Auftrag fortsetzen</button>` : ''}
         ${canDelete ? '<button type="button" class="btn btn-danger btn-block" id="delete-entry" style="margin-top:0.5rem">Eintrag löschen</button>' : ''}
       </form>
-    </div>`;
+    </div>
+    ${showHistory ? `
+    <div class="card" style="max-width:600px;margin:1rem auto 0;">
+      <div class="card-header">
+        <h3 style="margin:0;">Änderungsverlauf</h3>
+        <button class="btn btn-outline btn-sm" id="load-history" type="button">Anzeigen</button>
+      </div>
+      <div id="entry-history" style="margin-top:0.75rem;color:var(--text-light);font-size:0.9rem;"></div>
+    </div>` : ''}`;
 
   $app().innerHTML = layout(content, '');
   bindLayout();
@@ -1505,6 +1525,17 @@ async function renderEntryForm(editId, continueId, planningId) {
       return;
     }
 
+    // GoBD: Begruendung abfragen — bei fremdem Eintrag Pflicht, bei eigenem optional
+    if (isEdit) {
+      const reason = prompt(isForeign
+        ? 'Begründung für die Änderung dieses fremden Eintrags (Pflicht):'
+        : 'Begründung für die Änderung (optional):');
+      if (isForeign && (reason === null || !reason.trim())) {
+        toast('Begründung erforderlich', 'error'); return;
+      }
+      body.reason = (reason || '').trim();
+    }
+
     try {
       if (isEdit) {
         await api('PUT', '/api/entries/' + editId, body);
@@ -1522,14 +1553,44 @@ async function renderEntryForm(editId, continueId, planningId) {
     navigate('/entry/continue/' + editId);
   });
 
-  // Delete
+  // Delete (Soft-Delete; Begruendung abfragen — fremd Pflicht, eigen optional)
   document.getElementById('delete-entry')?.addEventListener('click', async () => {
     if (!confirm('Eintrag wirklich löschen?')) return;
+    const body = {};
+    const reason = prompt(isForeign
+      ? 'Begründung für das Löschen dieses fremden Eintrags (Pflicht):'
+      : 'Begründung für das Löschen (optional):');
+    if (isForeign && (reason === null || !reason.trim())) {
+      toast('Begründung erforderlich', 'error'); return;
+    }
+    body.reason = (reason || '').trim();
     try {
-      await api('DELETE', '/api/entries/' + editId);
+      await api('DELETE', '/api/entries/' + editId, body);
       toast('Eintrag gelöscht', 'success');
       navigate('/');
     } catch (err) { toast(err.message, 'error'); }
+  });
+
+  // Änderungsverlauf laden (chef/admin)
+  document.getElementById('load-history')?.addEventListener('click', async () => {
+    const box = document.getElementById('entry-history');
+    box.textContent = 'Lade…';
+    try {
+      const data = await api('GET', '/api/entries/' + editId + '/history');
+      const hist = (data && data.history) || [];
+      if (!hist.length) { box.textContent = 'Keine Änderungen protokolliert.'; return; }
+      box.innerHTML = hist.map(h => {
+        const s = h.snapshot || {};
+        const actLabel = h.action === 'delete' ? 'Gelöscht' : 'Geändert';
+        const vorher = `${esc(s.date || '')} ${esc(s.time_from || '')}–${esc(s.time_to || '')}, Pause ${esc(String(s.break_minutes ?? ''))}min` +
+          (s.description ? `, „${esc(s.description)}"` : '');
+        return `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border);">
+          <strong>${actLabel}</strong> am ${esc(String(h.changed_at || '').slice(0, 19))} von ${esc(h.changed_by_name || '—')}
+          ${h.reason ? `<br><em>Grund: ${esc(h.reason)}</em>` : ''}
+          <br><span style="color:var(--text-lighter);">Vorher: ${vorher}</span>
+        </div>`;
+      }).join('');
+    } catch (err) { box.textContent = 'Fehler: ' + err.message; }
   });
 }
 
@@ -3835,6 +3896,122 @@ async function renderSettings() {
         location.reload();
       }, 2000);
     } catch (err) { toast(err.message, 'error'); }
+  });
+}
+
+// --- Audit-Log (nur Admin) ---
+const AUDIT_LABELS = {
+  login_success: 'Login erfolgreich',
+  login_failed: 'Login fehlgeschlagen',
+  backup_download: 'Backup heruntergeladen',
+  backup_restore: 'Backup eingespielt',
+  user_create: 'Benutzer angelegt',
+  user_update: 'Benutzer geändert',
+  user_password_reset: 'Passwort zurückgesetzt',
+  user_delete: 'Benutzer gelöscht',
+};
+
+async function renderAudit() {
+  if (!isAdmin()) { navigate('/'); return; }
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'audit');
+  bindLayout();
+
+  let data;
+  try {
+    data = await api('GET', '/api/audit?limit=200');
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  const logs = (data && data.logs) || [];
+  const rows = logs.map(l => {
+    const label = AUDIT_LABELS[l.action] || l.action;
+    const who = l.user_name || l.username || '—';
+    return `<tr>
+      <td style="white-space:nowrap;">${esc(String(l.ts || '').slice(0, 19))}</td>
+      <td>${esc(label)}</td>
+      <td>${esc(who)}</td>
+      <td style="color:var(--text-light);">${esc(l.details || '')}</td>
+      <td style="color:var(--text-lighter);">${esc(l.ip || '')}</td>
+    </tr>`;
+  }).join('');
+
+  const mainEl = document.querySelector('.main');
+  mainEl.innerHTML = `
+    <div style="max-width:1000px;margin:0 auto;">
+      <div class="card">
+        <h2 style="margin-bottom:0.5rem;">Audit-Log</h2>
+        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
+          Protokoll sicherheitsrelevanter Aktionen (Login, Backup, Benutzerverwaltung). Neueste zuerst, max. 200.
+          Zeiteintrags-Änderungen sind im jeweiligen Eintrag unter „Änderungsverlauf" einsehbar.
+        </p>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;font-size:0.88rem;">
+            <thead><tr>
+              <th>Zeit</th><th>Aktion</th><th>Benutzer</th><th>Details</th><th>IP</th>
+            </tr></thead>
+            <tbody>${rows || '<tr><td colspan="5" style="color:var(--text-light);">Keine Einträge.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+// --- Gelöschte Einträge (Papierkorb, nur Admin) ---
+async function renderDeletedEntries() {
+  if (!isAdmin()) { navigate('/'); return; }
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-entries');
+  bindLayout();
+
+  let data;
+  try {
+    data = await api('GET', '/api/entries/deleted');
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  const entries = (data && data.entries) || [];
+  const rows = entries.map(e => {
+    const proj = e.project_name || e.project_text || '';
+    return `<tr>
+      <td style="white-space:nowrap;">${esc(e.date)}</td>
+      <td>${esc(e.user_name)}</td>
+      <td style="white-space:nowrap;">${esc(e.time_from)}–${esc(e.time_to)}</td>
+      <td>${esc(proj)}</td>
+      <td style="color:var(--text-light);">${esc(String(e.deleted_at || '').slice(0, 19))}</td>
+      <td>${esc(e.deleted_by_name || '—')}</td>
+      <td style="color:var(--text-light);">${esc(e.delete_reason || '')}</td>
+      <td><button class="btn btn-outline btn-sm restore-entry" data-id="${e.id}" type="button">Wiederherstellen</button></td>
+    </tr>`;
+  }).join('');
+
+  const mainEl = document.querySelector('.main');
+  mainEl.innerHTML = `
+    <div style="max-width:1100px;margin:0 auto;">
+      <div class="card">
+        <h2 style="margin-bottom:0.5rem;">Gelöschte Einträge</h2>
+        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
+          Soft-gelöschte Zeiteinträge bleiben für die Revisionssicherheit (GoBD) erhalten und sind hier einsehbar.
+          Wiederherstellen setzt den Eintrag zurück; der Vorgang wird im Änderungsverlauf protokolliert.
+        </p>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;font-size:0.88rem;">
+            <thead><tr>
+              <th>Datum</th><th>Mitarbeiter</th><th>Zeit</th><th>Projekt</th>
+              <th>Gelöscht am</th><th>Gelöscht von</th><th>Begründung</th><th></th>
+            </tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" style="color:var(--text-light);">Keine gelöschten Einträge.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+  mainEl.querySelectorAll('.restore-entry').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Diesen Eintrag wiederherstellen?')) return;
+      const reason = prompt('Begründung für die Wiederherstellung (optional):') || '';
+      try {
+        await api('POST', '/api/entries/' + btn.dataset.id + '/restore', { reason: reason.trim() });
+        toast('Eintrag wiederhergestellt', 'success');
+        renderDeletedEntries();
+      } catch (err) { toast(err.message, 'error'); }
+    });
   });
 }
 

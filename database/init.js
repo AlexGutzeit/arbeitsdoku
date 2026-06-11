@@ -335,6 +335,28 @@ async function initDatabase() {
       FOREIGN KEY (to_user_id) REFERENCES users(id) ON DELETE CASCADE,
       UNIQUE(note_id, to_user_id)
     );
+
+    -- Revisionssicherheit (GoBD): unveraenderlicher Aenderungsverlauf von Zeiteintraegen
+    CREATE TABLE IF NOT EXISTS entry_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entry_id INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      changed_by INTEGER,
+      changed_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      reason TEXT DEFAULT '',
+      snapshot TEXT
+    );
+
+    -- Audit-Log: sicherheits-/betriebsrelevante Ereignisse (Login, Backup, User-Verwaltung)
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      user_id INTEGER,
+      username TEXT DEFAULT '',
+      action TEXT NOT NULL,
+      details TEXT DEFAULT '',
+      ip TEXT DEFAULT ''
+    );
   `);
 
   // Migration: target_hours_per_day → target_hours_per_week
@@ -569,6 +591,17 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: Soft-Delete-Spalten in entries (Revisionssicherheit GoBD)
+  try {
+    const eCols = db.prepare("PRAGMA table_info(entries)").all();
+    if (!eCols.find(c => c.name === 'deleted_at')) {
+      db.prepare("ALTER TABLE entries ADD COLUMN deleted_at TEXT").run();
+      db.prepare("ALTER TABLE entries ADD COLUMN deleted_by INTEGER").run();
+      markDirty();
+      console.log('Migration: deleted_at/deleted_by in entries hinzugefuegt.');
+    }
+  } catch (e) {}
+
   // Migration: Branding-Defaults (White-Label) — fuegt nur Werte ein, die fehlen
   try {
     const brandDefaults = [
@@ -630,11 +663,47 @@ async function initDatabase() {
   }
 }
 
+// Stellt sicher, dass die Revisionssicherheits-Objekte existieren — wichtig nach einem
+// Restore eines aelteren Backups, das diese Tabellen/Spalten noch nicht hatte. Sonst
+// wuerden Queries mit "deleted_at IS NULL" mit "no such column" fehlschlagen.
+function ensureAuditSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS entry_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_id INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        changed_by INTEGER,
+        changed_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        reason TEXT DEFAULT '',
+        snapshot TEXT
+      );
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        user_id INTEGER,
+        username TEXT DEFAULT '',
+        action TEXT NOT NULL,
+        details TEXT DEFAULT '',
+        ip TEXT DEFAULT ''
+      );
+    `);
+    const eCols = targetDb.prepare("PRAGMA table_info(entries)").all();
+    if (!eCols.find(c => c.name === 'deleted_at')) {
+      targetDb.prepare("ALTER TABLE entries ADD COLUMN deleted_at TEXT").run();
+      targetDb.prepare("ALTER TABLE entries ADD COLUMN deleted_by INTEGER").run();
+    }
+  } catch (e) {
+    console.error('ensureAuditSchema fehlgeschlagen:', e.message);
+  }
+}
+
 function reloadFromFile(filePath) {
   const buffer = fs.readFileSync(filePath || DB_PATH);
   const rawDb = new SQL.Database(buffer);
   db = wrapDb(rawDb);
   db.pragma('foreign_keys = ON');
+  ensureAuditSchema(db);
 }
 
 module.exports = { getDb, closeDb, setDb, initDatabase, saveToFile, reloadFromFile, DB_PATH, get SQL() { return SQL; } };
