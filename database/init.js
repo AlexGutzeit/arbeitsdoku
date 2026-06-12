@@ -762,6 +762,14 @@ function ensureAuditSchema(targetDb) {
       targetDb.prepare("ALTER TABLE absences ADD COLUMN deleted_at TEXT").run();
       targetDb.prepare("ALTER TABLE absences ADD COLUMN deleted_by INTEGER").run();
     }
+    // Berechtigungs-Spalten der users-Tabelle absichern — die Auth-Middleware liest sie bei
+    // JEDER Anfrage. Fehlen sie nach Restore eines alten Backups, wuerde jede Anfrage brechen.
+    const uCols = targetDb.prepare("PRAGMA table_info(users)").all();
+    for (const col of ['can_plan', 'can_bulletin', 'can_upload']) {
+      if (!uCols.find(c => c.name === col)) {
+        targetDb.prepare(`ALTER TABLE users ADD COLUMN ${col} INTEGER DEFAULT 0`).run();
+      }
+    }
   } catch (e) {
     console.error('ensureAuditSchema fehlgeschlagen:', e.message);
   }
