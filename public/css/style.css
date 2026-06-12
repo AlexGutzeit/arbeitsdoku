@@ -221,6 +221,13 @@ body {
 .doc-icon { font-size: 1.1rem; }
 .doc-meta { font-size: 0.78rem; color: var(--text-lighter); white-space: nowrap; }
 .doc-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.doc-picker-list { display: flex; flex-direction: column; max-height: 50vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.doc-picker-item {
+  text-align: left; background: none; border: none; border-bottom: 1px solid var(--border);
+  padding: 0.6rem 0.6rem; font-size: 0.92rem; color: var(--text); cursor: pointer; font-family: inherit;
+}
+.doc-picker-item:last-child { border-bottom: none; }
+.doc-picker-item:hover { background: var(--primary-light); }
 @media (max-width: 600px) {
   .doc-row { flex-wrap: wrap; }
   .doc-meta { order: 3; width: 100%; }

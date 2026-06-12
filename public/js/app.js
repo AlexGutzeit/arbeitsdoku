@@ -4125,6 +4125,55 @@ async function downloadDocument(id, name) {
   } catch (e) { toast(e.message, 'error'); }
 }
 
+// Ordner-Auswahldialog fuer "Verschieben". Liefert Ziel-Ordner-ID (oder null = Wurzel),
+// oder undefined bei Abbruch. excludeRootId: Ordner (+ Nachkommen), die nicht waehlbar sind.
+async function pickTargetFolder(excludeRootId) {
+  let all = [];
+  try { all = (await api('GET', '/api/documents/folders/all')).folders || []; }
+  catch (e) { toast(e.message, 'error'); return undefined; }
+
+  const exclude = new Set();
+  if (excludeRootId) {
+    exclude.add(excludeRootId);
+    let frontier = [excludeRootId];
+    while (frontier.length) {
+      const next = [];
+      all.forEach(f => { if (frontier.includes(f.parent_id)) { exclude.add(f.id); next.push(f.id); } });
+      frontier = next;
+    }
+  }
+
+  function levelHtml(parentId, depth) {
+    let html = '';
+    all.filter(f => (f.parent_id || null) === parentId && !exclude.has(f.id)).forEach(f => {
+      html += `<button class="doc-picker-item" data-id="${f.id}" style="padding-left:${0.6 + depth * 1.3}rem">📁 ${esc(f.name)}</button>`;
+      html += levelHtml(f.id, depth + 1);
+    });
+    return html;
+  }
+
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:420px;">
+        <h2>Zielordner wählen</h2>
+        <div class="doc-picker-list">
+          <button class="doc-picker-item" data-id="">📁 Dokumente (Wurzel)</button>
+          ${levelHtml(null, 1)}
+        </div>
+        <div class="modal-actions"><button class="btn btn-outline" id="doc-picker-cancel">Abbrechen</button></div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const done = (val) => { overlay.remove(); resolve(val); };
+    overlay.querySelectorAll('.doc-picker-item').forEach(b => b.addEventListener('click', () => {
+      done(b.dataset.id ? Number(b.dataset.id) : null);
+    }));
+    overlay.querySelector('#doc-picker-cancel').addEventListener('click', () => done(undefined));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) done(undefined); });
+  });
+}
+
 async function renderDocuments() {
   const route = getRoute();
   const m = route.match(/^\/documents\/(\d+)/);
@@ -4153,6 +4202,7 @@ async function renderDocuments() {
       <span class="doc-meta">${f.subfolder_count} Ordner · ${f.document_count} Dateien</span>
       ${manage ? `<span class="doc-actions">
         <button class="btn btn-sm btn-outline doc-folder-rename" data-id="${f.id}" data-name="${esc(f.name)}">Umbenennen</button>
+        <button class="btn btn-sm btn-outline doc-folder-move" data-id="${f.id}" data-name="${esc(f.name)}">Verschieben</button>
         <button class="btn btn-sm btn-danger doc-folder-delete" data-id="${f.id}" data-name="${esc(f.name)}">Löschen</button>
       </span>` : ''}
     </div>`).join('');
@@ -4164,7 +4214,8 @@ async function renderDocuments() {
       <span class="doc-meta">${docFormatSize(d.size)}${d.uploaded_by_name ? ` · ${esc(d.uploaded_by_name)}` : ''}</span>
       <span class="doc-actions">
         <button class="btn btn-sm btn-primary doc-download" data-id="${d.id}" data-name="${esc(d.original_name)}">Herunterladen</button>
-        ${manage ? `<button class="btn btn-sm btn-danger doc-delete" data-id="${d.id}" data-name="${esc(label)}">Löschen</button>` : ''}
+        ${manage ? `<button class="btn btn-sm btn-outline doc-move" data-id="${d.id}">Verschieben</button>
+        <button class="btn btn-sm btn-danger doc-delete" data-id="${d.id}" data-name="${esc(label)}">Löschen</button>` : ''}
       </span>
     </div>`;
   }).join('');
@@ -4214,6 +4265,16 @@ async function renderDocuments() {
     });
   });
 
+  // Ordner verschieben
+  mainEl.querySelectorAll('.doc-folder-move').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const target = await pickTargetFolder(Number(btn.dataset.id));
+      if (target === undefined) return;
+      try { await api('PUT', '/api/documents/folders/' + btn.dataset.id + '/move', { parent_id: target }); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
   // Ordner löschen (rekursiv)
   mainEl.querySelectorAll('.doc-folder-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -4236,6 +4297,16 @@ async function renderDocuments() {
       toast('Datei hochgeladen', 'success');
       renderDocuments();
     } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Dokument verschieben
+  mainEl.querySelectorAll('.doc-move').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const target = await pickTargetFolder(null);
+      if (target === undefined) return;
+      try { await api('PUT', '/api/documents/' + btn.dataset.id + '/move', { folder_id: target }); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
   });
 
   // Dokument löschen

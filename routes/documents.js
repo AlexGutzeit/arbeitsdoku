@@ -125,6 +125,13 @@ router.get('/', authenticate, (req, res) => {
   });
 });
 
+// Alle Ordner flach (fuer den Verschieben-Auswahlbaum) — alle eingeloggten Nutzer
+router.get('/folders/all', authenticate, (req, res) => {
+  const db = getDb();
+  const folders = db.prepare('SELECT id, name, parent_id FROM doc_folders ORDER BY name COLLATE NOCASE').all();
+  res.json({ folders });
+});
+
 // Ordner anlegen (chef + admin)
 router.post('/folders', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
@@ -148,6 +155,23 @@ router.put('/folders/:id', authenticate, authorize('chef'), (req, res) => {
   if (name.length > NAME_MAX) return res.status(400).json({ error: `Name zu lang (max. ${NAME_MAX})` });
   db.prepare('UPDATE doc_folders SET name = ? WHERE id = ?').run(name, req.params.id);
   res.json({ folder: folderRow(db, req.params.id) });
+});
+
+// Ordner verschieben (chef + admin) — mit Schutz gegen Verschieben in sich selbst/Unterordner
+router.put('/folders/:id/move', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const folder = folderRow(db, req.params.id);
+  if (!folder) return res.status(404).json({ error: 'Ordner nicht gefunden' });
+  const target = req.body.parent_id ? Number(req.body.parent_id) : null;
+  if (target) {
+    if (!folderRow(db, target)) return res.status(400).json({ error: 'Zielordner nicht gefunden' });
+    const subtree = collectFolderIds(db, folder.id); // Ordner + alle Nachkommen
+    if (subtree.includes(target)) {
+      return res.status(400).json({ error: 'Ordner kann nicht in sich selbst oder einen Unterordner verschoben werden' });
+    }
+  }
+  db.prepare('UPDATE doc_folders SET parent_id = ? WHERE id = ?').run(target, folder.id);
+  res.json({ success: true });
 });
 
 // Alle Ordner-IDs eines Teilbaums (inkl. Wurzel) sammeln
@@ -214,6 +238,17 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   let title = typeof req.body.title === 'string' ? req.body.title.trim().slice(0, NAME_MAX) : doc.title;
   db.prepare('UPDATE documents SET title = ? WHERE id = ?').run(title, req.params.id);
   res.json({ document: db.prepare('SELECT id, folder_id, original_name, title, mime, size, uploaded_at FROM documents WHERE id = ?').get(req.params.id) });
+});
+
+// Dokument in anderen Ordner verschieben (chef + admin)
+router.put('/:id/move', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const doc = db.prepare('SELECT id FROM documents WHERE id = ?').get(req.params.id);
+  if (!doc) return res.status(404).json({ error: 'Dokument nicht gefunden' });
+  const target = req.body.folder_id ? Number(req.body.folder_id) : null;
+  if (target && !folderRow(db, target)) return res.status(400).json({ error: 'Zielordner nicht gefunden' });
+  db.prepare('UPDATE documents SET folder_id = ? WHERE id = ?').run(target, req.params.id);
+  res.json({ success: true });
 });
 
 // Dokument löschen (chef + admin)
