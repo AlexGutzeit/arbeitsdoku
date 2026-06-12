@@ -4221,11 +4221,20 @@ async function renderDocuments() {
     </div>`;
   }).join('');
 
+  const st = data.storage || { used: 0, limit: 0 };
+  const pct = st.limit ? Math.min(100, Math.round((st.used / st.limit) * 100)) : 0;
+  const storageHtml = st.limit ? `
+    <div class="doc-storage">
+      <div class="doc-storage-bar"><div class="doc-storage-fill${pct >= 90 ? ' doc-storage-fill--full' : ''}" style="width:${pct}%"></div></div>
+      <span class="doc-storage-text">${docFormatSize(st.used)} / ${docFormatSize(st.limit)} belegt (${pct}%)</span>
+    </div>` : '';
+
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
     <div style="max-width:900px;margin:0 auto;">
       <div class="card">
         <div class="doc-breadcrumb">${breadcrumbHtml}</div>
+        ${storageHtml}
         ${manage ? `<div class="doc-toolbar">
           <button class="btn btn-sm btn-outline" id="doc-new-folder">+ Neuer Ordner</button>
           <button class="btn btn-sm btn-primary" id="doc-upload-btn">⬆ Datei hochladen</button>

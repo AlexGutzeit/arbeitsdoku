@@ -22,6 +22,11 @@ const MIME = {
   '.txt': 'text/plain', '.csv': 'text/csv',
 };
 const NAME_MAX = 120;
+const MAX_TOTAL_BYTES = 500 * 1024 * 1024; // Gesamt-Speicherlimit der Dokumenten-Ablage (500 MB)
+
+function totalUsedBytes(db) {
+  return db.prepare('SELECT COALESCE(SUM(size), 0) as total FROM documents').get().total || 0;
+}
 
 // Upload direkt nach storage/documents/ mit generiertem UUID-Namen (kein User-Pfad)
 const storage = multer.diskStorage({
@@ -122,6 +127,7 @@ router.get('/', authenticate, (req, res) => {
     folder: folderId ? folderRow(db, folderId) : null,
     breadcrumb: buildBreadcrumb(db, folderId),
     folders, documents,
+    storage: { used: totalUsedBytes(db), limit: MAX_TOTAL_BYTES },
   });
 });
 
@@ -212,6 +218,14 @@ router.post('/upload', authenticate, authorize('chef'), (req, res) => {
     if (!contentMatchesExt(req.file.path, ext)) {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
       return res.status(400).json({ error: 'Dateiinhalt passt nicht zum Format — Datei abgelehnt' });
+    }
+    // Gesamt-Speicherlimit der Ablage pruefen (500 MB)
+    const used = totalUsedBytes(db);
+    if (used + req.file.size > MAX_TOTAL_BYTES) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+      const limitMb = Math.round(MAX_TOTAL_BYTES / (1024 * 1024));
+      const freeMb = Math.max(0, (MAX_TOTAL_BYTES - used) / (1024 * 1024));
+      return res.status(400).json({ error: `Speicherlimit der Dokumenten-Ablage erreicht (${limitMb} MB). Noch frei: ${freeMb.toFixed(1)} MB.` });
     }
     const folderId = req.body.folder_id ? Number(req.body.folder_id) : null;
     if (folderId && !folderRow(db, folderId)) {

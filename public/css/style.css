@@ -208,6 +208,11 @@ body {
 .doc-breadcrumb a:hover { text-decoration: underline; }
 .doc-crumb-current { font-weight: 600; }
 .doc-crumb-sep { color: var(--text-lighter); }
+.doc-storage { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; }
+.doc-storage-bar { flex: 1; max-width: 240px; height: 8px; background: var(--border); border-radius: 9999px; overflow: hidden; }
+.doc-storage-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
+.doc-storage-fill--full { background: var(--danger); }
+.doc-storage-text { font-size: 0.78rem; color: var(--text-light); white-space: nowrap; }
 .doc-toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
 .doc-toolbar-hint { font-size: 0.75rem; color: var(--text-lighter); }
 .doc-list { display: flex; flex-direction: column; }
