@@ -235,8 +235,11 @@ body {
 .doc-picker-item:last-child { border-bottom: none; }
 .doc-picker-item:hover { background: var(--primary-light); }
 @media (max-width: 600px) {
-  .doc-row { flex-wrap: wrap; }
-  .doc-meta { order: 3; width: 100%; }
+  /* Auf dem Smartphone Name / Meta / Buttons untereinander statt nebeneinander */
+  .doc-row { flex-wrap: wrap; align-items: flex-start; }
+  .doc-link { flex: 1 0 100%; order: 0; }
+  .doc-meta { width: 100%; order: 1; white-space: normal; }
+  .doc-actions { width: 100%; order: 2; }
 }
 
 /* === Main Content === */

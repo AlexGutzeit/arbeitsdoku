@@ -4292,7 +4292,7 @@ async function renderDocuments() {
   const storageHtml = (manage && st.limit) ? `
     <div class="doc-storage">
       <div class="doc-storage-bar"><div class="doc-storage-fill${over ? ' doc-storage-fill--full' : ''}" style="width:${barPct}%"></div></div>
-      <span class="doc-storage-text${realPct > 100 ? ' doc-storage-text--over' : ''}">${docFormatSize(st.used)} / ${docFormatSize(st.limit)} belegt (${realPct}%)${realPct > 100 ? ' — Limit überschritten' : ''}</span>
+      <span class="doc-storage-text${realPct > 100 ? ' doc-storage-text--over' : ''}">${docFormatSize(st.used) || '0 B'} / ${docFormatSize(st.limit)} belegt (${realPct}%)${realPct > 100 ? ' — Limit überschritten' : ''}</span>
     </div>` : '';
 
   const mainEl = document.querySelector('.main');
