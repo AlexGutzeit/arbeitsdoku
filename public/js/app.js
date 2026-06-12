@@ -358,6 +358,7 @@ function render() {
   else if (route === '/audit') renderAudit();
   else if (route === '/deleted-entries') renderDeletedEntries();
   else if (route === '/deleted-absences') renderDeletedAbsences();
+  else if (route === '/documents' || route.startsWith('/documents/')) renderDocuments();
   else if (route === '/pdf') renderPdfExport();
   else if (route === '/statistics') renderStatistics();
   else if (route === '/planning') renderPlanning();
@@ -508,6 +509,9 @@ function layout(content, activeNav) {
         <a href="#/notes" class="${activeNav === 'notes' ? 'active' : ''}">
           <span class="icon">&#128221;</span> Notizen
           <span class="nav-badge" id="nav-badge-notes"${S.badges.notes ? '' : ' style="display:none"'}>${S.badges.notes || ''}</span>
+        </a>
+        <a href="#/documents" class="${activeNav === 'documents' ? 'active' : ''}">
+          <span class="icon">&#128193;</span> Dokumente
         </a>
         <a href="#/absences" class="${activeNav === 'absences' ? 'active' : ''}">
           <span class="icon">&#128197;</span> Abwesenheit
@@ -3390,6 +3394,10 @@ async function showUserModal(user) {
             <input type="checkbox" id="um-can-bulletin" ${user?.can_bulletin ? 'checked' : ''}>
             Schwarzes-Brett-Recht (darf Einträge erstellen/bearbeiten)
           </label>
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:0.3rem;">
+            <input type="checkbox" id="um-can-upload" ${user?.can_upload ? 'checked' : ''}>
+            Datei-Upload-Recht (darf Dokumente hochladen &amp; verwalten)
+          </label>
         </div>
         ${isEdit ? `
         <div class="form-section">
@@ -3489,6 +3497,7 @@ async function showUserModal(user) {
       start_overtime: parseFloat(document.getElementById('um-start-overtime').value) || 0,
       can_plan: document.getElementById('um-can-plan').checked,
       can_bulletin: document.getElementById('um-can-bulletin').checked,
+      can_upload: document.getElementById('um-can-upload').checked,
     };
     // Bei neuem User Tages-Stunden setzen
     if (!isEdit) {
@@ -3689,6 +3698,20 @@ async function renderSettings() {
     if (data) S.settings = data.settings;
   } catch (e) {}
 
+  // Dokumenten-Speicher (nur Admin)
+  let docStorage = null;
+  if (isAdmin()) {
+    try { const ds = await api('GET', '/api/documents'); if (ds) docStorage = ds.storage; } catch (e) {}
+  }
+  let docLimitVal = '500', docLimitUnit = 'MB', docUsedStr = '', docLimitStr = '';
+  if (docStorage) {
+    const lim = docStorage.limit, gb = 1024 * 1024 * 1024, mb = 1024 * 1024;
+    if (lim >= gb && lim % gb === 0) { docLimitUnit = 'GB'; docLimitVal = String(lim / gb); }
+    else { docLimitUnit = 'MB'; const v = lim / mb; docLimitVal = (v % 1 === 0) ? String(v) : v.toFixed(2); }
+    docUsedStr = docFormatSize(docStorage.used);
+    docLimitStr = docFormatSize(docStorage.limit);
+  }
+
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
     <div style="max-width:600px;margin:0 auto;">
@@ -3774,6 +3797,32 @@ async function renderSettings() {
         </div>
       </div>
 
+      ${isAdmin() ? `
+      <div class="card">
+        <h2 style="margin-bottom:1rem;">Dokumenten-Speicher</h2>
+        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
+          Aktuell belegt: <strong>${docUsedStr}</strong> von <strong>${docLimitStr}</strong>.
+        </p>
+        <div class="form-row" style="grid-template-columns:1fr 110px;">
+          <div class="form-group">
+            <label>Gesamtlimit</label>
+            <input type="text" class="form-control" id="doc-limit-value" value="${esc(docLimitVal)}" inputmode="decimal">
+          </div>
+          <div class="form-group">
+            <label>Einheit</label>
+            <select class="form-control" id="doc-limit-unit">
+              <option value="MB"${docLimitUnit === 'MB' ? ' selected' : ''}>MB</option>
+              <option value="GB"${docLimitUnit === 'GB' ? ' selected' : ''}>GB</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="doc-limit-save">Limit speichern</button>
+        <p style="color:var(--text-lighter);font-size:0.8rem;margin-top:0.6rem;">
+          Bestehende Dateien bleiben immer erhalten. Ein Limit unterhalb des belegten Speichers
+          blockiert nur neue Uploads, bis genug gelöscht wurde. „.“ und „,“ sind beide erlaubt.
+        </p>
+      </div>` : ''}
+
       <div class="card">
         <h2 style="margin-bottom:1rem;">Datenbank-Backup</h2>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -3802,6 +3851,24 @@ async function renderSettings() {
         company_city: document.getElementById('s-city').value,
       });
       toast('Einstellungen gespeichert', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  // Dokumenten-Speicherlimit (Admin)
+  document.getElementById('doc-limit-save')?.addEventListener('click', async () => {
+    const raw = document.getElementById('doc-limit-value').value.trim().replace(',', '.');
+    const unit = document.getElementById('doc-limit-unit').value;
+    const val = parseFloat(raw);
+    if (!isFinite(val) || val <= 0) { toast('Bitte eine gültige Zahl größer 0 eingeben', 'error'); return; }
+    const newBytes = Math.round(val * (unit === 'GB' ? 1024 * 1024 * 1024 : 1024 * 1024));
+    const usedBytes = docStorage ? docStorage.used : 0;
+    if (newBytes < usedBytes) {
+      if (!confirm(`Aktuell sind ${docFormatSize(usedBytes)} belegt. Ein Limit von ${docFormatSize(newBytes)} blockiert neue Uploads, bis genug gelöscht wurde. Bestehende Dateien bleiben erhalten. Trotzdem speichern?`)) return;
+    }
+    try {
+      await api('PUT', '/api/documents/storage-limit', { value: raw, unit });
+      toast('Speicherlimit gespeichert', 'success');
+      renderSettings();
     } catch (err) { toast(err.message, 'error'); }
   });
 
@@ -4086,6 +4153,258 @@ async function renderDeletedAbsences() {
         toast('Abwesenheit wiederhergestellt', 'success');
         renderDeletedAbsences();
       } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+}
+
+// --- Dokumente (Ablage) ---
+function docFileIcon(name) {
+  const ext = (name || '').toLowerCase().split('.').pop();
+  if (ext === 'pdf') return '📄';
+  if (['doc', 'docx'].includes(ext)) return '📝';
+  if (['xls', 'xlsx'].includes(ext)) return '📊';
+  if (['ppt', 'pptx'].includes(ext)) return '📈';
+  if (['png', 'jpg', 'jpeg'].includes(ext)) return '🖼️';
+  if (['txt', 'csv'].includes(ext)) return '📃';
+  return '📎';
+}
+function docFormatSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function downloadDocument(id, name) {
+  try {
+    const res = await fetch('/api/documents/' + id + '/download', { headers: { 'Authorization': 'Bearer ' + S.token } });
+    if (!res.ok) throw new Error('Download fehlgeschlagen');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name || 'dokument';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// Ordner-Auswahldialog fuer "Verschieben". Liefert Ziel-Ordner-ID (oder null = Wurzel),
+// oder undefined bei Abbruch. excludeRootId: Ordner (+ Nachkommen), die nicht waehlbar sind.
+async function pickTargetFolder(excludeRootId) {
+  let all = [];
+  try { all = (await api('GET', '/api/documents/folders/all')).folders || []; }
+  catch (e) { toast(e.message, 'error'); return undefined; }
+
+  const exclude = new Set();
+  if (excludeRootId) {
+    exclude.add(excludeRootId);
+    let frontier = [excludeRootId];
+    while (frontier.length) {
+      const next = [];
+      all.forEach(f => { if (frontier.includes(f.parent_id)) { exclude.add(f.id); next.push(f.id); } });
+      frontier = next;
+    }
+  }
+
+  function levelHtml(parentId, depth) {
+    let html = '';
+    all.filter(f => (f.parent_id || null) === parentId && !exclude.has(f.id)).forEach(f => {
+      html += `<button class="doc-picker-item" data-id="${f.id}" style="padding-left:${0.6 + depth * 1.3}rem">📁 ${esc(f.name)}</button>`;
+      html += levelHtml(f.id, depth + 1);
+    });
+    return html;
+  }
+
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:420px;">
+        <h2>Zielordner wählen</h2>
+        <div class="doc-picker-list">
+          <button class="doc-picker-item" data-id="">📁 Dokumente (Wurzel)</button>
+          ${levelHtml(null, 1)}
+        </div>
+        <div class="modal-actions"><button class="btn btn-outline" id="doc-picker-cancel">Abbrechen</button></div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const done = (val) => { overlay.remove(); resolve(val); };
+    overlay.querySelectorAll('.doc-picker-item').forEach(b => b.addEventListener('click', () => {
+      done(b.dataset.id ? Number(b.dataset.id) : null);
+    }));
+    overlay.querySelector('#doc-picker-cancel').addEventListener('click', () => done(undefined));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) done(undefined); });
+  });
+}
+
+async function renderDocuments() {
+  const route = getRoute();
+  const m = route.match(/^\/documents\/(\d+)/);
+  const folderId = m ? Number(m[1]) : null;
+
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'documents');
+  bindLayout();
+
+  let data;
+  try {
+    data = await api('GET', '/api/documents' + (folderId ? '?folder_id=' + folderId : ''));
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  const manage = isChefOrAdmin() || (S.user && S.user.can_upload);
+  const crumbs = [{ id: null, name: 'Dokumente' }].concat(data.breadcrumb || []);
+  const breadcrumbHtml = crumbs.map((c, i) => {
+    const last = i === crumbs.length - 1;
+    return last
+      ? `<span class="doc-crumb-current">${esc(c.name)}</span>`
+      : `<a href="#/documents${c.id ? '/' + c.id : ''}">${esc(c.name)}</a>`;
+  }).join('<span class="doc-crumb-sep"> / </span>');
+
+  const folderRows = (data.folders || []).map(f => `
+    <div class="doc-row">
+      <a class="doc-link" href="#/documents/${f.id}"><span class="doc-icon">📁</span> ${esc(f.name)}</a>
+      <span class="doc-meta">${f.subfolder_count} Ordner · ${f.document_count} Dateien</span>
+      ${manage ? `<span class="doc-actions">
+        <button class="btn btn-sm btn-outline doc-folder-rename" data-id="${f.id}" data-name="${esc(f.name)}">Umbenennen</button>
+        <button class="btn btn-sm btn-outline doc-folder-move" data-id="${f.id}" data-name="${esc(f.name)}">Verschieben</button>
+        <button class="btn btn-sm btn-danger doc-folder-delete" data-id="${f.id}" data-name="${esc(f.name)}">Löschen</button>
+      </span>` : ''}
+    </div>`).join('');
+
+  const docRows = (data.documents || []).map(d => {
+    const label = d.title || d.original_name;
+    return `<div class="doc-row">
+      <span class="doc-link"><span class="doc-icon">${docFileIcon(d.original_name)}</span> ${esc(label)}</span>
+      <span class="doc-meta">${docFormatSize(d.size)}${d.uploaded_by_name ? ` · ${esc(d.uploaded_by_name)}` : ''}</span>
+      <span class="doc-actions">
+        <button class="btn btn-sm btn-primary doc-download" data-id="${d.id}" data-name="${esc(d.original_name)}">Herunterladen</button>
+        ${manage ? `<button class="btn btn-sm btn-outline doc-rename" data-id="${d.id}" data-name="${esc(d.original_name)}">Umbenennen</button>
+        <button class="btn btn-sm btn-outline doc-move" data-id="${d.id}">Verschieben</button>
+        <button class="btn btn-sm btn-danger doc-delete" data-id="${d.id}" data-name="${esc(label)}">Löschen</button>` : ''}
+      </span>
+    </div>`;
+  }).join('');
+
+  const st = data.storage || { used: 0, limit: 0 };
+  const realPct = st.limit ? Math.round((st.used / st.limit) * 100) : 0;
+  const barPct = Math.min(100, realPct);
+  const over = realPct >= 90;
+  // Belegungsbalken nur fuer Nutzer mit Verwaltungs-/Upload-Recht
+  const storageHtml = (manage && st.limit) ? `
+    <div class="doc-storage">
+      <div class="doc-storage-bar"><div class="doc-storage-fill${over ? ' doc-storage-fill--full' : ''}" style="width:${barPct}%"></div></div>
+      <span class="doc-storage-text${realPct > 100 ? ' doc-storage-text--over' : ''}">${docFormatSize(st.used)} / ${docFormatSize(st.limit)} belegt (${realPct}%)${realPct > 100 ? ' — Limit überschritten' : ''}</span>
+    </div>` : '';
+
+  const mainEl = document.querySelector('.main');
+  mainEl.innerHTML = `
+    <div style="max-width:900px;margin:0 auto;">
+      <div class="card">
+        <div class="doc-breadcrumb">${breadcrumbHtml}</div>
+        ${storageHtml}
+        ${manage ? `<div class="doc-toolbar">
+          <button class="btn btn-sm btn-outline" id="doc-new-folder">+ Neuer Ordner</button>
+          <button class="btn btn-sm btn-primary" id="doc-upload-btn">⬆ Datei hochladen</button>
+          <input type="file" id="doc-file-input" style="display:none" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.txt,.csv">
+          <span class="doc-toolbar-hint">PDF, Word, Excel, PowerPoint, PNG, JPG, TXT, CSV — max. 5 MB</span>
+        </div>` : ''}
+        <div class="doc-list">
+          ${folderRows}${docRows}
+          ${(!folderRows && !docRows) ? '<p class="absence-empty">Dieser Ordner ist leer.</p>' : ''}
+        </div>
+      </div>
+    </div>`;
+
+  // Downloads (alle Rollen)
+  mainEl.querySelectorAll('.doc-download').forEach(btn => {
+    btn.addEventListener('click', () => downloadDocument(btn.dataset.id, btn.dataset.name));
+  });
+
+  if (!manage) return;
+
+  // Neuer Ordner
+  document.getElementById('doc-new-folder')?.addEventListener('click', async () => {
+    const name = prompt('Name des neuen Ordners:');
+    if (name === null || !name.trim()) return;
+    try {
+      await api('POST', '/api/documents/folders', { name: name.trim(), parent_id: folderId });
+      renderDocuments();
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Ordner umbenennen
+  mainEl.querySelectorAll('.doc-folder-rename').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = prompt('Neuer Name:', btn.dataset.name);
+      if (name === null || !name.trim()) return;
+      try { await api('PUT', '/api/documents/folders/' + btn.dataset.id, { name: name.trim() }); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Ordner verschieben
+  mainEl.querySelectorAll('.doc-folder-move').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const target = await pickTargetFolder(Number(btn.dataset.id));
+      if (target === undefined) return;
+      try { await api('PUT', '/api/documents/folders/' + btn.dataset.id + '/move', { parent_id: target }); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Ordner löschen (rekursiv)
+  mainEl.querySelectorAll('.doc-folder-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Ordner „${btn.dataset.name}" mit allen Unterordnern und Dokumenten löschen?`)) return;
+      try { await api('DELETE', '/api/documents/folders/' + btn.dataset.id); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Datei hochladen
+  const fileInput = document.getElementById('doc-file-input');
+  document.getElementById('doc-upload-btn')?.addEventListener('click', () => fileInput.click());
+  fileInput?.addEventListener('change', async () => {
+    if (!fileInput.files.length) return;
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    if (folderId) fd.append('folder_id', folderId);
+    try {
+      await api('POST', '/api/documents/upload', fd, true);
+      toast('Datei hochgeladen', 'success');
+      renderDocuments();
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Dokument umbenennen (Endung bleibt erhalten)
+  mainEl.querySelectorAll('.doc-rename').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const cur = btn.dataset.name || '';
+      const dot = cur.lastIndexOf('.');
+      const base = dot > 0 ? cur.slice(0, dot) : cur;
+      const ext = dot > 0 ? cur.slice(dot) : '';
+      const name = prompt(`Neuer Name${ext ? ' (' + ext + ' bleibt erhalten)' : ''}:`, base);
+      if (name === null || !name.trim()) return;
+      try { await api('PUT', '/api/documents/' + btn.dataset.id, { name: name.trim() }); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Dokument verschieben
+  mainEl.querySelectorAll('.doc-move').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const target = await pickTargetFolder(null);
+      if (target === undefined) return;
+      try { await api('PUT', '/api/documents/' + btn.dataset.id + '/move', { folder_id: target }); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  // Dokument löschen
+  mainEl.querySelectorAll('.doc-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Dokument „${btn.dataset.name}" löschen?`)) return;
+      try { await api('DELETE', '/api/documents/' + btn.dataset.id); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
     });
   });
 }

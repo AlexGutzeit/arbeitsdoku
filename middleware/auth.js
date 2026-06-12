@@ -17,7 +17,7 @@ function authenticate(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const db = getDb();
-    const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin FROM users WHERE id = ?').get(decoded.userId);
+    const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload FROM users WHERE id = ?').get(decoded.userId);
     if (!user) return res.status(401).json({ error: 'Benutzer nicht gefunden' });
     req.user = user;
     next();

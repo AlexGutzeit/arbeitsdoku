@@ -368,6 +368,30 @@ async function initDatabase() {
       reason TEXT DEFAULT '',
       snapshot TEXT
     );
+
+    -- Dokumenten-Ablage: Ordner (verschachtelt via parent_id) + Dokumente (Datei flach in storage/documents/)
+    CREATE TABLE IF NOT EXISTS doc_folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      parent_id INTEGER,
+      created_by INTEGER,
+      created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      FOREIGN KEY (parent_id) REFERENCES doc_folders(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      folder_id INTEGER,
+      original_name TEXT NOT NULL,
+      stored_name TEXT NOT NULL,
+      mime TEXT DEFAULT '',
+      size INTEGER DEFAULT 0,
+      title TEXT DEFAULT '',
+      uploaded_by INTEGER,
+      uploaded_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      FOREIGN KEY (folder_id) REFERENCES doc_folders(id) ON DELETE CASCADE,
+      FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
+    );
   `);
 
   // Migration: target_hours_per_day → target_hours_per_week
@@ -408,6 +432,15 @@ async function initDatabase() {
     if (!cols4.some(c => c.name === 'can_bulletin')) {
       db.exec("ALTER TABLE users ADD COLUMN can_bulletin INTEGER DEFAULT 0");
       console.log('Migration: can_bulletin Spalte hinzugefügt.');
+    }
+  } catch (e) {}
+
+  // Migration: can_upload Spalte (Recht, Dokumente hochzuladen/zu verwalten)
+  try {
+    const colsUp = db.prepare("PRAGMA table_info(users)").all();
+    if (!colsUp.some(c => c.name === 'can_upload')) {
+      db.exec("ALTER TABLE users ADD COLUMN can_upload INTEGER DEFAULT 0");
+      console.log('Migration: can_upload Spalte hinzugefügt.');
     }
   } catch (e) {}
 
@@ -728,6 +761,14 @@ function ensureAuditSchema(targetDb) {
     if (!aCols.find(c => c.name === 'deleted_at')) {
       targetDb.prepare("ALTER TABLE absences ADD COLUMN deleted_at TEXT").run();
       targetDb.prepare("ALTER TABLE absences ADD COLUMN deleted_by INTEGER").run();
+    }
+    // Berechtigungs-Spalten der users-Tabelle absichern — die Auth-Middleware liest sie bei
+    // JEDER Anfrage. Fehlen sie nach Restore eines alten Backups, wuerde jede Anfrage brechen.
+    const uCols = targetDb.prepare("PRAGMA table_info(users)").all();
+    for (const col of ['can_plan', 'can_bulletin', 'can_upload']) {
+      if (!uCols.find(c => c.name === col)) {
+        targetDb.prepare(`ALTER TABLE users ADD COLUMN ${col} INTEGER DEFAULT 0`).run();
+      }
     }
   } catch (e) {
     console.error('ensureAuditSchema fehlgeschlagen:', e.message);

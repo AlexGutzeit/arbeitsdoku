@@ -49,7 +49,8 @@ router.post('/login', loginLimiter, (req, res) => {
       target_hours_per_week: user.target_hours_per_week,
       start_overtime: user.start_overtime || 0,
       can_plan: !!user.can_plan,
-      can_bulletin: !!user.can_bulletin
+      can_bulletin: !!user.can_bulletin,
+      can_upload: !!user.can_upload
     }
   });
 });

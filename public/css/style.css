@@ -202,6 +202,43 @@ body {
 .nav-group.open .nav-caret { transform: rotate(90deg); }
 .sidebar nav a.nav-subitem { padding-left: 2.6rem; font-size: 0.9rem; }
 
+/* === Dokumente === */
+.doc-breadcrumb { font-size: 0.95rem; margin-bottom: 0.85rem; }
+.doc-breadcrumb a { color: var(--primary); text-decoration: none; }
+.doc-breadcrumb a:hover { text-decoration: underline; }
+.doc-crumb-current { font-weight: 600; }
+.doc-crumb-sep { color: var(--text-lighter); }
+.doc-storage { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; }
+.doc-storage-bar { flex: 1; max-width: 240px; height: 8px; background: var(--border); border-radius: 9999px; overflow: hidden; }
+.doc-storage-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
+.doc-storage-fill--full { background: var(--danger); }
+.doc-storage-text { font-size: 0.78rem; color: var(--text-light); white-space: nowrap; }
+.doc-storage-text--over { color: var(--danger); font-weight: 600; }
+.doc-toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+.doc-toolbar-hint { font-size: 0.75rem; color: var(--text-lighter); }
+.doc-list { display: flex; flex-direction: column; }
+.doc-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.6rem 0.25rem; border-bottom: 1px solid var(--border);
+}
+.doc-row:last-child { border-bottom: none; }
+.doc-link { display: flex; align-items: center; gap: 0.5rem; color: var(--text); text-decoration: none; font-size: 0.95rem; flex: 1; min-width: 0; }
+.doc-link:hover { color: var(--primary); }
+.doc-icon { font-size: 1.1rem; }
+.doc-meta { font-size: 0.78rem; color: var(--text-lighter); white-space: nowrap; }
+.doc-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.doc-picker-list { display: flex; flex-direction: column; max-height: 50vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.doc-picker-item {
+  text-align: left; background: none; border: none; border-bottom: 1px solid var(--border);
+  padding: 0.6rem 0.6rem; font-size: 0.92rem; color: var(--text); cursor: pointer; font-family: inherit;
+}
+.doc-picker-item:last-child { border-bottom: none; }
+.doc-picker-item:hover { background: var(--primary-light); }
+@media (max-width: 600px) {
+  .doc-row { flex-wrap: wrap; }
+  .doc-meta { order: 3; width: 100%; }
+}
+
 /* === Main Content === */
 .main { padding: 1rem; max-width: 1400px; margin: 0 auto; }
 .main.main-wide { max-width: none; }
