@@ -4288,7 +4288,8 @@ async function renderDocuments() {
   const realPct = st.limit ? Math.round((st.used / st.limit) * 100) : 0;
   const barPct = Math.min(100, realPct);
   const over = realPct >= 90;
-  const storageHtml = st.limit ? `
+  // Belegungsbalken nur fuer Nutzer mit Verwaltungs-/Upload-Recht
+  const storageHtml = (manage && st.limit) ? `
     <div class="doc-storage">
       <div class="doc-storage-bar"><div class="doc-storage-fill${over ? ' doc-storage-fill--full' : ''}" style="width:${barPct}%"></div></div>
       <span class="doc-storage-text${realPct > 100 ? ' doc-storage-text--over' : ''}">${docFormatSize(st.used)} / ${docFormatSize(st.limit)} belegt (${realPct}%)${realPct > 100 ? ' — Limit überschritten' : ''}</span>

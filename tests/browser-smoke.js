@@ -163,6 +163,9 @@ async function deleteDocByName(adminPage, name) {
     const a = await newContextPage(browser, 'admin', 'test');
     const ap = a.page;
 
+    // Sauberer Ausgangszustand: MA hat zu Beginn KEIN Upload-Recht (Idempotenz)
+    if (maId) await setUserUpload(ap, maId, false);
+
     await gotoHash(ap, '#/settings');
     await ap.waitForSelector('#doc-limit-value', { timeout: 8000 });
     check('Admin sieht "Dokumenten-Speicher"-Einstellung', !!(await ap.$('#doc-limit-value')));
@@ -189,6 +192,7 @@ async function deleteDocByName(adminPage, name) {
     console.log('--- ADMIN: Dokumente (anlegen/upload/verschieben/umbenennen/löschen) ---');
     await gotoHash(ap, '#/documents');
     await ap.waitForSelector('#doc-new-folder', { timeout: 8000 });
+    check('Admin: Speicher-Balken sichtbar', !!(await ap.$('.doc-storage')));
 
     // Geteilten Ordner für Chef/MA anlegen + Datei darin
     a.promptQueue.push('BT-Shared');
@@ -248,6 +252,7 @@ async function deleteDocByName(adminPage, name) {
     await gotoHash(cp, '#/documents');
     await sleep(800);
     check('Chef hat Verwalten-Buttons (Neuer Ordner)', !!(await cp.$('#doc-new-folder')));
+    check('Chef: Speicher-Balken sichtbar', !!(await cp.$('.doc-storage')));
     check('Chef sieht den geteilten Ordner "BT-Shared"', (await mainText(cp)).includes('BT-Shared'));
     await c.ctx.close();
 
@@ -258,6 +263,7 @@ async function deleteDocByName(adminPage, name) {
     await gotoHash(mp, '#/documents');
     await sleep(800);
     check('MA hat KEINE Verwalten-Toolbar (kein Upload/Neuer Ordner)', !(await mp.$('#doc-new-folder')));
+    check('MA OHNE Recht: KEIN Speicher-Balken', !(await mp.$('.doc-storage')));
     check('MA sieht den Ordner "BT-Shared"', (await mainText(mp)).includes('BT-Shared'));
     await openFolder(mp, 'BT-Shared');
     await waitForText(mp, 'smoke.pdf');
@@ -284,6 +290,7 @@ async function deleteDocByName(adminPage, name) {
     await gotoHash(m2p, '#/documents');
     await sleep(800);
     check('MA MIT Recht: Upload-Toolbar sichtbar', !!(await m2p.$('#doc-file-input')));
+    check('MA MIT Recht: Speicher-Balken sichtbar', !!(await m2p.$('.doc-storage')));
 
     // .exe-Upload muss abgelehnt werden (Allowlist greift auch fuer can_upload-User)
     await (await m2p.$('#doc-file-input')).uploadFile(exePath);
@@ -337,6 +344,7 @@ async function deleteDocByName(adminPage, name) {
     await gotoHash(m3p, '#/documents');
     await sleep(800);
     check('MA OHNE Recht: KEINE Upload-Toolbar', !(await m3p.$('#doc-file-input')));
+    check('MA OHNE Recht: KEIN Speicher-Balken (nach Entzug wieder weg)', !(await m3p.$('.doc-storage')));
     await openFolder(m3p, 'MA-Ziel');
     await waitForText(m3p, 'MA-Datei.pdf');
     check('MA OHNE Recht: sieht Datei + Herunterladen', !!(await m3p.$('.doc-download')));
