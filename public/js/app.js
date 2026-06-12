@@ -4214,7 +4214,8 @@ async function renderDocuments() {
       <span class="doc-meta">${docFormatSize(d.size)}${d.uploaded_by_name ? ` · ${esc(d.uploaded_by_name)}` : ''}</span>
       <span class="doc-actions">
         <button class="btn btn-sm btn-primary doc-download" data-id="${d.id}" data-name="${esc(d.original_name)}">Herunterladen</button>
-        ${manage ? `<button class="btn btn-sm btn-outline doc-move" data-id="${d.id}">Verschieben</button>
+        ${manage ? `<button class="btn btn-sm btn-outline doc-rename" data-id="${d.id}" data-name="${esc(d.original_name)}">Umbenennen</button>
+        <button class="btn btn-sm btn-outline doc-move" data-id="${d.id}">Verschieben</button>
         <button class="btn btn-sm btn-danger doc-delete" data-id="${d.id}" data-name="${esc(label)}">Löschen</button>` : ''}
       </span>
     </div>`;
@@ -4297,6 +4298,20 @@ async function renderDocuments() {
       toast('Datei hochgeladen', 'success');
       renderDocuments();
     } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Dokument umbenennen (Endung bleibt erhalten)
+  mainEl.querySelectorAll('.doc-rename').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const cur = btn.dataset.name || '';
+      const dot = cur.lastIndexOf('.');
+      const base = dot > 0 ? cur.slice(0, dot) : cur;
+      const ext = dot > 0 ? cur.slice(dot) : '';
+      const name = prompt(`Neuer Name${ext ? ' (' + ext + ' bleibt erhalten)' : ''}:`, base);
+      if (name === null || !name.trim()) return;
+      try { await api('PUT', '/api/documents/' + btn.dataset.id, { name: name.trim() }); renderDocuments(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
   });
 
   // Dokument verschieben

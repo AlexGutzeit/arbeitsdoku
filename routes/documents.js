@@ -230,13 +230,23 @@ router.post('/upload', authenticate, authorize('chef'), (req, res) => {
   });
 });
 
-// Dokument-Metadaten ändern (chef + admin)
+// Dokument umbenennen / Metadaten ändern (chef + admin)
+// Beim Umbenennen bleibt die urspruengliche Dateiendung erhalten (kein Format-Umtarnen moeglich).
 router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id);
   if (!doc) return res.status(404).json({ error: 'Dokument nicht gefunden' });
+
+  let newOriginal = doc.original_name;
+  if (typeof req.body.name === 'string') {
+    const ext = path.extname(doc.original_name); // Original-Endung beibehalten
+    let base = path.basename(req.body.name.trim(), path.extname(req.body.name.trim()));
+    base = base.replace(/[\\/\r\n\t"]/g, '').trim().slice(0, 200);
+    if (!base) return res.status(400).json({ error: 'Name erforderlich' });
+    newOriginal = base + ext;
+  }
   let title = typeof req.body.title === 'string' ? req.body.title.trim().slice(0, NAME_MAX) : doc.title;
-  db.prepare('UPDATE documents SET title = ? WHERE id = ?').run(title, req.params.id);
+  db.prepare('UPDATE documents SET original_name = ?, title = ? WHERE id = ?').run(newOriginal, title, req.params.id);
   res.json({ document: db.prepare('SELECT id, folder_id, original_name, title, mime, size, uploaded_at FROM documents WHERE id = ?').get(req.params.id) });
 });
 
