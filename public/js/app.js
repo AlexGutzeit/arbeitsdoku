@@ -3693,6 +3693,20 @@ async function renderSettings() {
     if (data) S.settings = data.settings;
   } catch (e) {}
 
+  // Dokumenten-Speicher (nur Admin)
+  let docStorage = null;
+  if (isAdmin()) {
+    try { const ds = await api('GET', '/api/documents'); if (ds) docStorage = ds.storage; } catch (e) {}
+  }
+  let docLimitVal = '500', docLimitUnit = 'MB', docUsedStr = '', docLimitStr = '';
+  if (docStorage) {
+    const lim = docStorage.limit, gb = 1024 * 1024 * 1024, mb = 1024 * 1024;
+    if (lim >= gb && lim % gb === 0) { docLimitUnit = 'GB'; docLimitVal = String(lim / gb); }
+    else { docLimitUnit = 'MB'; const v = lim / mb; docLimitVal = (v % 1 === 0) ? String(v) : v.toFixed(2); }
+    docUsedStr = docFormatSize(docStorage.used);
+    docLimitStr = docFormatSize(docStorage.limit);
+  }
+
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
     <div style="max-width:600px;margin:0 auto;">
@@ -3778,6 +3792,32 @@ async function renderSettings() {
         </div>
       </div>
 
+      ${isAdmin() ? `
+      <div class="card">
+        <h2 style="margin-bottom:1rem;">Dokumenten-Speicher</h2>
+        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
+          Aktuell belegt: <strong>${docUsedStr}</strong> von <strong>${docLimitStr}</strong>.
+        </p>
+        <div class="form-row" style="grid-template-columns:1fr 110px;">
+          <div class="form-group">
+            <label>Gesamtlimit</label>
+            <input type="text" class="form-control" id="doc-limit-value" value="${esc(docLimitVal)}" inputmode="decimal">
+          </div>
+          <div class="form-group">
+            <label>Einheit</label>
+            <select class="form-control" id="doc-limit-unit">
+              <option value="MB"${docLimitUnit === 'MB' ? ' selected' : ''}>MB</option>
+              <option value="GB"${docLimitUnit === 'GB' ? ' selected' : ''}>GB</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="doc-limit-save">Limit speichern</button>
+        <p style="color:var(--text-lighter);font-size:0.8rem;margin-top:0.6rem;">
+          Bestehende Dateien bleiben immer erhalten. Ein Limit unterhalb des belegten Speichers
+          blockiert nur neue Uploads, bis genug gelöscht wurde. „.“ und „,“ sind beide erlaubt.
+        </p>
+      </div>` : ''}
+
       <div class="card">
         <h2 style="margin-bottom:1rem;">Datenbank-Backup</h2>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -3806,6 +3846,24 @@ async function renderSettings() {
         company_city: document.getElementById('s-city').value,
       });
       toast('Einstellungen gespeichert', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  // Dokumenten-Speicherlimit (Admin)
+  document.getElementById('doc-limit-save')?.addEventListener('click', async () => {
+    const raw = document.getElementById('doc-limit-value').value.trim().replace(',', '.');
+    const unit = document.getElementById('doc-limit-unit').value;
+    const val = parseFloat(raw);
+    if (!isFinite(val) || val <= 0) { toast('Bitte eine gültige Zahl größer 0 eingeben', 'error'); return; }
+    const newBytes = Math.round(val * (unit === 'GB' ? 1024 * 1024 * 1024 : 1024 * 1024));
+    const usedBytes = docStorage ? docStorage.used : 0;
+    if (newBytes < usedBytes) {
+      if (!confirm(`Aktuell sind ${docFormatSize(usedBytes)} belegt. Ein Limit von ${docFormatSize(newBytes)} blockiert neue Uploads, bis genug gelöscht wurde. Bestehende Dateien bleiben erhalten. Trotzdem speichern?`)) return;
+    }
+    try {
+      await api('PUT', '/api/documents/storage-limit', { value: raw, unit });
+      toast('Speicherlimit gespeichert', 'success');
+      renderSettings();
     } catch (err) { toast(err.message, 'error'); }
   });
 
@@ -4222,11 +4280,13 @@ async function renderDocuments() {
   }).join('');
 
   const st = data.storage || { used: 0, limit: 0 };
-  const pct = st.limit ? Math.min(100, Math.round((st.used / st.limit) * 100)) : 0;
+  const realPct = st.limit ? Math.round((st.used / st.limit) * 100) : 0;
+  const barPct = Math.min(100, realPct);
+  const over = realPct >= 90;
   const storageHtml = st.limit ? `
     <div class="doc-storage">
-      <div class="doc-storage-bar"><div class="doc-storage-fill${pct >= 90 ? ' doc-storage-fill--full' : ''}" style="width:${pct}%"></div></div>
-      <span class="doc-storage-text">${docFormatSize(st.used)} / ${docFormatSize(st.limit)} belegt (${pct}%)</span>
+      <div class="doc-storage-bar"><div class="doc-storage-fill${over ? ' doc-storage-fill--full' : ''}" style="width:${barPct}%"></div></div>
+      <span class="doc-storage-text${realPct > 100 ? ' doc-storage-text--over' : ''}">${docFormatSize(st.used)} / ${docFormatSize(st.limit)} belegt (${realPct}%)${realPct > 100 ? ' — Limit überschritten' : ''}</span>
     </div>` : '';
 
   const mainEl = document.querySelector('.main');

@@ -22,10 +22,18 @@ const MIME = {
   '.txt': 'text/plain', '.csv': 'text/csv',
 };
 const NAME_MAX = 120;
-const MAX_TOTAL_BYTES = 500 * 1024 * 1024; // Gesamt-Speicherlimit der Dokumenten-Ablage (500 MB)
+const DEFAULT_STORAGE_LIMIT = 500 * 1024 * 1024;       // Standard, falls nichts eingestellt (500 MB)
+const MAX_STORAGE_LIMIT = 1024 * 1024 * 1024 * 1024;   // Obergrenze (1 TB) als Sanity-Schutz
 
 function totalUsedBytes(db) {
   return db.prepare('SELECT COALESCE(SUM(size), 0) as total FROM documents').get().total || 0;
+}
+// Konfigurierbares Gesamt-Speicherlimit aus den Settings (Admin), mit Fallback auf 500 MB
+function getStorageLimit(db) {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'doc_storage_limit_bytes'").get();
+  const n = row ? parseInt(row.value, 10) : NaN;
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_STORAGE_LIMIT;
+  return Math.min(n, MAX_STORAGE_LIMIT);
 }
 
 // Upload direkt nach storage/documents/ mit generiertem UUID-Namen (kein User-Pfad)
@@ -127,7 +135,7 @@ router.get('/', authenticate, (req, res) => {
     folder: folderId ? folderRow(db, folderId) : null,
     breadcrumb: buildBreadcrumb(db, folderId),
     folders, documents,
-    storage: { used: totalUsedBytes(db), limit: MAX_TOTAL_BYTES },
+    storage: { used: totalUsedBytes(db), limit: getStorageLimit(db) },
   });
 });
 
@@ -219,12 +227,13 @@ router.post('/upload', authenticate, authorize('chef'), (req, res) => {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
       return res.status(400).json({ error: 'Dateiinhalt passt nicht zum Format — Datei abgelehnt' });
     }
-    // Gesamt-Speicherlimit der Ablage pruefen (500 MB)
+    // Gesamt-Speicherlimit der Ablage pruefen (konfigurierbar)
+    const limitBytes = getStorageLimit(db);
     const used = totalUsedBytes(db);
-    if (used + req.file.size > MAX_TOTAL_BYTES) {
+    if (used + req.file.size > limitBytes) {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
-      const limitMb = Math.round(MAX_TOTAL_BYTES / (1024 * 1024));
-      const freeMb = Math.max(0, (MAX_TOTAL_BYTES - used) / (1024 * 1024));
+      const limitMb = (limitBytes / (1024 * 1024)).toFixed(limitBytes % (1024 * 1024) ? 1 : 0);
+      const freeMb = Math.max(0, (limitBytes - used) / (1024 * 1024));
       return res.status(400).json({ error: `Speicherlimit der Dokumenten-Ablage erreicht (${limitMb} MB). Noch frei: ${freeMb.toFixed(1)} MB.` });
     }
     const folderId = req.body.folder_id ? Number(req.body.folder_id) : null;
@@ -242,6 +251,22 @@ router.post('/upload', authenticate, authorize('chef'), (req, res) => {
     const doc = db.prepare('SELECT id, folder_id, original_name, title, mime, size, uploaded_at FROM documents WHERE id = ?').get(r.lastInsertRowid);
     res.status(201).json({ document: doc });
   });
+});
+
+// Gesamt-Speicherlimit setzen (nur Admin). MUSS vor PUT '/:id' stehen.
+router.put('/storage-limit', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  let value = req.body.value;
+  // "," und "." gleich behandeln
+  if (typeof value === 'string') value = parseFloat(value.replace(',', '.'));
+  if (!Number.isFinite(value) || value <= 0) return res.status(400).json({ error: 'Bitte eine gültige Zahl größer 0 eingeben' });
+  const unit = req.body.unit === 'GB' ? 'GB' : 'MB';
+  const factor = unit === 'GB' ? 1024 * 1024 * 1024 : 1024 * 1024;
+  let bytes = Math.round(value * factor);
+  if (bytes < 1024 * 1024) bytes = 1024 * 1024;            // min. 1 MB
+  if (bytes > MAX_STORAGE_LIMIT) return res.status(400).json({ error: 'Limit zu groß (max. 1024 GB)' });
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('doc_storage_limit_bytes', ?)").run(String(bytes));
+  res.json({ limit: bytes, used: totalUsedBytes(db) });
 });
 
 // Dokument umbenennen / Metadaten ändern (chef + admin)
