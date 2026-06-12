@@ -41,6 +41,45 @@ const upload = multer({
   },
 });
 
+// Inhaltspruefung (Magic Bytes): pruefen, ob der echte Dateiinhalt zur Endung passt.
+// Faengt umbenannte Dateien ab (z.B. .exe → .pdf), die den reinen Extension-Filter umgehen wuerden.
+function headBytes(filePath, n) {
+  const buf = Buffer.alloc(n);
+  let read = 0;
+  const fd = fs.openSync(filePath, 'r');
+  try { read = fs.readSync(fd, buf, 0, n, 0); } finally { fs.closeSync(fd); }
+  return buf.subarray(0, read);
+}
+function startsWith(head, sig) {
+  if (head.length < sig.length) return false;
+  for (let i = 0; i < sig.length; i++) if (head[i] !== sig[i]) return false;
+  return true;
+}
+function isLikelyText(filePath) {
+  // Heuristik: erste 8 KB ohne Null-Byte → Text; ein Null-Byte deutet auf Binaerdatei (z.B. .exe) hin
+  const head = headBytes(filePath, 8192);
+  for (let i = 0; i < head.length; i++) if (head[i] === 0) return false;
+  return true;
+}
+function contentMatchesExt(filePath, ext) {
+  const head = headBytes(filePath, 16);
+  switch (ext) {
+    case '.pdf':  return startsWith(head, [0x25, 0x50, 0x44, 0x46]); // %PDF
+    case '.png':  return startsWith(head, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    case '.jpg':
+    case '.jpeg': return startsWith(head, [0xFF, 0xD8, 0xFF]);
+    // docx/xlsx/pptx sind ZIP-Container (Office Open XML) → PK-Signatur
+    case '.docx':
+    case '.xlsx':
+    case '.pptx': return startsWith(head, [0x50, 0x4B, 0x03, 0x04])
+                      || startsWith(head, [0x50, 0x4B, 0x05, 0x06])
+                      || startsWith(head, [0x50, 0x4B, 0x07, 0x08]);
+    case '.txt':
+    case '.csv':  return isLikelyText(filePath);
+    default:      return false;
+  }
+}
+
 function folderRow(db, id) {
   return db.prepare('SELECT id, name, parent_id FROM doc_folders WHERE id = ?').get(id);
 }
@@ -144,6 +183,12 @@ router.post('/upload', authenticate, authorize('chef'), (req, res) => {
     if (err) return res.status(400).json({ error: err.message || 'Upload fehlgeschlagen' });
     if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
     const db = getDb();
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    // Inhaltspruefung: Dateiinhalt muss zur Endung passen (faengt getarnte Dateien ab)
+    if (!contentMatchesExt(req.file.path, ext)) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+      return res.status(400).json({ error: 'Dateiinhalt passt nicht zum Format — Datei abgelehnt' });
+    }
     const folderId = req.body.folder_id ? Number(req.body.folder_id) : null;
     if (folderId && !folderRow(db, folderId)) {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
@@ -151,7 +196,6 @@ router.post('/upload', authenticate, authorize('chef'), (req, res) => {
     }
     let title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
     if (title.length > NAME_MAX) title = title.slice(0, NAME_MAX);
-    const ext = path.extname(req.file.originalname).toLowerCase();
     const r = db.prepare(`
       INSERT INTO documents (folder_id, original_name, stored_name, mime, size, title, uploaded_by, uploaded_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
