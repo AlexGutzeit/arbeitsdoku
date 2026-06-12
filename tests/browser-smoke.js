@@ -111,10 +111,44 @@ async function clickFolderBtn(page, name, btnClass) {
   }, name, btnClass);
   await sleep(400);
 }
+// Als Admin das can_upload-Recht eines Users per Mitarbeiter→Bearbeiten setzen
+async function setUserUpload(adminPage, userId, desired) {
+  await gotoHash(adminPage, '#/users');
+  await adminPage.waitForSelector('.edit-user', { timeout: 8000 });
+  await adminPage.evaluate((id) => {
+    const b = document.querySelector('.edit-user[data-id="' + id + '"]');
+    if (b) b.click();
+  }, userId);
+  await adminPage.waitForSelector('#um-can-upload', { timeout: 8000 });
+  const isChecked = await adminPage.$eval('#um-can-upload', el => el.checked);
+  if (isChecked !== desired) await adminPage.click('#um-can-upload');
+  await adminPage.click('#user-modal-form button[type="submit"]');
+  await sleep(1300);
+}
+// Als Admin ein Dokument per sichtbarem Namen löschen (Aufräumen)
+async function deleteDocByName(adminPage, name) {
+  await gotoHash(adminPage, '#/documents');
+  await adminPage.waitForSelector('#doc-new-folder', { timeout: 8000 });
+  await adminPage.evaluate((n) => {
+    const row = [...document.querySelectorAll('.doc-row')].find(r => r.textContent.includes(n) && r.querySelector('.doc-delete'));
+    if (row) row.querySelector('.doc-delete').click();
+  }, name);
+  await sleep(1200);
+}
 
 (async () => {
   const pdfPath = path.join(os.tmpdir(), 'smoke.pdf');
   fs.writeFileSync(pdfPath, '%PDF-1.4 Browser-Smoke-Test Inhalt');
+  const maPdf = path.join(os.tmpdir(), 'marecht.pdf');
+  fs.writeFileSync(maPdf, '%PDF-1.4 MA-Upload mit Recht');
+
+  // MA-User-ID (alex) per API ermitteln (fuer Mitarbeiter→Bearbeiten)
+  let maId = null;
+  try {
+    const lg = await (await fetch(BASE + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'test' }) })).json();
+    const us = await (await fetch(BASE + '/api/users', { headers: { authorization: 'Bearer ' + lg.token } })).json();
+    maId = (us.users.find(u => u.username === 'alex') || {}).id;
+  } catch (e) {}
 
   const browser = await puppeteer.launch({
     executablePath: CHROME, headless: 'shell',
@@ -234,6 +268,39 @@ async function clickFolderBtn(page, name, btnClass) {
     await sleep(800);
     check('MA kann Einstellungen nicht öffnen (kein settings-form)', !(await mp.$('#settings-form')));
     await m.ctx.close();
+
+    // ===================== UPLOAD-RECHT (can_upload) =====================
+    console.log('\n--- UPLOAD-RECHT: vergeben → MA lädt hoch → entziehen → MA darf nicht ---');
+    check('MA-User-ID gefunden', !!maId);
+
+    // 1) Admin vergibt can_upload an MA (Mitarbeiter → Bearbeiten, Checkbox, Speichern)
+    await setUserUpload(ap, maId, true);
+
+    // 2) MA (frische Session) sieht jetzt die Upload-Toolbar und kann hochladen
+    const m2 = await newContextPage(browser, 'alex', 'test');
+    const m2p = m2.page;
+    await gotoHash(m2p, '#/documents');
+    await sleep(800);
+    check('MA MIT Recht: Upload-Toolbar sichtbar', !!(await m2p.$('#doc-file-input')));
+    await (await m2p.$('#doc-file-input')).uploadFile(maPdf);
+    check('MA MIT Recht: Upload erscheint (marecht.pdf)', await waitForText(m2p, 'marecht.pdf'));
+    await m2.ctx.close();
+
+    // 3) Admin entzieht das Recht wieder
+    await setUserUpload(ap, maId, false);
+
+    // 4) MA (frische Session) hat keine Upload-Toolbar mehr
+    const m3 = await newContextPage(browser, 'alex', 'test');
+    const m3p = m3.page;
+    await gotoHash(m3p, '#/documents');
+    await sleep(800);
+    check('MA OHNE Recht: KEINE Upload-Toolbar', !(await m3p.$('#doc-file-input')));
+    check('MA OHNE Recht: sieht die hochgeladene Datei nur lesend', (await mainText(m3p)).includes('marecht.pdf') && !(await m3p.$('.doc-delete')));
+    await m3.ctx.close();
+
+    // Aufräumen: vom MA hochgeladene Datei entfernen
+    await deleteDocByName(ap, 'marecht.pdf');
+    check('Aufräumen: marecht.pdf gelöscht', await waitForGone(ap, 'marecht.pdf'));
 
     // ===================== CLEANUP (Admin) =====================
     await gotoHash(ap, '#/documents');

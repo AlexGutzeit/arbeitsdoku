@@ -9,6 +9,14 @@ const { berlinNow } = require('../audit');
 
 const router = express.Router();
 
+// Darf Dokumente verwalten (hochladen, Ordner/Dateien anlegen/aendern/loeschen):
+// Admin, Chef oder ein Benutzer mit explizitem Upload-Recht (can_upload).
+function canManageDocs(req, res, next) {
+  const u = req.user;
+  if (u && (u.role === 'admin' || u.role === 'chef' || u.can_upload)) return next();
+  return res.status(403).json({ error: 'Keine Berechtigung' });
+}
+
 const storageDir = path.join(__dirname, '..', 'storage', 'documents');
 function ensureStorageDir() { if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true }); }
 
@@ -147,7 +155,7 @@ router.get('/folders/all', authenticate, (req, res) => {
 });
 
 // Ordner anlegen (chef + admin)
-router.post('/folders', authenticate, authorize('chef'), (req, res) => {
+router.post('/folders', authenticate, canManageDocs, (req, res) => {
   const db = getDb();
   const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
   const parentId = req.body.parent_id ? Number(req.body.parent_id) : null;
@@ -160,7 +168,7 @@ router.post('/folders', authenticate, authorize('chef'), (req, res) => {
 });
 
 // Ordner umbenennen (chef + admin)
-router.put('/folders/:id', authenticate, authorize('chef'), (req, res) => {
+router.put('/folders/:id', authenticate, canManageDocs, (req, res) => {
   const db = getDb();
   const folder = folderRow(db, req.params.id);
   if (!folder) return res.status(404).json({ error: 'Ordner nicht gefunden' });
@@ -172,7 +180,7 @@ router.put('/folders/:id', authenticate, authorize('chef'), (req, res) => {
 });
 
 // Ordner verschieben (chef + admin) — mit Schutz gegen Verschieben in sich selbst/Unterordner
-router.put('/folders/:id/move', authenticate, authorize('chef'), (req, res) => {
+router.put('/folders/:id/move', authenticate, canManageDocs, (req, res) => {
   const db = getDb();
   const folder = folderRow(db, req.params.id);
   if (!folder) return res.status(404).json({ error: 'Ordner nicht gefunden' });
@@ -202,7 +210,7 @@ function collectFolderIds(db, rootId) {
 }
 
 // Ordner rekursiv löschen (chef + admin) — inkl. Unterordner, Dokumente und Dateien
-router.delete('/folders/:id', authenticate, authorize('chef'), (req, res) => {
+router.delete('/folders/:id', authenticate, canManageDocs, (req, res) => {
   const db = getDb();
   const folder = folderRow(db, req.params.id);
   if (!folder) return res.status(404).json({ error: 'Ordner nicht gefunden' });
@@ -216,7 +224,7 @@ router.delete('/folders/:id', authenticate, authorize('chef'), (req, res) => {
 });
 
 // Datei hochladen (chef + admin)
-router.post('/upload', authenticate, authorize('chef'), (req, res) => {
+router.post('/upload', authenticate, canManageDocs, (req, res) => {
   upload.single('file')(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message || 'Upload fehlgeschlagen' });
     if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
@@ -271,7 +279,7 @@ router.put('/storage-limit', authenticate, authorize('admin'), (req, res) => {
 
 // Dokument umbenennen / Metadaten ändern (chef + admin)
 // Beim Umbenennen bleibt die urspruengliche Dateiendung erhalten (kein Format-Umtarnen moeglich).
-router.put('/:id', authenticate, authorize('chef'), (req, res) => {
+router.put('/:id', authenticate, canManageDocs, (req, res) => {
   const db = getDb();
   const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id);
   if (!doc) return res.status(404).json({ error: 'Dokument nicht gefunden' });
@@ -290,7 +298,7 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
 });
 
 // Dokument in anderen Ordner verschieben (chef + admin)
-router.put('/:id/move', authenticate, authorize('chef'), (req, res) => {
+router.put('/:id/move', authenticate, canManageDocs, (req, res) => {
   const db = getDb();
   const doc = db.prepare('SELECT id FROM documents WHERE id = ?').get(req.params.id);
   if (!doc) return res.status(404).json({ error: 'Dokument nicht gefunden' });
@@ -301,7 +309,7 @@ router.put('/:id/move', authenticate, authorize('chef'), (req, res) => {
 });
 
 // Dokument löschen (chef + admin)
-router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
+router.delete('/:id', authenticate, canManageDocs, (req, res) => {
   const db = getDb();
   const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id);
   if (!doc) return res.status(404).json({ error: 'Dokument nicht gefunden' });

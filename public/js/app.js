@@ -3394,6 +3394,10 @@ async function showUserModal(user) {
             <input type="checkbox" id="um-can-bulletin" ${user?.can_bulletin ? 'checked' : ''}>
             Schwarzes-Brett-Recht (darf Einträge erstellen/bearbeiten)
           </label>
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:0.3rem;">
+            <input type="checkbox" id="um-can-upload" ${user?.can_upload ? 'checked' : ''}>
+            Datei-Upload-Recht (darf Dokumente hochladen &amp; verwalten)
+          </label>
         </div>
         ${isEdit ? `
         <div class="form-section">
@@ -3493,6 +3497,7 @@ async function showUserModal(user) {
       start_overtime: parseFloat(document.getElementById('um-start-overtime').value) || 0,
       can_plan: document.getElementById('um-can-plan').checked,
       can_bulletin: document.getElementById('um-can-bulletin').checked,
+      can_upload: document.getElementById('um-can-upload').checked,
     };
     // Bei neuem User Tages-Stunden setzen
     if (!isEdit) {
@@ -4245,7 +4250,7 @@ async function renderDocuments() {
     data = await api('GET', '/api/documents' + (folderId ? '?folder_id=' + folderId : ''));
   } catch (e) { toast(e.message, 'error'); return; }
 
-  const manage = isChefOrAdmin();
+  const manage = isChefOrAdmin() || (S.user && S.user.can_upload);
   const crumbs = [{ id: null, name: 'Dokumente' }].concat(data.breadcrumb || []);
   const breadcrumbHtml = crumbs.map((c, i) => {
     const last = i === crumbs.length - 1;

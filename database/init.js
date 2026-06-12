@@ -435,6 +435,15 @@ async function initDatabase() {
     }
   } catch (e) {}
 
+  // Migration: can_upload Spalte (Recht, Dokumente hochzuladen/zu verwalten)
+  try {
+    const colsUp = db.prepare("PRAGMA table_info(users)").all();
+    if (!colsUp.some(c => c.name === 'can_upload')) {
+      db.exec("ALTER TABLE users ADD COLUMN can_upload INTEGER DEFAULT 0");
+      console.log('Migration: can_upload Spalte hinzugefügt.');
+    }
+  } catch (e) {}
+
   // Migration: Bestehende target_hours_per_week in user_target_hours übernehmen
   try {
     const existingTargets = db.prepare('SELECT COUNT(*) as count FROM user_target_hours').get();
