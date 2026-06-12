@@ -4102,6 +4102,7 @@ function docFileIcon(name) {
   if (['xls', 'xlsx'].includes(ext)) return '📊';
   if (['ppt', 'pptx'].includes(ext)) return '📈';
   if (['png', 'jpg', 'jpeg'].includes(ext)) return '🖼️';
+  if (['txt', 'csv'].includes(ext)) return '📃';
   return '📎';
 }
 function docFormatSize(bytes) {
@@ -4176,8 +4177,8 @@ async function renderDocuments() {
         ${manage ? `<div class="doc-toolbar">
           <button class="btn btn-sm btn-outline" id="doc-new-folder">+ Neuer Ordner</button>
           <button class="btn btn-sm btn-primary" id="doc-upload-btn">⬆ Datei hochladen</button>
-          <input type="file" id="doc-file-input" style="display:none" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg">
-          <span class="doc-toolbar-hint">PDF, Word, Excel, PowerPoint, PNG, JPG — max. 5 MB</span>
+          <input type="file" id="doc-file-input" style="display:none" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.txt,.csv">
+          <span class="doc-toolbar-hint">PDF, Word, Excel, PowerPoint, PNG, JPG, TXT, CSV — max. 5 MB</span>
         </div>` : ''}
         <div class="doc-list">
           ${folderRows}${docRows}

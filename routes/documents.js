@@ -12,13 +12,14 @@ const router = express.Router();
 const storageDir = path.join(__dirname, '..', 'storage', 'documents');
 function ensureStorageDir() { if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true }); }
 
-const ALLOWED_EXT = ['.pdf', '.docx', '.xlsx', '.pptx', '.png', '.jpg', '.jpeg'];
+const ALLOWED_EXT = ['.pdf', '.docx', '.xlsx', '.pptx', '.png', '.jpg', '.jpeg', '.txt', '.csv'];
 const MIME = {
   '.pdf': 'application/pdf',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.txt': 'text/plain', '.csv': 'text/csv',
 };
 const NAME_MAX = 120;
 
@@ -36,7 +37,7 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (ALLOWED_EXT.includes(ext)) cb(null, true);
-    else cb(new Error('Dateiformat nicht erlaubt (erlaubt: PDF, Word, Excel, PowerPoint, PNG, JPG)'));
+    else cb(new Error('Dateiformat nicht erlaubt (erlaubt: PDF, Word, Excel, PowerPoint, PNG, JPG, TXT, CSV)'));
   },
 });
 
