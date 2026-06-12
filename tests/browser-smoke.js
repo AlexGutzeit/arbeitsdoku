@@ -141,6 +141,8 @@ async function deleteDocByName(adminPage, name) {
   fs.writeFileSync(pdfPath, '%PDF-1.4 Browser-Smoke-Test Inhalt');
   const maPdf = path.join(os.tmpdir(), 'marecht.pdf');
   fs.writeFileSync(maPdf, '%PDF-1.4 MA-Upload mit Recht');
+  const exePath = path.join(os.tmpdir(), 'boese.exe');
+  fs.writeFileSync(exePath, Buffer.from([0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00])); // MZ-Header (Windows-Executable)
 
   // MA-User-ID (alex) per API ermitteln (fuer Mitarbeiter→Bearbeiten)
   let maId = null;
@@ -276,14 +278,54 @@ async function deleteDocByName(adminPage, name) {
     // 1) Admin vergibt can_upload an MA (Mitarbeiter → Bearbeiten, Checkbox, Speichern)
     await setUserUpload(ap, maId, true);
 
-    // 2) MA (frische Session) sieht jetzt die Upload-Toolbar und kann hochladen
+    // 2) MA (frische Session) sieht jetzt die Upload-Toolbar
     const m2 = await newContextPage(browser, 'alex', 'test');
     const m2p = m2.page;
     await gotoHash(m2p, '#/documents');
     await sleep(800);
     check('MA MIT Recht: Upload-Toolbar sichtbar', !!(await m2p.$('#doc-file-input')));
+
+    // .exe-Upload muss abgelehnt werden (Allowlist greift auch fuer can_upload-User)
+    await (await m2p.$('#doc-file-input')).uploadFile(exePath);
+    await sleep(1300);
+    check('MA: .exe-Upload abgelehnt (nicht in Liste)', !(await mainText(m2p)).includes('boese.exe'));
+
+    // Gueltiger PDF-Upload
     await (await m2p.$('#doc-file-input')).uploadFile(maPdf);
-    check('MA MIT Recht: Upload erscheint (marecht.pdf)', await waitForText(m2p, 'marecht.pdf'));
+    check('MA MIT Recht: PDF-Upload erscheint (marecht.pdf)', await waitForText(m2p, 'marecht.pdf'));
+
+    // Zielordner + zu verschiebenden Unterordner anlegen
+    m2.promptQueue.push('MA-Ziel');
+    await m2p.click('#doc-new-folder');
+    await waitForText(m2p, 'MA-Ziel');
+    m2.promptQueue.push('MA-Sub');
+    await m2p.click('#doc-new-folder');
+    check('MA legt Ordner "MA-Ziel" + "MA-Sub" an', await waitForText(m2p, 'MA-Sub'));
+
+    // MA benennt Datei um
+    m2.promptQueue.push('MA-Datei');
+    await m2p.click('.doc-rename');
+    check('MA benennt Datei um → MA-Datei.pdf', await waitForText(m2p, 'MA-Datei.pdf'));
+
+    // MA verschiebt Datei nach MA-Ziel
+    await m2p.click('.doc-move');
+    await pickInModal(m2p, 'MA-Ziel');
+    check('MA verschiebt Datei (aus Wurzel verschwunden)', await waitForGone(m2p, 'MA-Datei.pdf'));
+
+    // MA benennt Unterordner um
+    m2.promptQueue.push('MA-SubNeu');
+    await clickFolderBtn(m2p, 'MA-Sub', 'doc-folder-rename');
+    check('MA benennt Unterordner um → MA-SubNeu', await waitForText(m2p, 'MA-SubNeu'));
+
+    // MA verschiebt Unterordner nach MA-Ziel
+    await clickFolderBtn(m2p, 'MA-SubNeu', 'doc-folder-move');
+    await pickInModal(m2p, 'MA-Ziel');
+    check('MA verschiebt Unterordner (aus Wurzel verschwunden)', await waitForGone(m2p, 'MA-SubNeu'));
+
+    // Kontrolle: in MA-Ziel liegen Datei + Unterordner
+    await openFolder(m2p, 'MA-Ziel');
+    const ziel = await mainText(m2p);
+    check('MA-Ziel enthält verschobene Datei + Unterordner', ziel.includes('MA-Datei.pdf') && ziel.includes('MA-SubNeu'));
     await m2.ctx.close();
 
     // 3) Admin entzieht das Recht wieder
@@ -295,12 +337,18 @@ async function deleteDocByName(adminPage, name) {
     await gotoHash(m3p, '#/documents');
     await sleep(800);
     check('MA OHNE Recht: KEINE Upload-Toolbar', !(await m3p.$('#doc-file-input')));
-    check('MA OHNE Recht: sieht die hochgeladene Datei nur lesend', (await mainText(m3p)).includes('marecht.pdf') && !(await m3p.$('.doc-delete')));
+    await openFolder(m3p, 'MA-Ziel');
+    await waitForText(m3p, 'MA-Datei.pdf');
+    check('MA OHNE Recht: sieht Datei + Herunterladen', !!(await m3p.$('.doc-download')));
+    check('MA OHNE Recht: KEINE Verwalten-Buttons', !(await m3p.$('.doc-delete')) && !(await m3p.$('.doc-move')) && !(await m3p.$('.doc-rename')) && !(await m3p.$('.doc-folder-move')));
     await m3.ctx.close();
 
-    // Aufräumen: vom MA hochgeladene Datei entfernen
-    await deleteDocByName(ap, 'marecht.pdf');
-    check('Aufräumen: marecht.pdf gelöscht', await waitForGone(ap, 'marecht.pdf'));
+    // Aufräumen: vom MA angelegten Ordner (mit Datei + Unterordner) rekursiv entfernen
+    await gotoHash(ap, '#/documents');
+    await ap.waitForSelector('#doc-new-folder', { timeout: 8000 });
+    await clickFolderBtn(ap, 'MA-Ziel', 'doc-folder-delete');
+    await sleep(1200);
+    check('Aufräumen: MA-Ziel (inkl. Inhalt) gelöscht', await waitForGone(ap, 'MA-Ziel'));
 
     // ===================== CLEANUP (Admin) =====================
     await gotoHash(ap, '#/documents');
