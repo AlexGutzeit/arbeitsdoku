@@ -2,6 +2,14 @@ node_modules/
 data/
 .env
 .env.*
+!.env.example
 uploads/
 backups/
 storage/
+
+# Lokale Datenbanken / Clones (nie committen — enthalten echte Daten)
+*.db
+local.db
+
+# Claude-Code / lokale Editor-Einstellungen
+.claude/
