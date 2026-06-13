@@ -8,12 +8,28 @@ if [ "$BRANCH" != "main" ]; then
   exit 1
 fi
 
-echo "Deploye auf Produktion (Mini-PC)..."
+# Ziel-Server konfigurierbar über Umgebungsvariablen (oder eine lokale .env.deploy):
+#   DEPLOY_HOST     SSH-Ziel, z. B. user@server.example
+#   DEPLOY_PATH     Zielverzeichnis auf dem Server
+#   DEPLOY_SERVICE  systemd --user Service-Name, der nach dem Sync neu gestartet wird
+[ -f .env.deploy ] && . ./.env.deploy
+DEPLOY_HOST="${DEPLOY_HOST:-user@server.example}"
+DEPLOY_PATH="${DEPLOY_PATH:-/home/user/arbeitsdoku}"
+DEPLOY_SERVICE="${DEPLOY_SERVICE:-arbeitsdoku}"
+
+if [ "$DEPLOY_HOST" = "user@server.example" ]; then
+  echo "Fehler: DEPLOY_HOST nicht gesetzt. Beispiel:"
+  echo "  DEPLOY_HOST=user@server DEPLOY_PATH=/home/user/arbeitsdoku ./deploy.sh"
+  echo "  (oder Werte in eine lokale, nicht eingecheckte .env.deploy schreiben)"
+  exit 1
+fi
+
+echo "Deploye auf $DEPLOY_HOST:$DEPLOY_PATH ..."
 git push
-rsync -az --delete public/ alexg@10.83.27.2:/home/alexg/arbeitsdoku/public/
-rsync -az database/ alexg@10.83.27.2:/home/alexg/arbeitsdoku/database/
-rsync -az routes/ alexg@10.83.27.2:/home/alexg/arbeitsdoku/routes/
-rsync -az middleware/ alexg@10.83.27.2:/home/alexg/arbeitsdoku/middleware/
-rsync -az server.js audit.js .puppeteerrc.cjs package.json package-lock.json alexg@10.83.27.2:/home/alexg/arbeitsdoku/
-ssh alexg@10.83.27.2 "systemctl --user restart arbeitsdoku"
+rsync -az --delete public/ "$DEPLOY_HOST:$DEPLOY_PATH/public/"
+rsync -az database/ "$DEPLOY_HOST:$DEPLOY_PATH/database/"
+rsync -az routes/ "$DEPLOY_HOST:$DEPLOY_PATH/routes/"
+rsync -az middleware/ "$DEPLOY_HOST:$DEPLOY_PATH/middleware/"
+rsync -az server.js audit.js .puppeteerrc.cjs package.json package-lock.json "$DEPLOY_HOST:$DEPLOY_PATH/"
+ssh "$DEPLOY_HOST" "systemctl --user restart $DEPLOY_SERVICE"
 echo "Erfolgreich deployed."
