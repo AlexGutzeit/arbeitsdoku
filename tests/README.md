@@ -16,6 +16,16 @@ node tests/complex-saldo-versioning.js
 Prüft Soll/Ist/Überstunden + Revisionssicherheit (Soft-Delete, History, Papierkorb) über
 ein komplexes Szenario (krank → FZA → löschen → Urlaub) inkl. Überlappung, Feiertag, Restore.
 
+## Abwesenheits-Überschneidung (Logik, kein Server nötig)
+
+```bash
+node tests/absence-overlap.js
+```
+Prüft die prioritätsbewusste Tageszählung (`routes/absence-days.js`), die `/api/absences/summary`
+**und** die PDF gemeinsam nutzen: Krank verdrängt Urlaub/FZA an überschnittenen Tagen, Feiertag
+verdrängt alles, Wochenenden zählen nie — inkl. „Urlaubstage genommen (Jahr)". Läuft gegen eine
+frische Temp-DB.
+
 ## Browser-Smoke-Test (echte UI-Klicks, Puppeteer)
 
 ```bash

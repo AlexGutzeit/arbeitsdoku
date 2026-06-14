@@ -4,7 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
-const { calcTargetHours, calcActualHours, countScheduledDays, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
+const { calcTargetHours, calcActualHours, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
+const { computeAbsenceSummary, countUrlaubDaysInYear } = require('./absence-days');
 
 function fmtH(val) {
   const neg = val < 0;
@@ -157,6 +158,16 @@ router.get('/export', authenticate, (req, res) => {
   let x = 40;
   let y = doc.y;
 
+  // Stellt sicher, dass für die nächsten `needed` Punkte Platz ist; sonst neue Seite.
+  // WICHTIG: verhindert, dass y unter den Seitenrand driftet — sonst bricht pdfkit
+  // bei jeder folgenden Textzeile automatisch um (Symptom: viele fast leere Seiten).
+  function ensureSpace(needed) {
+    if (y + needed > doc.page.height - 40) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
+      y = 40;
+    }
+  }
+
   // Kopfzeile der Tabelle
   doc.fontSize(8).font('Helvetica-Bold');
   for (const col of filteredCols) {
@@ -186,10 +197,6 @@ router.get('/export', authenticate, (req, res) => {
 
     // Zeiteinträge dieses Tages
     for (const entry of dayEntries) {
-      if (y > doc.page.height - 80) {
-        doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
-        y = 40;
-      }
       x = 40;
       const rowData = [];
       rowData.push({ text: formatDateDE(entry.date), width: filteredCols[0].width });
@@ -214,9 +221,18 @@ router.get('/export', authenticate, (req, res) => {
         if (cellH > rowH) rowH = cellH;
       }
       rowH = Math.min(rowH, 80);
+
+      // Seitenumbruch erst, wenn die KOMPLETTE Zeile nicht mehr passt
+      if (y + rowH > doc.page.height - 40) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
+        y = 40;
+      }
+
       doc.fillColor('#333');
       for (const cell of rowData) {
-        doc.text(cell.text, x, y, { width: cell.width, height: rowH });
+        // height + ellipsis kappt zu langen Text, statt ihn ueber den Seitenrand
+        // fliessen zu lassen (sonst schiebt pdfkit eine automatische Seite ein)
+        doc.text(cell.text, x, y, { width: cell.width, height: rowH, ellipsis: true });
         x += cell.width;
       }
       y += rowH + 1;
@@ -224,26 +240,25 @@ router.get('/export', authenticate, (req, res) => {
 
     // Abwesenheitszeilen dieses Tages
     for (const ab of dayAbsences) {
-      if (y > doc.page.height - 80) {
+      const absText = ab.comment ? `${ab.label} — ${ab.comment}` : ab.label;
+      const idx = showEmployee ? 6 : 5;
+      const restWidth = filteredCols.slice(idx).reduce((s, c) => s + c.width, 0);
+      const absH = Math.max(12, Math.min(doc.heightOfString(absText, { width: restWidth - 2 }), 40));
+
+      // Seitenumbruch erst, wenn die Zeile nicht mehr passt
+      if (y + absH > doc.page.height - 40) {
         doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
         y = 40;
       }
+
       x = 40;
-      const absText = ab.comment ? `${ab.label} — ${ab.comment}` : ab.label;
       // Datum
       doc.fillColor('#64748b').font('Helvetica-Oblique').fontSize(7);
       doc.text(formatDateDE(date), x, y, { width: filteredCols[0].width }); x += filteredCols[0].width;
-      // Von/Bis/Pause/Netto leer
-      doc.text('', x, y, { width: filteredCols[1].width }); x += filteredCols[1].width;
-      doc.text('', x, y, { width: filteredCols[2].width }); x += filteredCols[2].width;
-      doc.text('', x, y, { width: filteredCols[3].width }); x += filteredCols[3].width;
-      doc.text('', x, y, { width: filteredCols[4].width }); x += filteredCols[4].width;
-      let idx = 5;
-      if (showEmployee) { doc.text('', x, y, { width: filteredCols[idx].width }); x += filteredCols[idx].width; idx++; }
+      // Von/Bis/Pause/Netto (+ ggf. Mitarbeiter) leer lassen
+      for (let i = 1; i < idx; i++) { doc.text('', x, y, { width: filteredCols[i].width }); x += filteredCols[i].width; }
       // Abwesenheitstext über Arbeitsort+Kunde+Projekt+Beschreibung+Regie
-      const restWidth = filteredCols.slice(idx).reduce((s, c) => s + c.width, 0);
-      const absH = Math.max(12, Math.min(doc.heightOfString(absText, { width: restWidth - 2 }), 40));
-      doc.text(absText, x, y, { width: restWidth, height: absH });
+      doc.text(absText, x, y, { width: restWidth, height: absH, ellipsis: true });
       doc.font('Helvetica').fillColor('#333').fontSize(7);
       y += absH + 1;
     }
@@ -253,10 +268,7 @@ router.get('/export', authenticate, (req, res) => {
 
   // -- Zusammenfassung --
   y += 10;
-  if (y > doc.page.height - 60) {
-    doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
-    y = 40;
-  }
+  ensureSpace(24); // Trennlinie + Gesamtstunden-Zeile zusammenhalten
 
   doc.moveTo(40, y).lineTo(300, y).stroke();
   y += 8;
@@ -310,12 +322,15 @@ router.get('/export', authenticate, (req, res) => {
 
     // Zusammenfassung Text
     doc.font('Helvetica').fontSize(9);
+    ensureSpace(14);
     doc.text(`Soll-Stunden: ${fmtH(totalSoll)}`, 40, y);
     y += 14;
     const prefix = totalUeber >= 0 ? '+' : '';
+    ensureSpace(14);
     doc.text(`Differenz (Zeitraum): ${prefix}${fmtH(totalUeber)}`, 40, y);
     y += 14;
     const prefixG = totalUeberGesamt >= 0 ? '+' : '';
+    ensureSpace(14);
     doc.text(`Überstunden gesamt: ${prefixG}${fmtH(totalUeberGesamt)}`, 40, y);
     y += 14;
 
@@ -330,14 +345,9 @@ router.get('/export', authenticate, (req, res) => {
       `).all(targetUid, date_to, date_from);
 
       if (pdfAbsences.length > 0) {
-        // Arbeitstage pro Typ zählen (begrenzt auf date_from/date_to des Zeitraums)
-        const typeDays = {};
-        for (const ab of pdfAbsences) {
-          const from = ab.date_from > date_from ? ab.date_from : date_from;
-          const to   = ab.date_to < date_to     ? ab.date_to   : date_to;
-          if (from > to) continue;
-          typeDays[ab.type] = (typeDays[ab.type] || 0) + countScheduledDays(db, targetUid, from, to);
-        }
+        // Prioritätsbewusste Zählung über die gemeinsame Quelle (identisch zu
+        // /api/absences/summary): Krank verdrängt Urlaub/FZA an überschnittenen Tagen.
+        const { summary: typeDays } = computeAbsenceSummary(db, targetUid, date_from, date_to);
 
         if (Object.keys(typeDays).length > 0) {
           const typeLabels = {
@@ -346,25 +356,15 @@ router.get('/export', authenticate, (req, res) => {
             berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise'
           };
           const parts = Object.entries(typeDays).map(([t, d]) => `${d} ${d === 1 ? 'Tag' : 'Tage'} ${typeLabels[t] || t}`);
+          ensureSpace(40); // Abwesenheits-Unterblock (3 Zeilen) zusammenhalten
           doc.font('Helvetica-Bold').fontSize(9).fillColor('#333').text('Abwesenheiten im Zeitraum:', 40, y);
           y += 13;
           doc.font('Helvetica').text(parts.join(', '), 40, y);
           y += 13;
 
-          // Urlaubstage approved im aktuellen Kalenderjahr
-          const thisYear = new Date().getFullYear().toString();
-          const urlaubRows = db.prepare(`
-            SELECT date_from, date_to FROM absences
-            WHERE user_id = ? AND type = 'urlaub' AND status = 'approved'
-            AND date_from <= ? AND date_to >= ?
-            AND deleted_at IS NULL
-          `).all(targetUid, thisYear + '-12-31', thisYear + '-01-01');
-          let urlaubJahr = 0;
-          for (const ur of urlaubRows) {
-            const f = ur.date_from > (thisYear + '-01-01') ? ur.date_from : (thisYear + '-01-01');
-            const t2 = ur.date_to < (thisYear + '-12-31') ? ur.date_to : (thisYear + '-12-31');
-            if (f <= t2) urlaubJahr += countScheduledDays(db, targetUid, f, t2);
-          }
+          // Urlaubstage genommen im aktuellen Kalenderjahr (Krank/Feiertage abgezogen)
+          const thisYear = new Date().getFullYear();
+          const urlaubJahr = countUrlaubDaysInYear(db, targetUid, thisYear);
           doc.text(`Urlaubstage genommen (${thisYear}): ${urlaubJahr} Arbeitstage`, 40, y);
           y += 14;
         }
