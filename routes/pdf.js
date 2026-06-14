@@ -4,7 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
-const { calcTargetHours, calcActualHours, countScheduledDays, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
+const { calcTargetHours, calcActualHours, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
+const { computeAbsenceSummary, countUrlaubDaysInYear } = require('./absence-days');
 
 function fmtH(val) {
   const neg = val < 0;
@@ -330,14 +331,9 @@ router.get('/export', authenticate, (req, res) => {
       `).all(targetUid, date_to, date_from);
 
       if (pdfAbsences.length > 0) {
-        // Arbeitstage pro Typ zählen (begrenzt auf date_from/date_to des Zeitraums)
-        const typeDays = {};
-        for (const ab of pdfAbsences) {
-          const from = ab.date_from > date_from ? ab.date_from : date_from;
-          const to   = ab.date_to < date_to     ? ab.date_to   : date_to;
-          if (from > to) continue;
-          typeDays[ab.type] = (typeDays[ab.type] || 0) + countScheduledDays(db, targetUid, from, to);
-        }
+        // Prioritätsbewusste Zählung über die gemeinsame Quelle (identisch zu
+        // /api/absences/summary): Krank verdrängt Urlaub/FZA an überschnittenen Tagen.
+        const { summary: typeDays } = computeAbsenceSummary(db, targetUid, date_from, date_to);
 
         if (Object.keys(typeDays).length > 0) {
           const typeLabels = {
@@ -351,20 +347,9 @@ router.get('/export', authenticate, (req, res) => {
           doc.font('Helvetica').text(parts.join(', '), 40, y);
           y += 13;
 
-          // Urlaubstage approved im aktuellen Kalenderjahr
-          const thisYear = new Date().getFullYear().toString();
-          const urlaubRows = db.prepare(`
-            SELECT date_from, date_to FROM absences
-            WHERE user_id = ? AND type = 'urlaub' AND status = 'approved'
-            AND date_from <= ? AND date_to >= ?
-            AND deleted_at IS NULL
-          `).all(targetUid, thisYear + '-12-31', thisYear + '-01-01');
-          let urlaubJahr = 0;
-          for (const ur of urlaubRows) {
-            const f = ur.date_from > (thisYear + '-01-01') ? ur.date_from : (thisYear + '-01-01');
-            const t2 = ur.date_to < (thisYear + '-12-31') ? ur.date_to : (thisYear + '-12-31');
-            if (f <= t2) urlaubJahr += countScheduledDays(db, targetUid, f, t2);
-          }
+          // Urlaubstage genommen im aktuellen Kalenderjahr (Krank/Feiertage abgezogen)
+          const thisYear = new Date().getFullYear();
+          const urlaubJahr = countUrlaubDaysInYear(db, targetUid, thisYear);
           doc.text(`Urlaubstage genommen (${thisYear}): ${urlaubJahr} Arbeitstage`, 40, y);
           y += 14;
         }
