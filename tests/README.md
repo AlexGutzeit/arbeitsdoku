@@ -26,6 +26,15 @@ Prüft die prioritätsbewusste Tageszählung (`routes/absence-days.js`), die `/a
 verdrängt alles, Wochenenden zählen nie — inkl. „Urlaubstage genommen (Jahr)". Läuft gegen eine
 frische Temp-DB.
 
+## Abwesenheits-Doppelbuchung (Logik, kein Server nötig)
+
+```bash
+node tests/absence-conflict.js
+```
+Prüft `sameTierConflict` (`routes/absences.js`): Doppelbuchung innerhalb derselben Stufe wird
+verhindert (Urlaub/FZA/Sonderurlaub untereinander, Berufsschule/Innung, Krank gegen Krank),
+während stufenübergreifende Überschneidungen (Krank über Urlaub usw.) erlaubt bleiben.
+
 ## Browser-Smoke-Test (echte UI-Klicks, Puppeteer)
 
 ```bash

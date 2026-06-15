@@ -24,6 +24,43 @@ const NOTIFY_CHEF = ['krank', 'berufsschule', 'innung'];
 // Typen die eine Genehmigung brauchen (Vorschlags-Mechanismus bei Manager-Edit von approved)
 const APPROVAL_REQUIRED = ['urlaub', 'freizeitausgleich', 'sonderurlaub'];
 
+// Konflikt-Gruppen: zwei Abwesenheiten derselben Gruppe duerfen sich pro Tag NICHT
+// ueberschneiden (Doppelbuchung). Stufenuebergreifend (z.B. Krank ueber Urlaub) bleibt
+// erlaubt — das ist das gewollte Verdraengungs-Feature der Tageszaehlung.
+const CONFLICT_GROUPS = [
+  ['urlaub', 'freizeitausgleich', 'sonderurlaub'],
+  ['berufsschule', 'innung'],
+  ['krank'],
+];
+const TYPE_LABELS = {
+  krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'Freizeitausgleich',
+  sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag', berufsschule: 'Berufsschule', innung: 'Innung',
+};
+function conflictGroup(type) {
+  return CONFLICT_GROUPS.find(g => g.includes(type)) || null;
+}
+// Liefert einen kollidierenden Datensatz derselben Gruppe (oder null). excludeId beim Bearbeiten.
+function sameTierConflict(db, uid, type, from, to, excludeId) {
+  const group = conflictGroup(type);
+  if (!group || uid == null) return null; // feiertag (global) oder unbekannt: kein Gruppen-Check
+  const ph = group.map(() => '?').join(',');
+  return db.prepare(`
+    SELECT id, type, date_from, date_to FROM absences
+    WHERE user_id = ? AND deleted_at IS NULL
+      AND status IN ('pending','active','approved')
+      AND type IN (${ph})
+      AND date_from <= ? AND date_to >= ?
+      AND id != ?
+    ORDER BY date_from LIMIT 1
+  `).get(uid, ...group, to, from, excludeId || -1);
+}
+function conflictMessage(type, conflict) {
+  const g = conflictGroup(type).map(t => TYPE_LABELS[t]).join('/');
+  const fmt = (d) => d.split('-').reverse().join('.');
+  return `Überschneidung mit bestehender Abwesenheit „${TYPE_LABELS[conflict.type] || conflict.type}" `
+    + `(${fmt(conflict.date_from)}–${fmt(conflict.date_to)}). Pro Tag ist nur eine Abwesenheit aus ${g} möglich.`;
+}
+
 function isManager(user) {
   return user.role === 'admin' || user.role === 'chef' || user.role === 'buchhalter';
 }
@@ -250,6 +287,12 @@ router.post('/', authenticate, (req, res) => {
     status = initialStatus(type);
   }
 
+  // Doppelbuchung innerhalb derselben Stufe verhindern (z.B. Urlaub + FZA am selben Tag)
+  const conflict = sameTierConflict(db, uid, type, date_from, date_to, null);
+  if (conflict) {
+    return res.status(400).json({ error: conflictMessage(type, conflict) });
+  }
+
   const result = db.prepare(`
     INSERT INTO absences (user_id, type, date_from, date_to, status, comment, created_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))
@@ -284,6 +327,12 @@ router.put('/:id', authenticate, (req, res) => {
   if (date_from > date_to) return res.status(400).json({ error: 'Datum von muss vor Datum bis liegen' });
   if (tooLongComment(comment)) {
     return res.status(400).json({ error: `Kommentar zu lang (max. ${COMMENT_MAX} Zeichen)` });
+  }
+
+  // Doppelbuchung innerhalb derselben Stufe verhindern (sich selbst ausgenommen)
+  const conflict = sameTierConflict(db, absence.user_id, absence.type, date_from, date_to, absence.id);
+  if (conflict) {
+    return res.status(400).json({ error: conflictMessage(absence.type, conflict) });
   }
 
   // GoBD: Vorher-Abbild festhalten, bevor irgendein UPDATE-Zweig die Daten ueberschreibt
@@ -602,3 +651,6 @@ router.post('/:id/reject-manager-edit', authenticate, (req, res) => {
 });
 
 module.exports = router;
+// Fuer Tests
+module.exports.sameTierConflict = sameTierConflict;
+module.exports.conflictGroup = conflictGroup;
