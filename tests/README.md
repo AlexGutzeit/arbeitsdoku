@@ -35,6 +35,36 @@ Prüft `sameTierConflict` (`routes/absences.js`): Doppelbuchung innerhalb dersel
 verhindert (Urlaub/FZA/Sonderurlaub untereinander, Berufsschule/Innung, Krank gegen Krank),
 während stufenübergreifende Überschneidungen (Krank über Urlaub usw.) erlaubt bleiben.
 
+## Abwesenheiten im Browser (echte UI-Klicks, Puppeteer)
+
+```bash
+node tests/browser-absences.js   # BASE per ENV setzbar (Default :3000)
+```
+Fährt das komplette Szenario durch: FZA buchen (Soll bleibt 8) → Urlaub am selben Tag =
+Fehlermeldung → FZA löschen, Urlaub buchen + als Admin genehmigen (Soll 0, 1 Urlaubstag) →
+Krank am selben Tag (verdrängt Urlaub) → Krank+Krank und Berufsschule+Innung = Fehler.
+
+Braucht eine **frische DB**, in der `max` und `admin` das Passwort `test` haben und `max` 8h
+Mo-Fr hinterlegt hat. Setup-Skript (Beispiel, gegen eigene Temp-DB):
+
+```js
+// setup.js — dann:  DB_PATH=/tmp/bro.db JWT_SECRET=<32+ Zeichen> node setup.js
+process.env.DB_PATH = '/tmp/bro.db';
+const bcrypt = require('bcryptjs');
+const { initDatabase, getDb, saveToFile } = require('./database/init');
+(async () => {
+  await initDatabase(); const db = getDb();
+  const h = bcrypt.hashSync('test', 10);
+  db.prepare("UPDATE users SET password_hash=? WHERE username IN ('max','admin')").run(h);
+  const id = db.prepare("SELECT id FROM users WHERE username='max'").get().id;
+  db.prepare('DELETE FROM user_target_hours WHERE user_id=?').run(id);
+  db.prepare(`INSERT INTO user_target_hours (user_id,hours_per_week,hours_mon,hours_tue,hours_wed,hours_thu,hours_fri,valid_from)
+    VALUES (?,40,8,8,8,8,8,'2020-01-01')`).run(id);
+  saveToFile(); process.exit(0);
+})();
+```
+Dann Server gegen diese DB starten und `BASE=http://localhost:<port> node tests/browser-absences.js`.
+
 ## Browser-Smoke-Test (echte UI-Klicks, Puppeteer)
 
 ```bash
