@@ -66,7 +66,7 @@ router.get('/export', authenticate, (req, res) => {
     const absTypeLabels = {
       krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'Freizeitausgleich',
       sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag',
-      berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise',
+      berufsschule: 'Berufsschule', innung: 'Innung',
     };
     const absRows = db.prepare(`
       SELECT type, date_from, date_to, comment FROM absences
@@ -353,7 +353,7 @@ router.get('/export', authenticate, (req, res) => {
           const typeLabels = {
             krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA',
             sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag',
-            berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise'
+            berufsschule: 'Berufsschule', innung: 'Innung'
           };
           const parts = Object.entries(typeDays).map(([t, d]) => `${d} ${d === 1 ? 'Tag' : 'Tage'} ${typeLabels[t] || t}`);
           ensureSpace(40); // Abwesenheits-Unterblock (3 Zeilen) zusammenhalten

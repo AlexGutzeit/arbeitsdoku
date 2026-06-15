@@ -78,6 +78,36 @@ function eq(name, got, want) { assert(name + ` (=${want})`, got === want, 'ist '
   s = computeAbsenceSummary(db, uid, '2026-06-19', '2026-06-22');
   eq('  Urlaub (nur Fr+Mo)', s.summary.urlaub, 2);
 
+  // --- Fall E: Krank verdrängt Berufsschule (am selben Tag) ---
+  console.log('\nFall E — Berufsschule Mo-Di + Krank Di:');
+  reset();
+  insAbs.run(uid, 'berufsschule', '2026-06-15', '2026-06-16', 'active'); // Mo+Di
+  insAbs.run(uid, 'krank', '2026-06-16', '2026-06-16', 'active');        // Di krank
+  s = computeAbsenceSummary(db, uid, FROM, TO);
+  eq('  Berufsschule (Di zurückgegeben)', s.summary.berufsschule, 1);
+  eq('  Krank', s.summary.krank, 1);
+  eq('  Abwesenheitstage gesamt', s.totalUniqueDays, 2);
+
+  // --- Fall F: Krank verdrängt Innung ---
+  console.log('\nFall F — Innung Mi + Krank Mi (selber Tag):');
+  reset();
+  insAbs.run(uid, 'innung', '2026-06-17', '2026-06-17', 'active');
+  insAbs.run(uid, 'krank', '2026-06-17', '2026-06-17', 'active');
+  s = computeAbsenceSummary(db, uid, FROM, TO);
+  eq('  Innung (verdrängt)', s.summary.innung || 0, 0);
+  eq('  Krank', s.summary.krank, 1);
+  eq('  Abwesenheitstage gesamt', s.totalUniqueDays, 1);
+
+  // --- Fall G: Berufsschule verdrängt weiterhin Urlaub ---
+  console.log('\nFall G — Urlaub Mo-Di + Berufsschule Di:');
+  reset();
+  insAbs.run(uid, 'urlaub', '2026-06-15', '2026-06-16', 'approved');
+  insAbs.run(uid, 'berufsschule', '2026-06-16', '2026-06-16', 'active');
+  s = computeAbsenceSummary(db, uid, FROM, TO);
+  eq('  Urlaub (Di ist Schultag)', s.summary.urlaub, 1);
+  eq('  Berufsschule', s.summary.berufsschule, 1);
+  eq('  Urlaubstage/Jahr (Schultag abgezogen)', countUrlaubDaysInYear(db, uid, 2026), 1);
+
   console.log(`\nErgebnis: ${pass} ok, ${fail} fehlgeschlagen`);
   if (fail > 0) { console.log('Fehlgeschlagen: ' + fails.join(', ')); }
   try { fs.unlinkSync(process.env.DB_PATH); } catch (_) {}
