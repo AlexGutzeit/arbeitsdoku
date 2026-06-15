@@ -5795,6 +5795,27 @@ function formatDateRange(from, to) {
 }
 
 const APPROVAL_REQUIRED_TYPES = ['urlaub', 'sonderurlaub', 'freizeitausgleich'];
+
+// Konflikt-Gruppen (Spiegel des Backends in routes/absences.js): zwei Abwesenheiten
+// derselben Gruppe duerfen sich pro Tag nicht ueberschneiden -> harte Sperre.
+const ABSENCE_CONFLICT_GROUPS = [
+  ['urlaub', 'freizeitausgleich', 'sonderurlaub'],
+  ['berufsschule', 'innung'],
+  ['krank'],
+];
+function absenceGroup(type) {
+  return ABSENCE_CONFLICT_GROUPS.find(g => g.includes(type)) || null;
+}
+function sameAbsenceGroup(a, b) {
+  const g = absenceGroup(a);
+  return g ? g.includes(b) : false;
+}
+// Prioritaet fuer die Tageszaehlung (kleiner = hoeher, gewinnt):
+// Feiertag > Krank > Berufsschule/Innung > Urlaub/FZA/Sonderurlaub.
+const ABSENCE_PRIORITY = {
+  feiertag: 0, krank: 1, berufsschule: 2, innung: 2,
+  urlaub: 3, freizeitausgleich: 3, sonderurlaub: 3,
+};
 function filterApprovedAbsences(absences) {
   return (absences || []).filter(a =>
     // Pending Urlaub/FZA/Sonderurlaub ausblenden — AUSSER wenn ein Vorschlag hängt
@@ -6057,12 +6078,29 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
     if (date_from > date_to) { toast('Datum von muss vor bis liegen', 'error'); return; }
 
     try {
-      // Überlappungsprüfung für den gewählten User
+      // Überlappungsprüfung für den gewählten User (globale Feiertage haben user_id=null
+      // und sind hier bewusst ausgenommen)
       const existingParams = `from=${date_from}&to=${date_to}` + (target_user_id !== S.user.id ? `&user_id=${target_user_id}` : '');
       const existing = await api('GET', `/api/absences?${existingParams}`);
       const overlaps = (existing?.absences || []).filter(a => String(a.id) !== String(editId) && a.user_id === target_user_id);
-      if (overlaps.length > 0) {
-        const proceed = confirm(`Für diesen Zeitraum existiert bereits eine Abwesenheit (${ABSENCE_TYPES[overlaps[0].type]?.label || overlaps[0].type}).\nTrotzdem speichern?`);
+      const lbl = (t) => ABSENCE_TYPES[t]?.label || t;
+
+      // 1) Gleiche Stufe → harte Sperre (kein Speichern; Backend erzwingt es zusätzlich)
+      const sameTier = overlaps.find(a => sameAbsenceGroup(type, a.type));
+      if (sameTier) {
+        const grp = absenceGroup(type).map(lbl).join('/');
+        toast(`Pro Tag ist nur eine Abwesenheit aus ${grp} möglich (bereits „${lbl(sameTier.type)}" eingetragen).`, 'error');
+        return;
+      }
+      // 2) Andere Stufe → Hinweis mit erklärter Priorität, Speichern bestätigen lassen
+      const crossTier = overlaps[0];
+      if (crossTier) {
+        const winner = ABSENCE_PRIORITY[type] <= ABSENCE_PRIORITY[crossTier.type] ? type : crossTier.type;
+        const loser  = winner === type ? crossTier.type : type;
+        const proceed = confirm(
+          `An diesem Tag besteht bereits „${lbl(crossTier.type)}".\n`
+          + `Beide bleiben erfasst – gezählt wird der Tag als „${lbl(winner)}" (höhere Priorität), `
+          + `„${lbl(loser)}" wird an diesem Tag nicht gezählt.\n\nTrotzdem speichern?`);
         if (!proceed) return;
       }
 
