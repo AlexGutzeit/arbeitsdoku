@@ -244,7 +244,7 @@ async function initDatabase() {
       user_id      INTEGER,
       type         TEXT NOT NULL CHECK(type IN (
                      'krank','urlaub','freizeitausgleich','sonderurlaub',
-                     'feiertag','berufsschule','innung','dienstreise'
+                     'feiertag','berufsschule','innung'
                    )),
       date_from    TEXT NOT NULL,
       date_to      TEXT NOT NULL,
@@ -656,6 +656,31 @@ async function initDatabase() {
       console.log('Migration: deleted_at/deleted_by in absences hinzugefuegt.');
     }
   } catch (e) {}
+
+  // Migration: 'dienstreise' aus dem absences.type CHECK-Constraint entfernen.
+  // Der Typ wird nicht mehr angeboten. SQLite kann einen CHECK nicht per ALTER aendern,
+  // daher Tabelle neu aufbauen — die neue DDL wird aus der bestehenden abgeleitet, damit
+  // ALLE Spalten (inkl. spaeter per ALTER ergaenzte) exakt erhalten bleiben.
+  // Idempotent: laeuft nur, solange der CHECK noch 'dienstreise' enthaelt.
+  try {
+    const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='absences'").get();
+    if (row && row.sql && row.sql.includes("'dienstreise'")) {
+      const newSql = row.sql
+        .replace(/\babsences\b/, 'absences_new')      // nur 1. Vorkommen = Tabellenname
+        .replace(/\s*,\s*'dienstreise'/i, '');        // Wert aus der CHECK-Liste streichen
+      db.exec('PRAGMA foreign_keys=OFF');
+      db.exec('BEGIN');
+      db.exec('DROP TABLE IF EXISTS absences_new');
+      db.exec(newSql);
+      db.exec('INSERT INTO absences_new SELECT * FROM absences');
+      db.exec('DROP TABLE absences');
+      db.exec('ALTER TABLE absences_new RENAME TO absences');
+      db.exec('COMMIT');
+      db.exec('PRAGMA foreign_keys=ON');
+      markDirty();
+      console.log('Migration: dienstreise aus absences-CHECK entfernt (Tabelle neu aufgebaut).');
+    }
+  } catch (e) { console.error('Migration dienstreise-CHECK fehlgeschlagen:', e.message); }
 
   // Migration: Branding-Defaults (White-Label) — fuegt nur Werte ein, die fehlen
   try {

@@ -1369,7 +1369,6 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .welcome-task-absence--sonderurlaub { border-left-color: #9d174d; background: #fdf2f8; }
 .welcome-task-absence--berufsschule { border-left-color: #92400e; background: #fffbeb; }
 .welcome-task-absence--innung       { border-left-color: #065f46; background: #f0fdf4; }
-.welcome-task-absence--dienstreise  { border-left-color: #0369a1; background: #f0f9ff; }
 .welcome-task-absence--feiertag     { border-left-color: #7e22ce; background: #faf5ff; }
 .welcome-task-time { font-size: 0.8rem; color: var(--primary); font-weight: 600; white-space: nowrap; min-width: 150px; }
 .welcome-task-title { font-size: 0.9rem; }
@@ -1767,7 +1766,6 @@ details[open] .absence-history-summary::before { content: '▾ '; }
 .tl-absence-banner--sonderurlaub { background: #fce7f3; color: #9d174d; }
 .tl-absence-banner--berufsschule { background: #fef3c7; color: #92400e; }
 .tl-absence-banner--innung       { background: #d1fae5; color: #065f46; }
-.tl-absence-banner--dienstreise  { background: #e0f2fe; color: #0369a1; }
 .tl-absence-banner--feiertag     { background: #fdf4ff; color: #7e22ce; }
 
 /* Wochenraster-Abwesenheits-Chips */
@@ -1781,7 +1779,6 @@ details[open] .absence-history-summary::before { content: '▾ '; }
 .grid-absence-chip--sonderurlaub { background: #fce7f3; color: #9d174d; }
 .grid-absence-chip--berufsschule { background: #fef3c7; color: #92400e; }
 .grid-absence-chip--innung       { background: #d1fae5; color: #065f46; }
-.grid-absence-chip--dienstreise  { background: #e0f2fe; color: #0369a1; }
 .grid-absence-chip--feiertag     { background: #fdf4ff; color: #7e22ce; }
 
 /* Manager-für-MA Badge im Card */

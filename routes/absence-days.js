@@ -36,15 +36,16 @@ function buildHolidaySet(db, from, to) {
   return set;
 }
 
-// Set der Krank-/Berufsschule-/Innung-Tage (Soll>0, keine Feiertage) im Zeitraum.
-// Diese Tage verdrängen Urlaub/FZA/Sonderurlaub.
-function buildSickSet(db, userId, from, to, hasHours, holidaySet) {
+// Set der Tage (Soll>0, keine Feiertage) im Zeitraum, an denen eine Abwesenheit der
+// angegebenen Typen liegt. Dient als Verdrängungs-Set für niedriger priorisierte Typen.
+function buildDaySet(db, userId, types, from, to, hasHours, holidaySet) {
+  const placeholders = types.map(() => '?').join(',');
   const rows = db.prepare(`
     SELECT date_from, date_to FROM absences
     WHERE user_id = ? AND status IN ('active','approved')
-      AND type IN ('krank','berufsschule','innung')
+      AND type IN (${placeholders})
       AND date_from <= ? AND date_to >= ? AND deleted_at IS NULL
-  `).all(userId, to, from);
+  `).all(userId, ...types, to, from);
   const set = new Set();
   for (const row of rows) {
     const ef = row.date_from > from ? row.date_from : from;
@@ -60,8 +61,9 @@ function buildSickSet(db, userId, from, to, hasHours, holidaySet) {
   return set;
 }
 
-// Effektive Tage einer einzelnen (auf [ef,et] geklemmten) Abwesenheit unter Priorität.
-function countTypeDays(absType, ef, et, hasHours, holidaySet, sickSet) {
+// Effektive Tage einer einzelnen (auf [ef,et] geklemmten) Abwesenheit unter Priorität:
+// Feiertag > Krank > Berufsschule/Innung > Urlaub/FZA/Sonderurlaub.
+function countTypeDays(absType, ef, et, hasHours, holidaySet, krankSet, schoolSet) {
   let n = 0;
   const cur = new Date(ef + 'T12:00:00'), end = new Date(et + 'T12:00:00');
   while (cur <= end) {
@@ -69,10 +71,12 @@ function countTypeDays(absType, ef, et, hasHours, holidaySet, sickSet) {
     if (hasHours(ds)) {
       if (absType === 'feiertag') {
         n++;
-      } else if (['krank', 'berufsschule', 'innung', 'dienstreise'].includes(absType)) {
+      } else if (absType === 'krank') {
         if (!holidaySet.has(ds)) n++;
+      } else if (absType === 'berufsschule' || absType === 'innung') {
+        if (!holidaySet.has(ds) && !krankSet.has(ds)) n++; // Krank verdrängt Schule/Innung
       } else { // urlaub, sonderurlaub, freizeitausgleich
-        if (!holidaySet.has(ds) && !sickSet.has(ds)) n++;
+        if (!holidaySet.has(ds) && !krankSet.has(ds) && !schoolSet.has(ds)) n++;
       }
     }
     cur.setDate(cur.getDate() + 1);
@@ -95,7 +99,8 @@ function computeAbsenceSummary(db, userId, from, to) {
 
   const hasHours = buildScheduleCheck(db, userId);
   const holidaySet = buildHolidaySet(db, from, to);
-  const sickSet = buildSickSet(db, userId, from, to, hasHours, holidaySet);
+  const krankSet = buildDaySet(db, userId, ['krank'], from, to, hasHours, holidaySet);
+  const schoolSet = buildDaySet(db, userId, ['berufsschule', 'innung'], from, to, hasHours, holidaySet);
 
   const summary = {};
   const uniqueAbsenceDays = new Set();
@@ -103,7 +108,7 @@ function computeAbsenceSummary(db, userId, from, to) {
     const ef = row.date_from > from ? row.date_from : from;
     const et = row.date_to < to ? row.date_to : to;
     if (ef > et) continue;
-    const days = countTypeDays(row.type, ef, et, hasHours, holidaySet, sickSet);
+    const days = countTypeDays(row.type, ef, et, hasHours, holidaySet, krankSet, schoolSet);
     if (days > 0) summary[row.type] = (summary[row.type] || 0) + days;
     const cur = new Date(ef + 'T12:00:00'), end = new Date(et + 'T12:00:00');
     while (cur <= end) {
@@ -128,7 +133,8 @@ function countUrlaubDaysInYear(db, userId, year) {
 
   const hasHours = buildScheduleCheck(db, userId);
   const holidaySet = buildHolidaySet(db, from, to);
-  const sickSet = buildSickSet(db, userId, from, to, hasHours, holidaySet);
+  // Urlaub wird von Krank UND Berufsschule/Innung verdrängt
+  const displaceSet = buildDaySet(db, userId, ['krank', 'berufsschule', 'innung'], from, to, hasHours, holidaySet);
 
   let count = 0;
   for (const row of urlaubRows) {
@@ -138,7 +144,7 @@ function countUrlaubDaysInYear(db, userId, year) {
     const cur = new Date(ef + 'T12:00:00'), end = new Date(et + 'T12:00:00');
     while (cur <= end) {
       const ds = cur.toISOString().slice(0, 10);
-      if (hasHours(ds) && !holidaySet.has(ds) && !sickSet.has(ds)) count++;
+      if (hasHours(ds) && !holidaySet.has(ds) && !displaceSet.has(ds)) count++;
       cur.setDate(cur.getDate() + 1);
     }
   }
@@ -150,6 +156,6 @@ module.exports = {
   countUrlaubDaysInYear,
   buildScheduleCheck,
   buildHolidaySet,
-  buildSickSet,
+  buildDaySet,
   countTypeDays,
 };

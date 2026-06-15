@@ -685,7 +685,6 @@ async function renderDashboardContent() {
     ['feiertag', '🎉 Feiertag'],
     ['berufsschule', '🏫 Berufsschule'],
     ['innung', '🔧 Innung'],
-    ['dienstreise', '🚗 Dienstreise'],
   ];
   const filtersHtml = `
     <div class="filters">
@@ -791,7 +790,7 @@ async function renderDashboardContent() {
         if (!absenceSummary || S.user.role !== 'mitarbeiter') return '';
         const sum = absenceSummary.summary || {};
         if (Object.keys(sum).length === 0) return '';
-        const typeLabels = { krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA', sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag', berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise' };
+        const typeLabels = { krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA', sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag', berufsschule: 'Berufsschule', innung: 'Innung' };
         const totalDays = absenceSummary.totalUniqueDays ?? Object.values(sum).reduce((s, v) => s + v, 0);
         const details = Object.entries(sum).map(([t, d]) => `${typeLabels[t] || t}: ${d}`).join(', ');
         return `<div class="summary-card">
@@ -4672,7 +4671,7 @@ async function renderStatisticsContent() {
       const absenceColors = {
         krank: '#dc2626', urlaub: '#1d4ed8', freizeitausgleich: '#7c3aed',
         sonderurlaub: '#9a3412', berufsschule: '#0369a1', innung: '#0f766e',
-        dienstreise: '#374151', feiertag: '#b45309',
+        feiertag: '#b45309',
       };
       const chartAbsences = (byDate?.absences || [])
         .filter(a => a.status === 'active' || a.status === 'approved')
@@ -4684,7 +4683,7 @@ async function renderStatisticsContent() {
       window._statsChartHighlight = highlightFn;
 
       if (sd && Object.keys(sd.summary || {}).length > 0) {
-        const typeLabels = { krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA', sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag', berufsschule: 'Berufsschule', innung: 'Innung', dienstreise: 'Dienstreise' };
+        const typeLabels = { krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA', sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag', berufsschule: 'Berufsschule', innung: 'Innung' };
         const rows = Object.entries(sd.summary).map(([t, d]) =>
           `<tr class="abs-hover-row" data-abs-type="${t}" style="cursor:pointer">
             <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${absenceColors[t]||'#64748b'};margin-right:6px"></span>${typeLabels[t] || t}</td>
@@ -5774,7 +5773,6 @@ const ABSENCE_TYPES = {
   sonderurlaub:      { label: 'Sonderurlaub',       icon: '🎁', workflow: 'approve' },
   berufsschule:      { label: 'Berufsschule',       icon: '🏫', workflow: 'notify' },
   innung:            { label: 'Innung',             icon: '🔧', workflow: 'notify' },
-  dienstreise:       { label: 'Dienstreise',        icon: '🚗', workflow: 'none' },
   feiertag:          { label: 'Feiertag',           icon: '🎉', workflow: 'none' },
 };
 

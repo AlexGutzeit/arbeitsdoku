@@ -18,7 +18,7 @@ function tooLongComment(c) { return typeof c === 'string' && c.length > COMMENT_
 const router = express.Router();
 
 // Typen die sofort aktiv sind (kein Genehmigungsschritt)
-const AUTO_ACTIVE = ['krank', 'feiertag', 'berufsschule', 'innung', 'dienstreise'];
+const AUTO_ACTIVE = ['krank', 'feiertag', 'berufsschule', 'innung'];
 // Typen die Chef-Benachrichtigung brauchen (auch nach Edit)
 const NOTIFY_CHEF = ['krank', 'berufsschule', 'innung'];
 // Typen die eine Genehmigung brauchen (Vorschlags-Mechanismus bei Manager-Edit von approved)
@@ -213,7 +213,7 @@ router.post('/', authenticate, (req, res) => {
     return res.status(400).json({ error: `Kommentar zu lang (max. ${COMMENT_MAX} Zeichen)` });
   }
 
-  const validTypes = ['krank','urlaub','freizeitausgleich','sonderurlaub','feiertag','berufsschule','innung','dienstreise'];
+  const validTypes = ['krank','urlaub','freizeitausgleich','sonderurlaub','feiertag','berufsschule','innung'];
   if (!validTypes.includes(type)) {
     return res.status(400).json({ error: 'Ungültiger Typ' });
   }
