@@ -4074,28 +4074,61 @@ const AUDIT_LABELS = {
   user_delete: 'Benutzer gelöscht',
 };
 
+let _audit = { action: '', from: '', to: '', logs: [], total: 0, offset: 0, limit: 100 };
+
+function auditRowHtml(l) {
+  const label = AUDIT_LABELS[l.action] || l.action;
+  const who = l.user_name || l.username || '—';
+  return `<tr>
+    <td style="white-space:nowrap;">${esc(String(l.ts || '').slice(0, 19))}</td>
+    <td>${esc(label)}</td>
+    <td>${esc(who)}</td>
+    <td style="color:var(--text-light);">${esc(l.details || '')}</td>
+    <td style="color:var(--text-lighter);">${esc(l.ip || '')}</td>
+  </tr>`;
+}
+function auditQuery(extra) {
+  const p = [];
+  if (_audit.action) p.push('action=' + encodeURIComponent(_audit.action));
+  if (_audit.from) p.push('from=' + _audit.from);
+  if (_audit.to) p.push('to=' + _audit.to);
+  return p.concat(extra || []).join('&');
+}
+async function auditLoad(reset) {
+  if (reset) { _audit.offset = 0; _audit.logs = []; }
+  const data = await api('GET', '/api/audit?' + auditQuery([`limit=${_audit.limit}`, `offset=${_audit.offset}`]));
+  if (!data) return;
+  _audit.total = data.total;
+  _audit.logs = reset ? data.logs : _audit.logs.concat(data.logs);
+  _audit.offset = _audit.logs.length;
+}
+function auditPaint() {
+  const tb = document.getElementById('audit-tbody');
+  if (!tb) return;
+  tb.innerHTML = _audit.logs.map(auditRowHtml).join('') || '<tr><td colspan="5" style="color:var(--text-light);">Keine Einträge.</td></tr>';
+  const st = document.getElementById('audit-status');
+  if (st) st.textContent = `${_audit.logs.length} von ${_audit.total} angezeigt`;
+  const more = document.getElementById('audit-more');
+  if (more) more.style.display = _audit.logs.length < _audit.total ? '' : 'none';
+}
+async function auditExport() {
+  try {
+    const res = await fetch('/api/audit/export?' + auditQuery(), { headers: { Authorization: 'Bearer ' + S.token } });
+    if (!res.ok) { toast('Export fehlgeschlagen', 'error'); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { toast('Export fehlgeschlagen', 'error'); }
+}
+
 async function renderAudit() {
   if (!isAdmin()) { navigate('/'); return; }
+  _audit = { action: '', from: '', to: '', logs: [], total: 0, offset: 0, limit: 100 };
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'audit');
   bindLayout();
-
-  let data;
-  try {
-    data = await api('GET', '/api/audit?limit=200');
-  } catch (e) { toast(e.message, 'error'); return; }
-
-  const logs = (data && data.logs) || [];
-  const rows = logs.map(l => {
-    const label = AUDIT_LABELS[l.action] || l.action;
-    const who = l.user_name || l.username || '—';
-    return `<tr>
-      <td style="white-space:nowrap;">${esc(String(l.ts || '').slice(0, 19))}</td>
-      <td>${esc(label)}</td>
-      <td>${esc(who)}</td>
-      <td style="color:var(--text-light);">${esc(l.details || '')}</td>
-      <td style="color:var(--text-lighter);">${esc(l.ip || '')}</td>
-    </tr>`;
-  }).join('');
 
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
@@ -4103,19 +4136,53 @@ async function renderAudit() {
       <div class="card">
         <h2 style="margin-bottom:0.5rem;">Audit-Log</h2>
         <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
-          Protokoll sicherheitsrelevanter Aktionen (Login, Backup, Benutzerverwaltung). Neueste zuerst, max. 200.
-          Zeiteintrags-Änderungen sind im jeweiligen Eintrag unter „Änderungsverlauf" einsehbar.
+          Protokoll sicherheitsrelevanter Aktionen (Login, Backup, Benutzerverwaltung). Neueste zuerst.
+          Zeiteintrags- und Abwesenheits-Änderungen sind zusätzlich im jeweiligen „Änderungsverlauf" einsehbar.
         </p>
+        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:flex-end;margin-bottom:1rem;">
+          <div class="form-group" style="margin:0;min-width:170px;">
+            <label style="font-size:0.8rem;">Aktion</label>
+            <select id="audit-f-action" class="form-control">
+              <option value="">Alle Aktionen</option>
+              ${Object.entries(AUDIT_LABELS).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label style="font-size:0.8rem;">Von</label>
+            <input type="date" id="audit-f-from" class="form-control">
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label style="font-size:0.8rem;">Bis</label>
+            <input type="date" id="audit-f-to" class="form-control">
+          </div>
+          <button class="btn btn-primary btn-sm" id="audit-filter">Filtern</button>
+          <button class="btn btn-outline btn-sm" id="audit-export">&#11015; CSV-Export</button>
+          <span id="audit-status" style="margin-left:auto;color:var(--text-light);font-size:0.85rem;"></span>
+        </div>
         <div style="overflow-x:auto;">
           <table class="data-table" style="width:100%;font-size:0.88rem;">
-            <thead><tr>
-              <th>Zeit</th><th>Aktion</th><th>Benutzer</th><th>Details</th><th>IP</th>
-            </tr></thead>
-            <tbody>${rows || '<tr><td colspan="5" style="color:var(--text-light);">Keine Einträge.</td></tr>'}</tbody>
+            <thead><tr><th>Zeit</th><th>Aktion</th><th>Benutzer</th><th>Details</th><th>IP</th></tr></thead>
+            <tbody id="audit-tbody"></tbody>
           </table>
+        </div>
+        <div style="text-align:center;margin-top:1rem;">
+          <button class="btn btn-outline btn-sm" id="audit-more" style="display:none;">Mehr laden</button>
         </div>
       </div>
     </div>`;
+
+  document.getElementById('audit-filter').addEventListener('click', async () => {
+    _audit.action = document.getElementById('audit-f-action').value;
+    _audit.from = document.getElementById('audit-f-from').value;
+    _audit.to = document.getElementById('audit-f-to').value;
+    try { await auditLoad(true); auditPaint(); } catch (e) { toast(e.message, 'error'); }
+  });
+  document.getElementById('audit-more').addEventListener('click', async () => {
+    try { await auditLoad(false); auditPaint(); } catch (e) { toast(e.message, 'error'); }
+  });
+  document.getElementById('audit-export').addEventListener('click', auditExport);
+
+  try { await auditLoad(true); auditPaint(); } catch (e) { toast(e.message, 'error'); }
 }
 
 // --- Gelöschte Einträge (Papierkorb, nur Admin) ---

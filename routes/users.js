@@ -6,6 +6,31 @@ const { logAudit } = require('../audit');
 
 const router = express.Router();
 
+// Felder, die im Audit-Log nachvollziehbar protokolliert werden (Label + Formatter).
+// Das Passwort wird BEWUSST nie geloggt.
+const USER_AUDIT_FIELDS = [
+  ['username', 'Benutzername', v => String(v ?? '')],
+  ['name', 'Name', v => String(v ?? '')],
+  ['role', 'Rolle', v => String(v ?? '')],
+  ['target_hours_per_week', 'Soll-Stunden/Woche', v => String(v ?? '')],
+  ['start_overtime', 'Start-Überstunden', v => String(v ?? 0)],
+  ['can_plan', 'Recht Planung', v => (v ? 'Ja' : 'Nein')],
+  ['can_bulletin', 'Recht Schwarzes Brett', v => (v ? 'Ja' : 'Nein')],
+  ['can_upload', 'Recht Dokumente-Upload', v => (v ? 'Ja' : 'Nein')],
+];
+// Alle relevanten Felder eines neuen Benutzers als Klartext.
+function userAuditCreate(u) {
+  return USER_AUDIT_FIELDS.map(([k, label, fmt]) => `${label}: ${fmt(u[k])}`).join(', ');
+}
+// Nur die geaenderten Felder als "Feld: alt → neu".
+function userAuditDiff(before, after) {
+  const changes = [];
+  for (const [k, label, fmt] of USER_AUDIT_FIELDS) {
+    if (fmt(before[k]) !== fmt(after[k])) changes.push(`${label}: ${fmt(before[k])} → ${fmt(after[k])}`);
+  }
+  return changes;
+}
+
 // Einfache Benutzerliste (id + name) für alle authentifizierten User (z.B. Regie-Dropdown)
 router.get('/list', authenticate, (req, res) => {
   const db = getDb();
@@ -75,7 +100,7 @@ router.post('/', authenticate, authorize('chef'), (req, res) => {
 
   const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, created_at FROM users WHERE id = ?').get(userId);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_create',
-    details: `Neuer Benutzer: ${username} (${role}), id=${userId}`, ip: req.ip });
+    details: `id=${userId} · ${userAuditCreate(user)}`, ip: req.ip });
   res.status(201).json({ user });
 });
 
@@ -107,8 +132,10 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   );
 
   const updated = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, created_at FROM users WHERE id = ?').get(req.params.id);
+  const _changes = userAuditDiff(user, updated);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_update',
-    details: `Benutzer geaendert: ${updated.username} (id=${req.params.id})`, ip: req.ip });
+    details: `${updated.username} (id=${req.params.id}): ` + (_changes.length ? _changes.join('; ') : 'keine Änderung'),
+    ip: req.ip });
   res.json({ user: updated });
 });
 
