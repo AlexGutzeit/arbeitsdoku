@@ -13,15 +13,30 @@ function saveToFile() {
   if (!db) return;
   const dir = path.dirname(DB_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const data = db.export();
-  fs.writeFileSync(DB_PATH, Buffer.from(data));
+  const data = Buffer.from(db.export());
+  // Atomar schreiben: erst in eine Temp-Datei, dann umbenennen. Bei Crash/Stromausfall
+  // waehrend des Schreibens bleibt die bestehende DB-Datei dadurch unversehrt.
+  const tmp = DB_PATH + '.tmp-' + process.pid;
+  try {
+    fs.writeFileSync(tmp, data);
+    fs.renameSync(tmp, DB_PATH); // POSIX-rename ist atomar (Temp liegt im selben Verzeichnis)
+  } catch (e) {
+    try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (_) {}
+    throw e;
+  }
 }
 
 // Autosave alle 5 Sekunden wenn Änderungen vorliegen
 let dirty = false;
 function markDirty() { dirty = true; }
 setInterval(() => {
-  if (dirty) { saveToFile(); dirty = false; }
+  if (!dirty) return;
+  try {
+    saveToFile();
+    dirty = false; // nur bei Erfolg zuruecksetzen -> sonst Retry im naechsten Intervall
+  } catch (e) {
+    console.error('Autosave fehlgeschlagen, Retry in 5s:', e.message);
+  }
 }, 5000);
 
 // Wrapper um sql.js-DB mit better-sqlite3-ähnlicher API
