@@ -5,7 +5,7 @@ const multer = require('multer');
 const archiver = require('archiver');
 const AdmZip = require('adm-zip');
 const dbModule = require('../database/init');
-const { getDb, saveToFile, reloadFromFile, DB_PATH } = dbModule;
+const { getDb, saveToFile, reloadFromFile, writeFileAtomic, DB_PATH } = dbModule;
 const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 
@@ -196,8 +196,8 @@ router.post('/restore', authenticate, authorize('chef'), upload.single('backup')
     }
     safetyArchive.writeZip(safetyZipPath);
 
-    // DB wiederherstellen
-    fs.writeFileSync(DB_PATH, Buffer.from(dbBuffer));
+    // DB wiederherstellen (atomar, damit ein Abbruch die bestehende DB nicht zerstoert)
+    writeFileAtomic(DB_PATH, Buffer.from(dbBuffer));
 
     // Uploads wiederherstellen (Subordner werden bei Bedarf angelegt)
     if (uploadFiles.length > 0) {
