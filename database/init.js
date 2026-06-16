@@ -434,7 +434,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE users ADD COLUMN start_overtime REAL DEFAULT 0");
       console.log('Migration: start_overtime Spalte hinzugefügt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: can_plan Spalte
   try {
@@ -443,7 +443,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE users ADD COLUMN can_plan INTEGER DEFAULT 0");
       console.log('Migration: can_plan Spalte hinzugefügt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: can_bulletin Spalte
   try {
@@ -452,7 +452,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE users ADD COLUMN can_bulletin INTEGER DEFAULT 0");
       console.log('Migration: can_bulletin Spalte hinzugefügt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: can_upload Spalte (Recht, Dokumente hochzuladen/zu verwalten)
   try {
@@ -461,7 +461,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE users ADD COLUMN can_upload INTEGER DEFAULT 0");
       console.log('Migration: can_upload Spalte hinzugefügt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: Bestehende target_hours_per_week in user_target_hours übernehmen
   try {
@@ -475,7 +475,7 @@ async function initDatabase() {
       }
       if (allUsers.length > 0) console.log('Migration: Soll-Stunden-Historie initialisiert.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: Tages-Spalten in user_target_hours hinzufügen
   try {
@@ -504,7 +504,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE projects ADD COLUMN address TEXT DEFAULT ''");
       console.log('Migration: address Spalte in projects hinzugefügt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: Regiezettel-Spalten in entries
   try {
@@ -514,7 +514,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE entries ADD COLUMN regie_user_id INTEGER");
       console.log('Migration: Regiezettel-Spalten in entries hinzugefügt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: password_plain-Spalte droppen (war Klartext-Passwort-Komfort, durch Passwort-Reset-Button ersetzt)
   try {
@@ -524,7 +524,7 @@ async function initDatabase() {
       markDirty();
       console.log('Migration: password_plain-Spalte entfernt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: group_id für Planungsgruppen
   try {
@@ -537,7 +537,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE planning_entries ADD COLUMN color TEXT DEFAULT '#f59e0b'");
       console.log('Migration: color in planning_entries hinzugefügt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: orders – quantity nullable + location-Spalten
   try {
@@ -572,7 +572,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE orders ADD COLUMN location_text TEXT DEFAULT 'Lager'");
       console.log('Migration: location-Spalten in orders hinzugefügt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: Projekt/Ort in tool_checkouts
   try {
@@ -583,7 +583,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE tool_checkouts ADD COLUMN address TEXT");
       console.log('Migration: Projekt/Ort in tool_checkouts hinzugefügt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: Edit-Lock-Spalten in notes
   try {
@@ -593,7 +593,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE notes ADD COLUMN editing_since TEXT");
       console.log('Migration: Edit-Lock-Spalten in notes hinzugefuegt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: updated_by in bulletin_entries
   try {
@@ -602,7 +602,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE bulletin_entries ADD COLUMN updated_by INTEGER");
       console.log('Migration: updated_by in bulletin_entries hinzugefuegt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: updated_by in notes
   try {
@@ -611,7 +611,7 @@ async function initDatabase() {
       db.exec("ALTER TABLE notes ADD COLUMN updated_by INTEGER");
       console.log('Migration: updated_by in notes hinzugefuegt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: vacation_days_per_year in users
   try {
@@ -621,7 +621,7 @@ async function initDatabase() {
       markDirty();
       console.log('Migration: vacation_days_per_year in users hinzugefuegt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: created_by in absences
   try {
@@ -631,7 +631,7 @@ async function initDatabase() {
       markDirty();
       console.log('Migration: created_by in absences hinzugefuegt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: ma_needs_ack in absences (MA muss Manager-Änderungen quittieren)
   try {
@@ -641,7 +641,7 @@ async function initDatabase() {
       markDirty();
       console.log('Migration: ma_needs_ack in absences hinzugefuegt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: proposed_date_from/to — Manager-Vorschlag für genehmigten Urlaub/FZA/Sonderurlaub
   try {
@@ -652,7 +652,7 @@ async function initDatabase() {
       markDirty();
       console.log('Migration: proposed_date_from/to in absences hinzugefuegt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: Soft-Delete-Spalten in entries (Revisionssicherheit GoBD)
   try {
@@ -663,7 +663,7 @@ async function initDatabase() {
       markDirty();
       console.log('Migration: deleted_at/deleted_by in entries hinzugefuegt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: Soft-Delete-Spalten in absences (Revisionssicherheit GoBD)
   try {
@@ -674,7 +674,7 @@ async function initDatabase() {
       markDirty();
       console.log('Migration: deleted_at/deleted_by in absences hinzugefuegt.');
     }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Migration: 'dienstreise' aus dem absences.type CHECK-Constraint entfernen.
   // Der Typ wird nicht mehr angeboten. SQLite kann einen CHECK nicht per ALTER aendern,
@@ -716,7 +716,7 @@ async function initDatabase() {
       if (!checkStmt.get(k)) { insStmt.run(k, v); added++; }
     }
     if (added > 0) { markDirty(); console.log('Migration: ' + added + ' Branding-Default(s) gesetzt.'); }
-  } catch (e) {}
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Seed-Daten nur wenn DB leer
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
