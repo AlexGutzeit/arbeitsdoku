@@ -95,6 +95,17 @@ app.get('/api/debug/sse', authenticate, authorize('admin'), (req, res) => {
   res.json({ clients: getClientCount() });
 });
 
+// Healthcheck (ohne Auth) — fuer Monitoring/Uptime-Checks. 200 wenn DB erreichbar, sonst 503.
+app.get('/health', (req, res) => {
+  try {
+    const { getDb } = require('./database/init');
+    getDb().prepare('SELECT 1').get();
+    res.json({ status: 'ok', db: true });
+  } catch (e) {
+    res.status(503).json({ status: 'error', db: false });
+  }
+});
+
 // SPA-Fallback (gerenderte index.html mit Branding-Tokens)
 app.get('*', (req, res) => brandingRouter.renderIndex(req, res));
 
