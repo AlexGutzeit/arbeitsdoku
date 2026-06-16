@@ -554,8 +554,9 @@ function layout(content, activeNav) {
     ${activeNav === 'planning' ? (canEditPlanning() ? '<button class="fab" id="fab-new" title="Neue Planung">+</button>' : '')
     : activeNav === 'bulletin' ? (canEditBulletin() ? '<button class="fab" id="fab-new" title="Neuer Eintrag">+</button>' : '')
     : activeNav === 'notes' ? '<button class="fab" id="fab-new" title="Neue Notiz">+</button>'
-    : activeNav === 'welcome' || activeNav === 'orders' || activeNav === 'statistics' ? ''
-    : (showNewEntry ? '<button class="fab" id="fab-new" title="Neuer Eintrag">+</button>' : '')}
+    : activeNav === 'absences' ? '<button class="fab" id="fab-new" title="Neue Abwesenheit">+</button>'
+    : activeNav === 'dashboard' ? (showNewEntry ? '<button class="fab" id="fab-new" title="Neuer Eintrag">+</button>' : '')
+    : ''}
   `;
 }
 
@@ -593,6 +594,7 @@ function bindLayout() {
     if (route === '/planning') navigate('/planning/new');
     else if (route === '/bulletin') navigate('/bulletin/new');
     else if (route === '/notes') showNoteForm();
+    else if (route === '/absences') showAbsenceForm(null, 'krank', null, null, null);
     else navigate('/entry/new');
   });
 }
