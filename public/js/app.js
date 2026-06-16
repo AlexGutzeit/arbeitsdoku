@@ -6383,10 +6383,6 @@ async function renderAbsences() {
 
 
   const monthNames = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
-  function monthLabel(ym) {
-    const [y, m] = ym.split('-');
-    return `${monthNames[parseInt(m, 10) - 1]} ${y}`;
-  }
 
   // Alle Abwesenheiten nach User filtern (nur für Manager)
   // Für Nicht-Manager: Posteingang-Items aus der Hauptliste ausblenden (kein Duplikat)
@@ -6437,18 +6433,35 @@ async function renderAbsences() {
       ? g.recent.map(a => renderAbsenceCard(a)).join('')
       : (Object.keys(g.history).length === 0 ? '<p class="absence-empty">Keine Einträge</p>' : '');
 
-    const historyKeys = Object.keys(g.history).sort().reverse(); // neueste zuerst
+    const historyKeys = Object.keys(g.history).sort().reverse(); // YYYY-MM, neueste zuerst
     const historyCount = Object.values(g.history).reduce((s, v) => s + v.length, 0);
+    // Monate nach Jahr buendeln: Verlauf -> Jahr -> Monat -> Karten (jede Ebene eigenes <details>)
+    const byYear = {};
+    for (const mk of historyKeys) {
+      const y = mk.substring(0, 4);
+      (byYear[y] || (byYear[y] = [])).push(mk);
+    }
+    const yearKeys = Object.keys(byYear).sort().reverse();
     const historyHtml = historyKeys.length > 0 ? `
       <details class="absence-history">
         <summary class="absence-history-summary">Verlauf (${historyCount})</summary>
         <div class="absence-history-body">
-          ${historyKeys.map(mk => `
-            <div class="absence-history-month">
-              <div class="absence-history-month-label">${monthLabel(mk)}</div>
-              ${g.history[mk].map(a => renderAbsenceCard(a)).join('')}
-            </div>
-          `).join('')}
+          ${yearKeys.map(y => {
+            const yearCount = byYear[y].reduce((s, mk) => s + g.history[mk].length, 0);
+            return `
+            <details class="absence-history-year">
+              <summary class="absence-history-year-summary">${y} (${yearCount})</summary>
+              <div class="absence-history-year-body">
+                ${byYear[y].map(mk => `
+                  <details class="absence-history-month">
+                    <summary class="absence-history-month-summary">${monthNames[parseInt(mk.substring(5, 7), 10) - 1]} (${g.history[mk].length})</summary>
+                    <div class="absence-history-month-body">
+                      ${g.history[mk].map(a => renderAbsenceCard(a)).join('')}
+                    </div>
+                  </details>`).join('')}
+              </div>
+            </details>`;
+          }).join('')}
         </div>
       </details>` : '';
 

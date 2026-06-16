@@ -1737,16 +1737,35 @@ table.data-table .actions button { margin-left: 0.25rem; }
 details[open] .absence-history-summary::before { content: '▾ '; }
 .absence-history-summary:hover { background: var(--bg); }
 .absence-history-body { margin-top: 0.5rem; }
-.absence-history-month-label {
-  font-size: 0.75rem;
+/* Verschachtelter Verlauf: Jahr- und Monatsebene, gleicher ▸/▾-Pfeil-Stil */
+.absence-history-year, .absence-history-month { margin-top: 0.25rem; }
+.absence-history-year-summary,
+.absence-history-month-summary {
+  cursor: pointer;
   font-weight: 600;
   color: var(--text-lighter);
+  user-select: none;
+  list-style: none;
+  border-radius: 4px;
+}
+.absence-history-year-summary { font-size: 0.8rem; padding: 0.35rem 0.5rem; }
+.absence-history-month-summary {
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0.4rem 0.5rem 0.2rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 0.4rem;
+  padding: 0.3rem 0.5rem;
 }
+.absence-history-year-summary::-webkit-details-marker,
+.absence-history-month-summary::-webkit-details-marker { display: none; }
+.absence-history-year-summary::before,
+.absence-history-month-summary::before { content: '▸ '; font-size: 0.7rem; }
+details[open] > .absence-history-year-summary::before,
+details[open] > .absence-history-month-summary::before { content: '▾ '; }
+.absence-history-year-summary:hover,
+.absence-history-month-summary:hover { background: var(--bg); }
+/* Einrueckung je Ebene: Jahr -> Monate -> Karten */
+.absence-history-year-body { margin: 0.25rem 0 0.5rem 0.75rem; }
+.absence-history-month-body { margin: 0.3rem 0 0.6rem 0.75rem; }
 .absence-counter { font-size: 0.85rem; color: var(--text-lighter); }
 .absence-form-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1100; padding: 1rem; }
 .absence-form-card { background: var(--card); border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
