@@ -130,6 +130,19 @@ async function modalAccept(page, text) {
   await sleep(350);
 }
 const hasModal = (page) => page.$('.dialog-modal').then(el => !!el);
+async function modalCancel(page) {
+  await page.waitForSelector('.dialog-modal [data-act="cancel"]', { timeout: 4000 });
+  await page.click('.dialog-modal [data-act="cancel"]');
+  await sleep(350);
+}
+// Löschen-Button einer Karte klicken + Bestätigungs-Modal akzeptieren (Begründungs-Modal bleibt offen)
+async function startAbsenceDelete(page, label) {
+  await page.evaluate((lbl) => {
+    const card = [...document.querySelectorAll('.absence-card')].find(c => c.innerText.includes(lbl));
+    if (card) card.querySelector('.absence-delete')?.click();
+  }, label);
+  await modalAccept(page); // "Abwesenheit wirklich löschen?" → OK
+}
 
 (async () => {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
@@ -194,6 +207,22 @@ const hasModal = (page) => page.$('.dialog-modal').then(el => !!el);
   check('Berufsschule eingetragen', /eingetragen/i.test(m), m);
   m = await createAbsence(page, 'innung', TUE, TUE);
   check('Innung gegen Berufsschule blockiert', /Überschneidung|nur eine Abwesenheit/i.test(m), m);
+
+  // --- Löschen: Abbrechen im Begründungs-Modal lässt die Abwesenheit stehen, OK löscht ---
+  console.log('\n--- Löschen-Flow: Abbrechen lässt stehen, OK löscht (eigene, optionaler Grund) ---');
+  m = await createAbsence(page, 'sonderurlaub', '2026-06-26', '2026-06-26'); // freier Tag, eindeutiger Typ
+  check('Sonderurlaub für Lösch-Test angelegt', /eingetragen/i.test(m), m);
+  check('Sonderurlaub-Karte vorhanden', (await cardCount(page, 'Sonderurlaub')) === 1);
+  // 1) Löschen → Bestätigung OK → Begründungs-Modal → ABBRECHEN → bleibt erhalten
+  await startAbsenceDelete(page, 'Sonderurlaub');
+  await modalCancel(page);
+  await sleep(700);
+  check('Abbrechen im Grund-Modal → Abwesenheit bleibt', (await cardCount(page, 'Sonderurlaub')) === 1, 'Karten: ' + await cardCount(page, 'Sonderurlaub'));
+  // 2) Löschen → Bestätigung OK → Begründungs-Modal → OK mit LEEREM Text → gelöscht (Grund optional)
+  await startAbsenceDelete(page, 'Sonderurlaub');
+  await modalAccept(page, '');
+  await sleep(900);
+  check('OK (leerer Grund) → eigene Abwesenheit gelöscht', (await cardCount(page, 'Sonderurlaub')) === 0, 'Karten: ' + await cardCount(page, 'Sonderurlaub'));
 
   console.log(`\nErgebnis: ${pass} ok, ${fail} fehlgeschlagen`);
   if (fail > 0) console.log('Fehlgeschlagen: ' + fails.join(', '));

@@ -1658,10 +1658,11 @@ async function renderEntryForm(editId, continueId, planningId) {
       ? 'Begründung für das Löschen dieses fremden Eintrags (Pflicht):'
       : 'Begründung für das Löschen (optional):',
       { title: 'Begründung', required: isForeign });
-    if (isForeign && (reason === null || !reason.trim())) {
+    if (reason === null) return; // Abbrechen → Eintrag NICHT löschen (gilt auch bei optionalem Grund)
+    if (isForeign && !reason.trim()) {
       toast('Begründung erforderlich', 'error'); return;
     }
-    body.reason = (reason || '').trim();
+    body.reason = reason.trim();
     try {
       await api('DELETE', '/api/entries/' + editId, body);
       toast('Eintrag gelöscht', 'success');
@@ -6054,7 +6055,8 @@ function bindAbsenceCardActions(container) {
     btn.addEventListener('click', async () => {
       if (!(await confirmModal('Abwesenheit wirklich löschen?', { title: 'Abwesenheit löschen', okLabel: 'Löschen' }))) return;
       // Begruendung optional (eigene), Pflicht bei fremder — Backend erzwingt das
-      const reason = (await promptModal('Begründung für das Löschen (bei fremder Abwesenheit Pflicht):', { title: 'Begründung' })) || '';
+      const reason = await promptModal('Begründung für das Löschen (bei fremder Abwesenheit Pflicht):', { title: 'Begründung' });
+      if (reason === null) return; // Abbrechen → Abwesenheit NICHT löschen
       try { await api('DELETE', '/api/absences/' + btn.dataset.id, { reason: reason.trim() }); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
