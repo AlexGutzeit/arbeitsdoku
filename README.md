@@ -226,7 +226,13 @@ loginctl enable-linger $USER   # damit der Dienst auch ohne aktive Sitzung läuf
 
 > Tipp: ENV-Werte können auch aus der `.env` kommen statt in der Unit zu stehen.
 
-### 3. Datensicherung einplanen
+### 3. Monitoring (optional)
+
+Der Endpoint **`GET /health`** antwortet ohne Login mit `{"status":"ok","db":true}` (HTTP 200),
+solange Server und Datenbank erreichbar sind, sonst HTTP 503. Ideal für Uptime-Checks
+(z. B. Uptime-Robot, Load-Balancer oder ein Cron-Wächter).
+
+### 4. Datensicherung einplanen
 
 Siehe [Datenablage & Backup](#datenablage--backup). Mindestens die `data/`- und `uploads/`-Ordner
 (und `storage/`, falls Dokumente genutzt werden) regelmäßig sichern.
