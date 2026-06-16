@@ -40,7 +40,7 @@ Jeder Punkt entspricht einem Menüpunkt in der App.
 |---|---|
 | **🏠 Willkommen** | Persönliches Dashboard: anstehende Planung, eigene Abwesenheiten, Schnellüberblick. |
 | **📊 Zeitnachweis** | Kern-Zeiterfassung. Eintrag mit Datum, Von/Bis, Pause, Arbeitsort, Kunde, Projekt, Beschreibung und optionalem „Regie"-Vermerk. Nettostunden werden automatisch berechnet; überlappende Einträge werden nicht doppelt gezählt. |
-| **👥 Mitarbeiter** | Benutzerverwaltung (anlegen/bearbeiten/Rolle setzen), **Soll-Stunden pro Woche** (mit Historie), Start-Überstunden, Urlaubsanspruch, Passwort zurücksetzen, Einzelrechte vergeben. *(Chef/Admin)* |
+| **👥 Mitarbeiter** | Benutzerverwaltung (anlegen/bearbeiten/Rolle setzen), **Soll-Stunden pro Woche** (mit Historie), Start-Überstunden, Passwort zurücksetzen, Einzelrechte vergeben. *(Chef/Admin)* |
 | **📁 Projekte** | Projekt-/Auftragsstammdaten, die in Zeiteinträgen ausgewählt werden können. *(Chef/Admin)* |
 | **📅 Planung** | Einsatz-/Schichtplanung: Termine mit Uhrzeit, Ort, Kunde, Projekt – einzeln oder als Gruppe, farblich markierbar. Mitarbeiter sehen ihre Einsätze. |
 | **📌 Schwarzes Brett** | Aushänge/Ankündigungen fürs ganze Team, mit Benachrichtigungs-Badge. |
@@ -155,7 +155,7 @@ Damit die App produktiv nutzbar ist, als **Admin** der Reihe nach:
 3. **Soll-Stunden hinterlegen** – beim Bearbeiten jedes Mitarbeiters die **Wochen-Soll-Stunden**
    (pro Wochentag) eintragen. **Wichtig:** ohne Soll-Stunden kann die Über-/Minusstunden-Berechnung
    nicht korrekt rechnen.
-4. (Optional) **Start-Überstunden** und **Urlaubsanspruch** pro Mitarbeiter setzen.
+4. (Optional) **Start-Überstunden** pro Mitarbeiter setzen.
 5. (Optional) **Einzelrechte** vergeben (Planung/Schwarzes Brett/Dokumente).
 6. **Eigenes Passwort ändern** und die nicht benötigten Test-Konten (`chef`/`buchhalter`/`max`)
    anpassen oder löschen.
