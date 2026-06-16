@@ -1627,10 +1627,11 @@ async function renderEntryForm(editId, continueId, planningId) {
         ? 'Begründung für die Änderung dieses fremden Eintrags (Pflicht):'
         : 'Begründung für die Änderung (optional):',
         { title: 'Begründung', required: isForeign });
-      if (isForeign && (reason === null || !reason.trim())) {
+      if (reason === null) return; // Abbrechen → Bearbeitung verwerfen (nicht speichern)
+      if (isForeign && !reason.trim()) {
         toast('Begründung erforderlich', 'error'); return;
       }
-      body.reason = (reason || '').trim();
+      body.reason = reason.trim();
     }
 
     try {
@@ -4167,7 +4168,8 @@ async function renderDeletedEntries() {
   mainEl.querySelectorAll('.restore-entry').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!(await confirmModal('Diesen Eintrag wiederherstellen?', { title: 'Wiederherstellen', okLabel: 'Wiederherstellen', danger: false }))) return;
-      const reason = (await promptModal('Begründung für die Wiederherstellung (optional):', { title: 'Begründung' })) || '';
+      const reason = await promptModal('Begründung für die Wiederherstellung (optional):', { title: 'Begründung' });
+      if (reason === null) return; // Abbrechen → bleibt im Papierkorb
       try {
         await api('POST', '/api/entries/' + btn.dataset.id + '/restore', { reason: reason.trim() });
         toast('Eintrag wiederhergestellt', 'success');
@@ -4228,7 +4230,8 @@ async function renderDeletedAbsences() {
   mainEl.querySelectorAll('.restore-absence').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!(await confirmModal('Diese Abwesenheit wiederherstellen?', { title: 'Wiederherstellen', okLabel: 'Wiederherstellen', danger: false }))) return;
-      const reason = (await promptModal('Begründung für die Wiederherstellung (optional):', { title: 'Begründung' })) || '';
+      const reason = await promptModal('Begründung für die Wiederherstellung (optional):', { title: 'Begründung' });
+      if (reason === null) return; // Abbrechen → bleibt im Papierkorb
       try {
         await api('POST', '/api/absences/' + btn.dataset.id + '/restore', { reason: reason.trim() });
         toast('Abwesenheit wiederhergestellt', 'success');
@@ -6190,7 +6193,8 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
 
       if (editId) {
         // Begruendung optional (eigene), Pflicht bei fremder — Backend erzwingt das
-        const reason = (await promptModal('Begründung für die Änderung (bei fremder Abwesenheit Pflicht):', { title: 'Begründung' })) || '';
+        const reason = await promptModal('Begründung für die Änderung (bei fremder Abwesenheit Pflicht):', { title: 'Begründung' });
+        if (reason === null) return; // Abbrechen → Bearbeitung verwerfen
         await api('PUT', '/api/absences/' + editId, { date_from, date_to, comment, reason: reason.trim() });
       } else {
         await api('POST', '/api/absences', { type, date_from, date_to, comment, target_user_id });
