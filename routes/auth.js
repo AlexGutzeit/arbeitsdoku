@@ -8,6 +8,10 @@ const { logAudit } = require('../audit');
 
 const router = express.Router();
 
+// Fester Dummy-Hash (Cost 10, wie die echten Hashes), um die Antwortzeit bei unbekanntem
+// Benutzer an den bcrypt-Vergleich anzugleichen → keine User-Enumeration über Timing.
+const DUMMY_HASH = bcrypt.hashSync('timing-equalizer-not-a-real-password', 10);
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -27,6 +31,7 @@ router.post('/login', loginLimiter, (req, res) => {
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   if (!user) {
+    bcrypt.compareSync(password, DUMMY_HASH); // Timing angleichen (Antwortzeit wie bei echtem User)
     logAudit(db, { username, action: 'login_failed', details: 'Benutzer unbekannt', ip: req.ip });
     return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
   }
