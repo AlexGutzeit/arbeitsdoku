@@ -9,21 +9,25 @@ const DB_PATH = path.resolve(process.env.DB_PATH || path.join(__dirname, '..', '
 let db;
 let SQL;
 
-function saveToFile() {
-  if (!db) return;
-  const dir = path.dirname(DB_PATH);
+// Atomar schreiben: erst in eine Temp-Datei (im selben Verzeichnis), dann umbenennen.
+// Bei Crash/Stromausfall waehrend des Schreibens bleibt die Zieldatei unversehrt.
+// Gemeinsame Quelle fuer Autosave (saveToFile) UND Backup-Restore (routes/backup.js).
+function writeFileAtomic(targetPath, buffer) {
+  const dir = path.dirname(targetPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const data = Buffer.from(db.export());
-  // Atomar schreiben: erst in eine Temp-Datei, dann umbenennen. Bei Crash/Stromausfall
-  // waehrend des Schreibens bleibt die bestehende DB-Datei dadurch unversehrt.
-  const tmp = DB_PATH + '.tmp-' + process.pid;
+  const tmp = targetPath + '.tmp-' + process.pid;
   try {
-    fs.writeFileSync(tmp, data);
-    fs.renameSync(tmp, DB_PATH); // POSIX-rename ist atomar (Temp liegt im selben Verzeichnis)
+    fs.writeFileSync(tmp, buffer);
+    fs.renameSync(tmp, targetPath); // POSIX-rename ist atomar (gleiches Dateisystem)
   } catch (e) {
     try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (_) {}
     throw e;
   }
+}
+
+function saveToFile() {
+  if (!db) return;
+  writeFileAtomic(DB_PATH, Buffer.from(db.export()));
 }
 
 // Autosave alle 5 Sekunden wenn Änderungen vorliegen
@@ -823,4 +827,4 @@ function reloadFromFile(filePath) {
   ensureAuditSchema(db);
 }
 
-module.exports = { getDb, closeDb, setDb, initDatabase, saveToFile, reloadFromFile, DB_PATH, get SQL() { return SQL; } };
+module.exports = { getDb, closeDb, setDb, initDatabase, saveToFile, reloadFromFile, writeFileAtomic, DB_PATH, get SQL() { return SQL; } };
