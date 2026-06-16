@@ -9,6 +9,13 @@ const router = express.Router();
 // Validierungs-Helper
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 function isValidTime(s) { return typeof s === 'string' && TIME_RE.test(s); }
+// Gueltiges ISO-Datum (YYYY-MM-DD, kalendarisch real) — analog zu routes/absences.js
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function isValidDate(s) {
+  if (typeof s !== 'string' || !DATE_RE.test(s)) return false;
+  const d = new Date(s + 'T12:00:00');
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
 function isValidBreak(n) {
   return typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 600 && Math.floor(n) === n;
 }
@@ -158,6 +165,9 @@ router.post('/', authenticate, (req, res) => {
   if (!date || !time_from || !time_to) {
     return res.status(400).json({ error: 'Datum, Von und Bis sind Pflichtfelder' });
   }
+  if (!isValidDate(date)) {
+    return res.status(400).json({ error: 'Ungültiges Datum (erwartet YYYY-MM-DD, gültiger Kalendertag)' });
+  }
   if (!isValidTime(time_from) || !isValidTime(time_to)) {
     return res.status(400).json({ error: 'Ungültiges Zeitformat (erwartet HH:MM, 00:00 bis 23:59)' });
   }
@@ -226,6 +236,9 @@ router.put('/:id', authenticate, (req, res) => {
   }
   const lenErr = validateLengths(req.body, ENTRY_LIMITS);
   if (lenErr) return res.status(400).json({ error: lenErr });
+  if (date && !isValidDate(date)) {
+    return res.status(400).json({ error: 'Ungültiges Datum (erwartet YYYY-MM-DD, gültiger Kalendertag)' });
+  }
   const net_hours = calculateNetHours(newFrom, newTo, newBreak);
 
   const newRegie = has_regie !== undefined ? (has_regie || 0) : entry.has_regie;
