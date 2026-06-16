@@ -334,6 +334,83 @@ function toast(msg, type) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+// --- Gestylte Dialoge (ersetzen native confirm()/prompt()) ---
+// confirmModal: Promise<boolean> — true bei OK, false bei Abbrechen/Esc/Outside-Klick.
+function confirmModal(message, opts = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay dialog-modal';
+    const danger = opts.danger !== false; // Bestätigungen sind meist destruktiv → rote OK-Taste
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:440px">
+        <div class="modal-header"><h3>${esc(opts.title || 'Bestätigen')}</h3></div>
+        <div class="modal-body"><p style="margin:0;white-space:pre-line">${esc(message)}</p></div>
+        <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem">
+          <button class="btn btn-outline" data-act="cancel">${esc(opts.cancelLabel || 'Abbrechen')}</button>
+          <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-act="ok">${esc(opts.okLabel || 'OK')}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); resolve(val); };
+    const onKey = (e) => { if (e.key === 'Escape') finish(false); else if (e.key === 'Enter') finish(true); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(false); });
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(false));
+    overlay.querySelector('[data-act="ok"]').addEventListener('click', () => finish(true));
+    overlay.querySelector('[data-act="ok"]').focus();
+  });
+}
+// promptModal: Promise<string|null> — String bei OK, null bei Abbrechen/Esc (wie natives prompt()).
+// opts: { title, defaultValue, multiline (default true), required, requiredMsg, okLabel, placeholder }
+function promptModal(message, opts = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay dialog-modal';
+    const multiline = opts.multiline !== false;
+    const def = opts.defaultValue != null ? String(opts.defaultValue) : '';
+    const ph = opts.placeholder ? ` placeholder="${esc(opts.placeholder)}"` : '';
+    const field = multiline
+      ? `<textarea id="pm-input" class="form-control" rows="3" style="width:100%"${ph}>${esc(def)}</textarea>`
+      : `<input id="pm-input" type="text" class="form-control" style="width:100%"${ph} value="${esc(def)}">`;
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:480px">
+        <div class="modal-header"><h3>${esc(opts.title || 'Eingabe')}</h3></div>
+        <div class="modal-body">
+          <p style="margin:0 0 0.6rem;white-space:pre-line">${esc(message)}</p>
+          ${field}
+          <div id="pm-error" style="color:#dc2626;font-size:0.85rem;margin-top:0.4rem;display:none"></div>
+        </div>
+        <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem">
+          <button class="btn btn-outline" data-act="cancel">Abbrechen</button>
+          <button class="btn btn-primary" data-act="ok">${esc(opts.okLabel || 'OK')}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#pm-input');
+    const errEl = overlay.querySelector('#pm-error');
+    const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); resolve(val); };
+    const submit = () => {
+      if (opts.required && !input.value.trim()) {
+        errEl.textContent = opts.requiredMsg || 'Pflichtfeld – bitte ausfüllen.';
+        errEl.style.display = '';
+        input.focus();
+        return;
+      }
+      finish(input.value);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') finish(null);
+      else if (e.key === 'Enter' && !multiline) { e.preventDefault(); submit(); }
+    };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(null));
+    overlay.querySelector('[data-act="ok"]').addEventListener('click', submit);
+    input.focus();
+    if (!multiline) input.select();
+  });
+}
+
 // --- Router ---
 function navigate(hash) {
   window.location.hash = hash;
@@ -1546,13 +1623,15 @@ async function renderEntryForm(editId, continueId, planningId) {
 
     // GoBD: Begruendung abfragen — bei fremdem Eintrag Pflicht, bei eigenem optional
     if (isEdit) {
-      const reason = prompt(isForeign
+      const reason = await promptModal(isForeign
         ? 'Begründung für die Änderung dieses fremden Eintrags (Pflicht):'
-        : 'Begründung für die Änderung (optional):');
-      if (isForeign && (reason === null || !reason.trim())) {
+        : 'Begründung für die Änderung (optional):',
+        { title: 'Begründung', required: isForeign });
+      if (reason === null) return; // Abbrechen → Bearbeitung verwerfen (nicht speichern)
+      if (isForeign && !reason.trim()) {
         toast('Begründung erforderlich', 'error'); return;
       }
-      body.reason = (reason || '').trim();
+      body.reason = reason.trim();
     }
 
     try {
@@ -1574,15 +1653,17 @@ async function renderEntryForm(editId, continueId, planningId) {
 
   // Delete (Soft-Delete; Begruendung abfragen — fremd Pflicht, eigen optional)
   document.getElementById('delete-entry')?.addEventListener('click', async () => {
-    if (!confirm('Eintrag wirklich löschen?')) return;
+    if (!(await confirmModal('Eintrag wirklich löschen?', { title: 'Eintrag löschen', okLabel: 'Löschen' }))) return;
     const body = {};
-    const reason = prompt(isForeign
+    const reason = await promptModal(isForeign
       ? 'Begründung für das Löschen dieses fremden Eintrags (Pflicht):'
-      : 'Begründung für das Löschen (optional):');
-    if (isForeign && (reason === null || !reason.trim())) {
+      : 'Begründung für das Löschen (optional):',
+      { title: 'Begründung', required: isForeign });
+    if (reason === null) return; // Abbrechen → Eintrag NICHT löschen (gilt auch bei optionalem Grund)
+    if (isForeign && !reason.trim()) {
       toast('Begründung erforderlich', 'error'); return;
     }
-    body.reason = (reason || '').trim();
+    body.reason = reason.trim();
     try {
       await api('DELETE', '/api/entries/' + editId, body);
       toast('Eintrag gelöscht', 'success');
@@ -1804,7 +1885,7 @@ async function renderPlanningContent() {
       menu.querySelector('.plan-menu-del').addEventListener('click', async (ev) => {
         ev.stopPropagation();
         closePlanMenus();
-        if (!confirm('Planung wirklich l\u00f6schen?')) return;
+        if (!(await confirmModal('Planung wirklich l\u00f6schen?', { title: 'Planung l\u00f6schen', okLabel: 'L\u00f6schen' }))) return;
         try {
           await api('DELETE', '/api/planning/' + btn.dataset.id);
           toast('Planung gel\u00f6scht', 'success');
@@ -2544,7 +2625,7 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
   });
 
   document.getElementById('delete-planning')?.addEventListener('click', async () => {
-    if (!confirm('Planung wirklich löschen?')) return;
+    if (!(await confirmModal('Planung wirklich löschen?', { title: 'Planung löschen', okLabel: 'Löschen' }))) return;
     try {
       if (isGroupEdit) {
         await api('DELETE', '/api/planning/group/' + editGroupId);
@@ -2762,8 +2843,8 @@ async function renderTools() {
 
   // Bearbeiten
   mainEl.querySelectorAll('.tool-edit').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const newName = prompt('Werkzeug umbenennen:', btn.dataset.name);
+    btn.addEventListener('click', async () => {
+      const newName = await promptModal('Werkzeug umbenennen:', { title: 'Umbenennen', defaultValue: btn.dataset.name, multiline: false, required: true });
       if (newName === null || !newName.trim()) return;
       api('PUT', `/api/tools/${btn.dataset.id}`, { name: newName.trim() })
         .then(() => { toast('Werkzeug umbenannt', 'success'); renderTools(); })
@@ -2774,7 +2855,7 @@ async function renderTools() {
   // Löschen
   mainEl.querySelectorAll('.tool-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Werkzeug wirklich löschen?')) return;
+      if (!(await confirmModal('Werkzeug wirklich löschen?', { title: 'Werkzeug löschen', okLabel: 'Löschen' }))) return;
       try {
         await api('DELETE', `/api/tools/${btn.dataset.id}`);
         toast('Werkzeug gelöscht', 'success');
@@ -2810,7 +2891,7 @@ async function renderTools() {
           </table>
           ${isAdmin() ? `<button class="btn btn-danger btn-sm" id="clear-history" data-id="${toolId}" style="margin-top:0.5rem;">Historie zurücksetzen</button>` : ''}`;
           document.getElementById('clear-history')?.addEventListener('click', async () => {
-            if (!confirm('Komplette Historie dieses Werkzeugs wirklich löschen?')) return;
+            if (!(await confirmModal('Komplette Historie dieses Werkzeugs wirklich löschen?', { title: 'Historie löschen', okLabel: 'Löschen' }))) return;
             try {
               await api('DELETE', `/api/tools/${toolId}/history`);
               toast('Historie zurückgesetzt', 'success');
@@ -3181,7 +3262,7 @@ async function renderBulletin() {
   });
   mainEl.querySelectorAll('.del-bulletin').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Eintrag wirklich löschen?')) return;
+      if (!(await confirmModal('Eintrag wirklich löschen?', { title: 'Eintrag löschen', okLabel: 'Löschen' }))) return;
       try {
         await api('DELETE', '/api/bulletin/' + btn.dataset.id);
         toast('Eintrag gelöscht', 'success');
@@ -3259,7 +3340,7 @@ async function renderBulletinForm(editId) {
   });
 
   document.getElementById('delete-bulletin')?.addEventListener('click', async () => {
-    if (!confirm('Eintrag wirklich löschen?')) return;
+    if (!(await confirmModal('Eintrag wirklich löschen?', { title: 'Eintrag löschen', okLabel: 'Löschen' }))) return;
     try {
       await api('DELETE', '/api/bulletin/' + editId);
       toast('Eintrag gelöscht', 'success');
@@ -3329,7 +3410,7 @@ async function renderUsers() {
   mainEl.querySelectorAll('.del-user').forEach(btn => {
     btn.addEventListener('click', async () => {
       const user = S.users.find(u => u.id === Number(btn.dataset.id));
-      if (!confirm(`"${user?.name}" wirklich löschen? Alle Einträge werden ebenfalls gelöscht.`)) return;
+      if (!(await confirmModal(`"${user?.name}" wirklich löschen? Alle Einträge werden ebenfalls gelöscht.`, { title: 'Benutzer löschen', okLabel: 'Löschen' }))) return;
       try {
         await api('DELETE', '/api/users/' + btn.dataset.id);
         toast('Mitarbeiter gelöscht', 'success');
@@ -3677,7 +3758,7 @@ async function renderProjects() {
 
   mainEl.querySelectorAll('.del-project').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Projekt wirklich löschen?')) return;
+      if (!(await confirmModal('Projekt wirklich löschen?', { title: 'Projekt löschen', okLabel: 'Löschen' }))) return;
       try {
         await api('DELETE', '/api/projects/' + btn.dataset.id);
         toast('Projekt gelöscht', 'success');
@@ -3864,7 +3945,7 @@ async function renderSettings() {
     const newBytes = Math.round(val * (unit === 'GB' ? 1024 * 1024 * 1024 : 1024 * 1024));
     const usedBytes = docStorage ? docStorage.used : 0;
     if (newBytes < usedBytes) {
-      if (!confirm(`Aktuell sind ${docFormatSize(usedBytes)} belegt. Ein Limit von ${docFormatSize(newBytes)} blockiert neue Uploads, bis genug gelöscht wurde. Bestehende Dateien bleiben erhalten. Trotzdem speichern?`)) return;
+      if (!(await confirmModal(`Aktuell sind ${docFormatSize(usedBytes)} belegt. Ein Limit von ${docFormatSize(newBytes)} blockiert neue Uploads, bis genug gelöscht wurde. Bestehende Dateien bleiben erhalten. Trotzdem speichern?`, { title: 'Speicherlimit', okLabel: 'Speichern', danger: false }))) return;
     }
     try {
       await api('PUT', '/api/documents/storage-limit', { value: raw, unit });
@@ -3929,7 +4010,7 @@ async function renderSettings() {
 
   // App-Icon zuruecksetzen
   document.getElementById('delete-app-icon')?.addEventListener('click', async () => {
-    if (!confirm('App-Icon auf Standard zuruecksetzen?')) return;
+    if (!(await confirmModal('App-Icon auf Standard zuruecksetzen?', { title: 'App-Icon zurücksetzen', okLabel: 'Zurücksetzen' }))) return;
     try {
       await api('DELETE', '/api/settings/app-icon');
       toast('Icon zurueckgesetzt — App wird neu geladen', 'success');
@@ -3966,7 +4047,7 @@ async function renderSettings() {
   document.getElementById('restore-confirm').addEventListener('click', async () => {
     const fileInput = document.getElementById('backup-file');
     if (!fileInput.files.length) { toast('Bitte eine Backup-Datei auswählen', 'error'); return; }
-    if (!confirm('ACHTUNG: Alle aktuellen Daten werden durch das Backup ersetzt!\n\nEin Sicherungs-Backup wird automatisch erstellt.\n\nFortfahren?')) return;
+    if (!(await confirmModal('ACHTUNG: Alle aktuellen Daten werden durch das Backup ersetzt!\n\nEin Sicherungs-Backup wird automatisch erstellt.\n\nFortfahren?', { title: 'Backup einspielen', okLabel: 'Fortfahren' }))) return;
 
     const fd = new FormData();
     fd.append('backup', fileInput.files[0]);
@@ -4086,8 +4167,9 @@ async function renderDeletedEntries() {
 
   mainEl.querySelectorAll('.restore-entry').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Diesen Eintrag wiederherstellen?')) return;
-      const reason = prompt('Begründung für die Wiederherstellung (optional):') || '';
+      if (!(await confirmModal('Diesen Eintrag wiederherstellen?', { title: 'Wiederherstellen', okLabel: 'Wiederherstellen', danger: false }))) return;
+      const reason = await promptModal('Begründung für die Wiederherstellung (optional):', { title: 'Begründung' });
+      if (reason === null) return; // Abbrechen → bleibt im Papierkorb
       try {
         await api('POST', '/api/entries/' + btn.dataset.id + '/restore', { reason: reason.trim() });
         toast('Eintrag wiederhergestellt', 'success');
@@ -4147,8 +4229,9 @@ async function renderDeletedAbsences() {
 
   mainEl.querySelectorAll('.restore-absence').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Diese Abwesenheit wiederherstellen?')) return;
-      const reason = prompt('Begründung für die Wiederherstellung (optional):') || '';
+      if (!(await confirmModal('Diese Abwesenheit wiederherstellen?', { title: 'Wiederherstellen', okLabel: 'Wiederherstellen', danger: false }))) return;
+      const reason = await promptModal('Begründung für die Wiederherstellung (optional):', { title: 'Begründung' });
+      if (reason === null) return; // Abbrechen → bleibt im Papierkorb
       try {
         await api('POST', '/api/absences/' + btn.dataset.id + '/restore', { reason: reason.trim() });
         toast('Abwesenheit wiederhergestellt', 'success');
@@ -4324,7 +4407,7 @@ async function renderDocuments() {
 
   // Neuer Ordner
   document.getElementById('doc-new-folder')?.addEventListener('click', async () => {
-    const name = prompt('Name des neuen Ordners:');
+    const name = await promptModal('Name des neuen Ordners:', { title: 'Neuer Ordner', multiline: false, required: true });
     if (name === null || !name.trim()) return;
     try {
       await api('POST', '/api/documents/folders', { name: name.trim(), parent_id: folderId });
@@ -4335,7 +4418,7 @@ async function renderDocuments() {
   // Ordner umbenennen
   mainEl.querySelectorAll('.doc-folder-rename').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const name = prompt('Neuer Name:', btn.dataset.name);
+      const name = await promptModal('Neuer Name:', { title: 'Ordner umbenennen', defaultValue: btn.dataset.name, multiline: false, required: true });
       if (name === null || !name.trim()) return;
       try { await api('PUT', '/api/documents/folders/' + btn.dataset.id, { name: name.trim() }); renderDocuments(); }
       catch (e) { toast(e.message, 'error'); }
@@ -4355,7 +4438,7 @@ async function renderDocuments() {
   // Ordner löschen (rekursiv)
   mainEl.querySelectorAll('.doc-folder-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm(`Ordner „${btn.dataset.name}" mit allen Unterordnern und Dokumenten löschen?`)) return;
+      if (!(await confirmModal(`Ordner „${btn.dataset.name}" mit allen Unterordnern und Dokumenten löschen?`, { title: 'Ordner löschen', okLabel: 'Löschen' }))) return;
       try { await api('DELETE', '/api/documents/folders/' + btn.dataset.id); renderDocuments(); }
       catch (e) { toast(e.message, 'error'); }
     });
@@ -4383,7 +4466,7 @@ async function renderDocuments() {
       const dot = cur.lastIndexOf('.');
       const base = dot > 0 ? cur.slice(0, dot) : cur;
       const ext = dot > 0 ? cur.slice(dot) : '';
-      const name = prompt(`Neuer Name${ext ? ' (' + ext + ' bleibt erhalten)' : ''}:`, base);
+      const name = await promptModal(`Neuer Name${ext ? ' (' + ext + ' bleibt erhalten)' : ''}:`, { title: 'Datei umbenennen', defaultValue: base, multiline: false, required: true });
       if (name === null || !name.trim()) return;
       try { await api('PUT', '/api/documents/' + btn.dataset.id, { name: name.trim() }); renderDocuments(); }
       catch (e) { toast(e.message, 'error'); }
@@ -4403,7 +4486,7 @@ async function renderDocuments() {
   // Dokument löschen
   mainEl.querySelectorAll('.doc-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm(`Dokument „${btn.dataset.name}" löschen?`)) return;
+      if (!(await confirmModal(`Dokument „${btn.dataset.name}" löschen?`, { title: 'Dokument löschen', okLabel: 'Löschen' }))) return;
       try { await api('DELETE', '/api/documents/' + btn.dataset.id); renderDocuments(); }
       catch (e) { toast(e.message, 'error'); }
     });
@@ -5278,7 +5361,7 @@ function bindOrderEvents(orders, manage) {
   // Löschen
   document.querySelectorAll('.order-del-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Eintrag l\u00f6schen?')) return;
+      if (!(await confirmModal('Eintrag l\u00f6schen?', { title: 'Eintrag l\u00f6schen', okLabel: 'L\u00f6schen' }))) return;
       try {
         await api('DELETE', '/api/orders/' + btn.dataset.id);
         toast('Gel\u00f6scht', 'success');
@@ -5302,7 +5385,7 @@ function bindOrderEvents(orders, manage) {
 function bindOrderedEvents(orders) {
   document.querySelectorAll('.ordered-del-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Eintrag endg\u00fcltig l\u00f6schen?')) return;
+      if (!(await confirmModal('Eintrag endg\u00fcltig l\u00f6schen?', { title: 'Endg\u00fcltig l\u00f6schen', okLabel: 'Endg\u00fcltig l\u00f6schen' }))) return;
       try {
         await api('DELETE', '/api/orders/' + btn.dataset.id);
         toast('Gel\u00f6scht', 'success');
@@ -5503,7 +5586,7 @@ function bindNoteEvents() {
   document.querySelectorAll('.note-del-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!confirm('Notiz wirklich l\u00f6schen?')) return;
+      if (!(await confirmModal('Notiz wirklich l\u00f6schen?', { title: 'Notiz l\u00f6schen', okLabel: 'L\u00f6schen' }))) return;
       try {
         await api('DELETE', '/api/notes/' + btn.dataset.id);
         toast('Gel\u00f6scht', 'success');
@@ -5973,9 +6056,10 @@ function bindAbsenceCardActions(container) {
   });
   container.querySelectorAll('.absence-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Abwesenheit wirklich löschen?')) return;
+      if (!(await confirmModal('Abwesenheit wirklich löschen?', { title: 'Abwesenheit löschen', okLabel: 'Löschen' }))) return;
       // Begruendung optional (eigene), Pflicht bei fremder — Backend erzwingt das
-      const reason = prompt('Begründung für das Löschen (bei fremder Abwesenheit Pflicht):') || '';
+      const reason = await promptModal('Begründung für das Löschen (bei fremder Abwesenheit Pflicht):', { title: 'Begründung' });
+      if (reason === null) return; // Abbrechen → Abwesenheit NICHT löschen
       try { await api('DELETE', '/api/absences/' + btn.dataset.id, { reason: reason.trim() }); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
@@ -6099,16 +6183,18 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
       if (crossTier) {
         const winner = ABSENCE_PRIORITY[type] <= ABSENCE_PRIORITY[crossTier.type] ? type : crossTier.type;
         const loser  = winner === type ? crossTier.type : type;
-        const proceed = confirm(
+        const proceed = await confirmModal(
           `An diesem Tag besteht bereits „${lbl(crossTier.type)}".\n`
           + `Beide bleiben erfasst – gezählt wird der Tag als „${lbl(winner)}" (höhere Priorität), `
-          + `„${lbl(loser)}" wird an diesem Tag nicht gezählt.\n\nTrotzdem speichern?`);
+          + `„${lbl(loser)}" wird an diesem Tag nicht gezählt.\n\nTrotzdem speichern?`,
+          { title: 'Überschneidung', okLabel: 'Trotzdem speichern', danger: false });
         if (!proceed) return;
       }
 
       if (editId) {
         // Begruendung optional (eigene), Pflicht bei fremder — Backend erzwingt das
-        const reason = prompt('Begründung für die Änderung (bei fremder Abwesenheit Pflicht):') || '';
+        const reason = await promptModal('Begründung für die Änderung (bei fremder Abwesenheit Pflicht):', { title: 'Begründung' });
+        if (reason === null) return; // Abbrechen → Bearbeitung verwerfen
         await api('PUT', '/api/absences/' + editId, { date_from, date_to, comment, reason: reason.trim() });
       } else {
         await api('POST', '/api/absences', { type, date_from, date_to, comment, target_user_id });
