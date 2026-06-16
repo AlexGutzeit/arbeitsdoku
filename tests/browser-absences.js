@@ -77,7 +77,11 @@ async function findAbsenceId(page, type, status) {
 }
 // Legt eine Abwesenheit über das Formular an; gibt den Toast-Text zurück.
 async function createAbsence(page, type, from, to) {
-  await page.evaluate(() => { const t = document.querySelector('.toast'); if (t) t.remove(); });
+  await page.evaluate(() => {
+    document.querySelectorAll('.dialog-modal').forEach(e => e.remove());
+    document.getElementById('absence-form-overlay')?.remove();
+    const t = document.querySelector('.toast'); if (t) t.remove();
+  });
   await page.click('#absence-new-btn');
   await page.waitForSelector('#abs-type', { timeout: 6000 });
   await page.evaluate((t, f, tt) => {
@@ -87,13 +91,20 @@ async function createAbsence(page, type, from, to) {
     document.getElementById('abs-to').value = tt;
   }, type, from, to);
   await page.click('#abs-save');
-  await sleep(900); // overlap-confirm (auto-accept) + POST + Toast
+  // Das Cross-Tier-Modal erscheint erst nach dem Overlap-Netzwerk-Check → bis zu ~3s warten,
+  // entweder bis das Modal da ist, das Formular zu ist (Erfolg) oder ein Toast erschien.
+  for (let i = 0; i < 20; i++) {
+    if (await hasModal(page)) { await page.click('.dialog-modal [data-act="ok"]'); await sleep(600); break; }
+    if (!(await page.$('#absence-form-overlay'))) break; // Erfolg ohne Modal → Formular geschlossen
+    if (await readToast(page)) break;                    // Toast (z. B. Same-Tier-Block) erschienen
+    await sleep(150);
+  }
+  await sleep(300);
   const msg = await readToast(page);
-  // Falls Formular nach Fehler offen blieb: schließen
   if (await page.$('#absence-form-overlay')) {
     await page.evaluate(() => document.getElementById('absence-form-overlay')?.remove());
   }
-  await sleep(300);
+  await sleep(250);
   return msg;
 }
 async function deleteAbsenceByLabel(page, label) {
@@ -101,12 +112,24 @@ async function deleteAbsenceByLabel(page, label) {
     const card = [...document.querySelectorAll('.absence-card')].find(c => c.innerText.includes(lbl));
     if (card) card.querySelector('.absence-delete')?.click();
   }, label);
-  await sleep(1100); // prompt(reason) auto-accept + DELETE + rerender
+  await modalAccept(page);       // 1) Bestätigung "Abwesenheit löschen?"
+  await modalAccept(page, '');   // 2) Begründungs-Modal (eigene Abwesenheit -> leer ok)
+  await sleep(900);              // DELETE + rerender
 }
 async function cardCount(page, label) {
   return page.evaluate((lbl) =>
     [...document.querySelectorAll('.absence-card')].filter(c => c.innerText.includes(lbl)).length, label);
 }
+// Gestyltes Dialog-Modal bestätigen (statt nativem confirm/prompt). text = Eingabe für promptModal.
+async function modalAccept(page, text) {
+  await page.waitForSelector('.dialog-modal [data-act="ok"]', { timeout: 4000 });
+  if (text !== undefined) {
+    await page.evaluate((t) => { const i = document.querySelector('.dialog-modal #pm-input'); if (i) i.value = t; }, text);
+  }
+  await page.click('.dialog-modal [data-act="ok"]');
+  await sleep(350);
+}
+const hasModal = (page) => page.$('.dialog-modal').then(el => !!el);
 
 (async () => {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });

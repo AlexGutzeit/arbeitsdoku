@@ -1783,3 +1783,7 @@ details[open] .absence-history-summary::before { content: '▾ '; }
 
 /* Manager-für-MA Badge im Card */
 .absence-created-by { font-size: 0.75rem; color: var(--text-lighter); font-style: italic; }
+
+/* Gestylte Dialoge (confirmModal/promptModal) müssen über allen anderen Overlays liegen
+   (z. B. dem Abwesenheits-Formular mit z-index 1100), damit ihre Buttons klickbar sind. */
+.dialog-modal { z-index: 3000; }

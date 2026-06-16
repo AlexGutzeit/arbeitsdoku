@@ -125,6 +125,19 @@ async function setUserUpload(adminPage, userId, desired) {
   await adminPage.click('#user-modal-form button[type="submit"]');
   await sleep(1300);
 }
+// Prompt-Modal (promptModal) ausfüllen + bestätigen (ersetzt natives prompt()).
+async function fillPrompt(page, value) {
+  await page.waitForSelector('.dialog-modal #pm-input', { timeout: 5000 });
+  await page.evaluate((v) => { document.querySelector('.dialog-modal #pm-input').value = v; }, value);
+  await page.click('.dialog-modal [data-act="ok"]');
+  await sleep(600);
+}
+// Confirm-Modal (confirmModal) bestätigen (ersetzt natives confirm()).
+async function acceptConfirm(page) {
+  await page.waitForSelector('.dialog-modal [data-act="ok"]', { timeout: 5000 });
+  await page.click('.dialog-modal [data-act="ok"]');
+  await sleep(600);
+}
 // Als Admin ein Dokument per sichtbarem Namen löschen (Aufräumen)
 async function deleteDocByName(adminPage, name) {
   await gotoHash(adminPage, '#/documents');
@@ -133,7 +146,8 @@ async function deleteDocByName(adminPage, name) {
     const row = [...document.querySelectorAll('.doc-row')].find(r => r.textContent.includes(n) && r.querySelector('.doc-delete'));
     if (row) row.querySelector('.doc-delete').click();
   }, name);
-  await sleep(1200);
+  await acceptConfirm(adminPage); // Bestätigungs-Modal "Dokument löschen?"
+  await sleep(900);
 }
 
 (async () => {
@@ -195,8 +209,8 @@ async function deleteDocByName(adminPage, name) {
     check('Admin: Speicher-Balken sichtbar', !!(await ap.$('.doc-storage')));
 
     // Geteilten Ordner für Chef/MA anlegen + Datei darin
-    a.promptQueue.push('BT-Shared');
     await ap.click('#doc-new-folder');
+    await fillPrompt(ap, 'BT-Shared');
     check('Ordner "BT-Shared" angelegt', await waitForText(ap, 'BT-Shared'));
     await openFolder(ap, 'BT-Shared');
     await (await ap.$('#doc-file-input')).uploadFile(pdfPath);
@@ -205,11 +219,11 @@ async function deleteDocByName(adminPage, name) {
     // Zurück zur Wurzel, zwei Ordner für Verschieben-Tests
     await gotoHash(ap, '#/documents');
     await ap.waitForSelector('#doc-new-folder', { timeout: 8000 });
-    a.promptQueue.push('MoveZiel');
     await ap.click('#doc-new-folder');
+    await fillPrompt(ap, 'MoveZiel');
     await waitForText(ap, 'MoveZiel');
-    a.promptQueue.push('MoveQuelle');
     await ap.click('#doc-new-folder');
+    await fillPrompt(ap, 'MoveQuelle');
     check('Ordner "MoveZiel" + "MoveQuelle" angelegt', await waitForText(ap, 'MoveQuelle'));
 
     // Datei in Wurzel hochladen und nach MoveZiel verschieben
@@ -222,8 +236,8 @@ async function deleteDocByName(adminPage, name) {
     check('Datei liegt jetzt in MoveZiel', await waitForText(ap, 'smoke.pdf'));
 
     // Datei umbenennen
-    a.promptQueue.push('Handbuch');
     await ap.click('.doc-rename');
+    await fillPrompt(ap, 'Handbuch');
     check('Datei umbenannt zu "Handbuch.pdf"', await waitForText(ap, 'Handbuch.pdf'));
 
     // Ordner verschieben: MoveQuelle -> in MoveZiel
@@ -239,7 +253,8 @@ async function deleteDocByName(adminPage, name) {
     await gotoHash(ap, '#/documents');
     await ap.waitForSelector('#doc-new-folder', { timeout: 8000 });
     await clickFolderBtn(ap, 'MoveZiel', 'doc-folder-delete');
-    await sleep(1200);
+    await acceptConfirm(ap);
+    await sleep(900);
     check('MoveZiel rekursiv gelöscht', await waitForGone(ap, 'MoveZiel'));
 
     // ===================== CHEF =====================
@@ -302,16 +317,16 @@ async function deleteDocByName(adminPage, name) {
     check('MA MIT Recht: PDF-Upload erscheint (marecht.pdf)', await waitForText(m2p, 'marecht.pdf'));
 
     // Zielordner + zu verschiebenden Unterordner anlegen
-    m2.promptQueue.push('MA-Ziel');
     await m2p.click('#doc-new-folder');
+    await fillPrompt(m2p, 'MA-Ziel');
     await waitForText(m2p, 'MA-Ziel');
-    m2.promptQueue.push('MA-Sub');
     await m2p.click('#doc-new-folder');
+    await fillPrompt(m2p, 'MA-Sub');
     check('MA legt Ordner "MA-Ziel" + "MA-Sub" an', await waitForText(m2p, 'MA-Sub'));
 
     // MA benennt Datei um
-    m2.promptQueue.push('MA-Datei');
     await m2p.click('.doc-rename');
+    await fillPrompt(m2p, 'MA-Datei');
     check('MA benennt Datei um → MA-Datei.pdf', await waitForText(m2p, 'MA-Datei.pdf'));
 
     // MA verschiebt Datei nach MA-Ziel
@@ -320,8 +335,8 @@ async function deleteDocByName(adminPage, name) {
     check('MA verschiebt Datei (aus Wurzel verschwunden)', await waitForGone(m2p, 'MA-Datei.pdf'));
 
     // MA benennt Unterordner um
-    m2.promptQueue.push('MA-SubNeu');
     await clickFolderBtn(m2p, 'MA-Sub', 'doc-folder-rename');
+    await fillPrompt(m2p, 'MA-SubNeu');
     check('MA benennt Unterordner um → MA-SubNeu', await waitForText(m2p, 'MA-SubNeu'));
 
     // MA verschiebt Unterordner nach MA-Ziel
@@ -355,14 +370,16 @@ async function deleteDocByName(adminPage, name) {
     await gotoHash(ap, '#/documents');
     await ap.waitForSelector('#doc-new-folder', { timeout: 8000 });
     await clickFolderBtn(ap, 'MA-Ziel', 'doc-folder-delete');
-    await sleep(1200);
+    await acceptConfirm(ap);
+    await sleep(900);
     check('Aufräumen: MA-Ziel (inkl. Inhalt) gelöscht', await waitForGone(ap, 'MA-Ziel'));
 
     // ===================== CLEANUP (Admin) =====================
     await gotoHash(ap, '#/documents');
     await ap.waitForSelector('#doc-new-folder', { timeout: 8000 });
     await clickFolderBtn(ap, 'BT-Shared', 'doc-folder-delete');
-    await sleep(1200);
+    await acceptConfirm(ap);
+    await sleep(900);
     check('Aufräumen: BT-Shared gelöscht', await waitForGone(ap, 'BT-Shared'));
     await a.ctx.close();
 
