@@ -324,7 +324,22 @@ Danach mit `admin` / `NeuesPasswort123` anmelden und in der App ändern.
 
 **Über-/Minusstunden stimmen nicht.**
 Pro Mitarbeiter müssen **Soll-Stunden** hinterlegt sein (*Mitarbeiter → Bearbeiten*). Ohne sie kann
-das Stundenkonto nicht korrekt berechnet werden.
+das Stundenkonto nicht korrekt berechnet werden. Das **„Gültig ab"-Datum** der Soll-Stunden gilt als
+Anstellungsbeginn: davor werden keine Soll-Stunden gerechnet (keine Minusstunden vor dem Eintritt).
+Setze es auf den tatsächlichen Eintrittstag – auch rückwirkend, um Altzeiten korrekt einzurechnen.
+
+**Wie entferne ich einen ausgeschiedenen Mitarbeiter?**
+Nicht löschen, sondern **ausstellen**: *Mitarbeiter → Ausstellen*, Austrittsdatum wählen. Der Account
+kann sich nicht mehr anmelden, alle Zeiten/Abwesenheiten/Planungen bleiben aber erhalten und werden
+für den Anstellungszeitraum weiter in Statistik und PDF berücksichtigt. Ausgestellte Mitarbeiter
+liegen im *Papierkorb → Mitarbeiter*; dort kann man sie **wiedereinstellen** (Wiedereintrittsdatum;
+die Lücke zählt 0 Soll-Stunden – auch mehrfach möglich) oder als Admin **endgültig löschen** (entfernt
+alle Daten unwiderruflich – nur für versehentlich angelegte Konten gedacht).
+
+**Warum hat der Admin kein Stundenkonto?**
+Das **Admin-Konto** ist ein reines Verwaltungskonto und gilt nicht als Mitarbeiter – es erscheint
+nicht in Zeiterfassung, Statistik oder Stundensalden. Nur Mitarbeiter, Chef und Buchhalter führen
+ein Stundenkonto. (Beispiel: 13 Konten = 1 Admin + 12 Mitarbeiter-Konten mit Saldo.)
 
 **Daten weg nach Neuinstallation?**
 Die Daten liegen in `data/`, `uploads/`, `storage/`. Beim Klonen/Neuaufsetzen diese Ordner aus dem
