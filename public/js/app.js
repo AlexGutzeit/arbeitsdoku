@@ -6159,6 +6159,20 @@ function renderAbsenceCard(a, opts = {}) {
 }
 
 function bindAbsenceCardActions(container) {
+  // Lazy-Render: Karten eines Verlauf-Monats erst beim Aufklappen ins DOM bauen (einmalig),
+  // danach deren Aktionen binden. Spart DOM-Knoten bei vielen Einträgen über die Jahre.
+  container.querySelectorAll('details.absence-history-month').forEach(d => {
+    d.addEventListener('toggle', () => {
+      if (!d.open) return;
+      const body = d.querySelector('.absence-history-month-body');
+      if (!body || body.dataset.rendered) return;
+      body.dataset.rendered = '1';
+      const items = _absHistory[d.dataset.absKey] || [];
+      body.innerHTML = items.map(a => renderAbsenceCard(a)).join('');
+      bindAbsenceCardActions(body); // Aktionen + Änderungsverlauf der frisch gebauten Karten binden
+    });
+  });
+
   // Änderungsverlauf (chef/admin): beim ersten Aufklappen laden
   container.querySelectorAll('details.absence-changelog').forEach(d => {
     d.addEventListener('toggle', async () => {
@@ -6375,6 +6389,9 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
 
 let _inboxUserFilter = '';
 let _allAbsenceUserFilter = '';
+// Lazy-Render-Cache der Verlauf-Monate: Key "type|YYYY-MM" -> Array der Abwesenheiten.
+// Die Karten eines Monats werden erst beim Aufklappen ins DOM gebaut (spart Knoten bei vielen Einträgen).
+let _absHistory = {};
 let _collapsedSections;
 try { _collapsedSections = new Set(JSON.parse(localStorage.getItem('absenceCollapsed') || '[]')); } catch(e) { _collapsedSections = new Set(); }
 
@@ -6518,6 +6535,7 @@ async function renderAbsences() {
     allUsersForFilter.sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  _absHistory = {}; // Lazy-Render-Cache pro Render neu aufbauen
   const listHtml = Object.entries(ABSENCE_TYPES).map(([type, info]) => {
     const g = filteredGrouped[type] || { recent: [], history: {} };
     const allEntries = [...g.recent, ...Object.values(g.history).flat()];
@@ -6551,13 +6569,15 @@ async function renderAbsences() {
             <details class="absence-history-year">
               <summary class="absence-history-year-summary">${y} (${yearCount})</summary>
               <div class="absence-history-year-body">
-                ${byYear[y].map(mk => `
-                  <details class="absence-history-month">
+                ${byYear[y].map(mk => {
+                  // Karten NICHT sofort rendern — Daten merken, Body bleibt leer bis zum Aufklappen
+                  _absHistory[`${type}|${mk}`] = g.history[mk];
+                  return `
+                  <details class="absence-history-month" data-abs-key="${type}|${mk}">
                     <summary class="absence-history-month-summary">${monthNames[parseInt(mk.substring(5, 7), 10) - 1]} (${g.history[mk].length})</summary>
-                    <div class="absence-history-month-body">
-                      ${g.history[mk].map(a => renderAbsenceCard(a)).join('')}
-                    </div>
-                  </details>`).join('')}
+                    <div class="absence-history-month-body"></div>
+                  </details>`;
+                }).join('')}
               </div>
             </details>`;
           }).join('')}
