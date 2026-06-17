@@ -47,6 +47,26 @@ function employmentOverlaps(periods, from, to) {
   return false;
 }
 
+// Haelt den Beginn des ERSTEN Anstellungszeitraums am fruehesten "Gueltig ab" (valid_from) der
+// Soll-Stunden. So zaehlt fuer (auch rueckdatierte) Mitarbeiter das aelteste Gueltig-ab-Datum als
+// Anstellungsbeginn — nicht das Anlegedatum. Spaetere Wiedereintritts-Zeitraeume bleiben unberuehrt.
+function syncEmploymentStart(db, userId) {
+  try {
+    const earliest = db.prepare('SELECT MIN(valid_from) AS d FROM user_target_hours WHERE user_id = ?').get(userId);
+    if (!earliest || !earliest.d) return;
+    const first = db.prepare('SELECT id, end_date FROM employment_periods WHERE user_id = ? ORDER BY start_date ASC LIMIT 1').get(userId);
+    if (!first) {
+      db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, NULL)').run(userId, earliest.d);
+      return;
+    }
+    // Nur den ersten Zeitraum verschieben, und nie hinter dessen Ende (sonst ungueltiger Zeitraum)
+    if (first.end_date && earliest.d > first.end_date) return;
+    db.prepare('UPDATE employment_periods SET start_date = ? WHERE id = ?').run(earliest.d, first.id);
+  } catch (e) {
+    console.error('syncEmploymentStart fehlgeschlagen:', e.message);
+  }
+}
+
 // Soll-Stunden für einen Zeitraum berechnen (berücksichtigt Änderungen + genehmigte Abwesenheiten
 // + Anstellungszeiträume: außerhalb der Anstellung zählt ein Tag 0 Soll-Stunden).
 function calcTargetHours(db, userId, from, to) {
@@ -494,6 +514,7 @@ router.post('/targets/:userId', authenticate, (req, res) => {
     'SELECT id FROM user_target_hours WHERE user_id = ? ORDER BY valid_from DESC LIMIT 1'
   ).get(req.params.userId);
   db.prepare('UPDATE users SET target_hours_per_week = ? WHERE id = ?').run(hpw, req.params.userId);
+  syncEmploymentStart(db, userId);
 
   const targets = db.prepare(
     'SELECT id, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from DESC'
@@ -525,6 +546,7 @@ router.put('/targets/:userId/:id', authenticate, (req, res) => {
   if (latest) {
     db.prepare('UPDATE users SET target_hours_per_week = ? WHERE id = ?').run(latest.hours_per_week, req.params.userId);
   }
+  syncEmploymentStart(db, req.params.userId);
 
   const targets = db.prepare(
     'SELECT id, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from DESC'
@@ -550,6 +572,7 @@ router.delete('/targets/:userId/:id', authenticate, (req, res) => {
   if (latest) {
     db.prepare('UPDATE users SET target_hours_per_week = ? WHERE id = ?').run(latest.hours_per_week, req.params.userId);
   }
+  syncEmploymentStart(db, req.params.userId);
 
   const targets = db.prepare(
     'SELECT id, hours_per_week, valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from DESC'
@@ -591,3 +614,4 @@ module.exports.getEarliestTargetDate = getEarliestTargetDate;
 module.exports.clampFrom = clampFrom;
 module.exports.getEmploymentPeriods = getEmploymentPeriods;
 module.exports.employmentOverlaps = employmentOverlaps;
+module.exports.syncEmploymentStart = syncEmploymentStart;
