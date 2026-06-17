@@ -22,15 +22,53 @@ function countWeekdays(from, to) {
   return count;
 }
 
-// Soll-Stunden für einen Zeitraum berechnen (berücksichtigt Änderungen + genehmigte Abwesenheiten)
+// Anstellungszeitraeume eines Users ([{start_date, end_date|null}], end_date NULL = aktuell angestellt).
+function getEmploymentPeriods(db, userId) {
+  try {
+    return db.prepare('SELECT start_date, end_date FROM employment_periods WHERE user_id = ? ORDER BY start_date ASC').all(userId);
+  } catch (_) {
+    return []; // Tabelle fehlt (sehr altes Backup vor Migration) -> wie "durchgaengig angestellt"
+  }
+}
+// Ist dateStr (YYYY-MM-DD) von einem Anstellungszeitraum abgedeckt? Ohne Daten: ja (Abwaertskompat.).
+function isEmployedOn(periods, dateStr) {
+  if (!periods || periods.length === 0) return true;
+  for (const p of periods) {
+    if (p.start_date <= dateStr && (!p.end_date || dateStr <= p.end_date)) return true;
+  }
+  return false;
+}
+// Ueberlappt mind. ein Anstellungszeitraum den Bereich [from, to]?
+function employmentOverlaps(periods, from, to) {
+  if (!periods || periods.length === 0) return true;
+  for (const p of periods) {
+    if (p.start_date <= to && (!p.end_date || p.end_date >= from)) return true;
+  }
+  return false;
+}
+
+// Soll-Stunden für einen Zeitraum berechnen (berücksichtigt Änderungen + genehmigte Abwesenheiten
+// + Anstellungszeiträume: außerhalb der Anstellung zählt ein Tag 0 Soll-Stunden).
 function calcTargetHours(db, userId, from, to) {
   const targets = db.prepare(
     'SELECT hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from ASC'
   ).all(userId);
 
   const dayKeys = [null, 'hours_mon', 'hours_tue', 'hours_wed', 'hours_thu', 'hours_fri', null]; // 0=So, 6=Sa
+  const periods = getEmploymentPeriods(db, userId);
 
-  if (targets.length === 0) return countWeekdays(from, to) * 8;
+  if (targets.length === 0) {
+    // Fallback 8h/Werktag — aber nur an Tagen innerhalb der Anstellung
+    let t = 0;
+    const c = new Date(from + 'T12:00:00');
+    const e = new Date(to + 'T12:00:00');
+    while (c <= e) {
+      const d = c.getDay();
+      if (d !== 0 && d !== 6 && isEmployedOn(periods, fmtDate(c))) t += 8;
+      c.setDate(c.getDate() + 1);
+    }
+    return t;
+  }
 
   // Abwesenheiten laden die Soll → 0 setzen
   const absences = db.prepare(`
@@ -64,7 +102,7 @@ function calcTargetHours(db, userId, from, to) {
     const day = cur.getDay();
     if (day !== 0 && day !== 6) {
       const dateStr = fmtDate(cur);
-      if (!zeroSollDays.has(dateStr)) {
+      if (!zeroSollDays.has(dateStr) && isEmployedOn(periods, dateStr)) {
         let active = targets[0];
         for (const t of targets) {
           if (t.valid_from <= dateStr) active = t;
@@ -167,6 +205,9 @@ router.get('/', authenticate, (req, res) => {
   const { user_ids, period, date } = req.query;
   const role = req.user.role;
 
+  // Explizite Auswahl (vom User gewaehlt) wird immer angezeigt; die automatische "alle
+  // Mitarbeiter"-Sicht blendet ausgestellte MA ohne Bezug zum Zeitraum aus.
+  const explicitUsers = role !== 'mitarbeiter' && !!user_ids;
   let targetUserIds = [];
   if (role === 'mitarbeiter') {
     targetUserIds = [req.user.id];
@@ -258,8 +299,20 @@ router.get('/', authenticate, (req, res) => {
   // Daten berechnen
   const userStats = [];
   for (const uid of targetUserIds) {
-    const user = db.prepare('SELECT id, name, role, start_overtime FROM users WHERE id = ?').get(uid);
+    const user = db.prepare('SELECT id, name, role, start_overtime, active FROM users WHERE id = ?').get(uid);
     if (!user) continue;
+
+    // Automatische "alle"-Sicht: ausgestellte MA nur zeigen, wenn ihr Anstellungszeitraum den
+    // gewaehlten Bereich beruehrt ODER sie dort Eintraege haben. Explizit gewaehlte immer.
+    if (!explicitUsers && user.active === 0) {
+      const periods = getEmploymentPeriods(db, uid);
+      if (!employmentOverlaps(periods, mainRange.from, mainRange.to)) {
+        const hasEntry = db.prepare(
+          'SELECT 1 FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL LIMIT 1'
+        ).get(uid, mainRange.from, mainRange.to);
+        if (!hasEntry) continue;
+      }
+    }
 
     const startOvertime = user.start_overtime || 0;
     const earliest = getEarliestTargetDate(db, uid);
@@ -536,3 +589,5 @@ module.exports.countScheduledDays = countScheduledDays;
 module.exports.fmtDate = fmtDate;
 module.exports.getEarliestTargetDate = getEarliestTargetDate;
 module.exports.clampFrom = clampFrom;
+module.exports.getEmploymentPeriods = getEmploymentPeriods;
+module.exports.employmentOverlaps = employmentOverlaps;

@@ -31,11 +31,31 @@ function userAuditDiff(before, after) {
   return changes;
 }
 
-// Einfache Benutzerliste (id + name) für alle authentifizierten User (z.B. Regie-Dropdown)
+// Einfache Benutzerliste (id + name) für alle authentifizierten User (z.B. Regie-Dropdown).
+// Default nur AKTIVE (fuer Zuweisungs-Picker neuer Arbeit); ?all=1 schliesst Ausgestellte ein
+// (z.B. fuer Historien-Filter), inkl. active-Flag zum Kennzeichnen.
 router.get('/list', authenticate, (req, res) => {
   const db = getDb();
-  const users = db.prepare("SELECT id, name, role FROM users WHERE role != 'admin' ORDER BY name").all();
+  const all = req.query.all === '1' || req.query.all === 'true';
+  const users = all
+    ? db.prepare("SELECT id, name, role, active FROM users WHERE role != 'admin' ORDER BY name").all()
+    : db.prepare("SELECT id, name, role, active FROM users WHERE role != 'admin' AND active = 1 ORDER BY name").all();
   res.json({ users });
+});
+
+// Ausgestellte Mitarbeiter (Papierkorb-Reiter "Mitarbeiter"). MUSS vor "/:id" stehen.
+router.get('/inactive', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT u.id, u.username, u.name, u.role, u.target_hours_per_week, u.deactivated_at, u.deactivated_by,
+           du.name AS deactivated_by_name,
+           (SELECT MAX(ep.end_date) FROM employment_periods ep WHERE ep.user_id = u.id) AS employed_until
+    FROM users u
+    LEFT JOIN users du ON u.deactivated_by = du.id
+    WHERE u.active = 0
+    ORDER BY u.deactivated_at DESC, u.name
+  `).all();
+  res.json({ users: rows });
 });
 
 // Alle Benutzer abrufen
@@ -44,9 +64,9 @@ router.get('/', authenticate, authorize('chef', 'buchhalter'), (req, res) => {
   let users;
 
   if (req.user.role === 'admin') {
-    users = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, created_at FROM users ORDER BY name').all();
+    users = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, active, created_at FROM users ORDER BY name').all();
   } else {
-    users = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
+    users = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, active, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
   }
 
   res.json({ users });
@@ -97,6 +117,8 @@ router.post('/', authenticate, authorize('chef'), (req, res) => {
   db.prepare(
     'INSERT INTO user_target_hours (user_id, hours_per_week, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(userId, hpw, hMon, hTue, hWed, hThu, hFri, today);
+  // Offener Anstellungszeitraum ab heute (Basis fuer die Soll-Stunden-Anrechnung)
+  db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, NULL)').run(userId, today);
 
   const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, created_at FROM users WHERE id = ?').get(userId);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_create',
@@ -158,19 +180,90 @@ router.post('/:id/reset-password', authenticate, authorize('chef'), (req, res) =
   res.json({ success: true });
 });
 
-// Benutzer löschen
-router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
+// Mitarbeiter AUSSTELLEN (Soft-Delete): kein Login mehr, aber alle Daten bleiben erhalten und
+// werden fuer den Anstellungszeitraum weiter angezeigt/berechnet. Schliesst den offenen
+// Anstellungszeitraum mit dem Austrittsdatum (Default heute).
+router.post('/:id/deactivate', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-
   if (user.role === 'admin' && req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin-Accounts können nur von Admins gelöscht werden' });
+    return res.status(403).json({ error: 'Admin-Accounts können nur von Admins ausgestellt werden' });
+  }
+  if (Number(req.params.id) === req.user.id) {
+    return res.status(400).json({ error: 'Sich selbst kann man nicht ausstellen' });
+  }
+  if (user.active === 0) return res.status(409).json({ error: 'Mitarbeiter ist bereits ausgestellt' });
+
+  const today = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+  const employedUntil = req.body && req.body.employed_until ? String(req.body.employed_until) : today;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(employedUntil)) {
+    return res.status(400).json({ error: 'Ungültiges Austrittsdatum (Format JJJJ-MM-TT)' });
+  }
+  // Austrittsdatum darf nicht vor dem aktuellen Eintritt liegen
+  const open = db.prepare('SELECT id, start_date FROM employment_periods WHERE user_id = ? AND end_date IS NULL ORDER BY start_date DESC LIMIT 1').get(req.params.id);
+  if (open && employedUntil < open.start_date) {
+    return res.status(400).json({ error: `Austrittsdatum liegt vor dem Eintrittsdatum (${open.start_date})` });
+  }
+
+  const ts = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+  db.prepare('UPDATE users SET active = 0, deactivated_at = ?, deactivated_by = ? WHERE id = ?').run(ts, req.user.id, req.params.id);
+  if (open) {
+    db.prepare('UPDATE employment_periods SET end_date = ? WHERE id = ?').run(employedUntil, open.id);
+  } else {
+    // Kein offener Zeitraum (Daten-Altlast) -> einen abgeschlossenen Tageszeitraum anlegen
+    db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, ?)').run(req.params.id, employedUntil, employedUntil);
+  }
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_deactivate',
+    details: `Ausgestellt: ${user.username} (${user.role}, id=${req.params.id}), letzter Arbeitstag ${employedUntil}`, ip: req.ip });
+  res.json({ success: true });
+});
+
+// Mitarbeiter WIEDEREINSTELLEN: neuer offener Anstellungszeitraum ab Wiedereintrittsdatum
+// (Default heute). Die Lueckenzeit dazwischen bleibt mit Soll = 0 bestehen.
+router.post('/:id/reactivate', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+  if (user.role === 'admin' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin-Accounts können nur von Admins wiedereingestellt werden' });
+  }
+  if (user.active === 1) return res.status(409).json({ error: 'Mitarbeiter ist bereits aktiv' });
+
+  const today = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+  const startDate = req.body && req.body.start_date ? String(req.body.start_date) : today;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    return res.status(400).json({ error: 'Ungültiges Wiedereintrittsdatum (Format JJJJ-MM-TT)' });
+  }
+  // Wiedereintritt muss nach dem letzten Austritt liegen (keine ueberlappenden Zeitraeume)
+  const lastEnd = db.prepare('SELECT MAX(end_date) AS d FROM employment_periods WHERE user_id = ?').get(req.params.id);
+  if (lastEnd && lastEnd.d && startDate <= lastEnd.d) {
+    return res.status(400).json({ error: `Wiedereintritt muss nach dem letzten Austritt (${lastEnd.d}) liegen` });
+  }
+
+  db.prepare('UPDATE users SET active = 1, deactivated_at = NULL, deactivated_by = NULL WHERE id = ?').run(req.params.id);
+  db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, NULL)').run(req.params.id, startDate);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_reactivate',
+    details: `Wiedereingestellt: ${user.username} (${user.role}, id=${req.params.id}), Eintritt ${startDate}`, ip: req.ip });
+  res.json({ success: true });
+});
+
+// Benutzer ENDGUELTIG löschen (Hard-Delete inkl. aller Daten per Cascade). Nur Admin und nur,
+// wenn der Mitarbeiter zuvor ausgestellt wurde — schuetzt vor versehentlichem Datenverlust.
+router.delete('/:id', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+  if (Number(req.params.id) === req.user.id) {
+    return res.status(400).json({ error: 'Sich selbst kann man nicht löschen' });
+  }
+  if (user.active !== 0) {
+    return res.status(400).json({ error: 'Mitarbeiter muss zuerst ausgestellt werden, bevor er endgültig gelöscht werden kann' });
   }
 
   db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_delete',
-    details: `Benutzer geloescht: ${user.username} (${user.role}, id=${req.params.id})`, ip: req.ip });
+    details: `Endgueltig geloescht: ${user.username} (${user.role}, id=${req.params.id})`, ip: req.ip });
   res.json({ success: true });
 });
 

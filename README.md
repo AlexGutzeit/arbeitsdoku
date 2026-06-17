@@ -40,7 +40,7 @@ Jeder Punkt entspricht einem Menüpunkt in der App.
 |---|---|
 | **🏠 Willkommen** | Persönliches Dashboard: anstehende Planung, eigene Abwesenheiten, Schnellüberblick. |
 | **📊 Zeitnachweis** | Kern-Zeiterfassung. Eintrag mit Datum, Von/Bis, Pause, Arbeitsort, Kunde, Projekt, Beschreibung und optionalem „Regie"-Vermerk. Nettostunden werden automatisch berechnet; überlappende Einträge werden nicht doppelt gezählt. |
-| **👥 Mitarbeiter** | Benutzerverwaltung (anlegen/bearbeiten/Rolle setzen), **Soll-Stunden pro Woche** (mit Historie), Start-Überstunden, Passwort zurücksetzen, Einzelrechte vergeben. *(Chef/Admin)* |
+| **👥 Mitarbeiter** | Benutzerverwaltung (anlegen/bearbeiten/Rolle setzen), **Soll-Stunden pro Woche** (mit Historie), Start-Überstunden, Passwort zurücksetzen, Einzelrechte vergeben. **Ausstellen statt Löschen:** ausgeschiedene Mitarbeiter werden mit Austrittsdatum ausgestellt (kein Login mehr), ihre Zeiten/Abwesenheiten/Planungen bleiben aber vollständig erhalten und für ihren Anstellungszeitraum in Statistik und PDF berücksichtigt. Wiedereinstellen ist jederzeit möglich (auch mehrfach) – die Lücke zählt 0 Soll-Stunden. *(Chef/Admin)* |
 | **📁 Projekte** | Projekt-/Auftragsstammdaten, die in Zeiteinträgen ausgewählt werden können. *(Chef/Admin)* |
 | **📅 Planung** | Einsatz-/Schichtplanung: Termine mit Uhrzeit, Ort, Kunde, Projekt – einzeln oder als Gruppe, farblich markierbar. Mitarbeiter sehen ihre Einsätze. |
 | **📌 Schwarzes Brett** | Aushänge/Ankündigungen fürs ganze Team, mit Benachrichtigungs-Badge. |
@@ -53,7 +53,7 @@ Jeder Punkt entspricht einem Menüpunkt in der App.
 | **📄 PDF-Export** | Druckfertiger Arbeitsnachweis (Einträge + Abwesenheiten + Stunden-Zusammenfassung) als PDF, gefiltert nach Zeitraum/Mitarbeiter/Projekt. |
 | **⚙️ Einstellungen** | White-Label-Branding, Dokumenten-Speicherlimit, Datenbank-Backup/Restore. *(Chef/Admin)* |
 | **📜 Audit-Log** | Revisionssicheres Protokoll (Logins, Backups, Benutzeränderungen u. a.). Benutzeranlage wird mit allen Parametern, Änderungen feldgenau als „alt → neu" protokolliert (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)* |
-| **🗑️ Papierkorb** | Gelöschte Einträge/Abwesenheiten bleiben mit Begründung erhalten und können wiederhergestellt werden (GoBD). *(Admin)* |
+| **🗑️ Papierkorb** | Gelöschte Einträge/Abwesenheiten bleiben mit Begründung erhalten und können wiederhergestellt werden (GoBD). Im Unterreiter **Mitarbeiter** liegen ausgestellte Mitarbeiter zum Wiedereinstellen; endgültiges Löschen (mit allen Daten) ist dort nur als Admin und nur für zuvor ausgestellte Mitarbeiter möglich. *(Admin)* |
 
 **Querschnitts-Features:** Echtzeit-Updates über alle Geräte (Server-Sent Events), rollenbasierte
 Sichtbarkeit, mobil-optimiert/installierbar (PWA), Brute-Force-Schutz am Login, durchgehend

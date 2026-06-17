@@ -676,6 +676,9 @@ async function initDatabase() {
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
+  // Migration: Mitarbeiter-Soft-Delete ("Ausstellen") + Anstellungszeitraeume (employment_periods)
+  ensureEmploymentSchema(db);
+
   // Migration: 'dienstreise' aus dem absences.type CHECK-Constraint entfernen.
   // Der Typ wird nicht mehr angeboten. SQLite kann einen CHECK nicht per ALTER aendern,
   // daher Tabelle neu aufbauen — die neue DDL wird aus der bestehenden abgeleitet, damit
@@ -760,6 +763,10 @@ async function initDatabase() {
     saveToFile();
     console.log('Datenbank initialisiert mit Seed-Daten.');
   }
+
+  // Nach dem Seed erneut sicherstellen: frisch angelegte Seed-User brauchen ihren offenen
+  // Anstellungszeitraum (der erste Aufruf oben lief, bevor es ueberhaupt User gab). Idempotent.
+  ensureEmploymentSchema(db);
 }
 
 // Stellt sicher, dass die Revisionssicherheits-Objekte existieren — wichtig nach einem
@@ -816,6 +823,59 @@ function ensureAuditSchema(targetDb) {
     }
   } catch (e) {
     console.error('ensureAuditSchema fehlgeschlagen:', e.message);
+  }
+  ensureEmploymentSchema(targetDb);
+}
+
+// Mitarbeiter-Soft-Delete ("Ausstellen") + Anstellungszeitraeume.
+// users.active (1/0) ist eine schnelle Hilfsspalte (Login-Sperre, Listenfilter); die Wahrheit zur
+// Soll-Stunden-Anrechnung liegt in employment_periods: ein Tag zaehlt nur, wenn er in einen
+// [start_date .. end_date]-Zeitraum faellt (end_date NULL = aktuell angestellt). Mehrere Aus-/
+// Wiedereintritts-Zyklen sind dadurch korrekt abbildbar; Lueckenzeiten ergeben Soll=0.
+function ensureEmploymentSchema(targetDb) {
+  try {
+    const uCols = targetDb.prepare("PRAGMA table_info(users)").all();
+    let changed = false;
+    if (!uCols.find(c => c.name === 'active')) {
+      targetDb.prepare("ALTER TABLE users ADD COLUMN active INTEGER DEFAULT 1").run();
+      changed = true;
+    }
+    if (!uCols.find(c => c.name === 'deactivated_at')) {
+      targetDb.prepare("ALTER TABLE users ADD COLUMN deactivated_at TEXT").run();
+      changed = true;
+    }
+    if (!uCols.find(c => c.name === 'deactivated_by')) {
+      targetDb.prepare("ALTER TABLE users ADD COLUMN deactivated_by INTEGER").run();
+      changed = true;
+    }
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS employment_periods (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date   TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+    // Backfill: jeder User ohne Zeitraum bekommt einen offenen ab fruehestem valid_from
+    // (= effektiver Anstellungsbeginn), ersatzweise ab created_at. So bleiben Bestands-DBs
+    // crashfrei und alle bisherigen Mitarbeiter gelten als durchgaengig angestellt.
+    const usersNoPeriod = targetDb.prepare(
+      'SELECT u.id, u.created_at FROM users u WHERE NOT EXISTS (SELECT 1 FROM employment_periods ep WHERE ep.user_id = u.id)'
+    ).all();
+    if (usersNoPeriod.length > 0) {
+      const earliestStmt = targetDb.prepare('SELECT MIN(valid_from) AS d FROM user_target_hours WHERE user_id = ?');
+      const insStmt = targetDb.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, NULL)');
+      for (const u of usersNoPeriod) {
+        const earliest = earliestStmt.get(u.id);
+        const start = (earliest && earliest.d) || (u.created_at ? String(u.created_at).slice(0, 10) : '2000-01-01');
+        insStmt.run(u.id, start);
+      }
+      changed = true;
+    }
+    if (changed) markDirty();
+  } catch (e) {
+    console.error('ensureEmploymentSchema fehlgeschlagen:', e.message);
   }
 }
 

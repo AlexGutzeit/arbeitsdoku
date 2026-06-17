@@ -41,6 +41,12 @@ router.post('/login', loginLimiter, (req, res) => {
     return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
   }
 
+  // Ausgestellte Mitarbeiter koennen sich nicht mehr anmelden (Daten bleiben erhalten).
+  if (user.active === 0) {
+    logAudit(db, { userId: user.id, username, action: 'login_failed', details: 'Account ausgestellt', ip: req.ip });
+    return res.status(403).json({ error: 'Dieser Account ist ausgestellt. Bitte wende dich an die Verwaltung.' });
+  }
+
   logAudit(db, { userId: user.id, username: user.username, action: 'login_success', ip: req.ip });
   const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
 

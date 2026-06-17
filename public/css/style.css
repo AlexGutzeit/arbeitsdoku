@@ -285,6 +285,8 @@ body {
 .btn-success:hover { background: #15803d; }
 .btn-danger { background: var(--danger); color: white; }
 .btn-danger:hover { background: #b91c1c; }
+.btn-warning { background: #d97706; color: white; }
+.btn-warning:hover { background: #b45309; }
 .btn-outline {
   background: transparent;
   border: 1.5px solid var(--border);

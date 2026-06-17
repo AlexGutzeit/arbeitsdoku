@@ -320,9 +320,18 @@ function canEditBulletin() {
   return isChefOrAdmin() || (S.user && S.user.can_bulletin);
 }
 
-// Filtere Admin-User aus Listen (Admin taucht nirgends als Mitarbeiter auf)
+// Filtere Admin-User aus Listen (Admin taucht nirgends als Mitarbeiter auf).
+// Enthält auch ausgestellte (inaktive) Mitarbeiter — wichtig für Historien-Filter (Statistik/PDF).
 function getWorkerUsers() {
   return S.users.filter(u => u.role !== 'admin');
+}
+// Nur aktive Mitarbeiter — für Picker neuer Arbeit (neue Einträge, neue Planung).
+function getActiveWorkerUsers() {
+  return getWorkerUsers().filter(u => u.active !== 0);
+}
+// Anzeigename mit Kennzeichnung ausgestellter Mitarbeiter.
+function workerLabel(u) {
+  return esc(u.name) + (u.active === 0 ? ' (ausgestellt)' : '');
 }
 
 function toast(msg, type) {
@@ -371,7 +380,7 @@ function promptModal(message, opts = {}) {
     const ph = opts.placeholder ? ` placeholder="${esc(opts.placeholder)}"` : '';
     const field = multiline
       ? `<textarea id="pm-input" class="form-control" rows="3" style="width:100%"${ph}>${esc(def)}</textarea>`
-      : `<input id="pm-input" type="text" class="form-control" style="width:100%"${ph} value="${esc(def)}">`;
+      : `<input id="pm-input" type="${esc(opts.inputType || 'text')}" class="form-control" style="width:100%"${ph} value="${esc(def)}">`;
     overlay.innerHTML = `
       <div class="modal" style="max-width:480px">
         <div class="modal-header"><h3>${esc(opts.title || 'Eingabe')}</h3></div>
@@ -453,6 +462,7 @@ function render() {
   else if (route === '/bulletin/new') renderBulletinForm();
   else if (route.startsWith('/bulletin/edit/')) renderBulletinForm(route.split('/').pop());
   else if (route === '/welcome') renderWelcome();
+  else if (route === '/deleted-users') renderDeletedUsers();
   else if (route === '/' || route === '/dashboard') renderDashboard();
   else renderWelcome();
 }
@@ -608,13 +618,14 @@ function layout(content, activeNav) {
           <span class="icon">&#128220;</span> Audit-Log
         </a>` : ''}
         ${showAudit ? `
-        <div class="nav-group${(activeNav === 'deleted-entries' || activeNav === 'deleted-absences') ? ' open' : ''}" id="nav-papierkorb">
+        <div class="nav-group${(activeNav === 'deleted-entries' || activeNav === 'deleted-absences' || activeNav === 'deleted-users') ? ' open' : ''}" id="nav-papierkorb">
           <div class="nav-group-label" id="nav-papierkorb-label">
             <span class="icon">&#128465;</span> Papierkorb
             <span class="nav-caret">&#9656;</span>
           </div>
           <a href="#/deleted-entries" class="nav-subitem ${activeNav === 'deleted-entries' ? 'active' : ''}">Einträge</a>
           <a href="#/deleted-absences" class="nav-subitem ${activeNav === 'deleted-absences' ? 'active' : ''}">Abwesenheiten</a>
+          <a href="#/deleted-users" class="nav-subitem ${activeNav === 'deleted-users' ? 'active' : ''}">Mitarbeiter</a>
         </div>
         ` : ''}
       </nav>
@@ -1454,7 +1465,7 @@ async function renderEntryForm(editId, continueId, planningId) {
           <label>Mitarbeiter</label>
           <select class="form-control" id="ef-user" required>
             <option value="">-- Mitarbeiter wählen --</option>
-            ${getWorkerUsers().map(u => `<option value="${u.id}" ${entry?.user_id == u.id ? 'selected' : ''}>${esc(u.name)} (${roleName(u.role)})</option>`).join('')}
+            ${getActiveWorkerUsers().map(u => `<option value="${u.id}" ${entry?.user_id == u.id ? 'selected' : ''}>${esc(u.name)} (${roleName(u.role)})</option>`).join('')}
           </select>
         </div>
         ` : ''}
@@ -2269,7 +2280,9 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
   const ref = entry || (groupEntries && groupEntries[0]) || source;
   const title = isEdit ? 'Planung bearbeiten' : (isGroupEdit ? 'Planungsgruppe bearbeiten' : (source ? 'Auftrag erneut planen' : 'Neue Planung'));
   const assignedIds = entry ? entry.assigned_users.map(u => u.user_id) : (groupAssigned ? groupAssigned.map(u => u.user_id) : (source ? source.assigned_users.map(u => u.user_id) : []));
-  const workers = getWorkerUsers();
+  // Neue Planung nur mit aktiven Mitarbeitern; bereits zugewiesene (evtl. inzwischen ausgestellte) bleiben erhalten
+  const _assignedSet = new Set(assignedIds);
+  const workers = getWorkerUsers().filter(u => u.active !== 0 || _assignedSet.has(u.id));
 
   // Tage-State für dynamische Liste
   let planDays = [];
@@ -3381,7 +3394,7 @@ async function renderUsers() {
             </tr>
           </thead>
           <tbody>
-            ${S.users.map(u => `
+            ${S.users.filter(u => u.active !== 0).map(u => `
               <tr>
                 <td>${esc(u.name)}</td>
                 <td>${esc(u.username)}</td>
@@ -3389,7 +3402,7 @@ async function renderUsers() {
                 <td>${u.target_hours_per_week}</td>
                 <td class="actions">
                   <button class="btn btn-sm btn-outline edit-user" data-id="${u.id}">Bearbeiten</button>
-                  ${u.id !== S.user.id ? `<button class="btn btn-sm btn-danger del-user" data-id="${u.id}">Löschen</button>` : ''}
+                  ${u.id !== S.user.id ? `<button class="btn btn-sm btn-warning deactivate-user" data-id="${u.id}">Ausstellen</button>` : ''}
                 </td>
               </tr>
             `).join('')}
@@ -3407,13 +3420,18 @@ async function renderUsers() {
     });
   });
 
-  mainEl.querySelectorAll('.del-user').forEach(btn => {
+  mainEl.querySelectorAll('.deactivate-user').forEach(btn => {
     btn.addEventListener('click', async () => {
       const user = S.users.find(u => u.id === Number(btn.dataset.id));
-      if (!(await confirmModal(`"${user?.name}" wirklich löschen? Alle Einträge werden ebenfalls gelöscht.`, { title: 'Benutzer löschen', okLabel: 'Löschen' }))) return;
+      const today = new Date().toLocaleDateString('sv-SE');
+      const employedUntil = await promptModal(
+        `"${user?.name}" ausstellen. Der Account kann sich dann nicht mehr anmelden, aber alle Daten bleiben erhalten und werden weiter angezeigt.\n\nLetzter Arbeitstag (Austrittsdatum):`,
+        { title: 'Mitarbeiter ausstellen', okLabel: 'Ausstellen', multiline: false, inputType: 'date', defaultValue: today, required: true, requiredMsg: 'Bitte ein Austrittsdatum wählen.' }
+      );
+      if (employedUntil === null) return; // Abbrechen
       try {
-        await api('DELETE', '/api/users/' + btn.dataset.id);
-        toast('Mitarbeiter gelöscht', 'success');
+        await api('POST', '/api/users/' + btn.dataset.id + '/deactivate', { employed_until: employedUntil.trim() });
+        toast('Mitarbeiter ausgestellt', 'success');
         renderUsers();
       } catch (e) { toast(e.message, 'error'); }
     });
@@ -4071,6 +4089,8 @@ const AUDIT_LABELS = {
   user_create: 'Benutzer angelegt',
   user_update: 'Benutzer geändert',
   user_password_reset: 'Passwort zurückgesetzt',
+  user_deactivate: 'Mitarbeiter ausgestellt',
+  user_reactivate: 'Mitarbeiter wiedereingestellt',
   user_delete: 'Benutzer gelöscht',
 };
 
@@ -4303,6 +4323,85 @@ async function renderDeletedAbsences() {
         await api('POST', '/api/absences/' + btn.dataset.id + '/restore', { reason: reason.trim() });
         toast('Abwesenheit wiederhergestellt', 'success');
         renderDeletedAbsences();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+}
+
+// --- Ausgestellte Mitarbeiter (Papierkorb, nur Admin) ---
+async function renderDeletedUsers() {
+  if (!isAdmin()) { navigate('/'); return; }
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-users');
+  bindLayout();
+
+  let data;
+  try {
+    data = await api('GET', '/api/users/inactive');
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  const users = (data && data.users) || [];
+  const rows = users.map(u => `<tr>
+      <td>${esc(u.name)}</td>
+      <td>${esc(u.username)}</td>
+      <td><span class="badge badge-${u.role}">${roleName(u.role)}</span></td>
+      <td style="white-space:nowrap;">${esc(u.employed_until || '—')}</td>
+      <td style="color:var(--text-light);">${esc(String(u.deactivated_at || '').slice(0, 19))}</td>
+      <td>${esc(u.deactivated_by_name || '—')}</td>
+      <td class="actions" style="white-space:nowrap;">
+        <button class="btn btn-outline btn-sm reactivate-user" data-id="${u.id}" data-name="${esc(u.name)}" type="button">Wiedereinstellen</button>
+        <button class="btn btn-danger btn-sm purge-user" data-id="${u.id}" data-name="${esc(u.name)}" type="button">Endgültig löschen</button>
+      </td>
+    </tr>`).join('');
+
+  const mainEl = document.querySelector('.main');
+  mainEl.innerHTML = `
+    <div style="max-width:1100px;margin:0 auto;">
+      <div class="card">
+        <h2 style="margin-bottom:0.5rem;">Ausgestellte Mitarbeiter</h2>
+        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
+          Ausgestellte Mitarbeiter können sich nicht mehr anmelden, bleiben aber mit allen Zeiten,
+          Abwesenheiten und Planungen erhalten und werden für ihren Anstellungszeitraum weiter in
+          Statistik und PDF berücksichtigt. <strong>Wiedereinstellen</strong> reaktiviert den Account ab
+          einem Wiedereintrittsdatum (die Lücke zählt 0 Soll-Stunden). <strong>Endgültig löschen</strong>
+          entfernt den Mitarbeiter samt aller Daten unwiderruflich.
+        </p>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;font-size:0.88rem;">
+            <thead><tr>
+              <th>Name</th><th>Benutzername</th><th>Rolle</th><th>Austritt</th>
+              <th>Ausgestellt am</th><th>Ausgestellt von</th><th></th>
+            </tr></thead>
+            <tbody>${rows || '<tr><td colspan="7" style="color:var(--text-light);">Keine ausgestellten Mitarbeiter.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+  mainEl.querySelectorAll('.reactivate-user').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const today = new Date().toLocaleDateString('sv-SE');
+      const startDate = await promptModal(
+        `"${btn.dataset.name}" wiedereinstellen. Ab dem Wiedereintrittsdatum läuft die Soll-Stunden-Berechnung wieder; die Zeit der Ausstellung bleibt mit 0 Soll-Stunden erhalten.\n\nWiedereintrittsdatum:`,
+        { title: 'Wiedereinstellen', okLabel: 'Wiedereinstellen', multiline: false, inputType: 'date', defaultValue: today, required: true, requiredMsg: 'Bitte ein Wiedereintrittsdatum wählen.' }
+      );
+      if (startDate === null) return;
+      try {
+        await api('POST', '/api/users/' + btn.dataset.id + '/reactivate', { start_date: startDate.trim() });
+        toast('Mitarbeiter wiedereingestellt', 'success');
+        renderDeletedUsers();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+
+  mainEl.querySelectorAll('.purge-user').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!(await confirmModal(
+        `"${btn.dataset.name}" wirklich ENDGÜLTIG löschen?\n\nAlle Zeiteinträge, Abwesenheiten, Planungen und Notizen dieses Mitarbeiters werden unwiderruflich entfernt. Das kann nur über ein vollständiges Backup rückgängig gemacht werden.`,
+        { title: 'Endgültig löschen', okLabel: 'Endgültig löschen', danger: true }))) return;
+      try {
+        await api('DELETE', '/api/users/' + btn.dataset.id);
+        toast('Mitarbeiter endgültig gelöscht', 'success');
+        renderDeletedUsers();
       } catch (err) { toast(err.message, 'error'); }
     });
   });
@@ -4588,7 +4687,7 @@ async function renderPdfExport() {
           <label>Mitarbeiter</label>
           <select class="form-control" id="pdf-user">
             <option value="">Alle Mitarbeiter</option>
-            ${getWorkerUsers().map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}
+            ${getWorkerUsers().map(u => `<option value="${u.id}">${workerLabel(u)}</option>`).join('')}
           </select>
         </div>
         ` : ''}
@@ -4735,7 +4834,7 @@ async function renderStatisticsContent() {
     workers.forEach((u, i) => {
       const active = S.statsSelectedUsers.size === 0 || S.statsSelectedUsers.has(u.id);
       const color = colorFor(u.id);
-      chipsHtml += `<button class="emp-chip ${active ? '' : 'inactive'}" data-uid="${u.id}" style="background:${color}">${esc(u.name)}</button>`;
+      chipsHtml += `<button class="emp-chip ${active ? '' : 'inactive'}" data-uid="${u.id}" style="background:${color}">${workerLabel(u)}</button>`;
     });
     chipsHtml += '</div>';
   }
