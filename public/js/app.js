@@ -5446,12 +5446,14 @@ function renderOrderedList(orders) {
   if (!orders.length) return '<p style="color:#94a3b8;text-align:center">Keine Bestellungen im letzten Monat</p>';
   const isAdmin = S.user.role === 'admin';
   return orders.map(o => {
+    const requestedDate = o.created_at ? formatDateTimeDE(o.created_at) : '';
     const orderedDate = o.ordered_at ? formatDateTimeDE(o.ordered_at) : '';
     return `<div class="order-item order-done" data-id="${o.id}">
       <div class="order-content">
         <div class="order-product">${fmtOrderQty(o)}${esc(o.product)}${fmtOrderLocation(o)}</div>
         ${o.comment ? `<div class="order-comment">${esc(o.comment)}</div>` : ''}
-        <div class="order-meta">bestellt am ${orderedDate}${o.ordered_by_name ? ' von ' + esc(o.ordered_by_name) : ''}</div>
+        <div class="order-meta">Bestellt von ${esc(o.user_name)} am ${requestedDate}</div>
+        <div class="order-meta">Bestellung ausgelöst${o.ordered_by_name ? ' von ' + esc(o.ordered_by_name) : ''} am ${orderedDate}</div>
       </div>
       ${isAdmin ? `<div class="order-actions"><button class="btn btn-sm btn-danger ordered-del-btn" data-id="${o.id}">&times;</button></div>` : ''}
     </div>`;
