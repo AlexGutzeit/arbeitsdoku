@@ -31,6 +31,20 @@ function userAuditDiff(before, after) {
   return changes;
 }
 
+// Haengt jedem User seine Anstellungszeitraeume an (kompakt: [{s,e}], e=null = aktuell angestellt).
+// Damit kann das Frontend MA aus Perioden-Ansichten ausblenden, in denen sie (noch) nicht angestellt sind.
+function attachEmployment(db, users) {
+  if (!users.length) return users;
+  const ids = users.map(u => u.id);
+  const rows = db.prepare(
+    `SELECT user_id, start_date, end_date FROM employment_periods WHERE user_id IN (${ids.map(() => '?').join(',')}) ORDER BY start_date ASC`
+  ).all(...ids);
+  const byUser = {};
+  for (const r of rows) (byUser[r.user_id] || (byUser[r.user_id] = [])).push({ s: r.start_date, e: r.end_date });
+  for (const u of users) u.employment = byUser[u.id] || [];
+  return users;
+}
+
 // Einfache Benutzerliste (id + name) für alle authentifizierten User (z.B. Regie-Dropdown).
 // Default nur AKTIVE (fuer Zuweisungs-Picker neuer Arbeit); ?all=1 schliesst Ausgestellte ein
 // (z.B. fuer Historien-Filter), inkl. active-Flag zum Kennzeichnen.
@@ -40,7 +54,7 @@ router.get('/list', authenticate, (req, res) => {
   const users = all
     ? db.prepare("SELECT id, name, role, active FROM users WHERE role != 'admin' ORDER BY name").all()
     : db.prepare("SELECT id, name, role, active FROM users WHERE role != 'admin' AND active = 1 ORDER BY name").all();
-  res.json({ users });
+  res.json({ users: attachEmployment(db, users) });
 });
 
 // Ausgestellte Mitarbeiter (Papierkorb-Reiter "Mitarbeiter"). MUSS vor "/:id" stehen.
@@ -69,7 +83,7 @@ router.get('/', authenticate, authorize('chef', 'buchhalter'), (req, res) => {
     users = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, active, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
   }
 
-  res.json({ users });
+  res.json({ users: attachEmployment(db, users) });
 });
 
 // Einzelnen Benutzer abrufen

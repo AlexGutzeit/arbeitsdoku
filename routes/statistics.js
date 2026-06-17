@@ -322,9 +322,11 @@ router.get('/', authenticate, (req, res) => {
     const user = db.prepare('SELECT id, name, role, start_overtime, active FROM users WHERE id = ?').get(uid);
     if (!user) continue;
 
-    // Automatische "alle"-Sicht: ausgestellte MA nur zeigen, wenn ihr Anstellungszeitraum den
-    // gewaehlten Bereich beruehrt ODER sie dort Eintraege haben. Explizit gewaehlte immer.
-    if (!explicitUsers && user.active === 0) {
+    // Automatische "alle"-Sicht: einen MA nur zeigen, wenn sein Anstellungszeitraum den gewaehlten
+    // Bereich beruehrt ODER er dort Eintraege hat. So verschwinden im Zeitraum (noch) nicht bzw. nicht
+    // mehr angestellte MA aus der Periode (auch aktive, die erst spaeter eingestellt wurden).
+    // Explizit gewaehlte MA werden immer gezeigt.
+    if (!explicitUsers) {
       const periods = getEmploymentPeriods(db, uid);
       if (!employmentOverlaps(periods, mainRange.from, mainRange.to)) {
         const hasEntry = db.prepare(

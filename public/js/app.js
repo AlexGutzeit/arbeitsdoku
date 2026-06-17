@@ -333,6 +333,13 @@ function getActiveWorkerUsers() {
 function workerLabel(u) {
   return esc(u.name) + (u.active === 0 ? ' (ausgestellt)' : '');
 }
+// War der Mitarbeiter im Zeitraum [from,to] (irgendwann) angestellt? Nutzt user.employment ([{s,e}]).
+// Ohne Employment-Daten (alter Server/Stand) -> true, damit nichts faelschlich verschwindet.
+function employedInRange(user, from, to) {
+  const periods = user && user.employment;
+  if (!Array.isArray(periods) || periods.length === 0) return true;
+  return periods.some(p => p.s <= to && (!p.e || p.e >= from));
+}
 
 function toast(msg, type) {
   let t = document.querySelector('.toast');
@@ -797,7 +804,7 @@ async function renderDashboardContent() {
   let chipsHtml = '';
   if (canViewAll()) {
     if (!S.hiddenEmployees) S.hiddenEmployees = new Set();
-    const workers = getWorkerUsers().filter(u => u.role === 'mitarbeiter' || u.role === 'chef' || u.role === 'buchhalter');
+    const workers = getWorkerUsers().filter(u => (u.role === 'mitarbeiter' || u.role === 'chef' || u.role === 'buchhalter') && employedInRange(u, range.from, range.to));
     chipsHtml = `<div class="employee-chips">
       ${workers.map((u, i) => {
         const c = PALETTE[i % PALETTE.length];
@@ -1152,7 +1159,7 @@ function renderWeekGridHtml(entries, range, absences) {
   }
 
   // Spalten (Mitarbeiter) bestimmen
-  const columns = getGridColumns(entries);
+  const columns = getGridColumns(entries, range);
   if (columns.length === 0) {
     return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge in dieser Woche</p></div>';
   }
@@ -1219,7 +1226,7 @@ function renderWeekGridHtml(entries, range, absences) {
 function renderMonthGridHtml(entries, range, absences = []) {
   // Kalenderwochen des Monats ermitteln
   const weeks = getCalendarWeeks(range.from, range.to);
-  const columns = getGridColumns(entries);
+  const columns = getGridColumns(entries, range);
 
   if (columns.length === 0) {
     return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge in diesem Monat</p></div>';
@@ -1300,19 +1307,21 @@ function renderMonthGridHtml(entries, range, absences = []) {
 }
 
 // --- Grid-Hilfsfunktionen ---
-function getGridColumns(entries) {
+function getGridColumns(entries, range) {
   if (S.user.role === 'mitarbeiter') {
     return [{ id: S.user.id, name: S.user.name }];
   }
   const byUser = {};
+  // MA mit Einträgen im Zeitraum immer zeigen (sie waren angestellt + haben Daten)
   entries.forEach(e => {
     if (!byUser[e.user_id]) byUser[e.user_id] = { id: e.user_id, name: e.user_name };
   });
-  // Auch Mitarbeiter ohne Einträge anzeigen wenn bekannt
+  // MA ohne Einträge nur zeigen, wenn sie im Zeitraum angestellt waren (sonst leere Spalte ausblenden)
   getWorkerUsers().forEach(u => {
-    if (!byUser[u.id] && (!S.hiddenEmployees || !S.hiddenEmployees.has(u.id))) {
-      byUser[u.id] = { id: u.id, name: u.name };
-    }
+    if (byUser[u.id]) return;
+    if (S.hiddenEmployees && S.hiddenEmployees.has(u.id)) return;
+    if (range && !employedInRange(u, range.from, range.to)) return;
+    byUser[u.id] = { id: u.id, name: u.name };
   });
   return Object.values(byUser).sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -2069,10 +2078,10 @@ function renderPlanningTimeline(entries, absences, canEdit) {
 function renderPlanningGrid(entries, absences, range, view, canEdit) {
   const dayNamesShort = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
-  // Spalten = alle Mitarbeiter + zusätzlich verplante/abwesende Chefs/Buchhalter
+  // Spalten = im Zeitraum angestellte Mitarbeiter + zusätzlich verplante/abwesende (auch ausgestellte mit Bezug)
   const colMap = {};
   (S.users || [])
-    .filter(u => u.role === 'mitarbeiter')
+    .filter(u => u.role === 'mitarbeiter' && (!range || employedInRange(u, range.from, range.to)))
     .forEach(u => { colMap[u.id] = { id: u.id, name: u.name }; });
   entries.forEach(e => {
     e.assigned_users.forEach(u => {
