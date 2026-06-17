@@ -4918,16 +4918,13 @@ async function renderStatisticsContent() {
   drawPieChart(document.getElementById('pie-chart'), c);
   drawTimeChart(document.getElementById('time-chart'), stats.combinedTimeline, stats.users.length > 1 ? null : stats.users);
 
-  // Abwesenheitsblock nachladen (nur für Mitarbeiter oder Einzeluser-Ansicht)
-  if (period !== 'total' && userIds.length === 1) {
+  // Chart-Abwesenheitsbänder: nur die AUSGEWÄHLTEN Mitarbeiter (1 = dieser, mehrere = alle gewählten;
+  // keine explizite Auswahl = alle) + globale Feiertage. Behebt das Einblenden fremder Abwesenheiten.
+  if (period !== 'total') {
     try {
-      const uid_param = userIds[0] !== S.user.id ? `&user_id=${userIds[0]}` : '';
-      const [sd, byDate] = await Promise.all([
-        api('GET', `/api/absences/summary?from=${stats.range.from}&to=${stats.range.to}${uid_param}`),
-        api('GET', `/api/absences/by-date?from=${stats.range.from}&to=${stats.range.to}${uid_param ? `&user_id=${userIds[0]}` : ''}`),
-      ]);
-
-      // Abwesenheitsbänder für Chart vorbereiten (nur approved/active)
+      const selExplicit = S.statsSelectedUsers && S.statsSelectedUsers.size > 0;
+      const userQ = selExplicit ? `&user_id=${[...S.statsSelectedUsers].join(',')}` : '';
+      const byDate = await api('GET', `/api/absences/by-date?from=${stats.range.from}&to=${stats.range.to}${userQ}`);
       const absenceColors = {
         krank: '#dc2626', urlaub: '#1d4ed8', freizeitausgleich: '#7c3aed',
         sonderurlaub: '#9a3412', berufsschule: '#0369a1', innung: '#0f766e',
@@ -4936,11 +4933,22 @@ async function renderStatisticsContent() {
       const chartAbsences = (byDate?.absences || [])
         .filter(a => a.status === 'active' || a.status === 'approved')
         .map(a => ({ type: a.type, from: a.date_from, to: a.date_to, color: absenceColors[a.type] || '#64748b' }));
-
-      // Chart neu zeichnen mit Abwesenheitsbändern
       const canvas = document.getElementById('time-chart');
       const highlightFn = drawTimeChart(canvas, stats.combinedTimeline, stats.users.length > 1 ? null : stats.users, chartAbsences, null);
       window._statsChartHighlight = highlightFn;
+    } catch (e) {}
+  }
+
+  // Abwesenheits-Zusammenfassung (Tabelle) nur bei Einzeluser-Ansicht
+  if (period !== 'total' && userIds.length === 1) {
+    try {
+      const uid_param = userIds[0] !== S.user.id ? `&user_id=${userIds[0]}` : '';
+      const sd = await api('GET', `/api/absences/summary?from=${stats.range.from}&to=${stats.range.to}${uid_param}`);
+      const absenceColors = {
+        krank: '#dc2626', urlaub: '#1d4ed8', freizeitausgleich: '#7c3aed',
+        sonderurlaub: '#9a3412', berufsschule: '#0369a1', innung: '#0f766e',
+        feiertag: '#b45309',
+      };
 
       if (sd && Object.keys(sd.summary || {}).length > 0) {
         const typeLabels = { krank: 'Krank', urlaub: 'Urlaub', freizeitausgleich: 'FZA', sonderurlaub: 'Sonderurlaub', feiertag: 'Feiertag', berufsschule: 'Berufsschule', innung: 'Innung' };

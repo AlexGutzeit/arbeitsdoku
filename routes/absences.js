@@ -200,6 +200,11 @@ router.get('/by-date', authenticate, (req, res) => {
   const APPROVAL_TYPES = "('urlaub','sonderurlaub','freizeitausgleich')";
 
   if (isManager(req.user)) {
+    // Optionaler user_id-Filter (eine ID oder kommasepariert) — globale Feiertage (user_id IS NULL)
+    // bleiben immer enthalten. Ohne Filter: alle (z.B. Dashboard/Planung).
+    const idList = String(req.query.user_id || '').split(',').map(s => parseInt(s, 10)).filter(n => n > 0);
+    const userFilter = idList.length
+      ? ` AND (a.user_id IN (${idList.map(() => '?').join(',')}) OR a.user_id IS NULL)` : '';
     sql = `SELECT a.*, u.name as user_name FROM absences a
            LEFT JOIN users u ON a.user_id = u.id
            WHERE a.date_from <= ? AND a.date_to >= ?
@@ -208,9 +213,9 @@ router.get('/by-date', authenticate, (req, res) => {
              (a.status IN ('active','approved'))
              OR (a.status = 'pending' AND a.type NOT IN ${APPROVAL_TYPES})
              OR (a.status = 'pending' AND a.proposed_date_from IS NOT NULL)
-           )
+           )${userFilter}
            ORDER BY a.date_from`;
-    params = [to, from];
+    params = [to, from, ...idList];
   } else {
     // Mitarbeiter: eigene + Feiertage (active)
     sql = `SELECT a.*, u.name as user_name FROM absences a
