@@ -77,58 +77,57 @@ function calcTargetHours(db, userId, from, to) {
   const dayKeys = [null, 'hours_mon', 'hours_tue', 'hours_wed', 'hours_thu', 'hours_fri', null]; // 0=So, 6=Sa
   const periods = getEmploymentPeriods(db, userId);
 
-  if (targets.length === 0) {
-    // Fallback 8h/Werktag — aber nur an Tagen innerhalb der Anstellung
-    let t = 0;
-    const c = new Date(from + 'T12:00:00');
-    const e = new Date(to + 'T12:00:00');
-    while (c <= e) {
-      const d = c.getDay();
-      if (d !== 0 && d !== 6 && isEmployedOn(periods, fmtDate(c))) t += 8;
-      c.setDate(c.getDate() + 1);
+  // Soll-relevante Abwesenheiten nach Prioritaet aufteilen: Feiertag > Krank > Urlaub/Schule/Innung/Sonderurlaub.
+  // - Feiertag/Urlaub/Schule/Innung/Sonderurlaub: Soll = 0 (Arbeit an dem Tag = volle Ueberstunden).
+  // - Krank: Soll = min(an dem Tag gebuchte Ist-Stunden, Normal-Soll) -> ueberstundenneutral bis zur normalen
+  //   Tagesleistung; nur darueber hinaus echte Ueberstunden. Krank ohne Arbeit: Soll 0 (wie bisher).
+  const feiertagDays = new Set();
+  const krankDays = new Set();
+  const otherZeroDays = new Set();
+  const fillDays = (rows, set) => {
+    for (const a of rows) {
+      const c = new Date(a.date_from + 'T12:00:00'), e = new Date(a.date_to + 'T12:00:00');
+      while (c <= e) { set.add(fmtDate(c)); c.setDate(c.getDate() + 1); }
     }
-    return t;
+  };
+  fillDays(db.prepare("SELECT date_from, date_to FROM absences WHERE type='feiertag' AND status='active' AND date_from<=? AND date_to>=? AND deleted_at IS NULL").all(to, from), feiertagDays);
+  fillDays(db.prepare("SELECT date_from, date_to FROM absences WHERE user_id=? AND type='krank' AND status IN ('active','approved') AND date_from<=? AND date_to>=? AND deleted_at IS NULL").all(userId, to, from), krankDays);
+  fillDays(db.prepare("SELECT date_from, date_to FROM absences WHERE user_id=? AND type IN ('urlaub','sonderurlaub','berufsschule','innung') AND status IN ('active','approved') AND date_from<=? AND date_to>=? AND deleted_at IS NULL").all(userId, to, from), otherZeroDays);
+
+  // Ist-Stunden je Tag — nur fuer Krank-Tage gebraucht. Gleiche Berechnung wie die angezeigten
+  // Ist-Stunden (calcActualHours: Ueberlappungen zusammengefasst, Pausen abgezogen).
+  const istByDay = {};
+  if (krankDays.size > 0) {
+    const ents = db.prepare("SELECT user_id, date, time_from, time_to, break_minutes FROM entries WHERE user_id=? AND date>=? AND date<=? AND deleted_at IS NULL").all(userId, from, to);
+    const byDate = {};
+    for (const e of ents) (byDate[e.date] || (byDate[e.date] = [])).push(e);
+    for (const d of Object.keys(byDate)) istByDay[d] = calcActualHours(byDate[d]);
   }
 
-  // Abwesenheiten laden die Soll → 0 setzen
-  const absences = db.prepare(`
-    SELECT date_from, date_to FROM absences
-    WHERE (
-      (user_id = ? AND type IN ('krank','urlaub','sonderurlaub','berufsschule','innung')
-       AND status IN ('active','approved'))
-      OR (type = 'feiertag' AND status = 'active')
-    )
-    AND date_from <= ? AND date_to >= ?
-    AND deleted_at IS NULL
-  `).all(userId, to, from);
-
-  // Menge der Tage mit Soll=0 ermitteln
-  const zeroSollDays = new Set();
-  for (const a of absences) {
-    const cur = new Date(a.date_from + 'T12:00:00');
-    const end = new Date(a.date_to + 'T12:00:00');
-    while (cur <= end) {
-      zeroSollDays.add(fmtDate(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-  }
+  // Normal-Soll fuer einen Wochentag (aus user_target_hours zum Datum, sonst Fallback 8h)
+  const normalSollFor = (dateStr, day) => {
+    if (targets.length === 0) return 8;
+    let active = targets[0];
+    for (const t of targets) { if (t.valid_from <= dateStr) active = t; else break; }
+    return active[dayKeys[day]] || 0;
+  };
 
   let total = 0;
   const startDate = new Date(from + 'T12:00:00');
   const endDate = new Date(to + 'T12:00:00');
-
   const cur = new Date(startDate);
   while (cur <= endDate) {
     const day = cur.getDay();
     if (day !== 0 && day !== 6) {
       const dateStr = fmtDate(cur);
-      if (!zeroSollDays.has(dateStr) && isEmployedOn(periods, dateStr)) {
-        let active = targets[0];
-        for (const t of targets) {
-          if (t.valid_from <= dateStr) active = t;
-          else break;
-        }
-        total += active[dayKeys[day]] || 0;
+      if (isEmployedOn(periods, dateStr)) {
+        const normalSoll = normalSollFor(dateStr, day);
+        let daySoll;
+        if (feiertagDays.has(dateStr)) daySoll = 0;                                  // Feiertag schlaegt alles
+        else if (krankDays.has(dateStr)) daySoll = Math.min(istByDay[dateStr] || 0, normalSoll); // Krank: neutral bis Normal-Soll
+        else if (otherZeroDays.has(dateStr)) daySoll = 0;                            // Urlaub/Schule/Innung/Sonderurlaub
+        else daySoll = normalSoll;
+        total += daySoll;
       }
     }
     cur.setDate(cur.getDate() + 1);
