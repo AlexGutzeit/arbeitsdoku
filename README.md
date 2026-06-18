@@ -324,9 +324,11 @@ Danach mit `admin` / `NeuesPasswort123` anmelden und in der App ändern.
 
 **Über-/Minusstunden stimmen nicht.**
 Pro Mitarbeiter müssen **Soll-Stunden** hinterlegt sein (*Mitarbeiter → Bearbeiten*). Ohne sie kann
-das Stundenkonto nicht korrekt berechnet werden. Das **„Gültig ab"-Datum** der Soll-Stunden gilt als
-Anstellungsbeginn: davor werden keine Soll-Stunden gerechnet (keine Minusstunden vor dem Eintritt).
-Setze es auf den tatsächlichen Eintrittstag – auch rückwirkend, um Altzeiten korrekt einzurechnen.
+das Stundenkonto nicht korrekt berechnet werden. Man kann **mehrere „Gültig ab"-Einträge** hinterlegen,
+wenn sich die Wochenstunden im Laufe der Anstellung ändern – ab dem jeweiligen Datum gilt dann der neue
+Wert (Staffelung). Das **früheste „Gültig ab"-Datum** gilt als **Anstellungsbeginn**: davor werden keine
+Soll-Stunden gerechnet (keine Minusstunden vor dem Eintritt). Setze das früheste auf den tatsächlichen
+Eintrittstag – auch rückwirkend, um Altzeiten korrekt einzurechnen.
 
 **Wie entferne ich einen ausgeschiedenen Mitarbeiter?**
 Nicht löschen, sondern **ausstellen**: *Mitarbeiter → Ausstellen*, Austrittsdatum wählen. Der Account
