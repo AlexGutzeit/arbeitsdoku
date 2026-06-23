@@ -106,11 +106,13 @@ router.get('/', authenticate, (req, res) => {
     SELECT DISTINCT n.*, u.name as owner_name,
       CASE WHEN n.user_id = ? THEN 'owner'
            ELSE COALESCE(ns.permission, '') END as access_level,
-      eu.name as editing_by_name
+      eu.name as editing_by_name,
+      COALESCE(lu.name, u.name) as updated_by_name
     FROM notes n
     JOIN users u ON n.user_id = u.id
     LEFT JOIN note_shares ns ON ns.note_id = n.id AND ns.user_id = ?
     LEFT JOIN users eu ON n.editing_by = eu.id
+    LEFT JOIN users lu ON n.updated_by = lu.id
     WHERE n.user_id = ? OR ns.user_id = ?
     ORDER BY n.updated_at DESC
   `).all(uid, uid, uid, uid);

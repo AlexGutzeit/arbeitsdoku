@@ -5733,7 +5733,7 @@ function renderNoteList(notes) {
           <div class="note-meta">
             ${ownerInfo}
             ${sharesInfo}
-            <span>${formatDateTimeDE(n.updated_at)}</span>
+            <span>Bearbeitet ${formatDateTimeDE(n.updated_at)}${n.updated_by_name ? ' von ' + esc(n.updated_by_name) : ''}</span>
           </div>
         </div>
         <div class="note-actions">
