@@ -4002,7 +4002,10 @@ async function renderSettings() {
           </div>
           ${colorPickerHtml('b-theme', 'Theme-Farbe', S.settings.theme_color || '#5DB635')}
           ${colorPickerHtml('b-bg', 'Hintergrund (PWA-Splash)', S.settings.background_color || '#ffffff')}
-          <button type="submit" class="btn btn-primary">Branding speichern</button>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="submit" class="btn btn-primary">Branding speichern</button>
+            <button type="button" class="btn btn-outline" id="brand-reset">Zurücksetzen</button>
+          </div>
         </form>
         <hr style="margin:1.5rem 0;border:none;border-top:1px solid var(--border);">
         <div class="form-group">
@@ -4141,6 +4144,13 @@ async function renderSettings() {
       toast('Branding gespeichert — App wird neu geladen', 'success');
       setTimeout(() => location.reload(), 800);
     } catch (err) { toast(err.message, 'error'); }
+  });
+
+  // Branding zuruecksetzen: verwirft ungespeicherte Aenderungen (Name/Farben/Icon-Auswahl),
+  // indem die Settings-Ansicht aus dem zuletzt gespeicherten Stand neu aufgebaut wird.
+  document.getElementById('brand-reset')?.addEventListener('click', () => {
+    renderSettings();
+    toast('Auf gespeicherten Stand zurückgesetzt');
   });
 
   // App-Icon hochladen
