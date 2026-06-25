@@ -4551,11 +4551,11 @@ async function renderDeletedUsers() {
 function docFileIcon(name) {
   const ext = (name || '').toLowerCase().split('.').pop();
   if (ext === 'pdf') return '📄';
-  if (['doc', 'docx'].includes(ext)) return '📝';
-  if (['xls', 'xlsx'].includes(ext)) return '📊';
-  if (['ppt', 'pptx'].includes(ext)) return '📈';
+  if (['doc', 'docx', 'odt'].includes(ext)) return '📝';
+  if (['xls', 'xlsx', 'ods'].includes(ext)) return '📊';
+  if (['ppt', 'pptx', 'odp'].includes(ext)) return '📈';
   if (['png', 'jpg', 'jpeg'].includes(ext)) return '🖼️';
-  if (['txt', 'csv'].includes(ext)) return '📃';
+  if (['txt', 'csv', 'md'].includes(ext)) return '📃';
   return '📎';
 }
 function docFormatSize(bytes) {
@@ -4694,8 +4694,8 @@ async function renderDocuments() {
         ${manage ? `<div class="doc-toolbar">
           <button class="btn btn-sm btn-outline" id="doc-new-folder">+ Neuer Ordner</button>
           <button class="btn btn-sm btn-primary" id="doc-upload-btn">⬆ Datei hochladen</button>
-          <input type="file" id="doc-file-input" style="display:none" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.txt,.csv">
-          <span class="doc-toolbar-hint">PDF, Word, Excel, PowerPoint, PNG, JPG, TXT, CSV — max. 5 MB</span>
+          <input type="file" id="doc-file-input" style="display:none" accept=".pdf,.docx,.xlsx,.pptx,.odt,.ods,.odp,.png,.jpg,.jpeg,.txt,.csv,.md">
+          <span class="doc-toolbar-hint">PDF, Word/Excel/PowerPoint, OpenDocument (odt/ods/odp), PNG, JPG, TXT, CSV, Markdown — max. 5 MB</span>
         </div>` : ''}
         <div class="doc-list">
           ${folderRows}${docRows}

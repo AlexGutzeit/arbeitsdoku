@@ -20,14 +20,17 @@ function canManageDocs(req, res, next) {
 const storageDir = path.join(__dirname, '..', 'storage', 'documents');
 function ensureStorageDir() { if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true }); }
 
-const ALLOWED_EXT = ['.pdf', '.docx', '.xlsx', '.pptx', '.png', '.jpg', '.jpeg', '.txt', '.csv'];
+const ALLOWED_EXT = ['.pdf', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp', '.png', '.jpg', '.jpeg', '.txt', '.csv', '.md'];
 const MIME = {
   '.pdf': 'application/pdf',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.odt': 'application/vnd.oasis.opendocument.text',
+  '.ods': 'application/vnd.oasis.opendocument.spreadsheet',
+  '.odp': 'application/vnd.oasis.opendocument.presentation',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.txt': 'text/plain', '.csv': 'text/csv',
+  '.txt': 'text/plain', '.csv': 'text/csv', '.md': 'text/markdown',
 };
 const NAME_MAX = 120;
 const DEFAULT_STORAGE_LIMIT = 500 * 1024 * 1024;       // Standard, falls nichts eingestellt (500 MB)
@@ -58,7 +61,7 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (ALLOWED_EXT.includes(ext)) cb(null, true);
-    else cb(new Error('Dateiformat nicht erlaubt (erlaubt: PDF, Word, Excel, PowerPoint, PNG, JPG, TXT, CSV)'));
+    else cb(new Error('Dateiformat nicht erlaubt (erlaubt: PDF, Word/Excel/PowerPoint, OpenDocument (odt/ods/odp), PNG, JPG, TXT, CSV, Markdown)'));
   },
 });
 
@@ -89,14 +92,18 @@ function contentMatchesExt(filePath, ext) {
     case '.png':  return startsWith(head, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
     case '.jpg':
     case '.jpeg': return startsWith(head, [0xFF, 0xD8, 0xFF]);
-    // docx/xlsx/pptx sind ZIP-Container (Office Open XML) → PK-Signatur
+    // docx/xlsx/pptx (Office Open XML) UND odt/ods/odp (OpenDocument) sind ZIP-Container → PK-Signatur
     case '.docx':
     case '.xlsx':
-    case '.pptx': return startsWith(head, [0x50, 0x4B, 0x03, 0x04])
+    case '.pptx':
+    case '.odt':
+    case '.ods':
+    case '.odp':  return startsWith(head, [0x50, 0x4B, 0x03, 0x04])
                       || startsWith(head, [0x50, 0x4B, 0x05, 0x06])
                       || startsWith(head, [0x50, 0x4B, 0x07, 0x08]);
     case '.txt':
-    case '.csv':  return isLikelyText(filePath);
+    case '.csv':
+    case '.md':   return isLikelyText(filePath);
     default:      return false;
   }
 }
