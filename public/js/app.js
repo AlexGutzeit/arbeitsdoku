@@ -223,6 +223,131 @@ function formatDateTimeDE(dt) {
   return `${pad(berlin.getDate())}.${pad(berlin.getMonth() + 1)}.${berlin.getFullYear()}, ${pad(berlin.getHours())}:${pad(berlin.getMinutes())}`;
 }
 
+// --- Farb-Hilfen fuer den eigenen Farbwaehler (HSV <-> Hex) ---
+// Normalisiert eine Hex-Eingabe auf '#RRGGBB' (Grossschreibung) oder gibt null zurueck.
+// Akzeptiert mit/ohne '#' und die 3-stellige Kurzform (#abc -> #AABBCC).
+function normalizeHex(str) {
+  if (typeof str !== 'string') return null;
+  let s = str.trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{3}$/.test(s)) s = s.split('').map(c => c + c).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(s)) return null;
+  return '#' + s.toUpperCase();
+}
+// Hex '#RRGGBB' -> { h:0..360, s:0..100, v:0..100 }. Bei ungueltig: null.
+function hexToHsv(hex) {
+  const n = normalizeHex(hex);
+  if (!n) return null;
+  const r = parseInt(n.slice(1, 3), 16) / 255;
+  const g = parseInt(n.slice(3, 5), 16) / 255;
+  const b = parseInt(n.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
+  }
+  const s = max === 0 ? 0 : Math.round((d / max) * 100);
+  const v = Math.round(max * 100);
+  return { h, s, v };
+}
+// { h, s, v } -> '#RRGGBB' (h 0..360, s/v 0..100).
+function hsvToHex(h, s, v) {
+  h = ((h % 360) + 360) % 360; s = Math.max(0, Math.min(100, s)) / 100; v = Math.max(0, Math.min(100, v)) / 100;
+  const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const hx = n => Math.round((n + m) * 255).toString(16).padStart(2, '0');
+  return ('#' + hx(r) + hx(g) + hx(b)).toUpperCase();
+}
+
+// Markup eines eigenen Farbwaehlers. Das Hex-Textfeld traegt die uebergebene id (z.B. 'b-theme'),
+// damit der bestehende Speichern-Handler unveraendert dessen .value (Hex) lesen kann.
+function colorPickerHtml(id, label, value) {
+  const hex = normalizeHex(value) || '#000000';
+  return `
+    <div class="form-group color-picker" data-cp="${id}">
+      <label>${label}</label>
+      <div class="cp-top">
+        <span class="cp-swatch" data-cp-swatch></span>
+        <input type="text" class="form-control cp-hex" id="${id}" value="${hex}" maxlength="7" spellcheck="false"
+               autocapitalize="off" autocomplete="off" inputmode="text" aria-label="${label} Hex-Wert">
+      </div>
+      <div class="cp-sliders">
+        <label class="cp-slabel">Farbton</label>
+        <input type="range" class="cp-range cp-hue" data-cp-h min="0" max="360" step="1">
+        <label class="cp-slabel">Sättigung</label>
+        <input type="range" class="cp-range cp-sat" data-cp-s min="0" max="100" step="1">
+        <label class="cp-slabel">Wert</label>
+        <input type="range" class="cp-range cp-val" data-cp-v min="0" max="100" step="1">
+      </div>
+    </div>`;
+}
+
+// Verdrahtet einen Farbwaehler (HSV-Regler <-> Hex-Feld <-> Vorschau, beidseitig live).
+function bindColorPicker(id) {
+  const root = document.querySelector(`.color-picker[data-cp="${id}"]`);
+  if (!root) return;
+  const hexEl = root.querySelector('.cp-hex');
+  const swatch = root.querySelector('[data-cp-swatch]');
+  const hEl = root.querySelector('[data-cp-h]');
+  const sEl = root.querySelector('[data-cp-s]');
+  const vEl = root.querySelector('[data-cp-v]');
+
+  const init = hexToHsv(hexEl.value) || { h: 0, s: 0, v: 0 };
+  const st = { h: init.h, s: init.s, v: init.v, lastHue: init.h };
+
+  function paintGradients() {
+    // Farbton: statischer Regenbogen; Saettigung: Grau->Vollfarbe; Wert: Schwarz->Vollfarbe (beim akt. Farbton)
+    hEl.style.background = 'linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)';
+    const pure = hsvToHex(st.h, 100, 100);
+    sEl.style.background = `linear-gradient(to right, ${hsvToHex(st.h, 0, st.v || 50)}, ${pure})`;
+    vEl.style.background = `linear-gradient(to right, #000, ${hsvToHex(st.h, st.s, 100)})`;
+  }
+  function applyToUi(updateHexField = true) {
+    hEl.value = st.h; sEl.value = st.s; vEl.value = st.v;
+    const hex = hsvToHex(st.h, st.s, st.v);
+    if (updateHexField) hexEl.value = hex;
+    swatch.style.background = hex;
+    paintGradients();
+  }
+
+  // Regler -> State -> Hex
+  function onSlider() {
+    st.h = parseInt(hEl.value, 10); st.s = parseInt(sEl.value, 10); st.v = parseInt(vEl.value, 10);
+    if (st.s > 0) st.lastHue = st.h;
+    applyToUi(true);
+  }
+  [hEl, sEl, vEl].forEach(el => el.addEventListener('input', onSlider));
+
+  // Hex-Feld -> Regler (nur bei gueltiger Eingabe; Grau/Weiss: Farbton beibehalten)
+  hexEl.addEventListener('input', () => {
+    const hsv = hexToHsv(hexEl.value);
+    if (!hsv) return; // ungueltig -> Regler stehen lassen, kein Crash
+    st.s = hsv.s; st.v = hsv.v;
+    st.h = hsv.s === 0 ? st.lastHue : hsv.h;
+    if (hsv.s > 0) st.lastHue = hsv.h;
+    applyToUi(false); // Hex-Feld waehrend des Tippens nicht ueberschreiben
+  });
+  hexEl.addEventListener('blur', () => {
+    const n = normalizeHex(hexEl.value) || hsvToHex(st.h, st.s, st.v);
+    hexEl.value = n;
+  });
+
+  // Initial: Regler + Vorschau aus gespeichertem Hex ableiten, das Hex-Feld selbst aber NICHT
+  // ueberschreiben (sonst Rundungsdrift beim blossen Oeffnen). Swatch zeigt den echten Hex-Wert.
+  hEl.value = st.h; sEl.value = st.s; vEl.value = st.v;
+  swatch.style.background = normalizeHex(hexEl.value) || hsvToHex(st.h, st.s, st.v);
+  paintGradients();
+}
+
 function formatDateISO(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -3875,16 +4000,8 @@ async function renderSettings() {
             <label>Short-Name (max. 12 Zeichen, fuer Homescreen-Icon)</label>
             <input type="text" class="form-control" id="b-app-short" maxlength="12" value="${esc(S.settings.app_short_name || '')}" placeholder="Arbeitsdoku">
           </div>
-          <div class="form-row" style="grid-template-columns:1fr 1fr;">
-            <div class="form-group">
-              <label>Theme-Farbe</label>
-              <input type="color" class="form-control" id="b-theme" value="${esc(S.settings.theme_color || '#5DB635')}" style="height:42px;padding:4px;">
-            </div>
-            <div class="form-group">
-              <label>Hintergrund (PWA-Splash)</label>
-              <input type="color" class="form-control" id="b-bg" value="${esc(S.settings.background_color || '#ffffff')}" style="height:42px;padding:4px;">
-            </div>
-          </div>
+          ${colorPickerHtml('b-theme', 'Theme-Farbe', S.settings.theme_color || '#5DB635')}
+          ${colorPickerHtml('b-bg', 'Hintergrund (PWA-Splash)', S.settings.background_color || '#ffffff')}
           <button type="submit" class="btn btn-primary">Branding speichern</button>
         </form>
         <hr style="margin:1.5rem 0;border:none;border-top:1px solid var(--border);">
@@ -4002,6 +4119,10 @@ async function renderSettings() {
       renderSettings();
     } catch (err) { toast(err.message, 'error'); }
   });
+
+  // Eigener Farbwaehler fuer Theme- + Hintergrundfarbe (HSV-Regler <-> Hex)
+  bindColorPicker('b-theme');
+  bindColorPicker('b-bg');
 
   // Brand-Form (App-Name + Short-Name + Theme-Color + Background-Color)
   document.getElementById('brand-form').addEventListener('submit', async (e) => {

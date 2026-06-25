@@ -353,6 +353,29 @@ textarea.form-control { resize: vertical; min-height: 60px; }
   grid-template-columns: 1fr 1fr 1fr;
   gap: 0.75rem;
 }
+
+/* Eigener Farbwaehler (HSV-Regler + Hex-Feld) */
+.color-picker .cp-top { display: flex; align-items: center; gap: 0.6rem; }
+.cp-swatch {
+  width: 42px; height: 42px; flex: 0 0 auto; border-radius: 8px;
+  border: 1px solid var(--border); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+}
+.cp-hex { max-width: 160px; font-family: monospace; text-transform: uppercase; letter-spacing: 0.5px; }
+.cp-sliders { margin-top: 0.6rem; display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.6rem; align-items: center; }
+.cp-slabel { font-size: 0.8rem; color: var(--text-light); margin: 0; }
+.cp-range {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 14px;
+  border-radius: 7px; outline: none; border: 1px solid var(--border);
+  background: #ddd; /* wird per JS mit Verlauf ueberschrieben */
+}
+.cp-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; border: 2px solid #555; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
+.cp-range::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; border: 2px solid #555; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
 .net-hours-display {
   background: var(--primary-light);
   color: var(--primary);
