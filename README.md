@@ -264,6 +264,14 @@ Alle veränderlichen Daten liegen im Projektordner (und sind aus der Versionsver
 Für Server-Betrieb zusätzlich eine **dateibasierte Sicherung** (z. B. nächtlicher `rsync`/Cron der
 Ordner `data/`, `uploads/`, `storage/`) einrichten.
 
+**Wiederherstellung (getestet):** Ein per *Backup herunterladen* (oder per Cron) erzeugtes ZIP wird über
+*Einstellungen → Backup einspielen* hochgeladen. Der Server prüft das ZIP, legt **zuerst** ein
+Safety-Backup der aktuellen Daten an, schreibt die Datenbank **atomar** zurück, stellt Uploads/Dokumente
+wieder her und **lädt live neu** (kein Neustart nötig). Wichtig: Das Backup enthält die **echten
+Passwörter zum Sicherungszeitpunkt** – nach dem Einspielen gelten wieder genau diese Anmeldedaten. Bei
+Totalverlust genügen die drei Ordner `data/`, `uploads/`, `storage/` aus einer Dateisicherung bzw. das
+ZIP über die UI.
+
 ---
 
 ## White-Label-Branding
