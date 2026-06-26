@@ -645,7 +645,7 @@ async function handleLogin(e) {
 }
 
 function logout() {
-  if (S.sse) { S.sse.close(); S.sse = null; }
+  stopSSE();
   S.token = null;
   S.user = null;
   localStorage.removeItem('token');
@@ -654,33 +654,80 @@ function logout() {
   navigate('/login');
 }
 
-function initSSE() {
-  if (S.sse) return;
-  S.sse = new EventSource('/api/events?token=' + encodeURIComponent(S.token));
-  S.sse.onmessage = function(e) {
-    let p; try { p = JSON.parse(e.data); } catch (_) { return; }
-    // Bestellungs-Badge immer aktualisieren (live-Zähler, auch eigene Aktionen)
-    if (p.type === 'orders') loadBadges();
-    if (p.originTab === S.tabId) return;
-    const route = getRoute();
-    if (p.type === 'orders'   && route === '/orders')                              renderOrders();
-    if (p.type === 'notes'    && route === '/notes' && !_editingNoteLockId)        renderNotizen();
-    if (p.type === 'bulletin' && route === '/bulletin')                            renderBulletin();
-    if (p.type === 'planning' && route === '/planning')                            renderPlanningContent();
-    if (p.type === 'tools'    && route === '/tools')                               renderTools();
-    if (p.type === 'entries'  && route === '/statistics')                          renderStatistics();
-    if ((p.type === 'planning' || p.type === 'bulletin') && route === '/welcome')  renderWelcome();
-    if (p.type === 'bulletin'  && route !== '/bulletin')  loadBadges();
-    if (p.type === 'notes'     && route !== '/notes')     loadBadges();
-    if (p.type === 'absences') {
-      loadBadges();  // immer, damit Nav-Badge auf jeder Route live aktualisiert wird
-      if (route.startsWith('/absences'))       renderAbsences();
-      else if (route === '/' || route === '')  renderDashboardContent();
-      else if (route === '/welcome')           renderWelcome();
-      else if (route === '/planning')          renderPlanningContent();
-      else if (route === '/statistics')        renderStatistics();
-    }
+// Echtzeit-Updates (SSE). Statt des langen Login-Tokens haengt der Client ein nur 60 s gueltiges
+// Ticket an die URL und holt fuer JEDE (Wieder-)Verbindung ein frisches. Wiederverbinden uebernehmen
+// wir selbst (EventSource wuerde sonst stur die alte, abgelaufene URL erneut verwenden).
+let _sseStopped = false;
+let _sseReconnectTimer = null;
+let _sseBackoff = 1000;
+
+function _sseOnMessage(e) {
+  let p; try { p = JSON.parse(e.data); } catch (_) { return; }
+  // Bestellungs-Badge immer aktualisieren (live-Zähler, auch eigene Aktionen)
+  if (p.type === 'orders') loadBadges();
+  if (p.originTab === S.tabId) return;
+  const route = getRoute();
+  if (p.type === 'orders'   && route === '/orders')                              renderOrders();
+  if (p.type === 'notes'    && route === '/notes' && !_editingNoteLockId)        renderNotizen();
+  if (p.type === 'bulletin' && route === '/bulletin')                            renderBulletin();
+  if (p.type === 'planning' && route === '/planning')                            renderPlanningContent();
+  if (p.type === 'tools'    && route === '/tools')                               renderTools();
+  if (p.type === 'entries'  && route === '/statistics')                          renderStatistics();
+  if ((p.type === 'planning' || p.type === 'bulletin') && route === '/welcome')  renderWelcome();
+  if (p.type === 'bulletin'  && route !== '/bulletin')  loadBadges();
+  if (p.type === 'notes'     && route !== '/notes')     loadBadges();
+  if (p.type === 'absences') {
+    loadBadges();  // immer, damit Nav-Badge auf jeder Route live aktualisiert wird
+    if (route.startsWith('/absences'))       renderAbsences();
+    else if (route === '/' || route === '')  renderDashboardContent();
+    else if (route === '/welcome')           renderWelcome();
+    else if (route === '/planning')          renderPlanningContent();
+    else if (route === '/statistics')        renderStatistics();
+  }
+}
+
+function scheduleSSEReconnect() {
+  if (_sseStopped || _sseReconnectTimer) return;
+  const delay = _sseBackoff;
+  _sseBackoff = Math.min(_sseBackoff * 2, 30000); // exponentiell, max. 30 s
+  _sseReconnectTimer = setTimeout(() => { _sseReconnectTimer = null; connectSSE(); }, delay);
+}
+
+async function connectSSE() {
+  if (_sseStopped || !S.token) return;
+  if (S.sse) { try { S.sse.close(); } catch (_) {} S.sse = null; }
+  let ticket;
+  try {
+    const r = await api('GET', '/api/events/ticket');
+    if (!r || !r.ticket) return;        // null = 401/abgemeldet (api() hat schon ausgeloggt) → nicht erneut versuchen
+    ticket = r.ticket;
+  } catch (_) {
+    scheduleSSEReconnect();             // Netzwerkfehler → spaeter erneut versuchen
+    return;
+  }
+  if (_sseStopped || !S.token) return;
+  const es = new EventSource('/api/events?ticket=' + encodeURIComponent(ticket));
+  S.sse = es;
+  es.onopen = () => { _sseBackoff = 1000; }; // erfolgreiche Verbindung → Backoff zuruecksetzen
+  es.onmessage = _sseOnMessage;
+  es.onerror = () => {                  // getrennt / Ticket abgelaufen / Server-Force-Close → frisch verbinden
+    try { es.close(); } catch (_) {}
+    if (S.sse === es) S.sse = null;
+    scheduleSSEReconnect();
   };
+}
+
+function initSSE() {
+  _sseStopped = false;
+  _sseBackoff = 1000;
+  if (S.sse) return;
+  connectSSE();
+}
+
+function stopSSE() {
+  _sseStopped = true;
+  if (_sseReconnectTimer) { clearTimeout(_sseReconnectTimer); _sseReconnectTimer = null; }
+  if (S.sse) { try { S.sse.close(); } catch (_) {} S.sse = null; }
 }
 
 // --- Layout ---

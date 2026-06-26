@@ -16,6 +16,41 @@ const PORT = process.env.PORT || 3000;
 // Vertraue dem ersten Proxy in der Kette (Caddy) — req.ip kommt dann aus X-Forwarded-For
 app.set('trust proxy', 1);
 
+// --- Sicherheits-Header (eng auf diese App zugeschnitten) ---
+// CSP (Content-Security-Policy): sagt dem Browser, woher Inhalte kommen duerfen.
+//  - script-src 'self'  : nur App-eigene Skript-Dateien, KEINE eingebetteten <script> (die
+//    Service-Worker-Registrierung liegt ausgelagert in /js/sw-register.js) → eingeschleuste
+//    Fremd-Skripte werden vom Browser nicht ausgefuehrt (zweite Mauer gegen XSS).
+//  - style-src 'self' 'unsafe-inline' : die App nutzt viele inline style="..."-Attribute und den
+//    Branding-<style>-Block; inline Styles sind risikoarm und bleiben erlaubt.
+//  - img/font/connect/manifest/worker-src 'self' : alles nur von der eigenen Herkunft, inkl.
+//    fetch + SSE (Echtzeit). Externe Wetter-APIs ruft der Server, nicht der Browser → 'self' genuegt.
+//  - frame-ancestors 'none' (+ X-Frame-Options DENY) : die App darf nicht in eine fremde Seite
+//    eingebettet werden (Schutz gegen „Clickjacking").
+//  - object-src 'none', base-uri/form-action 'self' : weitere Haertung.
+// HSTS (HTTPS-Erzwingung) uebernimmt bewusst der vorgeschaltete Caddy-Proxy.
+const CSP_POLICY = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self'",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "manifest-src 'self'",
+  "worker-src 'self'",
+].join('; ');
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', CSP_POLICY);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -59,9 +94,19 @@ app.use('/api/absences', require('./routes/absences'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/documents', require('./routes/documents'));
 
+// Kurzlebiges SSE-Ticket: normaler (authentifizierter) Aufruf per Authorization-Header liefert ein
+// nur 60 Sekunden gueltiges Token. Der Client haengt DIESES an die SSE-URL — nicht mehr den langen
+// Login-Token. Selbst falls die URL in einem Proxy-Log landet, ist das Ticket Sekunden spaeter wertlos.
+app.get('/api/events/ticket', authenticate, (req, res) => {
+  const ticket = jwt.sign({ userId: req.user.id, sse: true }, JWT_SECRET, { expiresIn: '60s' });
+  res.json({ ticket });
+});
+
 // SSE – Echtzeit-Updates für alle verbundenen Clients
 app.get('/api/events', (req, res) => {
-  const token = req.query.token;
+  // Bevorzugt das kurzlebige Ticket; der lange Login-Token bleibt als Fallback gueltig (z.B. fuer
+  // einen alten, noch offenen Tab vor dem Reload) — die Verifikation ist fuer beide identisch.
+  const token = req.query.ticket || req.query.token;
   if (!token) return res.status(401).end();
   try { jwt.verify(token, JWT_SECRET); } catch (_) { return res.status(401).end(); }
   res.set({
