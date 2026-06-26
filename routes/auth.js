@@ -10,6 +10,7 @@ const router = express.Router();
 
 // Fester Dummy-Hash (Cost 10, wie die echten Hashes), um die Antwortzeit bei unbekanntem
 // Benutzer an den bcrypt-Vergleich anzugleichen → keine User-Enumeration über Timing.
+// hashSync hier bewusst: laeuft EINMAL beim Serverstart (nicht pro Anfrage), blockiert also nichts.
 const DUMMY_HASH = bcrypt.hashSync('timing-equalizer-not-a-real-password', 10);
 
 const loginLimiter = rateLimit({
@@ -21,8 +22,10 @@ const loginLimiter = rateLimit({
   skipSuccessfulRequests: true,
 });
 
-// Login
-router.post('/login', loginLimiter, (req, res) => {
+// Login. async + bcrypt.compare (kooperativ): die rechenintensive Passwortpruefung blockiert den
+// Event-Loop nicht mehr — der Server bleibt unter vielen gleichzeitigen Logins ansprechbar.
+router.post('/login', loginLimiter, async (req, res) => {
+ try {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Benutzername und Passwort erforderlich' });
@@ -31,12 +34,12 @@ router.post('/login', loginLimiter, (req, res) => {
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   if (!user) {
-    bcrypt.compareSync(password, DUMMY_HASH); // Timing angleichen (Antwortzeit wie bei echtem User)
+    await bcrypt.compare(password, DUMMY_HASH); // Timing angleichen (Antwortzeit wie bei echtem User)
     logAudit(db, { username, action: 'login_failed', details: 'Benutzer unbekannt', ip: req.ip });
     return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
   }
 
-  if (!bcrypt.compareSync(password, user.password_hash)) {
+  if (!(await bcrypt.compare(password, user.password_hash))) {
     logAudit(db, { userId: user.id, username, action: 'login_failed', details: 'Falsches Passwort', ip: req.ip });
     return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
   }
@@ -64,6 +67,10 @@ router.post('/login', loginLimiter, (req, res) => {
       can_upload: !!user.can_upload
     }
   });
+ } catch (e) {
+  console.error('Login-Fehler:', e.message);
+  return res.status(500).json({ error: 'Interner Serverfehler' });
+ }
 });
 
 // Aktueller Benutzer

@@ -98,7 +98,7 @@ router.get('/:id', authenticate, authorize('chef'), (req, res) => {
 });
 
 // Benutzer erstellen
-router.post('/', authenticate, authorize('chef'), (req, res) => {
+router.post('/', authenticate, authorize('chef'), async (req, res) => {
   const { username, password, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri } = req.body;
 
   if (!username || !password || !name || !role) {
@@ -121,7 +121,9 @@ router.post('/', authenticate, authorize('chef'), (req, res) => {
   const hMon = hours_mon || 8, hTue = hours_tue || 8, hWed = hours_wed || 8, hThu = hours_thu || 8, hFri = hours_fri || 6;
   const hpw = target_hours_per_week || (hMon + hTue + hWed + hThu + hFri);
 
-  const hash = bcrypt.hashSync(password, 10);
+  let hash;
+  try { hash = await bcrypt.hash(password, 10); } // kooperativ (blockiert den Event-Loop nicht)
+  catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }
   const result = db.prepare(
     "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(username, hash, name, role, hpw, start_overtime || 0, can_plan ? 1 : 0, can_bulletin ? 1 : 0, can_upload ? 1 : 0);
@@ -176,7 +178,7 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
 });
 
 // Passwort zurücksetzen
-router.post('/:id/reset-password', authenticate, authorize('chef'), (req, res) => {
+router.post('/:id/reset-password', authenticate, authorize('chef'), async (req, res) => {
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
@@ -187,7 +189,9 @@ router.post('/:id/reset-password', authenticate, authorize('chef'), (req, res) =
   if (!password || password.length < 4) {
     return res.status(400).json({ error: 'Passwort muss mindestens 4 Zeichen haben' });
   }
-  const hash = bcrypt.hashSync(password, 10);
+  let hash;
+  try { hash = await bcrypt.hash(password, 10); } // kooperativ (blockiert den Event-Loop nicht)
+  catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }
   db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(hash, req.params.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_password_reset',
     details: `Passwort zurueckgesetzt fuer: ${user.username} (id=${req.params.id})`, ip: req.ip });
