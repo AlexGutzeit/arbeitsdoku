@@ -55,9 +55,31 @@ Jeder Punkt entspricht einem Menüpunkt in der App.
 | **📜 Audit-Log** | Revisionssicheres Protokoll (Logins, Backups, Benutzeränderungen u. a.). Benutzeranlage wird mit allen Parametern, Änderungen feldgenau als „alt → neu" protokolliert (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)* |
 | **🗑️ Papierkorb** | Gelöschte Einträge/Abwesenheiten bleiben mit Begründung erhalten und können wiederhergestellt werden (GoBD). Im Unterreiter **Mitarbeiter** liegen ausgestellte Mitarbeiter zum Wiedereinstellen; endgültiges Löschen (mit allen Daten) ist dort nur als Admin und nur für zuvor ausgestellte Mitarbeiter möglich. *(Admin)* |
 
-**Querschnitts-Features:** Echtzeit-Updates über alle Geräte (Server-Sent Events), rollenbasierte
+**Querschnitts-Features:** Echtzeit-Updates über alle Geräte (Server-Sent Events), **Push-Benachrichtigungen
+aufs Handy auch bei geschlossener App** (Web Push, optional je Gerät aktivierbar), rollenbasierte
 Sichtbarkeit, mobil-optimiert/installierbar (PWA), Brute-Force-Schutz am Login, durchgehend
 parametrisierte SQL-Abfragen und HTML-Escaping (XSS-Schutz).
+
+### 🔔 Push-Benachrichtigungen (Web Push)
+
+Zusätzlich zu den Live-Zählern (die nur bei geöffneter App hochzählen) kann jeder Nutzer auf der
+**Startseite** unter „🔔 Benachrichtigungen" echte Geräte-Benachrichtigungen aktivieren – sie kommen auch an,
+wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweiligen Zähler erhöhen würde, **außer
+für den Auslöser selbst**:
+
+| Ereignis | Benachrichtigt wird |
+|---|---|
+| Neue Bestellung | alle Chefs |
+| Neuer/aktualisierter Aushang | alle außer dem Autor |
+| Notiz geteilt/angeboten | die betroffenen Empfänger |
+| Neuer Abwesenheitsantrag bzw. Krank-/Schule-/Innung-Meldung | alle Manager (Chef/Admin/Buchhalter) |
+| Urlaub genehmigt/abgelehnt bzw. Abwesenheit vom Chef bearbeitet | der betroffene Mitarbeiter |
+
+Pro Nutzer lassen sich die vier Kategorien (Bestellungen / Abwesenheiten / Schwarzes Brett / Notizen) einzeln
+ein- und ausschalten. **Voraussetzung:** In der `.env` müssen `VAPID_PUBLIC`/`VAPID_PRIVATE`/`VAPID_SUBJECT`
+gesetzt sein (siehe Konfiguration) – fehlen sie, ist Push einfach inaktiv. **Auf iPhone/iPad** funktioniert
+Web Push nur, wenn die App über „Teilen → Zum Home-Bildschirm" installiert ist (PWA, ab iOS 16.4); Android-
+Chrome und Desktop funktionieren auch im Browser-Tab.
 
 ---
 
@@ -171,6 +193,8 @@ Konfiguration über die Datei `.env` (Vorlage: `.env.example`).
 | `JWT_SECRET` | **ja** | – | Geheimer Schlüssel für die Login-Tokens. **Min. 32 Zeichen**, sonst startet der Server nicht. Lang und zufällig wählen, geheim halten. |
 | `PORT` | nein | `3000` | HTTP-Port des Servers. |
 | `DB_PATH` | nein | `./data/arbeitsdoku.db` | Pfad der SQLite-Datenbankdatei. |
+| `VAPID_PUBLIC` / `VAPID_PRIVATE` | nein | – | Schlüsselpaar für **Push-Benachrichtigungen** (Web Push). Einmalig erzeugen mit `node -e "console.log(require('web-push').generateVAPIDKeys())"`. Fehlen sie, ist Push inaktiv. |
+| `VAPID_SUBJECT` | nein | `mailto:admin@example.com` | Kontaktangabe (`mailto:` oder `https:`) für den Push-Dienst. |
 | `CHROME_BIN` | nein | – | Nur für die Browser-Tests (Puppeteer), nicht für den Betrieb. |
 
 ---
@@ -315,8 +339,12 @@ Datenbank wird beim Hochziehen sicher aktualisiert. Trotzdem vor einem Update ei
 Automatisierte Tests liegen unter `tests/` (Berechnungs-/Logiktests sowie echte Browser-Klick-Tests
 mit Puppeteer). Details in [`tests/README.md`](tests/README.md).
 
+Push-Tests (kein Browser nötig): `node tests/push-api.js` (Abo-/Einstellungs-Endpunkte),
+`node tests/push-targeting.js` (richtige Empfänger je Ereignis + 410-Bereinigung),
+`node tests/push-sw.js` (Service-Worker-Handler).
+
 Technik-Stack: Node.js/Express · `sql.js` (SQLite in WASM) · `pdfkit` (PDF) · `sharp` (Icons) ·
-`bcryptjs` · `jsonwebtoken` · `multer` · Vanilla-JS-Frontend (kein Framework, kein Build).
+`bcryptjs` · `jsonwebtoken` · `multer` · `web-push` (Push) · Vanilla-JS-Frontend (kein Framework, kein Build).
 
 ---
 

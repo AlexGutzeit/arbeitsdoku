@@ -413,6 +413,9 @@ async function initDatabase() {
     );
   `);
 
+  // Web-Push-Tabellen (idempotent, hier UND ueber ensurePushSchema im Restore-Pfad)
+  ensurePushSchema(db);
+
   // Migration: target_hours_per_day → target_hours_per_week
   try {
     const cols = db.prepare("PRAGMA table_info(users)").all();
@@ -825,6 +828,37 @@ function ensureAuditSchema(targetDb) {
     console.error('ensureAuditSchema fehlgeschlagen:', e.message);
   }
   ensureEmploymentSchema(targetDb);
+  ensurePushSchema(targetDb);
+}
+
+// Web-Push: Geraete-Abos (ein Eintrag pro Geraet, ein Nutzer kann mehrere haben) +
+// Kategorie-Schalter pro Nutzer. Beide idempotent — laufen bei Init UND nach Backup-Restore,
+// damit alte DB-Staende crashfrei hochgezogen werden ([[feedback_abwaertskompatibilitaet]]).
+function ensurePushSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL,
+        endpoint   TEXT NOT NULL UNIQUE,
+        p256dh     TEXT NOT NULL,
+        auth       TEXT NOT NULL,
+        user_agent TEXT DEFAULT '',
+        created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE TABLE IF NOT EXISTS push_prefs (
+        user_id  INTEGER PRIMARY KEY,
+        orders   INTEGER DEFAULT 1,
+        bulletin INTEGER DEFAULT 1,
+        notes    INTEGER DEFAULT 1,
+        absences INTEGER DEFAULT 1,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (e) {
+    console.error('ensurePushSchema fehlgeschlagen:', e.message);
+  }
 }
 
 // Mitarbeiter-Soft-Delete ("Ausstellen") + Anstellungszeitraeume.

@@ -93,6 +93,7 @@ app.use('/api/badges', require('./routes/badges'));
 app.use('/api/absences', require('./routes/absences'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/documents', require('./routes/documents'));
+app.use('/api/push', require('./routes/push'));
 
 // Kurzlebiges SSE-Ticket: normaler (authentifizierter) Aufruf per Authorization-Header liefert ein
 // nur 60 Sekunden gueltiges Token. Der Client haengt DIESES an die SSE-URL — nicht mehr den langen

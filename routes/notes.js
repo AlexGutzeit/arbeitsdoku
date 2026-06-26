@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
+const push = require('../push');
 
 const router = express.Router();
 const LOCK_TIMEOUT_MINUTES = 15;
@@ -303,13 +304,20 @@ router.put('/:id/shares', authenticate, (req, res) => {
   const { shares } = req.body;
   if (!Array.isArray(shares)) return res.status(400).json({ error: 'shares muss ein Array sein' });
 
+  // Vorher bestehende Empfaenger merken, um nur NEU hinzugekommene zu benachrichtigen.
+  const prevShareIds = new Set(
+    db.prepare('SELECT user_id FROM note_shares WHERE note_id = ?').all(note.id).map(r => r.user_id)
+  );
+
   db.prepare('DELETE FROM note_shares WHERE note_id = ?').run(note.id);
 
   const insert = db.prepare("INSERT INTO note_shares (note_id, user_id, permission, created_at) VALUES (?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))");
+  const newlyAdded = [];
   for (const s of shares) {
     if (!s.user_id || s.user_id === note.user_id) continue;
     const perm = s.permission === 'write' ? 'write' : 'read';
     insert.run(note.id, s.user_id, perm);
+    if (!prevShareIds.has(s.user_id)) newlyAdded.push(s.user_id);
   }
 
   const updated = db.prepare(`
@@ -320,6 +328,15 @@ router.put('/:id/shares', authenticate, (req, res) => {
   `).all(note.id);
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ shares: updated });
+
+  if (newlyAdded.length) {
+    const sharer = db.prepare('SELECT name FROM users WHERE id = ?').get(req.user.id);
+    push.notifyUsers(db, newlyAdded, 'notes', {
+      title: 'Notiz geteilt',
+      body: `${sharer ? sharer.name : 'Jemand'} hat „${note.title}" mit dir geteilt`,
+      url: '/#/notes',
+    }, req.user.id);
+  }
 });
 
 // --- Weitergeben ---
@@ -340,13 +357,24 @@ router.post('/:id/offer', authenticate, (req, res) => {
     "INSERT INTO note_offers (note_id, from_user_id, to_user_id) VALUES (?, ?, ?) " +
     "ON CONFLICT(note_id, to_user_id) DO UPDATE SET status = 'pending', from_user_id = excluded.from_user_id, created_at = strftime('%Y-%m-%d %H:%M:%f', 'now')"
   );
+  const offered = [];
   for (const uid of user_ids) {
     if (uid === req.user.id) continue;
     insert.run(note.id, req.user.id, uid);
+    offered.push(uid);
   }
 
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
+
+  if (offered.length) {
+    const from = db.prepare('SELECT name FROM users WHERE id = ?').get(req.user.id);
+    push.notifyUsers(db, offered, 'notes', {
+      title: 'Notiz angeboten',
+      body: `${from ? from.name : 'Jemand'} bietet dir „${note.title}" an`,
+      url: '/#/notes',
+    }, req.user.id);
+  }
 });
 
 module.exports = router;

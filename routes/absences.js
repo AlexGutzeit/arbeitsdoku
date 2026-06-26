@@ -2,8 +2,15 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
+const push = require('../push');
 const { computeAbsenceSummary, countUrlaubDaysInYear } = require('./absence-days');
 const { recordAbsenceHistory, berlinNow } = require('../audit');
+
+// Datumsbereich „TT.MM.–TT.MM." (bzw. ein einzelnes Datum, wenn von==bis) für Push-Texte.
+function fmtRange(from, to) {
+  const f = (d) => String(d).split('-').reverse().join('.');
+  return from === to ? f(from) : `${f(from)}–${f(to)}`;
+}
 
 // Validierungs-Helper für ISO-Datum (YYYY-MM-DD, kalendarisch gültig)
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -306,6 +313,28 @@ router.post('/', authenticate, (req, res) => {
   const absence = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(result.lastInsertRowid), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.status(201).json({ absence });
+
+  // Push analog Abwesenheits-Badge:
+  const label = TYPE_LABELS[type] || type;
+  const range = fmtRange(date_from, date_to);
+  if (type !== 'feiertag') {
+    if (created_by !== uid && status === 'pending' && APPROVAL_REQUIRED.includes(type)) {
+      // Manager hat für einen MA eingetragen → der MA muss bestätigen.
+      push.notifyUsers(db, [uid], 'absences', {
+        title: `${label} eingetragen`, body: `Bitte bestätigen: ${range}`, url: '/#/absences',
+      }, req.user.id);
+    } else if (status === 'pending' && APPROVAL_REQUIRED.includes(type)) {
+      // Selbstantrag → alle Manager.
+      push.notifyUsers(db, push.managerIds(db, req.user.id), 'absences', {
+        title: `Neuer Antrag: ${label}`, body: `${absence.user_name}: ${range}`, url: '/#/absences',
+      }, req.user.id);
+    } else if (status === 'active' && NOTIFY_CHEF.includes(type)) {
+      // Krank/Berufsschule/Innung gemeldet → alle Manager.
+      push.notifyUsers(db, push.managerIds(db, req.user.id), 'absences', {
+        title: `${label} gemeldet`, body: `${absence.user_name}: ${range}`, url: '/#/absences',
+      }, req.user.id);
+    }
+  }
 });
 
 // PUT /api/absences/:id — Abwesenheit bearbeiten
@@ -409,6 +438,17 @@ router.put('/:id', authenticate, (req, res) => {
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
+
+  // Manager hat eine fremde Abwesenheit bearbeitet → MA muss bestätigen (ma_needs_ack gesetzt).
+  if (updated.ma_needs_ack === 1 && updated.user_id && updated.user_id !== req.user.id) {
+    const label = TYPE_LABELS[updated.type] || updated.type;
+    // Bei Vorschlag zeigt proposed_* die neuen Daten, sonst date_from/to.
+    const fromD = updated.proposed_date_from || updated.date_from;
+    const toD = updated.proposed_date_to || updated.date_to;
+    push.notifyUsers(db, [updated.user_id], 'absences', {
+      title: 'Abwesenheit bearbeitet', body: `Bitte bestätigen: ${label} ${fmtRange(fromD, toD)}`, url: '/#/absences',
+    }, req.user.id);
+  }
 });
 
 // DELETE /api/absences/:id
@@ -506,6 +546,14 @@ router.post('/:id/approve', authenticate, (req, res) => {
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
+
+  // Antrag genehmigt → der Mitarbeiter.
+  if (updated.user_id && updated.user_id !== req.user.id) {
+    const label = TYPE_LABELS[updated.type] || updated.type;
+    push.notifyUsers(db, [updated.user_id], 'absences', {
+      title: `${label} genehmigt`, body: fmtRange(updated.date_from, updated.date_to), url: '/#/absences',
+    }, req.user.id);
+  }
 });
 
 // POST /api/absences/:id/reject — ablehnen (Manager)
@@ -525,6 +573,14 @@ router.post('/:id/reject', authenticate, (req, res) => {
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
+
+  // Antrag abgelehnt → der Mitarbeiter.
+  if (updated.user_id && updated.user_id !== req.user.id) {
+    const label = TYPE_LABELS[updated.type] || updated.type;
+    push.notifyUsers(db, [updated.user_id], 'absences', {
+      title: `${label} abgelehnt`, body: fmtRange(updated.date_from, updated.date_to), url: '/#/absences',
+    }, req.user.id);
+  }
 });
 
 // POST /api/absences/:id/accept — MA akzeptiert Manager-eingetragenen Urlaub/FZA

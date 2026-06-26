@@ -1,4 +1,4 @@
-const CACHE_VERSION = 196;
+const CACHE_VERSION = 197;
 const CACHE_NAME = 'arbeitsdoku-v' + CACHE_VERSION;
 
 // Install: NICHT sofort aktivieren — warten bis User bestätigt oder App neu startet
@@ -20,6 +20,42 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+});
+
+// Web-Push: Server schickt eine Benachrichtigung (auch bei geschlossener App). Der Payload ist
+// JSON { title, body, url }. Faellt das Parsen aus, wird eine generische Meldung gezeigt.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (_) { data = {}; }
+  const title = data.title || 'Arbeitsdoku';
+  const url = data.url || '/';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: '/icons/icon-192x192.png',
+      badge: '/icons/icon-96x96.png',
+      tag: url,            // gleiche Route ersetzt statt stapelt
+      data: { url },
+    })
+  );
+});
+
+// Klick auf die Benachrichtigung: bestehendes App-Fenster fokussieren (und zur Route schicken)
+// oder ein neues oeffnen.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if ('focus' in w) {
+          if ('navigate' in w && url !== '/') { try { w.navigate(url); } catch (_) {} }
+          return w.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })
+  );
 });
 
 // Fetch: Network-first für alles, Cache nur als Offline-Fallback

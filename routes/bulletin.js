@@ -2,8 +2,14 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
+const push = require('../push');
 
 const router = express.Router();
+
+// Empfänger eines Aushangs = alle aktiven Nutzer außer dem Auslöser (analog Bulletin-Badge).
+function bulletinTargets(db) {
+  return db.prepare('SELECT id FROM users WHERE COALESCE(active,1) = 1').all().map(r => r.id);
+}
 
 function getSeenAt(db, userId, topic) {
   const row = db.prepare('SELECT seen_at FROM user_seen WHERE user_id = ? AND topic = ?').get(userId, topic);
@@ -64,6 +70,12 @@ router.post('/', authenticate, canBulletin, (req, res) => {
 
   broadcast('bulletin', req.headers['x-tab-id']);
   res.status(201).json({ entry });
+
+  push.notifyUsers(db, bulletinTargets(db), 'bulletin', {
+    title: 'Schwarzes Brett',
+    body: entry.title,
+    url: '/#/bulletin',
+  }, req.user.id);
 });
 
 // Eintrag bearbeiten
@@ -94,6 +106,12 @@ router.put('/:id', authenticate, canBulletin, (req, res) => {
 
   broadcast('bulletin', req.headers['x-tab-id']);
   res.json({ entry: updated });
+
+  push.notifyUsers(db, bulletinTargets(db), 'bulletin', {
+    title: 'Schwarzes Brett aktualisiert',
+    body: updated.title,
+    url: '/#/bulletin',
+  }, req.user.id);
 });
 
 // Eintrag löschen

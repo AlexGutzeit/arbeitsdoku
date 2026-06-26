@@ -117,6 +117,145 @@ async function renderWelcomeWeek() {
   document.getElementById('welcome-week-next')?.addEventListener('click', () => { S.welcomeWeekOffset++; renderWelcomeWeek(); });
 }
 
+// --- Web-Push (Benachrichtigungen) ---
+
+// Browser-Unterstuetzung: Service Worker + Push + Notification muessen alle vorhanden sein.
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+// iOS/iPadOS unterstuetzt Push nur in einer zum Home-Bildschirm hinzugefuegten PWA (installiert).
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+// VAPID-Public-Key (Base64url) → Uint8Array fuer applicationServerKey.
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+async function getPushSubscription() {
+  if (!pushSupported()) return null;
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+
+// Abonnieren: Erlaubnis anfragen → VAPID-Key holen → subscribe → an Server melden.
+async function enablePush() {
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('Benachrichtigungen wurden im Browser nicht erlaubt.');
+  const keyResp = await api('GET', '/api/push/key');
+  if (!keyResp || !keyResp.key) throw new Error('Push ist auf dem Server nicht konfiguriert.');
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(keyResp.key),
+  });
+  await api('POST', '/api/push/subscribe', { subscription: sub.toJSON() });
+}
+
+async function disablePush() {
+  const sub = await getPushSubscription();
+  if (sub) {
+    const endpoint = sub.endpoint;
+    try { await sub.unsubscribe(); } catch (_) {}
+    await api('POST', '/api/push/unsubscribe', { endpoint });
+  }
+}
+
+const PUSH_CATS = [
+  { key: 'orders',   label: 'Bestellungen' },
+  { key: 'absences', label: 'Abwesenheiten' },
+  { key: 'bulletin', label: 'Schwarzes Brett' },
+  { key: 'notes',    label: 'Notizen' },
+];
+
+// Baut die Benachrichtigungs-Karte auf der Welcome-Seite (alle Rollen).
+async function initPushCard() {
+  const card = document.getElementById('welcome-push');
+  if (!card) return;
+  if (!pushSupported()) { card.style.display = 'none'; return; }
+
+  const denied = Notification.permission === 'denied';
+  let active = false;
+  try { active = !!(await getPushSubscription()); } catch (_) {}
+
+  let prefs = { orders: true, absences: true, bulletin: true, notes: true };
+  if (active) {
+    try { const p = await api('GET', '/api/push/prefs'); if (p) prefs = p; } catch (_) {}
+  }
+
+  const iosHint = isIOS() && !isStandalone()
+    ? `<p class="push-hint">📱 Auf dem iPhone/iPad: App über „Teilen → Zum Home-Bildschirm" installieren, damit Benachrichtigungen ankommen.</p>`
+    : '';
+
+  let statusHtml, controlsHtml = '';
+  if (denied) {
+    statusHtml = `<span class="push-status push-off">Im Browser blockiert</span>`;
+    controlsHtml = `<p class="push-hint">Benachrichtigungen sind für diese Seite im Browser blockiert. Bitte in den Browser-/Seiteneinstellungen erlauben.</p>`;
+  } else if (active) {
+    statusHtml = `<span class="push-status push-on">Aktiv</span>`;
+    const toggles = PUSH_CATS.map(c => `
+      <label class="push-cat">
+        <input type="checkbox" data-cat="${c.key}" ${prefs[c.key] ? 'checked' : ''}>
+        <span>${c.label}</span>
+      </label>`).join('');
+    controlsHtml = `
+      <div class="push-cats">${toggles}</div>
+      <div class="push-actions">
+        <button class="btn btn-sm" id="push-test">Test-Benachrichtigung</button>
+        <button class="btn btn-sm btn-outline" id="push-disable">Ausschalten</button>
+      </div>`;
+  } else {
+    statusHtml = `<span class="push-status push-off">Aus</span>`;
+    controlsHtml = `
+      <p class="push-hint">Erhalte eine Benachrichtigung auf dieses Gerät, auch wenn die App geschlossen ist – z. B. bei neuer Bestellung, genehmigtem Urlaub oder neuem Aushang.</p>
+      <div class="push-actions"><button class="btn btn-sm btn-primary" id="push-enable">Benachrichtigungen aktivieren</button></div>`;
+  }
+
+  card.style.display = '';
+  card.innerHTML = `<h3>&#128276; Benachrichtigungen ${statusHtml}</h3>${controlsHtml}${iosHint}`;
+
+  const enableBtn = document.getElementById('push-enable');
+  if (enableBtn) enableBtn.addEventListener('click', async () => {
+    enableBtn.disabled = true;
+    try { await enablePush(); toast('Benachrichtigungen aktiviert'); initPushCard(); }
+    catch (e) { toast(e.message || 'Aktivierung fehlgeschlagen', 'error'); enableBtn.disabled = false; }
+  });
+
+  const disableBtn = document.getElementById('push-disable');
+  if (disableBtn) disableBtn.addEventListener('click', async () => {
+    disableBtn.disabled = true;
+    try { await disablePush(); toast('Benachrichtigungen ausgeschaltet'); initPushCard(); }
+    catch (e) { toast(e.message || 'Fehler', 'error'); disableBtn.disabled = false; }
+  });
+
+  const testBtn = document.getElementById('push-test');
+  if (testBtn) testBtn.addEventListener('click', async () => {
+    testBtn.disabled = true;
+    try { await api('POST', '/api/push/test'); toast('Test-Benachrichtigung gesendet'); }
+    catch (e) { toast(e.message || 'Senden fehlgeschlagen', 'error'); }
+    testBtn.disabled = false;
+  });
+
+  card.querySelectorAll('input[data-cat]').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const body = {}; body[cb.dataset.cat] = cb.checked;
+      try { await api('PUT', '/api/push/prefs', body); }
+      catch (e) { toast('Konnte Einstellung nicht speichern', 'error'); cb.checked = !cb.checked; }
+    });
+  });
+}
+
 async function renderWelcome() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'welcome');
   bindLayout();
@@ -180,6 +319,7 @@ async function renderWelcome() {
       <div class="welcome-section" id="welcome-week-container">
         <div class="loading"><div class="spinner"></div></div>
       </div>
+      <div class="welcome-section" id="welcome-push" style="display:none"></div>
       ${eventBulletinHtml}
       ${newBulletinHtml}
       <div class="welcome-section" id="welcome-weather">
@@ -200,6 +340,9 @@ async function renderWelcome() {
     if (!document.getElementById('welcome-clock')) { clearInterval(clockInterval); return; }
     updateClock();
   }, 1000);
+
+  // Push-Benachrichtigungen-Karte (alle Rollen)
+  initPushCard();
 
   // Wetter laden: komplett serverseitig (Geocoding + Wetter)
   try {
