@@ -195,6 +195,11 @@ Caddy holt automatisch ein Let's-Encrypt-Zertifikat. (Analog mit nginx + certbot
 Wenn ein Proxy vor der App läuft, ist `app.set('trust proxy', 1)` bereits aktiv – die echte
 Client-IP wird korrekt erkannt (für Login-Limit & Audit-Log).
 
+**Sicherheits-Header:** Die App setzt selbst eine restriktive **Content-Security-Policy** sowie
+`X-Frame-Options`, `X-Content-Type-Options` und `Referrer-Policy` (schützt u. a. gegen
+eingeschleuste Skripte/XSS und Clickjacking). Die **HTTPS-Erzwingung (HSTS)** überlässt sie bewusst
+dem Reverse-Proxy – bei Caddy ist HTTPS automatisch aktiv; HSTS kann dort bei Bedarf ergänzt werden.
+
 ### 2. Automatischer Start (systemd, Linux)
 
 Damit die App nach Neustart/Absturz von selbst läuft, eine systemd-Unit anlegen, z. B.
