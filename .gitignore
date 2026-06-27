@@ -13,3 +13,4 @@ local.db
 
 # Claude-Code / lokale Editor-Einstellungen
 .claude/
+.deploy-backups/
