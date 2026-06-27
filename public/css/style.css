@@ -1378,6 +1378,18 @@ table.data-table .actions button { margin-left: 0.25rem; }
   margin-bottom: 1.25rem;
 }
 .welcome-section h3 { font-size: 1.05rem; margin-bottom: 0.75rem; color: var(--text); display: flex; align-items: center; gap: 0.5rem; }
+/* Erprobungs-Hinweis (Web Push Beta) */
+.erprobung-banner {
+  background: #fff8e1;
+  border: 1px solid #f0d98c;
+  border-left: 4px solid #e0a800;
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+  color: #6b5400;
+}
+.erprobung-banner strong { display: block; font-size: 0.95rem; margin-bottom: 0.25rem; }
+.erprobung-banner p { margin: 0; font-size: 0.88rem; line-height: 1.45; }
 /* Benachrichtigungs-Karte (Web Push) */
 .push-status { font-size: 0.7rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 999px; margin-left: auto; }
 .push-status.push-on { background: var(--primary-light); color: var(--primary-hover); }
