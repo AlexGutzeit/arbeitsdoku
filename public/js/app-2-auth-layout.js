@@ -186,6 +186,9 @@ function layout(content, activeNav) {
           <span class="icon">&#128200;</span> Statistik
         </a>
         <div class="sidebar-divider"></div>
+        <a href="#/notifications" class="${activeNav === 'notifications' ? 'active' : ''}">
+          <span class="icon">&#128276;</span> Benachrichtigungen
+        </a>
         <a href="#/pdf" class="${activeNav === 'pdf' ? 'active' : ''}">
           <span class="icon">&#128196;</span> PDF-Export
         </a>

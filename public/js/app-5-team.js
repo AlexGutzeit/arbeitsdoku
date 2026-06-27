@@ -179,11 +179,30 @@ const PUSH_CATS = [
   { key: 'notes',    label: 'Notizen' },
 ];
 
-// Baut die Benachrichtigungs-Karte auf der Welcome-Seite (alle Rollen).
+// Eigene Seite „Benachrichtigungen" (Seitenleisten-Punkt, alle Rollen).
+async function renderNotifications() {
+  $app().innerHTML = layout(`
+    <div class="welcome-page">
+      <div class="welcome-header"><h1>&#128276; Benachrichtigungen</h1></div>
+      <div class="welcome-section" id="push-card">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>`, 'notifications');
+  bindLayout();
+  const fab = document.getElementById('fab-new');
+  if (fab) fab.style.display = 'none';
+  initPushCard();
+}
+
+// Baut die Benachrichtigungs-Karte (auf der Benachrichtigungen-Seite).
 async function initPushCard() {
-  const card = document.getElementById('welcome-push');
+  const card = document.getElementById('push-card');
   if (!card) return;
-  if (!pushSupported()) { card.style.display = 'none'; return; }
+  if (!pushSupported()) {
+    card.innerHTML = `<h3>&#128276; Benachrichtigungen</h3>
+      <p class="push-hint">Dieses Gerät bzw. dieser Browser unterstützt keine Push-Benachrichtigungen.</p>`;
+    return;
+  }
 
   const denied = Notification.permission === 'denied';
   let active = false;
@@ -319,7 +338,6 @@ async function renderWelcome() {
       <div class="welcome-section" id="welcome-week-container">
         <div class="loading"><div class="spinner"></div></div>
       </div>
-      <div class="welcome-section" id="welcome-push" style="display:none"></div>
       ${eventBulletinHtml}
       ${newBulletinHtml}
       <div class="welcome-section" id="welcome-weather">
@@ -340,9 +358,6 @@ async function renderWelcome() {
     if (!document.getElementById('welcome-clock')) { clearInterval(clockInterval); return; }
     updateClock();
   }, 1000);
-
-  // Push-Benachrichtigungen-Karte (alle Rollen)
-  initPushCard();
 
   // Wetter laden: komplett serverseitig (Geocoding + Wetter)
   try {
