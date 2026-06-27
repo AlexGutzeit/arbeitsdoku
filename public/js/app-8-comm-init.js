@@ -1356,5 +1356,5 @@ window.addEventListener('beforeunload', () => {
 window.addEventListener('DOMContentLoaded', () => {
   if (!S.token) navigate('/login');
   render();
-  if (S.token) { initSSE(); loadBadges(); }
+  if (S.token) { initSSE(); loadBadges(); syncPushSubscription(); }
 });

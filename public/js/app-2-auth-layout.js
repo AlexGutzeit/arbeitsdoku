@@ -36,6 +36,7 @@ async function handleLogin(e) {
     navigate('/welcome');
     initSSE();
     loadBadges();
+    syncPushSubscription();
   } catch (err) {
     const el = document.getElementById('login-error');
     el.textContent = err.message;

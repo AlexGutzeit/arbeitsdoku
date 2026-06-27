@@ -81,6 +81,10 @@ gesetzt sein (siehe Konfiguration) – fehlen sie, ist Push einfach inaktiv. **A
 Web Push nur, wenn die App über „Teilen → Zum Home-Bildschirm" installiert ist (PWA, ab iOS 16.4); Android-
 Chrome und Desktop funktionieren auch im Browser-Tab.
 
+Ein Gerät/Browser hat genau **ein** Push-Abo. Ist die Browser-Erlaubnis erteilt, wird das Abo beim Login
+automatisch dem **aktuell angemeldeten Nutzer** zugeordnet – auf einem geteilten Gerät gehen die
+Benachrichtigungen also immer an den, der gerade eingeloggt ist.
+
 ---
 
 ## Rollen & Rechte

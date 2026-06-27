@@ -179,6 +179,27 @@ const PUSH_CATS = [
   { key: 'notes',    label: 'Notizen' },
 ];
 
+// Beim Login/App-Start: wenn die Browser-Erlaubnis bereits erteilt ist, das Geraete-Abo
+// (ein Endpoint pro Browser) auf den AKTUELL eingeloggten Nutzer umziehen/auffrischen.
+// So „folgt" das Abo dem angemeldeten User (wichtig bei geteilten Geraeten + beim Testen).
+// Fragt NIE nach Erlaubnis — bei 'default'/'denied' passiert nichts.
+async function syncPushSubscription() {
+  if (!pushSupported() || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const keyResp = await api('GET', '/api/push/key');
+      if (!keyResp || !keyResp.key) return;
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyResp.key),
+      });
+    }
+    await api('POST', '/api/push/subscribe', { subscription: sub.toJSON() });
+  } catch (_) { /* still: Push bleibt einfach beim alten Stand */ }
+}
+
 // Eigene Seite „Benachrichtigungen" (Seitenleisten-Punkt, alle Rollen).
 async function renderNotifications() {
   $app().innerHTML = layout(`
