@@ -62,10 +62,10 @@ parametrisierte SQL-Abfragen und HTML-Escaping (XSS-Schutz).
 
 ### 🔔 Push-Benachrichtigungen (Web Push)
 
-Zusätzlich zu den Live-Zählern (die nur bei geöffneter App hochzählen) kann jeder Nutzer auf der
-**Startseite** unter „🔔 Benachrichtigungen" echte Geräte-Benachrichtigungen aktivieren – sie kommen auch an,
-wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweiligen Zähler erhöhen würde, **außer
-für den Auslöser selbst**:
+Zusätzlich zu den Live-Zählern (die nur bei geöffneter App hochzählen) kann jeder Nutzer über den
+Seitenleisten-Punkt **„🔔 Benachrichtigungen"** echte Geräte-Benachrichtigungen aktivieren – sie kommen auch
+an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweiligen Zähler erhöhen würde,
+**außer für den Auslöser selbst**:
 
 | Ereignis | Benachrichtigt wird |
 |---|---|
@@ -76,7 +76,7 @@ für den Auslöser selbst**:
 | Urlaub genehmigt/abgelehnt bzw. Abwesenheit vom Chef bearbeitet | der betroffene Mitarbeiter |
 
 Pro Nutzer lassen sich die vier Kategorien (Bestellungen / Abwesenheiten / Schwarzes Brett / Notizen) einzeln
-ein- und ausschalten. **Voraussetzung:** In der `.env` müssen `VAPID_PUBLIC`/`VAPID_PRIVATE`/`VAPID_SUBJECT`
+ein- und ausschalten (wird sofort gespeichert). **Voraussetzung:** In der `.env` müssen `VAPID_PUBLIC`/`VAPID_PRIVATE`/`VAPID_SUBJECT`
 gesetzt sein (siehe Konfiguration) – fehlen sie, ist Push einfach inaktiv. **Auf iPhone/iPad** funktioniert
 Web Push nur, wenn die App über „Teilen → Zum Home-Bildschirm" installiert ist (PWA, ab iOS 16.4); Android-
 Chrome und Desktop funktionieren auch im Browser-Tab.
