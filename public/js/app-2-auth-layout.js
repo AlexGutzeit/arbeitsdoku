@@ -44,7 +44,11 @@ async function handleLogin(e) {
   }
 }
 
-function logout() {
+function logout(manual) {
+  // Nur der bewusste „Abmelden"-Klick meldet sich serverseitig fuers Audit-Log ab (best effort,
+  // solange das Token noch gueltig ist). Der automatische Logout (401/abgelaufenes Token) ruft
+  // logout() ohne Argument — dort wird serverseitig bereits 'session_expired' protokolliert.
+  if (manual && S.token) { api('POST', '/api/auth/logout').catch(() => {}); }
   stopSSE();
   S.token = null;
   S.user = null;
@@ -258,7 +262,7 @@ function bindLayout() {
     document.getElementById('nav-papierkorb')?.classList.toggle('open');
   });
 
-  if (logoutBtn) logoutBtn.addEventListener('click', logout);
+  if (logoutBtn) logoutBtn.addEventListener('click', () => logout(true));
   if (fab) fab.addEventListener('click', () => {
     const route = getRoute();
     if (route === '/planning') navigate('/planning/new');

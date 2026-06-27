@@ -5,6 +5,7 @@ const fs = require('fs');
 const sharp = require('sharp');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
+const { logAudit } = require('../audit');
 
 const router = express.Router();
 
@@ -118,10 +119,17 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
     company_name, company_street, company_zip, company_city,
     app_name, app_short_name, theme_color, background_color,
   };
+  const changes = [];
   for (const [key, value] of Object.entries(fields)) {
     if (value !== undefined) {
+      const cur = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+      const oldVal = cur ? cur.value : '';
+      if (String(oldVal) !== String(value)) changes.push(`${key}: "${oldVal}" → "${value}"`);
       db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
     }
+  }
+  if (changes.length) {
+    logAudit(db, { userId: req.user.id, username: req.user.username, action: 'settings_update', details: changes.join('; '), ip: req.ip });
   }
 
   // Wetter-Cache leeren, damit neuer Ort sofort wirkt
@@ -145,6 +153,7 @@ router.post('/logo', authenticate, authorize('chef'), upload.single('logo'), (re
   const logoPath = '/uploads/' + req.file.filename;
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('company_logo', logoPath);
 
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'settings_update', details: 'Firmen-Logo gesetzt', ip: req.ip });
   res.json({ logo: logoPath });
 });
 
@@ -159,6 +168,7 @@ router.delete('/logo', authenticate, authorize('chef'), (req, res) => {
   }
 
   db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('company_logo', '');
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'settings_update', details: 'Firmen-Logo entfernt', ip: req.ip });
   res.json({ success: true });
 });
 
@@ -200,6 +210,7 @@ router.post('/app-icon', authenticate, authorize('chef'), (req, res) => {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
       const db = getDb();
       db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('app_icon_master', '/uploads/icons/master.png');
+      logAudit(db, { userId: req.user.id, username: req.user.username, action: 'settings_update', details: 'App-Icon gesetzt', ip: req.ip });
       res.json({ success: true, master: '/uploads/icons/master.png' });
     } catch (e) {
       console.error('Icon-Upload fehlgeschlagen:', e.message);
@@ -220,6 +231,7 @@ router.delete('/app-icon', authenticate, authorize('chef'), (req, res) => {
   } catch (e) { console.error('Icon-Reset fehlgeschlagen:', e.message); }
   const db = getDb();
   db.prepare("DELETE FROM settings WHERE key = 'app_icon_master'").run();
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'settings_update', details: 'App-Icon zurückgesetzt', ip: req.ip });
   res.json({ success: true });
 });
 

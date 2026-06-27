@@ -302,6 +302,9 @@ async function renderSettings() {
 const AUDIT_LABELS = {
   login_success: 'Login erfolgreich',
   login_failed: 'Login fehlgeschlagen',
+  logout: 'Abmeldung (manuell)',
+  session_expired: 'Sitzung abgelaufen (Timeout)',
+  settings_update: 'Einstellungen geändert',
   backup_download: 'Backup heruntergeladen',
   backup_restore: 'Backup eingespielt',
   user_create: 'Benutzer angelegt',

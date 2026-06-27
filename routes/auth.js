@@ -78,4 +78,13 @@ router.get('/me', authenticate, (req, res) => {
   res.json({ user: req.user });
 });
 
+// Abmelden. Bei stateless JWT gibt es serverseitig nichts „abzumelden" — dieser Endpunkt dient
+// nur dem Audit-Log. Best effort: der „Abmelden"-Button ruft ihn auf; ein blosses Schliessen des
+// Tabs erreicht den Server nicht (der automatische Logout bei abgelaufenem Token wird separat als
+// 'session_expired' protokolliert).
+router.post('/logout', authenticate, (req, res) => {
+  logAudit(getDb(), { userId: req.user.id, username: req.user.username, action: 'logout', details: 'manuell', ip: req.ip });
+  res.json({ success: true });
+});
+
 module.exports = router;

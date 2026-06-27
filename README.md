@@ -52,7 +52,7 @@ Jeder Punkt entspricht einem Menüpunkt in der App.
 | **📈 Statistik** | Soll-/Ist-Stunden und Überstunden je Zeitraum und Mitarbeiter, mit Diagrammen. |
 | **📄 PDF-Export** | Druckfertiger Arbeitsnachweis (Einträge + Abwesenheiten + Stunden-Zusammenfassung) als PDF, gefiltert nach Zeitraum/Mitarbeiter/Projekt. |
 | **⚙️ Einstellungen** | White-Label-Branding, Dokumenten-Speicherlimit, Datenbank-Backup/Restore. *(Chef/Admin)* |
-| **📜 Audit-Log** | Revisionssicheres Protokoll (Logins, Backups, Benutzeränderungen u. a.). Benutzeranlage wird mit allen Parametern, Änderungen feldgenau als „alt → neu" protokolliert (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)* |
+| **📜 Audit-Log** | Revisionssicheres Protokoll: An-/Abmeldungen (Login erfolgreich/fehlgeschlagen, manuelle Abmeldung, Sitzungs-Timeout), Benutzeränderungen, Einstellungs-/Branding-Änderungen, Backups u. a. Benutzeranlage mit allen Parametern, Änderungen feldgenau als „alt → neu" (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)* |
 | **🗑️ Papierkorb** | Gelöschte Einträge/Abwesenheiten bleiben mit Begründung erhalten und können wiederhergestellt werden (GoBD). Im Unterreiter **Mitarbeiter** liegen ausgestellte Mitarbeiter zum Wiedereinstellen; endgültiges Löschen (mit allen Daten) ist dort nur als Admin und nur für zuvor ausgestellte Mitarbeiter möglich. *(Admin)* |
 
 **Querschnitts-Features:** Echtzeit-Updates über alle Geräte (Server-Sent Events), **Push-Benachrichtigungen
