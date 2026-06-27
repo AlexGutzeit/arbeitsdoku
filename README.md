@@ -75,15 +75,23 @@ an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweilig
 | Neuer Abwesenheitsantrag bzw. Krank-/Schule-/Innung-Meldung | alle Manager (Chef/Admin/Buchhalter) |
 | Urlaub genehmigt/abgelehnt bzw. Abwesenheit vom Chef bearbeitet | der betroffene Mitarbeiter |
 
-Pro Nutzer lassen sich die vier Kategorien (Bestellungen / Abwesenheiten / Schwarzes Brett / Notizen) einzeln
-ein- und ausschalten (wird sofort gespeichert). **Voraussetzung:** In der `.env` müssen `VAPID_PUBLIC`/`VAPID_PRIVATE`/`VAPID_SUBJECT`
-gesetzt sein (siehe Konfiguration) – fehlen sie, ist Push einfach inaktiv. **Auf iPhone/iPad** funktioniert
-Web Push nur, wenn die App über „Teilen → Zum Home-Bildschirm" installiert ist (PWA, ab iOS 16.4); Android-
-Chrome und Desktop funktionieren auch im Browser-Tab.
+Pro Nutzer lassen sich die Kategorien (Abwesenheiten / Schwarzes Brett / Notizen, für Chef/Admin zusätzlich
+Bestellungen) einzeln ein- und ausschalten (wird sofort gespeichert). **Voraussetzung:** In der `.env`
+müssen `VAPID_PUBLIC`/`VAPID_PRIVATE`/`VAPID_SUBJECT` gesetzt sein (siehe Konfiguration) – fehlen sie, ist
+Push einfach inaktiv. **Auf iPhone/iPad** funktioniert Web Push nur, wenn die App über „Teilen → Zum
+Home-Bildschirm" installiert ist (PWA, ab iOS 16.4); Android-Chrome und Desktop funktionieren auch im
+Browser-Tab.
 
 Ein Gerät/Browser hat genau **ein** Push-Abo. Ist die Browser-Erlaubnis erteilt, wird das Abo beim Login
 automatisch dem **aktuell angemeldeten Nutzer** zugeordnet – auf einem geteilten Gerät gehen die
 Benachrichtigungen also immer an den, der gerade eingeloggt ist.
+
+**Hinweise zur Zustellung:** Web Push läuft über den Push-Dienst des Browsers (Google/Apple/Mozilla) und
+wird bei fehlendem Empfang nachgeliefert (TTL 1 Tag), Priorität „normal". Zu beachten: Am **Desktop** muss
+der Browser laufen (auch im Hintergrund). Auf **Android** kann die Akku-Optimierung einzelne Browser in den
+Standby schicken und Meldungen verzögern → für den Empfangs-Browser ggf. „uneingeschränkt" einstellen. Pro
+Gerät am besten **einen** Browser bzw. die installierte PWA nutzen (zwei Browser = zwei getrennte Abos, ggf.
+doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusammengefasst).
 
 ---
 
