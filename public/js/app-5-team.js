@@ -223,7 +223,9 @@ async function initPushCard() {
     controlsHtml = `<p class="push-hint">Benachrichtigungen sind für diese Seite im Browser blockiert. Bitte in den Browser-/Seiteneinstellungen erlauben.</p>`;
   } else if (active) {
     statusHtml = `<span class="push-status push-on">Aktiv</span>`;
-    const toggles = PUSH_CATS.map(c => `
+    // Bestell-Push gehen nur an Rolle 'chef' — fuer alle anderen den Schalter ausblenden.
+    const cats = PUSH_CATS.filter(c => c.key !== 'orders' || S.user.role === 'chef');
+    const toggles = cats.map(c => `
       <label class="push-cat">
         <input type="checkbox" data-cat="${c.key}" ${prefs[c.key] ? 'checked' : ''}>
         <span>${c.label}</span>
