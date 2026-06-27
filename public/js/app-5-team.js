@@ -241,6 +241,22 @@ async function initPushCard() {
     return;
   }
 
+  // Hat der Server Push überhaupt eingerichtet (VAPID-Schlüssel)? /key liefert sonst 503.
+  // Dann gar nicht erst „Aktivieren" anbieten (sonst Browser-Abfrage → Fehlermeldung).
+  let pushConfigured = true;
+  try {
+    const r = await fetch('/api/push/key', { headers: S.token ? { Authorization: 'Bearer ' + S.token } : {} });
+    if (r.status === 503) pushConfigured = false; // 200 = eingerichtet; Netzfehler → nicht hart sperren
+  } catch (_) { /* Netzproblem: Karte normal anzeigen, nicht faelschlich „nicht eingerichtet" */ }
+  if (!pushConfigured) {
+    const adminHint = (S.user && S.user.role === 'admin')
+      ? ' Zum Aktivieren VAPID-Schlüssel in der <code>.env</code> setzen (siehe README/Konfiguration).'
+      : '';
+    card.innerHTML = `<h3>&#128276; Benachrichtigungen</h3>
+      <p class="push-hint">Push-Benachrichtigungen sind auf diesem Server nicht eingerichtet.${adminHint}</p>`;
+    return;
+  }
+
   const denied = Notification.permission === 'denied';
   let active = false;
   try { active = !!(await getPushSubscription()); } catch (_) {}
