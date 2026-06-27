@@ -78,7 +78,8 @@ an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweilig
 Pro Nutzer lassen sich die Kategorien (Abwesenheiten / Schwarzes Brett / Notizen, für Chef/Admin zusätzlich
 Bestellungen) einzeln ein- und ausschalten (wird sofort gespeichert). **Voraussetzung:** In der `.env`
 müssen `VAPID_PUBLIC`/`VAPID_PRIVATE`/`VAPID_SUBJECT` gesetzt sein (siehe Konfiguration) – fehlen sie, ist
-Push einfach inaktiv. **Auf iPhone/iPad** funktioniert Web Push nur, wenn die App über „Teilen → Zum
+Push inaktiv; die Benachrichtigungen-Karte zeigt dann statt des „Aktivieren"-Buttons einen Hinweis (für
+Admins mit Einrichtungstipp). **Auf iPhone/iPad** funktioniert Web Push nur, wenn die App über „Teilen → Zum
 Home-Bildschirm" installiert ist (PWA, ab iOS 16.4); Android-Chrome und Desktop funktionieren auch im
 Browser-Tab.
 
