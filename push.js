@@ -75,9 +75,14 @@ async function notifyUsers(db, userIds, category, payload, excludeUserId) {
       : targets;
     if (allowed.length === 0) return;
 
+    // Zentrale Sperre: ausgestellte (deaktivierte) Nutzer bekommen NIE Push — egal welcher Ausloeser
+    // sie in userIds reicht. COALESCE(active,1)=1 schliesst nur active=0 aus (Altstaende ohne Spalte
+    // gelten als aktiv).
     const placeholders = allowed.map(() => '?').join(',');
     const subs = db.prepare(
-      `SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id IN (${placeholders})`
+      `SELECT s.id, s.endpoint, s.p256dh, s.auth
+       FROM push_subscriptions s JOIN users u ON u.id = s.user_id
+       WHERE s.user_id IN (${placeholders}) AND COALESCE(u.active, 1) = 1`
     ).all(...allowed);
     if (subs.length === 0) return;
 

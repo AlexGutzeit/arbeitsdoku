@@ -184,6 +184,13 @@ function req(server, method, p, token, body) {
     if (!chefGot) { pass++; console.log('  ✓ Auslöser (chef) bekommt eigenen Aushang NICHT'); }
     else { fail++; console.log('  ✗ Auslöser (chef) hat fälschlich Push bekommen'); }
 
+    // 11b. Ausgestellter (deaktivierter) Nutzer bekommt NIE Push — zentrale Sperre in notifyUsers,
+    //      selbst wenn ein Ausloeser ihn direkt adressiert (hier Notiz-Angebot an lisa).
+    db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(ids.lisa);
+    await act('POST', `/api/notes/${noteId}/offer`, 'max', { user_ids: [ids.lisa] });
+    expectTargets('Ausgestellter Nutzer → kein Push', []);
+    db.prepare('UPDATE users SET active = 1 WHERE id = ?').run(ids.lisa); // fuer Folgetests reaktivieren
+
     // 12. Abgelaufenes Abo (410) wird beim Senden entfernt.
     webpush.sendNotification = (sub) => {
       if (sub.endpoint === 'sub://lisa') return Promise.reject({ statusCode: 410 });

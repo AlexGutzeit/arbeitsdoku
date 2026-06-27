@@ -232,6 +232,9 @@ router.post('/:id/deactivate', authenticate, authorize('chef'), (req, res) => {
     // Kein offener Zeitraum (Daten-Altlast) -> einen abgeschlossenen Tageszeitraum anlegen
     db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, ?)').run(req.params.id, employedUntil, employedUntil);
   }
+  // Push-Abos des ausgestellten Nutzers entfernen (er soll keine Benachrichtigungen mehr bekommen;
+  // notifyUsers sperrt zusaetzlich serverseitig). Bei Wiedereinstellung re-abonniert das Geraet beim Login.
+  db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(req.params.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_deactivate',
     details: `Ausgestellt: ${user.username} (${user.role}, id=${req.params.id}), letzter Arbeitstag ${employedUntil}`, ip: req.ip });
   res.json({ success: true });
