@@ -69,7 +69,7 @@ an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweilig
 
 | Ereignis | Benachrichtigt wird |
 |---|---|
-| Neue Bestellung | alle Chefs |
+| Neue Bestellung | Chef + Admin |
 | Neuer/aktualisierter Aushang | alle außer dem Autor |
 | Notiz geteilt/angeboten | die betroffenen Empfänger |
 | Neuer Abwesenheitsantrag bzw. Krank-/Schule-/Innung-Meldung | alle Manager (Chef/Admin/Buchhalter) |

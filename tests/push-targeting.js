@@ -116,9 +116,9 @@ function req(server, method, p, token, body) {
   }
 
   try {
-    // 1. Bestellung von max → nur chef (badges: orders nur Rolle 'chef')
+    // 1. Bestellung von max → Chef + Admin (badges: orders fuer chef/admin)
     await act('POST', '/api/orders', 'max', { product: 'Kabeltrommel', quantity: 3 });
-    expectTargets('Bestellung → nur chef', ['chef']);
+    expectTargets('Bestellung → Chef + Admin', ['admin', 'chef']);
     {
       const okIcon = SENT.length && SENT.every(s => s.payload.icon === '/icons/cat-orders.png');
       if (okIcon) { pass++; console.log('  ✓ Bestellung nutzt Kategorie-Icon cat-orders'); }
@@ -172,10 +172,10 @@ function req(server, method, p, token, body) {
     await act('PUT', `/api/notes/${noteId}/shares`, 'max', { shares: [{ user_id: ids.lisa, permission: 'write' }] });
     expectTargets('Notiz-Freigabe unverändert → kein Push', []);
 
-    // 10. Kategorie-Schalter: chef schaltet Bestellungen ab → Bestellung erzeugt KEINEN Push an chef
+    // 10. Kategorie-Schalter: chef schaltet Bestellungen ab → Bestellung geht nur noch an admin
     await req(server, 'PUT', '/api/push/prefs', tokens.chef, { orders: false });
     await act('POST', '/api/orders', 'max', { product: 'Schrauben', quantity: 10 });
-    expectTargets('Bestellung mit chef-Pref aus → niemand', []);
+    expectTargets('Bestellung mit chef-Pref aus → nur admin', ['admin']);
     await req(server, 'PUT', '/api/push/prefs', tokens.chef, { orders: true });
 
     // 11. Auslöser-Ausschluss: chef legt Aushang an, hat selbst ein Abo → bekommt selbst nichts

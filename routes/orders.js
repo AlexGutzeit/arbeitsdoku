@@ -79,8 +79,8 @@ router.post('/', authenticate, (req, res) => {
   broadcast('orders', req.headers['x-tab-id']);
   res.status(201).json({ order });
 
-  // Push an alle Chefs (deren Bestell-Zaehler steigt; badges.js: nur Rolle 'chef'), nicht an den Auslöser.
-  const chefIds = db.prepare("SELECT id FROM users WHERE role = 'chef' AND COALESCE(active,1) = 1").all().map(r => r.id);
+  // Push an Chef + Admin (deren Bestell-Zaehler steigt; analog badges.js), nicht an den Auslöser.
+  const chefIds = db.prepare("SELECT id FROM users WHERE role IN ('chef','admin') AND COALESCE(active,1) = 1").all().map(r => r.id);
   push.notifyUsers(db, chefIds, 'orders', {
     title: 'Neue Bestellung',
     body: `${qty ? qty + '× ' : ''}${order.product} — von ${order.user_name}`,

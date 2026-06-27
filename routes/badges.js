@@ -37,7 +37,7 @@ router.get('/', authenticate, (req, res) => {
   ).get(uid).n;
 
   let orders = 0;
-  if (role === 'chef') {
+  if (role === 'chef' || role === 'admin') {
     orders = db.prepare("SELECT COUNT(*) as n FROM orders WHERE ordered_at IS NULL").get().n;
   }
 
