@@ -96,3 +96,5 @@ router.get('/index.html', renderIndex);
 
 module.exports = router;
 module.exports.renderIndex = renderIndex;
+module.exports.iconBasePath = iconBasePath;
+module.exports.hasCustomIcons = hasCustomIcons;

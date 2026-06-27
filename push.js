@@ -8,6 +8,7 @@
 // verzoegern und Fehler eines Geraets duerfen die anderen nicht abbrechen.
 
 const webpush = require('web-push');
+const { iconBasePath } = require('./routes/branding');
 
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC || '';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE || '';
@@ -72,10 +73,14 @@ async function notifyUsers(db, userIds, category, payload, excludeUserId) {
     ).all(...allowed);
     if (subs.length === 0) return;
 
+    // Branding-Icon (Logo des Kunden, falls hochgeladen) für die Benachrichtigung.
+    let icon = '/icons/icon-192x192.png';
+    try { icon = iconBasePath() + '/icon-192x192.png'; } catch (_) {}
     const body = JSON.stringify({
       title: payload.title || 'Arbeitsdoku',
       body: payload.body || '',
       url: payload.url || '/',
+      icon: payload.icon || icon,
     });
 
     await Promise.all(subs.map(async (s) => {

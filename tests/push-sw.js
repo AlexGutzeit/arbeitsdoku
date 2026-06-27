@@ -44,14 +44,15 @@ sandbox.self.self = sandbox.self;
   // 1. push mit gültigem Payload
   const waits = [];
   const ev = {
-    data: { json: () => ({ title: 'Neue Bestellung', body: '3× Kabeltrommel — von Max', url: '/#/orders' }) },
+    data: { json: () => ({ title: 'Neue Bestellung', body: '3× Kabeltrommel — von Max', url: '/#/orders', icon: '/uploads/icons/icon-192x192.png' }) },
     waitUntil: (p) => waits.push(p),
   };
   listeners.push(ev);
   await Promise.all(waits);
   ok('showNotification Titel', lastNotification && lastNotification.title === 'Neue Bestellung', JSON.stringify(lastNotification));
   ok('showNotification Body', lastNotification.opts.body === '3× Kabeltrommel — von Max');
-  ok('showNotification icon/badge gesetzt', lastNotification.opts.icon === '/icons/icon-192x192.png' && lastNotification.opts.badge === '/icons/icon-96x96.png');
+  ok('showNotification icon aus Payload (Branding)', lastNotification.opts.icon === '/uploads/icons/icon-192x192.png');
+  ok('showNotification badge monochrom', lastNotification.opts.badge === '/icons/badge-96x96.png');
   ok('showNotification data.url', lastNotification.opts.data.url === '/#/orders');
   ok('showNotification tag = url (ersetzt statt stapelt)', lastNotification.opts.tag === '/#/orders');
 

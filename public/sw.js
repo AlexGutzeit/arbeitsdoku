@@ -1,4 +1,4 @@
-const CACHE_VERSION = 199;
+const CACHE_VERSION = 200;
 const CACHE_NAME = 'arbeitsdoku-v' + CACHE_VERSION;
 
 // Install: NICHT sofort aktivieren — warten bis User bestätigt oder App neu startet
@@ -23,7 +23,7 @@ self.addEventListener('message', (event) => {
 });
 
 // Web-Push: Server schickt eine Benachrichtigung (auch bei geschlossener App). Der Payload ist
-// JSON { title, body, url }. Faellt das Parsen aus, wird eine generische Meldung gezeigt.
+// JSON { title, body, url, icon }. Faellt das Parsen aus, wird eine generische Meldung gezeigt.
 self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (_) { data = {}; }
@@ -32,8 +32,10 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || '',
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/icon-96x96.png',
+      // Logo aus dem Payload (Branding-Icon des Kunden) — Fallback Standard-App-Icon.
+      icon: data.icon || '/icons/icon-192x192.png',
+      // Status-Leisten-Symbol: MUSS einfarbig + transparent sein, sonst weisses Quadrat.
+      badge: '/icons/badge-96x96.png',
       tag: url,            // gleiche Route ersetzt statt stapelt
       data: { url },
     })
