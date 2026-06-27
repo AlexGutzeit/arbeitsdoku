@@ -84,7 +84,10 @@ Browser-Tab.
 
 Ein Gerät/Browser hat genau **ein** Push-Abo. Ist die Browser-Erlaubnis erteilt, wird das Abo beim Login
 automatisch dem **aktuell angemeldeten Nutzer** zugeordnet – auf einem geteilten Gerät gehen die
-Benachrichtigungen also immer an den, der gerade eingeloggt ist.
+Benachrichtigungen also immer an den, der gerade eingeloggt ist. Beim **Abmelden** wird das Push-Abo dieses
+Geräts entfernt (beim nächsten Login folgt es wieder dem Angemeldeten); ein bewusstes **„Ausschalten"** bleibt
+dagegen aus, bis wieder „Aktivieren" gedrückt wird. **Ausgestellte Mitarbeiter** erhalten keine
+Benachrichtigungen mehr.
 
 **Hinweise zur Zustellung:** Web Push läuft über den Push-Dienst des Browsers (Google/Apple/Mozilla) und
 wird bei fehlendem Empfang nachgeliefert (TTL 1 Tag), Priorität „normal". Zu beachten: Am **Desktop** muss
@@ -142,6 +145,10 @@ cp .env.example .env
 openssl rand -base64 48
 #    (Kein openssl? Stattdessen: node -e "console.log(require('crypto').randomBytes(48).toString('base64'))")
 
+# 4b) (Optional) Push-Benachrichtigungen aktivieren: VAPID-Schlüsselpaar erzeugen und die drei
+#     Werte (VAPID_PUBLIC/VAPID_PRIVATE/VAPID_SUBJECT) in .env eintragen. Ohne sie ist Push inaktiv.
+node -e "console.log(require('web-push').generateVAPIDKeys())"
+
 # 5) Starten
 npm start
 ```
@@ -193,6 +200,10 @@ Damit die App produktiv nutzbar ist, als **Admin** der Reihe nach:
 5. (Optional) **Einzelrechte** vergeben (Planung/Schwarzes Brett/Dokumente).
 6. **Eigenes Passwort ändern** und die nicht benötigten Test-Konten (`chef`/`buchhalter`/`max`)
    anpassen oder löschen.
+7. (Optional) **Push-Benachrichtigungen:** Sind die `VAPID_*`-Schlüssel in der `.env` gesetzt (siehe
+   [Installation](#installation)), kann jeder Nutzer sie selbst über den Seitenleisten-Punkt
+   **🔔 Benachrichtigungen** aktivieren (am Handy am besten als installierte PWA). Details im Abschnitt
+   [Push-Benachrichtigungen](#-push-benachrichtigungen-web-push).
 
 ---
 
