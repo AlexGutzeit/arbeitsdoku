@@ -10,6 +10,14 @@
 const webpush = require('web-push');
 const { iconBasePath } = require('./routes/branding');
 
+// Kategorie-Symbole fuer die Benachrichtigung (Emojis wie in der Seitenleiste, als PNG gerendert).
+const CATEGORY_ICONS = {
+  orders:   '/icons/cat-orders.png',
+  absences: '/icons/cat-absences.png',
+  bulletin: '/icons/cat-bulletin.png',
+  notes:    '/icons/cat-notes.png',
+};
+
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC || '';
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE || '';
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
@@ -73,14 +81,17 @@ async function notifyUsers(db, userIds, category, payload, excludeUserId) {
     ).all(...allowed);
     if (subs.length === 0) return;
 
-    // Branding-Icon (Logo des Kunden, falls hochgeladen) für die Benachrichtigung.
-    let icon = '/icons/icon-192x192.png';
-    try { icon = iconBasePath() + '/icon-192x192.png'; } catch (_) {}
+    // Icon-Auswahl (rechtes Bild der Meldung): ausdrueckliches payload.icon hat Vorrang,
+    // sonst ein Kategorie-Symbol (wie in der Seitenleiste), sonst das Branding-Logo des Kunden.
+    // Das linke App-Avatar (PWA-Icon) bleibt davon unberuehrt.
+    let brandIcon = '/icons/icon-192x192.png';
+    try { brandIcon = iconBasePath() + '/icon-192x192.png'; } catch (_) {}
+    const icon = payload.icon || CATEGORY_ICONS[category] || brandIcon;
     const body = JSON.stringify({
       title: payload.title || 'Arbeitsdoku',
       body: payload.body || '',
       url: payload.url || '/',
-      icon: payload.icon || icon,
+      icon,
     });
 
     await Promise.all(subs.map(async (s) => {

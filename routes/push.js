@@ -76,7 +76,7 @@ router.post('/test', authenticate, async (req, res) => {
   const db = getDb();
   const has = db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?').get(req.user.id).n;
   if (!has) return res.status(400).json({ error: 'Kein Geraet abonniert' });
-  await push.notifyUsers(db, [req.user.id], 'orders', {
+  await push.notifyUsers(db, [req.user.id], null, {
     title: 'Test-Benachrichtigung',
     body: 'Push funktioniert auf diesem Geraet. 🎉',
     url: '/',

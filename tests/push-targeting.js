@@ -119,6 +119,11 @@ function req(server, method, p, token, body) {
     // 1. Bestellung von max → nur chef (badges: orders nur Rolle 'chef')
     await act('POST', '/api/orders', 'max', { product: 'Kabeltrommel', quantity: 3 });
     expectTargets('Bestellung → nur chef', ['chef']);
+    {
+      const okIcon = SENT.length && SENT.every(s => s.payload.icon === '/icons/cat-orders.png');
+      if (okIcon) { pass++; console.log('  ✓ Bestellung nutzt Kategorie-Icon cat-orders'); }
+      else { fail++; console.log('  ✗ Bestellung-Icon: ' + (SENT[0] && SENT[0].payload.icon)); }
+    }
 
     // 2. Aushang von chef → alle außer chef
     await act('POST', '/api/bulletin', 'chef', { title: 'Betriebsausflug' });
@@ -127,6 +132,11 @@ function req(server, method, p, token, body) {
     // 3. Urlaubsantrag (self) von max → alle Manager
     await act('POST', '/api/absences', 'max', { type: 'urlaub', date_from: '2026-08-03', date_to: '2026-08-05' });
     expectTargets('Urlaubsantrag → Manager', ['admin', 'chef', 'buchhalter']);
+    {
+      const okIcon = SENT.length && SENT.every(s => s.payload.icon === '/icons/cat-absences.png');
+      if (okIcon) { pass++; console.log('  ✓ Abwesenheit nutzt Kategorie-Icon cat-absences'); }
+      else { fail++; console.log('  ✗ Abwesenheit-Icon: ' + (SENT[0] && SENT[0].payload.icon)); }
+    }
 
     // 4. Krankmeldung (self) von max → alle Manager
     await act('POST', '/api/absences', 'max', { type: 'krank', date_from: '2026-09-01', date_to: '2026-09-02' });
