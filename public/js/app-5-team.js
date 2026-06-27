@@ -207,7 +207,7 @@ async function renderNotifications() {
       <div class="welcome-header"><h1>&#128276; Benachrichtigungen</h1></div>
       <div class="erprobung-banner">
         <strong>&#129514; Erprobung</strong>
-        <p>Diese Funktion ist noch in der Testphase. Bitte verlass dich noch nicht zu 100 % darauf – einzelne Benachrichtigungen können verspätet kommen oder ausbleiben. Rückmeldung (klappt / klappt nicht) gerne an Alex. Danke!</p>
+        <p>Diese Funktion ist noch in der Testphase. Bitte verlass dich noch nicht zu 100 % darauf – einzelne Benachrichtigungen können verspätet kommen oder ausbleiben. Rückmeldung (klappt / klappt nicht) gerne an den Admin. Danke!</p>
       </div>
       <div class="welcome-section" id="push-card">
         <div class="loading"><div class="spinner"></div></div>
