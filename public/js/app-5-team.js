@@ -269,7 +269,7 @@ async function initPushCard() {
   card.querySelectorAll('input[data-cat]').forEach(cb => {
     cb.addEventListener('change', async () => {
       const body = {}; body[cb.dataset.cat] = cb.checked;
-      try { await api('PUT', '/api/push/prefs', body); }
+      try { await api('PUT', '/api/push/prefs', body); toast('Gespeichert', 'success'); }
       catch (e) { toast('Konnte Einstellung nicht speichern', 'error'); cb.checked = !cb.checked; }
     });
   });
