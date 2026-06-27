@@ -161,8 +161,18 @@ async function enablePush() {
     applicationServerKey: urlBase64ToUint8Array(keyResp.key),
   });
   await api('POST', '/api/push/subscribe', { subscription: sub.toJSON() });
+  // Geraeteweites „Opt-out" aufheben (s. PUSH_OPTOUT_KEY): bewusstes Aktivieren erlaubt wieder
+  // das automatische Mitziehen beim Login.
+  try { localStorage.removeItem(PUSH_OPTOUT_KEY); } catch (_) {}
 }
 
+// Geraeteweite Markierung „auf diesem Geraet bewusst per Knopf ausgeschaltet". Verhindert, dass
+// syncPushSubscription() beim naechsten Login/App-Start wieder abonniert. Wird NICHT vom Logout
+// gesetzt (dort soll das Abo dem naechsten Login wieder folgen), nur vom „Ausschalten"-Knopf.
+const PUSH_OPTOUT_KEY = 'pushOptOut';
+
+// Raw-Abmeldung des Geraete-Abos (Browser + Server). Aendert das Opt-out NICHT — wird auch vom
+// manuellen Logout genutzt.
 async function disablePush() {
   const sub = await getPushSubscription();
   if (sub) {
@@ -185,6 +195,8 @@ const PUSH_CATS = [
 // Fragt NIE nach Erlaubnis — bei 'default'/'denied' passiert nichts.
 async function syncPushSubscription() {
   if (!pushSupported() || Notification.permission !== 'granted') return;
+  // Auf diesem Geraet bewusst ausgeschaltet → nicht heimlich wieder abonnieren.
+  try { if (localStorage.getItem(PUSH_OPTOUT_KEY) === '1') return; } catch (_) {}
   try {
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
@@ -281,7 +293,12 @@ async function initPushCard() {
   const disableBtn = document.getElementById('push-disable');
   if (disableBtn) disableBtn.addEventListener('click', async () => {
     disableBtn.disabled = true;
-    try { await disablePush(); toast('Benachrichtigungen ausgeschaltet'); initPushCard(); }
+    try {
+      await disablePush();
+      // Bewusstes Ausschalten merken → bleibt aus, bis wieder „Aktivieren" gedrückt wird.
+      try { localStorage.setItem(PUSH_OPTOUT_KEY, '1'); } catch (_) {}
+      toast('Benachrichtigungen ausgeschaltet'); initPushCard();
+    }
     catch (e) { toast(e.message || 'Fehler', 'error'); disableBtn.disabled = false; }
   });
 

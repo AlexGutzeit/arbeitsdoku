@@ -44,11 +44,15 @@ async function handleLogin(e) {
   }
 }
 
-function logout(manual) {
-  // Nur der bewusste „Abmelden"-Klick meldet sich serverseitig fuers Audit-Log ab (best effort,
-  // solange das Token noch gueltig ist). Der automatische Logout (401/abgelaufenes Token) ruft
+async function logout(manual) {
+  // Nur der bewusste „Abmelden"-Klick: Push-Abo dieses Geraets abmelden (wichtig auf geteilten
+  // Geraeten) und serverseitig fuers Audit-Log abmelden — beides MUSS passieren, solange das Token
+  // noch gueltig ist, daher VOR dem Loeschen. Der automatische Logout (401/abgelaufenes Token) ruft
   // logout() ohne Argument — dort wird serverseitig bereits 'session_expired' protokolliert.
-  if (manual && S.token) { api('POST', '/api/auth/logout').catch(() => {}); }
+  if (manual && S.token) {
+    try { await disablePush(); } catch (_) { /* Push bleibt zur Not aktiv — kein Logout-Blocker */ }
+    api('POST', '/api/auth/logout').catch(() => {});
+  }
   stopSSE();
   S.token = null;
   S.user = null;
