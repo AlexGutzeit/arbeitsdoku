@@ -1,4 +1,4 @@
-const CACHE_VERSION = 203;
+const CACHE_VERSION = 204;
 const CACHE_NAME = 'arbeitsdoku-v' + CACHE_VERSION;
 
 // Install: NICHT sofort aktivieren — warten bis User bestätigt oder App neu startet
@@ -36,7 +36,8 @@ self.addEventListener('push', (event) => {
       icon: data.icon || '/icons/icon-192x192.png',
       // Status-Leisten-Symbol: MUSS einfarbig + transparent sein, sonst weisses Quadrat.
       badge: '/icons/badge-96x96.png',
-      tag: url,            // gleiche Route ersetzt statt stapelt
+      // KEIN gemeinsames tag → jede Meldung bleibt einzeln stehen (sonst wuerde die naechste
+      // Meldung derselben Route die vorige ersetzen).
       data: { url },
     })
   );

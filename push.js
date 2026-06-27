@@ -94,10 +94,13 @@ async function notifyUsers(db, userIds, category, payload, excludeUserId) {
       icon,
     });
 
+    // urgency 'high' → der Push-Dienst stellt auch im Energiespar-/Doze-Modus sofort zu
+    // (statt Meldungen zu buendeln). TTL 1 Tag: aeltere, verpasste Meldungen sind ohnehin veraltet.
+    const sendOpts = { urgency: 'high', TTL: 86400 };
     await Promise.all(subs.map(async (s) => {
       const subscription = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } };
       try {
-        await webpush.sendNotification(subscription, body);
+        await webpush.sendNotification(subscription, body, sendOpts);
       } catch (err) {
         const code = err && err.statusCode;
         if (code === 404 || code === 410) {

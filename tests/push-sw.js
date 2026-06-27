@@ -54,7 +54,7 @@ sandbox.self.self = sandbox.self;
   ok('showNotification icon aus Payload (Branding)', lastNotification.opts.icon === '/uploads/icons/icon-192x192.png');
   ok('showNotification badge monochrom', lastNotification.opts.badge === '/icons/badge-96x96.png');
   ok('showNotification data.url', lastNotification.opts.data.url === '/#/orders');
-  ok('showNotification tag = url (ersetzt statt stapelt)', lastNotification.opts.tag === '/#/orders');
+  ok('showNotification ohne tag (jede Meldung einzeln)', lastNotification.opts.tag === undefined);
 
   // 2. push ohne/kaputten Payload → generische Meldung, kein Crash
   lastNotification = null;
