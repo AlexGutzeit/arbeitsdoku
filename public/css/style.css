@@ -1705,6 +1705,15 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .modal-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
 .modal-header h3 { margin: 0; font-size: 1.1rem; }
 .modal-body { padding: 1rem 1.25rem; max-height: 60vh; overflow-y: auto; }
+/* Navigations-Auswahl-Dialog */
+.nav-choose-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.nav-choose-list .nav-choose-btn { width: 100%; justify-content: center; text-align: center; }
+.nav-choose-remember { display: flex; align-items: center; gap: 0.45rem; margin-top: 0.85rem; font-size: 0.9rem; cursor: pointer; }
+.nav-choose-remember input { width: 1.05rem; height: 1.05rem; cursor: pointer; }
+/* dezenter Text-Link (z. B. „Navigations-App ändern") */
+.link-btn { background: none; border: none; padding: 0.15rem 0; color: var(--primary); font-size: 0.82rem; cursor: pointer; text-decoration: underline; }
+.link-btn:hover { color: var(--primary-hover); }
+.nav-change-link { margin-top: 0.4rem; }
 @media (max-width: 600px) {
   .note-filters { flex-direction: column; }
   .note-card-row { flex-direction: column; }

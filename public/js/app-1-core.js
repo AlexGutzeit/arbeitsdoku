@@ -198,15 +198,87 @@ function regieHtmlBadge(entry, extraStyle) {
   return `<span class="regie-badge regie-yes"${extraStyle ? ' style="' + extraStyle + '"' : ''}>&#10004; ${REGIE_LABELS[v] || ''}</span>`;
 }
 
-function openNav(address) {
-  const q = encodeURIComponent(address);
-  // iOS/Android native Apps bevorzugen, Fallback auf Google Maps
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  if (isIOS) {
-    window.open('maps://maps.apple.com/?daddr=' + q, '_blank');
-  } else {
-    window.open('https://www.google.com/maps/dir/?api=1&destination=' + q, '_blank');
-  }
+// --- Navigation: Dienst-/App-Auswahl statt fester Google-Maps-Bindung ---
+// Web-Apps koennen die installierten Apps NICHT auflisten (kein Web-API). Daher: kuratierte Auswahl je
+// Plattform + auf Android die native Geraete-Auswahl via geo:-Link. Jede URL nimmt q = encodeURIComponent(adresse).
+const NAV_SERVICES = {
+  device: { label: 'Geräte-Auswahl (installierte Apps)', scheme: true, url: q => 'geo:0,0?q=' + q },
+  google: { label: 'Google Maps',    url: q => 'https://www.google.com/maps/dir/?api=1&destination=' + q },
+  apple:  { label: 'Apple Karten',   url: q => 'https://maps.apple.com/?daddr=' + q },
+  waze:   { label: 'Waze',           url: q => 'https://waze.com/ul?q=' + q + '&navigate=yes' },
+  osm:    { label: 'OpenStreetMap',  url: q => 'https://www.openstreetmap.org/search?query=' + q },
+  bing:   { label: 'Bing Maps',      url: q => 'https://www.bing.com/maps?q=' + q },
+};
+const NAV_PREF_KEY = 'navApp';
+
+function navPlatform() {
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/.test(ua)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  return 'desktop';
+}
+function navOptionsFor(platform) {
+  if (platform === 'android') return ['device', 'google', 'waze'];
+  if (platform === 'ios') return ['apple', 'google', 'waze'];
+  return ['google', 'osm', 'apple', 'bing'];
+}
+function navPref() { try { return localStorage.getItem(NAV_PREF_KEY); } catch (_) { return null; } }
+
+// Öffnet die Navigation zu einem gewählten Dienst. MUSS synchron im Klick-Handler laufen (sonst
+// blockt der Browser window.open). geo: per location.href (OS-Übergabe), https per neuem Tab.
+function launchNav(id, address) {
+  const svc = NAV_SERVICES[id];
+  if (!svc || !address) return;
+  const url = svc.url(encodeURIComponent(address));
+  if (svc.scheme) window.location.href = url;
+  else window.open(url, '_blank', 'noopener');
+}
+
+// Einstieg von allen Navigations-Buttons. Gemerkte Wahl wird direkt verwendet, sonst Auswahl-Dialog.
+// opts.force erzwingt den Dialog (zum Ändern der gemerkten Wahl).
+function openNav(address, opts = {}) {
+  if (!address) return;
+  const options = navOptionsFor(navPlatform());
+  const pref = navPref();
+  if (!opts.force && pref && options.includes(pref)) { launchNav(pref, address); return; }
+  chooseNavModal(address, options);
+}
+
+// Auswahl-Dialog im vorhandenen Modal-Stil (wie confirmModal). Klick auf eine Option startet die
+// Navigation; „merken" speichert die Wahl (bzw. löscht sie, wenn abgewählt).
+function chooseNavModal(address, options) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay dialog-modal';
+  const remembered = !!navPref();
+  const btns = options.map(id =>
+    `<button class="btn btn-outline nav-choose-btn" data-nav="${id}">${esc(NAV_SERVICES[id].label)}</button>`
+  ).join('');
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header"><h3>Navigation öffnen mit …</h3></div>
+      <div class="modal-body">
+        <div class="nav-choose-list">${btns}</div>
+        <label class="nav-choose-remember"><input type="checkbox" id="nav-remember"${remembered ? ' checked' : ''}> Auswahl merken</label>
+      </div>
+      <div class="modal-footer" style="display:flex;justify-content:flex-end;padding:1rem">
+        <button class="btn btn-outline" data-act="cancel">Abbrechen</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); };
+  const onKey = (e) => { if (e.key === 'Escape') finish(); };
+  document.addEventListener('keydown', onKey);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(); });
+  overlay.querySelector('[data-act="cancel"]').addEventListener('click', finish);
+  overlay.querySelectorAll('.nav-choose-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      const id = b.dataset.nav;
+      const remember = overlay.querySelector('#nav-remember').checked;
+      try { if (remember) localStorage.setItem(NAV_PREF_KEY, id); else localStorage.removeItem(NAV_PREF_KEY); } catch (_) {}
+      launchNav(id, address);
+      finish();
+    });
+  });
 }
 
 function formatDateDE(d) {

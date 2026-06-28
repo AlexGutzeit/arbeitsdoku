@@ -813,6 +813,7 @@ async function renderEntryForm(editId, continueId, planningId) {
             <input type="text" class="form-control" id="ef-address" value="${esc(address)}" placeholder="z.B. Musterstraße 1, 12345 Berlin">
             <button type="button" class="btn btn-outline btn-sm btn-nav" id="ef-nav" title="Navigation starten">&#128506;</button>
           </div>
+          ${navPref() ? '<button type="button" class="link-btn nav-change-link" id="ef-nav-change">Navigations-App ändern</button>' : ''}
         </div>
         <div class="form-group">
           <label>Kunde</label>
@@ -913,6 +914,11 @@ async function renderEntryForm(editId, continueId, planningId) {
   document.getElementById('ef-nav').addEventListener('click', () => {
     const addr = document.getElementById('ef-address').value.trim();
     if (addr) openNav(addr); else toast('Keine Adresse eingetragen', 'error');
+  });
+  const efNavChange = document.getElementById('ef-nav-change');
+  if (efNavChange) efNavChange.addEventListener('click', () => {
+    const addr = document.getElementById('ef-address').value.trim();
+    if (addr) openNav(addr, { force: true }); else toast('Keine Adresse eingetragen', 'error');
   });
 
   document.getElementById('back-btn').addEventListener('click', () => navigate(planningEntry ? '/planning' : '/'));

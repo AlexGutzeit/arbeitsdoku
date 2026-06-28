@@ -796,6 +796,7 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
             <input type="text" class="form-control" id="pf-address" value="${esc(ref?.address || '')}" placeholder="z.B. Musterstraße 1, 12345 Berlin">
             <button type="button" class="btn btn-outline btn-sm btn-nav" id="pf-nav" title="Navigation starten">&#128506;</button>
           </div>
+          ${navPref() ? '<button type="button" class="link-btn nav-change-link" id="pf-nav-change">Navigations-App ändern</button>' : ''}
         </div>
         <div class="form-group">
           <label>Kunde</label>
@@ -881,6 +882,11 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
   document.getElementById('pf-nav').addEventListener('click', () => {
     const addr = document.getElementById('pf-address').value.trim();
     if (addr) openNav(addr); else toast('Keine Adresse eingetragen', 'error');
+  });
+  const pfNavChange = document.getElementById('pf-nav-change');
+  if (pfNavChange) pfNavChange.addEventListener('click', () => {
+    const addr = document.getElementById('pf-address').value.trim();
+    if (addr) openNav(addr, { force: true }); else toast('Keine Adresse eingetragen', 'error');
   });
 
   document.getElementById('planning-form').addEventListener('submit', async (e) => {

@@ -56,7 +56,9 @@ Jeder Punkt entspricht einem Menüpunkt in der App.
 | **🗑️ Papierkorb** | Gelöschte Einträge/Abwesenheiten bleiben mit Begründung erhalten und können wiederhergestellt werden (GoBD). Im Unterreiter **Mitarbeiter** liegen ausgestellte Mitarbeiter zum Wiedereinstellen; endgültiges Löschen (mit allen Daten) ist dort nur als Admin und nur für zuvor ausgestellte Mitarbeiter möglich. *(Admin)* |
 
 **Querschnitts-Features:** Echtzeit-Updates über alle Geräte (Server-Sent Events), **Push-Benachrichtigungen
-aufs Handy auch bei geschlossener App** (Web Push, optional je Gerät aktivierbar), rollenbasierte
+aufs Handy auch bei geschlossener App** (Web Push, optional je Gerät aktivierbar), **Navigations-Button mit
+freier Wahl der Karten-App/des -Dienstes** (Auswahl-Dialog statt fester Google-Bindung – Android zeigt die
+Geräte-Auswahl der installierten Apps, iOS/Desktop eine kuratierte Liste; Wahl merkbar), rollenbasierte
 Sichtbarkeit, mobil-optimiert/installierbar (PWA), Brute-Force-Schutz am Login, durchgehend
 parametrisierte SQL-Abfragen und HTML-Escaping (XSS-Schutz).
 
