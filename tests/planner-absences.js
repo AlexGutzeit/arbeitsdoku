@@ -1,6 +1,7 @@
-// Planer-Sichtbarkeit-Test: Mitarbeiter mit Planungsrecht (can_plan) sehen im Planungskontext
-// (scope=planning) die Abwesenheiten ALLER — Typ ja, fremder Kommentar gestrippt. Ohne can_plan/scope
-// nur die eigenen; Manager voll inkl. Kommentar. Start: node tests/planner-absences.js
+// Planer-Sichtbarkeit-Test: Mitarbeiter mit „alle"-Planungsrecht (can_plan_all) sehen im Planungskontext
+// (scope=planning) die Abwesenheiten ALLER — Typ ja, fremder Kommentar gestrippt. Self-Planer (nur
+// can_plan) sehen NUR die eigenen. Ohne Recht/scope nur eigene; Manager voll inkl. Kommentar.
+// Start: node tests/planner-absences.js
 const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -39,12 +40,13 @@ const find = (resp, uid) => (resp.body && resp.body.absences || []).find(a => a.
     const admin = (await req('POST','/api/auth/login', null, { username:'admin', password:pw })).body.token;
     ok('Admin-Login', !!admin);
 
-    // Drei Nutzer anlegen
-    const mk = (u, canPlan) => req('POST','/api/users', admin, { username:u, password:'test', name:u.toUpperCase(), role:'mitarbeiter', can_plan:canPlan, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
-    const P = (await mk('planner', 1)).body.user;   // Planer
-    const N = (await mk('normalo', 0)).body.user;   // normaler MA
-    const X = (await mk('kollege', 0)).body.user;   // Kollege mit Abwesenheit
-    ok('3 Nutzer angelegt (P can_plan=1, N/X=0)', !!(P && N && X) && P.id && X.id, JSON.stringify({P:P&&P.id,N:N&&N.id,X:X&&X.id}));
+    // Nutzer anlegen
+    const mk = (u, canPlan, canPlanAll) => req('POST','/api/users', admin, { username:u, password:'test', name:u.toUpperCase(), role:'mitarbeiter', can_plan:canPlan, can_plan_all:canPlanAll, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    const P = (await mk('planner', 1, 1)).body.user;   // „alle"-Planer
+    const S = (await mk('selfplan', 1, 0)).body.user;  // Self-Planer (nur sich)
+    const N = (await mk('normalo', 0, 0)).body.user;   // normaler MA
+    const X = (await mk('kollege', 0, 0)).body.user;   // Kollege mit Abwesenheit
+    ok('4 Nutzer angelegt (P=alle, S=sich, N/X=0)', !!(P && S && N && X) && P.id && S.id && X.id, JSON.stringify({P:P&&P.id,S:S&&S.id,N:N&&N.id,X:X&&X.id}));
 
     // Abwesenheiten: X krank (Kommentar), P krank (eigener Kommentar) — beide am selben Tag
     await req('POST','/api/absences', admin, { type:'krank', date_from:D, date_to:D, comment:'GRUND-X', target_user_id:X.id });
@@ -55,6 +57,13 @@ const find = (resp, uid) => (resp.body && resp.body.absences || []).find(a => a.
     // N (kein can_plan): sieht X NICHT, selbst mit scope
     let r = await byDate(nTok, true);
     ok('N ohne Planungsrecht sieht X NICHT (trotz scope)', !find(r, X.id), JSON.stringify((r.body.absences||[]).map(a=>a.user_id)));
+
+    // S (Self-Planer, nur „sich"): sieht X NICHT, selbst mit scope — nur eigene Abwesenheiten
+    const sTok = (await req('POST','/api/auth/login', null, { username:'selfplan', password:'test' })).body.token;
+    await req('POST','/api/absences', sTok, { type:'krank', date_from:D, date_to:D, comment:'GRUND-S' });
+    r = await byDate(sTok, true);
+    ok('S (Self-Planer) sieht X NICHT (trotz scope)', !find(r, X.id), JSON.stringify((r.body.absences||[]).map(a=>a.user_id)));
+    ok('S sieht eigene Abwesenheit', !!find(r, S.id));
 
     // P ohne scope: nur eigene, X nicht
     r = await byDate(pTok, false);

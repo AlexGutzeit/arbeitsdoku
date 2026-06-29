@@ -14,7 +14,8 @@ const USER_AUDIT_FIELDS = [
   ['role', 'Rolle', v => String(v ?? '')],
   ['target_hours_per_week', 'Soll-Stunden/Woche', v => String(v ?? '')],
   ['start_overtime', 'Start-Überstunden', v => String(v ?? 0)],
-  ['can_plan', 'Recht Planung', v => (v ? 'Ja' : 'Nein')],
+  ['can_plan', 'Recht Planung (sich)', v => (v ? 'Ja' : 'Nein')],
+  ['can_plan_all', 'Recht Planung (alle)', v => (v ? 'Ja' : 'Nein')],
   ['can_bulletin', 'Recht Schwarzes Brett', v => (v ? 'Ja' : 'Nein')],
   ['can_upload', 'Recht Dokumente-Upload', v => (v ? 'Ja' : 'Nein')],
 ];
@@ -78,9 +79,9 @@ router.get('/', authenticate, authorize('chef', 'buchhalter'), (req, res) => {
   let users;
 
   if (req.user.role === 'admin') {
-    users = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, active, created_at FROM users ORDER BY name').all();
+    users = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, active, created_at FROM users ORDER BY name').all();
   } else {
-    users = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, active, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
+    users = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, active, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
   }
 
   res.json({ users: attachEmployment(db, users) });
@@ -91,7 +92,7 @@ router.get('/:id', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   let user;
 
-  user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, created_at FROM users WHERE id = ?').get(req.params.id);
+  user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, created_at FROM users WHERE id = ?').get(req.params.id);
 
   if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
   res.json({ user });
@@ -99,7 +100,10 @@ router.get('/:id', authenticate, authorize('chef'), (req, res) => {
 
 // Benutzer erstellen
 router.post('/', authenticate, authorize('chef'), async (req, res) => {
-  const { username, password, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri } = req.body;
+  const { username, password, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri } = req.body;
+  // „alle" impliziert immer „sich" (can_plan_all=1 ⇒ can_plan=1).
+  const planAll = can_plan_all ? 1 : 0;
+  const planSelf = (can_plan || can_plan_all) ? 1 : 0;
 
   if (!username || !password || !name || !role) {
     return res.status(400).json({ error: 'Benutzername, Passwort, Name und Rolle sind Pflichtfelder' });
@@ -125,8 +129,8 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   try { hash = await bcrypt.hash(password, 10); } // kooperativ (blockiert den Event-Loop nicht)
   catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }
   const result = db.prepare(
-    "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-  ).run(username, hash, name, role, hpw, start_overtime || 0, can_plan ? 1 : 0, can_bulletin ? 1 : 0, can_upload ? 1 : 0);
+    "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(username, hash, name, role, hpw, start_overtime || 0, planSelf, planAll, can_bulletin ? 1 : 0, can_upload ? 1 : 0);
 
   const userId = result.lastInsertRowid;
   const today = new Date().toISOString().slice(0, 10);
@@ -136,7 +140,7 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   // Offener Anstellungszeitraum ab heute (Basis fuer die Soll-Stunden-Anrechnung)
   db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, NULL)').run(userId, today);
 
-  const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, created_at FROM users WHERE id = ?').get(userId);
+  const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, created_at FROM users WHERE id = ?').get(userId);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_create',
     details: `id=${userId} · ${userAuditCreate(user)}`, ip: req.ip });
   res.status(201).json({ user });
@@ -153,23 +157,30 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     return res.status(403).json({ error: 'Admin-Accounts können nur von Admins bearbeitet werden' });
   }
 
-  const { username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload } = req.body;
+  const { username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload } = req.body;
+
+  // Rechte-Stufen normalisieren: jeweils mitgeschicktes Feld übernehmen, sonst Bestand behalten;
+  // „alle" impliziert immer „sich".
+  const newPlanAll = can_plan_all !== undefined ? (can_plan_all ? 1 : 0) : (user.can_plan_all || 0);
+  let newPlanSelf = can_plan !== undefined ? (can_plan ? 1 : 0) : (user.can_plan || 0);
+  if (newPlanAll) newPlanSelf = 1;
 
   db.prepare(
-    'UPDATE users SET username=?, name=?, role=?, target_hours_per_week=?, start_overtime=?, can_plan=?, can_bulletin=?, can_upload=? WHERE id=?'
+    'UPDATE users SET username=?, name=?, role=?, target_hours_per_week=?, start_overtime=?, can_plan=?, can_plan_all=?, can_bulletin=?, can_upload=? WHERE id=?'
   ).run(
     username || user.username,
     name || user.name,
     role || user.role,
     target_hours_per_week !== undefined ? target_hours_per_week : user.target_hours_per_week,
     start_overtime !== undefined ? start_overtime : (user.start_overtime || 0),
-    can_plan !== undefined ? (can_plan ? 1 : 0) : (user.can_plan || 0),
+    newPlanSelf,
+    newPlanAll,
     can_bulletin !== undefined ? (can_bulletin ? 1 : 0) : (user.can_bulletin || 0),
     can_upload !== undefined ? (can_upload ? 1 : 0) : (user.can_upload || 0),
     req.params.id
   );
 
-  const updated = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_bulletin, can_upload, created_at FROM users WHERE id = ?').get(req.params.id);
+  const updated = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, created_at FROM users WHERE id = ?').get(req.params.id);
   const _changes = userAuditDiff(user, updated);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_update',
     details: `${updated.username} (id=${req.params.id}): ` + (_changes.length ? _changes.join('; ') : 'keine Änderung'),

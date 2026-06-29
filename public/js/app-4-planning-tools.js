@@ -316,7 +316,7 @@ function renderPlanningTimeline(entries, absences, canEdit) {
       if (e.address) {
         actionsHtml += `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>`;
       }
-      if (canEdit) {
+      if (canEdit && canEditEntry(e)) {
         actionsHtml += `<button type="button" class="plan-menu-btn" data-id="${e.id}" data-group="${e.group_id || ''}" title="Aktionen">&#8942;</button>`;
       }
 
@@ -577,6 +577,11 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
   const _assignedSet = new Set(assignedIds);
   const workers = getWorkerUsers().filter(u => u.active !== 0 || _assignedSet.has(u.id));
 
+  // Self-Planer (nur „sich"-Recht): keine Mitarbeiter-Auswahl, Planung läuft auf ihn selbst.
+  const selfOnly = !canPlanAll();
+  // Bearbeitet ein Self-Planer eine GETEILTE Planung, klinkt er sich aus und legt seine eigene an.
+  const sharedEdit = selfOnly && (isEdit || isGroupEdit) && assignedIds.some(id => id !== S.user.id);
+
   // Tage-State für dynamische Liste
   let planDays = [];
   if (isGroupEdit) {
@@ -771,6 +776,12 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
         <button class="btn btn-outline btn-sm" id="back-btn">Zurück</button>
       </div>
       <form id="planning-form">
+        ${selfOnly ? `
+        <div class="form-group">
+          <label>Geplant für</label>
+          <div class="planning-self-target">${esc(S.user.name)} (nur du)</div>
+          ${sharedEdit ? `<div class="form-hint">Du klinkst dich aus der gemeinsamen Planung aus und legst deine eigene an.</div>` : ''}
+        </div>` : `
         <div class="form-group">
           <label>Mitarbeiter zuweisen</label>
           <div class="planning-user-checkboxes">
@@ -778,7 +789,7 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
               <label><input type="checkbox" name="assigned" value="${u.id}" ${assignedIds.includes(u.id) ? 'checked' : ''}> ${esc(u.name)} (${roleName(u.role)})</label>
             `).join('')}
           </div>
-        </div>
+        </div>`}
         <div class="plan-mode-toggle">
           <span class="${!multiMode ? 'active' : ''}" id="lbl-single">Einzeltag</span>
           <label class="toggle-switch">
@@ -891,7 +902,8 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
 
   document.getElementById('planning-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const checked = [...document.querySelectorAll('input[name="assigned"]:checked')].map(cb => Number(cb.value));
+    // Self-Planer: immer auf sich selbst; sonst die angehakten Mitarbeiter.
+    const checked = selfOnly ? [S.user.id] : [...document.querySelectorAll('input[name="assigned"]:checked')].map(cb => Number(cb.value));
     if (!checked.length) { toast('Mindestens einen Mitarbeiter zuweisen', 'error'); return; }
     if (!planDays.length) { toast('Mindestens einen Tag hinzufügen', 'error'); return; }
 

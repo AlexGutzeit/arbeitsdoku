@@ -206,10 +206,11 @@ router.get('/by-date', authenticate, (req, res) => {
   // Genehmigungspflichtige Typen erscheinen erst nach Genehmigung (approved), nicht schon bei pending
   const APPROVAL_TYPES = "('urlaub','sonderurlaub','freizeitausgleich')";
 
-  // Alle Abwesenheiten sehen: Manager immer; Mitarbeiter mit Planungsrecht NUR im Planungskontext
-  // (damit sie vernünftig planen können). Die echte Autorisierung ist can_plan — scope ist nur ein
-  // Kontext-Hinweis (Dashboard/Statistik nutzen ihn bewusst nicht).
-  const canSeeAll = isManager(req.user) || (req.user.can_plan && req.query.scope === 'planning');
+  // Alle Abwesenheiten sehen: Manager immer; Mitarbeiter mit „alle"-Planungsrecht (can_plan_all) NUR im
+  // Planungskontext (damit sie vernünftig fremd-planen können). Die echte Autorisierung ist can_plan_all —
+  // scope ist nur ein Kontext-Hinweis (Dashboard/Statistik nutzen ihn bewusst nicht). Self-Planer
+  // (can_plan ohne can_plan_all) sehen weiterhin nur die eigenen Abwesenheiten.
+  const canSeeAll = isManager(req.user) || (req.user.can_plan_all && req.query.scope === 'planning');
 
   if (canSeeAll) {
     // Optionaler user_id-Filter (eine ID oder kommasepariert) — globale Feiertage (user_id IS NULL)

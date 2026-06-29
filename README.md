@@ -112,7 +112,9 @@ doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusamm
 
 **Zusätzliche Einzelrechte** (pro Benutzer unter *Mitarbeiter → Bearbeiten* vergebbar):
 
-- **Planung bearbeiten** – darf Planungseinträge anlegen/ändern und sieht in der **Planungsansicht** die Abwesenheiten **aller** Mitarbeiter (Typ, **ohne** Kommentar – sonst weiterhin nur eigene Daten)
+- **Planungsrecht** – zwei Stufen, getrennt vergebbar:
+  - **sich** – darf nur sich selbst verplanen. In der Planung fällt die Mitarbeiter-Auswahl weg (Planung läuft auf den Nutzer selbst); fremde Abwesenheiten bleiben unsichtbar. Hat ein „alle"-Planer ihn einer **gemeinsamen** Planung zugewiesen, kann er diese für sich anpassen: Löschen klinkt nur ihn aus, eine Zeitänderung teilt den Eintrag auf (er bekommt seinen eigenen, die anderen bleiben unverändert).
+  - **alle** – darf alle Mitarbeiter verplanen und sieht in der **Planungsansicht** deren Abwesenheiten (Typ, **ohne** Kommentar). Schließt „sich" automatisch ein.
 - **Schwarzes Brett bearbeiten** – darf Aushänge verfassen
 - **Dokumente hochladen** – darf in der Dateiablage hochladen/verwalten
 

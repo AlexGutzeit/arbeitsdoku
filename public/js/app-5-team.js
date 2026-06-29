@@ -774,11 +774,16 @@ async function showUserModal(user) {
           </div>
         </div>
         <div class="form-group">
+          <label style="display:block;margin-bottom:0.3rem;">Planungsrecht</label>
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
             <input type="checkbox" id="um-can-plan" ${user?.can_plan ? 'checked' : ''}>
-            Planungsrecht (darf Planungen erstellen/bearbeiten)
+            sich – darf sich selbst verplanen
           </label>
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:0.3rem;">
+            <input type="checkbox" id="um-can-plan-all" ${user?.can_plan_all ? 'checked' : ''}>
+            alle – darf alle Mitarbeiter verplanen (schließt „sich" ein)
+          </label>
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:0.6rem;">
             <input type="checkbox" id="um-can-bulletin" ${user?.can_bulletin ? 'checked' : ''}>
             Schwarzes-Brett-Recht (darf Einträge erstellen/bearbeiten)
           </label>
@@ -826,6 +831,18 @@ async function showUserModal(user) {
 
   document.getElementById('um-cancel').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+  // Planungsrecht-Stufen koppeln: „alle" schließt „sich" zwingend ein.
+  const planSelfCb = document.getElementById('um-can-plan');
+  const planAllCb = document.getElementById('um-can-plan-all');
+  const syncPlanRights = () => {
+    if (planAllCb.checked) { planSelfCb.checked = true; planSelfCb.disabled = true; }
+    else { planSelfCb.disabled = false; }
+  };
+  planAllCb.addEventListener('change', syncPlanRights);
+  // „sich" abwählen → „alle" kann nicht mehr gelten (greift nur, solange „sich" nicht gesperrt ist).
+  planSelfCb.addEventListener('change', () => { if (!planSelfCb.checked) planAllCb.checked = false; });
+  syncPlanRights();
 
   // Passwort zurücksetzen (nur bei Bearbeitung)
   if (isEdit) {
@@ -884,6 +901,7 @@ async function showUserModal(user) {
       role: document.getElementById('um-role').value,
       start_overtime: parseFloat(document.getElementById('um-start-overtime').value) || 0,
       can_plan: document.getElementById('um-can-plan').checked,
+      can_plan_all: document.getElementById('um-can-plan-all').checked,
       can_bulletin: document.getElementById('um-can-bulletin').checked,
       can_upload: document.getElementById('um-can-upload').checked,
     };

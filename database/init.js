@@ -466,6 +466,10 @@ async function initDatabase() {
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
+  // Migration: can_plan_all Spalte (Planungsrecht-Stufe „alle" — can_plan allein = nur „sich")
+  // Backfill: Bestandsplaner (can_plan=1) behalten das Recht, ALLE zu planen.
+  ensurePlanAll(db);
+
   // Migration: Bestehende target_hours_per_week in user_target_hours übernehmen
   try {
     const existingTargets = db.prepare('SELECT COUNT(*) as count FROM user_target_hours').get();
@@ -824,11 +828,30 @@ function ensureAuditSchema(targetDb) {
         targetDb.prepare(`ALTER TABLE users ADD COLUMN ${col} INTEGER DEFAULT 0`).run();
       }
     }
+    // can_plan_all separat (mit Backfill aus can_plan), damit Bestandsplaner aus alten Backups „alle" behalten.
+    ensurePlanAll(targetDb);
   } catch (e) {
     console.error('ensureAuditSchema fehlgeschlagen:', e.message);
   }
   ensureEmploymentSchema(targetDb);
   ensurePushSchema(targetDb);
+}
+
+// Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
+// Beim ERSTEN Anlegen der Spalte werden Bestandsplaner (can_plan=1) auf can_plan_all=1 gehoben, damit sie
+// ihr bisheriges Recht (alle planen) behalten. Idempotent (Guard auf Spalten-Existenz) — laeuft bei Init
+// UND nach Backup-Restore alter Staende ([[feedback_abwaertskompatibilitaet]]).
+function ensurePlanAll(targetDb) {
+  try {
+    const cols = targetDb.prepare("PRAGMA table_info(users)").all();
+    if (!cols.some(c => c.name === 'can_plan_all')) {
+      targetDb.exec("ALTER TABLE users ADD COLUMN can_plan_all INTEGER DEFAULT 0");
+      targetDb.exec("UPDATE users SET can_plan_all = 1 WHERE can_plan = 1");
+      console.log('Migration: can_plan_all Spalte hinzugefügt (Bestandsplaner → „alle").');
+    }
+  } catch (e) {
+    console.error('ensurePlanAll fehlgeschlagen:', e.message);
+  }
 }
 
 // Web-Push: Geraete-Abos (ein Eintrag pro Geraet, ein Nutzer kann mehrere haben) +

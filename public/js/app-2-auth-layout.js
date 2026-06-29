@@ -70,7 +70,7 @@ async function refreshUser() {
   try {
     const d = await api('GET', '/api/auth/me');
     if (!d || !d.user) return;
-    const norm = u => u ? [u.role, !!u.can_plan, !!u.can_bulletin, !!u.can_upload].join('|') : '';
+    const norm = u => u ? [u.role, !!u.can_plan, !!u.can_plan_all, !!u.can_bulletin, !!u.can_upload].join('|') : '';
     const changed = norm(S.user) !== norm(d.user);
     S.user = d.user;
     localStorage.setItem('user', JSON.stringify(d.user));

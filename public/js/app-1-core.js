@@ -513,6 +513,19 @@ function canEditPlanning() {
   return isChefOrAdmin() || (S.user && S.user.can_plan);
 }
 
+// Darf ALLE verplanen (Chef/Admin oder „alle"-Recht). Self-Planer (nur can_plan) → false.
+function canPlanAll() {
+  return isChefOrAdmin() || (S.user && S.user.can_plan_all);
+}
+
+// Darf diesen konkreten Planungseintrag bearbeiten/löschen: „alle"-Planer immer; Self-Planer nur, wenn er
+// selbst zugewiesen ist (Backend regelt Ausklinken/Aufteilen bei geteilten Einträgen).
+function canEditEntry(e) {
+  if (canPlanAll()) return true;
+  if (!(S.user && S.user.can_plan)) return false;
+  return !!(e && e.assigned_users && e.assigned_users.some(a => a.user_id === S.user.id));
+}
+
 function canEditBulletin() {
   return isChefOrAdmin() || (S.user && S.user.can_bulletin);
 }
