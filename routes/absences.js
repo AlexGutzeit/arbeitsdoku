@@ -206,7 +206,12 @@ router.get('/by-date', authenticate, (req, res) => {
   // Genehmigungspflichtige Typen erscheinen erst nach Genehmigung (approved), nicht schon bei pending
   const APPROVAL_TYPES = "('urlaub','sonderurlaub','freizeitausgleich')";
 
-  if (isManager(req.user)) {
+  // Alle Abwesenheiten sehen: Manager immer; Mitarbeiter mit Planungsrecht NUR im Planungskontext
+  // (damit sie vernünftig planen können). Die echte Autorisierung ist can_plan — scope ist nur ein
+  // Kontext-Hinweis (Dashboard/Statistik nutzen ihn bewusst nicht).
+  const canSeeAll = isManager(req.user) || (req.user.can_plan && req.query.scope === 'planning');
+
+  if (canSeeAll) {
     // Optionaler user_id-Filter (eine ID oder kommasepariert) — globale Feiertage (user_id IS NULL)
     // bleiben immer enthalten. Ohne Filter: alle (z.B. Dashboard/Planung).
     const idList = String(req.query.user_id || '').split(',').map(s => parseInt(s, 10)).filter(n => n > 0);
@@ -241,7 +246,13 @@ router.get('/by-date', authenticate, (req, res) => {
     params = [to, from, uid];
   }
 
-  res.json({ absences: db.prepare(sql).all(...params) });
+  const rows = db.prepare(sql).all(...params);
+  // Datenschutz: Nicht-Manager (z. B. Planer) sehen bei FREMDEN Abwesenheiten keinen Kommentar
+  // (möglicher sensibler Grund). Eigener Kommentar bleibt sichtbar.
+  if (!isManager(req.user)) {
+    for (const r of rows) if (r.user_id && r.user_id !== uid) r.comment = '';
+  }
+  res.json({ absences: rows });
 });
 
 // POST /api/absences — neue Abwesenheit anlegen

@@ -40,7 +40,7 @@ async function renderPlanningContent() {
   try {
     const [planData, absData] = await Promise.all([
       api('GET', `/api/planning?date_from=${r.from}&date_to=${r.to}`),
-      api('GET', `/api/absences/by-date?from=${r.from}&to=${r.to}`),
+      api('GET', `/api/absences/by-date?from=${r.from}&to=${r.to}&scope=planning`),
     ]);
     if (planData) entries = planData.entries;
     if (absData) absences = filterApprovedAbsences(absData.absences);
