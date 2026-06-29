@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const multer = require('multer');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
-const { berlinNow } = require('../audit');
+const { berlinNow, logAudit } = require('../audit');
 
 const router = express.Router();
 
@@ -35,6 +35,8 @@ const MIME = {
 const NAME_MAX = 120;
 const DEFAULT_STORAGE_LIMIT = 500 * 1024 * 1024;       // Standard, falls nichts eingestellt (500 MB)
 const MAX_STORAGE_LIMIT = 1024 * 1024 * 1024 * 1024;   // Obergrenze (1 TB) als Sanity-Schutz
+const DEFAULT_FILE_LIMIT = 5 * 1024 * 1024;            // Standard max. Größe pro Datei (5 MB)
+const MIN_LIMIT = 1024 * 1024;                         // Untergrenze für beide Limits (1 MB)
 
 function totalUsedBytes(db) {
   return db.prepare('SELECT COALESCE(SUM(size), 0) as total FROM documents').get().total || 0;
@@ -46,6 +48,13 @@ function getStorageLimit(db) {
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_STORAGE_LIMIT;
   return Math.min(n, MAX_STORAGE_LIMIT);
 }
+// Konfigurierbares Max. pro Datei (Admin), Fallback 5 MB; eine Datei kann nie größer als der Gesamtspeicher sein.
+function getFileLimit(db) {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'doc_file_limit_bytes'").get();
+  const n = row ? parseInt(row.value, 10) : NaN;
+  const base = (!Number.isFinite(n) || n <= 0) ? DEFAULT_FILE_LIMIT : n;
+  return Math.max(MIN_LIMIT, Math.min(base, getStorageLimit(db)));
+}
 
 // Upload direkt nach storage/documents/ mit generiertem UUID-Namen (kein User-Pfad)
 const storage = multer.diskStorage({
@@ -55,15 +64,15 @@ const storage = multer.diskStorage({
     cb(null, crypto.randomUUID() + ext);
   },
 });
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (ALLOWED_EXT.includes(ext)) cb(null, true);
-    else cb(new Error('Dateiformat nicht erlaubt (erlaubt: PDF, Word/Excel/PowerPoint, OpenDocument (odt/ods/odp), PNG, JPG, TXT, CSV, Markdown)'));
-  },
-});
+function docFileFilter(req, file, cb) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ALLOWED_EXT.includes(ext)) cb(null, true);
+  else cb(new Error('Dateiformat nicht erlaubt (erlaubt: PDF, Word/Excel/PowerPoint, OpenDocument (odt/ods/odp), PNG, JPG, TXT, CSV, Markdown)'));
+}
+// Multer pro Upload bauen, damit das (konfigurierbare) Pro-Datei-Limit aktuell gelesen wird.
+function buildUpload(db) {
+  return multer({ storage, limits: { fileSize: getFileLimit(db) }, fileFilter: docFileFilter });
+}
 
 // Inhaltspruefung (Magic Bytes): pruefen, ob der echte Dateiinhalt zur Endung passt.
 // Faengt umbenannte Dateien ab (z.B. .exe → .pdf), die den reinen Extension-Filter umgehen wuerden.
@@ -150,7 +159,7 @@ router.get('/', authenticate, (req, res) => {
     folder: folderId ? folderRow(db, folderId) : null,
     breadcrumb: buildBreadcrumb(db, folderId),
     folders, documents,
-    storage: { used: totalUsedBytes(db), limit: getStorageLimit(db) },
+    storage: { used: totalUsedBytes(db), limit: getStorageLimit(db), fileLimit: getFileLimit(db) },
   });
 });
 
@@ -232,10 +241,16 @@ router.delete('/folders/:id', authenticate, canManageDocs, (req, res) => {
 
 // Datei hochladen (chef + admin)
 router.post('/upload', authenticate, canManageDocs, (req, res) => {
-  upload.single('file')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'Upload fehlgeschlagen' });
+  const db = getDb();
+  buildUpload(db).single('file')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        const maxMb = (getFileLimit(db) / (1024 * 1024)).toFixed(getFileLimit(db) % (1024 * 1024) ? 1 : 0);
+        return res.status(400).json({ error: `Datei zu groß (max. ${maxMb} MB pro Datei).` });
+      }
+      return res.status(400).json({ error: err.message || 'Upload fehlgeschlagen' });
+    }
     if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
-    const db = getDb();
     const ext = path.extname(req.file.originalname).toLowerCase();
     // Inhaltspruefung: Dateiinhalt muss zur Endung passen (faengt getarnte Dateien ab)
     if (!contentMatchesExt(req.file.path, ext)) {
@@ -268,20 +283,33 @@ router.post('/upload', authenticate, canManageDocs, (req, res) => {
   });
 });
 
-// Gesamt-Speicherlimit setzen (nur Admin). MUSS vor PUT '/:id' stehen.
-router.put('/storage-limit', authenticate, authorize('admin'), (req, res) => {
+// Beide Limits setzen (Gesamtspeicher + max. Dateigröße) — nur Admin. MUSS vor PUT '/:id' stehen.
+// Wert+Einheit je Limit; "," und "." erlaubt. Pro-Datei wird auf das Gesamtlimit gedeckelt.
+router.put('/limits', authenticate, authorize('admin'), (req, res) => {
   const db = getDb();
-  let value = req.body.value;
-  // "," und "." gleich behandeln
-  if (typeof value === 'string') value = parseFloat(value.replace(',', '.'));
-  if (!Number.isFinite(value) || value <= 0) return res.status(400).json({ error: 'Bitte eine gültige Zahl größer 0 eingeben' });
-  const unit = req.body.unit === 'GB' ? 'GB' : 'MB';
-  const factor = unit === 'GB' ? 1024 * 1024 * 1024 : 1024 * 1024;
-  let bytes = Math.round(value * factor);
-  if (bytes < 1024 * 1024) bytes = 1024 * 1024;            // min. 1 MB
-  if (bytes > MAX_STORAGE_LIMIT) return res.status(400).json({ error: 'Limit zu groß (max. 1024 GB)' });
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('doc_storage_limit_bytes', ?)").run(String(bytes));
-  res.json({ limit: bytes, used: totalUsedBytes(db) });
+  const parse = (v) => (typeof v === 'string' ? parseFloat(v.replace(',', '.')) : v);
+  const toBytes = (v, unit) => Math.round(v * (unit === 'GB' ? 1024 * 1024 * 1024 : 1024 * 1024));
+
+  const sVal = parse(req.body.storageValue);
+  const fVal = parse(req.body.fileValue);
+  if (!Number.isFinite(sVal) || sVal <= 0 || !Number.isFinite(fVal) || fVal <= 0) {
+    return res.status(400).json({ error: 'Bitte für beide Limits eine gültige Zahl größer 0 eingeben' });
+  }
+  let storageBytes = toBytes(sVal, req.body.storageUnit === 'GB' ? 'GB' : 'MB');
+  let fileBytes = toBytes(fVal, req.body.fileUnit === 'GB' ? 'GB' : 'MB');
+  if (storageBytes < MIN_LIMIT) storageBytes = MIN_LIMIT;
+  if (storageBytes > MAX_STORAGE_LIMIT) return res.status(400).json({ error: 'Gesamtlimit zu groß (max. 1024 GB)' });
+  if (fileBytes < MIN_LIMIT) fileBytes = MIN_LIMIT;
+  if (fileBytes > storageBytes) {
+    return res.status(400).json({ error: 'Max. Dateigröße darf das Gesamtlimit nicht überschreiten' });
+  }
+
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('doc_storage_limit_bytes', ?)").run(String(storageBytes));
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('doc_file_limit_bytes', ?)").run(String(fileBytes));
+  const mb = (b) => (b / (1024 * 1024)).toFixed(b % (1024 * 1024) ? 1 : 0);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'settings_update',
+    details: `Dokument-Limits: Gesamt ${mb(storageBytes)} MB, pro Datei ${mb(fileBytes)} MB`, ip: req.ip });
+  res.json({ limit: storageBytes, fileLimit: fileBytes, used: totalUsedBytes(db) });
 });
 
 // Dokument umbenennen / Metadaten ändern (chef + admin)

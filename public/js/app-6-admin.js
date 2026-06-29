@@ -16,10 +16,16 @@ async function renderSettings() {
     try { const ds = await api('GET', '/api/documents'); if (ds) docStorage = ds.storage; } catch (e) {}
   }
   let docLimitVal = '500', docLimitUnit = 'MB', docUsedStr = '', docLimitStr = '';
+  let docFileVal = '5', docFileUnit = 'MB';
+  // Wert+Einheit aus Bytes ableiten (GB nur bei glatten GB, sonst MB)
+  const splitUnit = (bytes) => {
+    const gb = 1024 * 1024 * 1024, mb = 1024 * 1024;
+    if (bytes >= gb && bytes % gb === 0) return { val: String(bytes / gb), unit: 'GB' };
+    const v = bytes / mb; return { val: (v % 1 === 0) ? String(v) : v.toFixed(2), unit: 'MB' };
+  };
   if (docStorage) {
-    const lim = docStorage.limit, gb = 1024 * 1024 * 1024, mb = 1024 * 1024;
-    if (lim >= gb && lim % gb === 0) { docLimitUnit = 'GB'; docLimitVal = String(lim / gb); }
-    else { docLimitUnit = 'MB'; const v = lim / mb; docLimitVal = (v % 1 === 0) ? String(v) : v.toFixed(2); }
+    const s = splitUnit(docStorage.limit); docLimitVal = s.val; docLimitUnit = s.unit;
+    const f = splitUnit(docStorage.fileLimit || 5 * 1024 * 1024); docFileVal = f.val; docFileUnit = f.unit;
     docUsedStr = docFormatSize(docStorage.used);
     docLimitStr = docFormatSize(docStorage.limit);
   }
@@ -123,10 +129,24 @@ async function renderSettings() {
             </select>
           </div>
         </div>
-        <button class="btn btn-primary" id="doc-limit-save">Limit speichern</button>
+        <div class="form-row" style="grid-template-columns:1fr 110px;">
+          <div class="form-group">
+            <label>Max. Dateigröße (pro Datei)</label>
+            <input type="text" class="form-control" id="doc-file-value" value="${esc(docFileVal)}" inputmode="decimal">
+          </div>
+          <div class="form-group">
+            <label>Einheit</label>
+            <select class="form-control" id="doc-file-unit">
+              <option value="MB"${docFileUnit === 'MB' ? ' selected' : ''}>MB</option>
+              <option value="GB"${docFileUnit === 'GB' ? ' selected' : ''}>GB</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="doc-limit-save">Speichern</button>
         <p style="color:var(--text-lighter);font-size:0.8rem;margin-top:0.6rem;">
-          Bestehende Dateien bleiben immer erhalten. Ein Limit unterhalb des belegten Speichers
-          blockiert nur neue Uploads, bis genug gelöscht wurde. „.“ und „,“ sind beide erlaubt.
+          Bestehende Dateien bleiben immer erhalten. Ein Gesamtlimit unterhalb des belegten Speichers
+          blockiert nur neue Uploads, bis genug gelöscht wurde. Die max. Dateigröße darf das Gesamtlimit
+          nicht überschreiten. „.“ und „,“ sind beide erlaubt.
         </p>
       </div>` : ''}
 
@@ -161,20 +181,24 @@ async function renderSettings() {
     } catch (err) { toast(err.message, 'error'); }
   });
 
-  // Dokumenten-Speicherlimit (Admin)
+  // Dokumenten-Limits (Admin): Gesamtspeicher + max. Dateigröße zusammen speichern
   document.getElementById('doc-limit-save')?.addEventListener('click', async () => {
-    const raw = document.getElementById('doc-limit-value').value.trim().replace(',', '.');
-    const unit = document.getElementById('doc-limit-unit').value;
-    const val = parseFloat(raw);
-    if (!isFinite(val) || val <= 0) { toast('Bitte eine gültige Zahl größer 0 eingeben', 'error'); return; }
-    const newBytes = Math.round(val * (unit === 'GB' ? 1024 * 1024 * 1024 : 1024 * 1024));
+    const toBytes = (raw, unit) => Math.round(parseFloat(raw) * (unit === 'GB' ? 1024 * 1024 * 1024 : 1024 * 1024));
+    const sRaw = document.getElementById('doc-limit-value').value.trim().replace(',', '.');
+    const sUnit = document.getElementById('doc-limit-unit').value;
+    const fRaw = document.getElementById('doc-file-value').value.trim().replace(',', '.');
+    const fUnit = document.getElementById('doc-file-unit').value;
+    const sVal = parseFloat(sRaw), fVal = parseFloat(fRaw);
+    if (!isFinite(sVal) || sVal <= 0 || !isFinite(fVal) || fVal <= 0) { toast('Bitte für beide Limits eine gültige Zahl größer 0 eingeben', 'error'); return; }
+    const storageBytes = toBytes(sRaw, sUnit), fileBytes = toBytes(fRaw, fUnit);
+    if (fileBytes > storageBytes) { toast('Max. Dateigröße darf das Gesamtlimit nicht überschreiten', 'error'); return; }
     const usedBytes = docStorage ? docStorage.used : 0;
-    if (newBytes < usedBytes) {
-      if (!(await confirmModal(`Aktuell sind ${docFormatSize(usedBytes)} belegt. Ein Limit von ${docFormatSize(newBytes)} blockiert neue Uploads, bis genug gelöscht wurde. Bestehende Dateien bleiben erhalten. Trotzdem speichern?`, { title: 'Speicherlimit', okLabel: 'Speichern', danger: false }))) return;
+    if (storageBytes < usedBytes) {
+      if (!(await confirmModal(`Aktuell sind ${docFormatSize(usedBytes)} belegt. Ein Gesamtlimit von ${docFormatSize(storageBytes)} blockiert neue Uploads, bis genug gelöscht wurde. Bestehende Dateien bleiben erhalten. Trotzdem speichern?`, { title: 'Speicherlimit', okLabel: 'Speichern', danger: false }))) return;
     }
     try {
-      await api('PUT', '/api/documents/storage-limit', { value: raw, unit });
-      toast('Speicherlimit gespeichert', 'success');
+      await api('PUT', '/api/documents/limits', { storageValue: sRaw, storageUnit: sUnit, fileValue: fRaw, fileUnit: fUnit });
+      toast('Gespeichert', 'success');
       renderSettings();
     } catch (err) { toast(err.message, 'error'); }
   });
@@ -776,7 +800,7 @@ async function renderDocuments() {
           <button class="btn btn-sm btn-outline" id="doc-new-folder">+ Neuer Ordner</button>
           <button class="btn btn-sm btn-primary" id="doc-upload-btn">⬆ Datei hochladen</button>
           <input type="file" id="doc-file-input" style="display:none" accept=".pdf,.docx,.xlsx,.pptx,.odt,.ods,.odp,.png,.jpg,.jpeg,.txt,.csv,.md">
-          <span class="doc-toolbar-hint">PDF, Word/Excel/PowerPoint, OpenDocument (odt/ods/odp), PNG, JPG, TXT, CSV, Markdown — max. 5 MB</span>
+          <span class="doc-toolbar-hint">PDF, Word/Excel/PowerPoint, OpenDocument (odt/ods/odp), PNG, JPG, TXT, CSV, Markdown — max. ${docFormatSize(st.fileLimit || 5 * 1024 * 1024)}</span>
         </div>` : ''}
         <div class="doc-list">
           ${folderRows}${docRows}
