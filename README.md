@@ -116,6 +116,8 @@ doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusamm
 - **Schwarzes Brett bearbeiten** – darf Aushänge verfassen
 - **Dokumente hochladen** – darf in der Dateiablage hochladen/verwalten
 
+> Geänderte Rechte greifen für den betroffenen Nutzer **ohne Ab-/Anmelden** – ein Seiten-Reload (F5) bzw. das Zurückkehren zum Tab genügt.
+
 ---
 
 ## Schnellstart (lokal testen)
