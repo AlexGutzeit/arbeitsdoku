@@ -62,6 +62,22 @@ async function logout(manual) {
   navigate('/login');
 }
 
+// Holt den aktuellen Nutzer (inkl. Rechte wie can_plan) frisch vom Server und aktualisiert S.user.
+// Nötig, weil S.user aus der Login-Antwort gecacht ist — ändert ein Admin z.B. das Planungsrecht,
+// soll das ohne erneutes Login (nach F5 / Tab-Rückkehr) greifen. Re-Render nur bei echter Rechte-Änderung.
+async function refreshUser() {
+  if (!S.token) return;
+  try {
+    const d = await api('GET', '/api/auth/me');
+    if (!d || !d.user) return;
+    const norm = u => u ? [u.role, !!u.can_plan, !!u.can_bulletin, !!u.can_upload].join('|') : '';
+    const changed = norm(S.user) !== norm(d.user);
+    S.user = d.user;
+    localStorage.setItem('user', JSON.stringify(d.user));
+    if (changed) render();
+  } catch (_) { /* offline o.ä.: alter Stand bleibt bestehen */ }
+}
+
 // Echtzeit-Updates (SSE). Statt des langen Login-Tokens haengt der Client ein nur 60 s gueltiges
 // Ticket an die URL und holt fuer JEDE (Wieder-)Verbindung ein frisches. Wiederverbinden uebernehmen
 // wir selbst (EventSource wuerde sonst stur die alte, abgelaufene URL erneut verwenden).

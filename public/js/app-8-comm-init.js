@@ -1356,5 +1356,9 @@ window.addEventListener('beforeunload', () => {
 window.addEventListener('DOMContentLoaded', () => {
   if (!S.token) navigate('/login');
   render();
-  if (S.token) { initSSE(); loadBadges(); syncPushSubscription(); }
+  if (S.token) { initSSE(); loadBadges(); syncPushSubscription(); refreshUser(); }
+});
+// Beim Zurückkehren zum Tab Rechte/Rolle auffrischen (greift ohne F5, sobald der Tab wieder sichtbar ist).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && S.token) refreshUser();
 });
