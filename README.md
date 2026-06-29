@@ -112,7 +112,7 @@ doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusamm
 
 **Zusätzliche Einzelrechte** (pro Benutzer unter *Mitarbeiter → Bearbeiten* vergebbar):
 
-- **Planung bearbeiten** – darf Planungseinträge anlegen/ändern
+- **Planung bearbeiten** – darf Planungseinträge anlegen/ändern und sieht in der **Planungsansicht** die Abwesenheiten **aller** Mitarbeiter (Typ, **ohne** Kommentar – sonst weiterhin nur eigene Daten)
 - **Schwarzes Brett bearbeiten** – darf Aushänge verfassen
 - **Dokumente hochladen** – darf in der Dateiablage hochladen/verwalten
 
