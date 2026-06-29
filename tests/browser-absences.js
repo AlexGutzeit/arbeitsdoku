@@ -1,10 +1,9 @@
 // Headless-Browser-Test (Puppeteer) für die Abwesenheits-Logik — echte UI-Klicks.
 //
-// Voraussetzung: Server mit frischer DB, in der 'max' das Passwort 'test' hat und 8h Mo-Fr
-// hinterlegt sind (siehe /tmp/abs-repro/setup-browser-abs.js). BASE per ENV setzbar.
-// Ausführen (Beispiel):
-//   DB_PATH=/tmp/abs-repro/bro.db JWT_SECRET=... PORT=3475 node server.js &
-//   BASE=http://localhost:3475 node tests/browser-absences.js
+// Voraussetzung: laufender Server gegen eine DB mit Passwort 'test' für 'admin' (z. B. via
+// `npm run clone-db` oder anonymisierter Seed). Der Test legt sich seinen eigenen Mitarbeiter an
+// (8h Mo-Fr) und nutzt eine datum-relative Zukunfts-Woche → unabhängig von Seed-/Prod-Daten und Datum.
+// BASE per ENV setzbar (Default http://localhost:3000).
 //
 // Szenario (vom Nutzer vorgegeben + erweitert):
 //   FZA an einem Tag (Soll bleibt 8) -> Urlaub am selben Tag = Fehlermeldung (Doppelbuchung)
@@ -19,9 +18,18 @@ const BASE = process.env.BASE || 'http://localhost:3000';
 const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
   '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
 
-const MON = '2026-06-22'; // Montag
-const TUE = '2026-06-23';
-const WEEK_FROM = '2026-06-22', WEEK_TO = '2026-06-26';
+// Datum-relativ + robust: Der Test legt sich seinen eigenen Nutzer an (Anstellung ab HEUTE), darum
+// muss die Test-Woche in der ZUKUNFT liegen (sonst Soll=0 vor Anstellungsbeginn). Wir nehmen den Montag
+// einer Woche ~2 Wochen voraus → alle Tage > heute, voll innerhalb Anstellung + Soll-Gültigkeit.
+function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+const _base = new Date(); _base.setDate(_base.getDate() + 14);
+_base.setDate(_base.getDate() - ((_base.getDay() + 6) % 7)); // auf Montag dieser Woche zurück
+const _dayAt = (off) => { const d = new Date(_base); d.setDate(d.getDate() + off); return ymd(d); };
+const MON = _dayAt(0); // Montag
+const TUE = _dayAt(1);
+const FRI = _dayAt(4);
+const WEEK_FROM = MON, WEEK_TO = FRI;
+const YEAR = MON.slice(0, 4);
 
 let pass = 0, fail = 0; const fails = [];
 function check(name, cond, detail) {
@@ -43,7 +51,7 @@ async function weekSoll(page, uid) {
   return u ? u.soll : null;
 }
 async function urlaubJahr(page) {
-  const d = await apiGet(page, `/api/absences/summary?from=2026-01-01&to=2026-12-31`);
+  const d = await apiGet(page, `/api/absences/summary?from=${YEAR}-01-01&to=${YEAR}-12-31`);
   return d.urlaubTageJahr || 0;
 }
 async function weekUrlaub(page) {
@@ -156,7 +164,22 @@ async function startAbsenceDelete(page, label) {
 
   await page.goto(BASE, { waitUntil: 'networkidle2' });
   await page.waitForSelector('#login-user', { timeout: 8000 });
-  await page.type('#login-user', 'max');
+
+  // Eigenen, isolierten Testnutzer als Admin anlegen (8h Mo-Fr = 40/Woche). So ist der Test unabhängig
+  // von Seed-/Prod-Daten (kein fester 'max' nötig) und läuft gegen jeden Klon (admin-Passwort 'test').
+  const TESTUSER = '_abstest_' + Date.now();
+  const setup = await page.evaluate(async (u) => {
+    const lr = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'test' }) });
+    const lj = await lr.json();
+    if (!lj.token) return { err: 'Admin-Login fehlgeschlagen (Passwort "test"? DB anonymisiert?)', body: lj };
+    const cr = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + lj.token },
+      body: JSON.stringify({ username: u, password: 'test', name: 'Abwesenheits-Test', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8, target_hours_per_week: 40 }) });
+    return { status: cr.status, body: await cr.json() };
+  }, TESTUSER);
+  check('Testnutzer angelegt (Admin)', setup.status === 201, JSON.stringify(setup));
+  if (setup.status !== 201) { console.log('\nAbbruch: Setup fehlgeschlagen.'); await browser.close(); process.exit(1); }
+
+  await page.type('#login-user', TESTUSER);
   await page.type('#login-pass', 'test');
   await page.click('#login-form button[type="submit"]');
   await page.waitForSelector('a[href="#/absences"]', { timeout: 8000 });
@@ -210,7 +233,7 @@ async function startAbsenceDelete(page, label) {
 
   // --- Löschen: Abbrechen im Begründungs-Modal lässt die Abwesenheit stehen, OK löscht ---
   console.log('\n--- Löschen-Flow: Abbrechen lässt stehen, OK löscht (eigene, optionaler Grund) ---');
-  m = await createAbsence(page, 'sonderurlaub', '2026-06-26', '2026-06-26'); // freier Tag, eindeutiger Typ
+  m = await createAbsence(page, 'sonderurlaub', FRI, FRI); // freier Tag, eindeutiger Typ
   check('Sonderurlaub für Lösch-Test angelegt', /eingetragen/i.test(m), m);
   check('Sonderurlaub-Karte vorhanden', (await cardCount(page, 'Sonderurlaub')) === 1);
   // 1) Löschen → Bestätigung OK → Begründungs-Modal → ABBRECHEN → bleibt erhalten
