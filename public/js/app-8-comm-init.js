@@ -920,7 +920,7 @@ function bindAbsenceCardActions(container) {
   });
 }
 
-function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
+function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
 
@@ -988,6 +988,12 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment) {
   const overlay = document.createElement('div');
   overlay.innerHTML = formHtml;
   document.body.appendChild(overlay.firstElementChild);
+
+  // Manager, der für jemanden „neu beantragt": Ziel-Mitarbeiter vorauswählen.
+  if (preUser) {
+    const us = document.getElementById('abs-user');
+    if (us) us.value = String(preUser);
+  }
 
   document.getElementById('abs-cancel').addEventListener('click', () => {
     document.getElementById('absence-form-overlay')?.remove();

@@ -59,17 +59,24 @@ const has = (resp, id) => ((resp.body && (resp.body.entries || resp.body.absence
     await req('DELETE','/api/absences/'+a1.id, t1);
     await req('DELETE','/api/entries/'+e2.id, t2);
 
-    // --- Mitarbeiter: nur Eigenes ---
+    // --- Mitarbeiter: nur Eigenes (Liste) ---
     let r = await req('GET','/api/entries/deleted', t1);
     ok('m1 sieht eigenen gelöschten Eintrag e1', has(r, e1.id), JSON.stringify((r.body.entries||[]).map(x=>x.id)));
     ok('m1 sieht NICHT m2s Eintrag e2', !has(r, e2.id));
     r = await req('GET','/api/absences/deleted/list', t1);
     ok('m1 sieht eigene gelöschte Abwesenheit a1', has(r, a1.id));
 
+    // --- Restore-Regeln ---
     r = await req('POST','/api/entries/'+e2.id+'/restore', t1, {});
     ok('m1 restauriert fremden Eintrag e2 → 403', r.status === 403, r.status+'');
     r = await req('POST','/api/absences/'+a1.id+'/restore', t1, {});
-    ok('m1 restauriert eigene Abwesenheit a1 → 200', r.status === 200, r.status+'');
+    ok('Abwesenheit NICHT wiederherstellbar (m1) → 403', r.status === 403, r.status+'');
+    r = await req('POST','/api/absences/'+a1.id+'/restore', admin, {});
+    ok('Abwesenheit NICHT wiederherstellbar (auch Admin) → 403', r.status === 403, r.status+'');
+
+    // „Neu beantragen" = frischer Antrag mit den alten Daten (läuft durch die Genehmigung)
+    r = await req('POST','/api/absences', t1, { type:a1.type, date_from:a1.date_from, date_to:a1.date_to });
+    ok('m1 kann Abwesenheit NEU beantragen → neuer Antrag', !!(r.body && r.body.absence) && r.status < 300, r.status+' '+JSON.stringify(r.body&&r.body.absence&&r.body.absence.id));
 
     // m1 hat keinen Zugriff auf Ausgestellte-Liste
     r = await req('GET','/api/users/inactive', t1);
@@ -80,6 +87,8 @@ const has = (resp, id) => ((resp.body && (resp.body.entries || resp.body.absence
     ok('Chef sieht e1 UND e2 (alle Löschungen)', has(r, e1.id) && has(r, e2.id), JSON.stringify((r.body.entries||[]).map(x=>x.id)));
     r = await req('POST','/api/entries/'+e2.id+'/restore', cTok, {});
     ok('Chef restauriert fremden Eintrag e2 → 200', r.status === 200, r.status+'');
+    r = await req('POST','/api/entries/'+e1.id+'/restore', t1, {});
+    ok('m1 restauriert eigenen Eintrag e1 → 200', r.status === 200, r.status+'');
 
     // Chef: Ausstellen → /inactive sichtbar → reactivate
     r = await req('POST','/api/users/'+tmp.id+'/deactivate', cTok, {});
