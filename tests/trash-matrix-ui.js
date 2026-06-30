@@ -200,6 +200,21 @@ const navInfo = (p) => p.evaluate(() => ({
     ok('7d) ma2 ist wieder aktiv (Login wieder möglich)', (await req('POST','/api/auth/login', null, { username:'xma2', password:'test' })).status === 200);
     ok('7e) ma1 (MA) → /api/users/inactive verboten (403)', (await req('GET','/api/users/inactive', t1)).status === 403);
 
+    // ============================================================
+    head('SZENARIO 8 — Buchhalter ist read-only bei Abwesenheiten (sieht alles, ändert nichts Fremdes)');
+    // ============================================================
+    const absB = (await req('POST','/api/absences', t1, { type:'urlaub', date_from:'2026-11-09', date_to:'2026-11-10' })).body.absence; // ma1 pending
+    ok('8a) Buchhalter sieht fremde Abwesenheiten (Lese-Sicht erhalten)', (await req('GET','/api/absences?from=2026-11-09&to=2026-11-10&user_id='+ma1.id, bTok)).status === 200);
+    ok('8b) Buchhalter genehmigen (fremd) → 403', (await req('POST','/api/absences/'+absB.id+'/approve', bTok)).status === 403);
+    ok('8c) Buchhalter ablehnen (fremd) → 403', (await req('POST','/api/absences/'+absB.id+'/reject', bTok, { reason:'x' })).status === 403);
+    ok('8d) Buchhalter löschen (fremd) → 403', (await req('DELETE','/api/absences/'+absB.id, bTok, { reason:'x' })).status === 403);
+    ok('8e) Buchhalter Fremdeintrag (für ma1) → 403', (await req('POST','/api/absences', bTok, { type:'urlaub', date_from:'2026-11-20', date_to:'2026-11-20', target_user_id:ma1.id })).status === 403);
+    ok('8f) Buchhalter Feiertag eintragen → 403', (await req('POST','/api/absences', bTok, { type:'feiertag', date_from:'2026-11-25', date_to:'2026-11-25' })).status === 403);
+    const ownB = await req('POST','/api/absences', bTok, { type:'krank', date_from:'2026-11-09', date_to:'2026-11-09' });
+    ok('8g) Buchhalter darf EIGENE Abwesenheit eintragen', ownB.status < 300 && !!(ownB.body && ownB.body.absence));
+    // Chef darf weiterhin alles
+    ok('8h) Chef genehmigen (fremd) → ok', (await req('POST','/api/absences/'+absB.id+'/approve', cTok)).status === 200);
+
   } finally { if (browser) await browser.close(); srv.kill('SIGTERM'); }
   console.log(`\n==================== Papierkorb-Matrix: ${pass} ok, ${fail} fehlgeschlagen ====================`);
   process.exit(fail===0?0:1);

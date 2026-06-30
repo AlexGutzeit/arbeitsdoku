@@ -71,6 +71,12 @@ function conflictMessage(type, conflict) {
 function isManager(user) {
   return user.role === 'admin' || user.role === 'chef' || user.role === 'buchhalter';
 }
+// Schreib-/Verwaltungsrechte auf FREMDE Abwesenheiten (genehmigen/ablehnen/löschen/bearbeiten/quittieren,
+// Fremdeintrag, Feiertage). Buchhalter ist bewusst NICHT dabei: er hat lesende Manager-Sicht, verwaltet
+// aber nicht (konsistent zu Zeiteinträgen, die er auch nur selbst löschen kann).
+function canManageAbsences(user) {
+  return user.role === 'admin' || user.role === 'chef';
+}
 
 function initialStatus(type) {
   return AUTO_ACTIVE.includes(type) ? 'active' : 'pending';
@@ -279,9 +285,9 @@ router.post('/', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Ungültiger Typ' });
   }
 
-  // Feiertage nur für Manager
-  if (type === 'feiertag' && !isManager(req.user)) {
-    return res.status(403).json({ error: 'Feiertage können nur von Chef/Admin/Buchhalter eingetragen werden' });
+  // Feiertage nur für Chef/Admin
+  if (type === 'feiertag' && !canManageAbsences(req.user)) {
+    return res.status(403).json({ error: 'Feiertage können nur von Chef/Admin eingetragen werden' });
   }
 
   let uid, status, created_by;
@@ -291,8 +297,8 @@ router.post('/', authenticate, (req, res) => {
     status = initialStatus(type);
     created_by = req.user.id;
   } else if (target_user_id && Number(target_user_id) !== req.user.id) {
-    // Manager trägt für anderen MA ein
-    if (!isManager(req.user)) {
+    // Chef/Admin trägt für anderen MA ein (Buchhalter nicht — read-only)
+    if (!canManageAbsences(req.user)) {
       return res.status(403).json({ error: 'Keine Berechtigung für Fremdeintrag' });
     }
     uid = Number(target_user_id);
@@ -356,7 +362,7 @@ router.put('/:id', authenticate, (req, res) => {
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   const isOwner = absence.user_id === req.user.id;
-  const manager = isManager(req.user);
+  const manager = canManageAbsences(req.user);
   if (!isOwner && !manager) return res.status(403).json({ error: 'Keine Berechtigung' });
 
   // GoBD: Bearbeiten einer fremden Abwesenheit (Manager) erfordert eine Begruendung
@@ -470,11 +476,11 @@ router.delete('/:id', authenticate, (req, res) => {
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
   const isOwner = absence.user_id === req.user.id;
-  if (!isOwner && !isManager(req.user)) {
+  if (!isOwner && !canManageAbsences(req.user)) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
-  // MA kann pending/active/rejected löschen — nur approved erfordert Manager
-  if (isOwner && !isManager(req.user) && absence.status === 'approved') {
+  // MA kann pending/active/rejected löschen — nur approved erfordert Chef/Admin
+  if (isOwner && !canManageAbsences(req.user) && absence.status === 'approved') {
     return res.status(403).json({ error: 'Genehmigte Abwesenheiten können nur vom Vorgesetzten gelöscht werden' });
   }
 
@@ -553,7 +559,7 @@ router.post('/:id/restore', authenticate, (req, res) => {
 
 // POST /api/absences/:id/approve — genehmigen
 router.post('/:id/approve', authenticate, (req, res) => {
-  if (!isManager(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
+  if (!canManageAbsences(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
 
   const db = getDb();
   const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
@@ -582,7 +588,7 @@ router.post('/:id/approve', authenticate, (req, res) => {
 
 // POST /api/absences/:id/reject — ablehnen (Manager)
 router.post('/:id/reject', authenticate, (req, res) => {
-  if (!isManager(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
+  if (!canManageAbsences(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
 
   const db = getDb();
   const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
@@ -665,7 +671,7 @@ router.post('/:id/reject-ma', authenticate, (req, res) => {
 
 // POST /api/absences/:id/acknowledge — Chef quittiert Krank/Berufsschule/Innung
 router.post('/:id/acknowledge', authenticate, (req, res) => {
-  if (!isManager(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
+  if (!canManageAbsences(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
 
   const db = getDb();
   const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);

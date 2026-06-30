@@ -759,11 +759,12 @@ function isManagerRole() {
 
 function renderAbsenceCard(a, opts = {}) {
   const type = ABSENCE_TYPES[a.type] || { label: a.type, icon: '📋' };
-  const canEdit = isManagerRole() || a.user_id === S.user?.id;
+  // Schreibaktionen auf Abwesenheiten nur Chef/Admin (Buchhalter ist read-only); eigene bleiben editierbar.
+  const canEdit = isChefOrAdmin() || a.user_id === S.user?.id;
   const isManagerEntry = a.created_by && a.created_by !== a.user_id;
   const isSelfChefAdmin = a.user_id === S.user?.id && ['admin','chef'].includes(S.user?.role);
-  const canApprove = isManagerRole() && a.status === 'pending' && !isManagerEntry && (a.user_id !== S.user?.id || isSelfChefAdmin);
-  const canAcknowledge = isManagerRole() && a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at && (a.user_id !== S.user?.id || isSelfChefAdmin);
+  const canApprove = isChefOrAdmin() && a.status === 'pending' && !isManagerEntry && (a.user_id !== S.user?.id || isSelfChefAdmin);
+  const canAcknowledge = isChefOrAdmin() && a.status === 'active' && ['krank','berufsschule','innung'].includes(a.type) && !a.notified_at && (a.user_id !== S.user?.id || isSelfChefAdmin);
   // MA-Akzeptanz für Manager-eingetragene pending-Einträge
   const canMaAccept = !isManagerRole() && a.user_id === S.user?.id && isManagerEntry && a.status === 'pending' && !a.ma_needs_ack;
   // MA quittiert/akzeptiert Manager-Änderung (dates/comment edit)
@@ -818,7 +819,7 @@ function renderAbsenceCard(a, opts = {}) {
       ${canMaRejectEdit ? `<button class="btn btn-sm btn-success absence-ack-ma" data-id="${a.id}">Akzeptieren</button>
                            <button class="btn btn-sm btn-danger absence-reject-edit" data-id="${a.id}">Ablehnen</button>` : ''}
       ${canEdit ? `<button class="btn btn-sm btn-outline absence-edit" data-id="${a.id}" data-type="${a.type}" data-from="${editFrom}" data-to="${editTo}" data-comment="${esc(a.comment||'')}">Bearbeiten</button>` : ''}
-      ${(isManagerRole() || a.user_id === S.user?.id) ? `<button class="btn btn-sm btn-danger absence-delete" data-id="${a.id}">Löschen</button>` : ''}
+      ${(isChefOrAdmin() || a.user_id === S.user?.id) ? `<button class="btn btn-sm btn-danger absence-delete" data-id="${a.id}">Löschen</button>` : ''}
     </div>
     ${isChefOrAdmin() ? `
     <details class="absence-changelog" data-id="${a.id}">
@@ -927,7 +928,7 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
   const role = S.user?.role;
   const managerOnly = ['feiertag'];
   const availableTypes = Object.entries(ABSENCE_TYPES).filter(([t]) => {
-    if (managerOnly.includes(t)) return isManagerRole();
+    if (managerOnly.includes(t)) return isChefOrAdmin();
     return true;
   });
 
@@ -935,9 +936,9 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
     `<option value="${t}" ${preType === t ? 'selected' : ''}>${info.icon} ${info.label}</option>`
   ).join('');
 
-  // Mitarbeiterauswahl für Manager
+  // Mitarbeiterauswahl nur für Chef/Admin (Buchhalter trägt nur für sich selbst ein)
   let userSelectHtml = '';
-  if (isManagerRole() && !editId) {
+  if (isChefOrAdmin() && !editId) {
     const allOtherUsers = S.users.filter(u => u.id !== S.user.id).sort((a, b) => a.name.localeCompare(b.name));
     const isFeiertag = preType === 'feiertag';
     userSelectHtml = `
@@ -1269,7 +1270,7 @@ async function renderAbsences() {
         ${cGood > 0 ? `<span class="absence-count-badge absence-count-good">✓ ${cGood}</span>` : ''}
         ${cPending > 0 ? `<span class="absence-count-badge absence-count-pending">${cPending} offen</span>` : ''}
         ${cRejected > 0 ? `<span class="absence-count-badge absence-count-rejected">✕ ${cRejected}</span>` : ''}
-        ${(type === 'feiertag' && !isManagerRole()) ? '' : `<button class="btn btn-sm btn-outline absence-new" data-type="${type}">+ Eintragen</button>`}
+        ${(type === 'feiertag' && !isChefOrAdmin()) ? '' : `<button class="btn btn-sm btn-outline absence-new" data-type="${type}">+ Eintragen</button>`}
       </div>
       <div class="absence-section-body${collapsed ? ' collapsed' : ''}">
         ${recentHtml}
