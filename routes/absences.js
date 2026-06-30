@@ -509,9 +509,13 @@ router.get('/:id/history', authenticate, authorize('chef'), (req, res) => {
   res.json({ history: rows });
 });
 
-// Gelöschte Abwesenheiten (Papierkorb) — nur Admin
-router.get('/deleted/list', authenticate, authorize('admin'), (req, res) => {
+// Papierkorb-Vollsicht: Chef/Admin sehen alles, Mitarbeiter (und Buchhalter) nur ihre EIGENEN Löschungen.
+const canSeeAllTrash = (u) => u.role === 'admin' || u.role === 'chef';
+
+// Gelöschte Abwesenheiten (Papierkorb). Chef/Admin: alle; sonst nur selbst gelöschte.
+router.get('/deleted/list', authenticate, (req, res) => {
   const db = getDb();
+  const ownOnly = !canSeeAllTrash(req.user);
   const rows = db.prepare(`
     SELECT a.*, u.name as user_name, du.name as deleted_by_name,
            (SELECT h.reason FROM absence_history h
@@ -520,17 +524,20 @@ router.get('/deleted/list', authenticate, authorize('admin'), (req, res) => {
     FROM absences a
     LEFT JOIN users u ON a.user_id = u.id
     LEFT JOIN users du ON a.deleted_by = du.id
-    WHERE a.deleted_at IS NOT NULL
+    WHERE a.deleted_at IS NOT NULL ${ownOnly ? 'AND a.deleted_by = ?' : ''}
     ORDER BY a.deleted_at DESC
-  `).all();
+  `).all(...(ownOnly ? [req.user.id] : []));
   res.json({ absences: rows });
 });
 
-// Gelöschte Abwesenheit wiederherstellen — nur Admin
-router.post('/:id/restore', authenticate, authorize('admin'), (req, res) => {
+// Gelöschte Abwesenheit wiederherstellen. Chef/Admin: jede; Mitarbeiter: nur selbst gelöschte.
+router.post('/:id/restore', authenticate, (req, res) => {
   const db = getDb();
   const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Gelöschte Abwesenheit nicht gefunden' });
+  if (!canSeeAllTrash(req.user) && absence.deleted_by !== req.user.id) {
+    return res.status(403).json({ error: 'Nur selbst gelöschte Abwesenheiten können wiederhergestellt werden' });
+  }
 
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
   recordAbsenceHistory(db, absence, 'restore', req.user.id, reason);

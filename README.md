@@ -53,7 +53,7 @@ Jeder Punkt entspricht einem Menüpunkt in der App.
 | **📄 PDF-Export** | Druckfertiger Arbeitsnachweis (Einträge + Abwesenheiten + Stunden-Zusammenfassung) als PDF, gefiltert nach Zeitraum/Mitarbeiter/Projekt. |
 | **⚙️ Einstellungen** | White-Label-Branding, Dokumenten-Speicherlimit, Datenbank-Backup/Restore. *(Chef/Admin)* |
 | **📜 Audit-Log** | Revisionssicheres Protokoll: An-/Abmeldungen (Login erfolgreich/fehlgeschlagen, manuelle Abmeldung, Sitzungs-Timeout), Benutzeränderungen, Einstellungs-/Branding-Änderungen, Backups u. a. Benutzeranlage mit allen Parametern, Änderungen feldgenau als „alt → neu" (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)* |
-| **🗑️ Papierkorb** | Gelöschte Einträge/Abwesenheiten bleiben mit Begründung erhalten und können wiederhergestellt werden (GoBD). Im Unterreiter **Mitarbeiter** liegen ausgestellte Mitarbeiter zum Wiedereinstellen; endgültiges Löschen (mit allen Daten) ist dort nur als Admin und nur für zuvor ausgestellte Mitarbeiter möglich. *(Admin)* |
+| **🗑️ Papierkorb** | Gelöschte Einträge/Abwesenheiten bleiben mit Begründung erhalten und können wiederhergestellt werden (GoBD). **Jeder sieht und stellt wieder her, was er selbst gelöscht hat; Chef/Admin sehen und stellen alles wieder her.** Im Unterreiter **Mitarbeiter** liegen ausgestellte Mitarbeiter zum Wiedereinstellen (**Chef/Admin** – Mitarbeiter haben darauf keinen Zugriff); endgültiges Löschen (mit allen Daten) ist dort nur als Admin und nur für zuvor ausgestellte Mitarbeiter möglich. |
 
 **Querschnitts-Features:** Echtzeit-Updates über alle Geräte (Server-Sent Events), **Push-Benachrichtigungen
 aufs Handy auch bei geschlossener App** (Web Push, optional je Gerät aktivierbar), **Navigations-Button mit
@@ -105,10 +105,10 @@ doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusamm
 
 | Rolle | Sieht / darf |
 |---|---|
-| **Administrator** | Alles: Benutzer-, Projekt-, Einstellungsverwaltung, Audit-Log, Papierkorb/Wiederherstellung. |
-| **Chef** | Wie Admin bei Team-/Projekt-/Einstellungs-Verwaltung und Sicht auf alle Daten – ohne Audit-Log/Papierkorb. |
-| **Buchhalter** | Lesende Manager-Sicht auf alle Mitarbeiterdaten/Statistiken/Nachweise (kein Verwalten von Stammdaten). |
-| **Mitarbeiter** | Nur die **eigenen** Daten (Zeiten, Abwesenheiten, Planung) + globale Feiertage. |
+| **Administrator** | Alles: Benutzer-, Projekt-, Einstellungsverwaltung, Audit-Log, kompletter Papierkorb/Wiederherstellung. |
+| **Chef** | Wie Admin bei Team-/Projekt-/Einstellungs-Verwaltung und Sicht auf alle Daten – ohne Audit-Log. Papierkorb: **voller** Zugriff (alle gelöschten Einträge/Abwesenheiten + ausgestellte Mitarbeiter wiederherstellen). |
+| **Buchhalter** | Lesende Manager-Sicht auf alle Mitarbeiterdaten/Statistiken/Nachweise (kein Verwalten von Stammdaten). Papierkorb: nur eigene Löschungen. |
+| **Mitarbeiter** | Nur die **eigenen** Daten (Zeiten, Abwesenheiten, Planung) + globale Feiertage. Papierkorb: sieht/stellt nur **selbst Gelöschtes** wieder her (kein Zugriff auf ausgestellte Mitarbeiter). |
 
 **Zusätzliche Einzelrechte** (pro Benutzer unter *Mitarbeiter → Bearbeiten* vergebbar):
 

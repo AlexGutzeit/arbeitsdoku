@@ -223,7 +223,6 @@ function layout(content, activeNav) {
         ${showAudit ? `<a href="#/audit" class="${activeNav === 'audit' ? 'active' : ''}">
           <span class="icon">&#128220;</span> Audit-Log
         </a>` : ''}
-        ${showAudit ? `
         <div class="nav-group${(activeNav === 'deleted-entries' || activeNav === 'deleted-absences' || activeNav === 'deleted-users') ? ' open' : ''}" id="nav-papierkorb">
           <div class="nav-group-label" id="nav-papierkorb-label">
             <span class="icon">&#128465;</span> Papierkorb
@@ -231,9 +230,8 @@ function layout(content, activeNav) {
           </div>
           <a href="#/deleted-entries" class="nav-subitem ${activeNav === 'deleted-entries' ? 'active' : ''}">Einträge</a>
           <a href="#/deleted-absences" class="nav-subitem ${activeNav === 'deleted-absences' ? 'active' : ''}">Abwesenheiten</a>
-          <a href="#/deleted-users" class="nav-subitem ${activeNav === 'deleted-users' ? 'active' : ''}">Mitarbeiter</a>
+          ${showUsers ? `<a href="#/deleted-users" class="nav-subitem ${activeNav === 'deleted-users' ? 'active' : ''}">Mitarbeiter</a>` : ''}
         </div>
-        ` : ''}
       </nav>
     </div>
     <div class="header">

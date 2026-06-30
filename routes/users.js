@@ -58,8 +58,9 @@ router.get('/list', authenticate, (req, res) => {
   res.json({ users: attachEmployment(db, users) });
 });
 
-// Ausgestellte Mitarbeiter (Papierkorb-Reiter "Mitarbeiter"). MUSS vor "/:id" stehen.
-router.get('/inactive', authenticate, authorize('admin'), (req, res) => {
+// Ausgestellte Mitarbeiter (Papierkorb-Reiter "Mitarbeiter"). Chef+Admin (MA haben keinen Zugriff).
+// MUSS vor "/:id" stehen.
+router.get('/inactive', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   const rows = db.prepare(`
     SELECT u.id, u.username, u.name, u.role, u.target_hours_per_week, u.deactivated_at, u.deactivated_by,

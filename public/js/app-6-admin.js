@@ -450,9 +450,9 @@ async function renderAudit() {
   try { await auditLoad(true); auditPaint(); } catch (e) { toast(e.message, 'error'); }
 }
 
-// --- Gelöschte Einträge (Papierkorb, nur Admin) ---
+// --- Gelöschte Einträge (Papierkorb). Chef/Admin: alle; Mitarbeiter: nur selbst gelöschte (Server filtert) ---
 async function renderDeletedEntries() {
-  if (!isAdmin()) { navigate('/'); return; }
+  if (!S.user) { navigate('/'); return; }
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-entries');
   bindLayout();
 
@@ -511,9 +511,9 @@ async function renderDeletedEntries() {
   });
 }
 
-// --- Gelöschte Abwesenheiten (Papierkorb, nur Admin) ---
+// --- Gelöschte Abwesenheiten (Papierkorb). Chef/Admin: alle; Mitarbeiter: nur selbst gelöschte (Server filtert) ---
 async function renderDeletedAbsences() {
-  if (!isAdmin()) { navigate('/'); return; }
+  if (!S.user) { navigate('/'); return; }
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-absences');
   bindLayout();
 
@@ -573,9 +573,9 @@ async function renderDeletedAbsences() {
   });
 }
 
-// --- Ausgestellte Mitarbeiter (Papierkorb, nur Admin) ---
+// --- Ausgestellte Mitarbeiter (Papierkorb). Chef+Admin; Mitarbeiter haben KEINEN Zugriff ---
 async function renderDeletedUsers() {
-  if (!isAdmin()) { navigate('/'); return; }
+  if (!canManageUsers()) { navigate('/'); return; }
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-users');
   bindLayout();
 

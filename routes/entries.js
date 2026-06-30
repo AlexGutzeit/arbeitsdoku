@@ -113,9 +113,13 @@ router.get('/', authenticate, (req, res) => {
   res.json({ entries });
 });
 
-// Gelöschte Einträge (Papierkorb) — nur Admin. MUSS vor GET '/:id' stehen.
-router.get('/deleted', authenticate, authorize('admin'), (req, res) => {
+// Papierkorb-Vollsicht: Chef/Admin sehen alles, Mitarbeiter (und Buchhalter) nur ihre EIGENEN Löschungen.
+const canSeeAllTrash = (u) => u.role === 'admin' || u.role === 'chef';
+
+// Gelöschte Einträge (Papierkorb). Chef/Admin: alle; sonst nur selbst gelöschte. MUSS vor GET '/:id' stehen.
+router.get('/deleted', authenticate, (req, res) => {
   const db = getDb();
+  const ownOnly = !canSeeAllTrash(req.user);
   const rows = db.prepare(`
     SELECT e.*, u.name as user_name, du.name as deleted_by_name, p.name as project_name,
            (SELECT h.reason FROM entry_history h
@@ -125,9 +129,9 @@ router.get('/deleted', authenticate, authorize('admin'), (req, res) => {
     JOIN users u ON e.user_id = u.id
     LEFT JOIN users du ON e.deleted_by = du.id
     LEFT JOIN projects p ON e.project_id = p.id
-    WHERE e.deleted_at IS NOT NULL
+    WHERE e.deleted_at IS NOT NULL ${ownOnly ? 'AND e.deleted_by = ?' : ''}
     ORDER BY e.deleted_at DESC
-  `).all();
+  `).all(...(ownOnly ? [req.user.id] : []));
   res.json({ entries: rows });
 });
 
@@ -313,11 +317,15 @@ router.get('/:id/history', authenticate, authorize('chef'), (req, res) => {
   res.json({ history: rows });
 });
 
-// Gelöschten Eintrag wiederherstellen — nur Admin. Wird als History-Eintrag protokolliert.
-router.post('/:id/restore', authenticate, authorize('admin'), (req, res) => {
+// Gelöschten Eintrag wiederherstellen. Chef/Admin: jeden; Mitarbeiter: nur selbst gelöschte.
+// Wird als History-Eintrag protokolliert.
+router.post('/:id/restore', authenticate, (req, res) => {
   const db = getDb();
   const entry = db.prepare('SELECT * FROM entries WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Gelöschter Eintrag nicht gefunden' });
+  if (!canSeeAllTrash(req.user) && entry.deleted_by !== req.user.id) {
+    return res.status(403).json({ error: 'Nur selbst gelöschte Einträge können wiederhergestellt werden' });
+  }
 
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
   // Vorher-Abbild (geloeschter Zustand) festhalten, dann wiederherstellen
