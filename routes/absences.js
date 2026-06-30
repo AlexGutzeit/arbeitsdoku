@@ -530,12 +530,23 @@ router.get('/deleted/list', authenticate, (req, res) => {
   res.json({ absences: rows });
 });
 
-// Gelöschte Abwesenheiten werden BEWUSST NICHT wiederhergestellt: ein Restore brächte den Antrag als
-// bereits „genehmigt" zurück und umginge die Genehmigung — problematisch, wenn der Zeitraum inzwischen
-// anders verplant wurde. Stattdessen „Neu beantragen" (frischer Antrag → normaler Genehmigungsfluss).
-// Der gelöschte Datensatz bleibt für die Revisionssicherheit (GoBD) im Papierkorb erhalten.
+// Gelöschte Abwesenheit wiederherstellen — NUR Admin (bewusste Ausnahme). Für Chef/Mitarbeiter/Buchhalter
+// ist Restore gesperrt, weil er den Antrag als bereits „genehmigt" zurückbrächte und die Genehmigung
+// umginge (problematisch, wenn der Zeitraum inzwischen verplant wurde) — die nutzen „Neu beantragen".
+// Der gelöschte Datensatz bleibt ohnehin für die Revisionssicherheit (GoBD) im Papierkorb erhalten.
 router.post('/:id/restore', authenticate, (req, res) => {
-  return res.status(403).json({ error: 'Abwesenheiten können nicht wiederhergestellt werden – bitte neu beantragen.' });
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Abwesenheiten können nur vom Admin wiederhergestellt werden – bitte neu beantragen.' });
+  }
+  const db = getDb();
+  const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id);
+  if (!absence) return res.status(404).json({ error: 'Gelöschte Abwesenheit nicht gefunden' });
+
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  recordAbsenceHistory(db, absence, 'restore', req.user.id, reason);
+  db.prepare('UPDATE absences SET deleted_at = NULL, deleted_by = NULL WHERE id = ?').run(req.params.id);
+  broadcast('absences', req.headers['x-tab-id']);
+  res.json({ success: true });
 });
 
 // POST /api/absences/:id/approve — genehmigen

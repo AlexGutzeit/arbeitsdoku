@@ -69,6 +69,20 @@ function req(method, p, token, body) {
     ok('Vorbefüllt: Typ krank', form.type === 'krank', JSON.stringify(form));
     ok('Vorbefüllt: Datum 2026-09-15', form.from === D && form.to === D, JSON.stringify(form));
 
+    // --- Admin: sieht „Wiederherstellen" statt „Neu beantragen" ---
+    await p.evaluate(() => { localStorage.clear(); });
+    await p.goto(BASE, { waitUntil:'networkidle2' });
+    await p.waitForSelector('#login-user'); await p.type('#login-user','admin'); await p.type('#login-pass', pw);
+    await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]');
+    await p.evaluate(() => { location.hash = '#/deleted-absences'; }); await sleep(1000);
+    const adminBtns = await p.evaluate(() => ({
+      restore: document.querySelectorAll('.restore-absence').length,
+      restoreText: (document.querySelector('.restore-absence')||{}).textContent || '',
+      reapply: document.querySelectorAll('.reapply-absence').length,
+    }));
+    ok('Admin: „Wiederherstellen"-Button', adminBtns.restore === 1 && /Wiederherstellen/.test(adminBtns.restoreText), JSON.stringify(adminBtns));
+    ok('Admin: KEIN „Neu beantragen"-Button', adminBtns.reapply === 0, JSON.stringify(adminBtns));
+
   } finally { if (browser) await browser.close(); srv.kill('SIGTERM'); }
   console.log(`\nAbsence-Reapply-UI: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);

@@ -50,13 +50,15 @@ const has = (resp, id) => ((resp.body && (resp.body.entries || resp.body.absence
     const t1 = (await req('POST','/api/auth/login', null, { username:'worker1', password:'test' })).body.token;
     const t2 = (await req('POST','/api/auth/login', null, { username:'worker2', password:'test' })).body.token;
 
-    // m1 legt Eintrag + Abwesenheit an und löscht beide; m2 legt Eintrag an und löscht ihn
+    // m1 legt Eintrag + zwei Abwesenheiten an und löscht sie; m2 legt Eintrag an und löscht ihn
     const e1 = (await req('POST','/api/entries', t1, { date:'2026-08-20', time_from:'07:00', time_to:'15:00', break_minutes:30 })).body.entry;
     const a1 = (await req('POST','/api/absences', t1, { type:'krank', date_from:'2026-08-21', date_to:'2026-08-21' })).body.absence;
+    const a2 = (await req('POST','/api/absences', t1, { type:'krank', date_from:'2026-08-28', date_to:'2026-08-28' })).body.absence;
     const e2 = (await req('POST','/api/entries', t2, { date:'2026-08-20', time_from:'08:00', time_to:'16:00', break_minutes:30 })).body.entry;
-    ok('Anlegen e1/a1/e2', !!(e1&&a1&&e2) && e1.id && a1.id && e2.id, JSON.stringify({e1:e1&&e1.id,a1:a1&&a1.id,e2:e2&&e2.id}));
+    ok('Anlegen e1/a1/a2/e2', !!(e1&&a1&&a2&&e2) && e1.id && a1.id && a2.id && e2.id, JSON.stringify({e1:e1&&e1.id,a1:a1&&a1.id,a2:a2&&a2.id,e2:e2&&e2.id}));
     await req('DELETE','/api/entries/'+e1.id, t1);
     await req('DELETE','/api/absences/'+a1.id, t1);
+    await req('DELETE','/api/absences/'+a2.id, t1);
     await req('DELETE','/api/entries/'+e2.id, t2);
 
     // --- Mitarbeiter: nur Eigenes (Liste) ---
@@ -70,11 +72,13 @@ const has = (resp, id) => ((resp.body && (resp.body.entries || resp.body.absence
     r = await req('POST','/api/entries/'+e2.id+'/restore', t1, {});
     ok('m1 restauriert fremden Eintrag e2 → 403', r.status === 403, r.status+'');
     r = await req('POST','/api/absences/'+a1.id+'/restore', t1, {});
-    ok('Abwesenheit NICHT wiederherstellbar (m1) → 403', r.status === 403, r.status+'');
-    r = await req('POST','/api/absences/'+a1.id+'/restore', admin, {});
-    ok('Abwesenheit NICHT wiederherstellbar (auch Admin) → 403', r.status === 403, r.status+'');
+    ok('Abwesenheit-Restore für m1 (MA) → 403', r.status === 403, r.status+'');
+    r = await req('POST','/api/absences/'+a1.id+'/restore', cTok, {});
+    ok('Abwesenheit-Restore für Chef → 403', r.status === 403, r.status+'');
+    r = await req('POST','/api/absences/'+a2.id+'/restore', admin, {});
+    ok('Abwesenheit-Restore für ADMIN → 200', r.status === 200, r.status+'');
 
-    // „Neu beantragen" = frischer Antrag mit den alten Daten (läuft durch die Genehmigung)
+    // „Neu beantragen" = frischer Antrag mit den alten Daten (läuft durch die Genehmigung); a1 ist noch gelöscht
     r = await req('POST','/api/absences', t1, { type:a1.type, date_from:a1.date_from, date_to:a1.date_to });
     ok('m1 kann Abwesenheit NEU beantragen → neuer Antrag', !!(r.body && r.body.absence) && r.status < 300, r.status+' '+JSON.stringify(r.body&&r.body.absence&&r.body.absence.id));
 

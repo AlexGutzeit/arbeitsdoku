@@ -534,7 +534,9 @@ async function renderDeletedAbsences() {
       <td style="color:var(--text-light);">${esc(String(a.deleted_at || '').slice(0, 19))}</td>
       <td>${esc(a.deleted_by_name || '—')}</td>
       <td style="color:var(--text-light);">${esc(a.delete_reason || '')}</td>
-      <td><button class="btn btn-outline btn-sm reapply-absence" data-id="${a.id}" type="button">Neu beantragen</button></td>
+      <td>${isAdmin()
+        ? `<button class="btn btn-outline btn-sm restore-absence" data-id="${a.id}" type="button">Wiederherstellen</button>`
+        : `<button class="btn btn-outline btn-sm reapply-absence" data-id="${a.id}" type="button">Neu beantragen</button>`}</td>
     </tr>`;
   }).join('');
 
@@ -545,9 +547,9 @@ async function renderDeletedAbsences() {
         <h2 style="margin-bottom:0.5rem;">Gelöschte Abwesenheiten</h2>
         <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
           Soft-gelöschte Abwesenheiten (Urlaub, Krankheit, FZA …) bleiben für die Revisionssicherheit (GoBD)
-          erhalten. Sie werden <strong>nicht wiederhergestellt</strong> (das brächte sie als bereits genehmigt
-          zurück) – stattdessen kannst du sie mit „Neu beantragen" als frischen Antrag erneut einreichen, der
-          wieder durch die Genehmigung läuft.
+          erhalten. ${isAdmin()
+            ? 'Als Admin kannst du sie <strong>wiederherstellen</strong> (sie kommen als bereits genehmigt zurück); der Vorgang wird im Verlauf protokolliert.'
+            : 'Sie werden <strong>nicht wiederhergestellt</strong> (das brächte sie als bereits genehmigt zurück) – stattdessen kannst du sie mit „Neu beantragen" als frischen Antrag erneut einreichen, der wieder durch die Genehmigung läuft.'}
         </p>
         <div style="overflow-x:auto;">
           <table class="data-table" style="width:100%;font-size:0.88rem;">
@@ -567,6 +569,20 @@ async function renderDeletedAbsences() {
       if (!a) return;
       // Frischer Antrag mit den alten Daten vorbefüllt → läuft wieder durch die Genehmigung.
       showAbsenceForm(null, a.type, a.date_from, a.date_to, a.comment || '', a.user_id);
+    });
+  });
+
+  // Admin-Ausnahme: echtes Wiederherstellen (un-delete, kommt als genehmigt zurück).
+  mainEl.querySelectorAll('.restore-absence').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!(await confirmModal('Diese Abwesenheit wiederherstellen? Sie kommt als bereits genehmigt zurück.', { title: 'Wiederherstellen', okLabel: 'Wiederherstellen', danger: false }))) return;
+      const reason = await promptModal('Begründung für die Wiederherstellung (optional):', { title: 'Begründung' });
+      if (reason === null) return; // Abbrechen → bleibt im Papierkorb
+      try {
+        await api('POST', '/api/absences/' + btn.dataset.id + '/restore', { reason: reason.trim() });
+        toast('Abwesenheit wiederhergestellt', 'success');
+        renderDeletedAbsences();
+      } catch (err) { toast(err.message, 'error'); }
     });
   });
 }
