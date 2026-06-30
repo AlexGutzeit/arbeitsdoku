@@ -115,7 +115,7 @@ async function renderSettings() {
 
       ${isAdmin() ? `
       <div class="card">
-        <h2 style="margin-bottom:1rem;">Dokumenten-Speicher</h2>
+        <h2 style="margin-bottom:1rem;">Speicher- &amp; Größenlimits</h2>
         <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
           Aktuell belegt: <strong>${docUsedStr}</strong> von <strong>${docLimitStr}</strong>.
         </p>
