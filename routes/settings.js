@@ -16,6 +16,23 @@ function ensureIconsDir() {
   if (!fs.existsSync(iconsDir)) fs.mkdirSync(iconsDir, { recursive: true });
 }
 
+// Admin-konfigurierbare max. Dateigröße für Logo UND App-Icon (Default 5 MB), Setting-Key
+// `branding_file_limit_bytes`. Clamp 1 MB … 50 MB (Bilder brauchen realistisch nicht mehr).
+const BRANDING_DEFAULT = 5 * 1024 * 1024;
+const BRANDING_MIN = 1 * 1024 * 1024;
+const BRANDING_MAX = 50 * 1024 * 1024;
+function getBrandingFileLimit(db) {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'branding_file_limit_bytes'").get();
+  const n = row ? parseInt(row.value, 10) : NaN;
+  const base = (!Number.isFinite(n) || n <= 0) ? BRANDING_DEFAULT : n;
+  return Math.max(BRANDING_MIN, Math.min(base, BRANDING_MAX));
+}
+const brandingFileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (['.png', '.jpg', '.jpeg'].includes(ext)) cb(null, true);
+  else cb(new Error('Nur PNG und JPG Dateien erlaubt'));
+};
+
 // Logo-Upload konfigurieren
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -29,19 +46,18 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = ['.png', '.jpg', '.jpeg'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Nur PNG und JPG Dateien erlaubt'));
+// Logo-Upload: Per-Request-Multer mit aktuellem (konfigurierbarem) Limit + klarer Fehlermeldung.
+function logoUpload(req, res, next) {
+  const limit = getBrandingFileLimit(getDb());
+  const m = multer({ storage, limits: { fileSize: limit }, fileFilter: brandingFileFilter }).single('logo');
+  m(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `Datei zu groß (max. ${Math.round(limit / (1024 * 1024))} MB)` });
+      return res.status(400).json({ error: err.message || 'Upload fehlgeschlagen' });
     }
-  }
-});
+    next();
+  });
+}
 
 // Wetter-Endpunkt: Server holt Geocoding (Nominatim) + Wetter (Open-Meteo)
 let weatherCache = { data: null, ts: 0 };
@@ -144,7 +160,7 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
 });
 
 // Logo hochladen
-router.post('/logo', authenticate, authorize('chef'), upload.single('logo'), (req, res) => {
+router.post('/logo', authenticate, authorize('chef'), logoUpload, (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Keine Datei hochgeladen' });
   }
@@ -172,21 +188,31 @@ router.delete('/logo', authenticate, authorize('chef'), (req, res) => {
   res.json({ success: true });
 });
 
-// App-Icon-Upload: Master in uploads/icons/master.png speichern, alle PWA-Groessen generieren
-const iconUpload = multer({
-  dest: path.join(__dirname, '..', 'uploads', 'tmp'),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = ['.png', '.jpg', '.jpeg'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) cb(null, true);
-    else cb(new Error('Nur PNG und JPG Dateien erlaubt'));
-  },
+// Max. Dateigröße für Logo + App-Icon setzen (Admin). Wert+Einheit (MB/GB), "," und "." erlaubt.
+router.put('/branding-limit', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  const raw = typeof req.body.fileValue === 'string' ? parseFloat(req.body.fileValue.replace(',', '.')) : req.body.fileValue;
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return res.status(400).json({ error: 'Bitte eine gültige Zahl größer 0 eingeben' });
+  }
+  let bytes = Math.round(raw * (req.body.fileUnit === 'GB' ? 1024 * 1024 * 1024 : 1024 * 1024));
+  bytes = Math.max(BRANDING_MIN, Math.min(bytes, BRANDING_MAX));
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('branding_file_limit_bytes', ?)").run(String(bytes));
+  const mb = (bytes / (1024 * 1024)).toFixed(bytes % (1024 * 1024) ? 1 : 0);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'settings_update', details: `Logo/Icon max. Dateigröße: ${mb} MB`, ip: req.ip });
+  res.json({ brandingFileLimit: bytes });
 });
 
+// App-Icon-Upload: Master in uploads/icons/master.png speichern, alle PWA-Groessen generieren.
+// Per-Request-Multer mit dem (konfigurierbaren) Branding-Limit.
 router.post('/app-icon', authenticate, authorize('chef'), (req, res) => {
+  const limit = getBrandingFileLimit(getDb());
+  const iconUpload = multer({ dest: path.join(__dirname, '..', 'uploads', 'tmp'), limits: { fileSize: limit }, fileFilter: brandingFileFilter });
   iconUpload.single('icon')(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'Upload fehlgeschlagen' });
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `Datei zu groß (max. ${Math.round(limit / (1024 * 1024))} MB)` });
+      return res.status(400).json({ error: err.message || 'Upload fehlgeschlagen' });
+    }
     if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
     try {
       // Mindestgroesse pruefen

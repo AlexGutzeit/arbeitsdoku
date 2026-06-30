@@ -17,10 +17,34 @@ if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 const documentsDir = path.join(__dirname, '..', 'storage', 'documents');
 
-const upload = multer({
-  dest: path.join(backupDir, 'temp'),
-  limits: { fileSize: 100 * 1024 * 1024 }
-});
+// Das Restore-Upload-Limit muss zum möglichen Backup-Volumen passen: ein Backup-Zip bündelt DB + uploads
+// (Logo/Icons) + die KOMPLETTE Dokumenten-Ablage. Darum dynamisch = konfiguriertes Dokumenten-Speicherlimit
+// + Reserve (DB bleibt realistisch im einstelligen MB-Bereich, dazu Icons + Zip-Overhead). Sonst könnte man
+// ein selbst erzeugtes Backup nicht mehr einspielen, sobald die Ablage größer als ein fixes Limit wird.
+const DEFAULT_STORAGE_LIMIT = 500 * 1024 * 1024;       // wie routes/documents.js
+const MAX_STORAGE_LIMIT = 1024 * 1024 * 1024 * 1024;   // 1 TB
+const RESTORE_HEADROOM = 128 * 1024 * 1024;            // Reserve für DB + uploads/icons + Zip-Overhead
+function restoreLimitBytes(db) {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'doc_storage_limit_bytes'").get();
+  const n = row ? parseInt(row.value, 10) : NaN;
+  const storage = (!Number.isFinite(n) || n <= 0) ? DEFAULT_STORAGE_LIMIT : Math.min(n, MAX_STORAGE_LIMIT);
+  return storage + RESTORE_HEADROOM;
+}
+// Per-Request-Multer mit aktuellem Limit + klarer Fehlermeldung (statt generischem Crash) bei Übergröße.
+function restoreUpload(req, res, next) {
+  const limit = restoreLimitBytes(getDb());
+  const m = multer({ dest: path.join(backupDir, 'temp'), limits: { fileSize: limit } }).single('backup');
+  m(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        const mb = Math.round(limit / (1024 * 1024));
+        return res.status(413).json({ error: `Backup-Datei zu groß (max. ${mb} MB). Erhöhe ggf. das Dokumenten-Speicherlimit in den Einstellungen.` });
+      }
+      return res.status(400).json({ error: 'Upload fehlgeschlagen' });
+    }
+    next();
+  });
+}
 
 // Backup herunterladen (ZIP mit DB + Uploads)
 router.get('/download', authenticate, authorize('chef'), (req, res) => {
@@ -74,7 +98,7 @@ router.get('/download', authenticate, authorize('chef'), (req, res) => {
 });
 
 // Backup wiederherstellen (ZIP oder SQLite)
-router.post('/restore', authenticate, authorize('chef'), upload.single('backup'), (req, res) => {
+router.post('/restore', authenticate, authorize('chef'), restoreUpload, (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Keine Backup-Datei hochgeladen' });
   }

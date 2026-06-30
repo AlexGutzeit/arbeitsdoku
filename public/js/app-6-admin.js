@@ -29,6 +29,9 @@ async function renderSettings() {
     docUsedStr = docFormatSize(docStorage.used);
     docLimitStr = docFormatSize(docStorage.limit);
   }
+  // Max. Dateigröße für Logo/App-Icon (Admin-konfigurierbar, Default 5 MB)
+  let brandVal = '5', brandUnit = 'MB';
+  { const b = splitUnit(parseInt(S.settings?.branding_file_limit_bytes, 10) || 5 * 1024 * 1024); brandVal = b.val; brandUnit = b.unit; }
 
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
@@ -142,11 +145,24 @@ async function renderSettings() {
             </select>
           </div>
         </div>
+        <div class="form-row" style="grid-template-columns:1fr 110px;">
+          <div class="form-group">
+            <label>Max. Dateigröße Logo / App-Icon</label>
+            <input type="text" class="form-control" id="brand-file-value" value="${esc(brandVal)}" inputmode="decimal">
+          </div>
+          <div class="form-group">
+            <label>Einheit</label>
+            <select class="form-control" id="brand-file-unit">
+              <option value="MB"${brandUnit === 'MB' ? ' selected' : ''}>MB</option>
+              <option value="GB"${brandUnit === 'GB' ? ' selected' : ''}>GB</option>
+            </select>
+          </div>
+        </div>
         <button class="btn btn-primary" id="doc-limit-save">Speichern</button>
         <p style="color:var(--text-lighter);font-size:0.8rem;margin-top:0.6rem;">
           Bestehende Dateien bleiben immer erhalten. Ein Gesamtlimit unterhalb des belegten Speichers
           blockiert nur neue Uploads, bis genug gelöscht wurde. Die max. Dateigröße darf das Gesamtlimit
-          nicht überschreiten. „.“ und „,“ sind beide erlaubt.
+          nicht überschreiten. Logo/App-Icon: 1–50 MB. „.“ und „,“ sind beide erlaubt.
         </p>
       </div>` : ''}
 
@@ -196,8 +212,14 @@ async function renderSettings() {
     if (storageBytes < usedBytes) {
       if (!(await confirmModal(`Aktuell sind ${docFormatSize(usedBytes)} belegt. Ein Gesamtlimit von ${docFormatSize(storageBytes)} blockiert neue Uploads, bis genug gelöscht wurde. Bestehende Dateien bleiben erhalten. Trotzdem speichern?`, { title: 'Speicherlimit', okLabel: 'Speichern', danger: false }))) return;
     }
+    // Branding-Limit (Logo/Icon) — separater Admin-Endpunkt
+    const bRaw = document.getElementById('brand-file-value').value.trim().replace(',', '.');
+    const bUnit = document.getElementById('brand-file-unit').value;
+    const bVal = parseFloat(bRaw);
+    if (!isFinite(bVal) || bVal <= 0) { toast('Bitte für die Logo-/Icon-Größe eine gültige Zahl größer 0 eingeben', 'error'); return; }
     try {
       await api('PUT', '/api/documents/limits', { storageValue: sRaw, storageUnit: sUnit, fileValue: fRaw, fileUnit: fUnit });
+      await api('PUT', '/api/settings/branding-limit', { fileValue: bRaw, fileUnit: bUnit });
       toast('Gespeichert', 'success');
       renderSettings();
     } catch (err) { toast(err.message, 'error'); }

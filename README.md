@@ -51,7 +51,7 @@ Jeder Punkt entspricht einem Menüpunkt in der App.
 | **🏖️ Abwesenheit** | Krank, Urlaub, Freizeitausgleich, Sonderurlaub, Feiertag, Berufsschule, Innung. Urlaub/FZA/Sonderurlaub durchlaufen einen **Genehmigungs-Workflow**. Prioritätsbewusste Tageszählung (Feiertag > Krank > Schule/Innung > Urlaub/FZA) und korrekte Soll-Stunden-/Überstunden-Verrechnung. **Arbeiten trotz Abwesenheit ist möglich** und wird sauber verrechnet: an Urlaub/Schule/Feiertag-Tagen zählt gebuchte Zeit voll als Überstunden, bei **FZA** sinkt nur der Abzug. **Krank** ist überstundenneutral bis zur normalen Tagesleistung (Soll = min(gearbeitete Stunden, Normal-Soll)) – Mehrarbeit darüber hinaus zählt als Überstunden. |
 | **📈 Statistik** | Soll-/Ist-Stunden und Überstunden je Zeitraum und Mitarbeiter, mit Diagrammen. |
 | **📄 PDF-Export** | Druckfertiger Arbeitsnachweis (Einträge + Abwesenheiten + Stunden-Zusammenfassung) als PDF, gefiltert nach Zeitraum/Mitarbeiter/Projekt. |
-| **⚙️ Einstellungen** | White-Label-Branding, Dokumenten-Speicherlimit, Datenbank-Backup/Restore. *(Chef/Admin)* |
+| **⚙️ Einstellungen** | White-Label-Branding (Logo + App-Icon; **max. Bild-Dateigröße admin-einstellbar, Default 5 MB**), Dokumenten-Speicherlimit (Gesamt + pro Datei), Datenbank-Backup/Restore. *(Chef/Admin; Größenlimits nur Admin)* |
 | **📜 Audit-Log** | Revisionssicheres Protokoll: An-/Abmeldungen (Login erfolgreich/fehlgeschlagen, manuelle Abmeldung, Sitzungs-Timeout), Benutzeränderungen, Einstellungs-/Branding-Änderungen, Backups u. a. Benutzeranlage mit allen Parametern, Änderungen feldgenau als „alt → neu" (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)* |
 | **🗑️ Papierkorb** | Gelöschte Einträge und Abwesenheiten bleiben mit Begründung erhalten (GoBD). **Gelöschte Zeit­einträge** können wiederhergestellt werden – jeder sieht/stellt wieder her, was er selbst gelöscht hat; Chef/Admin alles. **Gelöschte Abwesenheiten** werden für Chef/Mitarbeiter/Buchhalter **nicht** wiederhergestellt (das brächte sie als bereits genehmigt zurück und könnte mit zwischenzeitlicher Planung kollidieren) – stattdessen „**Neu beantragen**": ein frischer Antrag mit den alten Daten, der wieder durch die Genehmigung läuft. Nur der **Admin** kann eine Abwesenheit echt **wiederherstellen** (Ausnahme für versehentliche Löschungen). Im Unterreiter **Mitarbeiter** liegen ausgestellte Mitarbeiter zum Wiedereinstellen (**Chef/Admin** – Mitarbeiter haben darauf keinen Zugriff); endgültiges Löschen (mit allen Daten) ist dort nur als Admin und nur für zuvor ausgestellte Mitarbeiter möglich. |
 
@@ -313,7 +313,9 @@ Alle veränderlichen Daten liegen im Projektordner (und sind aus der Versionsver
 
 - **Backup herunterladen** – erzeugt ein ZIP mit Datenbank **+** Uploads (Logo/Icons) **+** Dokumenten.
 - **Backup einspielen** – ersetzt die aktuellen Daten; vorher wird automatisch ein Safety-Backup in
-  `backups/` abgelegt.
+  `backups/` abgelegt. Das Upload-Limit beim Einspielen ist **dynamisch** = konfiguriertes Dokumenten-
+  Speicherlimit **+ Reserve** (für DB/Icons), damit ein selbst erzeugtes Backup immer wieder eingespielt
+  werden kann – auch wenn die Dokumenten-Ablage groß ist.
 
 Für Server-Betrieb zusätzlich eine **dateibasierte Sicherung** (z. B. nächtlicher `rsync`/Cron der
 Ordner `data/`, `uploads/`, `storage/`) einrichten.

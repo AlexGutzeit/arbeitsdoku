@@ -40,6 +40,22 @@ function upload(token, filename, contentBuffer, fields) {
   });
 }
 
+// Generischer multipart-Upload an einen beliebigen Pfad/Feldnamen (für Logo/Icon)
+function uploadField(token, urlPath, field, filename, contentBuffer, contentType) {
+  return new Promise((resolve, reject) => {
+    const boundary = '----nodeform' + Date.now() + Math.random().toString(16).slice(2);
+    const head = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${field}"; filename="${filename}"\r\nContent-Type: ${contentType || 'application/octet-stream'}\r\n\r\n`);
+    const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const bodyBuf = Buffer.concat([head, contentBuffer, tail]);
+    const r = http.request({ host:'localhost', port:PORT, path:urlPath, method:'POST', headers: {
+      'Content-Type': 'multipart/form-data; boundary=' + boundary,
+      'Content-Length': bodyBuf.length,
+      Authorization: 'Bearer ' + token,
+    } }, (res) => { let s=''; res.on('data',d=>s+=d); res.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; resolve({status:res.statusCode, body:j}); }); });
+    r.on('error', reject); r.write(bodyBuf); r.end();
+  });
+}
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, console.log('  ✗ ' + n + (e ? '  → ' + e : '')));
@@ -86,6 +102,31 @@ const MB = 1024 * 1024;
     const small = Buffer.alloc(Math.round(0.2*MB), 0x41);
     u = await upload(token, 'klein.txt', small);
     ok('Upload innerhalb Limit → 201', u.status===201 && u.body.document, JSON.stringify(u.body));
+
+    // ===== Branding-Limit (Logo/App-Icon), Admin-konfigurierbar =====
+    // PUT setzt das Limit
+    r = await reqJSON('PUT','/api/settings/branding-limit', token, { fileValue:'2', fileUnit:'MB' });
+    ok('PUT /branding-limit (2 MB) → 200', r.status===200 && r.body.brandingFileLimit === 2*MB, JSON.stringify(r.body));
+    // Clamp nach oben (50 MB)
+    r = await reqJSON('PUT','/api/settings/branding-limit', token, { fileValue:'100', fileUnit:'MB' });
+    ok('Branding-Limit > 50 MB → auf 50 MB geclampt', r.status===200 && r.body.brandingFileLimit === 50*MB, JSON.stringify(r.body));
+    // Ungültig
+    r = await reqJSON('PUT','/api/settings/branding-limit', token, { fileValue:'0', fileUnit:'MB' });
+    ok('Branding-Limit ≤ 0 → 400', r.status===400, String(r.status));
+    // admin-only: Chef bekommt 403
+    await reqJSON('POST','/api/users', token, { username:'cheflimit', password:'test', name:'CHEF', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    const cTok = (await reqJSON('POST','/api/auth/login', null, { username:'cheflimit', password:'test' })).body.token;
+    r = await reqJSON('PUT','/api/settings/branding-limit', cTok, { fileValue:'3', fileUnit:'MB' });
+    ok('Branding-Limit als Chef → 403 (nur Admin)', r.status===403, String(r.status));
+
+    // Logo-Upload gegen das gesetzte Limit (1 MB): groß → 413, klein → 200
+    await reqJSON('PUT','/api/settings/branding-limit', token, { fileValue:'1', fileUnit:'MB' });
+    const bigLogo = Buffer.alloc(Math.round(1.3*MB), 0x42);
+    let lu = await uploadField(token, '/api/settings/logo', 'logo', 'logo.png', bigLogo, 'image/png');
+    ok('Logo > Branding-Limit → 413', lu.status===413, JSON.stringify(lu.body));
+    const smallLogo = Buffer.from([0x89,0x50,0x4e,0x47, ...new Array(2000).fill(0x42)]); // ~2 KB „PNG"
+    lu = await uploadField(token, '/api/settings/logo', 'logo', 'logo.png', Buffer.from(smallLogo), 'image/png');
+    ok('Logo innerhalb Branding-Limit → 200', lu.status===200 && lu.body && lu.body.logo, JSON.stringify(lu.body));
 
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nDoc-Limits: ${pass} ok, ${fail} fehlgeschlagen`);
