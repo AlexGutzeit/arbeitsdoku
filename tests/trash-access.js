@@ -56,9 +56,12 @@ const has = (resp, id) => ((resp.body && (resp.body.entries || resp.body.absence
     const a2 = (await req('POST','/api/absences', t1, { type:'krank', date_from:'2026-08-28', date_to:'2026-08-28' })).body.absence;
     const e2 = (await req('POST','/api/entries', t2, { date:'2026-08-20', time_from:'08:00', time_to:'16:00', break_minutes:30 })).body.entry;
     ok('Anlegen e1/a1/a2/e2', !!(e1&&a1&&a2&&e2) && e1.id && a1.id && a2.id && e2.id, JSON.stringify({e1:e1&&e1.id,a1:a1&&a1.id,a2:a2&&a2.id,e2:e2&&e2.id}));
+    // a3: m1s Abwesenheit, die der CHEF löscht (deleted_by=Chef, user_id=m1)
+    const a3 = (await req('POST','/api/absences', t1, { type:'krank', date_from:'2026-09-04', date_to:'2026-09-04' })).body.absence;
     await req('DELETE','/api/entries/'+e1.id, t1);
     await req('DELETE','/api/absences/'+a1.id, t1);
     await req('DELETE','/api/absences/'+a2.id, t1);
+    await req('DELETE','/api/absences/'+a3.id, cTok, { reason:'vom Chef entfernt' });
     await req('DELETE','/api/entries/'+e2.id, t2);
 
     // --- Mitarbeiter: nur Eigenes (Liste) ---
@@ -67,6 +70,7 @@ const has = (resp, id) => ((resp.body && (resp.body.entries || resp.body.absence
     ok('m1 sieht NICHT m2s Eintrag e2', !has(r, e2.id));
     r = await req('GET','/api/absences/deleted/list', t1);
     ok('m1 sieht eigene gelöschte Abwesenheit a1', has(r, a1.id));
+    ok('m1 sieht vom CHEF gelöschte EIGENE Abwesenheit a3', has(r, a3.id), JSON.stringify((r.body.absences||[]).map(x=>x.id)));
 
     // --- Restore-Regeln ---
     r = await req('POST','/api/entries/'+e2.id+'/restore', t1, {});

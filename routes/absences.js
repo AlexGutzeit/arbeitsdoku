@@ -512,7 +512,9 @@ router.get('/:id/history', authenticate, authorize('chef'), (req, res) => {
 // Papierkorb-Vollsicht: Chef/Admin sehen alles, Mitarbeiter (und Buchhalter) nur ihre EIGENEN Löschungen.
 const canSeeAllTrash = (u) => u.role === 'admin' || u.role === 'chef';
 
-// Gelöschte Abwesenheiten (Papierkorb). Chef/Admin: alle; sonst nur selbst gelöschte.
+// Gelöschte Abwesenheiten (Papierkorb). Chef/Admin: alle. Mitarbeiter/Buchhalter: ihre EIGENEN
+// (`user_id` = Eigentum, NICHT `deleted_by`) — so sieht der MA auch eine vom Chef gelöschte eigene
+// Abwesenheit und kann sie neu beantragen.
 router.get('/deleted/list', authenticate, (req, res) => {
   const db = getDb();
   const ownOnly = !canSeeAllTrash(req.user);
@@ -524,7 +526,7 @@ router.get('/deleted/list', authenticate, (req, res) => {
     FROM absences a
     LEFT JOIN users u ON a.user_id = u.id
     LEFT JOIN users du ON a.deleted_by = du.id
-    WHERE a.deleted_at IS NOT NULL ${ownOnly ? 'AND a.deleted_by = ?' : ''}
+    WHERE a.deleted_at IS NOT NULL ${ownOnly ? 'AND a.user_id = ?' : ''}
     ORDER BY a.deleted_at DESC
   `).all(...(ownOnly ? [req.user.id] : []));
   res.json({ absences: rows });
