@@ -103,6 +103,19 @@ const MB = 1024 * 1024;
     u = await upload(token, 'klein.txt', small);
     ok('Upload innerhalb Limit → 201', u.status===201 && u.body.document, JSON.stringify(u.body));
 
+    // ===== Durchsetzung GESAMT-Speicherlimit (Ablage) =====
+    // Belegt sind jetzt ~0,2 MB. Limit knapp setzen: Gesamt 1 MB, Pro-Datei 1 MB.
+    await reqJSON('PUT','/api/documents/limits', token, { storageValue:'1', storageUnit:'MB', fileValue:'1', fileUnit:'MB' });
+    const g0 = await reqJSON('GET','/api/documents', token);
+    ok('Belegt < Gesamtlimit vor dem Test', g0.body.storage.used < g0.body.storage.limit, JSON.stringify(g0.body.storage));
+    // 0,9 MB: passt pro Datei (≤1 MB), aber 0,2+0,9 = 1,1 > 1 MB Gesamt → muss am Gesamtlimit scheitern
+    let over = await upload(token, 'voll.txt', Buffer.alloc(Math.round(0.9*MB), 0x43));
+    ok('Upload über Gesamt-Speicherlimit → 400 „Speicherlimit"', over.status===400 && /Speicherlimit/.test(over.body && over.body.error || ''), JSON.stringify(over.body));
+    // Limit anheben → derselbe Upload geht jetzt durch (Limit ist dynamisch/scharf)
+    await reqJSON('PUT','/api/documents/limits', token, { storageValue:'500', storageUnit:'MB', fileValue:'5', fileUnit:'MB' });
+    let now = await upload(token, 'jetzt-ok.txt', Buffer.alloc(Math.round(0.9*MB), 0x43));
+    ok('Nach Limit-Erhöhung: gleicher Upload → 201', now.status===201 && now.body.document, JSON.stringify(now.body));
+
     // ===== Branding-Limit (Logo/App-Icon), Admin-konfigurierbar =====
     // PUT setzt das Limit
     r = await reqJSON('PUT','/api/settings/branding-limit', token, { fileValue:'2', fileUnit:'MB' });
