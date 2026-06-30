@@ -316,7 +316,9 @@ function renderPlanningTimeline(entries, absences, canEdit) {
       if (e.address) {
         actionsHtml += `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>`;
       }
-      if (canEdit && canEditEntry(e)) {
+      // ⋮-Menü: „alle"-Planer/Manager in jeder Spalte; Self-Planer NUR in seiner eigenen Spalte
+      // (auch bei geteilten Einträgen, die in mehreren Spalten erscheinen).
+      if (canEdit && canEditEntry(e) && (canPlanAll() || col.id === S.user.id)) {
         actionsHtml += `<button type="button" class="plan-menu-btn" data-id="${e.id}" data-group="${e.group_id || ''}" title="Aktionen">&#8942;</button>`;
       }
 
