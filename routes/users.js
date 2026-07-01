@@ -14,20 +14,30 @@ const USER_AUDIT_FIELDS = [
   ['role', 'Rolle', v => String(v ?? '')],
   ['target_hours_per_week', 'Soll-Stunden/Woche', v => String(v ?? '')],
   ['start_overtime', 'Start-Überstunden', v => String(v ?? 0)],
-  ['can_plan', 'Recht Planung (sich)', v => (v ? 'Ja' : 'Nein')],
-  ['can_plan_all', 'Recht Planung (alle)', v => (v ? 'Ja' : 'Nein')],
   ['can_bulletin', 'Recht Schwarzes Brett', v => (v ? 'Ja' : 'Nein')],
   ['can_upload', 'Recht Dokumente-Upload', v => (v ? 'Ja' : 'Nein')],
 ];
+// Planungsrecht semantisch als EINE Stufe (statt zwei Boolescher Felder), damit im Audit auf einen Blick
+// erkennbar ist, WELCHER Stand gilt — insbesondere „alle → nur sich" (nur die alle-Stufe entzogen).
+function planLevel(u) {
+  if (u.can_plan_all) return 'alle';
+  if (u.can_plan) return 'nur sich';
+  return 'keins';
+}
 // Alle relevanten Felder eines neuen Benutzers als Klartext.
 function userAuditCreate(u) {
-  return USER_AUDIT_FIELDS.map(([k, label, fmt]) => `${label}: ${fmt(u[k])}`).join(', ');
+  const parts = USER_AUDIT_FIELDS.map(([k, label, fmt]) => `${label}: ${fmt(u[k])}`);
+  parts.push(`Planungsrecht: ${planLevel(u)}`);
+  return parts.join(', ');
 }
 // Nur die geaenderten Felder als "Feld: alt → neu".
 function userAuditDiff(before, after) {
   const changes = [];
   for (const [k, label, fmt] of USER_AUDIT_FIELDS) {
     if (fmt(before[k]) !== fmt(after[k])) changes.push(`${label}: ${fmt(before[k])} → ${fmt(after[k])}`);
+  }
+  if (planLevel(before) !== planLevel(after)) {
+    changes.push(`Planungsrecht: ${planLevel(before)} → ${planLevel(after)}`);
   }
   return changes;
 }
