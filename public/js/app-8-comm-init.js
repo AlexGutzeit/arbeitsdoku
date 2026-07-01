@@ -392,6 +392,7 @@ function renderNoteList(notes) {
           ${isOwner ? `<button class="btn btn-sm note-share-btn" data-id="${n.id}" title="Freigabe">&#128101;</button>` : ''}
           ${isOwner ? `<button class="btn btn-sm note-offer-btn" data-id="${n.id}" title="Weitergeben">&#10145;</button>` : ''}
           ${isOwner ? `<button class="btn btn-sm btn-danger note-del-btn" data-id="${n.id}" title="L\u00f6schen">&times;</button>` : ''}
+          ${!isOwner ? `<button class="btn btn-sm note-leave-btn" data-id="${n.id}" title="Freigabe verlassen (aus meiner Liste entfernen)">&#128682;</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -442,6 +443,17 @@ function bindNoteEvents() {
       e.stopPropagation();
       const n = _notizen.find(x => x.id === Number(btn.dataset.id));
       if (n) showOfferDialog(n);
+    });
+  });
+  document.querySelectorAll('.note-leave-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!(await confirmModal('Diese geteilte Notiz aus deiner Liste entfernen? Der Eigentümer kann dich später wieder hinzufügen.', { title: 'Freigabe verlassen', okLabel: 'Entfernen' }))) return;
+      try {
+        await api('DELETE', '/api/notes/' + btn.dataset.id + '/share/self');
+        toast('Aus deiner Liste entfernt', 'success');
+        renderNotizen();
+      } catch (err) { toast(err.message, 'error'); }
     });
   });
 }

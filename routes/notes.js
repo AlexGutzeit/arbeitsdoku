@@ -276,6 +276,21 @@ router.delete('/:id', authenticate, (req, res) => {
   res.json({ success: true });
 });
 
+// Empfaenger verlaesst eine geteilte Notiz (entfernt die EIGENE Freigabe). Der Eigentuemer sieht danach
+// den Haken leer und kann durch erneutes Anhaken (PUT /:id/shares) wieder hinzufuegen.
+router.delete('/:id/share/self', authenticate, (req, res) => {
+  const db = getDb();
+  const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
+  if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
+  if (note.user_id === req.user.id) {
+    return res.status(400).json({ error: 'Als Eigentümer kannst du die Notiz löschen, nicht verlassen.' });
+  }
+  const r = db.prepare('DELETE FROM note_shares WHERE note_id = ? AND user_id = ?').run(req.params.id, req.user.id);
+  if (r.changes === 0) return res.status(404).json({ error: 'Für dich besteht keine Freigabe dieser Notiz.' });
+  broadcast('notes', req.headers['x-tab-id']);
+  res.json({ success: true });
+});
+
 // --- Sharing ---
 
 // Aktuelle Freigaben abrufen
