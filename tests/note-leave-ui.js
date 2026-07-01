@@ -34,12 +34,16 @@ const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, {
     const admin = await tok('admin', apw);
     const O = (await req('POST','/api/users', admin, { username:'owner', password:'test', name:'OWNER', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const B = (await req('POST','/api/users', admin, { username:'empf', password:'test', name:'EMPF', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const tO = await tok('owner'), tB = await tok('empf');
+    const O2 = (await req('POST','/api/users', admin, { username:'owner2', password:'test', name:'ZWEITER', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const tO = await tok('owner'), tO2 = await tok('owner2'), tB = await tok('empf');
     const note = (await req('POST','/api/notes', tO, { title:'Geteilte UI-Notiz', body:'Inhalt' })).body.note;
     await req('PUT','/api/notes/'+note.id+'/shares', tO, { shares:[{ user_id:B.id, permission:'read' }] });
+    // Zweiter Freigeber teilt ebenfalls mit B
+    const note2 = (await req('POST','/api/notes', tO2, { title:'Notiz vom Zweiten', body:'Y' })).body.note;
+    await req('PUT','/api/notes/'+note2.id+'/shares', tO2, { shares:[{ user_id:B.id, permission:'read' }] });
     // B bekommt zusätzlich eine EIGENE Notiz (für den Owner-Filter)
     const ownNote = (await req('POST','/api/notes', tB, { title:'Meine eigene UI-Notiz', body:'X' })).body.note;
-    ok('Setup: geteilte Notiz + eigene Notiz für B', !!note.id && !!ownNote.id);
+    ok('Setup: 2 Freigeber + eigene Notiz für B', !!note.id && !!note2.id && !!ownNote.id);
 
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
     const p = await browser.newPage(); await p.setViewport({ width:1000, height:900 });
@@ -60,7 +64,18 @@ const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, {
     await setOwner('shared');
     ok('Filter „Freigegeben": geteilte sichtbar, eigene NICHT', await p.evaluate((o, s) => !document.querySelector(o) && !!document.querySelector(s), ownSel, sel));
     await setOwner('');
-    ok('Filter „Alle": beide sichtbar', await p.evaluate((o, s) => !!document.querySelector(o) && !!document.querySelector(s), ownSel, sel));
+    ok('Filter „Alle": eigene + beide geteilten sichtbar', await p.evaluate((o, s, s2) => !!document.querySelector(o) && !!document.querySelector(s) && !!document.querySelector(s2), ownSel, sel, `.note-card[data-id="${note2.id}"]`));
+
+    // Pro-Nutzer-Optionen im Dropdown (je Freigeber)
+    const optLabels = await p.evaluate(() => [...document.querySelectorAll('#note-filter-owner option')].map(o => o.textContent));
+    ok('Dropdown listet beide Freigeber namentlich', optLabels.includes('OWNER') && optLabels.includes('ZWEITER'), JSON.stringify(optLabels));
+
+    // Filter nach genau einem Nutzer (OWNER)
+    await setOwner('u:' + O.id);
+    ok('Filter „OWNER": nur dessen Notiz, nicht die des Zweiten/eigene', await p.evaluate((s, s2, o) => !!document.querySelector(s) && !document.querySelector(s2) && !document.querySelector(o), sel, `.note-card[data-id="${note2.id}"]`, ownSel));
+    await setOwner('u:' + O2.id);
+    ok('Filter „ZWEITER": nur dessen Notiz', await p.evaluate((s, s2) => !document.querySelector(s) && !!document.querySelector(s2), sel, `.note-card[data-id="${note2.id}"]`));
+    await setOwner('');
 
     await p.evaluate((s) => document.querySelector(s + ' .note-leave-btn').click(), sel); await sleep(300);
     await p.evaluate(() => { const b = document.querySelector('.dialog-modal [data-act="ok"]'); if (b) b.click(); }); await sleep(900);

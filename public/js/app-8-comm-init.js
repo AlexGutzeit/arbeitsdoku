@@ -286,6 +286,20 @@ async function renderNotizen() {
     `<option value="${p.id}" ${_notizenFilter.projectId == p.id ? 'selected' : ''}>${esc(p.name)}</option>`
   ).join('');
 
+  // Nutzer, die MIR etwas freigegeben haben (aus den geteilten Notizen), alphabetisch — je eigene Filteroption.
+  const _seenOwners = new Set();
+  const sharers = [];
+  for (const n of notes) {
+    if (n.user_id !== S.user.id && !_seenOwners.has(n.user_id)) {
+      _seenOwners.add(n.user_id);
+      sharers.push({ id: n.user_id, name: n.owner_name || ('#' + n.user_id) });
+    }
+  }
+  sharers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const sharerOpts = sharers.map(s =>
+    `<option value="u:${s.id}" ${_notizenFilter.owner === 'u:' + s.id ? 'selected' : ''}>${esc(s.name)}</option>`
+  ).join('');
+
   mainEl.innerHTML = `
     <div class="card" style="max-width:900px;margin:0 auto">
       <h2 style="margin-bottom:1rem">Notizen</h2>
@@ -295,6 +309,7 @@ async function renderNotizen() {
           <option value="">Alle Notizen</option>
           <option value="own" ${_notizenFilter.owner === 'own' ? 'selected' : ''}>Eigene</option>
           <option value="shared" ${_notizenFilter.owner === 'shared' ? 'selected' : ''}>Freigegeben (von anderen)</option>
+          ${sharerOpts}
         </select>
         <select id="note-filter-project" class="form-control">
           <option value="">Alle Projekte</option>
@@ -353,6 +368,7 @@ function filterNotizen() {
   const of = _notizenFilter.owner;
   if (of === 'own') list = list.filter(n => n.user_id === S.user.id);
   else if (of === 'shared') list = list.filter(n => n.user_id !== S.user.id);
+  else if (of && of.startsWith('u:')) { const uid = Number(of.slice(2)); list = list.filter(n => n.user_id === uid); }
   const pf = _notizenFilter.projectId;
   if (pf === 'none') {
     list = list.filter(n => !n.project_id && !n.project_text);
