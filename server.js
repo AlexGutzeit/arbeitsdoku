@@ -178,6 +178,8 @@ async function start() {
   await initDatabase();
   cleanupToolHistory();
   setInterval(cleanupToolHistory, 24 * 60 * 60 * 1000); // täglich
+  // Geplante Zusammenfassungen (Digest-Push): minütlicher Scheduler.
+  require('./scheduler').start(require('./database/init').getDb);
   app.listen(PORT, () => {
     console.log(`Arbeitsdoku-Server läuft auf http://localhost:${PORT}`);
   });

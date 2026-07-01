@@ -288,7 +288,8 @@ async function initPushCard() {
       <div class="push-actions">
         <button class="btn btn-sm" id="push-test">Test-Benachrichtigung</button>
         <button class="btn btn-sm btn-outline" id="push-disable">Ausschalten</button>
-      </div>`;
+      </div>
+      <div id="summary-section" class="summary-section"></div>`;
   } else {
     statusHtml = `<span class="push-status push-off">Aus</span>`;
     controlsHtml = `
@@ -332,6 +333,105 @@ async function initPushCard() {
       try { await api('PUT', '/api/push/prefs', body); toast('Gespeichert', 'success'); }
       catch (e) { toast('Konnte Einstellung nicht speichern', 'error'); cb.checked = !cb.checked; }
     });
+  });
+
+  if (active) initSummarySection();
+}
+
+// --- Geplante Zusammenfassungen (Digest-Push) ---
+const SUMMARY_WD = [{ n: 1, l: 'Mo' }, { n: 2, l: 'Di' }, { n: 3, l: 'Mi' }, { n: 4, l: 'Do' }, { n: 5, l: 'Fr' }, { n: 6, l: 'Sa' }, { n: 7, l: 'So' }];
+function summaryCatOptions() {
+  return PUSH_CATS.filter(c => c.key !== 'orders' || S.user.role === 'chef' || S.user.role === 'admin');
+}
+const summaryCatLabel = (key) => (PUSH_CATS.find(c => c.key === key) || {}).label || key;
+const summaryDaysLabel = (arr) => SUMMARY_WD.filter(w => arr.includes(w.n)).map(w => w.l).join(', ');
+
+async function initSummarySection() {
+  const box = document.getElementById('summary-section');
+  if (!box) return;
+  let data = { schedules: [], pausedAll: false };
+  try { data = await api('GET', '/api/push/summaries'); } catch (_) {}
+  const rows = (data.schedules || []).map(s => `
+    <div class="summary-row${s.paused || data.pausedAll ? ' paused' : ''}" data-id="${s.id}">
+      <div class="summary-row-main">
+        <strong>${esc(s.name || 'Zusammenfassung')}</strong>${s.paused ? ' <span class="summary-tag">pausiert</span>' : ''}
+        <div class="summary-row-sub">${summaryDaysLabel(s.weekdays)} · ${esc(s.time)} · ${s.cats.map(summaryCatLabel).map(esc).join(', ')}</div>
+      </div>
+      <div class="summary-row-actions">
+        <button class="btn btn-xs" data-sum="toggle" data-id="${s.id}">${s.paused ? 'Fortsetzen' : 'Pause'}</button>
+        <button class="btn btn-xs btn-outline" data-sum="edit" data-id="${s.id}">Bearbeiten</button>
+        <button class="btn btn-xs btn-danger" data-sum="del" data-id="${s.id}">Löschen</button>
+      </div>
+    </div>`).join('');
+
+  box.innerHTML = `
+    <div class="summary-head">
+      <h4>&#128340; Geplante Zusammenfassung</h4>
+      <label class="summary-pauseall"><input type="checkbox" id="sum-pause-all" ${data.pausedAll ? 'checked' : ''}> Alle pausieren</label>
+    </div>
+    <p class="push-hint">Erhalte zu festen Zeiten eine Übersicht offener Aufgaben – unabhängig von den Kategorie-Schaltern oben.</p>
+    <div class="summary-list">${rows || '<p class="push-hint">Noch keine Zusammenfassung angelegt.</p>'}</div>
+    <div id="sum-form"></div>
+    <button class="btn btn-sm btn-primary" id="sum-add">+ Zusammenfassung hinzufügen</button>`;
+
+  document.getElementById('sum-pause-all').addEventListener('change', async (e) => {
+    try { await api('PUT', '/api/push/summaries/pause-all', { paused: e.target.checked }); toast('Gespeichert', 'success'); initSummarySection(); }
+    catch (err) { toast(err.message || 'Fehler', 'error'); }
+  });
+  document.getElementById('sum-add').addEventListener('click', () => openSummaryForm(null));
+  box.querySelectorAll('[data-sum]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    const sched = (data.schedules || []).find(x => String(x.id) === String(id));
+    if (btn.dataset.sum === 'edit') { openSummaryForm(sched); return; }
+    if (btn.dataset.sum === 'toggle') {
+      try { await api('PUT', '/api/push/summaries/' + id, { paused: !sched.paused }); initSummarySection(); }
+      catch (err) { toast(err.message || 'Fehler', 'error'); }
+      return;
+    }
+    if (btn.dataset.sum === 'del') {
+      if (!(await confirmModal('Diese geplante Zusammenfassung löschen?', { title: 'Löschen', okLabel: 'Löschen' }))) return;
+      try { await api('DELETE', '/api/push/summaries/' + id); toast('Gelöscht', 'success'); initSummarySection(); }
+      catch (err) { toast(err.message || 'Fehler', 'error'); }
+    }
+  }));
+}
+
+function openSummaryForm(sched) {
+  const box = document.getElementById('sum-form');
+  if (!box) return;
+  const isEdit = !!sched;
+  const name = sched ? sched.name : '';
+  const days = sched ? sched.weekdays : [1, 2, 3, 4, 5];
+  const time = sched ? sched.time : '08:00';
+  const selCats = sched ? sched.cats : summaryCatOptions().map(c => c.key);
+  box.innerHTML = `
+    <div class="summary-form">
+      <input id="sf-name" class="form-control" maxlength="40" placeholder="Name (z. B. Einkaufen)" value="${esc(name)}">
+      <div class="sf-weekdays">${SUMMARY_WD.map(w => `<label><input type="checkbox" class="sf-wd" value="${w.n}" ${days.includes(w.n) ? 'checked' : ''}> ${w.l}</label>`).join('')}</div>
+      <label class="sf-time-label">Uhrzeit <input id="sf-time" type="time" class="form-control" value="${esc(time)}"></label>
+      <div class="sf-cats">${summaryCatOptions().map(c => `<label><input type="checkbox" class="sf-cat" value="${c.key}" ${selCats.includes(c.key) ? 'checked' : ''}> ${c.label}</label>`).join('')}</div>
+      <div class="sf-actions">
+        <button class="btn btn-sm btn-primary" id="sf-save">Speichern</button>
+        <button class="btn btn-sm btn-outline" id="sf-cancel">Abbrechen</button>
+      </div>
+    </div>`;
+  document.getElementById('sf-cancel').addEventListener('click', () => { box.innerHTML = ''; });
+  document.getElementById('sf-save').addEventListener('click', async () => {
+    const body = {
+      name: document.getElementById('sf-name').value.trim(),
+      weekdays: [...box.querySelectorAll('.sf-wd:checked')].map(cb => Number(cb.value)),
+      time: document.getElementById('sf-time').value,
+      cats: [...box.querySelectorAll('.sf-cat:checked')].map(cb => cb.value),
+    };
+    if (!body.weekdays.length) { toast('Mindestens einen Wochentag wählen', 'error'); return; }
+    if (!body.time) { toast('Uhrzeit wählen', 'error'); return; }
+    if (!body.cats.length) { toast('Mindestens eine Kategorie wählen', 'error'); return; }
+    try {
+      if (isEdit) await api('PUT', '/api/push/summaries/' + sched.id, body);
+      else await api('POST', '/api/push/summaries', body);
+      toast('Gespeichert', 'success');
+      initSummarySection();
+    } catch (err) { toast(err.message || 'Fehler', 'error'); }
   });
 }
 

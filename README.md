@@ -78,7 +78,18 @@ an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweilig
 | Urlaub genehmigt/abgelehnt bzw. Abwesenheit vom Chef bearbeitet | der betroffene Mitarbeiter |
 
 Pro Nutzer lassen sich die Kategorien (Abwesenheiten / Schwarzes Brett / Notizen, für Chef/Admin zusätzlich
-Bestellungen) einzeln ein- und ausschalten (wird sofort gespeichert). **Voraussetzung:** In der `.env`
+Bestellungen) einzeln ein- und ausschalten (wird sofort gespeichert).
+
+**Geplante Zusammenfassung (Digest):** Als Alternative zu den ereignisgetriebenen Pushes kann jeder Nutzer
+beliebig viele **Zusammenfassungen** anlegen (**+**) – je mit **Name** (z. B. „Einkaufen"), **Wochentagen**,
+**Uhrzeit** und **Kategorien**. Zur gewählten Zeit kommt **eine** Push mit den offenen To-dos, z. B.
+„Du hast noch 3 Bestellungen, 2 Abwesenheiten und 4 Notizen zu bearbeiten." bzw. **„Es gibt nichts zu tun."**
+(der Name wird zum Titel). So kann man die normalen Kategorie-Pushes ausschalten und sich stattdessen zu
+festen Zeiten erinnern lassen. Jeder Plan ist **bearbeitbar**, einzeln **pausierbar** (Pause/Fortsetzen) und
+löschbar; zusätzlich lassen sich mit **„Alle pausieren"** sämtliche Pläne auf einmal aussetzen (z. B. im
+Urlaub). Die Zusammenfassung wird **unabhängig** von den Kategorie-Schaltern zugestellt.
+
+**Voraussetzung:** In der `.env`
 müssen `VAPID_PUBLIC`/`VAPID_PRIVATE`/`VAPID_SUBJECT` gesetzt sein (siehe Konfiguration) – fehlen sie, ist
 Push inaktiv; die Benachrichtigungen-Karte zeigt dann statt des „Aktivieren"-Buttons einen Hinweis (für
 Admins mit Einrichtungstipp). **Auf iPhone/iPad** funktioniert Web Push nur, wenn die App über „Teilen → Zum

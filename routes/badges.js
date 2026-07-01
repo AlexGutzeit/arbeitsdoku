@@ -9,10 +9,11 @@ function getSeenAt(db, userId, topic) {
   return row ? row.seen_at : '2000-01-01 00:00:00';
 }
 
-router.get('/', authenticate, (req, res) => {
-  const db = getDb();
-  const uid = req.user.id;
-  const role = req.user.role;
+// Zähler je Kategorie für EINEN Nutzer (rollen-/seen-abhängig). Von GET / UND dem Zusammenfassungs-
+// Scheduler (scheduler.js) genutzt — Verhalten identisch zur bisherigen Route.
+function computeBadgeCounts(db, user) {
+  const uid = user.id;
+  const role = user.role;
 
   const bulletinSince = getSeenAt(db, uid, 'bulletin');
   const notesSince    = getSeenAt(db, uid, 'notes');
@@ -81,7 +82,11 @@ router.get('/', authenticate, (req, res) => {
     `).get(uid, statusSince).n;
   }
 
-  res.json({ bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount });
+  return { bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount };
+}
+
+router.get('/', authenticate, (req, res) => {
+  res.json(computeBadgeCounts(getDb(), req.user));
 });
 
 router.post('/:topic', authenticate, (req, res) => {
@@ -96,3 +101,4 @@ router.post('/:topic', authenticate, (req, res) => {
 });
 
 module.exports = router;
+module.exports.computeBadgeCounts = computeBadgeCounts;

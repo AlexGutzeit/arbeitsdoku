@@ -878,7 +878,29 @@ function ensurePushSchema(targetDb) {
         absences INTEGER DEFAULT 1,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
+      CREATE TABLE IF NOT EXISTS summary_schedules (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL,
+        name       TEXT NOT NULL DEFAULT '',
+        weekdays   TEXT NOT NULL DEFAULT '',
+        time       TEXT NOT NULL DEFAULT '08:00',
+        cats       TEXT NOT NULL DEFAULT '',
+        paused     INTEGER DEFAULT 0,
+        last_fired TEXT DEFAULT '',
+        created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
     `);
+    // Global-Pause je Nutzer (Urlaub): Spalte in push_prefs nachziehen (idempotent, alte DBs).
+    const cols = targetDb.prepare("PRAGMA table_info(push_prefs)").all();
+    if (!cols.some(c => c.name === 'summaries_paused')) {
+      targetDb.exec("ALTER TABLE push_prefs ADD COLUMN summaries_paused INTEGER DEFAULT 0");
+    }
+    // name-Spalte nachziehen, falls die Tabelle aus einer Vorversion ohne name stammt (idempotent).
+    const sCols = targetDb.prepare("PRAGMA table_info(summary_schedules)").all();
+    if (sCols.length && !sCols.some(c => c.name === 'name')) {
+      targetDb.exec("ALTER TABLE summary_schedules ADD COLUMN name TEXT NOT NULL DEFAULT ''");
+    }
   } catch (e) {
     console.error('ensurePushSchema fehlgeschlagen:', e.message);
   }
