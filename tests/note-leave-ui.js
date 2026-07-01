@@ -75,13 +75,19 @@ const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, {
     ok('Filter „OWNER": nur dessen Notiz, nicht die des Zweiten/eigene', await p.evaluate((s, s2, o) => !!document.querySelector(s) && !document.querySelector(s2) && !document.querySelector(o), sel, `.note-card[data-id="${note2.id}"]`, ownSel));
     await setOwner('u:' + O2.id);
     ok('Filter „ZWEITER": nur dessen Notiz', await p.evaluate((s, s2) => !document.querySelector(s) && !!document.querySelector(s2), sel, `.note-card[data-id="${note2.id}"]`));
-    await setOwner('');
 
-    await p.evaluate((s) => document.querySelector(s + ' .note-leave-btn').click(), sel); await sleep(300);
-    await p.evaluate(() => { const b = document.querySelector('.dialog-modal [data-act="ok"]'); if (b) b.click(); }); await sleep(900);
+    // Bugfix: Filter bleibt nach dem Verlassen/Neu-Rendern angewandt (nicht plötzlich komplette Liste).
+    await setOwner('shared');
+    const leave = async (s) => { await p.evaluate((x) => document.querySelector(x + ' .note-leave-btn').click(), s); await sleep(300); await p.evaluate(() => { const b = document.querySelector('.dialog-modal [data-act="ok"]'); if (b) b.click(); }); await sleep(900); };
+    await leave(sel); // OWNERs Notiz verlassen → re-render
+    ok('Nach Verlassen: Filter „Freigegeben" bleibt angewandt (eigene NICHT sichtbar)', await p.evaluate((o) => !document.querySelector(o), ownSel));
+    ok('  → OWNER-Notiz weg, ZWEITER-Notiz noch da', await p.evaluate((s, s2) => !document.querySelector(s) && !!document.querySelector(s2), sel, `.note-card[data-id="${note2.id}"]`));
 
-    ok('Notiz aus B-Liste verschwunden (DOM)', await p.evaluate((s) => !document.querySelector(s), sel));
-    ok('Notiz aus B-Liste verschwunden (API)', !((await req('GET','/api/notes', await tok('empf'))).body.notes || []).some(n => n.id === note.id));
+    // Guard: Filter auf einen Freigeber, dessen letzte Notiz entfernt wird → Reset auf „Alle"
+    await setOwner('u:' + O2.id);
+    await leave(`.note-card[data-id="${note2.id}"]`); // ZWEITERs einzige Notiz verlassen
+    ok('Guard: nach Entfernen der letzten ZWEITER-Notiz → Filter zurück auf „Alle" (eigene wieder sichtbar)', await p.evaluate((o) => !!document.querySelector(o) && document.getElementById('note-filter-owner').value === '', ownSel));
+    ok('Verlassene Notizen sind API-seitig weg', !((await req('GET','/api/notes', await tok('empf'))).body.notes || []).some(n => n.id === note.id || n.id === note2.id));
 
   } finally { if (browser) await browser.close(); srv.kill('SIGTERM'); }
   console.log(`\nNote-Leave-UI: ${pass} ok, ${fail} fehlgeschlagen`);

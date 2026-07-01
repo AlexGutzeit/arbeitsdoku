@@ -296,6 +296,11 @@ async function renderNotizen() {
     }
   }
   sharers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  // Steht der Filter auf einem Freigeber, der jetzt keine Notiz mehr hat (z. B. letzte entfernt),
+  // auf „Alle" zurücksetzen — sonst zeigt der Select einen nicht mehr existierenden Eintrag.
+  if (_notizenFilter.owner && _notizenFilter.owner.startsWith('u:') && !_seenOwners.has(Number(_notizenFilter.owner.slice(2)))) {
+    _notizenFilter.owner = '';
+  }
   const sharerOpts = sharers.map(s =>
     `<option value="u:${s.id}" ${_notizenFilter.owner === 'u:' + s.id ? 'selected' : ''}>${esc(s.name)}</option>`
   ).join('');
@@ -319,7 +324,7 @@ async function renderNotizen() {
         <input type="text" id="note-filter-search" class="form-control" placeholder="Suche..." value="${esc(_notizenFilter.search)}">
       </div>
       <div id="note-form-area"></div>
-      <div id="note-list">${renderNoteList(notes)}</div>
+      <div id="note-list">${renderNoteList(filterNotizen())}</div>
     </div>
   `;
 
