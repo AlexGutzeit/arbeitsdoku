@@ -233,7 +233,7 @@ function bindOrderedEvents(orders) {
 
 // --- Notizen ---
 let _notizen = [];
-let _notizenFilter = { projectId: '', search: '' };
+let _notizenFilter = { projectId: '', search: '', owner: '' };
 let _expandedNoteId = null;
 let _editingNoteLockId = null;
 
@@ -291,6 +291,11 @@ async function renderNotizen() {
       <h2 style="margin-bottom:1rem">Notizen</h2>
       ${offersHtml}
       <div class="note-filters">
+        <select id="note-filter-owner" class="form-control">
+          <option value="">Alle Notizen</option>
+          <option value="own" ${_notizenFilter.owner === 'own' ? 'selected' : ''}>Eigene</option>
+          <option value="shared" ${_notizenFilter.owner === 'shared' ? 'selected' : ''}>Freigegeben (von anderen)</option>
+        </select>
         <select id="note-filter-project" class="form-control">
           <option value="">Alle Projekte</option>
           <option value="none" ${_notizenFilter.projectId === 'none' ? 'selected' : ''}>Kein Projekt</option>
@@ -304,6 +309,11 @@ async function renderNotizen() {
   `;
 
   // Filter-Events
+  document.getElementById('note-filter-owner').addEventListener('change', (e) => {
+    _notizenFilter.owner = e.target.value;
+    document.getElementById('note-list').innerHTML = renderNoteList(filterNotizen());
+    bindNoteEvents();
+  });
   document.getElementById('note-filter-project').addEventListener('change', (e) => {
     _notizenFilter.projectId = e.target.value;
     document.getElementById('note-list').innerHTML = renderNoteList(filterNotizen());
@@ -340,6 +350,9 @@ async function renderNotizen() {
 
 function filterNotizen() {
   let list = _notizen;
+  const of = _notizenFilter.owner;
+  if (of === 'own') list = list.filter(n => n.user_id === S.user.id);
+  else if (of === 'shared') list = list.filter(n => n.user_id !== S.user.id);
   const pf = _notizenFilter.projectId;
   if (pf === 'none') {
     list = list.filter(n => !n.project_id && !n.project_text);

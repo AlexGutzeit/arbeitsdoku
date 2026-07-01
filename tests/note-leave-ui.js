@@ -34,10 +34,12 @@ const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, {
     const admin = await tok('admin', apw);
     const O = (await req('POST','/api/users', admin, { username:'owner', password:'test', name:'OWNER', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const B = (await req('POST','/api/users', admin, { username:'empf', password:'test', name:'EMPF', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const tO = await tok('owner');
+    const tO = await tok('owner'), tB = await tok('empf');
     const note = (await req('POST','/api/notes', tO, { title:'Geteilte UI-Notiz', body:'Inhalt' })).body.note;
     await req('PUT','/api/notes/'+note.id+'/shares', tO, { shares:[{ user_id:B.id, permission:'read' }] });
-    ok('Setup: Notiz geteilt mit B', !!note.id);
+    // B bekommt zusätzlich eine EIGENE Notiz (für den Owner-Filter)
+    const ownNote = (await req('POST','/api/notes', tB, { title:'Meine eigene UI-Notiz', body:'X' })).body.note;
+    ok('Setup: geteilte Notiz + eigene Notiz für B', !!note.id && !!ownNote.id);
 
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
     const p = await browser.newPage(); await p.setViewport({ width:1000, height:900 });
@@ -47,8 +49,18 @@ const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, {
     await p.evaluate(() => { location.hash = '#/notes'; }); await sleep(1200);
 
     const sel = `.note-card[data-id="${note.id}"]`;
+    const ownSel = `.note-card[data-id="${ownNote.id}"]`;
     ok('B sieht die geteilte Notiz', await p.evaluate((s) => !!document.querySelector(s), sel));
     ok('„Freigabe verlassen"-Button vorhanden', await p.evaluate((s) => !!document.querySelector(s + ' .note-leave-btn'), sel));
+
+    // Owner-Filter: Eigene → nur eigene Notiz; Freigegeben → nur geteilte Notiz; Alle → beide
+    const setOwner = async (v) => { await p.select('#note-filter-owner', v); await sleep(300); };
+    await setOwner('own');
+    ok('Filter „Eigene": eigene sichtbar, geteilte NICHT', await p.evaluate((o, s) => !!document.querySelector(o) && !document.querySelector(s), ownSel, sel));
+    await setOwner('shared');
+    ok('Filter „Freigegeben": geteilte sichtbar, eigene NICHT', await p.evaluate((o, s) => !document.querySelector(o) && !!document.querySelector(s), ownSel, sel));
+    await setOwner('');
+    ok('Filter „Alle": beide sichtbar', await p.evaluate((o, s) => !!document.querySelector(o) && !!document.querySelector(s), ownSel, sel));
 
     await p.evaluate((s) => document.querySelector(s + ' .note-leave-btn').click(), sel); await sleep(300);
     await p.evaluate(() => { const b = document.querySelector('.dialog-modal [data-act="ok"]'); if (b) b.click(); }); await sleep(900);
