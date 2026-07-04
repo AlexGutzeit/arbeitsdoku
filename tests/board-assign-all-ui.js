@@ -50,6 +50,12 @@ const inColumn = (p, colName, projName) => p.evaluate((cn, pn) => {
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]'); await sleep(300);
     await p.evaluate(()=>{ location.hash='#/projects'; }); await sleep(1200);
 
+    // Ohne Zuweisung: nur Mitarbeiter haben eine Spalte; Chef/Buchhalter NICHT (wie Planung)
+    const headHas = (n) => p.evaluate(n => [...document.querySelectorAll('.board-col-head')].some(h => h.textContent.includes(n)), n);
+    ok('Mitarbeiter-Spalte auch ohne Zuweisung vorhanden', await headHas('Mitarbeiter A'));
+    ok('Chef OHNE Zuweisung: KEINE Spalte', !(await headHas('Chef Zwei')));
+    ok('Buchhalter OHNE Zuweisung: KEINE Spalte', !(await headHas('Bucha Halter')));
+
     // Formular öffnen → Zuordnungstabelle prüfen
     await p.evaluate(()=>document.getElementById('fab-new').click()); await sleep(600);
     const boxes = await p.evaluate(()=> [...document.querySelectorAll('.pf2-assignee')].map(cb=>Number(cb.value)));
