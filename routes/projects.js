@@ -40,7 +40,8 @@ function setMilestones(db, projectId, arr) {
   for (const m of arr) {
     const title = (m && m.title != null ? String(m.title) : '').trim();
     if (!title) continue;
-    const days = Number(m && m.est_days);
+    // Dauer robust parsen: Komma ODER Punkt als Dezimaltrenner; ungültig/negativ → 1 (nie kaputte Werte).
+    const days = parseFloat(String(m && m.est_days != null ? m.est_days : '').replace(',', '.'));
     const est = (isFinite(days) && days >= 0) ? days : 1;
     const id = Number(m && m.id);
     if (id && existing.includes(id)) { upd.run(title, est, order, id, projectId); keep.add(id); }

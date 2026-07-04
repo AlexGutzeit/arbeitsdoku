@@ -1153,9 +1153,11 @@ async function exportProjectCsv(id) {
 // Zwischenziel-Status → Label + Farbe; Reihenfolge für die 3-Farb-Auswahl
 const MS_META = { offen: { label: 'offen', color: '#dc2626' }, doing: { label: 'in Arbeit', color: '#eab308' }, done: { label: 'erledigt', color: '#16a34a' } };
 const MS_ORDER = ['offen', 'doing', 'done'];
+// Dauer robust als Zahl (Komma ODER Punkt); ungültig → 0.
+const msDays = (v) => { const d = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(d) && d >= 0 ? d : 0; };
 // Fortschritt nach Dauer gewichtet (Ziel ohne Dauer zählt als 1 Tag)
 function projectProgress(ms) {
-  const w = m => (Number(m.est_days) > 0 ? Number(m.est_days) : 1);
+  const w = m => (msDays(m.est_days) > 0 ? msDays(m.est_days) : 1);
   const tot = ms.reduce((s, m) => s + w(m), 0) || 1;
   const sum = st => ms.filter(m => m.status === st).reduce((s, m) => s + w(m), 0);
   return { done: sum('done') / tot * 100, doing: sum('doing') / tot * 100, offen: sum('offen') / tot * 100 };
@@ -1229,7 +1231,7 @@ async function renderProjects() {
       const ctrl = canMs
         ? `<span class="ms-picker">${MS_ORDER.map(s => `<button type="button" class="ms-opt${m.status === s ? ' active' : ''}" data-id="${p.id}" data-mid="${m.id}" data-status="${s}" style="background:${MS_META[s].color}" title="${MS_META[s].label}"></button>`).join('')}</span>`
         : `<span class="ms-dot" style="background:${meta.color}" title="${meta.label}"></span>`;
-      return `<div class="ms-row">${ctrl}<span class="ms-title">${esc(m.title)}</span><span class="ms-days">${m.est_days} T</span></div>`;
+      return `<div class="ms-row">${ctrl}<span class="ms-title">${esc(m.title)}</span><span class="ms-days">${String(m.est_days).replace('.', ',')} T</span></div>`;
     }).join('');
     return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}${expanded ? ' expanded' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
       <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${flag}</div>
@@ -1386,7 +1388,7 @@ async function renderProjectForm(project) {
   const renderMsRows = () => {
     msListEl.innerHTML = msRows.map((r, i) => `<div class="ms-edit-row" data-idx="${i}">
       <input class="form-control ms-edit-title" data-idx="${i}" value="${esc(r.title || '')}" placeholder="z.B. Kabel verlegen">
-      <input type="number" class="form-control ms-edit-days" data-idx="${i}" value="${r.est_days != null ? r.est_days : 1}" min="0" step="0.5">
+      <input type="text" inputmode="decimal" class="form-control ms-edit-days" data-idx="${i}" value="${r.est_days != null ? String(r.est_days).replace('.', ',') : '1'}" placeholder="z.B. 1,5">
       <span class="ms-edit-unit">Tage</span>
       <button type="button" class="btn btn-sm btn-danger ms-edit-del" data-idx="${i}" title="Entfernen">&times;</button>
     </div>`).join('') || '<div class="push-hint">Noch keine Zwischenziele – mit „+ Zwischenziel" hinzufügen.</div>';
@@ -1409,6 +1411,10 @@ async function renderProjectForm(project) {
   document.getElementById('pf2-back').addEventListener('click', () => renderProjects());
   document.getElementById('pf2-nav').addEventListener('click', () => { const a = document.getElementById('pf2-address').value.trim(); if (a) openNav(a, { force: true }); else toast('Keine Adresse eingetragen', 'error'); });
   document.getElementById('pf2-save').addEventListener('click', async () => {
+    // Zwischenziele: Dauer als Komma ODER Punkt akzeptieren; ungültige Zahl → Abbruch mit Hinweis.
+    const msParsed = msRows.filter(r => (r.title || '').trim()).map(r => ({ id: r.id, title: r.title.trim(), est_days: parseFloat(String(r.est_days).replace(',', '.')) }));
+    const badMs = msParsed.find(m => !(m.est_days >= 0));
+    if (badMs) { toast(`Ungültige Dauer bei „${badMs.title}" – bitte eine Zahl ≥ 0 eingeben (z. B. 1,5).`, 'error'); return; }
     const body = {
       name: document.getElementById('pf2-name').value.trim(),
       client: document.getElementById('pf2-client').value.trim(),
@@ -1416,7 +1422,7 @@ async function renderProjectForm(project) {
       note: document.getElementById('pf2-note').value.trim(),
       urgency: document.getElementById('pf2-urgency').value,
       assigned_user_ids: [...document.querySelectorAll('.pf2-assignee:checked')].map(cb => Number(cb.value)),
-      milestones: msRows.filter(r => (r.title || '').trim()).map(r => ({ id: r.id, title: r.title.trim(), est_days: Number(r.est_days) })),
+      milestones: msParsed,
     };
     if (!body.name) { toast('Projektname ist erforderlich', 'error'); return; }
     try {
