@@ -63,6 +63,9 @@ async function tileAction(p, id, btnClass) {
 
     // ===== ADMIN =====
     await login(p, 'admin', apw); await goBoard(p);
+    const legend = await p.evaluate(() => { const l = document.querySelector('.board-legend'); return l ? l.textContent : ''; });
+    ok('Farb-Legende: Dringlichkeit (Dringend…Niedrig) + Fortschritt (erledigt/in Arbeit/offen)',
+      /Dringlichkeit/.test(legend) && /Dringend/.test(legend) && /Niedrig/.test(legend) && /Fortschritt/.test(legend) && /erledigt/.test(legend) && /in Arbeit/.test(legend) && /offen/.test(legend), legend.replace(/\s+/g,' ').trim());
     ok('Auftrag Alpha unter M1', await inColumn(p, 'M1', 'Auftrag Alpha'));
     ok('Auftrag Alpha auch unter M2 (Mehrfachzuweisung)', await inColumn(p, 'M2', 'Auftrag Alpha'));
     ok('Freier Auftrag unter „Nicht zugewiesen"', await inColumn(p, 'Nicht zugewiesen', 'Freier Auftrag'));

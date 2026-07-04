@@ -1219,6 +1219,16 @@ async function renderProjects() {
       <div class="board-col-body">${c.list.map(tileHtml).join('') || '<div class="board-empty">–</div>'}</div>
     </div>`).join('');
 
+  // Farb-Legende — getrennt für Dringlichkeit (Flagge/Ampel) und Fortschritt (Ziele/Balken),
+  // da dieselben Farben je Kontext etwas anderes bedeuten.
+  const legDot = (color) => `<span class="legend-dot" style="background:${color}"></span>`;
+  const legItem = (color, label) => `<span class="legend-item">${legDot(color)}${label}</span>`;
+  const legendHtml = `
+    <div class="board-legend">
+      <span class="legend-group"><span class="legend-label">Dringlichkeit:</span> ${PROJECT_URGENCY.map(u => legItem(u.color, u.label)).join('')}</span>
+      <span class="legend-group"><span class="legend-label">Fortschritt:</span> ${['done', 'doing', 'offen'].map(k => legItem(MS_META[k].color, MS_META[k].label)).join('')}</span>
+    </div>`;
+
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
     <div class="board-wrap">
@@ -1226,6 +1236,7 @@ async function renderProjects() {
         <h2>${showDone ? 'Erledigte Aufträge' : 'Projekte / Aufträge'}</h2>
         ${manage ? `<button class="btn btn-sm btn-outline" id="board-archive-toggle">${showDone ? '← Offene Aufträge' : 'Erledigte anzeigen'}</button>` : ''}
       </div>
+      ${legendHtml}
       <div class="board-scroll"><div class="board-columns">${colsHtml}</div></div>
     </div>`;
   // Im Archiv kein „Neues Projekt"-FAB anbieten

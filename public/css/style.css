@@ -1448,6 +1448,12 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .urg-opt { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.25); cursor: pointer; padding: 0; }
 .proj-tile-done { opacity: 0.82; }
 .board-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+/* Farb-Legende (Dringlichkeit + Fortschritt) */
+.board-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 1.4rem; font-size: 0.78rem; color: var(--text-light); padding: 0 0.25rem 0.6rem; }
+.legend-group { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0.2rem; }
+.legend-label { font-weight: 600; color: var(--text); margin-right: 0.2rem; }
+.legend-item { display: inline-flex; align-items: center; gap: 3px; margin-right: 0.5rem; }
+.legend-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.15); }
 /* Zwischenziele + Fortschrittsbalken */
 .ms-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--border); margin: 0.4rem 0; }
 .ms-bar span { display: block; height: 100%; }
