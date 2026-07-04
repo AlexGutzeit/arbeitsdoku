@@ -923,6 +923,8 @@ function ensureProjectSchema(targetDb) {
     add('done_at', 'TEXT');
     add('done_by', 'INTEGER');
     add('created_by', 'INTEGER');
+    add('deleted_at', 'TEXT');   // Soft-Delete (Papierkorb)
+    add('deleted_by', 'INTEGER');
     targetDb.exec(`
       CREATE TABLE IF NOT EXISTS project_assignments (
         project_id INTEGER NOT NULL,

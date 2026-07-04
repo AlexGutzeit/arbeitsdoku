@@ -1317,8 +1317,8 @@ async function renderProjects() {
   }));
   mainEl.querySelectorAll('.proj-del').forEach(b => b.addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (!(await confirmModal('Projekt wirklich löschen? Vorhandene Planungen/Zeitnachweise behalten den Namen.', { title: 'Projekt löschen', okLabel: 'Löschen' }))) return;
-    try { await api('DELETE', '/api/projects/' + pid(b)); toast('Projekt gelöscht', 'success'); renderProjects(); } catch (err) { toast(err.message, 'error'); }
+    if (!(await confirmModal('Projekt in den Papierkorb verschieben? Es lässt sich von dort (Chef/Admin) wiederherstellen.', { title: 'In den Papierkorb', okLabel: 'Löschen' }))) return;
+    try { await api('DELETE', '/api/projects/' + pid(b)); toast('In den Papierkorb verschoben', 'success'); renderProjects(); } catch (err) { toast(err.message, 'error'); }
   }));
 }
 

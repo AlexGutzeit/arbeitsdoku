@@ -683,6 +683,7 @@ function render() {
   else if (route.startsWith('/bulletin/edit/')) renderBulletinForm(route.split('/').pop());
   else if (route === '/welcome') renderWelcome();
   else if (route === '/notifications') renderNotifications();
+  else if (route === '/deleted-projects') renderDeletedProjects();
   else if (route === '/deleted-users') renderDeletedUsers();
   else if (route === '/' || route === '/dashboard') renderDashboard();
   else renderWelcome();

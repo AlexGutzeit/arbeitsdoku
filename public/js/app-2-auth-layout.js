@@ -224,13 +224,14 @@ function layout(content, activeNav) {
         ${showAudit ? `<a href="#/audit" class="${activeNav === 'audit' ? 'active' : ''}">
           <span class="icon">&#128220;</span> Audit-Log
         </a>` : ''}
-        <div class="nav-group${(activeNav === 'deleted-entries' || activeNav === 'deleted-absences' || activeNav === 'deleted-users') ? ' open' : ''}" id="nav-papierkorb">
+        <div class="nav-group${(activeNav === 'deleted-entries' || activeNav === 'deleted-absences' || activeNav === 'deleted-projects' || activeNav === 'deleted-users') ? ' open' : ''}" id="nav-papierkorb">
           <div class="nav-group-label" id="nav-papierkorb-label">
             <span class="icon">&#128465;</span> Papierkorb
             <span class="nav-caret">&#9656;</span>
           </div>
           <a href="#/deleted-entries" class="nav-subitem ${activeNav === 'deleted-entries' ? 'active' : ''}">Einträge</a>
           <a href="#/deleted-absences" class="nav-subitem ${activeNav === 'deleted-absences' ? 'active' : ''}">Abwesenheiten</a>
+          ${isChefOrAdmin() ? `<a href="#/deleted-projects" class="nav-subitem ${activeNav === 'deleted-projects' ? 'active' : ''}">Projekte</a>` : ''}
           ${showUsers ? `<a href="#/deleted-users" class="nav-subitem ${activeNav === 'deleted-users' ? 'active' : ''}">Mitarbeiter</a>` : ''}
         </div>
       </nav>

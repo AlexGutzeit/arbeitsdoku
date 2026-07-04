@@ -533,6 +533,57 @@ async function renderDeletedEntries() {
   });
 }
 
+// --- Gelöschte Projekte (Papierkorb). Nur Chef/Admin: wiederherstellen oder endgültig löschen ---
+async function renderDeletedProjects() {
+  if (!isChefOrAdmin()) { navigate('/'); return; }
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-projects');
+  bindLayout();
+
+  let data;
+  try { data = await api('GET', '/api/projects/deleted'); } catch (e) { toast(e.message, 'error'); return; }
+  const projects = (data && data.projects) || [];
+  const rows = projects.map(p => `<tr>
+    <td>${esc(p.name)}</td>
+    <td>${esc(p.client || '—')}</td>
+    <td>${(p.assigned_users || []).length ? esc(p.assigned_users.map(u => u.name).join(', ')) : '—'}</td>
+    <td style="color:var(--text-light);white-space:nowrap;">${esc(String(p.deleted_at || '').slice(0, 19))}</td>
+    <td>${esc(p.deleted_by_name || '—')}</td>
+    <td style="white-space:nowrap;">
+      <button class="btn btn-outline btn-sm restore-project" data-id="${p.id}" type="button">Wiederherstellen</button>
+      <button class="btn btn-danger btn-sm purge-project" data-id="${p.id}" data-name="${esc(p.name)}" type="button">Endgültig löschen</button>
+    </td>
+  </tr>`).join('');
+
+  const mainEl = document.querySelector('.main');
+  mainEl.innerHTML = `
+    <div style="max-width:1000px;margin:0 auto;">
+      <div class="card">
+        <h2 style="margin-bottom:0.5rem;">Gelöschte Projekte</h2>
+        <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;">
+          Gelöschte Aufträge liegen im Papierkorb – inkl. Zuweisungen und Zwischenzielen – und lassen sich
+          wiederherstellen. <strong>Endgültig löschen</strong> entfernt den Auftrag unwiderruflich; der
+          Projektname bleibt in vorhandenen Zeitnachweisen/Planungen als Freitext erhalten (die Statistik
+          rechnet die Stunden weiter mit). Nur Chef/Admin.
+        </p>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="width:100%;font-size:0.88rem;">
+            <thead><tr><th>Projekt</th><th>Kunde</th><th>Zugewiesen</th><th>Gelöscht am</th><th>Gelöscht von</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6" style="color:var(--text-light);">Keine gelöschten Projekte.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+  mainEl.querySelectorAll('.restore-project').forEach(btn => btn.addEventListener('click', async () => {
+    if (!(await confirmModal('Dieses Projekt wiederherstellen?', { title: 'Wiederherstellen', okLabel: 'Wiederherstellen', danger: false }))) return;
+    try { await api('POST', '/api/projects/' + btn.dataset.id + '/restore'); toast('Projekt wiederhergestellt', 'success'); renderDeletedProjects(); } catch (err) { toast(err.message, 'error'); }
+  }));
+  mainEl.querySelectorAll('.purge-project').forEach(btn => btn.addEventListener('click', async () => {
+    if (!(await confirmModal(`„${btn.dataset.name}" wirklich ENDGÜLTIG löschen?\n\nZuweisungen und Zwischenziele werden unwiderruflich entfernt. Der Projektname bleibt in vorhandenen Zeitnachweisen/Planungen als Freitext erhalten.`, { title: 'Endgültig löschen', okLabel: 'Endgültig löschen', danger: true }))) return;
+    try { await api('DELETE', '/api/projects/' + btn.dataset.id + '/purge'); toast('Projekt endgültig gelöscht', 'success'); renderDeletedProjects(); } catch (err) { toast(err.message, 'error'); }
+  }));
+}
+
 // --- Gelöschte Abwesenheiten (Papierkorb). Chef/Admin: alle; Mitarbeiter: nur selbst gelöschte (Server filtert) ---
 async function renderDeletedAbsences() {
   if (!S.user) { navigate('/'); return; }
