@@ -1116,13 +1116,17 @@ const projUrg = (key) => PROJECT_URGENCY.find(u => u.key === key) || PROJECT_URG
 let _boardUsers = [];
 
 // Auftrags-Board: Mitarbeiter waagerecht, darunter ihre Aufträge nach Dringlichkeit (rot oben), tie = ältester oben.
+let _boardShowDone = false; // Chef/Admin: Archiv (erledigte Aufträge) einblenden
+
 async function renderProjects() {
+  const manage = isChefOrAdmin();
+  const showDone = _boardShowDone && manage;
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'projects');
   bindLayout();
 
   let projects = [];
   try {
-    const [pData, uData] = await Promise.all([api('GET', '/api/projects'), api('GET', '/api/users/list')]);
+    const [pData, uData] = await Promise.all([api('GET', '/api/projects' + (showDone ? '?done=1' : '')), api('GET', '/api/users/list')]);
     if (!pData) return;
     projects = pData.projects || [];
     _boardUsers = (uData && uData.users) || [];
@@ -1147,24 +1151,30 @@ async function renderProjects() {
     ...cols.map(c => ({ id: c.id, name: c.name, list: sortTiles(byUser[c.id] || []) }))];
 
   const canPlanTake = canEditPlanning();
-  const manage = isChefOrAdmin();
+  const urgOpts = (p) => PROJECT_URGENCY.map(o => `<button type="button" class="urg-opt" data-id="${p.id}" data-urg="${o.key}" style="background:${o.color}" title="${o.label}"></button>`).join('');
   const tileHtml = (p) => {
     const u = projUrg(p.urgency);
-    return `<div class="proj-tile" data-id="${p.id}" style="border-left:5px solid ${u.color}">
-      <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span><span class="proj-flag" style="background:${u.color}" title="${u.label}"></span></div>
+    // Dringlichkeitsampel: Chef/Admin können die Farbe direkt (ohne „Bearbeiten") ändern.
+    const flag = (manage && !showDone)
+      ? `<span class="proj-flag-wrap"><button type="button" class="proj-flag proj-flag-btn" data-id="${p.id}" style="background:${u.color}" title="Dringlichkeit ändern (${u.label})"></button><span class="urg-picker" style="display:none">${urgOpts(p)}</span></span>`
+      : `<span class="proj-flag" style="background:${u.color}" title="${u.label}"></span>`;
+    const actions = showDone
+      ? `${manage ? `<button class="btn btn-xs btn-success proj-reopen" data-id="${p.id}">Wieder öffnen</button>` : ''}
+         ${manage ? `<button class="btn btn-xs btn-danger proj-del" data-id="${p.id}">Löschen</button>` : ''}`
+      : `${canPlanTake ? `<button class="btn btn-xs btn-primary proj-plan" data-id="${p.id}">In Planung übernehmen</button>` : ''}
+         <button class="btn btn-xs proj-entry" data-id="${p.id}">Als Zeitnachweis übernehmen</button>
+         ${manage ? `<button class="btn btn-xs btn-outline proj-edit" data-id="${p.id}">Bearbeiten</button>` : ''}
+         ${manage ? `<button class="btn btn-xs btn-success proj-done" data-id="${p.id}">Erledigt</button>` : ''}
+         ${manage ? `<button class="btn btn-xs btn-danger proj-del" data-id="${p.id}">Löschen</button>` : ''}`;
+    return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
+      <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${flag}</div>
       ${p.client ? `<div class="proj-client">${esc(p.client)}</div>` : ''}
       <div class="proj-detail" style="display:none">
         ${p.note ? `<p class="proj-note">${esc(p.note)}</p>` : ''}
         ${p.address ? `<div class="proj-addr">&#128205; ${esc(p.address)} <button class="btn btn-xs proj-nav" data-addr="${esc(p.address)}" title="Navigieren">&#128506;</button></div>` : ''}
-        <div class="proj-meta">Dringlichkeit: ${u.label} · erstellt ${formatDateTimeDE(p.created_at)}</div>
+        <div class="proj-meta">Dringlichkeit: ${u.label} · erstellt ${formatDateTimeDE(p.created_at)}${showDone && p.done_at ? ' · erledigt ' + formatDateTimeDE(p.done_at) : ''}</div>
         <div class="proj-meta">Für: ${(p.assigned_users && p.assigned_users.length) ? p.assigned_users.map(x => esc(x.name)).join(', ') : '– (nicht zugewiesen)'}</div>
-        <div class="proj-actions">
-          ${canPlanTake ? `<button class="btn btn-xs btn-primary proj-plan" data-id="${p.id}">In Planung übernehmen</button>` : ''}
-          <button class="btn btn-xs proj-entry" data-id="${p.id}">Als Zeitnachweis übernehmen</button>
-          ${manage ? `<button class="btn btn-xs btn-outline proj-edit" data-id="${p.id}">Bearbeiten</button>` : ''}
-          ${manage ? `<button class="btn btn-xs btn-success proj-done" data-id="${p.id}">Erledigt</button>` : ''}
-          ${manage ? `<button class="btn btn-xs btn-danger proj-del" data-id="${p.id}">Löschen</button>` : ''}
-        </div>
+        <div class="proj-actions">${actions}</div>
       </div>
     </div>`;
   };
@@ -1178,23 +1188,47 @@ async function renderProjects() {
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
     <div class="board-wrap">
-      <div class="board-head"><h2>Projekte / Aufträge</h2></div>
+      <div class="board-head">
+        <h2>${showDone ? 'Erledigte Aufträge' : 'Projekte / Aufträge'}</h2>
+        ${manage ? `<button class="btn btn-sm btn-outline" id="board-archive-toggle">${showDone ? '← Offene Aufträge' : 'Erledigte anzeigen'}</button>` : ''}
+      </div>
       <div class="board-scroll"><div class="board-columns">${colsHtml}</div></div>
     </div>`;
+  // Im Archiv kein „Neues Projekt"-FAB anbieten
+  if (showDone) { const fab = document.getElementById('fab-new'); if (fab) fab.style.display = 'none'; }
 
   // Kachel auf-/zuklappen
   mainEl.querySelectorAll('.proj-tile').forEach(tile => {
     tile.addEventListener('click', (e) => {
       if (e.target.closest('button')) return;
+      mainEl.querySelectorAll('.urg-picker').forEach(x => x.style.display = 'none');
       const det = tile.querySelector('.proj-detail');
       if (det) det.style.display = det.style.display === 'none' ? 'block' : 'none';
     });
   });
   const pid = (b) => b.dataset.id;
+  const at = document.getElementById('board-archive-toggle');
+  if (at) at.addEventListener('click', () => { _boardShowDone = !_boardShowDone; renderProjects(); });
   mainEl.querySelectorAll('.proj-nav').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); openNav(b.dataset.addr); }));
   mainEl.querySelectorAll('.proj-plan').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); navigate('/planning/from-project/' + pid(b)); }));
   mainEl.querySelectorAll('.proj-entry').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); navigate('/entry/from-project/' + pid(b)); }));
   mainEl.querySelectorAll('.proj-edit').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); renderProjectForm(S.projects.find(x => x.id == pid(b))); }));
+  // Dringlichkeitsampel: Flag öffnet Farbauswahl; Klick auf Farbe speichert direkt
+  mainEl.querySelectorAll('.proj-flag-btn').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const pick = b.parentElement.querySelector('.urg-picker');
+    const open = pick.style.display !== 'none';
+    mainEl.querySelectorAll('.urg-picker').forEach(x => x.style.display = 'none');
+    pick.style.display = open ? 'none' : 'inline-flex';
+  }));
+  mainEl.querySelectorAll('.urg-opt').forEach(b => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try { await api('PUT', '/api/projects/' + b.dataset.id, { urgency: b.dataset.urg }); toast('Dringlichkeit geändert', 'success'); renderProjects(); } catch (err) { toast(err.message, 'error'); }
+  }));
+  mainEl.querySelectorAll('.proj-reopen').forEach(b => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try { await api('POST', '/api/projects/' + pid(b) + '/reopen'); toast('Wieder geöffnet', 'success'); renderProjects(); } catch (err) { toast(err.message, 'error'); }
+  }));
   mainEl.querySelectorAll('.proj-done').forEach(b => b.addEventListener('click', async (e) => {
     e.stopPropagation();
     if (!(await confirmModal('Auftrag als erledigt markieren? Er verschwindet vom Board (bleibt archiviert).', { title: 'Erledigt', okLabel: 'Erledigt', danger: false }))) return;

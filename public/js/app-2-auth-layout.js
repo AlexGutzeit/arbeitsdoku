@@ -96,6 +96,7 @@ function _sseOnMessage(e) {
   if (p.type === 'bulletin' && route === '/bulletin')                            renderBulletin();
   if (p.type === 'planning' && route === '/planning')                            renderPlanningContent();
   if (p.type === 'tools'    && route === '/tools')                               renderTools();
+  if (p.type === 'projects' && route === '/projects')                            renderProjects();
   if (p.type === 'entries'  && route === '/statistics')                          renderStatistics();
   if ((p.type === 'planning' || p.type === 'bulletin') && route === '/welcome')  renderWelcome();
   if (p.type === 'bulletin'  && route !== '/bulletin')  loadBadges();

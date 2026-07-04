@@ -1442,6 +1442,12 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .proj-addr { font-size: 0.82rem; margin-bottom: 0.3rem; }
 .proj-meta { font-size: 0.78rem; color: var(--text-light); margin-bottom: 0.2rem; }
 .proj-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
+.proj-flag-wrap { display: inline-flex; align-items: center; gap: 4px; }
+.proj-flag-btn { border: 1px solid rgba(0,0,0,0.18); cursor: pointer; padding: 0; }
+.urg-picker { display: inline-flex; gap: 4px; margin-left: 4px; }
+.urg-opt { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.25); cursor: pointer; padding: 0; }
+.proj-tile-done { opacity: 0.82; }
+.board-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .welcome-task {
   display: flex;
   align-items: flex-start;
