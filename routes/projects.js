@@ -170,6 +170,41 @@ router.get('/:id/stats', authenticate, (req, res) => {
   res.json({ per_user: rows, total_hours, total_entries });
 });
 
+// CSV-Export: jeder einzelne Zeiteintrag zum Auftrag, nach Datum sortiert, + Summe der Netto-Stunden.
+// Gleiche Zuordnung wie die Statistik (project_id ODER Freitext-Name, alle Bucher außer Admin). Nur Manager.
+router.get('/:id/entries.csv', authenticate, (req, res) => {
+  if (req.user.role === 'mitarbeiter') return res.status(403).json({ error: 'Keine Berechtigung' });
+  const db = getDb();
+  const project = db.prepare('SELECT id, name FROM projects WHERE id = ?').get(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Projekt nicht gefunden' });
+  const rows = db.prepare(`
+    SELECT u.name AS user_name, e.date, e.time_from, e.time_to, e.break_minutes, e.net_hours
+    FROM entries e JOIN users u ON u.id = e.user_id
+    WHERE (e.project_id = ? OR (e.project_text = ? AND e.project_text <> '')) AND u.role <> 'admin'
+    ORDER BY e.date ASC, e.time_from ASC
+  `).all(project.id, project.name);
+
+  const cell = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const deNum = (n) => String(Math.round((Number(n) || 0) * 100) / 100).replace('.', ',');
+  const deDate = (d) => { const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]}` : String(d); };
+  const lines = [];
+  lines.push(['Projekt', project.name].map(cell).join(';'));
+  lines.push('');
+  lines.push(['Benutzer', 'Datum', 'Uhrzeit (von-bis)', 'Pause (min)', 'Netto (h)'].map(cell).join(';'));
+  let total = 0;
+  for (const r of rows) {
+    total += Number(r.net_hours) || 0;
+    lines.push([r.user_name, deDate(r.date), `${r.time_from}-${r.time_to}`, r.break_minutes || 0, deNum(r.net_hours)].map(cell).join(';'));
+  }
+  lines.push(['Gesamt', '', '', '', deNum(total)].map(cell).join(';'));
+  const csv = '﻿' + lines.join('\r\n'); // BOM für Excel-UTF-8
+
+  const safe = (project.name || 'projekt').replace(/[^\w\-]+/g, '_').slice(0, 40) || 'projekt';
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="Projekt_${safe}_${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.send(csv);
+});
+
 // Status eines Zwischenziels setzen (offen|doing|done) — Zugeteilte ODER Chef/Admin.
 router.patch('/:id/milestones/:mid/status', authenticate, (req, res) => {
   const db = getDb();

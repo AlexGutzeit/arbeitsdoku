@@ -66,11 +66,12 @@ const hoursOf = (s, name) => { const r = (s.per_user||[]).find(x=>x.name===name)
     ok('Buchhalter GET stats → 200', (await req('GET','/api/projects/'+proj.id+'/stats', tb)).status===200);
     ok('Chef GET stats → 200', (await req('GET','/api/projects/'+proj.id+'/stats', tc)).status===200);
 
-    // Löschen → Freitext → gleichnamig neu anlegen → Alt-Stunden bleiben über Name-Match
+    // Löschen (soft) → endgültig löschen (Name → Freitext) → gleichnamig neu anlegen → Alt-Stunden bleiben
     const projB = (await req('POST','/api/projects', admin, { name:'Bau B' })).body.project;
     await req('POST','/api/entries', tm1, { date:'2026-09-01', time_from:'07:00', time_to:'12:00', break_minutes:0, project_id:projB.id }); // 5
     ok('Vor Löschung: Bau B hat 5 h', (await stats(admin, projB.id)).total_hours===5);
-    await req('DELETE','/api/projects/'+projB.id, admin); // Name wandert in Freitext der Einträge
+    await req('DELETE','/api/projects/'+projB.id, admin);          // soft → Papierkorb
+    await req('DELETE','/api/projects/'+projB.id+'/purge', admin); // endgültig → Name wandert in Freitext
     const projB2 = (await req('POST','/api/projects', admin, { name:'Bau B' })).body.project; // neue id
     ok('Neu angelegtes gleichnamiges Projekt hat andere id', projB2.id !== projB.id);
     const s2 = await stats(admin, projB2.id);

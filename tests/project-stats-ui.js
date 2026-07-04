@@ -63,6 +63,7 @@ const hasStatsBtn = (p, pid) => p.evaluate(id => !!document.querySelector(`.proj
     const tbl = await p.evaluate(id => { const t = document.querySelector(`.proj-tile[data-id="${id}"] .proj-stats-table`); return t ? t.textContent : ''; }, pid);
     ok('Statistik-Tabelle zeigt Bucher + Gesamt', /M Eins/.test(tbl) && /Chef Zwei/.test(tbl) && /Gesamt/.test(tbl), tbl.replace(/\s+/g,' ').trim());
     ok('Netto-Stunden angezeigt (7:30 für m1)', /7:30/.test(tbl), tbl.replace(/\s+/g,' ').trim());
+    ok('CSV-Export-Button in der Statistik vorhanden', await p.evaluate(id => !!document.querySelector(`.proj-tile[data-id="${id}"] .proj-csv-btn`), pid));
 
     // BUCHHALTER: sieht den Reiter
     await login(p, 'bh'); await goBoard(p); await expand(p, pid);

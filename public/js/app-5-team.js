@@ -1129,8 +1129,25 @@ async function loadProjStats(id, container) {
     container.innerHTML = '<table class="proj-stats-table"><tbody>'
       + rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${fmtH(r.hours)} h</td><td class="num muted">${r.entries}×</td></tr>`).join('')
       + `<tr class="total"><td>Gesamt</td><td class="num">${fmtH(data.total_hours)} h</td><td class="num muted">${data.total_entries}×</td></tr>`
-      + '</tbody></table>';
+      + '</tbody></table>'
+      + `<button type="button" class="btn btn-sm btn-outline proj-csv-btn" data-id="${id}">&#11015; CSV-Export</button>`;
+    const csvBtn = container.querySelector('.proj-csv-btn');
+    if (csvBtn) csvBtn.addEventListener('click', (e) => { e.stopPropagation(); exportProjectCsv(id); });
   } catch (e) { container.innerHTML = '<div class="proj-meta">Fehler beim Laden.</div>'; }
+}
+
+// CSV-Download aller Einzeleinträge eines Auftrags (server-generiert, wie der Audit-Export).
+async function exportProjectCsv(id) {
+  try {
+    const res = await fetch('/api/projects/' + id + '/entries.csv', { headers: { Authorization: 'Bearer ' + S.token } });
+    if (!res.ok) { toast('Export fehlgeschlagen', 'error'); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = ((res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || ('projekt-' + id + '.csv');
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { toast('Export fehlgeschlagen', 'error'); }
 }
 
 // Zwischenziel-Status → Label + Farbe; Reihenfolge für die 3-Farb-Auswahl
