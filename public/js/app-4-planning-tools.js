@@ -602,7 +602,10 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
     planDays = groupEntries.map(e => ({ date: e.date, time_from: e.time_from, time_to: e.time_to, break_minutes: e.break_minutes }));
   } else if (isEdit) {
     planDays = [{ date: entry.date, time_from: entry.time_from, time_to: entry.time_to, break_minutes: entry.break_minutes }];
-  } else if (!source) {
+  } else if (!source || projectSource) {
+    // Neue Planung ODER „In Planung übernehmen" (Projekt-Quelle): heute als Standardtag vorbelegen,
+    // damit die Übernahme mit einem Klick speicherbar ist. „Auftrag erneut planen" (replanEntry) bleibt
+    // bewusst ohne Tag — dort wählt der Planer neue Termine.
     const today = formatDateISO(S.planningDate || new Date());
     planDays = [{ date: today, time_from: '07:00', time_to: '15:30', break_minutes: 30 }];
   }
