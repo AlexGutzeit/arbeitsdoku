@@ -1458,6 +1458,7 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .ms-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--border); margin: 0.4rem 0; }
 .ms-bar span { display: block; height: 100%; }
 .ms-bar-slim { height: 6px; margin: 0.35rem 0 0; }
+.proj-tile.expanded .ms-bar-slim { display: none; } /* aufgeklappt: nur der volle Balken im Detail */
 .ms-list { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.5rem 0 0.2rem; }
 .ms-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; }
 .ms-title { flex: 1; overflow-wrap: anywhere; }

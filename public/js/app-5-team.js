@@ -1197,7 +1197,7 @@ async function renderProjects() {
         : `<span class="ms-dot" style="background:${meta.color}" title="${meta.label}"></span>`;
       return `<div class="ms-row">${ctrl}<span class="ms-title">${esc(m.title)}</span><span class="ms-days">${m.est_days} T</span></div>`;
     }).join('');
-    return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
+    return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}${expanded ? ' expanded' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
       <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${flag}</div>
       ${p.client ? `<div class="proj-client">${esc(p.client)}</div>` : ''}
       ${prog ? msBar(prog, 'ms-bar-slim') : ''}
@@ -1251,6 +1251,7 @@ async function renderProjects() {
       if (!det) return;
       const open = det.style.display === 'none';
       det.style.display = open ? 'block' : 'none';
+      tile.classList.toggle('expanded', open);
       if (open) _expandedProjects.add(String(tile.dataset.id)); else _expandedProjects.delete(String(tile.dataset.id));
     });
   });
