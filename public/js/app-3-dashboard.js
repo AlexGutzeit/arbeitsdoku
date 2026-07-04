@@ -698,10 +698,11 @@ function navDate(dir) {
 }
 
 // --- Entry Form ---
-async function renderEntryForm(editId, continueId, planningId) {
+async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   let entry = null;
   let continueEntry = null;
   let planningEntry = null;
+  let projectSource = null;
 
   if (editId) {
     try {
@@ -724,6 +725,16 @@ async function renderEntryForm(editId, continueId, planningId) {
     } catch (e) {}
   }
 
+  if (fromProjectId) {
+    try {
+      const data = await api('GET', '/api/projects/' + fromProjectId);
+      if (data && data.project) {
+        const pr = data.project;
+        projectSource = { address: pr.address || '', client: pr.client || '', project_id: pr.id, project_text: '', description: pr.note || '' };
+      }
+    } catch (e) {}
+  }
+
   // Projekte und Benutzerliste laden
   let regieUsers = [];
   try {
@@ -739,9 +750,9 @@ async function renderEntryForm(editId, continueId, planningId) {
   } catch (e) {}
 
   const isEdit = !!entry;
-  const source = continueEntry || planningEntry;
+  const source = continueEntry || planningEntry || projectSource;
   const today = formatDateISO(new Date());
-  const title = isEdit ? 'Eintrag bearbeiten' : (planningEntry ? 'Eintrag aus Planung erstellen' : (continueEntry ? 'Weiter arbeiten' : 'Neuer Eintrag'));
+  const title = isEdit ? 'Eintrag bearbeiten' : (projectSource ? 'Auftrag als Zeitnachweis übernehmen' : (planningEntry ? 'Eintrag aus Planung erstellen' : (continueEntry ? 'Weiter arbeiten' : 'Neuer Eintrag')));
 
   const nowTime = `${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}`;
   const date = isEdit ? entry.date : today;
@@ -752,7 +763,7 @@ async function renderEntryForm(editId, continueId, planningId) {
   const client = isEdit ? entry.client : (source ? source.client : '');
   const projectId = isEdit ? (entry.project_id || '') : (source ? (source.project_id || '') : '');
   const projectText = isEdit ? (entry.project_text || '') : (source ? (source.project_text || '') : '');
-  const description = isEdit ? entry.description : (planningEntry ? planningEntry.description : '');
+  const description = isEdit ? entry.description : (projectSource ? (projectSource.description || '') : (planningEntry ? planningEntry.description : ''));
   const personalNote = isEdit ? (entry.personal_note || '') : '';
   const regieVal = isEdit ? (entry.has_regie || 0) : 0;
   const regieUserId = isEdit ? (entry.regie_user_id || S.user.id) : S.user.id;
@@ -896,11 +907,13 @@ async function renderEntryForm(editId, continueId, planningId) {
 
   document.getElementById('ef-break').addEventListener('input', updateNet);
 
-  // Projekt-Auswahl: Adresse übernehmen + Freitext steuern
+  // Projekt-Auswahl: Adresse/Kunde/Notiz übernehmen + Freitext steuern
   document.getElementById('ef-project').addEventListener('change', (e) => {
     const proj = S.projects.find(p => p.id == e.target.value);
-    if (proj && proj.address) {
-      document.getElementById('ef-address').value = proj.address;
+    if (proj) {
+      if (proj.address) document.getElementById('ef-address').value = proj.address;
+      if (proj.client) document.getElementById('ef-client').value = proj.client;
+      if (proj.note) document.getElementById('ef-desc').value = proj.note;
     }
     const ft = document.getElementById('ef-project-text');
     if (e.target.value) {

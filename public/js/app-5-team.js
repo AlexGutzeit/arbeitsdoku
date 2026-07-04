@@ -1105,90 +1105,162 @@ async function loadUserTargets(userId) {
 }
 
 // --- Projects ---
-async function renderProjects() {
-  if (!canManageProjects()) { navigate('/'); return; }
+// Dringlichkeitsstufen (Farbe + Rang für die Sortierung: rot zuerst)
+const PROJECT_URGENCY = [
+  { key: 'rot',    label: 'Dringend', color: '#dc2626', rank: 0 },
+  { key: 'orange', label: 'Hoch',     color: '#ea580c', rank: 1 },
+  { key: 'gelb',   label: 'Mittel',   color: '#eab308', rank: 2 },
+  { key: 'gruen',  label: 'Niedrig',  color: '#16a34a', rank: 3 },
+];
+const projUrg = (key) => PROJECT_URGENCY.find(u => u.key === key) || PROJECT_URGENCY[2];
+let _boardUsers = [];
 
+// Auftrags-Board: Mitarbeiter waagerecht, darunter ihre Aufträge nach Dringlichkeit (rot oben), tie = ältester oben.
+async function renderProjects() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'projects');
   bindLayout();
 
+  let projects = [];
   try {
-    const data = await api('GET', '/api/projects');
-    if (!data) return;
-    S.projects = data.projects;
+    const [pData, uData] = await Promise.all([api('GET', '/api/projects'), api('GET', '/api/users/list')]);
+    if (!pData) return;
+    projects = pData.projects || [];
+    _boardUsers = (uData && uData.users) || [];
   } catch (e) { toast(e.message, 'error'); return; }
+  S.projects = projects;
+
+  // Gruppieren: unter jedem zugewiesenen User; ohne Zuweisung → „Nicht zugewiesen"
+  const byUser = {}; const unassigned = [];
+  for (const p of projects) {
+    if (!p.assigned_users || !p.assigned_users.length) unassigned.push(p);
+    else for (const u of p.assigned_users) (byUser[u.user_id] || (byUser[u.user_id] = [])).push(p);
+  }
+  const cols = _boardUsers.filter(u => u.role === 'mitarbeiter' && u.active !== 0).map(u => ({ id: u.id, name: u.name }));
+  const seen = new Set(cols.map(c => c.id));
+  for (const p of projects) for (const u of (p.assigned_users || [])) if (!seen.has(u.user_id)) { seen.add(u.user_id); cols.push({ id: u.user_id, name: u.name }); }
+  cols.sort((a, b) => a.name.localeCompare(b.name));
+
+  const sortTiles = (list) => [...list].sort((a, b) =>
+    (projUrg(a.urgency).rank - projUrg(b.urgency).rank) ||
+    (String(a.created_at) < String(b.created_at) ? -1 : (String(a.created_at) > String(b.created_at) ? 1 : 0)));
+  const columns = [{ id: 'unassigned', name: 'Nicht zugewiesen', list: sortTiles(unassigned) },
+    ...cols.map(c => ({ id: c.id, name: c.name, list: sortTiles(byUser[c.id] || []) }))];
+
+  const canPlanTake = canEditPlanning();
+  const manage = isChefOrAdmin();
+  const tileHtml = (p) => {
+    const u = projUrg(p.urgency);
+    return `<div class="proj-tile" data-id="${p.id}" style="border-left:5px solid ${u.color}">
+      <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span><span class="proj-flag" style="background:${u.color}" title="${u.label}"></span></div>
+      ${p.client ? `<div class="proj-client">${esc(p.client)}</div>` : ''}
+      <div class="proj-detail" style="display:none">
+        ${p.note ? `<p class="proj-note">${esc(p.note)}</p>` : ''}
+        ${p.address ? `<div class="proj-addr">&#128205; ${esc(p.address)} <button class="btn btn-xs proj-nav" data-addr="${esc(p.address)}" title="Navigieren">&#128506;</button></div>` : ''}
+        <div class="proj-meta">Dringlichkeit: ${u.label} · erstellt ${formatDateTimeDE(p.created_at)}</div>
+        <div class="proj-meta">Für: ${(p.assigned_users && p.assigned_users.length) ? p.assigned_users.map(x => esc(x.name)).join(', ') : '– (nicht zugewiesen)'}</div>
+        <div class="proj-actions">
+          ${canPlanTake ? `<button class="btn btn-xs btn-primary proj-plan" data-id="${p.id}">In Planung übernehmen</button>` : ''}
+          <button class="btn btn-xs proj-entry" data-id="${p.id}">Als Zeitnachweis übernehmen</button>
+          ${manage ? `<button class="btn btn-xs btn-outline proj-edit" data-id="${p.id}">Bearbeiten</button>` : ''}
+          ${manage ? `<button class="btn btn-xs btn-success proj-done" data-id="${p.id}">Erledigt</button>` : ''}
+          ${manage ? `<button class="btn btn-xs btn-danger proj-del" data-id="${p.id}">Löschen</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  };
+
+  const colsHtml = columns.map(c => `
+    <div class="board-col">
+      <div class="board-col-head">${esc(c.name)}${c.list.length ? ` <span class="board-count">${c.list.length}</span>` : ''}</div>
+      <div class="board-col-body">${c.list.map(tileHtml).join('') || '<div class="board-empty">–</div>'}</div>
+    </div>`).join('');
 
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
-    <div class="card" style="max-width:600px;margin:0 auto;">
-      <div class="card-header">
-        <h2>Projekte</h2>
-      </div>
-      <form id="add-project-form" style="display:flex;gap:0.5rem;margin-bottom:1rem;">
-        <input type="text" class="form-control" id="new-project-name" placeholder="Neues Projekt..." required>
-        <button type="submit" class="btn btn-primary">+</button>
-      </form>
-      <div id="projects-list">
-        ${S.projects.map(p => `
-          <div class="project-item" data-id="${p.id}">
-            <div class="project-header">
-              <span style="font-weight:500">${esc(p.name)}</span>
-              <div style="display:flex;gap:0.25rem;">
-                <button class="btn btn-sm btn-outline toggle-project-details" data-id="${p.id}" title="Bearbeiten">&#9998;</button>
-                <button class="btn btn-sm btn-danger del-project" data-id="${p.id}">Löschen</button>
-              </div>
-            </div>
-            <div class="project-details" id="project-details-${p.id}" style="display:none;">
-              <div class="form-group" style="margin:0.5rem 0 0;">
-                <label style="font-size:0.8rem">Adresse</label>
-                <input type="text" class="form-control form-control-sm project-address" data-id="${p.id}" value="${esc(p.address || '')}" placeholder="z.B. Musterstraße 1, 12345 Berlin">
-              </div>
-              <button class="btn btn-sm btn-primary save-project" data-id="${p.id}" style="margin-top:0.4rem">Speichern</button>
-            </div>
-          </div>
-        `).join('')}
-      </div>
+    <div class="board-wrap">
+      <div class="board-head"><h2>Projekte / Aufträge</h2></div>
+      <div class="board-scroll"><div class="board-columns">${colsHtml}</div></div>
     </div>`;
 
-  document.getElementById('add-project-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const name = document.getElementById('new-project-name').value.trim();
-    if (!name) return;
+  // Kachel auf-/zuklappen
+  mainEl.querySelectorAll('.proj-tile').forEach(tile => {
+    tile.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      const det = tile.querySelector('.proj-detail');
+      if (det) det.style.display = det.style.display === 'none' ? 'block' : 'none';
+    });
+  });
+  const pid = (b) => b.dataset.id;
+  mainEl.querySelectorAll('.proj-nav').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); openNav(b.dataset.addr); }));
+  mainEl.querySelectorAll('.proj-plan').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); navigate('/planning/from-project/' + pid(b)); }));
+  mainEl.querySelectorAll('.proj-entry').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); navigate('/entry/from-project/' + pid(b)); }));
+  mainEl.querySelectorAll('.proj-edit').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); renderProjectForm(S.projects.find(x => x.id == pid(b))); }));
+  mainEl.querySelectorAll('.proj-done').forEach(b => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!(await confirmModal('Auftrag als erledigt markieren? Er verschwindet vom Board (bleibt archiviert).', { title: 'Erledigt', okLabel: 'Erledigt', danger: false }))) return;
+    try { await api('POST', '/api/projects/' + pid(b) + '/done'); toast('Als erledigt markiert', 'success'); renderProjects(); } catch (err) { toast(err.message, 'error'); }
+  }));
+  mainEl.querySelectorAll('.proj-del').forEach(b => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!(await confirmModal('Projekt wirklich löschen? Vorhandene Planungen/Zeitnachweise behalten den Namen.', { title: 'Projekt löschen', okLabel: 'Löschen' }))) return;
+    try { await api('DELETE', '/api/projects/' + pid(b)); toast('Projekt gelöscht', 'success'); renderProjects(); } catch (err) { toast(err.message, 'error'); }
+  }));
+}
+
+// Projekt-Formular (Chef/Admin) — via FAB (neu) oder „Bearbeiten" (mit Projekt).
+async function renderProjectForm(project) {
+  if (!isChefOrAdmin()) { navigate('/projects'); return; }
+  if (!_boardUsers.length) { try { const uData = await api('GET', '/api/users/list'); _boardUsers = (uData && uData.users) || []; } catch (_) {} }
+  const isEdit = !!(project && project.id);
+  const p = project || { name: '', client: '', address: '', note: '', urgency: 'gelb', assigned_users: [] };
+  const assignedIds = new Set((p.assigned_users || []).map(u => u.user_id));
+  const workers = _boardUsers.filter(u => u.role === 'mitarbeiter' && (u.active !== 0 || assignedIds.has(u.id)));
+
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'projects');
+  bindLayout();
+  const fab = document.getElementById('fab-new'); if (fab) fab.style.display = 'none';
+  const mainEl = document.querySelector('.main');
+  mainEl.innerHTML = `
+    <div class="card" style="max-width:700px;margin:0 auto;">
+      <div class="card-header">
+        <h2>${isEdit ? 'Projekt bearbeiten' : 'Neues Projekt / Auftrag'}</h2>
+        <button class="btn btn-outline btn-sm" id="pf2-back">Zurück</button>
+      </div>
+      <div class="form-group"><label>Projektname *</label><input class="form-control" id="pf2-name" value="${esc(p.name)}"></div>
+      <div class="form-group"><label>Kunde</label><input class="form-control" id="pf2-client" value="${esc(p.client || '')}"></div>
+      <div class="form-group"><label>Adresse / Arbeitsort</label>
+        <div style="display:flex;gap:0.4rem;">
+          <input class="form-control" id="pf2-address" value="${esc(p.address || '')}" placeholder="z.B. Musterstraße 1, 12345 Berlin">
+          <button type="button" class="btn btn-outline" id="pf2-nav" title="Navigieren">&#128506;</button>
+        </div></div>
+      <div class="form-group"><label>Notiz</label><textarea class="form-control" id="pf2-note" rows="3">${esc(p.note || '')}</textarea></div>
+      <div class="form-group"><label>Dringlichkeit</label>
+        <select class="form-control" id="pf2-urgency">
+          ${PROJECT_URGENCY.map(u => `<option value="${u.key}" ${p.urgency === u.key ? 'selected' : ''}>${u.label}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label>Zugedachte Mitarbeiter</label>
+        <div class="planning-user-checkboxes">${workers.map(u => `<label><input type="checkbox" class="pf2-assignee" value="${u.id}" ${assignedIds.has(u.id) ? 'checked' : ''}> ${esc(u.name)}</label>`).join('') || '<span class="push-hint">Keine Mitarbeiter vorhanden</span>'}</div></div>
+      <button class="btn btn-primary btn-block" id="pf2-save">${isEdit ? 'Speichern' : 'Projekt erstellen'}</button>
+    </div>`;
+
+  document.getElementById('pf2-back').addEventListener('click', () => renderProjects());
+  document.getElementById('pf2-nav').addEventListener('click', () => { const a = document.getElementById('pf2-address').value.trim(); if (a) openNav(a, { force: true }); else toast('Keine Adresse eingetragen', 'error'); });
+  document.getElementById('pf2-save').addEventListener('click', async () => {
+    const body = {
+      name: document.getElementById('pf2-name').value.trim(),
+      client: document.getElementById('pf2-client').value.trim(),
+      address: document.getElementById('pf2-address').value.trim(),
+      note: document.getElementById('pf2-note').value.trim(),
+      urgency: document.getElementById('pf2-urgency').value,
+      assigned_user_ids: [...document.querySelectorAll('.pf2-assignee:checked')].map(cb => Number(cb.value)),
+    };
+    if (!body.name) { toast('Projektname ist erforderlich', 'error'); return; }
     try {
-      await api('POST', '/api/projects', { name });
-      toast('Projekt erstellt', 'success');
+      if (isEdit) await api('PUT', '/api/projects/' + project.id, body);
+      else await api('POST', '/api/projects', body);
+      toast('Gespeichert', 'success');
       renderProjects();
     } catch (err) { toast(err.message, 'error'); }
-  });
-
-  mainEl.querySelectorAll('.toggle-project-details').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const det = document.getElementById('project-details-' + btn.dataset.id);
-      det.style.display = det.style.display === 'none' ? 'block' : 'none';
-    });
-  });
-
-  mainEl.querySelectorAll('.save-project').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.id;
-      const address = mainEl.querySelector(`.project-address[data-id="${id}"]`).value;
-      const p = S.projects.find(p => p.id == id);
-      try {
-        await api('PUT', '/api/projects/' + id, { name: p.name, address });
-        toast('Projekt gespeichert', 'success');
-        renderProjects();
-      } catch (err) { toast(err.message, 'error'); }
-    });
-  });
-
-  mainEl.querySelectorAll('.del-project').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!(await confirmModal('Projekt wirklich löschen?', { title: 'Projekt löschen', okLabel: 'Löschen' }))) return;
-      try {
-        await api('DELETE', '/api/projects/' + btn.dataset.id);
-        toast('Projekt gelöscht', 'success');
-        renderProjects();
-      } catch (err) { toast(err.message, 'error'); }
-    });
   });
 }
 

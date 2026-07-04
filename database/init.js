@@ -415,6 +415,8 @@ async function initDatabase() {
 
   // Web-Push-Tabellen (idempotent, hier UND ueber ensurePushSchema im Restore-Pfad)
   ensurePushSchema(db);
+  // Auftrags-Board-Erweiterung (idempotent, hier UND im Restore-Pfad)
+  ensureProjectSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -835,6 +837,7 @@ function ensureAuditSchema(targetDb) {
   }
   ensureEmploymentSchema(targetDb);
   ensurePushSchema(targetDb);
+  ensureProjectSchema(targetDb);
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
@@ -903,6 +906,34 @@ function ensurePushSchema(targetDb) {
     }
   } catch (e) {
     console.error('ensurePushSchema fehlgeschlagen:', e.message);
+  }
+}
+
+// Auftrags-Board: projects um Kunde/Notiz/Dringlichkeit/Erledigt/Ersteller erweitern + n:m-Zuweisungen.
+// Rein additiv (guarded ALTERs; ADD COLUMN mit DEFAULT setzt Bestandszeilen mit — Altprojekte bekommen
+// urgency='gelb'). Idempotent, laeuft bei Init UND Restore. name-UNIQUE bleibt unangetastet.
+function ensureProjectSchema(targetDb) {
+  try {
+    const cols = targetDb.prepare("PRAGMA table_info(projects)").all().map(c => c.name);
+    const add = (name, def) => { if (!cols.includes(name)) targetDb.exec(`ALTER TABLE projects ADD COLUMN ${name} ${def}`); };
+    add('client', "TEXT DEFAULT ''");
+    add('note', "TEXT DEFAULT ''");
+    add('urgency', "TEXT DEFAULT 'gelb'");
+    add('done', 'INTEGER DEFAULT 0');
+    add('done_at', 'TEXT');
+    add('done_by', 'INTEGER');
+    add('created_by', 'INTEGER');
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS project_assignments (
+        project_id INTEGER NOT NULL,
+        user_id    INTEGER NOT NULL,
+        PRIMARY KEY (project_id, user_id),
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE
+      );
+    `);
+  } catch (e) {
+    console.error('ensureProjectSchema fehlgeschlagen:', e.message);
   }
 }
 

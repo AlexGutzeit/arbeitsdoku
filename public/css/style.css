@@ -1419,6 +1419,28 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .sf-time-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
 .sf-time-label input { max-width: 140px; }
 .sf-actions { display: flex; gap: 0.5rem; }
+
+/* Auftrags-Board (Projekte) */
+.board-wrap { max-width: none; }
+.board-head { padding: 0 0.25rem 0.5rem; }
+.board-head h2 { margin: 0; }
+.board-scroll { overflow-x: auto; padding-bottom: 0.5rem; }
+.board-columns { display: flex; gap: 0.75rem; align-items: flex-start; min-height: 60vh; }
+.board-col { flex: 0 0 220px; width: 220px; background: var(--bg-soft, #f5f6f8); border: 1px solid var(--border); border-radius: 10px; }
+.board-col-head { font-weight: 600; font-size: 0.9rem; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); }
+.board-count { color: var(--text-light); font-weight: 400; }
+.board-col-body { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.board-empty { color: var(--text-lighter); font-size: 0.85rem; text-align: center; padding: 0.5rem 0; }
+.proj-tile { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.6rem; cursor: pointer; }
+.proj-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.proj-name { font-weight: 600; font-size: 0.9rem; overflow-wrap: anywhere; }
+.proj-flag { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.proj-client { font-size: 0.82rem; color: var(--text-light); margin-top: 0.15rem; }
+.proj-detail { margin-top: 0.5rem; border-top: 1px dashed var(--border); padding-top: 0.5rem; }
+.proj-note { margin: 0 0 0.4rem; font-size: 0.85rem; white-space: pre-line; }
+.proj-addr { font-size: 0.82rem; margin-bottom: 0.3rem; }
+.proj-meta { font-size: 0.78rem; color: var(--text-light); margin-bottom: 0.2rem; }
+.proj-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
 .welcome-task {
   display: flex;
   align-items: flex-start;

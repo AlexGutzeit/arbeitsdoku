@@ -157,7 +157,7 @@ function stopSSE() {
 // --- Layout ---
 function layout(content, activeNav) {
   const showUsers = canManageUsers();
-  const showProjects = canManageProjects();
+  const showProjects = true; // Auftrags-Board für alle sichtbar (Verwaltung bleibt rollengated)
   const showSettings = canSeeSettings();
   const showAudit = isAdmin();
   const showNewEntry = canCreateEntries();
@@ -244,6 +244,7 @@ function layout(content, activeNav) {
     </div>
     <div class="main">${content}</div>
     ${activeNav === 'planning' ? (canEditPlanning() ? '<button class="fab" id="fab-new" title="Neue Planung">+</button>' : '')
+    : activeNav === 'projects' ? (isChefOrAdmin() ? '<button class="fab" id="fab-new" title="Neues Projekt">+</button>' : '')
     : activeNav === 'bulletin' ? (canEditBulletin() ? '<button class="fab" id="fab-new" title="Neuer Eintrag">+</button>' : '')
     : activeNav === 'notes' ? '<button class="fab" id="fab-new" title="Neue Notiz">+</button>'
     : activeNav === 'absences' ? '<button class="fab" id="fab-new" title="Neue Abwesenheit">+</button>'
@@ -284,6 +285,7 @@ function bindLayout() {
   if (fab) fab.addEventListener('click', () => {
     const route = getRoute();
     if (route === '/planning') navigate('/planning/new');
+    else if (route === '/projects') renderProjectForm(null);
     else if (route === '/bulletin') navigate('/bulletin/new');
     else if (route === '/notes') showNoteForm();
     else if (route === '/absences') showAbsenceForm(null, 'krank', null, null, null);

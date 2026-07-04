@@ -654,6 +654,7 @@ function render() {
   const route = getRoute();
   if (route.startsWith('/entry/new')) renderEntryForm();
   else if (route.startsWith('/entry/continue/')) renderEntryForm(null, route.split('/').pop());
+  else if (route.startsWith('/entry/from-project/')) renderEntryForm(null, null, null, route.split('/').pop());
   else if (route.startsWith('/entry/')) renderEntryForm(route.split('/').pop());
   else if (route === '/users') renderUsers();
   else if (route === '/projects') renderProjects();
@@ -670,6 +671,8 @@ function render() {
   else if (route.startsWith('/planning/edit/')) renderPlanningForm(route.split('/').pop());
   else if (route.startsWith('/planning/replan/')) renderPlanningForm(null, route.split('/').pop());
   else if (route.startsWith('/planning/accept/')) renderEntryForm(null, null, route.split('/').pop());
+  else if (route.startsWith('/planning/from-project/')) renderPlanningForm(null, null, null, route.split('/').pop());
+  else if (route.startsWith('/entry/from-project/')) renderEntryForm(null, null, null, route.split('/').pop());
   else if (route === '/tools') renderTools();
   else if (route === '/orders') renderOrders();
   else if (route === '/notes') renderNotizen();

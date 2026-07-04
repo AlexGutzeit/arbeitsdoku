@@ -534,12 +534,13 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
 }
 
 // --- Planning Form ---
-async function renderPlanningForm(editId, replanId, editGroupId) {
+async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) {
   suppressTooltip();
   let entry = null;
   let replanEntry = null;
   let groupEntries = null;
   let groupAssigned = null;
+  let projectSource = null;
 
   try {
     const pData = await api('GET', '/api/projects');
@@ -569,11 +570,22 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
     } catch (e) { toast(e.message, 'error'); navigate('/planning'); return; }
   }
 
+  if (fromProjectId) {
+    try {
+      const data = await api('GET', '/api/projects/' + fromProjectId);
+      if (data && data.project) {
+        const pr = data.project;
+        // Quelle wie ein Planungseintrag aufbauen → Adresse/Kunde/Projekt/Notiz/zugedachte User werden vorbefüllt.
+        projectSource = { address: pr.address || '', client: pr.client || '', project_id: pr.id, project_text: '', description: pr.note || '', assigned_users: pr.assigned_users || [] };
+      }
+    } catch (e) {}
+  }
+
   const isEdit = !!entry;
   const isGroupEdit = !!groupEntries;
-  const source = replanEntry;
+  const source = replanEntry || projectSource;
   const ref = entry || (groupEntries && groupEntries[0]) || source;
-  const title = isEdit ? 'Planung bearbeiten' : (isGroupEdit ? 'Planungsgruppe bearbeiten' : (source ? 'Auftrag erneut planen' : 'Neue Planung'));
+  const title = isEdit ? 'Planung bearbeiten' : (isGroupEdit ? 'Planungsgruppe bearbeiten' : (projectSource ? 'Auftrag in Planung übernehmen' : (source ? 'Auftrag erneut planen' : 'Neue Planung')));
   const assignedIds = entry ? entry.assigned_users.map(u => u.user_id) : (groupAssigned ? groupAssigned.map(u => u.user_id) : (source ? source.assigned_users.map(u => u.user_id) : []));
   // Neue Planung nur mit aktiven Mitarbeitern; bereits zugewiesene (evtl. inzwischen ausgestellte) bleiben erhalten
   const _assignedSet = new Set(assignedIds);
@@ -877,11 +889,13 @@ async function renderPlanningForm(editId, replanId, editGroupId) {
     refreshDateSection();
   });
 
-  // Projekt-Auswahl: Adresse übernehmen + Freitext steuern
+  // Projekt-Auswahl: Adresse/Kunde/Notiz übernehmen + Freitext steuern
   document.getElementById('pf-project').addEventListener('change', (e) => {
     const proj = S.projects.find(p => p.id == e.target.value);
-    if (proj && proj.address) {
-      document.getElementById('pf-address').value = proj.address;
+    if (proj) {
+      if (proj.address) document.getElementById('pf-address').value = proj.address;
+      if (proj.client) document.getElementById('pf-client').value = proj.client;
+      const d = document.getElementById('pf-desc'); if (d && proj.note) d.value = proj.note;
     }
     const ft = document.getElementById('pf-project-text');
     if (e.target.value) {
