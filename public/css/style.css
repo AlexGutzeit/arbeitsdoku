@@ -1424,10 +1424,11 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .board-wrap { max-width: none; }
 .board-head { padding: 0 0.25rem 0.5rem; }
 .board-head h2 { margin: 0; }
-.board-scroll { overflow-x: auto; padding-bottom: 0.5rem; }
-.board-columns { display: flex; gap: 0.75rem; align-items: flex-start; min-height: 60vh; }
-.board-col { flex: 0 0 220px; width: 220px; background: var(--bg-soft, #f5f6f8); border: 1px solid var(--border); border-radius: 10px; }
-.board-col-head { font-weight: 600; font-size: 0.9rem; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); }
+/* Board scrollt in SICH (beide Leisten bleiben im Bild) — wie .timeline-scroll; Spaltenköpfe kleben oben. */
+.board-scroll { overflow: auto; -webkit-overflow-scrolling: touch; max-height: calc(100vh - 160px); padding-bottom: 0.5rem; }
+.board-columns { display: flex; gap: 0.75rem; align-items: flex-start; }
+.board-col { flex: 0 0 220px; width: 220px; background: var(--bg-soft, #f5f6f8); border: 1px solid var(--border); border-radius: 10px; align-self: stretch; }
+.board-col-head { position: sticky; top: 0; z-index: 3; background: var(--bg-soft, #f5f6f8); font-weight: 600; font-size: 0.9rem; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); border-radius: 10px 10px 0 0; }
 .board-count { color: var(--text-light); font-weight: 400; }
 .board-col-body { padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .board-empty { color: var(--text-lighter); font-size: 0.85rem; text-align: center; padding: 0.5rem 0; }
