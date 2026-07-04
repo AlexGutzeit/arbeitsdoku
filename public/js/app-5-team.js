@@ -1115,6 +1115,23 @@ const PROJECT_URGENCY = [
 const projUrg = (key) => PROJECT_URGENCY.find(u => u.key === key) || PROJECT_URGENCY[2];
 let _boardUsers = [];
 let _expandedProjects = new Set(); // aufgeklappte Kacheln (überlebt Re-Render/SSE)
+let _statsOpen = new Set(); // Projekt-Kacheln mit geöffnetem Statistik-Reiter (Manager)
+
+// Auftrags-Statistik (gebuchte Netto-Stunden je Nutzer) lazy in einen Container laden.
+async function loadProjStats(id, container) {
+  if (!container) return;
+  container.innerHTML = '<div class="proj-meta">Lädt…</div>';
+  try {
+    const data = await api('GET', '/api/projects/' + id + '/stats');
+    if (!data) return;
+    const rows = data.per_user || [];
+    if (!rows.length) { container.innerHTML = '<div class="proj-meta">Noch keine Stunden gebucht.</div>'; return; }
+    container.innerHTML = '<table class="proj-stats-table"><tbody>'
+      + rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${fmtH(r.hours)} h</td><td class="num muted">${r.entries}×</td></tr>`).join('')
+      + `<tr class="total"><td>Gesamt</td><td class="num">${fmtH(data.total_hours)} h</td><td class="num muted">${data.total_entries}×</td></tr>`
+      + '</tbody></table>';
+  } catch (e) { container.innerHTML = '<div class="proj-meta">Fehler beim Laden.</div>'; }
+}
 
 // Zwischenziel-Status → Label + Farbe; Reihenfolge für die 3-Farb-Auswahl
 const MS_META = { offen: { label: 'offen', color: '#dc2626' }, doing: { label: 'in Arbeit', color: '#eab308' }, done: { label: 'erledigt', color: '#16a34a' } };
@@ -1208,6 +1225,7 @@ async function renderProjects() {
         <div class="proj-meta">Für: ${(p.assigned_users && p.assigned_users.length) ? p.assigned_users.map(x => esc(x.name)).join(', ') : '– (nicht zugewiesen)'}</div>
         ${ms.length ? `<div class="ms-list">${msList}</div>${msBar(prog)}<div class="proj-meta">${Math.round(prog.done)}% fertig · ${Math.round(prog.doing)}% in Arbeit · ${Math.round(prog.offen)}% offen</div>`
           : (manage ? '<div class="proj-meta">Noch keine Zwischenziele (unter „Bearbeiten" anlegen)</div>' : '')}
+        ${canViewAll() ? `<button type="button" class="proj-stats-btn" data-id="${p.id}">&#128202; Statistik ${_statsOpen.has(String(p.id)) ? '&#9652;' : '&#9662;'}</button><div class="proj-stats" data-id="${p.id}"></div>` : ''}
         <div class="proj-actions">${actions}</div>
       </div>
     </div>`;
@@ -1270,6 +1288,15 @@ async function renderProjects() {
     mainEl.querySelectorAll('.urg-picker').forEach(x => x.style.display = 'none');
     pick.style.display = open ? 'none' : 'inline-flex';
   }));
+  // Statistik-Reiter (Manager): auf-/zuklappen + lazy laden; offene nach Re-Render neu befüllen
+  mainEl.querySelectorAll('.proj-stats-btn').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = String(b.dataset.id);
+    const cont = b.parentElement.querySelector(`.proj-stats[data-id="${id}"]`);
+    if (_statsOpen.has(id)) { _statsOpen.delete(id); if (cont) cont.innerHTML = ''; b.innerHTML = '\u{1F4CA} Statistik ▾'; }
+    else { _statsOpen.add(id); b.innerHTML = '\u{1F4CA} Statistik ▴'; loadProjStats(id, cont); }
+  }));
+  mainEl.querySelectorAll('.proj-stats').forEach(c => { if (_statsOpen.has(String(c.dataset.id))) loadProjStats(c.dataset.id, c); });
   // Zwischenziel-Status setzen (Zugeteilte + Chef/Admin) — Kachel bleibt via _expandedProjects offen
   mainEl.querySelectorAll('.ms-opt').forEach(b => b.addEventListener('click', async (e) => {
     e.stopPropagation();

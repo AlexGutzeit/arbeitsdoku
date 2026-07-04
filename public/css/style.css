@@ -1471,6 +1471,13 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .ms-edit-title { flex: 1; }
 .ms-edit-days { width: 80px; flex-shrink: 0; }
 .ms-edit-unit { font-size: 0.82rem; color: var(--text-light); }
+/* Statistik-Reiter je Auftrag */
+.proj-stats-btn { background: none; border: none; color: var(--primary, #16a34a); cursor: pointer; padding: 0.4rem 0; font-size: 0.82rem; font-weight: 600; }
+.proj-stats-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 0.3rem; }
+.proj-stats-table td { padding: 0.15rem 0.2rem; border-bottom: 1px solid var(--border); }
+.proj-stats-table td.num { text-align: right; white-space: nowrap; }
+.proj-stats-table td.muted { color: var(--text-light); }
+.proj-stats-table tr.total td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: none; }
 .welcome-task {
   display: flex;
   align-items: flex-start;

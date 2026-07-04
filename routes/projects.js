@@ -138,6 +138,26 @@ router.post('/:id/reopen', authenticate, authorize('chef'), (req, res) => {
   res.json({ success: true });
 });
 
+// Auftrags-Statistik: gebuchte Netto-Stunden je Nutzer (alle Bucher außer Admin) — nur Manager.
+// Zählt Zeiteinträge, die per project_id ODER per Freitext-Projektname zugeordnet sind (deckt Bestands-
+// projekte + den Lösch→Freitext→Wiederherstellen-Fall ab). Nur net_hours (Pause bereits abgezogen).
+router.get('/:id/stats', authenticate, (req, res) => {
+  if (req.user.role === 'mitarbeiter') return res.status(403).json({ error: 'Keine Berechtigung' });
+  const db = getDb();
+  const project = db.prepare('SELECT id, name FROM projects WHERE id = ?').get(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Projekt nicht gefunden' });
+  const rows = db.prepare(`
+    SELECT e.user_id, u.name, ROUND(SUM(e.net_hours), 2) AS hours, COUNT(*) AS entries
+    FROM entries e JOIN users u ON u.id = e.user_id
+    WHERE (e.project_id = ? OR (e.project_text = ? AND e.project_text <> '')) AND u.role <> 'admin'
+    GROUP BY e.user_id
+    ORDER BY hours DESC, u.name ASC
+  `).all(project.id, project.name);
+  const total_hours = Math.round(rows.reduce((s, r) => s + (r.hours || 0), 0) * 100) / 100;
+  const total_entries = rows.reduce((s, r) => s + r.entries, 0);
+  res.json({ per_user: rows, total_hours, total_entries });
+});
+
 // Status eines Zwischenziels setzen (offen|doing|done) — Zugeteilte ODER Chef/Admin.
 router.patch('/:id/milestones/:mid/status', authenticate, (req, res) => {
   const db = getDb();
