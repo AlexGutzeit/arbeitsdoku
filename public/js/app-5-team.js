@@ -1139,7 +1139,7 @@ async function renderProjects() {
     if (!p.assigned_users || !p.assigned_users.length) unassigned.push(p);
     else for (const u of p.assigned_users) (byUser[u.user_id] || (byUser[u.user_id] = [])).push(p);
   }
-  const cols = _boardUsers.filter(u => u.role === 'mitarbeiter' && u.active !== 0).map(u => ({ id: u.id, name: u.name }));
+  const cols = _boardUsers.filter(u => u.role !== 'admin' && u.active !== 0).map(u => ({ id: u.id, name: u.name }));
   const seen = new Set(cols.map(c => c.id));
   for (const p of projects) for (const u of (p.assigned_users || [])) if (!seen.has(u.user_id)) { seen.add(u.user_id); cols.push({ id: u.user_id, name: u.name }); }
   cols.sort((a, b) => a.name.localeCompare(b.name));
@@ -1248,7 +1248,8 @@ async function renderProjectForm(project) {
   const isEdit = !!(project && project.id);
   const p = project || { name: '', client: '', address: '', note: '', urgency: 'gelb', assigned_users: [] };
   const assignedIds = new Set((p.assigned_users || []).map(u => u.user_id));
-  const workers = _boardUsers.filter(u => u.role === 'mitarbeiter' && (u.active !== 0 || assignedIds.has(u.id)));
+  // Alle Nutzer außer Admin sind zuteilbar (Chef/Buchhalter können sich auch Arbeit zuweisen).
+  const workers = _boardUsers.filter(u => u.role !== 'admin' && (u.active !== 0 || assignedIds.has(u.id)));
 
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'projects');
   bindLayout();
@@ -1273,7 +1274,7 @@ async function renderProjectForm(project) {
           ${PROJECT_URGENCY.map(u => `<option value="${u.key}" ${p.urgency === u.key ? 'selected' : ''}>${u.label}</option>`).join('')}
         </select></div>
       <div class="form-group"><label>Zugedachte Mitarbeiter</label>
-        <div class="planning-user-checkboxes">${workers.map(u => `<label><input type="checkbox" class="pf2-assignee" value="${u.id}" ${assignedIds.has(u.id) ? 'checked' : ''}> ${esc(u.name)}</label>`).join('') || '<span class="push-hint">Keine Mitarbeiter vorhanden</span>'}</div></div>
+        <div class="planning-user-checkboxes">${workers.map(u => `<label><input type="checkbox" class="pf2-assignee" value="${u.id}" ${assignedIds.has(u.id) ? 'checked' : ''}> ${esc(u.name)}${u.role !== 'mitarbeiter' ? ` <span class="push-hint">(${esc(roleName(u.role))})</span>` : ''}</label>`).join('') || '<span class="push-hint">Keine Nutzer vorhanden</span>'}</div></div>
       <button class="btn btn-primary btn-block" id="pf2-save">${isEdit ? 'Speichern' : 'Projekt erstellen'}</button>
     </div>`;
 
