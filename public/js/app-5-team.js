@@ -1267,6 +1267,7 @@ async function renderProjects() {
     </div>`;
 
   const mainEl = document.querySelector('.main');
+  mainEl.classList.add('main-wide'); // Board volle Bildschirmbreite (wie Planung/Zeitnachweis)
   mainEl.innerHTML = `
     <div class="board-wrap">
       <div class="board-head">
