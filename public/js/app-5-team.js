@@ -1114,6 +1114,22 @@ const PROJECT_URGENCY = [
 ];
 const projUrg = (key) => PROJECT_URGENCY.find(u => u.key === key) || PROJECT_URGENCY[2];
 let _boardUsers = [];
+let _expandedProjects = new Set(); // aufgeklappte Kacheln (überlebt Re-Render/SSE)
+
+// Zwischenziel-Status → Label + Farbe; Reihenfolge für die 3-Farb-Auswahl
+const MS_META = { offen: { label: 'offen', color: '#dc2626' }, doing: { label: 'in Arbeit', color: '#eab308' }, done: { label: 'erledigt', color: '#16a34a' } };
+const MS_ORDER = ['offen', 'doing', 'done'];
+// Fortschritt nach Dauer gewichtet (Ziel ohne Dauer zählt als 1 Tag)
+function projectProgress(ms) {
+  const w = m => (Number(m.est_days) > 0 ? Number(m.est_days) : 1);
+  const tot = ms.reduce((s, m) => s + w(m), 0) || 1;
+  const sum = st => ms.filter(m => m.status === st).reduce((s, m) => s + w(m), 0);
+  return { done: sum('done') / tot * 100, doing: sum('doing') / tot * 100, offen: sum('offen') / tot * 100 };
+}
+const msBar = (prog, cls) => `<div class="ms-bar ${cls || ''}">`
+  + `<span style="width:${prog.done}%;background:${MS_META.done.color}"></span>`
+  + `<span style="width:${prog.doing}%;background:${MS_META.doing.color}"></span>`
+  + `<span style="width:${prog.offen}%;background:${MS_META.offen.color}"></span></div>`;
 
 // Auftrags-Board: Mitarbeiter waagerecht, darunter ihre Aufträge nach Dringlichkeit (rot oben), tie = ältester oben.
 let _boardShowDone = false; // Chef/Admin: Archiv (erledigte Aufträge) einblenden
@@ -1154,8 +1170,14 @@ async function renderProjects() {
 
   const canPlanTake = canEditPlanning();
   const urgOpts = (p) => PROJECT_URGENCY.map(o => `<button type="button" class="urg-opt" data-id="${p.id}" data-urg="${o.key}" style="background:${o.color}" title="${o.label}"></button>`).join('');
+  const myId = S.user && S.user.id;
   const tileHtml = (p) => {
     const u = projUrg(p.urgency);
+    const ms = p.milestones || [];
+    const prog = ms.length ? projectProgress(ms) : null;
+    // Status ändern dürfen Zugeteilte + Chef/Admin
+    const canMs = manage || (p.assigned_users || []).some(x => x.user_id === myId);
+    const expanded = _expandedProjects.has(String(p.id));
     // Dringlichkeitsampel: Chef/Admin können die Farbe direkt (ohne „Bearbeiten") ändern.
     const flag = (manage && !showDone)
       ? `<span class="proj-flag-wrap"><button type="button" class="proj-flag proj-flag-btn" data-id="${p.id}" style="background:${u.color}" title="Dringlichkeit ändern (${u.label})"></button><span class="urg-picker" style="display:none">${urgOpts(p)}</span></span>`
@@ -1168,14 +1190,24 @@ async function renderProjects() {
          ${manage ? `<button class="btn btn-xs btn-outline proj-edit" data-id="${p.id}">Bearbeiten</button>` : ''}
          ${manage ? `<button class="btn btn-xs btn-success proj-done" data-id="${p.id}">Erledigt</button>` : ''}
          ${manage ? `<button class="btn btn-xs btn-danger proj-del" data-id="${p.id}">Löschen</button>` : ''}`;
+    const msList = ms.map(m => {
+      const meta = MS_META[m.status] || MS_META.offen;
+      const ctrl = canMs
+        ? `<span class="ms-picker">${MS_ORDER.map(s => `<button type="button" class="ms-opt${m.status === s ? ' active' : ''}" data-id="${p.id}" data-mid="${m.id}" data-status="${s}" style="background:${MS_META[s].color}" title="${MS_META[s].label}"></button>`).join('')}</span>`
+        : `<span class="ms-dot" style="background:${meta.color}" title="${meta.label}"></span>`;
+      return `<div class="ms-row">${ctrl}<span class="ms-title">${esc(m.title)}</span><span class="ms-days">${m.est_days} T</span></div>`;
+    }).join('');
     return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
       <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${flag}</div>
       ${p.client ? `<div class="proj-client">${esc(p.client)}</div>` : ''}
-      <div class="proj-detail" style="display:none">
+      ${prog ? msBar(prog, 'ms-bar-slim') : ''}
+      <div class="proj-detail" style="display:${expanded ? 'block' : 'none'}">
         ${p.note ? `<p class="proj-note">${esc(p.note)}</p>` : ''}
         ${p.address ? `<div class="proj-addr">&#128205; ${esc(p.address)} <button class="btn btn-xs proj-nav" data-addr="${esc(p.address)}" title="Navigieren">&#128506;</button></div>` : ''}
         <div class="proj-meta">Dringlichkeit: ${u.label} · erstellt ${formatDateTimeDE(p.created_at)}${showDone && p.done_at ? ' · erledigt ' + formatDateTimeDE(p.done_at) : ''}</div>
         <div class="proj-meta">Für: ${(p.assigned_users && p.assigned_users.length) ? p.assigned_users.map(x => esc(x.name)).join(', ') : '– (nicht zugewiesen)'}</div>
+        ${ms.length ? `<div class="ms-list">${msList}</div>${msBar(prog)}<div class="proj-meta">${Math.round(prog.done)}% fertig · ${Math.round(prog.doing)}% in Arbeit · ${Math.round(prog.offen)}% offen</div>`
+          : (manage ? '<div class="proj-meta">Noch keine Zwischenziele (unter „Bearbeiten" anlegen)</div>' : '')}
         <div class="proj-actions">${actions}</div>
       </div>
     </div>`;
@@ -1205,7 +1237,10 @@ async function renderProjects() {
       if (e.target.closest('button')) return;
       mainEl.querySelectorAll('.urg-picker').forEach(x => x.style.display = 'none');
       const det = tile.querySelector('.proj-detail');
-      if (det) det.style.display = det.style.display === 'none' ? 'block' : 'none';
+      if (!det) return;
+      const open = det.style.display === 'none';
+      det.style.display = open ? 'block' : 'none';
+      if (open) _expandedProjects.add(String(tile.dataset.id)); else _expandedProjects.delete(String(tile.dataset.id));
     });
   });
   const pid = (b) => b.dataset.id;
@@ -1222,6 +1257,11 @@ async function renderProjects() {
     const open = pick.style.display !== 'none';
     mainEl.querySelectorAll('.urg-picker').forEach(x => x.style.display = 'none');
     pick.style.display = open ? 'none' : 'inline-flex';
+  }));
+  // Zwischenziel-Status setzen (Zugeteilte + Chef/Admin) — Kachel bleibt via _expandedProjects offen
+  mainEl.querySelectorAll('.ms-opt').forEach(b => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try { await api('PATCH', '/api/projects/' + b.dataset.id + '/milestones/' + b.dataset.mid + '/status', { status: b.dataset.status }); renderProjects(); } catch (err) { toast(err.message, 'error'); }
   }));
   mainEl.querySelectorAll('.urg-opt').forEach(b => b.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -1277,8 +1317,38 @@ async function renderProjectForm(project) {
         </select></div>
       <div class="form-group"><label>Zugedachte Mitarbeiter</label>
         <div class="planning-user-checkboxes">${workers.map(u => `<label><input type="checkbox" class="pf2-assignee" value="${u.id}" ${assignedIds.has(u.id) ? 'checked' : ''}> ${esc(u.name)}${u.role !== 'mitarbeiter' ? ` <span class="push-hint">(${esc(roleName(u.role))})</span>` : ''}</label>`).join('') || '<span class="push-hint">Keine Nutzer vorhanden</span>'}</div></div>
+      <div class="form-group"><label>Zwischenziele (für den Fortschrittsbalken)</label>
+        <div id="pf2-ms-list"></div>
+        <button type="button" class="btn btn-outline btn-sm" id="pf2-ms-add" style="margin-top:0.4rem">+ Zwischenziel</button>
+      </div>
       <button class="btn btn-primary btn-block" id="pf2-save">${isEdit ? 'Speichern' : 'Projekt erstellen'}</button>
     </div>`;
+
+  // Zwischenziel-Editor (dynamische Zeilen; msRows ist die Wahrheit, Inputs syncen live)
+  const msRows = (p.milestones || []).map(m => ({ id: m.id, title: m.title, est_days: m.est_days }));
+  const msListEl = document.getElementById('pf2-ms-list');
+  const renderMsRows = () => {
+    msListEl.innerHTML = msRows.map((r, i) => `<div class="ms-edit-row" data-idx="${i}">
+      <input class="form-control ms-edit-title" data-idx="${i}" value="${esc(r.title || '')}" placeholder="z.B. Kabel verlegen">
+      <input type="number" class="form-control ms-edit-days" data-idx="${i}" value="${r.est_days != null ? r.est_days : 1}" min="0" step="0.5">
+      <span class="ms-edit-unit">Tage</span>
+      <button type="button" class="btn btn-sm btn-danger ms-edit-del" data-idx="${i}" title="Entfernen">&times;</button>
+    </div>`).join('') || '<div class="push-hint">Noch keine Zwischenziele – mit „+ Zwischenziel" hinzufügen.</div>';
+  };
+  renderMsRows();
+  msListEl.addEventListener('input', (e) => {
+    const idx = Number(e.target.dataset.idx); if (!msRows[idx]) return;
+    if (e.target.classList.contains('ms-edit-title')) msRows[idx].title = e.target.value;
+    else if (e.target.classList.contains('ms-edit-days')) msRows[idx].est_days = e.target.value;
+  });
+  msListEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.ms-edit-del'); if (!btn) return;
+    msRows.splice(Number(btn.dataset.idx), 1); renderMsRows();
+  });
+  document.getElementById('pf2-ms-add').addEventListener('click', () => {
+    msRows.push({ title: '', est_days: 1 }); renderMsRows();
+    const inputs = msListEl.querySelectorAll('.ms-edit-title'); if (inputs.length) inputs[inputs.length - 1].focus();
+  });
 
   document.getElementById('pf2-back').addEventListener('click', () => renderProjects());
   document.getElementById('pf2-nav').addEventListener('click', () => { const a = document.getElementById('pf2-address').value.trim(); if (a) openNav(a, { force: true }); else toast('Keine Adresse eingetragen', 'error'); });
@@ -1290,6 +1360,7 @@ async function renderProjectForm(project) {
       note: document.getElementById('pf2-note').value.trim(),
       urgency: document.getElementById('pf2-urgency').value,
       assigned_user_ids: [...document.querySelectorAll('.pf2-assignee:checked')].map(cb => Number(cb.value)),
+      milestones: msRows.filter(r => (r.title || '').trim()).map(r => ({ id: r.id, title: r.title.trim(), est_days: Number(r.est_days) })),
     };
     if (!body.name) { toast('Projektname ist erforderlich', 'error'); return; }
     try {

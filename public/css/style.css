@@ -1448,6 +1448,22 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .urg-opt { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.25); cursor: pointer; padding: 0; }
 .proj-tile-done { opacity: 0.82; }
 .board-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+/* Zwischenziele + Fortschrittsbalken */
+.ms-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--border); margin: 0.4rem 0; }
+.ms-bar span { display: block; height: 100%; }
+.ms-bar-slim { height: 6px; margin: 0.35rem 0 0; }
+.ms-list { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.5rem 0 0.2rem; }
+.ms-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; }
+.ms-title { flex: 1; overflow-wrap: anywhere; }
+.ms-days { color: var(--text-light); font-size: 0.78rem; white-space: nowrap; }
+.ms-picker { display: inline-flex; gap: 3px; flex-shrink: 0; }
+.ms-opt { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.2); cursor: pointer; padding: 0; opacity: 0.4; }
+.ms-opt.active { opacity: 1; box-shadow: 0 0 0 2px rgba(0,0,0,0.15); }
+.ms-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.ms-edit-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem; }
+.ms-edit-title { flex: 1; }
+.ms-edit-days { width: 80px; flex-shrink: 0; }
+.ms-edit-unit { font-size: 0.82rem; color: var(--text-light); }
 .welcome-task {
   display: flex;
   align-items: flex-start;

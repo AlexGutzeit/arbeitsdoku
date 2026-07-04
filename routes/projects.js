@@ -16,7 +16,39 @@ function assignmentsOf(db, projectId) {
     WHERE pa.project_id = ? ORDER BY u.name
   `).all(projectId);
 }
-const withAssignments = (db, project) => ({ ...project, assigned_users: assignmentsOf(db, project.id) });
+// Zwischenziele eines Projekts (für den Fortschrittsbalken)
+function milestonesOf(db, projectId) {
+  return db.prepare('SELECT id, title, est_days, status, sort_order FROM project_milestones WHERE project_id = ? ORDER BY sort_order, id').all(projectId);
+}
+const withDetails = (db, project) => ({ ...project, assigned_users: assignmentsOf(db, project.id), milestones: milestonesOf(db, project.id) });
+
+function isAssigned(db, projectId, userId) {
+  return !!db.prepare('SELECT 1 FROM project_assignments WHERE project_id = ? AND user_id = ?').get(projectId, userId);
+}
+
+const MS_STATUS = ['offen', 'doing', 'done'];
+
+// Zwischenziele setzen (aus POST/PUT, Chef). Merge nach id: vorhandene id → UPDATE (Status BLEIBT erhalten),
+// ohne id → INSERT (status 'offen'), fehlende ids → DELETE. Leere Titel werden übersprungen.
+function setMilestones(db, projectId, arr) {
+  if (!Array.isArray(arr)) return;
+  const existing = db.prepare('SELECT id FROM project_milestones WHERE project_id = ?').all(projectId).map(r => r.id);
+  const keep = new Set();
+  const upd = db.prepare('UPDATE project_milestones SET title = ?, est_days = ?, sort_order = ? WHERE id = ? AND project_id = ?');
+  const ins = db.prepare("INSERT INTO project_milestones (project_id, title, est_days, status, sort_order) VALUES (?, ?, ?, 'offen', ?)");
+  let order = 0;
+  for (const m of arr) {
+    const title = (m && m.title != null ? String(m.title) : '').trim();
+    if (!title) continue;
+    const days = Number(m && m.est_days);
+    const est = (isFinite(days) && days >= 0) ? days : 1;
+    const id = Number(m && m.id);
+    if (id && existing.includes(id)) { upd.run(title, est, order, id, projectId); keep.add(id); }
+    else { ins.run(projectId, title, est, order); }
+    order++;
+  }
+  for (const id of existing) if (!keep.has(id)) db.prepare('DELETE FROM project_milestones WHERE id = ?').run(id);
+}
 
 function setAssignments(db, projectId, userIds) {
   db.prepare('DELETE FROM project_assignments WHERE project_id = ?').run(projectId);
@@ -33,7 +65,7 @@ router.get('/', authenticate, (req, res) => {
   const db = getDb();
   const done = req.query.done === '1' ? 1 : 0;
   const rows = db.prepare('SELECT * FROM projects WHERE COALESCE(done, 0) = ? ORDER BY name').all(done);
-  res.json({ projects: rows.map(p => withAssignments(db, p)) });
+  res.json({ projects: rows.map(p => withDetails(db, p)) });
 });
 
 // Einzelnes Projekt (für Übernehmen-Vorbefüllung)
@@ -41,7 +73,7 @@ router.get('/:id', authenticate, (req, res) => {
   const db = getDb();
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
   if (!project) return res.status(404).json({ error: 'Projekt nicht gefunden' });
-  res.json({ project: withAssignments(db, project) });
+  res.json({ project: withDetails(db, project) });
 });
 
 // Projekt/Auftrag erstellen (nur Chef/Admin)
@@ -55,9 +87,10 @@ router.post('/', authenticate, authorize('chef'), (req, res) => {
     "INSERT INTO projects (name, client, address, note, urgency, done, created_by) VALUES (?, ?, ?, ?, ?, 0, ?)"
   ).run(name.trim(), (client || '').trim(), (address || '').trim(), (note || '').trim(), normUrgency(urgency), req.user.id);
   setAssignments(db, r.lastInsertRowid, assigned_user_ids);
+  setMilestones(db, r.lastInsertRowid, req.body.milestones);
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(r.lastInsertRowid);
   broadcast('projects', req.headers['x-tab-id']);
-  res.status(201).json({ project: withAssignments(db, project) });
+  res.status(201).json({ project: withDetails(db, project) });
 });
 
 // Projekt bearbeiten (nur Chef/Admin)
@@ -79,9 +112,10 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     project.id
   );
   if (assigned_user_ids !== undefined) setAssignments(db, project.id, assigned_user_ids);
+  if (req.body.milestones !== undefined) setMilestones(db, project.id, req.body.milestones);
   const updated = db.prepare('SELECT * FROM projects WHERE id = ?').get(project.id);
   broadcast('projects', req.headers['x-tab-id']);
-  res.json({ project: withAssignments(db, updated) });
+  res.json({ project: withDetails(db, updated) });
 });
 
 // Als erledigt markieren (verschwindet vom Board, bleibt archiviert) — nur Chef/Admin
@@ -104,6 +138,23 @@ router.post('/:id/reopen', authenticate, authorize('chef'), (req, res) => {
   res.json({ success: true });
 });
 
+// Status eines Zwischenziels setzen (offen|doing|done) — Zugeteilte ODER Chef/Admin.
+router.patch('/:id/milestones/:mid/status', authenticate, (req, res) => {
+  const db = getDb();
+  const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Projekt nicht gefunden' });
+  const allowed = ['admin', 'chef'].includes(req.user.role) || isAssigned(db, project.id, req.user.id);
+  if (!allowed) return res.status(403).json({ error: 'Keine Berechtigung für dieses Zwischenziel' });
+  const { status } = req.body;
+  if (!MS_STATUS.includes(status)) return res.status(400).json({ error: 'Ungültiger Status' });
+  const ms = db.prepare('SELECT id FROM project_milestones WHERE id = ? AND project_id = ?').get(req.params.mid, project.id);
+  if (!ms) return res.status(404).json({ error: 'Zwischenziel nicht gefunden' });
+  db.prepare('UPDATE project_milestones SET status = ? WHERE id = ?').run(status, ms.id);
+  broadcast('projects', req.headers['x-tab-id']);
+  const updated = db.prepare('SELECT * FROM projects WHERE id = ?').get(project.id);
+  res.json({ project: withDetails(db, updated) });
+});
+
 // Projekt löschen (nur Chef/Admin) — Projektname VOR dem Löschen in die Freitexte sichern,
 // damit vorhandene Planungen/Zeitnachweise/Notizen/Werkzeuge ihre Daten behalten.
 router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
@@ -118,6 +169,7 @@ router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
   db.prepare(`UPDATE notes SET project_text = ?, project_id = NULL WHERE project_id = ? AND (project_text IS NULL OR project_text = '')`).run(project.name, project.id);
 
   db.prepare('DELETE FROM project_assignments WHERE project_id = ?').run(project.id);
+  db.prepare('DELETE FROM project_milestones WHERE project_id = ?').run(project.id);
   db.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
   broadcast('projects', req.headers['x-tab-id']);
   res.json({ success: true });

@@ -932,6 +932,19 @@ function ensureProjectSchema(targetDb) {
         FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE
       );
     `);
+    // Zwischenziele je Auftrag (Fortschrittsbalken); status: offen|doing|done, est_days = geschaetzte Dauer.
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS project_milestones (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        title      TEXT NOT NULL,
+        est_days   REAL DEFAULT 1,
+        status     TEXT DEFAULT 'offen',
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      );
+    `);
   } catch (e) {
     console.error('ensureProjectSchema fehlgeschlagen:', e.message);
   }
