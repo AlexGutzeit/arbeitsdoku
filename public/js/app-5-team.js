@@ -1162,15 +1162,20 @@ function projectProgress(ms) {
   const sum = st => ms.filter(m => m.status === st).reduce((s, m) => s + w(m), 0);
   return { done: sum('done') / tot * 100, doing: sum('doing') / tot * 100, offen: sum('offen') / tot * 100 };
 }
-const msBar = (prog, cls, goalPct) => `<div class="ms-bar ${cls || ''}">`
-  + `<span style="width:${prog.done}%;background:${MS_META.done.color}"></span>`
-  + `<span style="width:${prog.doing}%;background:${MS_META.doing.color}"></span>`
-  + `<span style="width:${prog.offen}%;background:${MS_META.offen.color}"></span>`
-  + (goalPct != null ? `<span class="ms-goal" style="left:${Math.max(0, Math.min(100, goalPct))}%" title="Frist"></span>` : '')
-  + '</div>';
+const msBar = (prog, cls, goalPct, fillPct) => {
+  const f = (fillPct == null ? 100 : fillPct) / 100;
+  const buffer = (goalPct != null && fillPct != null && goalPct > fillPct) ? (goalPct - fillPct) : 0;
+  return `<div class="ms-bar ${cls || ''}">`
+    + `<span style="width:${prog.done * f}%;background:${MS_META.done.color}"></span>`
+    + `<span style="width:${prog.doing * f}%;background:${MS_META.doing.color}"></span>`
+    + `<span style="width:${prog.offen * f}%;background:${MS_META.offen.color}"></span>`
+    + (buffer > 0 ? `<span class="ms-buffer" style="width:${buffer}%" title="Luft bis zur Frist"></span>` : '')
+    + (goalPct != null ? `<span class="ms-goal" style="left:${Math.max(0, Math.min(100, goalPct))}%" title="Frist"></span>` : '')
+    + '</div>';
+};
 
 // Fälligkeit + Zeitbudget. Restaufwand = Σ Tage der NICHT erledigten Ziele (offen + in Arbeit; erledigte raus).
-const SCHED = { rot: '#dc2626', orange: '#ea580c', gruen: '#16a34a', neutral: '#6b7280' };
+const SCHED = { rot: '#dc2626', orange: '#ea580c', gruen: '#16a34a', neutral: '#6b7280', luft: '#93c5fd' };
 const todayISO = () => formatDateISO(new Date());
 function daysBetween(aISO, bISO) {
   const a = new Date(aISO + 'T00:00:00'), b = new Date(bISO + 'T00:00:00');
@@ -1185,7 +1190,7 @@ function scheduleInfo(p, showDone) {
     : available === 0 ? 'heute fällig' : `noch ${available} ${available === 1 ? 'Tag' : 'Tage'}`;
   const ms = p.milestones || [];
   const hasSchedule = !showDone && !p.done && ms.length > 0;
-  let color = SCHED.neutral, goalPct = null, remaining = 0, delta = 0;
+  let color = SCHED.neutral, goalPct = null, fillPct = null, remaining = 0, delta = 0;
   if (hasSchedule) {
     remaining = msRemainingDays(ms);
     const ratio = remaining / Math.max(available, 0.5);
@@ -1193,12 +1198,17 @@ function scheduleInfo(p, showDone) {
     const w = m => (msDays(m.est_days) > 0 ? msDays(m.est_days) : 1);
     const doneDays = ms.filter(m => m.status === 'done').reduce((s, m) => s + w(m), 0);
     const totalDays = ms.reduce((s, m) => s + w(m), 0) || 1;
-    goalPct = Math.max(0, Math.min(100, (doneDays + Math.max(available, 0)) / totalDays * 100));
+    // Skala = Restaufwand-Ende ODER Frist (der Größere). Bei Puffer wird der Arbeitsbalken kürzer, die Frist
+    // rückt nach rechts → dazwischen die „Luft". Arbeitsbalken bleibt min. 40 % breit (extreme Puffer nicht winzig).
+    const deadlinePos = doneDays + Math.max(available, 0);
+    let scaleMax = Math.min(Math.max(totalDays, deadlinePos, 1), totalDays / 0.4);
+    fillPct = Math.min(100, totalDays / scaleMax * 100);
+    goalPct = Math.min(100, deadlinePos / scaleMax * 100);
     delta = remaining - available; // >0 = Frist gerissen (T über); <0 = T Luft
   } else {
     color = available < 0 ? SCHED.rot : (available <= 3 ? SCHED.orange : SCHED.neutral);
   }
-  return { available, label, color, hasSchedule, remaining, delta, goalPct };
+  return { available, label, color, hasSchedule, remaining, delta, goalPct, fillPct };
 }
 
 // Auftrags-Board: Mitarbeiter waagerecht, darunter ihre Aufträge nach Dringlichkeit (rot oben), tie = ältester oben.
@@ -1247,6 +1257,7 @@ async function renderProjects() {
     const prog = ms.length ? projectProgress(ms) : null;
     const sched = scheduleInfo(p, showDone);
     const goal = sched && sched.hasSchedule ? sched.goalPct : null;
+    const fill = sched && sched.hasSchedule ? sched.fillPct : null;
     const dT = (n) => String(Math.round(n * 10) / 10).replace('.', ',') + ' T';
     // Status ändern dürfen Zugeteilte + Chef/Admin
     const canMs = manage || (p.assigned_users || []).some(x => x.user_id === myId);
@@ -1274,14 +1285,14 @@ async function renderProjects() {
       <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${flag}</div>
       ${p.client ? `<div class="proj-client">${esc(p.client)}</div>` : ''}
       ${sched ? `<div class="proj-due" style="color:${sched.color}">&#128197; ${sched.label}</div>` : ''}
-      ${prog ? msBar(prog, 'ms-bar-slim', goal) : ''}
+      ${prog ? msBar(prog, 'ms-bar-slim', goal, fill) : ''}
       <div class="proj-detail" style="display:${expanded ? 'block' : 'none'}">
         ${p.note ? `<p class="proj-note">${esc(p.note)}</p>` : ''}
         ${p.address ? `<div class="proj-addr">&#128205; ${esc(p.address)} <button class="btn btn-xs proj-nav" data-addr="${esc(p.address)}" title="Navigieren">&#128506;</button></div>` : ''}
         <div class="proj-meta">Dringlichkeit: ${u.label} · erstellt ${formatDateTimeDE(p.created_at)}${showDone && p.done_at ? ' · erledigt ' + formatDateTimeDE(p.done_at) : ''}</div>
         <div class="proj-meta">Für: ${(p.assigned_users && p.assigned_users.length) ? p.assigned_users.map(x => esc(x.name)).join(', ') : '– (nicht zugewiesen)'}</div>
         ${sched ? `<div class="proj-meta" style="color:${sched.color}">&#128197; Fällig bis ${formatDateDE(p.due_date)} · ${sched.label}${sched.hasSchedule ? ` · Restaufwand ${dT(sched.remaining)} · ${sched.delta > 0 ? dT(sched.delta) + ' über Frist' : (sched.delta < 0 ? dT(-sched.delta) + ' Luft' : 'punktgenau')}` : ''}</div>` : ''}
-        ${ms.length ? `<div class="ms-list">${msList}</div>${msBar(prog, null, goal)}<div class="proj-meta">${Math.round(prog.done)}% fertig · ${Math.round(prog.doing)}% in Arbeit · ${Math.round(prog.offen)}% offen</div>`
+        ${ms.length ? `<div class="ms-list">${msList}</div>${msBar(prog, null, goal, fill)}<div class="proj-meta">${Math.round(prog.done)}% fertig · ${Math.round(prog.doing)}% in Arbeit · ${Math.round(prog.offen)}% offen</div>`
           : (manage ? '<div class="proj-meta">Noch keine Zwischenziele (unter „Bearbeiten" anlegen)</div>' : '')}
         ${canViewAll() ? `<button type="button" class="proj-stats-btn" data-id="${p.id}">&#128202; Statistik ${_statsOpen.has(String(p.id)) ? '&#9652;' : '&#9662;'}</button><div class="proj-stats" data-id="${p.id}"></div>` : ''}
         <div class="proj-actions">${actions}</div>
@@ -1303,7 +1314,7 @@ async function renderProjects() {
     <div class="board-legend">
       <span class="legend-group"><span class="legend-label">Dringlichkeit:</span> ${PROJECT_URGENCY.map(u => legItem(u.color, u.label)).join('')}</span>
       <span class="legend-group"><span class="legend-label">Fortschritt:</span> ${['done', 'doing', 'offen'].map(k => legItem(MS_META[k].color, MS_META[k].label)).join('')}</span>
-      <span class="legend-group"><span class="legend-label">Termin:</span> ${legItem(SCHED.gruen, 'in der Zeit')}${legItem(SCHED.orange, 'wird knapp')}${legItem(SCHED.rot, 'zu spät')}</span>
+      <span class="legend-group"><span class="legend-label">Termin:</span> ${legItem(SCHED.gruen, 'in der Zeit')}${legItem(SCHED.orange, 'wird knapp')}${legItem(SCHED.rot, 'zu spät')}${legItem(SCHED.luft, 'Luft bis Frist')}</span>
     </div>`;
 
   const mainEl = document.querySelector('.main');

@@ -26,6 +26,7 @@ const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.to
 const RED='#dc2626', ORANGE='#ea580c', GREEN='#16a34a';
 const dueStyle = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .proj-due`); return e ? e.getAttribute('style') : null; }, id);
 const goalLeft = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .ms-bar-slim .ms-goal`); return e ? parseFloat(e.style.left) : null; }, id);
+const bufferW = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .ms-bar-slim .ms-buffer`); return e ? parseFloat(e.style.width) : null; }, id);
 const detailText = (p, id) => p.evaluate(id => { const d = document.querySelector(`.proj-tile[data-id="${id}"] .proj-detail`); return d ? d.textContent : ''; }, id);
 
 (async () => {
@@ -68,6 +69,11 @@ const detailText = (p, id) => p.evaluate(id => { const d = document.querySelecto
     ok('behind: Frist-Marker IM Balken (~50%)', gb !== null && gb > 40 && gb < 60, 'left=' + gb);
     ok('puffer: Frist-Marker am rechten Rand (100%)', gp === 100, 'left=' + gp);
     ok('überfällig ohne Ziele: KEIN Frist-Marker', (await goalLeft(p, odNoMs.id)) === null);
+
+    // Luft (hellblaues Segment) nur bei Puffer
+    const bufP = await bufferW(p, puffer.id), bufB = await bufferW(p, behind.id);
+    ok('puffer: hellblaues Luft-Segment vorhanden (>0)', bufP !== null && bufP > 0, 'buffer=' + bufP);
+    ok('behind: KEIN Luft-Segment', bufB === null, 'buffer=' + bufB);
 
     // Detail-Text
     ok('behind: „über Frist" im Detail', /über Frist/.test(await detailText(p, behind.id)));
