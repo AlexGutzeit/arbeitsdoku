@@ -1162,10 +1162,44 @@ function projectProgress(ms) {
   const sum = st => ms.filter(m => m.status === st).reduce((s, m) => s + w(m), 0);
   return { done: sum('done') / tot * 100, doing: sum('doing') / tot * 100, offen: sum('offen') / tot * 100 };
 }
-const msBar = (prog, cls) => `<div class="ms-bar ${cls || ''}">`
+const msBar = (prog, cls, goalPct) => `<div class="ms-bar ${cls || ''}">`
   + `<span style="width:${prog.done}%;background:${MS_META.done.color}"></span>`
   + `<span style="width:${prog.doing}%;background:${MS_META.doing.color}"></span>`
-  + `<span style="width:${prog.offen}%;background:${MS_META.offen.color}"></span></div>`;
+  + `<span style="width:${prog.offen}%;background:${MS_META.offen.color}"></span>`
+  + (goalPct != null ? `<span class="ms-goal" style="left:${Math.max(0, Math.min(100, goalPct))}%" title="Frist"></span>` : '')
+  + '</div>';
+
+// Fälligkeit + Zeitbudget. Restaufwand = Σ Tage der NICHT erledigten Ziele (offen + in Arbeit; erledigte raus).
+const SCHED = { rot: '#dc2626', orange: '#ea580c', gruen: '#16a34a', neutral: '#6b7280' };
+const todayISO = () => formatDateISO(new Date());
+function daysBetween(aISO, bISO) {
+  const a = new Date(aISO + 'T00:00:00'), b = new Date(bISO + 'T00:00:00');
+  return Math.round((b - a) / 86400000);
+}
+const msRemainingDays = (ms) => ms.filter(m => m.status !== 'done').reduce((s, m) => s + (msDays(m.est_days) > 0 ? msDays(m.est_days) : 1), 0);
+// Liefert Fälligkeits-Infos für eine Kachel (oder null, wenn kein Datum).
+function scheduleInfo(p, showDone) {
+  if (!p.due_date) return null;
+  const available = daysBetween(todayISO(), p.due_date);
+  const label = available < 0 ? `${-available} ${-available === 1 ? 'Tag' : 'Tage'} überfällig`
+    : available === 0 ? 'heute fällig' : `noch ${available} ${available === 1 ? 'Tag' : 'Tage'}`;
+  const ms = p.milestones || [];
+  const hasSchedule = !showDone && !p.done && ms.length > 0;
+  let color = SCHED.neutral, goalPct = null, remaining = 0, delta = 0;
+  if (hasSchedule) {
+    remaining = msRemainingDays(ms);
+    const ratio = remaining / Math.max(available, 0.5);
+    color = (available <= 0 || ratio >= 1) ? SCHED.rot : (ratio >= 0.85 ? SCHED.orange : SCHED.gruen);
+    const w = m => (msDays(m.est_days) > 0 ? msDays(m.est_days) : 1);
+    const doneDays = ms.filter(m => m.status === 'done').reduce((s, m) => s + w(m), 0);
+    const totalDays = ms.reduce((s, m) => s + w(m), 0) || 1;
+    goalPct = Math.max(0, Math.min(100, (doneDays + Math.max(available, 0)) / totalDays * 100));
+    delta = remaining - available; // >0 = Frist gerissen (T über); <0 = T Luft
+  } else {
+    color = available < 0 ? SCHED.rot : (available <= 3 ? SCHED.orange : SCHED.neutral);
+  }
+  return { available, label, color, hasSchedule, remaining, delta, goalPct };
+}
 
 // Auftrags-Board: Mitarbeiter waagerecht, darunter ihre Aufträge nach Dringlichkeit (rot oben), tie = ältester oben.
 let _boardShowDone = false; // Chef/Admin: Archiv (erledigte Aufträge) einblenden
@@ -1211,6 +1245,9 @@ async function renderProjects() {
     const u = projUrg(p.urgency);
     const ms = p.milestones || [];
     const prog = ms.length ? projectProgress(ms) : null;
+    const sched = scheduleInfo(p, showDone);
+    const goal = sched && sched.hasSchedule ? sched.goalPct : null;
+    const dT = (n) => String(Math.round(n * 10) / 10).replace('.', ',') + ' T';
     // Status ändern dürfen Zugeteilte + Chef/Admin
     const canMs = manage || (p.assigned_users || []).some(x => x.user_id === myId);
     const expanded = _expandedProjects.has(String(p.id));
@@ -1236,13 +1273,15 @@ async function renderProjects() {
     return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}${expanded ? ' expanded' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
       <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${flag}</div>
       ${p.client ? `<div class="proj-client">${esc(p.client)}</div>` : ''}
-      ${prog ? msBar(prog, 'ms-bar-slim') : ''}
+      ${sched ? `<div class="proj-due" style="color:${sched.color}">&#128197; ${sched.label}</div>` : ''}
+      ${prog ? msBar(prog, 'ms-bar-slim', goal) : ''}
       <div class="proj-detail" style="display:${expanded ? 'block' : 'none'}">
         ${p.note ? `<p class="proj-note">${esc(p.note)}</p>` : ''}
         ${p.address ? `<div class="proj-addr">&#128205; ${esc(p.address)} <button class="btn btn-xs proj-nav" data-addr="${esc(p.address)}" title="Navigieren">&#128506;</button></div>` : ''}
         <div class="proj-meta">Dringlichkeit: ${u.label} · erstellt ${formatDateTimeDE(p.created_at)}${showDone && p.done_at ? ' · erledigt ' + formatDateTimeDE(p.done_at) : ''}</div>
         <div class="proj-meta">Für: ${(p.assigned_users && p.assigned_users.length) ? p.assigned_users.map(x => esc(x.name)).join(', ') : '– (nicht zugewiesen)'}</div>
-        ${ms.length ? `<div class="ms-list">${msList}</div>${msBar(prog)}<div class="proj-meta">${Math.round(prog.done)}% fertig · ${Math.round(prog.doing)}% in Arbeit · ${Math.round(prog.offen)}% offen</div>`
+        ${sched ? `<div class="proj-meta" style="color:${sched.color}">&#128197; Fällig bis ${formatDateDE(p.due_date)} · ${sched.label}${sched.hasSchedule ? ` · Restaufwand ${dT(sched.remaining)} · ${sched.delta > 0 ? dT(sched.delta) + ' über Frist' : (sched.delta < 0 ? dT(-sched.delta) + ' Luft' : 'punktgenau')}` : ''}</div>` : ''}
+        ${ms.length ? `<div class="ms-list">${msList}</div>${msBar(prog, null, goal)}<div class="proj-meta">${Math.round(prog.done)}% fertig · ${Math.round(prog.doing)}% in Arbeit · ${Math.round(prog.offen)}% offen</div>`
           : (manage ? '<div class="proj-meta">Noch keine Zwischenziele (unter „Bearbeiten" anlegen)</div>' : '')}
         ${canViewAll() ? `<button type="button" class="proj-stats-btn" data-id="${p.id}">&#128202; Statistik ${_statsOpen.has(String(p.id)) ? '&#9652;' : '&#9662;'}</button><div class="proj-stats" data-id="${p.id}"></div>` : ''}
         <div class="proj-actions">${actions}</div>
@@ -1264,6 +1303,7 @@ async function renderProjects() {
     <div class="board-legend">
       <span class="legend-group"><span class="legend-label">Dringlichkeit:</span> ${PROJECT_URGENCY.map(u => legItem(u.color, u.label)).join('')}</span>
       <span class="legend-group"><span class="legend-label">Fortschritt:</span> ${['done', 'doing', 'offen'].map(k => legItem(MS_META[k].color, MS_META[k].label)).join('')}</span>
+      <span class="legend-group"><span class="legend-label">Termin:</span> ${legItem(SCHED.gruen, 'in der Zeit')}${legItem(SCHED.orange, 'wird knapp')}${legItem(SCHED.rot, 'zu spät')}</span>
     </div>`;
 
   const mainEl = document.querySelector('.main');
@@ -1374,6 +1414,8 @@ async function renderProjectForm(project) {
         <select class="form-control" id="pf2-urgency">
           ${PROJECT_URGENCY.map(u => `<option value="${u.key}" ${p.urgency === u.key ? 'selected' : ''}>${u.label}</option>`).join('')}
         </select></div>
+      <div class="form-group"><label>Fällig bis (optional)</label>
+        <input type="date" class="form-control" id="pf2-due" value="${esc(p.due_date || '')}"></div>
       <div class="form-group"><label>Zugedachte Mitarbeiter</label>
         <div class="planning-user-checkboxes">${workers.map(u => `<label><input type="checkbox" class="pf2-assignee" value="${u.id}" ${assignedIds.has(u.id) ? 'checked' : ''}> ${esc(u.name)}${u.role !== 'mitarbeiter' ? ` <span class="push-hint">(${esc(roleName(u.role))})</span>` : ''}</label>`).join('') || '<span class="push-hint">Keine Nutzer vorhanden</span>'}</div></div>
       <div class="form-group"><label>Zwischenziele (für den Fortschrittsbalken)</label>
@@ -1422,6 +1464,7 @@ async function renderProjectForm(project) {
       address: document.getElementById('pf2-address').value.trim(),
       note: document.getElementById('pf2-note').value.trim(),
       urgency: document.getElementById('pf2-urgency').value,
+      due_date: document.getElementById('pf2-due').value || null,
       assigned_user_ids: [...document.querySelectorAll('.pf2-assignee:checked')].map(cb => Number(cb.value)),
       milestones: msParsed,
     };

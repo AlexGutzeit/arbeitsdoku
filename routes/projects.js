@@ -7,6 +7,8 @@ const router = express.Router();
 
 const URGENCIES = ['gruen', 'gelb', 'orange', 'rot'];
 const normUrgency = (u) => URGENCIES.includes(u) ? u : 'gelb';
+// „Fällig bis"-Datum: nur gültiges ISO-Datum (YYYY-MM-DD) übernehmen, sonst NULL.
+const normDue = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v))) ? v : null;
 
 // „Zugedachte" Mitarbeiter eines Projekts als [{user_id, name}]
 function assignmentsOf(db, projectId) {
@@ -91,14 +93,14 @@ router.get('/:id', authenticate, (req, res) => {
 
 // Projekt/Auftrag erstellen (nur Chef/Admin)
 router.post('/', authenticate, authorize('chef'), (req, res) => {
-  const { name, client, address, note, urgency, assigned_user_ids } = req.body;
+  const { name, client, address, note, urgency, assigned_user_ids, due_date } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Projektname ist erforderlich' });
   const db = getDb();
   const existing = db.prepare('SELECT id, deleted_at FROM projects WHERE name = ?').get(name.trim());
   if (existing) return res.status(409).json({ error: existing.deleted_at ? 'Ein gleichnamiges Projekt liegt im Papierkorb — bitte dort wiederherstellen oder endgültig löschen.' : 'Projekt existiert bereits' });
   const r = db.prepare(
-    "INSERT INTO projects (name, client, address, note, urgency, done, created_by) VALUES (?, ?, ?, ?, ?, 0, ?)"
-  ).run(name.trim(), (client || '').trim(), (address || '').trim(), (note || '').trim(), normUrgency(urgency), req.user.id);
+    "INSERT INTO projects (name, client, address, note, urgency, done, created_by, due_date) VALUES (?, ?, ?, ?, ?, 0, ?, ?)"
+  ).run(name.trim(), (client || '').trim(), (address || '').trim(), (note || '').trim(), normUrgency(urgency), req.user.id, normDue(due_date));
   setAssignments(db, r.lastInsertRowid, assigned_user_ids);
   setMilestones(db, r.lastInsertRowid, req.body.milestones);
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(r.lastInsertRowid);
@@ -111,17 +113,18 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   const project = db.prepare('SELECT * FROM projects WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!project) return res.status(404).json({ error: 'Projekt nicht gefunden' });
-  const { name, client, address, note, urgency, assigned_user_ids } = req.body;
+  const { name, client, address, note, urgency, assigned_user_ids, due_date } = req.body;
   if (name !== undefined && name.trim() && name.trim() !== project.name) {
     const clash = db.prepare('SELECT id FROM projects WHERE name = ? AND id != ?').get(name.trim(), project.id);
     if (clash) return res.status(409).json({ error: 'Projekt existiert bereits' });
   }
-  db.prepare('UPDATE projects SET name = ?, client = ?, address = ?, note = ?, urgency = ? WHERE id = ?').run(
+  db.prepare('UPDATE projects SET name = ?, client = ?, address = ?, note = ?, urgency = ?, due_date = ? WHERE id = ?').run(
     name !== undefined && name.trim() ? name.trim() : project.name,
     client !== undefined ? (client || '').trim() : (project.client || ''),
     address !== undefined ? (address || '').trim() : (project.address || ''),
     note !== undefined ? (note || '').trim() : (project.note || ''),
     urgency !== undefined ? normUrgency(urgency) : (project.urgency || 'gelb'),
+    due_date !== undefined ? normDue(due_date) : (project.due_date || null),
     project.id
   );
   if (assigned_user_ids !== undefined) setAssignments(db, project.id, assigned_user_ids);

@@ -1455,7 +1455,9 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .legend-item { display: inline-flex; align-items: center; gap: 3px; margin-right: 0.5rem; }
 .legend-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.15); }
 /* Zwischenziele + Fortschrittsbalken */
-.ms-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--border); margin: 0.4rem 0; }
+.ms-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--border); margin: 0.4rem 0; position: relative; }
+.ms-goal { position: absolute; top: 0; bottom: 0; width: 2px; background: #111827; box-shadow: 0 0 0 1px rgba(255,255,255,0.75); transform: translateX(-1px); z-index: 2; }
+.proj-due { font-size: 0.78rem; font-weight: 600; margin-top: 0.2rem; }
 .ms-bar span { display: block; height: 100%; }
 .ms-bar-slim { height: 6px; margin: 0.35rem 0 0; }
 .proj-tile.expanded .ms-bar-slim { display: none; } /* aufgeklappt: nur der volle Balken im Detail */

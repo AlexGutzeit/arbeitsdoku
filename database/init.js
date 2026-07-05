@@ -925,6 +925,7 @@ function ensureProjectSchema(targetDb) {
     add('created_by', 'INTEGER');
     add('deleted_at', 'TEXT');   // Soft-Delete (Papierkorb)
     add('deleted_by', 'INTEGER');
+    add('due_date', 'TEXT');     // optionales „Fällig bis"-Datum (ISO YYYY-MM-DD)
     targetDb.exec(`
       CREATE TABLE IF NOT EXISTS project_assignments (
         project_id INTEGER NOT NULL,
