@@ -8,7 +8,13 @@ const router = express.Router();
 const URGENCIES = ['gruen', 'gelb', 'orange', 'rot'];
 const normUrgency = (u) => URGENCIES.includes(u) ? u : 'gelb';
 // „Fällig bis"-Datum: nur gültiges ISO-Datum (YYYY-MM-DD) übernehmen, sonst NULL.
-const normDue = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v))) ? v : null;
+// Round-Trip verhindert unmögliche Tage (z.B. 2026-02-30, 2026-04-31, 29.02. im Nicht-Schaltjahr),
+// die Date.parse sonst stillschweigend in den Folgemonat rollt.
+const normDue = (v) => {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const d = new Date(v + 'T00:00:00Z');
+  return (!isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v) ? v : null;
+};
 
 // „Zugedachte" Mitarbeiter eines Projekts als [{user_id, name}]
 function assignmentsOf(db, projectId) {

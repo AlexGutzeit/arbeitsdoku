@@ -38,6 +38,12 @@ const dueOf = async (t, id) => (await req('GET','/api/projects/'+id, t)).body.pr
     ok('gültiges Datum gespeichert', r.body.project.due_date==='2026-08-15');
     ok('POST ungültig (Text) → NULL', (await req('POST','/api/projects', admin, { name:'Bau B', due_date:'morgen' })).body.project.due_date===null);
     ok('POST ungültig (2026-13-40) → NULL', (await req('POST','/api/projects', admin, { name:'Bau C', due_date:'2026-13-40' })).body.project.due_date===null);
+    ok('POST unmöglicher Tag 30.02. → NULL', (await req('POST','/api/projects', admin, { name:'Bau F1', due_date:'2026-02-30' })).body.project.due_date===null);
+    ok('POST unmöglicher Tag 31.04. → NULL', (await req('POST','/api/projects', admin, { name:'Bau F2', due_date:'2026-04-31' })).body.project.due_date===null);
+    ok('POST 29.02. Nicht-Schaltjahr → NULL', (await req('POST','/api/projects', admin, { name:'Bau F3', due_date:'2026-02-29' })).body.project.due_date===null);
+    ok('POST 29.02. Schaltjahr → gültig', (await req('POST','/api/projects', admin, { name:'Bau F4', due_date:'2028-02-29' })).body.project.due_date==='2028-02-29');
+    ok('POST Monat 00 → NULL', (await req('POST','/api/projects', admin, { name:'Bau F5', due_date:'2026-00-10' })).body.project.due_date===null);
+    ok('POST ohne führende Null (2026-2-3) → NULL', (await req('POST','/api/projects', admin, { name:'Bau F6', due_date:'2026-2-3' })).body.project.due_date===null);
     ok('POST ohne Datum → NULL', (await req('POST','/api/projects', admin, { name:'Bau D' })).body.project.due_date===null);
     ok('GET liefert due_date', (await dueOf(admin, id))==='2026-08-15');
     await req('PUT','/api/projects/'+id, admin, { urgency:'rot' });
