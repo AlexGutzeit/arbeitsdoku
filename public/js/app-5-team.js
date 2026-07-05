@@ -1292,8 +1292,7 @@ async function renderProjects() {
         <div class="proj-meta">Dringlichkeit: ${u.label} · erstellt ${formatDateTimeDE(p.created_at)}${showDone && p.done_at ? ' · erledigt ' + formatDateTimeDE(p.done_at) : ''}</div>
         <div class="proj-meta">Für: ${(p.assigned_users && p.assigned_users.length) ? p.assigned_users.map(x => esc(x.name)).join(', ') : '– (nicht zugewiesen)'}</div>
         ${sched ? `<div class="proj-meta" style="color:${sched.color}">&#128197; Fällig bis ${formatDateDE(p.due_date)} · ${sched.label}${sched.hasSchedule ? ` · Restaufwand ${dT(sched.remaining)} · ${sched.delta > 0 ? dT(sched.delta) + ' über Frist' : (sched.delta < 0 ? dT(-sched.delta) + ' Luft' : 'punktgenau')}` : ''}</div>` : ''}
-        ${ms.length ? `<div class="ms-list">${msList}</div>${msBar(prog, null, goal, fill)}<div class="proj-meta">${Math.round(prog.done)}% fertig · ${Math.round(prog.doing)}% in Arbeit · ${Math.round(prog.offen)}% offen</div>`
-          : (manage ? '<div class="proj-meta">Noch keine Zwischenziele (unter „Bearbeiten" anlegen)</div>' : '')}
+        ${ms.length ? `<div class="ms-list">${msList}</div>${msBar(prog, null, goal, fill)}<div class="proj-meta">${Math.round(prog.done)}% fertig · ${Math.round(prog.doing)}% in Arbeit · ${Math.round(prog.offen)}% offen</div>` : ''}
         ${canViewAll() ? `<button type="button" class="proj-stats-btn" data-id="${p.id}">&#128202; Statistik ${_statsOpen.has(String(p.id)) ? '&#9652;' : '&#9662;'}</button><div class="proj-stats" data-id="${p.id}"></div>` : ''}
         <div class="proj-actions">${actions}</div>
       </div>

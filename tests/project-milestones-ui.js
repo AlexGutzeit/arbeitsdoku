@@ -94,7 +94,7 @@ async function waitFor(page, fn, arg, timeout=6000) { const s=Date.now(); while(
     const leer = (await req('GET','/api/projects', admin)).body.projects.find(x=>x.name==='Leer').id;
     ok('Auftrag ohne Ziele: KEIN Fortschrittsbalken', await p.evaluate(id=>!document.querySelector(`.proj-tile[data-id="${id}"] .ms-bar`), leer));
     await expand(p, leer);
-    ok('ohne Ziele: Hinweis „Noch keine Zwischenziele"', (await detailText(p, leer)).includes('Noch keine Zwischenziele'));
+    ok('ohne Ziele: KEIN Hinweistext auf der Kachel', !(await detailText(p, leer)).includes('Noch keine Zwischenziele'));
 
     // ===== Multi-Client-Live =====
     console.log('\n[Multi-Client-Live]');
