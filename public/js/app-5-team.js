@@ -1177,17 +1177,29 @@ const msBar = (prog, cls, goalPct, fillPct) => {
 // Fälligkeit + Zeitbudget. Restaufwand = Σ Tage der NICHT erledigten Ziele (offen + in Arbeit; erledigte raus).
 const SCHED = { rot: '#dc2626', orange: '#ea580c', gruen: '#16a34a', neutral: '#6b7280', luft: '#93c5fd' };
 const todayISO = () => formatDateISO(new Date());
-function daysBetween(aISO, bISO) {
-  const a = new Date(aISO + 'T00:00:00'), b = new Date(bISO + 'T00:00:00');
-  return Math.round((b - a) / 86400000);
+// Arbeitstag = Mo–Fr und kein Feiertag. holidaySet = Set von ISO-Tagen (globale Feiertage).
+const isWorkday = (d, holidaySet) => { const wd = d.getDay(); return wd !== 0 && wd !== 6 && !(holidaySet && holidaySet.has(formatDateISO(d))); };
+// Arbeitstage NACH heute bis einschließlich due; negativ = überfällig (Arbeitstage nach due bis heute).
+// Sa/So und Feiertage zählen nicht — konsistent mit den Zwischenziel-Dauern (est_days = Arbeitstage).
+function workdaysUntil(dueISO, holidaySet) {
+  const today = todayISO();
+  if (dueISO === today) return 0;
+  const past = dueISO < today;
+  const start = new Date((past ? dueISO : today) + 'T00:00:00');
+  const end = new Date((past ? today : dueISO) + 'T00:00:00');
+  let count = 0;
+  const cur = new Date(start);
+  cur.setDate(cur.getDate() + 1); // ab dem Tag nach 'start'
+  while (cur <= end) { if (isWorkday(cur, holidaySet)) count++; cur.setDate(cur.getDate() + 1); }
+  return past ? -count : count;
 }
 const msRemainingDays = (ms) => ms.filter(m => m.status !== 'done').reduce((s, m) => s + (msDays(m.est_days) > 0 ? msDays(m.est_days) : 1), 0);
-// Liefert Fälligkeits-Infos für eine Kachel (oder null, wenn kein Datum).
-function scheduleInfo(p, showDone) {
+// Liefert Fälligkeits-Infos für eine Kachel (oder null, wenn kein Datum). available in ARBEITSTAGEN.
+function scheduleInfo(p, showDone, holidaySet) {
   if (!p.due_date) return null;
-  const available = daysBetween(todayISO(), p.due_date);
-  const label = available < 0 ? `${-available} ${-available === 1 ? 'Tag' : 'Tage'} überfällig`
-    : available === 0 ? 'heute fällig' : `noch ${available} ${available === 1 ? 'Tag' : 'Tage'}`;
+  const available = workdaysUntil(p.due_date, holidaySet);
+  const label = available < 0 ? `${-available} ${-available === 1 ? 'Arbeitstag' : 'Arbeitstage'} überfällig`
+    : available === 0 ? 'heute fällig' : `noch ${available} ${available === 1 ? 'Arbeitstag' : 'Arbeitstage'}`;
   const ms = p.milestones || [];
   const hasSchedule = !showDone && !p.done && ms.length > 0;
   let color = SCHED.neutral, goalPct = null, fillPct = null, remaining = 0, delta = 0;
@@ -1229,6 +1241,21 @@ async function renderProjects() {
   } catch (e) { toast(e.message, 'error'); return; }
   S.projects = projects;
 
+  // Feiertage im relevanten Bereich laden (für die Arbeitstag-Berechnung der Fälligkeit) — nur wenn Fristen da sind.
+  const holidaySet = new Set();
+  const dueDates = projects.filter(p => p.due_date).map(p => p.due_date);
+  if (dueDates.length) {
+    const today = todayISO();
+    const lo = dueDates.reduce((m, d) => d < m ? d : m, today);
+    const hi = dueDates.reduce((m, d) => d > m ? d : m, today);
+    try {
+      const fData = await api('GET', `/api/absences?type=feiertag&from=${lo}&to=${hi}`);
+      for (const a of ((fData && fData.absences) || [])) {
+        for (const c = new Date(a.date_from + 'T00:00:00'), e = new Date((a.date_to || a.date_from) + 'T00:00:00'); c <= e; c.setDate(c.getDate() + 1)) holidaySet.add(formatDateISO(c));
+      }
+    } catch (_) { /* Feiertage optional — ohne sie zählen nur Sa/So nicht */ }
+  }
+
   // Gruppieren: unter jedem zugewiesenen User; ohne Zuweisung → „Nicht zugewiesen"
   const byUser = {}; const unassigned = [];
   for (const p of projects) {
@@ -1255,10 +1282,10 @@ async function renderProjects() {
     const u = projUrg(p.urgency);
     const ms = p.milestones || [];
     const prog = ms.length ? projectProgress(ms) : null;
-    const sched = scheduleInfo(p, showDone);
+    const sched = scheduleInfo(p, showDone, holidaySet);
     const goal = sched && sched.hasSchedule ? sched.goalPct : null;
     const fill = sched && sched.hasSchedule ? sched.fillPct : null;
-    const dT = (n) => String(Math.round(n * 10) / 10).replace('.', ',') + ' T';
+    const dT = (n) => String(Math.round(n * 10) / 10).replace('.', ',') + ' AT';
     // Status ändern dürfen Zugeteilte + Chef/Admin
     const canMs = manage || (p.assigned_users || []).some(x => x.user_id === myId);
     const expanded = _expandedProjects.has(String(p.id));
@@ -1279,7 +1306,7 @@ async function renderProjects() {
       const ctrl = canMs
         ? `<span class="ms-picker">${MS_ORDER.map(s => `<button type="button" class="ms-opt${m.status === s ? ' active' : ''}" data-id="${p.id}" data-mid="${m.id}" data-status="${s}" style="background:${MS_META[s].color}" title="${MS_META[s].label}"></button>`).join('')}</span>`
         : `<span class="ms-dot" style="background:${meta.color}" title="${meta.label}"></span>`;
-      return `<div class="ms-row">${ctrl}<span class="ms-title">${esc(m.title)}</span><span class="ms-days">${String(m.est_days).replace('.', ',')} T</span></div>`;
+      return `<div class="ms-row">${ctrl}<span class="ms-title">${esc(m.title)}</span><span class="ms-days" title="Arbeitstage">${String(m.est_days).replace('.', ',')} AT</span></div>`;
     }).join('');
     return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}${expanded ? ' expanded' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
       <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${flag}</div>
@@ -1313,7 +1340,7 @@ async function renderProjects() {
     <div class="board-legend">
       <span class="legend-group"><span class="legend-label">Dringlichkeit:</span> ${PROJECT_URGENCY.map(u => legItem(u.color, u.label)).join('')}</span>
       <span class="legend-group"><span class="legend-label">Fortschritt:</span> ${['done', 'doing', 'offen'].map(k => legItem(MS_META[k].color, MS_META[k].label)).join('')}</span>
-      <span class="legend-group"><span class="legend-label">Termin:</span> ${legItem(SCHED.gruen, 'in der Zeit')}${legItem(SCHED.orange, 'wird knapp')}${legItem(SCHED.rot, 'zu spät')}${legItem(SCHED.luft, 'Luft bis Frist')}</span>
+      <span class="legend-group"><span class="legend-label" title="Berechnet in Arbeitstagen – Sa/So und Feiertage zählen nicht">Termin (Arbeitstage):</span> ${legItem(SCHED.gruen, 'in der Zeit')}${legItem(SCHED.orange, 'wird knapp')}${legItem(SCHED.rot, 'zu spät')}${legItem(SCHED.luft, 'Luft bis Frist')}</span>
     </div>`;
 
   const mainEl = document.querySelector('.main');
@@ -1442,7 +1469,7 @@ async function renderProjectForm(project) {
     msListEl.innerHTML = msRows.map((r, i) => `<div class="ms-edit-row" data-idx="${i}">
       <input class="form-control ms-edit-title" data-idx="${i}" value="${esc(r.title || '')}" placeholder="z.B. Kabel verlegen">
       <input type="text" inputmode="decimal" class="form-control ms-edit-days" data-idx="${i}" value="${r.est_days != null ? String(r.est_days).replace('.', ',') : '1'}" placeholder="z.B. 1,5">
-      <span class="ms-edit-unit">Tage</span>
+      <span class="ms-edit-unit" title="Arbeitstage (Sa/So & Feiertage zählen nicht)">Arbeitstage</span>
       <button type="button" class="btn btn-sm btn-danger ms-edit-del" data-idx="${i}" title="Entfernen">&times;</button>
     </div>`).join('') || '<div class="push-hint">Noch keine Zwischenziele – mit „+ Zwischenziel" hinzufügen.</div>';
   };

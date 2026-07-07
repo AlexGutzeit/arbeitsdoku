@@ -23,6 +23,8 @@ function req(method, p, token, body) {
 }
 const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+// Datum exakt k Arbeitstage (Mo–Fr) nach heute — Wochenenden überspringen (available = k, laufunabhängig).
+const dueInWorkdays = k => { const d = new Date(); let c = 0; while (c < k) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) c++; } return d.toISOString().slice(0, 10); };
 // Breite des hellblauen Luft-Segments am schlanken (eingeklappten) Balken
 const bufSlim = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .ms-bar-slim .ms-buffer`); return e ? parseFloat(e.style.width) : 0; }, id);
 // Breite des grünen (erledigt) Segments = 1. Span am schlanken Balken
@@ -52,9 +54,9 @@ async function loginPage(browser, base, user, pw) {
     const admin = await tok('admin', apw);
     await req('POST','/api/users', admin, { username:'chefliv', password:'test', name:'Chefin Live', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
     const jakob = (await req('POST','/api/users', admin, { username:'jakobliv', password:'test', name:'Jakob Wolf', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    // Frist in 30 T, 2 offene Ziele à 10 T → Rest 20 T, Puffer vorhanden (Luft ~33%).
-    // Nach „Ziel 1 erledigt": Rest 10 T → mehr Luft (~50%) + grünes Segment erscheint.
-    const pr = (await req('POST','/api/projects', admin, { name:'Live-Balken', assigned_user_ids:[jakob.id], due_date:iso(30), milestones:[{title:'Ziel 1', est_days:10},{title:'Ziel 2', est_days:10}] })).body.project;
+    // Frist in 30 ARBEITSTAGEN, 2 offene Ziele à 10 AT → Rest 20 AT, Puffer vorhanden (Luft ~33%).
+    // Nach „Ziel 1 erledigt": Rest 10 AT → mehr Luft (~50%) + grünes Segment erscheint.
+    const pr = (await req('POST','/api/projects', admin, { name:'Live-Balken', assigned_user_ids:[jakob.id], due_date:dueInWorkdays(30), milestones:[{title:'Ziel 1', est_days:10},{title:'Ziel 2', est_days:10}] })).body.project;
     const mid1 = pr.milestones[0].id;
 
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });

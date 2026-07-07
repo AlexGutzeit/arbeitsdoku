@@ -23,6 +23,9 @@ function req(method, p, token, body) {
 }
 const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+// Datum, das exakt k Arbeitstage (Mo–Fr) nach heute liegt — Wochenenden werden übersprungen.
+// So ist `available` (Arbeitstage) im Test deterministisch = k, unabhängig vom Wochentag des Laufs.
+const dueInWorkdays = k => { const d = new Date(); let c = 0; while (c < k) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) c++; } return d.toISOString().slice(0, 10); };
 const RED='#dc2626', ORANGE='#ea580c', GREEN='#16a34a';
 const dueStyle = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .proj-due`); return e ? e.getAttribute('style') : null; }, id);
 const goalLeft = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .ms-bar-slim .ms-goal`); return e ? parseFloat(e.style.left) : null; }, id);
@@ -41,12 +44,13 @@ const detailText = (p, id) => p.evaluate(id => { const d = document.querySelecto
     const admin = await tok('admin', apw);
     const anna = (await req('POST','/api/users', admin, { username:'anna', password:'test', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const P = (o) => req('POST','/api/projects', admin, { assigned_user_ids:[anna.id], ...o }).then(r => r.body.project);
-    // behind: Frist in 15 T, Restaufwand 30 T (alle offen) → rot, goalPct=(0+15)/30*100=50, „15 T über"
-    const behind = await P({ name:'Behind', due_date:iso(15), milestones:[{title:'A',est_days:15},{title:'B',est_days:15}] });
-    // Puffer: Frist in 30 T, Rest 20 T → grün, goalPct=100, „10 T Luft"
-    const puffer = await P({ name:'Puffer', due_date:iso(30), milestones:[{title:'A',est_days:10},{title:'B',est_days:10}] });
-    // knapp: Frist in 20 T, Rest 18 T (ratio 0.9) → orange
-    const knapp  = await P({ name:'Knapp', due_date:iso(20), milestones:[{title:'A',est_days:18}] });
+    // Alle Fristen in ARBEITSTAGEN, damit die Fälle laufunabhängig gelten.
+    // behind: Frist in 10 AT, Restaufwand 30 AT (alle offen) → rot, goalPct=(0+10)/30*100≈33, „20 AT über"
+    const behind = await P({ name:'Behind', due_date:dueInWorkdays(10), milestones:[{title:'A',est_days:15},{title:'B',est_days:15}] });
+    // Puffer: Frist in 30 AT, Rest 20 AT → grün (ratio 0.67), goalPct=100, „10 AT Luft"
+    const puffer = await P({ name:'Puffer', due_date:dueInWorkdays(30), milestones:[{title:'A',est_days:10},{title:'B',est_days:10}] });
+    // knapp: Frist in 20 AT, Rest 18 AT (ratio 0.9) → orange
+    const knapp  = await P({ name:'Knapp', due_date:dueInWorkdays(20), milestones:[{title:'A',est_days:18}] });
     // überfällig ohne Ziele → rotes Badge, KEIN Balken/Marker
     const odNoMs = await P({ name:'Overdue', due_date:iso(-4) });
     ok('Setup', !!(behind && puffer && knapp && odNoMs));
@@ -66,7 +70,7 @@ const detailText = (p, id) => p.evaluate(id => { const d = document.querySelecto
 
     // Frist-Marker-Position im Balken
     const gb = await goalLeft(p, behind.id), gp = await goalLeft(p, puffer.id);
-    ok('behind: Frist-Marker IM Balken (~50%)', gb !== null && gb > 40 && gb < 60, 'left=' + gb);
+    ok('behind: Frist-Marker IM Balken (~33%)', gb !== null && gb > 25 && gb < 42, 'left=' + gb);
     ok('puffer: Frist-Marker am rechten Rand (100%)', gp === 100, 'left=' + gp);
     ok('überfällig ohne Ziele: KEIN Frist-Marker', (await goalLeft(p, odNoMs.id)) === null);
 
