@@ -341,6 +341,8 @@ router.put('/group/:groupId', authenticate, canPlan, (req, res) => {
   }
 
   const update = db.transaction(() => {
+    // Serien-Verknüpfung der Gruppe merken (bleibt beim Bearbeiten einer Occurrence erhalten)
+    const link = db.prepare('SELECT series_id, occurrence_date FROM planning_entries WHERE group_id = ? LIMIT 1').get(groupId) || {};
     // Alte Einträge der Gruppe löschen (CASCADE löscht auch assignments)
     db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(groupId);
 
@@ -351,9 +353,9 @@ router.put('/group/:groupId', authenticate, canPlan, (req, res) => {
     for (const day of days) {
       if (!day.date || !day.time_from || !day.time_to) continue;
       const result = db.prepare(`
-        INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(req.user.id, day.date, day.time_from, day.time_to, day.break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', newGroupId, color || '#f59e0b');
+        INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(req.user.id, day.date, day.time_from, day.time_to, day.break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', newGroupId, color || '#f59e0b', link.series_id || null, link.occurrence_date || null);
 
       const planningId = result.lastInsertRowid;
       for (const uid of assigned_user_ids) {
@@ -409,8 +411,8 @@ router.put('/:id', authenticate, canPlan, (req, res) => {
       for (const day of days) {
         if (!day.date || !day.time_from || !day.time_to) continue;
         const result = db.prepare(`
-          INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, created_at, series_id, occurrence_date)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           originalCreatedBy,
           day.date, day.time_from, day.time_to, day.break_minutes || 0,
@@ -421,7 +423,8 @@ router.put('/:id', authenticate, canPlan, (req, res) => {
           description !== undefined ? description : entry.description,
           newGroupId,
           color !== undefined ? color : (entry.color || '#f59e0b'),
-          originalCreatedAt
+          originalCreatedAt,
+          entry.series_id || null, entry.occurrence_date || null
         );
         const planningId = result.lastInsertRowid;
         for (const uid of assigned_user_ids) {
