@@ -546,7 +546,37 @@ async function initDatabase() {
       db.exec("ALTER TABLE planning_entries ADD COLUMN color TEXT DEFAULT '#f59e0b'");
       console.log('Migration: color in planning_entries hinzugefügt.');
     }
+    // Serientermine: series_id (verknüpft alle Wiederholungen) + occurrence_date (Startdatum der Wiederholung)
+    if (!planCols.some(c => c.name === 'series_id')) {
+      db.exec("ALTER TABLE planning_entries ADD COLUMN series_id TEXT");
+      console.log('Migration: series_id in planning_entries hinzugefügt.');
+    }
+    if (!planCols.some(c => c.name === 'occurrence_date')) {
+      db.exec("ALTER TABLE planning_entries ADD COLUMN occurrence_date TEXT");
+      console.log('Migration: occurrence_date in planning_entries hinzugefügt.');
+    }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
+
+  // Serien-Regeln (Wiederholungen in der Planung)
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS planning_series (
+        series_id TEXT PRIMARY KEY,
+        created_by INTEGER NOT NULL,
+        freq TEXT NOT NULL,
+        anchor_date TEXT NOT NULL,
+        interval_weeks INTEGER DEFAULT 1,
+        end_type TEXT NOT NULL DEFAULT 'never',
+        end_count INTEGER,
+        end_until TEXT,
+        template TEXT NOT NULL DEFAULT '{}',
+        materialized_until TEXT,
+        active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (e) { console.error('Migration planning_series fehlgeschlagen:', e.message); }
 
   // Migration: orders – quantity nullable + location-Spalten
   try {
