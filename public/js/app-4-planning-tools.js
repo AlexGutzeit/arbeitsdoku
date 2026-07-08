@@ -325,7 +325,7 @@ function renderPlanningTimeline(entries, absences, canEdit) {
       const entryColor = e.color || '#f59e0b';
       bodyHtml += `<div class="tl-plan-entry" data-planning-id="${e.id}" style="top:${top}px;height:${height}px;left:${leftPct}%;width:${widthPct}%;right:auto;background:${entryColor}28;border-color:${entryColor};color:#374151;" title="Klicken zum \u00dcbernehmen">
         <div style="display:flex;justify-content:space-between;align-items:center;min-width:0;">
-          <span class="tl-e-time" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.time_from)} - ${esc(e.time_to)}</span>
+          <span class="tl-e-time" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.series_id ? '<span title="Serientermin">🔁</span> ' : ''}${esc(e.time_from)} - ${esc(e.time_to)}</span>
           <span style="display:flex;gap:2px;flex-shrink:0;">${actionsHtml}</span>
         </div>
         ${projLabel || e.client ? `<span class="tl-e-project">${esc(projLabel)}${projLabel && e.client ? ' – ' : ''}${esc(e.client || '')}</span>` : ''}
@@ -440,7 +440,7 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
         cellEntries.forEach(e => {
           const proj = e.project_name || e.project_text || '';
           const ec = e.color || '#f59e0b';
-          bodyHtml += `<div class="grid-plan-entry" style="background:${ec}28;border-left-color:${ec};color:#374151;">${e.time_from}-${e.time_to} ${e.address ? `<button class="nav-to-addr grid-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''} ${esc(proj)}${proj && e.client ? ' – ' : ''}${esc(e.client || '')}</div>`;
+          bodyHtml += `<div class="grid-plan-entry" style="background:${ec}28;border-left-color:${ec};color:#374151;">${e.series_id ? '🔁 ' : ''}${e.time_from}-${e.time_to} ${e.address ? `<button class="nav-to-addr grid-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''} ${esc(proj)}${proj && e.client ? ' – ' : ''}${esc(e.client || '')}</div>`;
         });
         bodyHtml += '</td>';
       });

@@ -3,8 +3,69 @@ const crypto = require('crypto');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
+const recur = require('../planning-recurrence');
 
 const router = express.Router();
+
+// ——— Serientermine (Wiederholungen) ———
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const addDaysISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const addMonthsISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+const diffDays = (aISO, bISO) => Math.round((new Date(bISO + 'T00:00:00Z') - new Date(aISO + 'T00:00:00Z')) / 86400000);
+
+// Wiederholungs-Eingaben prüfen/normalisieren; null bei ungültig.
+function validRecurrence(r) {
+  if (!r || !recur.FREQS.includes(r.freq)) return null;
+  const end_type = ['never', 'count', 'until'].includes(r.end_type) ? r.end_type : 'never';
+  const out = { freq: r.freq, interval_weeks: Math.max(1, Number(r.interval_weeks) || 1), end_type };
+  if (end_type === 'count') out.end_count = Math.min(500, Math.max(1, Number(r.end_count) || 1));
+  if (end_type === 'until') { if (!/^\d{4}-\d{2}-\d{2}$/.test(r.end_until || '')) return null; out.end_until = r.end_until; }
+  return out;
+}
+
+// Aus dem Body (days[] oder Einzeltag) die Serien-Vorlage bauen: Anker = frühester Tag, Tage als Offsets.
+function buildTemplate(body) {
+  const list = Array.isArray(body.days) && body.days.length
+    ? body.days
+    : [{ date: body.date, time_from: body.time_from, time_to: body.time_to, break_minutes: body.break_minutes }];
+  const valid = list.filter(d => d.date && d.time_from && d.time_to).sort((a, b) => a.date < b.date ? -1 : 1);
+  if (!valid.length) return null;
+  const anchor = valid[0].date;
+  return {
+    anchor,
+    tplDays: valid.map(d => ({ offset: diffDays(anchor, d.date), time_from: d.time_from, time_to: d.time_to, break_minutes: d.break_minutes || 0 })),
+    address: body.address || '', client: body.client || '', project_id: body.project_id || null,
+    project_text: body.project_text || '', description: body.description || '', color: body.color || '#f59e0b',
+  };
+}
+
+// Erzeugt für jede Wiederplanung echte Tageszeilen (eigene group_id je Vorkommen) + Zuweisungen + Serien-Regel.
+// Muss innerhalb einer Transaktion laufen. Liefert die series_id.
+function materializeSeries(db, createdBy, rule, template, assignedUserIds, occurrences, materializedUntil) {
+  const seriesId = crypto.randomUUID();
+  const insEntry = db.prepare(`INSERT INTO planning_entries
+    (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const insAssign = db.prepare('INSERT INTO planning_assignments (planning_id, user_id) VALUES (?, ?)');
+  for (const occStart of occurrences) {
+    const groupId = crypto.randomUUID(); // jede Wiederholung ist eine Gruppe (auch eintägig)
+    for (const td of template.tplDays) {
+      const date = addDaysISO(occStart, td.offset);
+      const r = insEntry.run(createdBy, date, td.time_from, td.time_to, td.break_minutes,
+        template.address, template.client, template.project_id, template.project_text, template.description,
+        groupId, template.color, seriesId, occStart);
+      for (const uid of assignedUserIds) insAssign.run(r.lastInsertRowid, uid);
+    }
+  }
+  db.prepare(`INSERT INTO planning_series
+    (series_id, created_by, freq, anchor_date, interval_weeks, end_type, end_count, end_until, template, materialized_until, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`).run(
+    seriesId, createdBy, rule.freq, rule.anchor_date, rule.interval_weeks, rule.end_type,
+    rule.end_count || null, rule.end_until || null,
+    JSON.stringify({ tplDays: template.tplDays, assigned_user_ids: assignedUserIds, address: template.address, client: template.client, project_id: template.project_id, project_text: template.project_text, description: template.description, color: template.color }),
+    materializedUntil);
+  return seriesId;
+}
 
 // Alle Planungen abrufen (für alle User sichtbar)
 router.get('/', authenticate, (req, res) => {
@@ -154,6 +215,28 @@ router.post('/', authenticate, canPlan, (req, res) => {
     if (ids.length !== 1 || ids[0] !== req.user.id) {
       return res.status(403).json({ error: 'Du darfst nur dich selbst verplanen' });
     }
+  }
+
+  // Serientermin (Wiederholung)? — vor allen Einzel-/Gruppen-Pfaden prüfen (funktioniert mit date ODER days[]).
+  if (req.body.recurrence) {
+    if (!assigned_user_ids || !assigned_user_ids.length) {
+      return res.status(400).json({ error: 'Mindestens ein Mitarbeiter muss zugewiesen werden' });
+    }
+    const rv = validRecurrence(req.body.recurrence);
+    if (!rv) return res.status(400).json({ error: 'Ungültige Wiederholungs-Angaben' });
+    const template = buildTemplate(req.body);
+    if (!template) return res.status(400).json({ error: 'Mindestens ein gültiger Tag ist erforderlich' });
+    const rule = { ...rv, anchor_date: template.anchor };
+    const horizon = rule.end_type === 'never' ? addMonthsISO(todayISO(), 24) : null;
+    const occurrences = recur.computeOccurrences(rule, horizon ? { horizon } : {});
+    if (!occurrences.length) return res.status(400).json({ error: 'Die Serie ergibt keine Termine' });
+    const spanDays = Math.max(...template.tplDays.map(d => d.offset));
+    const overlap = occurrences.length > 1 && diffDays(occurrences[0], occurrences[1]) <= spanDays;
+    const materializedUntil = horizon || occurrences[occurrences.length - 1];
+    const tx = db.transaction(() => materializeSeries(db, req.user.id, rule, template, assigned_user_ids, occurrences, materializedUntil));
+    const seriesId = tx();
+    broadcast('planning', req.headers['x-tab-id']);
+    return res.status(201).json({ success: true, series: true, series_id: seriesId, count: occurrences.length, days_per_occurrence: template.tplDays.length, overlap });
   }
 
   // Rückwärtskompatibel: einzelner Eintrag (altes Format)
