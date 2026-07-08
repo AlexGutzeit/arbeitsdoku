@@ -541,6 +541,57 @@ router.delete('/series/:seriesId', authenticate, canPlan, (req, res) => {
   res.json({ success: true });
 });
 
+// Serie bearbeiten mit Umfang: scope = 'occurrence' | 'following' | 'series'.
+// Ändert gemeinsame Felder (+ optional einheitliche Zeit + Zuweisung) auf den Zielzeilen; bei
+// following/series wird auch das Template aktualisiert (für die rollierende Verlängerung).
+router.put('/series/:seriesId', authenticate, canPlan, (req, res) => {
+  const db = getDb();
+  const series = loadSeriesOr(req, res, db);
+  if (!series) return;
+  const scope = req.body.scope || 'series';
+  const occ = req.body.occurrence_date;
+  const b = req.body;
+
+  let where = 'series_id = ?'; const wp = [series.series_id];
+  if (scope === 'occurrence' || scope === 'following') {
+    if (!occ) return res.status(400).json({ error: 'occurrence_date fehlt' });
+    where += scope === 'occurrence' ? ' AND occurrence_date = ?' : ' AND occurrence_date >= ?';
+    wp.push(occ);
+  }
+
+  const setCols = [], setVals = [];
+  const maybe = (col, val) => { if (val !== undefined) { setCols.push(col + ' = ?'); setVals.push(val); } };
+  maybe('address', b.address); maybe('client', b.client);
+  if (b.project_id !== undefined) { setCols.push('project_id = ?'); setVals.push(b.project_id || null); }
+  maybe('project_text', b.project_text); maybe('description', b.description); maybe('color', b.color);
+  maybe('time_from', b.time_from); maybe('time_to', b.time_to); maybe('break_minutes', b.break_minutes);
+
+  const tx = db.transaction(() => {
+    const ids = db.prepare(`SELECT id FROM planning_entries WHERE ${where}`).all(...wp).map(r => r.id);
+    if (setCols.length) db.prepare(`UPDATE planning_entries SET ${setCols.join(', ')} WHERE ${where}`).run(...setVals, ...wp);
+    if (Array.isArray(b.assigned_user_ids)) {
+      for (const pid of ids) {
+        db.prepare('DELETE FROM planning_assignments WHERE planning_id = ?').run(pid);
+        for (const uid of b.assigned_user_ids) db.prepare('INSERT INTO planning_assignments (planning_id, user_id) VALUES (?, ?)').run(pid, uid);
+      }
+    }
+    if (scope !== 'occurrence') { // Template für künftige (Scheduler-)Vorkommen mitziehen
+      let tpl; try { tpl = JSON.parse(series.template || '{}'); } catch (_) { tpl = {}; }
+      ['address', 'client', 'project_text', 'description', 'color'].forEach(k => { if (b[k] !== undefined) tpl[k] = b[k]; });
+      if (b.project_id !== undefined) tpl.project_id = b.project_id || null;
+      if (Array.isArray(b.assigned_user_ids)) tpl.assigned_user_ids = b.assigned_user_ids;
+      if (b.time_from !== undefined && Array.isArray(tpl.tplDays)) {
+        tpl.tplDays = tpl.tplDays.map(d => ({ ...d, time_from: b.time_from, time_to: b.time_to !== undefined ? b.time_to : d.time_to, break_minutes: b.break_minutes !== undefined ? b.break_minutes : d.break_minutes }));
+      }
+      db.prepare('UPDATE planning_series SET template = ? WHERE series_id = ?').run(JSON.stringify(tpl), series.series_id);
+    }
+    return ids.length;
+  });
+  const updated = tx();
+  broadcast('planning', req.headers['x-tab-id']);
+  res.json({ success: true, updated });
+});
+
 // Serie beenden: künftige Vorkommen (ab heute) entfernen, Vergangenes bleibt.
 router.post('/series/:seriesId/stop', authenticate, canPlan, (req, res) => {
   const db = getDb();

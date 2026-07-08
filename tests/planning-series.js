@@ -108,6 +108,28 @@ const uniq = arr => [...new Set(arr)];
     const del = await req('DELETE','/api/planning/series/' + r.body.series_id, selfTok, { scope:'series' });
     ok('Self-Planer: fremde Serie löschen → 403', del.status === 403, 'status ' + del.status);
 
+    // 11) Bearbeiten mit Umfang (occurrence / following / series)
+    r = await req('POST','/api/planning', admin, { date:'2026-07-08', time_from:'07:00', time_to:'15:30', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:4 } });
+    const es = r.body.series_id; // Vorkommen: 08,15,22,29
+    const entriesBy = async () => (await entriesOf(admin, es)).sort((a,b) => a.occurrence_date < b.occurrence_date ? -1 : 1);
+    // series: Farbe + Kunde auf alle
+    await req('PUT','/api/planning/series/' + es, admin, { scope:'series', color:'#ff0000', client:'Neu GmbH' });
+    ok('scope=series: alle 4 bekommen Farbe+Kunde', (await entriesBy()).every(e => e.color === '#ff0000' && e.client === 'Neu GmbH'));
+    // following ab 22.07.: Beschreibung nur ab dort
+    await req('PUT','/api/planning/series/' + es, admin, { scope:'following', occurrence_date:'2026-07-22', description:'ab hier' });
+    let eb = await entriesBy();
+    ok('scope=following: nur ab 22.07. Beschreibung', eb.filter(e=>e.description==='ab hier').map(e=>e.occurrence_date).join(',') === '2026-07-22,2026-07-29');
+    // occurrence 08.07.: Adresse nur dort
+    await req('PUT','/api/planning/series/' + es, admin, { scope:'occurrence', occurrence_date:'2026-07-08', address:'Nur hier 1' });
+    eb = await entriesBy();
+    ok('scope=occurrence: Adresse nur am 08.07.', eb.filter(e=>e.address==='Nur hier 1').map(e=>e.occurrence_date).join(',') === '2026-07-08');
+    // series: Zuweisung wechseln auf self
+    await req('PUT','/api/planning/series/' + es, admin, { scope:'series', assigned_user_ids:[self.id] });
+    ok('scope=series: Zuweisung auf allen gewechselt', (await entriesBy()).every(e => (e.assigned_users||[]).length===1 && e.assigned_users[0].user_id===self.id));
+    // Rechte: Self-Planer kann fremde Serie nicht bearbeiten
+    const putForbidden = await req('PUT','/api/planning/series/' + es, selfTok, { scope:'series', color:'#000000' });
+    ok('Self-Planer: fremde Serie bearbeiten → 403', putForbidden.status === 403, 'status ' + putForbidden.status);
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Series (API): ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);

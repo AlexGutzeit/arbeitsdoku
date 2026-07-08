@@ -1027,7 +1027,31 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
     const daysToSend = multiMode ? planDays : (planDays.length ? [planDays[0]] : []);
     if (!daysToSend.length) { toast('Mindestens einen Tag hinzufügen', 'error'); return; }
 
+    // Serien-Info der bearbeiteten Occurrence (Einzel- oder Gruppen-Eintrag)
+    const seriesInfo = (entry && entry.series_id) ? { series_id: entry.series_id, occurrence_date: entry.occurrence_date }
+      : (groupEntries && groupEntries[0] && groupEntries[0].series_id) ? { series_id: groupEntries[0].series_id, occurrence_date: groupEntries[0].occurrence_date }
+      : null;
+
     try {
+      if ((isEdit || isGroupEdit) && seriesInfo) {
+        // Serientermin bearbeiten → Umfang abfragen
+        const scope = await choiceModal('Serientermin bearbeiten: Was soll geändert werden?', [
+          { value: 'occurrence', label: 'Nur diesen Termin' },
+          { value: 'following', label: 'Diesen + alle folgenden' },
+          { value: 'series', label: 'Ganze Serie' },
+        ], { title: 'Serientermin bearbeiten', primary: true });
+        if (!scope) return;
+        if (scope === 'occurrence') {
+          if (isGroupEdit) await api('PUT', '/api/planning/group/' + editGroupId, { ...common, days: daysToSend });
+          else await api('PUT', '/api/planning/' + editId, { ...common, days: daysToSend });
+        } else {
+          const d0 = daysToSend[0] || {};
+          await api('PUT', '/api/planning/series/' + seriesInfo.series_id, { scope, occurrence_date: seriesInfo.occurrence_date, ...common, time_from: d0.time_from, time_to: d0.time_to, break_minutes: d0.break_minutes });
+        }
+        toast('Gespeichert', 'success');
+        navigate('/planning');
+        return;
+      }
       if (isEdit) {
         // Einzeleintrag bearbeiten — bei >1 Tag konvertiert Backend zu Gruppe
         await api('PUT', '/api/planning/' + editId, { ...common, days: daysToSend });
