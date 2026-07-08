@@ -495,6 +495,19 @@ function loadSeriesOr(req, res, db) {
   return series;
 }
 
+// Vorschau der nächsten Wiederholungstermine (für das Formular) — nutzt dieselbe Engine (kein Duplikat).
+router.post('/series/preview', authenticate, canPlan, (req, res) => {
+  const rv = validRecurrence(req.body.recurrence);
+  const anchor = req.body.anchor_date;
+  if (!rv || !/^\d{4}-\d{2}-\d{2}$/.test(anchor || '')) return res.status(400).json({ error: 'Ungültige Angaben' });
+  const rule = { ...rv, anchor_date: anchor };
+  const horizon = rule.end_type === 'never' ? addMonthsISO(todayISO(), 24) : null;
+  const occ = recur.computeOccurrences(rule, horizon ? { horizon } : {});
+  const spanDays = Math.max(0, Number(req.body.span_days) || 0);
+  const overlap = occ.length > 1 && diffDays(occ[0], occ[1]) <= spanDays;
+  res.json({ occurrences: occ.slice(0, 6), total: occ.length, bounded: rule.end_type !== 'never', overlap, label: recur.freqLabel(rule.freq, anchor) });
+});
+
 // Serie löschen mit Umfang: scope = 'occurrence' | 'following' | 'series'
 router.delete('/series/:seriesId', authenticate, canPlan, (req, res) => {
   const db = getDb();

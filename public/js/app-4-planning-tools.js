@@ -688,6 +688,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
     const container = document.getElementById('plan-days-list');
     if (container) container.innerHTML = renderDayRows();
     bindDayEvents();
+    if (typeof updateRecurAll === 'function') updateRecurAll(); // Serien-Vorschau/Labels an Datum anpassen
   }
 
   function bindDayEvents() {
@@ -876,17 +877,88 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
             </span>
           </div>
         </div>
+        ${(!isEdit && !isGroupEdit) ? `
+        <div class="form-group" id="pf-recur-group">
+          <label>Wiederholung (Serientermin)</label>
+          <select class="form-control" id="pf-recur">
+            <option value="">Keine (einmalig)</option>
+            <option value="weekly"></option>
+            <option value="monthly_date"></option>
+            <option value="monthly_weekday"></option>
+            <option value="yearly_weekday"></option>
+            <option value="yearly"></option>
+          </select>
+          <div id="pf-recur-end" style="display:none;margin-top:0.6rem;font-size:0.9rem">
+            <div style="margin-bottom:0.3rem"><label style="font-weight:normal"><input type="radio" name="pfrend" value="never" checked> kein Ende (läuft weiter)</label></div>
+            <div style="margin-bottom:0.3rem"><label style="font-weight:normal"><input type="radio" name="pfrend" value="count"> nach <input type="number" id="pf-recur-count" value="10" min="1" max="500" style="width:70px"> Terminen</label></div>
+            <div><label style="font-weight:normal"><input type="radio" name="pfrend" value="until"> bis <input type="date" id="pf-recur-until" style="width:auto"></label></div>
+          </div>
+          <div id="pf-recur-preview" class="push-hint" style="display:none;margin-top:0.5rem"></div>
+        </div>` : ''}
         <button type="submit" class="btn btn-primary btn-block">${(isEdit || isGroupEdit) ? 'Speichern' : 'Planung erstellen'}</button>
         ${isEdit ? `<button type="button" class="btn btn-outline btn-block" id="replan-entry" style="margin-top:0.5rem">Auftrag erneut planen</button>` : ''}
         ${(isEdit || isGroupEdit) ? '<button type="button" class="btn btn-danger btn-block" id="delete-planning" style="margin-top:0.5rem">Planung löschen</button>' : ''}
       </form>
     </div>`;
 
+  // ——— Wiederholung/Serientermin (nur Neu-Anlegen) ———
+  const WD_DE = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+  const MO_DE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  function recurLabelJS(freq, anchorISO) {
+    const d = new Date(anchorISO + 'T12:00:00'); const day = d.getDate(); const w = d.getDay(); const m = d.getMonth();
+    const nth = ['', '1.', '2.', '3.', '4.', '5.'][Math.floor((day - 1) / 7) + 1] || '';
+    return { weekly:`wöchentlich (jeden ${WD_DE[w]})`, monthly_date:`monatlich (jeden Monat am ${day}.)`, monthly_weekday:`monatlich (jeden ${nth} ${WD_DE[w]})`, yearly:`jährlich (am ${day}.${m + 1}.)`, yearly_weekday:`jährlich (${nth} ${WD_DE[w]} im ${MO_DE[m]})` }[freq] || '';
+  }
+  const currentAnchor = () => getDateRange().from;
+  function fillRecurOptions() {
+    const sel = document.getElementById('pf-recur'); if (!sel) return;
+    const a = currentAnchor();
+    ['weekly','monthly_date','monthly_weekday','yearly_weekday','yearly'].forEach(f => { const o = sel.querySelector(`option[value="${f}"]`); if (o) o.textContent = recurLabelJS(f, a); });
+  }
+  function getRecurrence() {
+    const sel = document.getElementById('pf-recur'); if (!sel || !sel.value) return null;
+    const end = document.querySelector('input[name="pfrend"]:checked')?.value || 'never';
+    const r = { freq: sel.value, end_type: end };
+    if (end === 'count') r.end_count = Number(document.getElementById('pf-recur-count').value) || 1;
+    if (end === 'until') r.end_until = document.getElementById('pf-recur-until').value;
+    return r;
+  }
+  let recurTimer = null;
+  async function updateRecurPreview() {
+    const box = document.getElementById('pf-recur-preview'); const endBox = document.getElementById('pf-recur-end');
+    if (!box) return;
+    const rec = getRecurrence();
+    if (endBox) endBox.style.display = rec ? '' : 'none';
+    if (!rec || (rec.end_type === 'until' && !rec.end_until)) { box.style.display = 'none'; return; }
+    const sorted = planDays.map(d => d.date).sort();
+    const spanDays = sorted.length ? Math.round((new Date(sorted[sorted.length - 1] + 'T12:00:00') - new Date(sorted[0] + 'T12:00:00')) / 86400000) : 0;
+    try {
+      const r = await api('POST', '/api/planning/series/preview', { recurrence: rec, anchor_date: currentAnchor(), span_days: spanDays });
+      const dates = r.occurrences.map(d => formatDateDE(d)).join(' · ');
+      const more = r.bounded ? `${r.total} Termine` : 'läuft weiter …';
+      box.style.display = '';
+      box.innerHTML = `🔁 ${esc(r.label)} — ${more}<br>Nächste: ${dates}${r.occurrences.length < r.total ? ' …' : ''}`
+        + (r.overlap ? `<br><span style="color:#b45309">⚠ Die Wiederholungen überschneiden sich – die Termine werden dann nebeneinander angezeigt.</span>` : '');
+    } catch (_) { box.style.display = 'none'; }
+  }
+  const updateRecurAll = () => { if (!document.getElementById('pf-recur')) return; fillRecurOptions(); updateRecurPreview(); };
+  function setupRecurrence() {
+    const sel = document.getElementById('pf-recur'); if (!sel) return;
+    fillRecurOptions();
+    const deb = () => { clearTimeout(recurTimer); recurTimer = setTimeout(updateRecurPreview, 250); };
+    sel.addEventListener('change', updateRecurPreview);
+    document.querySelectorAll('input[name="pfrend"]').forEach(r => r.addEventListener('change', updateRecurPreview));
+    document.getElementById('pf-recur-count')?.addEventListener('input', () => { const c = document.querySelector('input[name="pfrend"][value="count"]'); if (c) c.checked = true; deb(); });
+    document.getElementById('pf-recur-until')?.addEventListener('change', () => { const u = document.querySelector('input[name="pfrend"][value="until"]'); if (u) u.checked = true; updateRecurPreview(); });
+    document.getElementById('pf-single-date')?.addEventListener('change', () => setTimeout(updateRecurAll, 0));
+  }
+
   $app().innerHTML = layout(content, 'planning');
   bindLayout();
   const fab = document.getElementById('fab-new');
   if (fab) fab.style.display = 'none';
   bindDateSectionEvents();
+  setupRecurrence();
 
   document.querySelectorAll('.color-swatch').forEach(s => {
     s.addEventListener('click', () => {
@@ -965,14 +1037,20 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
         await api('PUT', '/api/planning/group/' + editGroupId, { ...common, days: daysToSend });
         toast('Planungsgruppe aktualisiert', 'success');
       } else {
-        // Neue Planung (einzeln oder Gruppe)
-        if (daysToSend.length === 1) {
+        // Neue Planung (einzeln, Gruppe ODER Serie)
+        const recurrence = getRecurrence();
+        if (recurrence) {
+          if (recurrence.end_type === 'until' && !recurrence.end_until) { toast('Bitte ein Enddatum für die Serie wählen', 'error'); return; }
+          const r = await api('POST', '/api/planning', { ...common, days: daysToSend, recurrence });
+          toast(r.overlap ? `Serie erstellt (${r.count} Termine) – Hinweis: Wiederholungen überschneiden sich` : `Serie erstellt (${r.count} Termine)`, r.overlap ? 'info' : 'success');
+        } else if (daysToSend.length === 1) {
           const day = daysToSend[0];
           await api('POST', '/api/planning', { ...common, date: day.date, time_from: day.time_from, time_to: day.time_to, break_minutes: day.break_minutes });
+          toast('Planung erstellt', 'success');
         } else {
           await api('POST', '/api/planning', { ...common, days: daysToSend });
+          toast('Planung erstellt', 'success');
         }
-        toast('Planung erstellt', 'success');
       }
       navigate('/planning');
     } catch (err) { toast(err.message, 'error'); }
