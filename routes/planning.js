@@ -595,16 +595,24 @@ router.put('/series/:seriesId', authenticate, canPlan, (req, res) => {
   res.json({ success: true, updated });
 });
 
-// Serie beenden: künftige Vorkommen (ab heute) entfernen, Vergangenes bleibt.
+// Serie beenden. Ohne body: künftige ab heute entfernen (Vergangenes bleibt). Mit { after: <occurrence_date> }:
+// „ab hier keine Wiederholung mehr" — diese Occurrence + Vergangenes bleiben, alle SPÄTEREN werden entfernt.
 router.post('/series/:seriesId/stop', authenticate, canPlan, (req, res) => {
   const db = getDb();
   const series = loadSeriesOr(req, res, db);
   if (!series) return;
+  const after = req.body && req.body.after;
   const today = todayISO();
   const tx = db.transaction(() => {
-    db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, today);
-    db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE series_id=?")
-      .run(addDaysISO(today, -1), addDaysISO(today, -1), series.series_id);
+    if (after) {
+      db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date > ?').run(series.series_id, after);
+      db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE series_id=?")
+        .run(after, after, series.series_id);
+    } else {
+      db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, today);
+      db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE series_id=?")
+        .run(addDaysISO(today, -1), addDaysISO(today, -1), series.series_id);
+    }
   });
   tx();
   broadcast('planning', req.headers['x-tab-id']);

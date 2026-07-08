@@ -598,6 +598,10 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
 
   const isEdit = !!entry;
   const isGroupEdit = !!groupEntries;
+  // Serien-Verknüpfung der bearbeiteten Occurrence (Einzel- oder Gruppen-Eintrag)
+  const seriesLink = (entry && entry.series_id) ? { series_id: entry.series_id, occurrence_date: entry.occurrence_date, entry_id: entry.id }
+    : (groupEntries && groupEntries[0] && groupEntries[0].series_id) ? { series_id: groupEntries[0].series_id, occurrence_date: groupEntries[0].occurrence_date, entry_id: groupEntries[0].id }
+    : null;
   const source = replanEntry || projectSource;
   const ref = entry || (groupEntries && groupEntries[0]) || source;
   const title = isEdit ? 'Planung bearbeiten' : (isGroupEdit ? 'Planungsgruppe bearbeiten' : (projectSource ? 'Auftrag in Planung übernehmen' : (source ? 'Auftrag erneut planen' : 'Neue Planung')));
@@ -897,6 +901,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
         </div>` : ''}
         <button type="submit" class="btn btn-primary btn-block">${(isEdit || isGroupEdit) ? 'Speichern' : 'Planung erstellen'}</button>
         ${isEdit ? `<button type="button" class="btn btn-outline btn-block" id="replan-entry" style="margin-top:0.5rem">Auftrag erneut planen</button>` : ''}
+        ${((isEdit || isGroupEdit) && seriesLink) ? `<button type="button" class="btn btn-outline btn-block" id="series-stop-here" style="margin-top:0.5rem">🔁✕ Ab hier keine Wiederholung mehr</button>` : ''}
         ${(isEdit || isGroupEdit) ? '<button type="button" class="btn btn-danger btn-block" id="delete-planning" style="margin-top:0.5rem">Planung löschen</button>' : ''}
       </form>
     </div>`;
@@ -1028,10 +1033,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
     const daysToSend = multiMode ? planDays : (planDays.length ? [planDays[0]] : []);
     if (!daysToSend.length) { toast('Mindestens einen Tag hinzufügen', 'error'); return; }
 
-    // Serien-Info der bearbeiteten Occurrence (Einzel- oder Gruppen-Eintrag)
-    const seriesInfo = (entry && entry.series_id) ? { series_id: entry.series_id, occurrence_date: entry.occurrence_date }
-      : (groupEntries && groupEntries[0] && groupEntries[0].series_id) ? { series_id: groupEntries[0].series_id, occurrence_date: groupEntries[0].occurrence_date }
-      : null;
+    const seriesInfo = seriesLink;
 
     try {
       if ((isEdit || isGroupEdit) && seriesInfo) {
@@ -1083,6 +1085,22 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
 
   document.getElementById('replan-entry')?.addEventListener('click', () => {
     navigate('/planning/replan/' + editId);
+  });
+
+  // „Ab hier keine Wiederholung mehr": diese Occurrence + Vergangenes bleiben, spätere weg.
+  // Danach optional direkt eine neue (ggf. anders getaktete) Serie ab hier planen.
+  document.getElementById('series-stop-here')?.addEventListener('click', async () => {
+    if (!seriesLink) return;
+    if (!(await confirmModal('Ab diesem Termin keine Wiederholung mehr?\n\nDieser Termin und alle vergangenen bleiben erhalten – alle späteren Wiederholungen werden entfernt.', { title: 'Wiederholung ab hier beenden', okLabel: 'Ab hier beenden' }))) return;
+    try {
+      await api('POST', '/api/planning/series/' + seriesLink.series_id + '/stop', { after: seriesLink.occurrence_date });
+      const next = await choiceModal('Wiederholung ab hier beendet. Möchtest du ab hier eine neue Serie planen (z. B. mit anderer Taktung)?', [
+        { value: 'new', label: '＋ Neue Serie ab hier planen', primary: true },
+        { value: 'done', label: 'Nein, fertig' },
+      ], { title: 'Fertig' });
+      if (next === 'new') navigate('/planning/replan/' + seriesLink.entry_id);
+      else { toast('Wiederholung ab hier beendet', 'success'); navigate('/planning'); }
+    } catch (err) { toast(err.message, 'error'); }
   });
 
   document.getElementById('delete-planning')?.addEventListener('click', async () => {

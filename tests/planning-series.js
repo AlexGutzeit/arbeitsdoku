@@ -150,6 +150,13 @@ const uniq = arr => [...new Set(arr)];
     const desc = (d) => bySa2.find(e => e.occurrence_date === d).description;
     ok('Beschreibung nur zukünftig geändert (Vergangenes leer)', desc('2026-07-08')==='' && desc('2026-07-22')==='' && desc('2026-07-29')==='neuer Text' && desc('2026-08-05')==='neuer Text');
 
+    // 13) „Ab hier keine Wiederholung mehr" (stop after): diese Occurrence + Vergangenes bleiben, spätere weg
+    r = await req('POST','/api/planning', admin, { date:'2026-07-08', time_from:'07:00', time_to:'15:30', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:5 } });
+    const sh = r.body.series_id; // 08,15,22,29,Aug05
+    await req('POST','/api/planning/series/' + sh + '/stop', admin, { after:'2026-07-22' });
+    const occH = uniq((await entriesOf(admin, sh)).map(e => e.occurrence_date)).sort();
+    ok('stop after 22.07.: 08/15/22 bleiben, spätere weg', JSON.stringify(occH) === JSON.stringify(['2026-07-08','2026-07-15','2026-07-22']));
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Series (API): ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);
