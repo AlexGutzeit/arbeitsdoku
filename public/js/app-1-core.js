@@ -586,6 +586,28 @@ function confirmModal(message, opts = {}) {
     overlay.querySelector('[data-act="ok"]').focus();
   });
 }
+// choiceModal: Mehrfach-Auswahl. choices: [{ value, label, danger?, primary? }]. Liefert value oder null (Abbruch).
+function choiceModal(message, choices, opts = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay dialog-modal';
+    const btns = choices.map(c => `<button class="btn ${c.danger ? 'btn-danger' : (c.primary ? 'btn-primary' : 'btn-outline')}" data-val="${esc(c.value)}" style="width:100%;margin-bottom:0.5rem;text-align:left">${esc(c.label)}</button>`).join('');
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:460px">
+        <div class="modal-header"><h3>${esc(opts.title || 'Aktion wählen')}</h3></div>
+        <div class="modal-body">${message ? `<p style="margin:0 0 0.9rem;white-space:pre-line">${esc(message)}</p>` : ''}${btns}</div>
+        <div class="modal-footer" style="display:flex;justify-content:flex-end;padding:1rem">
+          <button class="btn btn-outline" data-act="cancel">${esc(opts.cancelLabel || 'Abbrechen')}</button>
+        </div>`;
+    document.body.appendChild(overlay);
+    const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); resolve(val); };
+    const onKey = (e) => { if (e.key === 'Escape') finish(null); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
+    overlay.querySelectorAll('[data-val]').forEach(b => b.addEventListener('click', () => finish(b.dataset.val)));
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(null));
+  });
+}
 // promptModal: Promise<string|null> — String bei OK, null bei Abbrechen/Esc (wie natives prompt()).
 // opts: { title, defaultValue, multiline (default true), required, requiredMsg, okLabel, placeholder }
 function promptModal(message, opts = {}) {

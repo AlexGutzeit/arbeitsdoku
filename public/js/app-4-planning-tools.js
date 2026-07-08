@@ -189,10 +189,25 @@ async function renderPlanningContent() {
       menu.querySelector('.plan-menu-del').addEventListener('click', async (ev) => {
         ev.stopPropagation();
         closePlanMenus();
-        if (!(await confirmModal('Planung wirklich l\u00f6schen?', { title: 'Planung l\u00f6schen', okLabel: 'L\u00f6schen' }))) return;
+        const seriesId = btn.dataset.series;
+        const occ = btn.dataset.occ;
         try {
-          await api('DELETE', '/api/planning/' + btn.dataset.id);
-          toast('Planung gel\u00f6scht', 'success');
+          if (seriesId) {
+            const scope = await choiceModal('Dieser Termin geh\u00f6rt zu einer Serie. Was m\u00f6chtest du l\u00f6schen?', [
+              { value: 'occurrence', label: '\u2715 Nur diesen Termin', danger: true },
+              { value: 'following', label: '\u2715 Diesen + alle folgenden', danger: true },
+              { value: 'series', label: '\u2715 Ganze Serie', danger: true },
+              { value: 'stop', label: '\u23f9 Serie ab heute beenden (Vergangenes bleibt)' },
+            ], { title: 'Serientermin l\u00f6schen' });
+            if (!scope) return;
+            if (scope === 'stop') await api('POST', '/api/planning/series/' + seriesId + '/stop', {});
+            else await api('DELETE', '/api/planning/series/' + seriesId, { scope, occurrence_date: occ });
+            toast(scope === 'stop' ? 'Serie beendet' : 'Gel\u00f6scht', 'success');
+          } else {
+            if (!(await confirmModal('Planung wirklich l\u00f6schen?', { title: 'Planung l\u00f6schen', okLabel: 'L\u00f6schen' }))) return;
+            await api('DELETE', '/api/planning/' + btn.dataset.id);
+            toast('Planung gel\u00f6scht', 'success');
+          }
           renderPlanningContent();
         } catch (e2) { toast(e2.message, 'error'); }
       });
@@ -319,7 +334,7 @@ function renderPlanningTimeline(entries, absences, canEdit) {
       // ⋮-Menü: „alle"-Planer/Manager in jeder Spalte; Self-Planer NUR in seiner eigenen Spalte
       // (auch bei geteilten Einträgen, die in mehreren Spalten erscheinen).
       if (canEdit && canEditEntry(e) && (canPlanAll() || col.id === S.user.id)) {
-        actionsHtml += `<button type="button" class="plan-menu-btn" data-id="${e.id}" data-group="${e.group_id || ''}" title="Aktionen">&#8942;</button>`;
+        actionsHtml += `<button type="button" class="plan-menu-btn" data-id="${e.id}" data-group="${e.group_id || ''}" data-series="${e.series_id || ''}" data-occ="${e.occurrence_date || ''}" title="Aktionen">&#8942;</button>`;
       }
 
       const entryColor = e.color || '#f59e0b';

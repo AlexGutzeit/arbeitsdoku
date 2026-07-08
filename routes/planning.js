@@ -485,6 +485,65 @@ router.put('/:id', authenticate, canPlan, (req, res) => {
   res.json({ entry: { ...updated, assigned_users: assigned } });
 });
 
+// ——— Serien-Operationen (Löschen mit Umfang + „Serie beenden") — MÜSSEN vor /:id stehen ———
+// Rechte: Manager immer; Selbstplaner nur seine eigene Serie (created_by). Manager-Serien mit Fremd-
+// zuweisung kann ein Selbstplaner nicht als Ganzes ändern (er kann einzelne Vorkommen ausklinken).
+function loadSeriesOr(req, res, db) {
+  const series = db.prepare('SELECT * FROM planning_series WHERE series_id = ?').get(req.params.seriesId);
+  if (!series) { res.status(404).json({ error: 'Serie nicht gefunden' }); return null; }
+  if (!canPlanAll(req.user) && series.created_by !== req.user.id) { res.status(403).json({ error: 'Das ist nicht deine Serie' }); return null; }
+  return series;
+}
+
+// Serie löschen mit Umfang: scope = 'occurrence' | 'following' | 'series'
+router.delete('/series/:seriesId', authenticate, canPlan, (req, res) => {
+  const db = getDb();
+  const series = loadSeriesOr(req, res, db);
+  if (!series) return;
+  const scope = req.body && req.body.scope || 'series';
+  const occ = req.body && req.body.occurrence_date;
+
+  const tx = db.transaction(() => {
+    if (scope === 'occurrence') {
+      if (!occ) return { error: 'occurrence_date fehlt' };
+      db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date = ?').run(series.series_id, occ);
+    } else if (scope === 'following') {
+      if (!occ) return { error: 'occurrence_date fehlt' };
+      db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, occ);
+      if (occ <= series.anchor_date) {
+        db.prepare('DELETE FROM planning_series WHERE series_id = ?').run(series.series_id); // nichts bleibt übrig
+      } else {
+        db.prepare("UPDATE planning_series SET end_type='until', end_until=?, materialized_until=?, active=0 WHERE series_id=?")
+          .run(addDaysISO(occ, -1), addDaysISO(occ, -1), series.series_id);
+      }
+    } else { // ganze Serie
+      db.prepare('DELETE FROM planning_entries WHERE series_id = ?').run(series.series_id);
+      db.prepare('DELETE FROM planning_series WHERE series_id = ?').run(series.series_id);
+    }
+    return { ok: true };
+  });
+  const r = tx();
+  if (r.error) return res.status(400).json({ error: r.error });
+  broadcast('planning', req.headers['x-tab-id']);
+  res.json({ success: true });
+});
+
+// Serie beenden: künftige Vorkommen (ab heute) entfernen, Vergangenes bleibt.
+router.post('/series/:seriesId/stop', authenticate, canPlan, (req, res) => {
+  const db = getDb();
+  const series = loadSeriesOr(req, res, db);
+  if (!series) return;
+  const today = todayISO();
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, today);
+    db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE series_id=?")
+      .run(addDaysISO(today, -1), addDaysISO(today, -1), series.series_id);
+  });
+  tx();
+  broadcast('planning', req.headers['x-tab-id']);
+  res.json({ success: true });
+});
+
 // Gruppe löschen — MUSS vor /:id stehen!
 router.delete('/group/:groupId', authenticate, canPlan, (req, res) => {
   const db = getDb();

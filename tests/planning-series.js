@@ -81,6 +81,33 @@ const uniq = arr => [...new Set(arr)];
     r = await req('POST','/api/planning', selfTok, { date:'2026-07-08', time_from:'07:00', time_to:'15:30', assigned_user_ids:[self.id], recurrence:{ freq:'weekly', end_type:'count', end_count:2 } });
     ok('Self-Planer: Serie für sich selbst → 201', r.status === 201, 'status ' + r.status);
 
+    // 8) Löschen mit Umfang (occurrence / following / series)
+    r = await req('POST','/api/planning', admin, { date:'2026-07-08', time_from:'07:00', time_to:'15:30', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:5 } });
+    const sd = r.body.series_id;
+    const occs = async () => uniq((await entriesOf(admin, sd)).map(e => e.occurrence_date)).sort();
+    ok('Serie mit 5 Vorkommen angelegt', (await occs()).length === 5);
+    await req('DELETE','/api/planning/series/' + sd, admin, { scope:'occurrence', occurrence_date:'2026-07-15' });
+    ok('scope=occurrence: nur 15.07. entfernt', JSON.stringify(await occs()) === JSON.stringify(['2026-07-08','2026-07-22','2026-07-29','2026-08-05']));
+    await req('DELETE','/api/planning/series/' + sd, admin, { scope:'following', occurrence_date:'2026-07-29' });
+    ok('scope=following: ab 29.07. entfernt', JSON.stringify(await occs()) === JSON.stringify(['2026-07-08','2026-07-22']));
+    await req('DELETE','/api/planning/series/' + sd, admin, { scope:'series' });
+    ok('scope=series: alles entfernt', (await occs()).length === 0);
+
+    // 9) „Serie beenden": Anker in der Vergangenheit → Vergangenes bleibt, Zukunft weg
+    const past14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+    const today2 = new Date().toISOString().slice(0, 10);
+    r = await req('POST','/api/planning', admin, { date:past14, time_from:'07:00', time_to:'15:30', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'never' } });
+    const sd2 = r.body.series_id;
+    const before = (await entriesOf(admin, sd2)).length;
+    await req('POST','/api/planning/series/' + sd2 + '/stop', admin, {});
+    const remaining = await entriesOf(admin, sd2);
+    ok('stop: Vergangenes bleibt, Zukunft entfernt', remaining.length > 0 && remaining.length < before && remaining.every(e => e.occurrence_date < today2), `before=${before}, remaining=${remaining.length}`);
+
+    // 10) Rechte: Self-Planer kann fremde Serie nicht löschen
+    r = await req('POST','/api/planning', admin, { date:'2026-07-08', time_from:'07:00', time_to:'15:30', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:2 } });
+    const del = await req('DELETE','/api/planning/series/' + r.body.series_id, selfTok, { scope:'series' });
+    ok('Self-Planer: fremde Serie löschen → 403', del.status === 403, 'status ' + del.status);
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Series (API): ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);
