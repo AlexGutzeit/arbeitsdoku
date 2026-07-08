@@ -1,8 +1,14 @@
 // Geplante Zusammenfassungen (Digest-Push): prüft jede Minute, ob ein Plan fällig ist, baut aus den
 // Badge-Zählern eine Nachricht und schickt sie per notifyUsers (Kategorie null → unabhängig von den
 // Kategorie-Schaltern). isDue()/buildSummaryText()/berlinParts() sind reine Funktionen (testbar).
+const crypto = require('crypto');
 const { computeBadgeCounts } = require('./routes/badges');
 const push = require('./push');
+const recur = require('./planning-recurrence');
+
+const addDaysISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const addMonthsISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
+const SERIES_HORIZON_MONTHS = 24;
 
 const VALID_CATS = ['orders', 'absences', 'bulletin', 'notes'];
 const CAT_LABELS = { orders: 'Bestellungen', absences: 'Abwesenheiten', bulletin: 'Aushänge', notes: 'Notizen' };
@@ -66,12 +72,54 @@ async function tick(db, now = new Date()) {
   return fired;
 }
 
-let timer = null;
-function start(getDb) {
-  if (timer) return;
-  const run = () => { try { tick(getDb()); } catch (e) { console.error('summary tick fehlgeschlagen:', e && e.message); } };
-  setTimeout(run, 15000);            // kurz nach Boot einmal
-  timer = setInterval(run, 60 * 1000); // dann minütlich
+// Rollierende Materialisierung: verlängert aktive „never"-Serien bis heute + 24 Monate, sobald der
+// Horizont weiterrückt. Andere Endarten (count/until) sind bei Erstellung fertig materialisiert.
+// Gibt die Anzahl neu angelegter Vorkommen zurück. now injizierbar (Tests).
+function extendSeries(db, now = new Date()) {
+  const today = berlinParts(now).date;
+  const horizon = addMonthsISO(today, SERIES_HORIZON_MONTHS);
+  let series;
+  try { series = db.prepare("SELECT * FROM planning_series WHERE active = 1 AND end_type = 'never'").all(); } catch (_) { return 0; }
+  let added = 0;
+  const insEntry = db.prepare(`INSERT INTO planning_entries
+    (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const insAssign = db.prepare('INSERT INTO planning_assignments (planning_id, user_id) VALUES (?, ?)');
+  for (const s of series) {
+    if (s.materialized_until && s.materialized_until >= horizon) continue; // schon weit genug voraus
+    const rule = { freq: s.freq, anchor_date: s.anchor_date, interval_weeks: s.interval_weeks || 1, end_type: 'never' };
+    const from = s.materialized_until ? addDaysISO(s.materialized_until, 1) : today;
+    const occ = recur.computeOccurrences(rule, { horizon, from });
+    let tpl; try { tpl = JSON.parse(s.template || '{}'); } catch (_) { tpl = {}; }
+    const tplDays = (tpl.tplDays && tpl.tplDays.length) ? tpl.tplDays : [{ offset: 0, time_from: '07:00', time_to: '15:30', break_minutes: 0 }];
+    const assigned = tpl.assigned_user_ids || [];
+    const tx = db.transaction(() => {
+      for (const occStart of occ) {
+        const gid = crypto.randomUUID();
+        for (const td of tplDays) {
+          const r = insEntry.run(s.created_by, addDaysISO(occStart, td.offset), td.time_from, td.time_to, td.break_minutes || 0,
+            tpl.address || '', tpl.client || '', tpl.project_id || null, tpl.project_text || '', tpl.description || '', gid, tpl.color || '#f59e0b', s.series_id, occStart);
+          for (const uid of assigned) insAssign.run(r.lastInsertRowid, uid);
+        }
+        added++;
+      }
+      db.prepare('UPDATE planning_series SET materialized_until = ? WHERE series_id = ?').run(horizon, s.series_id);
+    });
+    tx();
+  }
+  return added;
 }
 
-module.exports = { start, tick, isDue, buildSummaryText, berlinParts, VALID_CATS, CAT_LABELS };
+let timer = null;
+let lastExtendDate = null;
+function start(getDb) {
+  if (timer) return;
+  const run = () => {
+    try { tick(getDb()); } catch (e) { console.error('summary tick fehlgeschlagen:', e && e.message); }
+    try { const d = berlinParts().date; if (d !== lastExtendDate) { lastExtendDate = d; extendSeries(getDb()); } } catch (e) { console.error('series extend fehlgeschlagen:', e && e.message); }
+  };
+  setTimeout(run, 15000);            // kurz nach Boot einmal
+  timer = setInterval(run, 60 * 1000); // dann minütlich (Serien-Verlängerung nur 1×/Tag)
+}
+
+module.exports = { start, tick, extendSeries, isDue, buildSummaryText, berlinParts, VALID_CATS, CAT_LABELS };
