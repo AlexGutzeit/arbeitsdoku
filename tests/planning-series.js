@@ -130,6 +130,26 @@ const uniq = arr => [...new Set(arr)];
     const putForbidden = await req('PUT','/api/planning/series/' + es, selfTok, { scope:'series', color:'#000000' });
     ok('Self-Planer: fremde Serie bearbeiten → 403', putForbidden.status === 403, 'status ' + putForbidden.status);
 
+    // 12) Nutzer-Zuordnung NUR für zukünftige Termine ändern — Vergangenes behält alte Zuordnung
+    //     (Szenario: erste 3 Termine Alex+Jan+Jakob; ab dem 4. nur noch Alex+Jakob; Jan bleibt in der Vergangenheit)
+    const alex = await mkUser({ username:'alex', name:'Alex' });
+    const jan = await mkUser({ username:'jan', name:'Jan' });
+    const jakob = await mkUser({ username:'jakob', name:'Jakob' });
+    r = await req('POST','/api/planning', admin, { date:'2026-07-08', time_from:'07:00', time_to:'15:30', assigned_user_ids:[alex.id, jan.id, jakob.id], recurrence:{ freq:'weekly', end_type:'count', end_count:5 } });
+    const sa = r.body.series_id; // 08,15,22,29,Aug05
+    await req('PUT','/api/planning/series/' + sa, admin, { scope:'following', occurrence_date:'2026-07-29', assigned_user_ids:[alex.id, jakob.id] });
+    const bySa = await entriesOf(admin, sa);
+    const asgn = (d) => (bySa.find(e => e.occurrence_date === d).assigned_users || []).map(a => a.user_id).sort((x,y)=>x-y);
+    const three = [alex.id, jan.id, jakob.id].sort((x,y)=>x-y);
+    const two = [alex.id, jakob.id].sort((x,y)=>x-y);
+    ok('erste 3 Termine behalten Alex+Jan+Jakob', JSON.stringify(asgn('2026-07-08'))===JSON.stringify(three) && JSON.stringify(asgn('2026-07-15'))===JSON.stringify(three) && JSON.stringify(asgn('2026-07-22'))===JSON.stringify(three));
+    ok('ab 4. Termin (29.07.) nur noch Alex+Jakob (Jan raus)', JSON.stringify(asgn('2026-07-29'))===JSON.stringify(two) && JSON.stringify(asgn('2026-08-05'))===JSON.stringify(two));
+    // Gleiches Prinzip für Beschreibung
+    await req('PUT','/api/planning/series/' + sa, admin, { scope:'following', occurrence_date:'2026-07-29', description:'neuer Text' });
+    const bySa2 = await entriesOf(admin, sa);
+    const desc = (d) => bySa2.find(e => e.occurrence_date === d).description;
+    ok('Beschreibung nur zukünftig geändert (Vergangenes leer)', desc('2026-07-08')==='' && desc('2026-07-22')==='' && desc('2026-07-29')==='neuer Text' && desc('2026-08-05')==='neuer Text');
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Series (API): ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);
