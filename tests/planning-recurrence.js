@@ -39,6 +39,11 @@ eq('yearly 29.02. Schaltjahr, count=3', computeOccurrences({ freq: 'yearly', anc
 eq('yearly am 08.07., count=2', computeOccurrences({ freq: 'yearly', anchor_date: '2026-07-08', end_type: 'count', end_count: 2 }),
   ['2026-07-08', '2027-07-08']);
 
+// yearly_weekday: 1. Montag im Februar (Anker 02.02.2026 = 1. Montag)
+eq('yearly_weekday 1. Mo im Februar, count=3', computeOccurrences({ freq: 'yearly_weekday', anchor_date: '2026-02-02', end_type: 'count', end_count: 3 }),
+  ['2026-02-02', '2027-02-01', '2028-02-07']);
+ok('freqLabel yearly_weekday', /jährlich .*1\. Montag im Februar/.test(freqLabel('yearly_weekday', '2026-02-02')), freqLabel('yearly_weekday', '2026-02-02'));
+
 // never + horizon (Scheduler-Materialisierung)
 eq('weekly never bis Horizont 2026-07-31', computeOccurrences({ freq: 'weekly', anchor_date: '2026-07-08', end_type: 'never' }, { horizon: '2026-07-31' }),
   ['2026-07-08', '2026-07-15', '2026-07-22', '2026-07-29']);

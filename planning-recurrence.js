@@ -6,7 +6,8 @@
 // Rechnen bewusst in UTC (Date.UTC / toISOString), damit Sommer-/Winterzeit keine Tage verschiebt.
 
 const MS_DAY = 86400000;
-const FREQS = ['yearly', 'monthly_date', 'monthly_weekday', 'weekly'];
+const FREQS = ['yearly', 'yearly_weekday', 'monthly_date', 'monthly_weekday', 'weekly'];
+const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 
 const fromISO = (s) => new Date(s + 'T00:00:00Z');
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -59,6 +60,9 @@ function computeOccurrences(rule, opts = {}) {
     } else if (freq === 'yearly') {
       const y = aY + k;
       if (!(aM === 1 && aD === 29 && daysInMonth(y, 1) < 29)) d = new Date(Date.UTC(y, aM, aD));
+    } else if (freq === 'yearly_weekday') {
+      const y = aY + k; // jedes Jahr der n-te Wochentag im Monat des Startdatums (z. B. 1. Montag im Februar)
+      d = nthWeekdayOfMonth(y, aM, aW, nth);
     } else if (freq === 'monthly_date') {
       const y = aY + Math.floor((aM + k) / 12);
       const m = (aM + k) % 12;
@@ -85,8 +89,10 @@ function freqLabel(freq, anchorISO) {
   const wd = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
   const { day, weekday, nth } = anchorParts(anchorISO);
   const nthWord = ['', '1.', '2.', '3.', '4.', '5.'][nth] || (nth + '.');
+  const month = fromISO(anchorISO).getUTCMonth();
   switch (freq) {
-    case 'yearly': return `jährlich (jedes Jahr am ${day}.${(fromISO(anchorISO).getUTCMonth() + 1)}.)`;
+    case 'yearly': return `jährlich (jedes Jahr am ${day}.${month + 1}.)`;
+    case 'yearly_weekday': return `jährlich (jeden ${nthWord} ${wd[weekday]} im ${MONTHS[month]})`;
     case 'monthly_date': return `monatlich (jeden Monat am ${day}.)`;
     case 'monthly_weekday': return `monatlich (jeden ${nthWord} ${wd[weekday]} des Monats)`;
     case 'weekly': return `wöchentlich (jeden ${wd[weekday]})`;
