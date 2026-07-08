@@ -934,7 +934,8 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
     const spanDays = sorted.length ? Math.round((new Date(sorted[sorted.length - 1] + 'T12:00:00') - new Date(sorted[0] + 'T12:00:00')) / 86400000) : 0;
     try {
       const r = await api('POST', '/api/planning/series/preview', { recurrence: rec, anchor_date: currentAnchor(), span_days: spanDays });
-      const dates = r.occurrences.map(d => formatDateDE(d)).join(' · ');
+      const endOf = (iso) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + spanDays); return formatDateDE(formatDateISO(d)); };
+      const dates = r.occurrences.map(d => spanDays > 0 ? `${formatDateDE(d)} – ${endOf(d)}` : formatDateDE(d)).join(' · ');
       const more = r.bounded ? `${r.total} Termine` : 'läuft weiter …';
       box.style.display = '';
       box.innerHTML = `🔁 ${esc(r.label)} — ${more}<br>Nächste: ${dates}${r.occurrences.length < r.total ? ' …' : ''}`
