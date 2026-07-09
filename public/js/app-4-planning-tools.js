@@ -608,7 +608,15 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
   const seriesInfoLine = (seriesLink && seriesRule) ? (() => {
     const s = seriesRule.series || {};
     const end = s.end_type === 'count' ? ` · endet nach ${s.end_count} Terminen` : (s.end_type === 'until' ? ` · bis ${formatDateDE(s.end_until)}` : ' · läuft fortlaufend');
-    return `🔁 Wiederholung: ${esc(seriesRule.label)}${end}`;
+    // Spanne der Occurrence (mehrtägig → Bereich) aus den geladenen Tagen
+    const occDates = (groupEntries ? groupEntries.map(e => e.date) : (entry ? [entry.date] : [])).slice().sort();
+    const occSpan = occDates.length ? Math.round((new Date(occDates[occDates.length - 1] + 'T12:00:00') - new Date(occDates[0] + 'T12:00:00')) / 86400000) : 0;
+    const addD = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return formatDateISO(d); };
+    const fmtOcc = (iso) => occSpan > 0 ? `${formatDateDE(iso)}–${formatDateDE(addD(iso, occSpan))}` : formatDateDE(iso);
+    const ups = seriesRule.upcoming || [];
+    const moreN = (seriesRule.totalUpcoming || 0) - ups.length;
+    const upLine = ups.length ? `<div style="margin-top:0.35rem">Nächste Termine: ${ups.map(fmtOcc).join(' · ')}${moreN > 0 ? ` (+${moreN} weitere)` : ''}</div>` : '';
+    return `🔁 Wiederholung: ${esc(seriesRule.label)}${end}${upLine}`;
   })() : '';
   const source = replanEntry || projectSource;
   const ref = entry || (groupEntries && groupEntries[0]) || source;

@@ -43,6 +43,7 @@ const seriesN = async (t, sid) => ((await req('GET','/api/planning', t)).body.en
     await p.evaluate(() => document.querySelector('.plan-menu-edit').click()); await sleep(1300);
 
     ok('Taktung wird angezeigt (Serien-Banner)', await p.evaluate(() => { const b = document.querySelector('.planning-series-banner'); return !!b && /Wiederholung:\s*wöchentlich/.test(b.textContent); }));
+    ok('Banner zeigt „Nächste Termine" (Folgedaten)', await p.evaluate(() => { const b = document.querySelector('.planning-series-banner'); return !!b && /Nächste Termine:\s*\d{2}\.\d{2}\.\d{4}/.test(b.textContent); }));
     ok('„Auftrag erneut planen" vorhanden', !!(await p.$('#replan-entry')));
     ok('Button „Ab hier keine Wiederholung mehr" vorhanden', !!(await p.$('#series-stop-here')));
     await p.evaluate(() => document.getElementById('series-stop-here').click()); await sleep(400);
