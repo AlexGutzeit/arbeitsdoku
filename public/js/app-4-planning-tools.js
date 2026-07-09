@@ -602,6 +602,14 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
   const seriesLink = (entry && entry.series_id) ? { series_id: entry.series_id, occurrence_date: entry.occurrence_date, entry_id: entry.id }
     : (groupEntries && groupEntries[0] && groupEntries[0].series_id) ? { series_id: groupEntries[0].series_id, occurrence_date: groupEntries[0].occurrence_date, entry_id: groupEntries[0].id }
     : null;
+  // Serien-Taktung laden (nur beim Bearbeiten eines Serientermins) — für die Anzeige im Formular.
+  let seriesRule = null;
+  if (seriesLink) { try { seriesRule = await api('GET', '/api/planning/series/' + seriesLink.series_id); } catch (_) {} }
+  const seriesInfoLine = (seriesLink && seriesRule) ? (() => {
+    const s = seriesRule.series || {};
+    const end = s.end_type === 'count' ? ` · endet nach ${s.end_count} Terminen` : (s.end_type === 'until' ? ` · bis ${formatDateDE(s.end_until)}` : ' · läuft fortlaufend');
+    return `🔁 Wiederholung: ${esc(seriesRule.label)}${end}`;
+  })() : '';
   const source = replanEntry || projectSource;
   const ref = entry || (groupEntries && groupEntries[0]) || source;
   const title = isEdit ? 'Planung bearbeiten' : (isGroupEdit ? 'Planungsgruppe bearbeiten' : (projectSource ? 'Auftrag in Planung übernehmen' : (source ? 'Auftrag erneut planen' : 'Neue Planung')));
@@ -813,6 +821,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
         <button class="btn btn-outline btn-sm" id="back-btn">Zurück</button>
       </div>
       <form id="planning-form">
+        ${seriesInfoLine ? `<div class="form-group"><div class="planning-series-banner" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:0.6rem 0.8rem;font-size:0.9rem;">${seriesInfoLine}<div style="color:var(--text-light);font-size:0.82rem;margin-top:0.2rem;">Änderungen fragen den Umfang ab (nur dieser / folgende / ganze Serie). Die Taktung selbst änderst du über „Ab hier keine Wiederholung mehr" → neue Serie.</div></div></div>` : ''}
         ${selfOnly ? `
         <div class="form-group">
           <label>Geplant für</label>
@@ -900,7 +909,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
           <div id="pf-recur-preview" class="push-hint" style="display:none;margin-top:0.5rem"></div>
         </div>` : ''}
         <button type="submit" class="btn btn-primary btn-block">${(isEdit || isGroupEdit) ? 'Speichern' : 'Planung erstellen'}</button>
-        ${isEdit ? `<button type="button" class="btn btn-outline btn-block" id="replan-entry" style="margin-top:0.5rem">Auftrag erneut planen</button>` : ''}
+        ${(isEdit || isGroupEdit) ? `<button type="button" class="btn btn-outline btn-block" id="replan-entry" style="margin-top:0.5rem">Auftrag erneut planen</button>` : ''}
         ${((isEdit || isGroupEdit) && seriesLink) ? `<button type="button" class="btn btn-outline btn-block" id="series-stop-here" style="margin-top:0.5rem">🔁✕ Ab hier keine Wiederholung mehr</button>` : ''}
         ${(isEdit || isGroupEdit) ? '<button type="button" class="btn btn-danger btn-block" id="delete-planning" style="margin-top:0.5rem">Planung löschen</button>' : ''}
       </form>
@@ -1084,7 +1093,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
   });
 
   document.getElementById('replan-entry')?.addEventListener('click', () => {
-    navigate('/planning/replan/' + editId);
+    navigate('/planning/replan/' + (editId || (groupEntries && groupEntries[0] && groupEntries[0].id)));
   });
 
   // „Ab hier keine Wiederholung mehr": diese Occurrence + Vergangenes bleiben, spätere weg.

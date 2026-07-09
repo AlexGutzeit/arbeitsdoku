@@ -42,6 +42,8 @@ const seriesN = async (t, sid) => ((await req('GET','/api/planning', t)).body.en
     await p.evaluate(() => document.querySelector('.tl-plan-entry .plan-menu-btn').click()); await sleep(300);
     await p.evaluate(() => document.querySelector('.plan-menu-edit').click()); await sleep(1300);
 
+    ok('Taktung wird angezeigt (Serien-Banner)', await p.evaluate(() => { const b = document.querySelector('.planning-series-banner'); return !!b && /Wiederholung:\s*wöchentlich/.test(b.textContent); }));
+    ok('„Auftrag erneut planen" vorhanden', !!(await p.$('#replan-entry')));
     ok('Button „Ab hier keine Wiederholung mehr" vorhanden', !!(await p.$('#series-stop-here')));
     await p.evaluate(() => document.getElementById('series-stop-here').click()); await sleep(400);
     ok('Sicherheitsabfrage erscheint', !!(await p.$('.modal [data-act="ok"]')));
@@ -51,6 +53,13 @@ const seriesN = async (t, sid) => ((await req('GET','/api/planning', t)).body.en
     await p.evaluate(() => document.querySelector('.modal [data-val="done"]').click()); await sleep(1200);
 
     ok('Serie ab heute beendet: nur noch 1 Vorkommen (heute)', (await seriesN(admin, s.series_id)) === 1, 'n=' + (await seriesN(admin, s.series_id)));
+
+    // Normale Planung (ohne Serie): kein Serien-Banner, kein „ab hier"-Button, aber „erneut planen" da
+    const n = (await req('POST','/api/planning', admin, { date:today, time_from:'08:00', time_to:'16:00', assigned_user_ids:[anna.id] })).body;
+    await p.evaluate((id) => { location.hash = '#/planning/edit/' + id; }, n.entry.id); await sleep(1300);
+    ok('normale Planung: KEIN Serien-Banner', await p.evaluate(() => !document.querySelector('.planning-series-banner')));
+    ok('normale Planung: KEIN „ab hier"-Button', await p.evaluate(() => !document.querySelector('#series-stop-here')));
+    ok('normale Planung: „erneut planen" trotzdem da', await p.evaluate(() => !!document.querySelector('#replan-entry')));
     ok('keine Konsolen-/Seitenfehler', errors.length === 0, errors.slice(0,3).join(' | '));
 
   } finally { if (browser) await browser.close(); srv.kill('SIGTERM'); }

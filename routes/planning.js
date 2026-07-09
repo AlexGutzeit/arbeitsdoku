@@ -511,6 +511,14 @@ router.post('/series/preview', authenticate, canPlan, (req, res) => {
   res.json({ occurrences: occ.slice(0, 6), total: occ.length, bounded: rule.end_type !== 'never', overlap, label: recur.freqLabel(rule.freq, anchor) });
 });
 
+// Serien-Regel + lesbares Label (für die Anzeige der Taktung im Bearbeiten-Formular)
+router.get('/series/:seriesId', authenticate, (req, res) => {
+  const db = getDb();
+  const s = db.prepare('SELECT series_id, freq, anchor_date, interval_weeks, end_type, end_count, end_until, active FROM planning_series WHERE series_id = ?').get(req.params.seriesId);
+  if (!s) return res.status(404).json({ error: 'Serie nicht gefunden' });
+  res.json({ series: s, label: recur.freqLabel(s.freq, s.anchor_date) });
+});
+
 // Serie löschen mit Umfang: scope = 'occurrence' | 'following' | 'series'
 router.delete('/series/:seriesId', authenticate, canPlan, (req, res) => {
   const db = getDb();
