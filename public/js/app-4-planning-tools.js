@@ -729,7 +729,9 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
   }
 
   const dateRange = getDateRange();
-  let multiMode = isGroupEdit || planDays.length > 1;
+  // „Mehrere Tage" nur bei tatsächlich >1 Tag. (Eintägige Serien-Occurrences sind zwar Gruppen,
+  // sollen aber als Einzeltag erscheinen — daher nicht pauschal isGroupEdit.)
+  let multiMode = planDays.length > 1;
 
   function renderSingleDaySection() {
     const day = planDays[0] || { date: formatDateISO(new Date()), time_from: '07:00', time_to: '15:30', break_minutes: 30 };
