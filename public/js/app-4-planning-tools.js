@@ -1067,7 +1067,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
           else await api('PUT', '/api/planning/' + editId, { ...common, days: daysToSend });
         } else {
           const d0 = daysToSend[0] || {};
-          await api('PUT', '/api/planning/series/' + seriesInfo.series_id, { scope, occurrence_date: seriesInfo.occurrence_date, ...common, time_from: d0.time_from, time_to: d0.time_to, break_minutes: d0.break_minutes });
+          await api('PUT', '/api/planning/series/' + seriesInfo.series_id, { scope, occurrence_date: seriesInfo.occurrence_date, ...common, days: daysToSend, time_from: d0.time_from, time_to: d0.time_to, break_minutes: d0.break_minutes });
         }
         toast('Gespeichert', 'success');
         navigate('/planning');

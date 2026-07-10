@@ -157,6 +157,32 @@ const uniq = arr => [...new Set(arr)];
     const occH = uniq((await entriesOf(admin, sh)).map(e => e.occurrence_date)).sort();
     ok('stop after 22.07.: 08/15/22 bleiben, spätere weg', JSON.stringify(occH) === JSON.stringify(['2026-07-08','2026-07-15','2026-07-22']));
 
+    // 14) Tages-STRUKTUR ändern (einen Tag löschen) für „diesen + folgende" → future re-materialisiert
+    //     Serie: 4 Vorkommen à 4 Tage (Fr/Mo/Di/Mi, Offsets 0/3/4/5). In Occurrence 2 den „Dienstag" (+4) löschen.
+    r = await req('POST','/api/planning', admin, { days:[
+      { date:'2026-07-10', time_from:'07:00', time_to:'15:30', break_minutes:30 },
+      { date:'2026-07-13', time_from:'07:00', time_to:'15:30', break_minutes:30 },
+      { date:'2026-07-14', time_from:'07:00', time_to:'15:30', break_minutes:30 },
+      { date:'2026-07-15', time_from:'07:00', time_to:'15:30', break_minutes:30 },
+    ], assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:4 } });
+    const st = r.body.series_id;
+    const perOcc = async () => { const es = await entriesOf(admin, st); const m = {}; es.forEach(e => m[e.occurrence_date] = (m[e.occurrence_date] || 0) + 1); return m; };
+    let m0 = await perOcc();
+    ok('vor: 4 Vorkommen à 4 Tage', Object.keys(m0).length === 4 && Object.values(m0).every(n => n === 4));
+    // In Occurrence 2 (17.07.) den Dienstag (21.07.) löschen → days ohne 21.07., scope=following
+    await req('PUT','/api/planning/series/' + st, admin, { scope:'following', occurrence_date:'2026-07-17', assigned_user_ids:[anna.id], days:[
+      { date:'2026-07-17', time_from:'07:00', time_to:'15:30', break_minutes:30 },
+      { date:'2026-07-20', time_from:'07:00', time_to:'15:30', break_minutes:30 },
+      { date:'2026-07-22', time_from:'07:00', time_to:'15:30', break_minutes:30 },
+    ] });
+    let m1 = await perOcc();
+    ok('nach: erste Occurrence (10.07.) behält 4 Tage', m1['2026-07-10'] === 4);
+    ok('nach: ab 17.07. nur noch 3 Tage (Dienstag raus)', m1['2026-07-17'] === 3 && m1['2026-07-24'] === 3 && m1['2026-07-31'] === 3);
+    const esSt = await entriesOf(admin, st);
+    ok('Dienstag 21./28.07. + 04.08. entfernt', !esSt.some(e => ['2026-07-21','2026-07-28','2026-08-04'].includes(e.date)));
+    ok('Dienstag 14.07. (erste Occurrence) bleibt', esSt.some(e => e.date === '2026-07-14'));
+    ok('Serie erhalten (alle Zeilen series_id)', esSt.every(e => e.series_id === st) && esSt.every(e => (e.assigned_users||[]).some(a=>a.user_id===anna.id)));
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Series (API): ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);

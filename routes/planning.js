@@ -566,6 +566,50 @@ router.put('/series/:seriesId', authenticate, canPlan, (req, res) => {
   const occ = req.body.occurrence_date;
   const b = req.body;
 
+  // Tages-STRUKTUR geändert (Tag entfernt/hinzugefügt/verschoben)? Bei following/series die betroffenen
+  // Vorkommen mit dem neuen Tagesmuster NEU materialisieren (Feld-/Zeit-Updates laufen unten wie bisher).
+  let tpl0; try { tpl0 = JSON.parse(series.template || '{}'); } catch (_) { tpl0 = {}; }
+  const days = Array.isArray(b.days) ? b.days.filter(d => d.date && d.time_from && d.time_to) : null;
+  let newTplDays = null;
+  if (days && days.length) {
+    const sorted = [...days].sort((a, x) => a.date < x.date ? -1 : 1);
+    const base = sorted[0].date;
+    newTplDays = sorted.map(d => ({ offset: diffDays(base, d.date), time_from: d.time_from, time_to: d.time_to, break_minutes: d.break_minutes || 0 }));
+  }
+  const offStr = (arr) => (arr || []).map(d => d.offset).join(',');
+  if ((scope === 'following' || scope === 'series') && newTplDays && offStr(newTplDays) !== offStr(tpl0.tplDays)) {
+    if (scope === 'following' && !occ) return res.status(400).json({ error: 'occurrence_date fehlt' });
+    const fromDate = scope === 'following' ? occ : todayISO();
+    const fld = (k, def) => (b[k] !== undefined ? b[k] : (tpl0[k] !== undefined ? tpl0[k] : def));
+    const tplNew = {
+      tplDays: newTplDays,
+      assigned_user_ids: Array.isArray(b.assigned_user_ids) ? b.assigned_user_ids : (tpl0.assigned_user_ids || []),
+      address: fld('address', ''), client: fld('client', ''),
+      project_id: b.project_id !== undefined ? (b.project_id || null) : (tpl0.project_id || null),
+      project_text: fld('project_text', ''), description: fld('description', ''), color: fld('color', '#f59e0b'),
+    };
+    const rule = { freq: series.freq, anchor_date: series.anchor_date, interval_weeks: series.interval_weeks || 1, end_type: series.end_type, end_count: series.end_count, end_until: series.end_until };
+    const horizon = series.end_type === 'never' ? addMonthsISO(todayISO(), 24) : null;
+    const starts = recur.computeOccurrences(rule, { from: fromDate, ...(horizon ? { horizon } : {}) });
+    const insE = db.prepare(`INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const insA = db.prepare('INSERT INTO planning_assignments (planning_id, user_id) VALUES (?, ?)');
+    const txr = db.transaction(() => {
+      db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, fromDate);
+      for (const start of starts) {
+        const gid = crypto.randomUUID();
+        for (const td of tplNew.tplDays) {
+          const r = insE.run(series.created_by, addDaysISO(start, td.offset), td.time_from, td.time_to, td.break_minutes,
+            tplNew.address, tplNew.client, tplNew.project_id, tplNew.project_text, tplNew.description, gid, tplNew.color, series.series_id, start);
+          for (const uid of tplNew.assigned_user_ids) insA.run(r.lastInsertRowid, uid);
+        }
+      }
+      db.prepare('UPDATE planning_series SET template = ? WHERE series_id = ?').run(JSON.stringify(tplNew), series.series_id);
+    });
+    txr();
+    broadcast('planning', req.headers['x-tab-id']);
+    return res.json({ success: true, rematerialized: starts.length, days_per_occurrence: newTplDays.length });
+  }
+
   let where = 'series_id = ?'; const wp = [series.series_id];
   if (scope === 'occurrence' || scope === 'following') {
     if (!occ) return res.status(400).json({ error: 'occurrence_date fehlt' });
