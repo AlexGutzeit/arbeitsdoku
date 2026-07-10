@@ -33,7 +33,7 @@ rsync -az --delete public/ "$DEPLOY_HOST:$DEPLOY_PATH/public/"
 rsync -az database/ "$DEPLOY_HOST:$DEPLOY_PATH/database/"
 rsync -az routes/ "$DEPLOY_HOST:$DEPLOY_PATH/routes/"
 rsync -az middleware/ "$DEPLOY_HOST:$DEPLOY_PATH/middleware/"
-rsync -az server.js audit.js push.js sse.js scheduler.js .puppeteerrc.cjs package.json package-lock.json "$DEPLOY_HOST:$DEPLOY_PATH/"
+rsync -az server.js audit.js push.js sse.js scheduler.js planning-recurrence.js .puppeteerrc.cjs package.json package-lock.json "$DEPLOY_HOST:$DEPLOY_PATH/"
 # Produktions-Dependencies abgleichen (z. B. neu hinzugekommenes web-push). --omit=dev laesst
 # Puppeteer & Co. aussen vor; ist nichts zu tun, ist der Schritt praktisch ein No-op.
 ssh "$DEPLOY_HOST" "${DEPLOY_NODE_BIN:+export PATH=\"$DEPLOY_NODE_BIN:\$PATH\"; }cd $DEPLOY_PATH && npm install --omit=dev --no-audit --no-fund"
