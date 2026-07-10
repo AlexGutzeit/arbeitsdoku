@@ -29,6 +29,8 @@ const seriesN = async (t, sid) => ((await req('GET','/api/planning', t)).body.en
     const today = new Date().toISOString().slice(0, 10);
     const s = (await req('POST','/api/planning', admin, { date:today, time_from:'07:00', time_to:'15:30', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:5 } })).body;
     ok('Serie (5 Vorkommen) angelegt', s.count === 5);
+    // Gruppe der ersten (heutigen) Occurrence — direkt ins Bearbeiten navigieren (unabhängig vom Wochentag/Tagesansicht)
+    const grpToday = ((await req('GET','/api/planning', admin)).body.entries || []).find(e => e.series_id === s.series_id && e.occurrence_date === today).group_id;
 
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
     const p = await browser.newPage(); await p.setViewport({ width:1000, height:1000 });
@@ -36,11 +38,7 @@ const seriesN = async (t, sid) => ((await req('GET','/api/planning', t)).body.en
     await p.goto(BASE, { waitUntil:'networkidle2' });
     await p.waitForSelector('#login-user'); await p.type('#login-user','admin'); await p.type('#login-pass', apw);
     await p.click('#login-form button[type="submit"]'); await p.waitForFunction(() => !document.querySelector('#login-user'), { timeout:20000 });
-    await p.evaluate(()=>{ location.hash='#/planning'; }); await sleep(1500);
-    await p.evaluate(() => { const b = [...document.querySelectorAll('button,a')].find(x => x.textContent.trim() === 'Tag'); if (b) b.click(); }); await sleep(800);
-    // ⋮ → Bearbeiten
-    await p.evaluate(() => document.querySelector('.tl-plan-entry .plan-menu-btn').click()); await sleep(300);
-    await p.evaluate(() => document.querySelector('.plan-menu-edit').click()); await sleep(1300);
+    await p.evaluate(g => { location.hash = '#/planning/edit-group/' + g; }, grpToday); await sleep(1400);
 
     ok('Taktung wird angezeigt (Serien-Banner)', await p.evaluate(() => { const b = document.querySelector('.planning-series-banner'); return !!b && /Wiederholung:\s*wöchentlich/.test(b.textContent); }));
     ok('Banner zeigt „Nächste Termine" (Folgedaten)', await p.evaluate(() => { const b = document.querySelector('.planning-series-banner'); return !!b && /Nächste Termine:\s*\d{2}\.\d{2}\.\d{4}/.test(b.textContent); }));
