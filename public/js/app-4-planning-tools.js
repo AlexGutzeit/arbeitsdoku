@@ -1122,14 +1122,25 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
   });
 
   document.getElementById('delete-planning')?.addEventListener('click', async () => {
-    if (!(await confirmModal('Planung wirklich löschen?', { title: 'Planung löschen', okLabel: 'Löschen' }))) return;
     try {
-      if (isGroupEdit) {
-        await api('DELETE', '/api/planning/group/' + editGroupId);
+      if (seriesLink) {
+        // Serientermin → gleicher Umfang-Dialog wie im ⋮-Menü der Tagesansicht
+        const scope = await choiceModal('Dieser Termin gehört zu einer Serie. Was möchtest du löschen?', [
+          { value: 'occurrence', label: '✕ Nur diesen Termin', danger: true },
+          { value: 'following', label: '✕ Diesen + alle folgenden', danger: true },
+          { value: 'series', label: '✕ Ganze Serie', danger: true },
+          { value: 'stop', label: '⏹ Serie ab heute beenden (Vergangenes bleibt)' },
+        ], { title: 'Serientermin löschen' });
+        if (!scope) return;
+        if (scope === 'stop') await api('POST', '/api/planning/series/' + seriesLink.series_id + '/stop', {});
+        else await api('DELETE', '/api/planning/series/' + seriesLink.series_id, { scope, occurrence_date: seriesLink.occurrence_date });
+        toast(scope === 'stop' ? 'Serie beendet' : 'Gelöscht', 'success');
       } else {
-        await api('DELETE', '/api/planning/' + editId);
+        if (!(await confirmModal('Planung wirklich löschen?', { title: 'Planung löschen', okLabel: 'Löschen' }))) return;
+        if (isGroupEdit) await api('DELETE', '/api/planning/group/' + editGroupId);
+        else await api('DELETE', '/api/planning/' + editId);
+        toast('Planung gelöscht', 'success');
       }
-      toast('Planung gelöscht', 'success');
       navigate('/planning');
     } catch (err) { toast(err.message, 'error'); }
   });
