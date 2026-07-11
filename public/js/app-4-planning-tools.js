@@ -1087,9 +1087,9 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
         }
         // B2) Taktung geändert → Umtakten (Split): ab wann?
         if (!sameRec) {
-          const scope = await choiceModal('Die neue Taktung – ab wann soll sie gelten?', [
-            { value: 'following', label: 'Ab diesem Termin (Vergangenes bleibt)', primary: true },
-            { value: 'series', label: 'Ganze Serie (ab heute)' },
+          const scope = await choiceModal('Die neue Taktung – ab wann soll sie gelten? (Vergangenes bleibt immer unverändert.)', [
+            { value: 'following', label: 'Ab diesem Termin (spätere neu takten)', primary: true },
+            { value: 'series', label: 'Ab heute (alle künftigen neu takten)' },
           ], { title: 'Wiederholung ändern' });
           if (!scope) return;
           const r = await api('POST', '/api/planning/series/' + seriesInfo.series_id + '/retakt', { scope, occurrence_date: seriesInfo.occurrence_date, ...common, days: daysToSend, recurrence: rec });
