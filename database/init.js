@@ -954,6 +954,7 @@ function ensurePushSchema(targetDb) {
         lead_num    INTEGER NOT NULL,
         lead_unit   TEXT NOT NULL,
         remind_time TEXT,
+        from_occurrence TEXT,
         created_at  TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
@@ -969,6 +970,10 @@ function ensurePushSchema(targetDb) {
     const rCols = targetDb.prepare("PRAGMA table_info(planning_reminders)").all();
     if (rCols.length && !rCols.some(c => c.name === 'remind_time')) {
       targetDb.exec("ALTER TABLE planning_reminders ADD COLUMN remind_time TEXT");
+    }
+    // from_occurrence-Spalte nachziehen (Serien-Scope „ab hier": nur Vorkommen >= diesem Datum; NULL = alle).
+    if (rCols.length && !rCols.some(c => c.name === 'from_occurrence')) {
+      targetDb.exec("ALTER TABLE planning_reminders ADD COLUMN from_occurrence TEXT");
     }
   } catch (e) {
     console.error('ensurePushSchema fehlgeschlagen:', e.message);

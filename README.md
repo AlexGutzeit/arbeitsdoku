@@ -88,9 +88,11 @@ Chef/Admin an **allen** (um sich an Termine der Mitarbeiter erinnern zu lassen).
 **Uhrzeit**. Die Uhrzeit ist mit der **Beginn-Zeit des Termins** vorbelegt: „1 Woche vorher" kommt dann zur
 Termin-Uhrzeit. Stellt man die Uhrzeit z. B. auf **18:00** (oder legt eine zweite Erinnerung damit an), erhält
 man eine **Abend-Erinnerung**. Die Push lautet „Am Fr 10.07. um 07:00: Kunde XY" bzw. für Chef „Anna hat am
-Fr 10.07. um 07:00 einen Termin: …". Bei **Serienterminen** wählbar **„nur dieser Termin"** oder **„ganze
-Serie"**. Hat ein Termin **mindestens eine** Erinnerung, zeigen **Tages- und Wochenansicht** eine **🔔** (wie das
-🔁 bei Serien). Schaltet man „Planung" wieder **aus**, bleiben alle gesetzten Erinnerungen erhalten und sind nur
+Fr 10.07. um 07:00 einen Termin: …". Bei **Serienterminen** ist wählbar **„nur dieser Termin" / „dieser + alle
+folgenden" / „ganze Serie"**. Wird aus einer **Einzelplanung mit gesetzter Erinnerung** eine Serie gemacht,
+fragt die App, wie die Erinnerung übernommen werden soll (nur dieser / dieser + folgende / alle). Hat ein Termin
+**mindestens eine** Erinnerung, zeigen **Tages- und Wochenansicht** eine **🔔** – unabhängig vom **🔁** der
+Serien (eine Serie mit Erinnerung trägt beide). Schaltet man „Planung" wieder **aus**, bleiben alle gesetzten Erinnerungen erhalten und sind nur
 **pausiert**; nach dem Wieder-Einschalten kommen sie wieder (noch zukünftige Termine als Nachhol-Erinnerung).
 
 **Geplante Zusammenfassung (Digest):** Als Alternative zu den ereignisgetriebenen Pushes kann jeder Nutzer

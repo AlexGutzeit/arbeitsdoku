@@ -90,11 +90,11 @@ async function showDay(p, iso, planning) {
     ok('Anna: ⋮ am Serientermin vorhanden', !!serBtn);
     await p.evaluate(() => document.querySelector('.plan-menu-btn[data-remind="1"]:not([data-series=""])').click()); await sleep(300);
     await p.evaluate(() => document.querySelector('.plan-menu-remind').click()); await sleep(400);
-    ok('Serien-Dialog zeigt Scope-Auswahl', (await p.$$('input[name="rem-scope"]')).length === 2);
-    await p.evaluate(() => { document.querySelector('input[name="rem-scope"][value="series"]').checked = true; document.querySelector('#rem-num').value='2'; document.querySelector('#rem-unit').value='day'; document.querySelector('#rem-add').click(); }); await sleep(700);
+    ok('Serien-Dialog zeigt 3 Scope-Optionen (dieser/folgende/ganze)', (await p.$$('input[name="rem-scope"]')).length === 3);
+    await p.evaluate(() => { document.querySelector('input[name="rem-scope"][value="all"]').checked = true; document.querySelector('#rem-num').value='2'; document.querySelector('#rem-unit').value='day'; document.querySelector('#rem-add').click(); }); await sleep(700);
     await p.evaluate(() => document.querySelector('.modal [data-act="close"]').click()); await sleep(200);
     const serList = (await req('GET','/api/planning/reminders?series_id='+sAnna.series_id, await tok('anna','annapw'))).body.reminders;
-    ok('API bestätigt: Serien-Erinnerung angelegt', serList.length === 1 && serList[0].target_type === 'series');
+    ok('API bestätigt: Serien-Erinnerung (ganze Serie) angelegt', serList.length === 1 && serList[0].target_type === 'series' && serList[0].from_occurrence === null);
 
     // 🔔 auch in der Wochenansicht
     await p.evaluate(() => { S.planningView = 'week'; renderPlanningContent(); }); await sleep(900);

@@ -68,8 +68,12 @@ function fmtWall(wallStr) {
 // occurrence: genau eines (group_id oder entry_id); series: alle materialisierten Vorkommen.
 function reminderOccurrences(db, r) {
   if (r.target_type === 'series') {
-    const rows = db.prepare(`SELECT occurrence_date AS occ, MIN(date || ' ' || time_from) AS startwall
-      FROM planning_entries WHERE series_id = ? GROUP BY occurrence_date`).all(r.series_id);
+    // from_occurrence gesetzt → nur Vorkommen ab diesem Datum (Scope „dieser + folgende").
+    const rows = r.from_occurrence
+      ? db.prepare(`SELECT occurrence_date AS occ, MIN(date || ' ' || time_from) AS startwall
+          FROM planning_entries WHERE series_id = ? AND occurrence_date >= ? GROUP BY occurrence_date`).all(r.series_id, r.from_occurrence)
+      : db.prepare(`SELECT occurrence_date AS occ, MIN(date || ' ' || time_from) AS startwall
+          FROM planning_entries WHERE series_id = ? GROUP BY occurrence_date`).all(r.series_id);
     return rows.filter(x => x.startwall).map(x => ({ occ_key: x.occ, startWall: x.startwall.slice(0, 16) }));
   }
   if (r.group_id) {

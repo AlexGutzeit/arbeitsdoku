@@ -73,6 +73,21 @@ const groupOf = async (t, id) => ((await req('GET','/api/planning', t)).body.ent
     const listS = (await req('GET','/api/planning/reminders?series_id='+s.series_id, annaT)).body.reminders;
     ok('Serien-Liste zeigt 1', listS.length === 1);
 
+    // 4c) Serien-Scope „ab hier" (from_occurrence)
+    const occs = [...new Set(((await req('GET','/api/planning', admin)).body.entries || []).filter(x=>x.series_id===s.series_id).map(x=>x.occurrence_date))].sort();
+    const follow = await req('POST','/api/planning/reminders', annaT, { target_type:'series', series_id:s.series_id, from_occurrence:occs[1], lead_num:1, lead_unit:'day' });
+    ok('Serien-Erinnerung „ab hier" (from_occurrence gesetzt)', follow.status === 201 && follow.body.reminder.from_occurrence === occs[1]);
+
+    // 4d) Einzel→Serie: eigene Benachrichtigung wandert mit (reminder_scope=all)
+    const single = (await req('POST','/api/planning', admin, { date:MON, time_from:'12:00', time_to:'13:00', client:'Conv', assigned_user_ids:[anna.id] })).body.entry;
+    await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:single.id, lead_num:1, lead_unit:'week', remind_time:'08:00' });
+    const conv = await req('POST','/api/planning/to-series', admin, { date:MON, time_from:'12:00', time_to:'13:00', assigned_user_ids:[anna.id], entry_id:single.id, recurrence:{ freq:'weekly', end_type:'count', end_count:3 }, reminder_scope:'all' });
+    ok('to-series erstellt Serie', conv.status === 201 && !!conv.body.series_id);
+    const annaAll = (await req('GET','/api/planning/reminders/mine', annaT)).body.reminders;
+    const migrated = annaAll.find(r => r.series_id === conv.body.series_id);
+    ok('Benachrichtigung auf Serie übertragen (series_id, kein entry_id, remind_time erhalten)', !!migrated && migrated.target_type === 'series' && !migrated.entry_id && migrated.remind_time === '08:00');
+    ok('alte Einzel-Erinnerung entfernt', !annaAll.some(r => r.entry_id === single.id));
+
     // 4b) remind_time (Uhrzeit): Default NULL (= Beginn-Uhrzeit), eigene Uhrzeit, getrennt gelistet
     const eTime = (await req('POST','/api/planning', admin, { date:MON, time_from:'10:00', time_to:'11:00', client:'Time', assigned_user_ids:[anna.id] })).body.entry;
     const defTime = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eTime.id, lead_num:1, lead_unit:'day' });

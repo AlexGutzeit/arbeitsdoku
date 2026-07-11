@@ -48,15 +48,11 @@ async function renderPlanningContent() {
   }
 
   // Eigene Erinnerungen laden (für die 🔔-Kennzeichnung an Terminen). Nur wenn das Feature an ist.
-  S.planReminderKeys = new Set();
+  S.planReminders = [];
   if (S.pushPlanning) {
     try {
       const rm = await api('GET', '/api/planning/reminders/mine');
-      ((rm && rm.reminders) || []).forEach(rr => {
-        if (rr.group_id) S.planReminderKeys.add('g:' + rr.group_id);
-        if (rr.entry_id) S.planReminderKeys.add('e:' + rr.entry_id);
-        if (rr.series_id) S.planReminderKeys.add('s:' + rr.series_id);
-      });
+      S.planReminders = (rm && rm.reminders) || [];
     } catch (_) {}
   }
 
@@ -287,11 +283,17 @@ const REMINDER_UNITS = [
   { v: 'month', l: 'Monat(e)' },
 ];
 const reminderUnitLabel = (u) => (REMINDER_UNITS.find(x => x.v === u) || {}).l || u;
-// Hat der aktuelle Nutzer für diesen Termin (Occurrence per group_id/entry_id oder ganze Serie) eine Erinnerung?
+// Hat der aktuelle Nutzer für diesen Termin eine Erinnerung? Occurrence (group_id/entry_id) oder Serie
+// (ganze Serie, oder „ab hier" via from_occurrence → nur Vorkommen ab dem Datum).
 function entryHasReminder(e) {
-  const s = S.planReminderKeys;
-  if (!s || !s.size) return false;
-  return (e.group_id && s.has('g:' + e.group_id)) || s.has('e:' + e.id) || (e.series_id && s.has('s:' + e.series_id));
+  const list = S.planReminders;
+  if (!list || !list.length) return false;
+  return list.some(r => {
+    if (r.target_type === 'series') {
+      return r.series_id && e.series_id === r.series_id && (!r.from_occurrence || (e.occurrence_date && e.occurrence_date >= r.from_occurrence));
+    }
+    return (r.group_id && e.group_id === r.group_id) || (r.entry_id && e.id === r.entry_id);
+  });
 }
 
 // Dialog zum Setzen/Entfernen von Erinnerungen für einen Termin. e: { id, group_id, series_id, client }.
@@ -316,8 +318,9 @@ async function openReminderDialog(e) {
           <label style="flex:0 0 auto">Uhrzeit<br><input id="rem-time" type="time" class="form-control" value="${esc(e.time_from || '')}" style="width:7rem"></label>
         </div>
         ${isSeries ? `<div style="margin-top:0.6rem"><label style="display:block;margin-bottom:0.3rem">Gilt für:</label>
-          <label style="margin-right:1rem"><input type="radio" name="rem-scope" value="occurrence" checked> nur diesen Termin</label>
-          <label><input type="radio" name="rem-scope" value="series"> ganze Serie</label></div>` : ''}
+          <label style="display:block"><input type="radio" name="rem-scope" value="occurrence" checked> nur diesen Termin</label>
+          <label style="display:block"><input type="radio" name="rem-scope" value="following"> diesen + alle folgenden</label>
+          <label style="display:block"><input type="radio" name="rem-scope" value="all"> ganze Serie</label></div>` : ''}
         <div style="margin-top:0.8rem"><button class="btn btn-primary btn-sm" id="rem-add">Erinnerung hinzufügen</button></div>
       </div>
       <div class="modal-footer" style="display:flex;justify-content:flex-end;padding:1rem">
@@ -339,7 +342,7 @@ async function openReminderDialog(e) {
     if (!reminders.length) { listEl.innerHTML = '<p style="margin:0;color:#9ca3af">Noch keine Erinnerung.</p>'; return; }
     listEl.innerHTML = reminders.map(r => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid #f0f0f0">
-        <span>${r.lead_num} ${esc(reminderUnitLabel(r.lead_unit))} vorher · um ${esc(r.remind_time || e.time_from || '–')}${r.target_type === 'series' ? ' · <em>ganze Serie</em>' : ''}</span>
+        <span>${r.lead_num} ${esc(reminderUnitLabel(r.lead_unit))} vorher · um ${esc(r.remind_time || e.time_from || '–')}${r.target_type === 'series' ? (r.from_occurrence ? ' · <em>ab hier</em>' : ' · <em>ganze Serie</em>') : ''}</span>
         <button class="btn btn-sm btn-outline rem-del" data-id="${r.id}" title="Entfernen">&#10005;</button>
       </div>`).join('');
     listEl.querySelectorAll('.rem-del').forEach(b => b.addEventListener('click', async () => {
@@ -353,11 +356,16 @@ async function openReminderDialog(e) {
     const time = overlay.querySelector('#rem-time').value;
     if (!Number.isInteger(num) || num < 1) { toast('Bitte eine Zahl ≥ 1 eingeben', 'error'); return; }
     const scope = isSeries ? ((overlay.querySelector('input[name="rem-scope"]:checked') || {}).value || 'occurrence') : 'occurrence';
-    const body = { target_type: scope === 'series' ? 'series' : 'occurrence', lead_num: num, lead_unit: unit };
+    const body = { lead_num: num, lead_unit: unit };
     if (time) body.remind_time = time;
-    if (scope === 'series') body.series_id = e.series_id;
-    else if (e.group_id) body.group_id = e.group_id;
-    else body.entry_id = e.id;
+    if (scope === 'occurrence') {
+      body.target_type = 'occurrence';
+      if (e.group_id) body.group_id = e.group_id; else body.entry_id = e.id;
+    } else {
+      body.target_type = 'series';
+      body.series_id = e.series_id;
+      if (scope === 'following') body.from_occurrence = e.occurrence_date;
+    }
     try { await api('POST', '/api/planning/reminders', body); toast('Erinnerung gespeichert', 'success'); changed = true; renderList(); }
     catch (err) { toast(err.message || 'Speichern fehlgeschlagen', 'error'); }
   });
@@ -1195,6 +1203,20 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
       if ((isEdit || isGroupEdit) && !seriesInfo && rec) {
         const body = { ...common, days: daysToSend, recurrence: rec };
         if (isGroupEdit) body.group_id = editGroupId; else body.entry_id = editId;
+        // Ist für diese Planung eine eigene Benachrichtigung gesetzt? → fragen, wie sie auf die Serie übergeht.
+        try {
+          const qs = isGroupEdit ? ('group_id=' + encodeURIComponent(editGroupId)) : ('entry_id=' + encodeURIComponent(editId));
+          const rl = await api('GET', '/api/planning/reminders?' + qs);
+          if (rl && rl.reminders && rl.reminders.length) {
+            const remScope = await choiceModal('Für diese Planung ist eine Benachrichtigung gesetzt. Wie soll sie auf die Serie übertragen werden?', [
+              { value: 'all', label: 'Für alle Termine der Serie', primary: true },
+              { value: 'following', label: 'Für diesen + alle folgenden' },
+              { value: 'occurrence', label: 'Nur für diesen Termin' },
+            ], { title: 'Benachrichtigung übertragen' });
+            if (!remScope) return; // abgebrochen → nichts tun
+            body.reminder_scope = remScope;
+          }
+        } catch (_) {}
         const r = await api('POST', '/api/planning/to-series', body);
         toast(`Serie erstellt (${r.count} Termine)`, 'success');
         navigate('/planning'); return;
