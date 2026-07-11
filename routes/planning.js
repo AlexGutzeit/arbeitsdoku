@@ -143,6 +143,94 @@ router.get('/group/:groupId', authenticate, (req, res) => {
 });
 
 // Einzelne Planung abrufen
+// ——— Planungs-Erinnerungen (Push vor einem Termin) ———
+// Bewusst NUR authenticate (kein canPlan): auch Mitarbeiter ohne Planungsrecht dürfen sich an ihre
+// eigenen Termine erinnern lassen. Empfänger = wer sie setzt. MUSS vor '/:id' stehen (sonst fängt
+// '/:id' den Pfad „reminders" ab).
+const LEAD_UNITS = ['hour', 'day', 'week', 'month'];
+function validLead(num, unit) {
+  const n = Number(num);
+  if (!Number.isInteger(n) || n < 1 || n > 999) return null;
+  if (!LEAD_UNITS.includes(unit)) return null;
+  return { num: n, unit };
+}
+function assignedIdsOfSeries(db, seriesId) {
+  return db.prepare(`SELECT DISTINCT pa.user_id FROM planning_assignments pa
+    JOIN planning_entries pe ON pe.id = pa.planning_id WHERE pe.series_id = ?`).all(seriesId).map(r => r.user_id);
+}
+function assignedIdsOfEntry2(db, entryId) {
+  return db.prepare('SELECT user_id FROM planning_assignments WHERE planning_id = ?').all(entryId).map(r => r.user_id);
+}
+// Darf der Nutzer für dieses Ziel eine Erinnerung setzen? canPlanAll → jede Planung; sonst nur, wenn
+// er selbst zugewiesen ist. Prüft außerdem, dass das Ziel überhaupt existiert. Occurrence-Ziel wird per
+// group_id (Mehrtag/Serie) ODER entry_id (Einzeltag ohne Gruppe) adressiert.
+function reminderTargetAllowed(db, user, t) {
+  let exists, ids;
+  if (t.target_type === 'series') {
+    exists = !!db.prepare('SELECT 1 FROM planning_entries WHERE series_id = ? LIMIT 1').get(t.series_id);
+    ids = () => assignedIdsOfSeries(db, t.series_id);
+  } else if (t.group_id) {
+    exists = !!db.prepare('SELECT 1 FROM planning_entries WHERE group_id = ? LIMIT 1').get(t.group_id);
+    ids = () => assignedIdsOfGroup(db, t.group_id);
+  } else {
+    exists = !!db.prepare('SELECT 1 FROM planning_entries WHERE id = ?').get(t.entry_id);
+    ids = () => assignedIdsOfEntry2(db, t.entry_id);
+  }
+  if (!exists) return false;
+  if (canPlanAll(user)) return true;
+  return ids().includes(user.id);
+}
+const reminderOut = (r) => ({ id: r.id, target_type: r.target_type, group_id: r.group_id, entry_id: r.entry_id, series_id: r.series_id, lead_num: r.lead_num, lead_unit: r.lead_unit });
+
+// Eigene Erinnerungen zu einem Termin/einer Serie lesen (group_id, entry_id und/oder series_id).
+router.get('/reminders', authenticate, (req, res) => {
+  const db = getDb();
+  const groupId = req.query.group_id || null;
+  const entryId = req.query.entry_id ? Number(req.query.entry_id) : null;
+  const seriesId = req.query.series_id || null;
+  if (!groupId && !entryId && !seriesId) return res.status(400).json({ error: 'group_id, entry_id oder series_id nötig' });
+  const rows = db.prepare(`SELECT * FROM planning_reminders WHERE user_id = ?
+    AND ((target_type = 'occurrence' AND group_id IS NOT NULL AND group_id = ?)
+      OR (target_type = 'occurrence' AND entry_id IS NOT NULL AND entry_id = ?)
+      OR (target_type = 'series' AND series_id IS NOT NULL AND series_id = ?))
+    ORDER BY id`).all(req.user.id, groupId, entryId, seriesId);
+  res.json({ reminders: rows.map(reminderOut) });
+});
+
+// Erinnerung anlegen (mehrere pro Ziel erlaubt; gleicher Vorlauf → idempotent).
+router.post('/reminders', authenticate, (req, res) => {
+  const db = getDb();
+  const b = req.body || {};
+  const target_type = b.target_type === 'series' ? 'series' : 'occurrence';
+  const group_id = target_type === 'occurrence' ? (b.group_id || null) : null;
+  const entry_id = (target_type === 'occurrence' && !group_id && b.entry_id) ? Number(b.entry_id) : null;
+  const series_id = target_type === 'series' ? (b.series_id || null) : null;
+  if (target_type === 'occurrence' && !group_id && !entry_id) return res.status(400).json({ error: 'group_id oder entry_id nötig' });
+  if (target_type === 'series' && !series_id) return res.status(400).json({ error: 'series_id nötig' });
+  const lead = validLead(b.lead_num, b.lead_unit);
+  if (!lead) return res.status(400).json({ error: 'Ungültiger Vorlauf' });
+  if (!reminderTargetAllowed(db, req.user, { target_type, group_id, entry_id, series_id })) {
+    return res.status(403).json({ error: 'Keine Berechtigung für diesen Termin' });
+  }
+  const dup = db.prepare(`SELECT * FROM planning_reminders WHERE user_id = ? AND target_type = ?
+    AND COALESCE(group_id,'') = COALESCE(?, '') AND COALESCE(entry_id,0) = COALESCE(?, 0)
+    AND COALESCE(series_id,'') = COALESCE(?, '') AND lead_num = ? AND lead_unit = ?`)
+    .get(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit);
+  if (dup) return res.status(200).json({ reminder: reminderOut(dup) });
+  const r = db.prepare(`INSERT INTO planning_reminders (user_id, target_type, group_id, entry_id, series_id, lead_num, lead_unit)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit);
+  const row = db.prepare('SELECT * FROM planning_reminders WHERE id = ?').get(r.lastInsertRowid);
+  res.status(201).json({ reminder: reminderOut(row) });
+});
+
+// Erinnerung löschen — nur eigene.
+router.delete('/reminders/:id', authenticate, (req, res) => {
+  const db = getDb();
+  const r = db.prepare('DELETE FROM planning_reminders WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+  if (r.changes === 0) return res.status(404).json({ error: 'Erinnerung nicht gefunden' });
+  res.json({ success: true });
+});
+
 router.get('/:id', authenticate, (req, res) => {
   const db = getDb();
   const entry = db.prepare(`

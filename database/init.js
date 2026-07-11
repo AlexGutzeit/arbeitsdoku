@@ -949,6 +949,7 @@ function ensurePushSchema(targetDb) {
         user_id     INTEGER NOT NULL,
         target_type TEXT NOT NULL DEFAULT 'occurrence',
         group_id    TEXT,
+        entry_id    INTEGER,
         series_id   TEXT,
         lead_num    INTEGER NOT NULL,
         lead_unit   TEXT NOT NULL,
