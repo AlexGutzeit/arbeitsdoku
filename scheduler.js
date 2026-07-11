@@ -48,15 +48,13 @@ function buildSummaryText(cats, counts) {
 // ===== Planungs-Erinnerungen (Push vor einem Termin) =====
 const WD_DE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']; // getUTCDay: 0=So
 
-// Wall-Clock "YYYY-MM-DD HH:MM" um Vorlauf zurückrechnen (UTC-Arithmetik auf der Wanduhr; DST-Sprünge
-// von 1 h sind für Erinnerungen unerheblich). Liefert wieder "YYYY-MM-DD HH:MM".
-function shiftWall(wallStr, num, unit) {
-  const d = new Date(wallStr.replace(' ', 'T') + ':00Z');
-  if (unit === 'hour') d.setUTCHours(d.getUTCHours() - num);
-  else if (unit === 'day') d.setUTCDate(d.getUTCDate() - num);
+// Datum "YYYY-MM-DD" um Vorlauf (Tage/Wochen/Monate) zurückrechnen. Liefert wieder "YYYY-MM-DD".
+function shiftDate(dateStr, num, unit) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  if (unit === 'day') d.setUTCDate(d.getUTCDate() - num);
   else if (unit === 'week') d.setUTCDate(d.getUTCDate() - num * 7);
   else if (unit === 'month') d.setUTCMonth(d.getUTCMonth() - num);
-  return d.toISOString().slice(0, 16).replace('T', ' ');
+  return d.toISOString().slice(0, 10);
 }
 // "YYYY-MM-DD HH:MM" → "Fr 10.07. um 07:00"
 function fmtWall(wallStr) {
@@ -92,7 +90,11 @@ function collectDueForUser(db, userId, nowParts) {
   const out = [];
   for (const r of reminders) {
     for (const occ of reminderOccurrences(db, r)) {
-      const fireWall = shiftWall(occ.startWall, r.lead_num, r.lead_unit);
+      // Feuerzeitpunkt = (Termindatum − Vorlauf) am gewählten Uhrzeit-Feld. remind_time leer → Beginn-Uhrzeit.
+      const apptDate = occ.startWall.slice(0, 10);
+      const apptTime = occ.startWall.slice(11, 16);
+      const fireDate = shiftDate(apptDate, r.lead_num, r.lead_unit);
+      const fireWall = fireDate + ' ' + (r.remind_time || apptTime);
       if (nowWall < fireWall) continue;        // noch nicht fällig
       if (nowWall >= occ.startWall) continue;  // Termin vorbei
       const done = db.prepare('SELECT 1 FROM planning_reminder_sent WHERE reminder_id = ? AND occ_key = ?').get(r.id, occ.occ_key);
@@ -122,40 +124,11 @@ function buildReminderPush(db, r, occKey, startWall) {
   const body = own ? `Am ${when}: ${label}` : `${(names.join(', ') || 'Mitarbeiter')} hat am ${when} einen Termin: ${label}`;
   return { title: '🔔 Erinnerung', body, url: '/planning' };
 }
-// Zeile fürs Digest-Bündel.
-function reminderLine(db, r, occKey, startWall) {
-  const { label, names, own, when } = reminderParts(db, r, occKey, startWall);
-  return own ? `• ${when} – ${label}` : `• ${when} – ${(names.join(', ') || 'Mitarbeiter')}: ${label}`;
-}
-// Läuft irgendwann zwischen JETZT und dem Termin ein aktiver Digest (geplante Zusammenfassung)? → eine
-// „geplante" Erinnerung dem Digest überlassen. Prüft die Tage von heute bis zum Termintag (Berlin).
-function digestRunsBefore(db, userId, nowParts, apptStartWall) {
-  const pref = db.prepare('SELECT summaries_paused FROM push_prefs WHERE user_id = ?').get(userId);
-  if (pref && pref.summaries_paused === 1) return false;
-  let scheds; try { scheds = db.prepare('SELECT * FROM summary_schedules WHERE user_id = ?').all(userId); } catch (_) { return false; }
-  const active = scheds.filter(s => !s.paused && String(s.weekdays || '').split(',').map(x => x.trim()).filter(Boolean).length);
-  if (!active.length) return false;
-  const nowWall = nowParts.date + ' ' + nowParts.hhmm;
-  const apptDate = apptStartWall.slice(0, 10);
-  let d = nowParts.date, guard = 0;
-  while (d <= apptDate && guard++ < 400) {
-    const dt = new Date(d + 'T00:00:00Z');
-    const wd = dt.getUTCDay() === 0 ? 7 : dt.getUTCDay();
-    for (const s of active) {
-      const days = String(s.weekdays || '').split(',').map(x => x.trim());
-      if (!days.includes(String(wd))) continue;
-      const runWall = d + ' ' + s.time;
-      if (runWall > nowWall && runWall < apptStartWall) return true;
-    }
-    dt.setUTCDate(dt.getUTCDate() + 1); d = dt.toISOString().slice(0, 10);
-  }
-  return false;
-}
 function markSent(db, reminderId, occKey) {
   db.prepare('INSERT OR IGNORE INTO planning_reminder_sent (reminder_id, occ_key) VALUES (?, ?)').run(reminderId, occKey);
 }
 
-// Einzelversand aller fälligen Erinnerungen, die nicht in ein heutiges Digest fallen. now injizierbar.
+// Einzelversand aller fälligen Planungs-Erinnerungen. now injizierbar.
 async function firePlanningReminders(db, now = new Date()) {
   const nowParts = berlinParts(now);
   let userIds;
@@ -164,9 +137,6 @@ async function firePlanningReminders(db, now = new Date()) {
   for (const uid of userIds) {
     const due = collectDueForUser(db, uid, nowParts);
     for (const d of due) {
-      // „Geplante" Erinnerung (scheduled=1): dem Digest überlassen, solange bis zum Termin noch einer läuft.
-      // Sonst (kein passender Digest → Fallback) bzw. exakte Erinnerung (scheduled=0) → jetzt einzeln senden.
-      if (d.r.scheduled === 1 && digestRunsBefore(db, uid, nowParts, d.startWall)) continue;
       const payload = buildReminderPush(db, d.r, d.occ_key, d.startWall);
       markSent(db, d.r.id, d.occ_key); // vor Versand → kein Doppelversand bei überlappenden Ticks
       try { await push.notifyUsers(db, [uid], 'planning', payload); }
@@ -191,15 +161,7 @@ async function tick(db, now = new Date()) {
     const pref = db.prepare('SELECT summaries_paused FROM push_prefs WHERE user_id = ?').get(s.user_id);
     if (pref && pref.summaries_paused === 1) continue; // Global-Pause (Urlaub)
     const cats = String(s.cats || '').split(',').map(x => x.trim()).filter(c => VALID_CATS.includes(c));
-    let body = buildSummaryText(cats, computeBadgeCounts(db, user));
-    // Fällige „geplante" Planungs-Erinnerungen (scheduled=1) dieses Nutzers ins Digest bündeln (nur wenn
-    // „Planung" an — die Pause-Regel steckt in collectDueForUser). Exakte (scheduled=0) kommen einzeln.
-    let dueReminders = [];
-    try { dueReminders = collectDueForUser(db, s.user_id, { date, hhmm, weekday }).filter(d => d.r.scheduled === 1); } catch (_) {}
-    if (dueReminders.length) {
-      body += '\n\nAnstehende Termine:\n' + dueReminders.map(d => reminderLine(db, d.r, d.occ_key, d.startWall)).join('\n');
-      for (const d of dueReminders) markSent(db, d.r.id, d.occ_key);
-    }
+    const body = buildSummaryText(cats, computeBadgeCounts(db, user));
     // Name als Titel (z. B. „Einkaufen"), sonst ein generischer Titel.
     const title = (s.name && s.name.trim()) ? s.name.trim() : '🔔 Deine Zusammenfassung';
     // last_fired VOR dem Versand setzen → kein Doppelversand bei überlappenden Ticks/Neustart.
@@ -264,4 +226,4 @@ function start(getDb) {
   timer = setInterval(run, 60 * 1000); // dann minütlich (Serien-Verlängerung nur 1×/Tag)
 }
 
-module.exports = { start, tick, extendSeries, firePlanningReminders, collectDueForUser, shiftWall, fmtWall, isDue, buildSummaryText, berlinParts, VALID_CATS, CAT_LABELS };
+module.exports = { start, tick, extendSeries, firePlanningReminders, collectDueForUser, shiftDate, fmtWall, isDue, buildSummaryText, berlinParts, VALID_CATS, CAT_LABELS };

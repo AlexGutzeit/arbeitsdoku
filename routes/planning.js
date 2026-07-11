@@ -147,7 +147,8 @@ router.get('/group/:groupId', authenticate, (req, res) => {
 // Bewusst NUR authenticate (kein canPlan): auch Mitarbeiter ohne Planungsrecht dürfen sich an ihre
 // eigenen Termine erinnern lassen. Empfänger = wer sie setzt. MUSS vor '/:id' stehen (sonst fängt
 // '/:id' den Pfad „reminders" ab).
-const LEAD_UNITS = ['hour', 'day', 'week', 'month'];
+const LEAD_UNITS = ['day', 'week', 'month'];
+const REMIND_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 function validLead(num, unit) {
   const n = Number(num);
   if (!Number.isInteger(n) || n < 1 || n > 999) return null;
@@ -180,7 +181,15 @@ function reminderTargetAllowed(db, user, t) {
   if (canPlanAll(user)) return true;
   return ids().includes(user.id);
 }
-const reminderOut = (r) => ({ id: r.id, target_type: r.target_type, group_id: r.group_id, entry_id: r.entry_id, series_id: r.series_id, lead_num: r.lead_num, lead_unit: r.lead_unit, scheduled: r.scheduled === 1 });
+const reminderOut = (r) => ({ id: r.id, target_type: r.target_type, group_id: r.group_id, entry_id: r.entry_id, series_id: r.series_id, lead_num: r.lead_num, lead_unit: r.lead_unit, remind_time: r.remind_time || null });
+
+// Alle eigenen Erinnerungen (für die 🔔-Anzeige in der Planung). MUSS vor '/reminders' mit Query stehen? Nein
+// — Express matcht '/reminders/mine' vor '/reminders'. Liefert nur die Ziel-Schlüssel.
+router.get('/reminders/mine', authenticate, (req, res) => {
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM planning_reminders WHERE user_id = ?').all(req.user.id);
+  res.json({ reminders: rows.map(reminderOut) });
+});
 
 // Eigene Erinnerungen zu einem Termin/einer Serie lesen (group_id, entry_id und/oder series_id).
 router.get('/reminders', authenticate, (req, res) => {
@@ -209,17 +218,19 @@ router.post('/reminders', authenticate, (req, res) => {
   if (target_type === 'series' && !series_id) return res.status(400).json({ error: 'series_id nötig' });
   const lead = validLead(b.lead_num, b.lead_unit);
   if (!lead) return res.status(400).json({ error: 'Ungültiger Vorlauf' });
-  const scheduled = b.scheduled ? 1 : 0; // 0 = exakt zur Termin-Zeit; 1 = in geplanter Zusammenfassung
+  // Uhrzeit (HH:MM), zu der die Erinnerung gesendet wird. Fehlt/leer → NULL = Beginn-Uhrzeit des Termins.
+  let remind_time = null;
+  if (b.remind_time) { if (!REMIND_TIME_RE.test(b.remind_time)) return res.status(400).json({ error: 'Ungültige Uhrzeit' }); remind_time = b.remind_time; }
   if (!reminderTargetAllowed(db, req.user, { target_type, group_id, entry_id, series_id })) {
     return res.status(403).json({ error: 'Keine Berechtigung für diesen Termin' });
   }
   const dup = db.prepare(`SELECT * FROM planning_reminders WHERE user_id = ? AND target_type = ?
     AND COALESCE(group_id,'') = COALESCE(?, '') AND COALESCE(entry_id,0) = COALESCE(?, 0)
-    AND COALESCE(series_id,'') = COALESCE(?, '') AND lead_num = ? AND lead_unit = ? AND scheduled = ?`)
-    .get(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit, scheduled);
+    AND COALESCE(series_id,'') = COALESCE(?, '') AND lead_num = ? AND lead_unit = ? AND COALESCE(remind_time,'') = COALESCE(?, '')`)
+    .get(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit, remind_time);
   if (dup) return res.status(200).json({ reminder: reminderOut(dup) });
-  const r = db.prepare(`INSERT INTO planning_reminders (user_id, target_type, group_id, entry_id, series_id, lead_num, lead_unit, scheduled)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit, scheduled);
+  const r = db.prepare(`INSERT INTO planning_reminders (user_id, target_type, group_id, entry_id, series_id, lead_num, lead_unit, remind_time)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit, remind_time);
   const row = db.prepare('SELECT * FROM planning_reminders WHERE id = ?').get(r.lastInsertRowid);
   res.status(201).json({ reminder: reminderOut(row) });
 });

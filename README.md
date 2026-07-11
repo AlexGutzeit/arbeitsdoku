@@ -84,15 +84,14 @@ zusätzlich Bestellungen) einzeln ein- und ausschalten (wird sofort gespeichert)
 **⋮-Menü** eines Termins der Punkt **„🔔 Benachrichtigung"** – auch für Mitarbeiter **ohne** Planungsrecht (die
 bekommen dadurch überhaupt erst das Menü, mit nur diesem einen Punkt), aber nur an **eigenen** Terminen;
 Chef/Admin an **allen** (um sich an Termine der Mitarbeiter erinnern zu lassen). Im Dialog lassen sich
-**mehrere** Erinnerungen je Termin setzen – jeweils **Zahl + Einheit (Stunde/Tag/Woche/Monat)** Vorlauf; bei
-**Serienterminen** wählbar **„nur dieser Termin"** oder **„ganze Serie"**. Jede Erinnerung ist entweder **exakt** oder
-**geplant** (Haken **„In geplanter Zusammenfassung senden"**): **ohne** Haken kommt die Push exakt zur
-**Termin-Uhrzeit minus Vorlauf** („Am Fr 10.07. um 07:00: Kunde XY" bzw. für Chef „Anna hat am Fr 10.07. um
-07:00 einen Termin: …"); **mit** Haken kommt sie stattdessen **gebündelt** in der nächsten **geplanten
-Zusammenfassung** (s. u.), die noch **vor** dem Termin läuft (unter „Anstehende Termine") – gibt es keine
-passende, kommt sie doch exakt zur Zeit (nie zu spät). „Exakt **und** geplant" deckt man mit **zwei**
-Erinnerungen ab. Schaltet man „Planung" wieder **aus**, bleiben alle gesetzten Erinnerungen erhalten und sind
-nur **pausiert**; nach dem Wieder-Einschalten kommen sie wieder (noch zukünftige Termine als Nachhol-Erinnerung).
+**mehrere** Erinnerungen je Termin setzen – jeweils **Vorlauf (Zahl + Tage/Wochen/Monate)** und eine
+**Uhrzeit**. Die Uhrzeit ist mit der **Beginn-Zeit des Termins** vorbelegt: „1 Woche vorher" kommt dann zur
+Termin-Uhrzeit. Stellt man die Uhrzeit z. B. auf **18:00** (oder legt eine zweite Erinnerung damit an), erhält
+man eine **Abend-Erinnerung**. Die Push lautet „Am Fr 10.07. um 07:00: Kunde XY" bzw. für Chef „Anna hat am
+Fr 10.07. um 07:00 einen Termin: …". Bei **Serienterminen** wählbar **„nur dieser Termin"** oder **„ganze
+Serie"**. Hat ein Termin **mindestens eine** Erinnerung, zeigen **Tages- und Wochenansicht** eine **🔔** (wie das
+🔁 bei Serien). Schaltet man „Planung" wieder **aus**, bleiben alle gesetzten Erinnerungen erhalten und sind nur
+**pausiert**; nach dem Wieder-Einschalten kommen sie wieder (noch zukünftige Termine als Nachhol-Erinnerung).
 
 **Geplante Zusammenfassung (Digest):** Als Alternative zu den ereignisgetriebenen Pushes kann jeder Nutzer
 beliebig viele **Zusammenfassungen** anlegen (**+**) – je mit **Name** (z. B. „Einkaufen"), **Wochentagen**,

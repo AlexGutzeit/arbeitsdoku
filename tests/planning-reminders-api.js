@@ -57,7 +57,7 @@ const groupOf = async (t, id) => ((await req('GET','/api/planning', t)).body.ent
     const forbidden = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eB.id, lead_num:1, lead_unit:'day' });
     ok('Anna auf Bobs Termin → 403', forbidden.status === 403);
     // Admin darf auf Bobs Planung (canPlanAll)
-    const adminOnBob = await req('POST','/api/planning/reminders', admin, { target_type:'occurrence', entry_id:eB.id, lead_num:2, lead_unit:'hour' });
+    const adminOnBob = await req('POST','/api/planning/reminders', admin, { target_type:'occurrence', entry_id:eB.id, lead_num:2, lead_unit:'day' });
     ok('Admin auf Bobs Termin → 201', adminOnBob.status === 201);
 
     // 3) Gruppen-Ziel (group_id)
@@ -73,20 +73,22 @@ const groupOf = async (t, id) => ((await req('GET','/api/planning', t)).body.ent
     const listS = (await req('GET','/api/planning/reminders?series_id='+s.series_id, annaT)).body.reminders;
     ok('Serien-Liste zeigt 1', listS.length === 1);
 
-    // 4b) scheduled-Flag (in geplanter Zusammenfassung vs. exakt)
-    const eSch = (await req('POST','/api/planning', admin, { date:MON, time_from:'10:00', time_to:'11:00', client:'Sched', assigned_user_ids:[anna.id] })).body.entry;
-    const defSch = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eSch.id, lead_num:1, lead_unit:'day' });
-    ok('scheduled default = false', defSch.body.reminder.scheduled === false);
-    const onSch = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eSch.id, lead_num:1, lead_unit:'day', scheduled:true });
-    ok('scheduled=true angelegt (nicht als Duplikat)', onSch.status === 201 && onSch.body.reminder.scheduled === true && onSch.body.reminder.id !== defSch.body.reminder.id);
-    const schList = (await req('GET','/api/planning/reminders?entry_id='+eSch.id, annaT)).body.reminders;
-    ok('beide Varianten (exakt + geplant) getrennt gelistet', schList.length === 2 && schList.filter(x=>x.scheduled).length === 1);
+    // 4b) remind_time (Uhrzeit): Default NULL (= Beginn-Uhrzeit), eigene Uhrzeit, getrennt gelistet
+    const eTime = (await req('POST','/api/planning', admin, { date:MON, time_from:'10:00', time_to:'11:00', client:'Time', assigned_user_ids:[anna.id] })).body.entry;
+    const defTime = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eTime.id, lead_num:1, lead_unit:'day' });
+    ok('remind_time default = null (Beginn-Uhrzeit)', defTime.body.reminder.remind_time === null);
+    const evening = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eTime.id, lead_num:1, lead_unit:'day', remind_time:'18:00' });
+    ok('eigene Uhrzeit 18:00 angelegt (kein Duplikat)', evening.status === 201 && evening.body.reminder.remind_time === '18:00' && evening.body.reminder.id !== defTime.body.reminder.id);
+    const timeList = (await req('GET','/api/planning/reminders?entry_id='+eTime.id, annaT)).body.reminders;
+    ok('beide Uhrzeit-Varianten getrennt gelistet', timeList.length === 2 && timeList.filter(x=>x.remind_time === '18:00').length === 1);
+    const badTime = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eTime.id, lead_num:1, lead_unit:'day', remind_time:'25:00' });
+    ok('ungültige Uhrzeit → 400', badTime.status === 400);
 
     // 5) Validierung
     const bad1 = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eA.id, lead_num:0, lead_unit:'day' });
     ok('lead_num 0 → 400', bad1.status === 400);
-    const bad2 = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eA.id, lead_num:1, lead_unit:'year' });
-    ok('lead_unit "year" → 400', bad2.status === 400);
+    const bad2 = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eA.id, lead_num:1, lead_unit:'hour' });
+    ok('lead_unit "hour" (entfernt) → 400', bad2.status === 400);
     const bad3 = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', lead_num:1, lead_unit:'day' });
     ok('ohne Ziel → 400', bad3.status === 400);
 

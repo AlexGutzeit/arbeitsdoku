@@ -47,6 +47,19 @@ async function renderPlanningContent() {
     } catch (_) { S.pushPlanning = false; }
   }
 
+  // Eigene Erinnerungen laden (für die 🔔-Kennzeichnung an Terminen). Nur wenn das Feature an ist.
+  S.planReminderKeys = new Set();
+  if (S.pushPlanning) {
+    try {
+      const rm = await api('GET', '/api/planning/reminders/mine');
+      ((rm && rm.reminders) || []).forEach(rr => {
+        if (rr.group_id) S.planReminderKeys.add('g:' + rr.group_id);
+        if (rr.entry_id) S.planReminderKeys.add('e:' + rr.entry_id);
+        if (rr.series_id) S.planReminderKeys.add('s:' + rr.series_id);
+      });
+    } catch (_) {}
+  }
+
   let entries = [];
   let absences = [];
   try {
@@ -269,12 +282,17 @@ async function renderPlanningContent() {
 
 // --- Planungs-Erinnerungen (Push vor einem Termin) ---
 const REMINDER_UNITS = [
-  { v: 'hour', l: 'Stunde(n)' },
   { v: 'day', l: 'Tag(e)' },
   { v: 'week', l: 'Woche(n)' },
   { v: 'month', l: 'Monat(e)' },
 ];
 const reminderUnitLabel = (u) => (REMINDER_UNITS.find(x => x.v === u) || {}).l || u;
+// Hat der aktuelle Nutzer für diesen Termin (Occurrence per group_id/entry_id oder ganze Serie) eine Erinnerung?
+function entryHasReminder(e) {
+  const s = S.planReminderKeys;
+  if (!s || !s.size) return false;
+  return (e.group_id && s.has('g:' + e.group_id)) || s.has('e:' + e.id) || (e.series_id && s.has('s:' + e.series_id));
+}
 
 // Dialog zum Setzen/Entfernen von Erinnerungen für einen Termin. e: { id, group_id, series_id, client }.
 async function openReminderDialog(e) {
@@ -290,19 +308,16 @@ async function openReminderDialog(e) {
     <div class="modal" style="max-width:480px">
       <div class="modal-header"><h3>&#128276; Benachrichtigung</h3></div>
       <div class="modal-body">
-        <p style="margin:0 0 0.8rem;color:#6b7280;font-size:0.9rem">Erinnerung per Push vor dem Termin${e.client ? ' <strong>' + esc(e.client) + '</strong>' : ''}. Sie wird zur Termin-Uhrzeit minus Vorlauf verschickt.</p>
+        <p style="margin:0 0 0.8rem;color:#6b7280;font-size:0.9rem">Erinnerung per Push vor dem Termin${e.client ? ' <strong>' + esc(e.client) + '</strong>' : ''}. Vorlauf + Uhrzeit wählen – die Uhrzeit ist mit der Beginn-Zeit des Termins vorbelegt (z. B. 18:00 für eine Abend-Erinnerung).</p>
         <div id="rem-list" style="margin-bottom:0.9rem"></div>
         <div style="display:flex;gap:0.5rem;align-items:flex-end;flex-wrap:wrap">
-          <label style="flex:0 0 auto">Vorlauf<br><input id="rem-num" type="number" min="1" max="999" value="1" class="form-control" style="width:5rem"></label>
-          <label style="flex:1 1 8rem">&nbsp;<br><select id="rem-unit" class="form-control">${REMINDER_UNITS.map(u => `<option value="${u.v}"${u.v === 'week' ? ' selected' : ''}>${esc(u.l)}</option>`).join('')}</select></label>
+          <label style="flex:0 0 auto">Vorlauf<br><input id="rem-num" type="number" min="1" max="999" value="1" class="form-control" style="width:4.5rem"></label>
+          <label style="flex:1 1 7rem">Einheit<br><select id="rem-unit" class="form-control">${REMINDER_UNITS.map(u => `<option value="${u.v}"${u.v === 'week' ? ' selected' : ''}>${esc(u.l)}</option>`).join('')}</select></label>
+          <label style="flex:0 0 auto">Uhrzeit<br><input id="rem-time" type="time" class="form-control" value="${esc(e.time_from || '')}" style="width:7rem"></label>
         </div>
         ${isSeries ? `<div style="margin-top:0.6rem"><label style="display:block;margin-bottom:0.3rem">Gilt für:</label>
           <label style="margin-right:1rem"><input type="radio" name="rem-scope" value="occurrence" checked> nur diesen Termin</label>
           <label><input type="radio" name="rem-scope" value="series"> ganze Serie</label></div>` : ''}
-        <label style="display:flex;align-items:flex-start;gap:0.4rem;margin-top:0.7rem">
-          <input type="checkbox" id="rem-scheduled" style="margin-top:0.2rem">
-          <span>In geplanter Zusammenfassung senden<br><span style="color:#9ca3af;font-size:0.82rem">Statt exakt zur Zeit kommt die Erinnerung gebündelt in deiner nächsten geplanten Zusammenfassung vor dem Termin. Ohne eine solche kommt sie exakt zur Zeit.</span></span>
-        </label>
         <div style="margin-top:0.8rem"><button class="btn btn-primary btn-sm" id="rem-add">Erinnerung hinzufügen</button></div>
       </div>
       <div class="modal-footer" style="display:flex;justify-content:flex-end;padding:1rem">
@@ -310,7 +325,8 @@ async function openReminderDialog(e) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); };
+  let changed = false; // beim Schließen die Planung neu rendern (🔔 aktualisieren)
+  const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); if (changed) renderPlanningContent(); };
   const onKey = (ev) => { if (ev.key === 'Escape') finish(); };
   document.addEventListener('keydown', onKey);
   overlay.addEventListener('click', (ev) => { if (ev.target === overlay) finish(); });
@@ -323,25 +339,26 @@ async function openReminderDialog(e) {
     if (!reminders.length) { listEl.innerHTML = '<p style="margin:0;color:#9ca3af">Noch keine Erinnerung.</p>'; return; }
     listEl.innerHTML = reminders.map(r => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid #f0f0f0">
-        <span>${r.lead_num} ${esc(reminderUnitLabel(r.lead_unit))} vorher${r.target_type === 'series' ? ' · <em>ganze Serie</em>' : ''}${r.scheduled ? ' · <em>in Zusammenfassung</em>' : ''}</span>
+        <span>${r.lead_num} ${esc(reminderUnitLabel(r.lead_unit))} vorher · um ${esc(r.remind_time || e.time_from || '–')}${r.target_type === 'series' ? ' · <em>ganze Serie</em>' : ''}</span>
         <button class="btn btn-sm btn-outline rem-del" data-id="${r.id}" title="Entfernen">&#10005;</button>
       </div>`).join('');
     listEl.querySelectorAll('.rem-del').forEach(b => b.addEventListener('click', async () => {
-      try { await api('DELETE', '/api/planning/reminders/' + b.dataset.id); renderList(); }
+      try { await api('DELETE', '/api/planning/reminders/' + b.dataset.id); changed = true; renderList(); }
       catch (err) { toast(err.message || 'Löschen fehlgeschlagen', 'error'); }
     }));
   }
   overlay.querySelector('#rem-add').addEventListener('click', async () => {
     const num = parseInt(overlay.querySelector('#rem-num').value, 10);
     const unit = overlay.querySelector('#rem-unit').value;
+    const time = overlay.querySelector('#rem-time').value;
     if (!Number.isInteger(num) || num < 1) { toast('Bitte eine Zahl ≥ 1 eingeben', 'error'); return; }
     const scope = isSeries ? ((overlay.querySelector('input[name="rem-scope"]:checked') || {}).value || 'occurrence') : 'occurrence';
-    const scheduled = !!overlay.querySelector('#rem-scheduled').checked;
-    const body = { target_type: scope === 'series' ? 'series' : 'occurrence', lead_num: num, lead_unit: unit, scheduled };
+    const body = { target_type: scope === 'series' ? 'series' : 'occurrence', lead_num: num, lead_unit: unit };
+    if (time) body.remind_time = time;
     if (scope === 'series') body.series_id = e.series_id;
     else if (e.group_id) body.group_id = e.group_id;
     else body.entry_id = e.id;
-    try { await api('POST', '/api/planning/reminders', body); toast('Erinnerung gespeichert', 'success'); renderList(); }
+    try { await api('POST', '/api/planning/reminders', body); toast('Erinnerung gespeichert', 'success'); changed = true; renderList(); }
     catch (err) { toast(err.message || 'Speichern fehlgeschlagen', 'error'); }
   });
   renderList();
@@ -449,7 +466,7 @@ function renderPlanningTimeline(entries, absences, canEdit) {
       const entryColor = e.color || '#f59e0b';
       bodyHtml += `<div class="tl-plan-entry" data-planning-id="${e.id}" style="top:${top}px;height:${height}px;left:${leftPct}%;width:${widthPct}%;right:auto;background:${entryColor}28;border-color:${entryColor};color:#374151;" title="Klicken zum \u00dcbernehmen">
         <div style="display:flex;justify-content:space-between;align-items:center;min-width:0;">
-          <span class="tl-e-time" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.series_id ? '<span title="Serientermin">🔁</span> ' : ''}${esc(e.time_from)} - ${esc(e.time_to)}</span>
+          <span class="tl-e-time" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.series_id ? '<span title="Serientermin">🔁</span> ' : ''}${entryHasReminder(e) ? '<span title="Erinnerung aktiv">🔔</span> ' : ''}${esc(e.time_from)} - ${esc(e.time_to)}</span>
           <span style="display:flex;gap:2px;flex-shrink:0;">${actionsHtml}</span>
         </div>
         ${projLabel || e.client ? `<span class="tl-e-project">${esc(projLabel)}${projLabel && e.client ? ' – ' : ''}${esc(e.client || '')}</span>` : ''}
@@ -564,7 +581,7 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
         cellEntries.forEach(e => {
           const proj = e.project_name || e.project_text || '';
           const ec = e.color || '#f59e0b';
-          bodyHtml += `<div class="grid-plan-entry" style="background:${ec}28;border-left-color:${ec};color:#374151;">${e.series_id ? '🔁 ' : ''}${e.time_from}-${e.time_to} ${e.address ? `<button class="nav-to-addr grid-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''} ${esc(proj)}${proj && e.client ? ' – ' : ''}${esc(e.client || '')}</div>`;
+          bodyHtml += `<div class="grid-plan-entry" style="background:${ec}28;border-left-color:${ec};color:#374151;">${e.series_id ? '🔁 ' : ''}${entryHasReminder(e) ? '🔔 ' : ''}${e.time_from}-${e.time_to} ${e.address ? `<button class="nav-to-addr grid-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''} ${esc(proj)}${proj && e.client ? ' – ' : ''}${esc(e.client || '')}</div>`;
         });
         bodyHtml += '</td>';
       });

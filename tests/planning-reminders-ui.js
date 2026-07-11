@@ -70,18 +70,20 @@ async function showDay(p, iso, planning) {
     await p.evaluate(() => document.querySelector('.plan-menu-remind').click()); await sleep(400);
     ok('Dialog offen (Vorlauf-Feld + Einheit)', !!(await p.$('#rem-num')) && !!(await p.$('#rem-unit')));
     const addRem = async (num, unit) => { await p.evaluate((n,u)=>{ const nn=document.querySelector('#rem-num'); nn.value=String(n); document.querySelector('#rem-unit').value=u; }, num, unit); await p.evaluate(()=>document.querySelector('#rem-add').click()); await sleep(600); };
+    ok('Uhrzeit-Feld mit Beginn-Uhrzeit (07:00) vorbelegt', (await p.$eval('#rem-time', el => el.value)) === '07:00');
     await addRem(1, 'week');
     await addRem(1, 'day');
     ok('zwei Erinnerungen in der Liste', (await p.$$('#rem-list .rem-del')).length === 2);
-    // „geplante" Erinnerung (Haken „In geplanter Zusammenfassung senden")
-    ok('Checkbox „geplant" vorhanden', !!(await p.$('#rem-scheduled')));
-    await p.evaluate(() => { document.querySelector('#rem-num').value='2'; document.querySelector('#rem-unit').value='day'; document.querySelector('#rem-scheduled').checked = true; document.querySelector('#rem-add').click(); }); await sleep(700);
-    ok('drei Erinnerungen (eine geplant, Liste zeigt „in Zusammenfassung")', (await p.$$('#rem-list .rem-del')).length === 3 && /in Zusammenfassung/.test(await p.evaluate(()=>document.querySelector('#rem-list').innerHTML)));
+    // Abend-Erinnerung mit eigener Uhrzeit 18:00
+    await p.evaluate(() => { document.querySelector('#rem-num').value='1'; document.querySelector('#rem-unit').value='day'; document.querySelector('#rem-time').value='18:00'; document.querySelector('#rem-add').click(); }); await sleep(700);
+    ok('drei Erinnerungen (Liste zeigt „um 18:00")', (await p.$$('#rem-list .rem-del')).length === 3 && /um 18:00/.test(await p.evaluate(()=>document.querySelector('#rem-list').innerHTML)));
     await p.evaluate(() => document.querySelector('#rem-list .rem-del').click()); await sleep(600);
     ok('nach Löschen zwei Erinnerungen', (await p.$$('#rem-list .rem-del')).length === 2);
-    await p.evaluate(() => document.querySelector('.modal [data-act="close"]').click()); await sleep(200);
+    await p.evaluate(() => document.querySelector('.modal [data-act="close"]').click()); await sleep(900);
     const annaList = (await req('GET','/api/planning/reminders?entry_id='+eAnna.id, await tok('anna','annapw'))).body.reminders;
-    ok('API bestätigt: Anna hat 2 Erinnerungen am Einzeltermin (1 exakt, 1 geplant)', annaList.length === 2 && annaList.filter(x=>x.scheduled).length === 1);
+    ok('API bestätigt: Anna hat 2 Erinnerungen (eine um 18:00)', annaList.length === 2 && annaList.filter(x=>x.remind_time === '18:00').length === 1);
+    // 🔔 in der Tagesansicht am Termin mit aktiver Erinnerung
+    ok('Tagesansicht zeigt 🔔 an Annas Termin', /🔔/.test(await p.evaluate(() => { const el=[...document.querySelectorAll('.tl-plan-entry')].find(x=>/AnnaKunde/.test(x.textContent)); return el?el.innerHTML:''; })));
 
     // Serien-Scope: Erinnerung „ganze Serie"
     const serBtn = await p.$('.plan-menu-btn[data-remind="1"]:not([data-series=""])');
@@ -93,6 +95,10 @@ async function showDay(p, iso, planning) {
     await p.evaluate(() => document.querySelector('.modal [data-act="close"]').click()); await sleep(200);
     const serList = (await req('GET','/api/planning/reminders?series_id='+sAnna.series_id, await tok('anna','annapw'))).body.reminders;
     ok('API bestätigt: Serien-Erinnerung angelegt', serList.length === 1 && serList[0].target_type === 'series');
+
+    // 🔔 auch in der Wochenansicht
+    await p.evaluate(() => { S.planningView = 'week'; renderPlanningContent(); }); await sleep(900);
+    ok('Wochenansicht zeigt 🔔', /🔔/.test(await p.evaluate(() => { const el=[...document.querySelectorAll('.grid-plan-entry')].find(x=>/AnnaKunde/.test(x.textContent)); return el?el.innerHTML:''; })));
 
     // „Planung" aus → Annas ⋮ verschwindet
     await showDay(p, MON, false);
