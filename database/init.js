@@ -953,6 +953,7 @@ function ensurePushSchema(targetDb) {
         series_id   TEXT,
         lead_num    INTEGER NOT NULL,
         lead_unit   TEXT NOT NULL,
+        scheduled   INTEGER DEFAULT 0,
         created_at  TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
@@ -964,6 +965,11 @@ function ensurePushSchema(targetDb) {
         FOREIGN KEY (reminder_id) REFERENCES planning_reminders(id) ON DELETE CASCADE
       );
     `);
+    // scheduled-Spalte nachziehen (0 = exakt zur Termin-Zeit; 1 = in geplanter Zusammenfassung).
+    const rCols = targetDb.prepare("PRAGMA table_info(planning_reminders)").all();
+    if (rCols.length && !rCols.some(c => c.name === 'scheduled')) {
+      targetDb.exec("ALTER TABLE planning_reminders ADD COLUMN scheduled INTEGER DEFAULT 0");
+    }
   } catch (e) {
     console.error('ensurePushSchema fehlgeschlagen:', e.message);
   }

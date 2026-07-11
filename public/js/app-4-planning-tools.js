@@ -299,6 +299,10 @@ async function openReminderDialog(e) {
         ${isSeries ? `<div style="margin-top:0.6rem"><label style="display:block;margin-bottom:0.3rem">Gilt für:</label>
           <label style="margin-right:1rem"><input type="radio" name="rem-scope" value="occurrence" checked> nur diesen Termin</label>
           <label><input type="radio" name="rem-scope" value="series"> ganze Serie</label></div>` : ''}
+        <label style="display:flex;align-items:flex-start;gap:0.4rem;margin-top:0.7rem">
+          <input type="checkbox" id="rem-scheduled" style="margin-top:0.2rem">
+          <span>In geplanter Zusammenfassung senden<br><span style="color:#9ca3af;font-size:0.82rem">Statt exakt zur Zeit kommt die Erinnerung gebündelt in deiner nächsten geplanten Zusammenfassung vor dem Termin. Ohne eine solche kommt sie exakt zur Zeit.</span></span>
+        </label>
         <div style="margin-top:0.8rem"><button class="btn btn-primary btn-sm" id="rem-add">Erinnerung hinzufügen</button></div>
       </div>
       <div class="modal-footer" style="display:flex;justify-content:flex-end;padding:1rem">
@@ -319,7 +323,7 @@ async function openReminderDialog(e) {
     if (!reminders.length) { listEl.innerHTML = '<p style="margin:0;color:#9ca3af">Noch keine Erinnerung.</p>'; return; }
     listEl.innerHTML = reminders.map(r => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid #f0f0f0">
-        <span>${r.lead_num} ${esc(reminderUnitLabel(r.lead_unit))} vorher${r.target_type === 'series' ? ' · <em>ganze Serie</em>' : ''}</span>
+        <span>${r.lead_num} ${esc(reminderUnitLabel(r.lead_unit))} vorher${r.target_type === 'series' ? ' · <em>ganze Serie</em>' : ''}${r.scheduled ? ' · <em>in Zusammenfassung</em>' : ''}</span>
         <button class="btn btn-sm btn-outline rem-del" data-id="${r.id}" title="Entfernen">&#10005;</button>
       </div>`).join('');
     listEl.querySelectorAll('.rem-del').forEach(b => b.addEventListener('click', async () => {
@@ -332,7 +336,8 @@ async function openReminderDialog(e) {
     const unit = overlay.querySelector('#rem-unit').value;
     if (!Number.isInteger(num) || num < 1) { toast('Bitte eine Zahl ≥ 1 eingeben', 'error'); return; }
     const scope = isSeries ? ((overlay.querySelector('input[name="rem-scope"]:checked') || {}).value || 'occurrence') : 'occurrence';
-    const body = { target_type: scope === 'series' ? 'series' : 'occurrence', lead_num: num, lead_unit: unit };
+    const scheduled = !!overlay.querySelector('#rem-scheduled').checked;
+    const body = { target_type: scope === 'series' ? 'series' : 'occurrence', lead_num: num, lead_unit: unit, scheduled };
     if (scope === 'series') body.series_id = e.series_id;
     else if (e.group_id) body.group_id = e.group_id;
     else body.entry_id = e.id;

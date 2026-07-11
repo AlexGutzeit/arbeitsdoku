@@ -73,6 +73,15 @@ const groupOf = async (t, id) => ((await req('GET','/api/planning', t)).body.ent
     const listS = (await req('GET','/api/planning/reminders?series_id='+s.series_id, annaT)).body.reminders;
     ok('Serien-Liste zeigt 1', listS.length === 1);
 
+    // 4b) scheduled-Flag (in geplanter Zusammenfassung vs. exakt)
+    const eSch = (await req('POST','/api/planning', admin, { date:MON, time_from:'10:00', time_to:'11:00', client:'Sched', assigned_user_ids:[anna.id] })).body.entry;
+    const defSch = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eSch.id, lead_num:1, lead_unit:'day' });
+    ok('scheduled default = false', defSch.body.reminder.scheduled === false);
+    const onSch = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eSch.id, lead_num:1, lead_unit:'day', scheduled:true });
+    ok('scheduled=true angelegt (nicht als Duplikat)', onSch.status === 201 && onSch.body.reminder.scheduled === true && onSch.body.reminder.id !== defSch.body.reminder.id);
+    const schList = (await req('GET','/api/planning/reminders?entry_id='+eSch.id, annaT)).body.reminders;
+    ok('beide Varianten (exakt + geplant) getrennt gelistet', schList.length === 2 && schList.filter(x=>x.scheduled).length === 1);
+
     // 5) Validierung
     const bad1 = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eA.id, lead_num:0, lead_unit:'day' });
     ok('lead_num 0 → 400', bad1.status === 400);

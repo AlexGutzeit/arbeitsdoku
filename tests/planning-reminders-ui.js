@@ -73,11 +73,15 @@ async function showDay(p, iso, planning) {
     await addRem(1, 'week');
     await addRem(1, 'day');
     ok('zwei Erinnerungen in der Liste', (await p.$$('#rem-list .rem-del')).length === 2);
+    // „geplante" Erinnerung (Haken „In geplanter Zusammenfassung senden")
+    ok('Checkbox „geplant" vorhanden', !!(await p.$('#rem-scheduled')));
+    await p.evaluate(() => { document.querySelector('#rem-num').value='2'; document.querySelector('#rem-unit').value='day'; document.querySelector('#rem-scheduled').checked = true; document.querySelector('#rem-add').click(); }); await sleep(700);
+    ok('drei Erinnerungen (eine geplant, Liste zeigt „in Zusammenfassung")', (await p.$$('#rem-list .rem-del')).length === 3 && /in Zusammenfassung/.test(await p.evaluate(()=>document.querySelector('#rem-list').innerHTML)));
     await p.evaluate(() => document.querySelector('#rem-list .rem-del').click()); await sleep(600);
-    ok('nach Löschen eine Erinnerung', (await p.$$('#rem-list .rem-del')).length === 1);
+    ok('nach Löschen zwei Erinnerungen', (await p.$$('#rem-list .rem-del')).length === 2);
     await p.evaluate(() => document.querySelector('.modal [data-act="close"]').click()); await sleep(200);
     const annaList = (await req('GET','/api/planning/reminders?entry_id='+eAnna.id, await tok('anna','annapw'))).body.reminders;
-    ok('API bestätigt: Anna hat 1 Erinnerung am Einzeltermin', annaList.length === 1);
+    ok('API bestätigt: Anna hat 2 Erinnerungen am Einzeltermin (1 exakt, 1 geplant)', annaList.length === 2 && annaList.filter(x=>x.scheduled).length === 1);
 
     // Serien-Scope: Erinnerung „ganze Serie"
     const serBtn = await p.$('.plan-menu-btn[data-remind="1"]:not([data-series=""])');

@@ -180,7 +180,7 @@ function reminderTargetAllowed(db, user, t) {
   if (canPlanAll(user)) return true;
   return ids().includes(user.id);
 }
-const reminderOut = (r) => ({ id: r.id, target_type: r.target_type, group_id: r.group_id, entry_id: r.entry_id, series_id: r.series_id, lead_num: r.lead_num, lead_unit: r.lead_unit });
+const reminderOut = (r) => ({ id: r.id, target_type: r.target_type, group_id: r.group_id, entry_id: r.entry_id, series_id: r.series_id, lead_num: r.lead_num, lead_unit: r.lead_unit, scheduled: r.scheduled === 1 });
 
 // Eigene Erinnerungen zu einem Termin/einer Serie lesen (group_id, entry_id und/oder series_id).
 router.get('/reminders', authenticate, (req, res) => {
@@ -209,16 +209,17 @@ router.post('/reminders', authenticate, (req, res) => {
   if (target_type === 'series' && !series_id) return res.status(400).json({ error: 'series_id nötig' });
   const lead = validLead(b.lead_num, b.lead_unit);
   if (!lead) return res.status(400).json({ error: 'Ungültiger Vorlauf' });
+  const scheduled = b.scheduled ? 1 : 0; // 0 = exakt zur Termin-Zeit; 1 = in geplanter Zusammenfassung
   if (!reminderTargetAllowed(db, req.user, { target_type, group_id, entry_id, series_id })) {
     return res.status(403).json({ error: 'Keine Berechtigung für diesen Termin' });
   }
   const dup = db.prepare(`SELECT * FROM planning_reminders WHERE user_id = ? AND target_type = ?
     AND COALESCE(group_id,'') = COALESCE(?, '') AND COALESCE(entry_id,0) = COALESCE(?, 0)
-    AND COALESCE(series_id,'') = COALESCE(?, '') AND lead_num = ? AND lead_unit = ?`)
-    .get(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit);
+    AND COALESCE(series_id,'') = COALESCE(?, '') AND lead_num = ? AND lead_unit = ? AND scheduled = ?`)
+    .get(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit, scheduled);
   if (dup) return res.status(200).json({ reminder: reminderOut(dup) });
-  const r = db.prepare(`INSERT INTO planning_reminders (user_id, target_type, group_id, entry_id, series_id, lead_num, lead_unit)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit);
+  const r = db.prepare(`INSERT INTO planning_reminders (user_id, target_type, group_id, entry_id, series_id, lead_num, lead_unit, scheduled)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit, scheduled);
   const row = db.prepare('SELECT * FROM planning_reminders WHERE id = ?').get(r.lastInsertRowid);
   res.status(201).json({ reminder: reminderOut(row) });
 });

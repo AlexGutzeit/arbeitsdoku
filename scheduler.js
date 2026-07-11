@@ -127,18 +127,27 @@ function reminderLine(db, r, occKey, startWall) {
   const { label, names, own, when } = reminderParts(db, r, occKey, startWall);
   return own ? `• ${when} – ${label}` : `• ${when} – ${(names.join(', ') || 'Mitarbeiter')}: ${label}`;
 }
-// Läuft heute (Berlin) noch ein aktiver Digest NACH now und VOR dem Termin? → Erinnerung dem Digest überlassen.
-function digestRunsLaterToday(db, userId, nowParts, startWall) {
+// Läuft irgendwann zwischen JETZT und dem Termin ein aktiver Digest (geplante Zusammenfassung)? → eine
+// „geplante" Erinnerung dem Digest überlassen. Prüft die Tage von heute bis zum Termintag (Berlin).
+function digestRunsBefore(db, userId, nowParts, apptStartWall) {
   const pref = db.prepare('SELECT summaries_paused FROM push_prefs WHERE user_id = ?').get(userId);
   if (pref && pref.summaries_paused === 1) return false;
   let scheds; try { scheds = db.prepare('SELECT * FROM summary_schedules WHERE user_id = ?').all(userId); } catch (_) { return false; }
+  const active = scheds.filter(s => !s.paused && String(s.weekdays || '').split(',').map(x => x.trim()).filter(Boolean).length);
+  if (!active.length) return false;
   const nowWall = nowParts.date + ' ' + nowParts.hhmm;
-  for (const s of scheds) {
-    if (s.paused) continue;
-    const days = String(s.weekdays || '').split(',').map(x => x.trim()).filter(Boolean);
-    if (!days.includes(String(nowParts.weekday))) continue;
-    const runWall = nowParts.date + ' ' + s.time;
-    if (runWall > nowWall && runWall < startWall) return true;
+  const apptDate = apptStartWall.slice(0, 10);
+  let d = nowParts.date, guard = 0;
+  while (d <= apptDate && guard++ < 400) {
+    const dt = new Date(d + 'T00:00:00Z');
+    const wd = dt.getUTCDay() === 0 ? 7 : dt.getUTCDay();
+    for (const s of active) {
+      const days = String(s.weekdays || '').split(',').map(x => x.trim());
+      if (!days.includes(String(wd))) continue;
+      const runWall = d + ' ' + s.time;
+      if (runWall > nowWall && runWall < apptStartWall) return true;
+    }
+    dt.setUTCDate(dt.getUTCDate() + 1); d = dt.toISOString().slice(0, 10);
   }
   return false;
 }
@@ -155,7 +164,9 @@ async function firePlanningReminders(db, now = new Date()) {
   for (const uid of userIds) {
     const due = collectDueForUser(db, uid, nowParts);
     for (const d of due) {
-      if (digestRunsLaterToday(db, uid, nowParts, d.startWall)) continue; // Digest übernimmt
+      // „Geplante" Erinnerung (scheduled=1): dem Digest überlassen, solange bis zum Termin noch einer läuft.
+      // Sonst (kein passender Digest → Fallback) bzw. exakte Erinnerung (scheduled=0) → jetzt einzeln senden.
+      if (d.r.scheduled === 1 && digestRunsBefore(db, uid, nowParts, d.startWall)) continue;
       const payload = buildReminderPush(db, d.r, d.occ_key, d.startWall);
       markSent(db, d.r.id, d.occ_key); // vor Versand → kein Doppelversand bei überlappenden Ticks
       try { await push.notifyUsers(db, [uid], 'planning', payload); }
@@ -181,10 +192,10 @@ async function tick(db, now = new Date()) {
     if (pref && pref.summaries_paused === 1) continue; // Global-Pause (Urlaub)
     const cats = String(s.cats || '').split(',').map(x => x.trim()).filter(c => VALID_CATS.includes(c));
     let body = buildSummaryText(cats, computeBadgeCounts(db, user));
-    // Fällige Planungs-Erinnerungen dieses Nutzers ins Digest bündeln (nur wenn „Planung" an — die
-    // Pause-Regel steckt in collectDueForUser). Als Zeilen anhängen + protokollieren.
+    // Fällige „geplante" Planungs-Erinnerungen (scheduled=1) dieses Nutzers ins Digest bündeln (nur wenn
+    // „Planung" an — die Pause-Regel steckt in collectDueForUser). Exakte (scheduled=0) kommen einzeln.
     let dueReminders = [];
-    try { dueReminders = collectDueForUser(db, s.user_id, { date, hhmm, weekday }); } catch (_) {}
+    try { dueReminders = collectDueForUser(db, s.user_id, { date, hhmm, weekday }).filter(d => d.r.scheduled === 1); } catch (_) {}
     if (dueReminders.length) {
       body += '\n\nAnstehende Termine:\n' + dueReminders.map(d => reminderLine(db, d.r, d.occ_key, d.startWall)).join('\n');
       for (const d of dueReminders) markSent(db, d.r.id, d.occ_key);

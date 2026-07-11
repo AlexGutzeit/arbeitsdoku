@@ -22,10 +22,12 @@ function addEntry(db, { date, tf = '07:00', tt = '15:30', group_id = null, serie
   db.prepare('INSERT INTO planning_assignments (planning_id,user_id) VALUES (?,?)').run(r.lastInsertRowid, userId);
   return r.lastInsertRowid;
 }
-function addReminder(db, { userId, target_type = 'occurrence', group_id = null, entry_id = null, series_id = null, lead_num, lead_unit }) {
-  return db.prepare(`INSERT INTO planning_reminders (user_id,target_type,group_id,entry_id,series_id,lead_num,lead_unit)
-    VALUES (?,?,?,?,?,?,?)`).run(userId, target_type, group_id, entry_id, series_id, lead_num, lead_unit).lastInsertRowid;
+function addReminder(db, { userId, target_type = 'occurrence', group_id = null, entry_id = null, series_id = null, lead_num, lead_unit, scheduled = 0 }) {
+  return db.prepare(`INSERT INTO planning_reminders (user_id,target_type,group_id,entry_id,series_id,lead_num,lead_unit,scheduled)
+    VALUES (?,?,?,?,?,?,?,?)`).run(userId, target_type, group_id, entry_id, series_id, lead_num, lead_unit, scheduled).lastInsertRowid;
 }
+const setSummariesPaused = (db, userId, on) => db.prepare(`INSERT INTO push_prefs (user_id, summaries_paused) VALUES (?, ?)
+  ON CONFLICT(user_id) DO UPDATE SET summaries_paused = excluded.summaries_paused`).run(userId, on ? 1 : 0);
 const sentCount = (db, rid) => db.prepare('SELECT COUNT(*) n FROM planning_reminder_sent WHERE reminder_id=?').get(rid).n;
 const setPlanningPref = (db, userId, on) => db.prepare(`INSERT INTO push_prefs (user_id, planning) VALUES (?, ?)
   ON CONFLICT(user_id) DO UPDATE SET planning = excluded.planning`).run(userId, on ? 1 : 0);
@@ -68,18 +70,33 @@ const setPlanningPref = (db, userId, on) => db.prepare(`INSERT INTO push_prefs (
   await firePlanningReminders(db, nowAt('2026-08-13 07:00'));
   ok('Serie: 2. Vorkommen gefeuert', sentCount(db, rs) === 2);
 
-  // ── T5: Digest-Bündelung. Nutzer hat einen Digest um 18:00 → Erinnerung wird nicht einzeln gesendet,
-  //        sondern beim Digest-Tick gebündelt. ──
+  // Digest um 18:00 (alle Tage) für die folgenden Tests.
   db.prepare(`INSERT INTO summary_schedules (user_id,name,weekdays,time,cats,paused,last_fired)
     VALUES (?, 'Abend', '1,2,3,4,5,6,7', '18:00', 'notes', 0, '')`).run(uid);
+
+  // ── T5: „geplante" Erinnerung (scheduled=1) → nicht einzeln, sondern im Digest gebündelt ──
   const e5 = addEntry(db, { date: '2026-07-31', userId: uid, client: 'C5' });
-  const r5 = addReminder(db, { userId: uid, entry_id: e5, lead_num: 1, lead_unit: 'week' }); // fireAt 2026-07-24 07:00
+  const r5 = addReminder(db, { userId: uid, entry_id: e5, lead_num: 1, lead_unit: 'week', scheduled: 1 }); // fireAt 2026-07-24 07:00
   const early = await firePlanningReminders(db, nowAt('2026-07-24 07:00'));
-  ok('Digest vorhanden: morgens NICHT einzeln gesendet (aufgeschoben)', early === 0 && sentCount(db, r5) === 0);
+  ok('scheduled + Digest: morgens NICHT einzeln (aufgeschoben)', early === 0 && sentCount(db, r5) === 0);
   const fired = await tick(db, nowAt('2026-07-24 18:00'));
   const digest = fired.find(f => f.user_id === uid);
-  ok('Digest-Tick bündelt die Erinnerung (Body enthält „Anstehende Termine")', !!digest && /Anstehende Termine/.test(digest.body) && /C5/.test(digest.body), digest && digest.body);
-  ok('Digest: Erinnerung als gesendet protokolliert', sentCount(db, r5) === 1);
+  ok('Digest-Tick bündelt die scheduled-Erinnerung („Anstehende Termine")', !!digest && /Anstehende Termine/.test(digest.body) && /C5/.test(digest.body), digest && digest.body);
+  ok('Digest: scheduled-Erinnerung protokolliert', sentCount(db, r5) === 1);
+
+  // ── T6: EXAKTE Erinnerung (scheduled=0) trotz vorhandenem Digest → einzeln zur fireAt ──
+  const e6 = addEntry(db, { date: '2026-08-21', userId: uid, client: 'C6' });
+  const r6 = addReminder(db, { userId: uid, entry_id: e6, lead_num: 1, lead_unit: 'week', scheduled: 0 }); // fireAt 2026-08-14 07:00
+  const s6 = await firePlanningReminders(db, nowAt('2026-08-14 07:00'));
+  ok('exakt trotz Digest: einzeln zur fireAt gesendet', s6 === 1 && sentCount(db, r6) === 1);
+
+  // ── T7: scheduled=1 aber KEIN passender Digest (Digest pausiert) → Fallback exakt zur fireAt ──
+  setSummariesPaused(db, uid, true);
+  const e7 = addEntry(db, { date: '2026-09-04', userId: uid, client: 'C7' });
+  const r7 = addReminder(db, { userId: uid, entry_id: e7, lead_num: 1, lead_unit: 'week', scheduled: 1 }); // fireAt 2026-08-28 07:00
+  const s7 = await firePlanningReminders(db, nowAt('2026-08-28 07:00'));
+  ok('scheduled ohne Digest: Fallback → exakt gesendet', s7 === 1 && sentCount(db, r7) === 1);
+  setSummariesPaused(db, uid, false);
 
   console.log(`\nPlanning-Reminders-Scheduler: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail === 0 ? 0 : 1);

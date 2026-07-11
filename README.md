@@ -85,13 +85,14 @@ zusätzlich Bestellungen) einzeln ein- und ausschalten (wird sofort gespeichert)
 bekommen dadurch überhaupt erst das Menü, mit nur diesem einen Punkt), aber nur an **eigenen** Terminen;
 Chef/Admin an **allen** (um sich an Termine der Mitarbeiter erinnern zu lassen). Im Dialog lassen sich
 **mehrere** Erinnerungen je Termin setzen – jeweils **Zahl + Einheit (Stunde/Tag/Woche/Monat)** Vorlauf; bei
-**Serienterminen** wählbar **„nur dieser Termin"** oder **„ganze Serie"**. Die Push kommt standardmäßig zur
+**Serienterminen** wählbar **„nur dieser Termin"** oder **„ganze Serie"**. Jede Erinnerung ist entweder **exakt** oder
+**geplant** (Haken **„In geplanter Zusammenfassung senden"**): **ohne** Haken kommt die Push exakt zur
 **Termin-Uhrzeit minus Vorlauf** („Am Fr 10.07. um 07:00: Kunde XY" bzw. für Chef „Anna hat am Fr 10.07. um
-07:00 einen Termin: …"). Wer eine **geplante Zusammenfassung** (s. u.) eingerichtet hat, bekommt die an dem Tag
-fälligen Erinnerungen **darin gebündelt** (unter „Anstehende Termine") statt einzeln – sofern die
-Zusammenfassung noch **vor** dem Termin läuft, sonst kommt die Erinnerung einzeln zur berechneten Zeit. Schaltet
-man „Planung" wieder **aus**, bleiben alle gesetzten Erinnerungen erhalten und sind nur **pausiert**; nach dem
-Wieder-Einschalten kommen sie wieder (noch zukünftige Termine als Nachhol-Erinnerung).
+07:00 einen Termin: …"); **mit** Haken kommt sie stattdessen **gebündelt** in der nächsten **geplanten
+Zusammenfassung** (s. u.), die noch **vor** dem Termin läuft (unter „Anstehende Termine") – gibt es keine
+passende, kommt sie doch exakt zur Zeit (nie zu spät). „Exakt **und** geplant" deckt man mit **zwei**
+Erinnerungen ab. Schaltet man „Planung" wieder **aus**, bleiben alle gesetzten Erinnerungen erhalten und sind
+nur **pausiert**; nach dem Wieder-Einschalten kommen sie wieder (noch zukünftige Termine als Nachhol-Erinnerung).
 
 **Geplante Zusammenfassung (Digest):** Als Alternative zu den ereignisgetriebenen Pushes kann jeder Nutzer
 beliebig viele **Zusammenfassungen** anlegen (**+**) – je mit **Name** (z. B. „Einkaufen"), **Wochentagen**,
