@@ -107,6 +107,21 @@ const leadOf = async (t, gid) => { const rs = await remOn(t, gid); return rs[0] 
     ok('Erinnerung auf ALLE 3 Vorkommen übertragen (remind_time erhalten)', convOcc.every(o => mineC.some(r=>r.group_id===o.gid && r.remind_time==='08:00' && r.series_id===conv.body.series_id)));
     ok('alte Einzel-Erinnerung entfernt', !mineC.some(r=>r.entry_id===single.id));
 
+    // ===== G) „für alle" vereinheitlicht (überschreibt vorherige „ab hier"-Abweichung) =====
+    const sg = (await req('POST','/api/planning', admin, { date:MON, time_from:'06:00', time_to:'07:00', client:'Uni', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:5 } })).body;
+    const og = await seriesOccs(admin, sg.series_id);
+    // 1) „für alle" 1 Woche
+    await req('POST','/api/planning/reminders', annaT, { series_id:sg.series_id, occurrence_date:og[0].od, group_id:og[0].gid, scope:'all', lead_num:1, lead_unit:'week' });
+    // 2) auf dem 4. „dieser + folgende" → 2 Tage
+    const r4g = (await remOn(annaT, og[3].gid))[0];
+    await req('PUT','/api/planning/reminders/'+r4g.id, annaT, { lead_num:2, lead_unit:'day', scope:'following' });
+    ok('jetzt uneinheitlich (1./4. verschieden)', (await leadOf(annaT,og[0].gid))==='1week' && (await leadOf(annaT,og[3].gid))==='2day');
+    // 3) auf dem 2. etwas ändern, Scope „alle"
+    const r2g = (await remOn(annaT, og[1].gid))[0];
+    await req('PUT','/api/planning/reminders/'+r2g.id, annaT, { lead_num:3, lead_unit:'day', scope:'all' });
+    const leadsG = await Promise.all(og.map(o=>leadOf(annaT,o.gid)));
+    ok('„für alle": ALLE 5 Vorkommen wieder gleich (3 Tage)', leadsG.length===5 && leadsG.every(v=>v==='3day'), JSON.stringify(leadsG));
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Reminders-API: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);
