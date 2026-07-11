@@ -93,8 +93,10 @@ Fr 10.07. um 07:00 einen Termin: …". Bestehende Erinnerungen lassen sich im Di
 Termine es gilt: **„nur dieser Termin" / „dieser + alle folgenden" / „ganze Serie"** — „nur dieser" ist dabei
 eine echte **Ausnahme** auf genau diesem Vorkommen (die anderen bleiben). Löscht man „für alle", ist die
 Erinnerung überall weg. Wird aus einer **Einzelplanung mit gesetzter Erinnerung** eine Serie gemacht, fragt die
-App, wie die Erinnerung übernommen werden soll. Hat ein Termin **mindestens eine** Erinnerung, zeigen **Tages-
-und Wochenansicht** eine **🔔** – unabhängig vom **🔁** der Serien (eine Serie mit Erinnerung trägt beide). Schaltet man „Planung" wieder **aus**, bleiben alle gesetzten Erinnerungen erhalten und sind nur
+App, wie die Erinnerung übernommen werden soll. Bei **nie endenden** Serien wächst eine „für alle" bzw.
+„ab hier" gesetzte Erinnerung automatisch mit den rollierend nachgeschobenen Terminen mit. Hat ein Termin
+**mindestens eine** Erinnerung, zeigen **Tages- und Wochenansicht** eine **🔔** – unabhängig vom **🔁** der
+Serien (eine Serie mit Erinnerung trägt beide). Schaltet man „Planung" wieder **aus**, bleiben alle gesetzten Erinnerungen erhalten und sind nur
 **pausiert**; nach dem Wieder-Einschalten kommen sie wieder (noch zukünftige Termine als Nachhol-Erinnerung).
 
 **Geplante Zusammenfassung (Digest):** Als Alternative zu den ereignisgetriebenen Pushes kann jeder Nutzer

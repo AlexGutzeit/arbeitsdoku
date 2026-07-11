@@ -8,7 +8,7 @@ const fs = require('fs');
 try { fs.unlinkSync(process.env.DB_PATH); } catch (_) {}
 const crypto = require('crypto');
 const { initDatabase, getDb } = require('../database/init');
-const { firePlanningReminders, tick } = require('../scheduler');
+const { firePlanningReminders, tick, extendSeries } = require('../scheduler');
 
 let pass = 0, fail = 0;
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, console.log('  ✗ ' + n + (e ? '  → ' + e : '')));
@@ -90,6 +90,34 @@ const setPlanningPref = (db, userId, on) => db.prepare(`INSERT INTO push_prefs (
   const r6 = addReminder(db, { userId: uid, entry_id: e6, lead_num: 1, lead_unit: 'week' }); // fireWall 2026-08-14 09:30
   ok('Default-Uhrzeit: um 07:00 noch nicht fällig', (await firePlanningReminders(db, nowAt('2026-08-14 07:00'))) === 0 && sentCount(db, r6) === 0);
   ok('Default-Uhrzeit: zur Beginn-Uhrzeit (09:30) gesendet', (await firePlanningReminders(db, nowAt('2026-08-14 09:30'))) === 1 && sentCount(db, r6) === 1);
+
+  // ── T7: rollierendes Nachschieben zieht „bis Ende" laufende Erinnerungen auf neue Vorkommen mit ──
+  const NOW = nowAt('2026-10-05 08:00'); // today = 2026-10-05
+  const SID = crypto.randomUUID();
+  const gA = crypto.randomUUID(), gB = crypto.randomUUID();
+  addEntry(db, { date: '2026-10-05', tf: '07:00', userId: uid, series_id: SID, occurrence_date: '2026-10-05', group_id: gA, client: 'CR' });
+  addEntry(db, { date: '2026-10-12', tf: '07:00', userId: uid, series_id: SID, occurrence_date: '2026-10-12', group_id: gB, client: 'CR' });
+  db.prepare(`INSERT INTO planning_series (series_id, created_by, freq, anchor_date, interval_weeks, end_type, end_count, end_until, template, materialized_until, active)
+    VALUES (?, ?, 'weekly', '2026-10-05', 1, 'never', NULL, NULL, ?, '2026-10-12', 1)`).run(SID, uid,
+    JSON.stringify({ tplDays: [{ offset: 0, time_from: '07:00', time_to: '15:30', break_minutes: 0 }], assigned_user_ids: [uid], color: '#f59e0b' }));
+  // „ganze Serie"-Erinnerung (reicht bis zum letzten Vorkommen 2026-10-12): auf beide vorhandenen
+  const RG = crypto.randomUUID();
+  addReminder(db, { userId: uid, group_id: gA, series_id: SID, occurrence_date: '2026-10-05', reminder_group: RG, lead_num: 1, lead_unit: 'week' });
+  addReminder(db, { userId: uid, group_id: gB, series_id: SID, occurrence_date: '2026-10-12', reminder_group: RG, lead_num: 1, lead_unit: 'week' });
+  // „nur dieser" auf dem 1. (reicht NICHT bis zum Ende) → darf NICHT mitwachsen
+  const RG2 = crypto.randomUUID();
+  addReminder(db, { userId: uid, group_id: gA, series_id: SID, occurrence_date: '2026-10-05', reminder_group: RG2, lead_num: 3, lead_unit: 'day' });
+
+  const remAt = (od) => db.prepare('SELECT * FROM planning_reminders WHERE series_id = ? AND occurrence_date = ?').all(SID, od);
+  const before = db.prepare('SELECT COUNT(*) n FROM planning_entries WHERE series_id = ?').get(SID).n;
+  extendSeries(db, NOW);
+  const after = db.prepare('SELECT COUNT(*) n FROM planning_entries WHERE series_id = ?').get(SID).n;
+  ok('Verlängerung legt neue Vorkommen an', after > before + 50);
+  const at19 = remAt('2026-10-19');
+  ok('neues Vorkommen 19.10. hat die „ganze Serie"-Erinnerung (RG, 1 week)', at19.length === 1 && at19[0].reminder_group === RG && at19[0].lead_num === 1 && at19[0].lead_unit === 'week');
+  ok('„nur dieser" (RG2) wächst NICHT mit', !at19.some(r => r.reminder_group === RG2));
+  const at2yr = remAt('2027-10-04'); // ~letztes Vorkommen im Horizont
+  ok('auch weit vorn (~2 Jahre) ist die Erinnerung da', at2yr.length === 1 && at2yr[0].reminder_group === RG);
 
   console.log(`\nPlanning-Reminders-Scheduler: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail === 0 ? 0 : 1);

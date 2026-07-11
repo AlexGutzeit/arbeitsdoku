@@ -185,6 +185,9 @@ function extendSeries(db, now = new Date()) {
     (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const insAssign = db.prepare('INSERT INTO planning_assignments (planning_id, user_id) VALUES (?, ?)');
+  // Erinnerungen, die „bis zum Ende" laufen (Zeile am bisher letzten Vorkommen), auf neue Vorkommen mitziehen.
+  let insRem = null;
+  try { insRem = db.prepare(`INSERT INTO planning_reminders (user_id, reminder_group, group_id, entry_id, series_id, occurrence_date, lead_num, lead_unit, remind_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`); } catch (_) {}
   for (const s of series) {
     if (s.materialized_until && s.materialized_until >= horizon) continue; // schon weit genug voraus
     const rule = { freq: s.freq, anchor_date: s.anchor_date, interval_weeks: s.interval_weeks || 1, end_type: 'never' };
@@ -194,8 +197,13 @@ function extendSeries(db, now = new Date()) {
     const tplDays = (tpl.tplDays && tpl.tplDays.length) ? tpl.tplDays : [{ offset: 0, time_from: '07:00', time_to: '15:30', break_minutes: 0 }];
     const assigned = tpl.assigned_user_ids || [];
     const tx = db.transaction(() => {
+      // Bisheriges letztes Vorkommen merken (für die Erinnerungs-Mitführung).
+      let prevLast = null;
+      try { prevLast = (db.prepare('SELECT MAX(occurrence_date) AS m FROM planning_entries WHERE series_id = ?').get(s.series_id) || {}).m || null; } catch (_) {}
+      const newGroups = [];
       for (const occStart of occ) {
         const gid = crypto.randomUUID();
+        newGroups.push({ occ: occStart, gid });
         for (const td of tplDays) {
           const r = insEntry.run(s.created_by, addDaysISO(occStart, td.offset), td.time_from, td.time_to, td.break_minutes || 0,
             tpl.address || '', tpl.client || '', tpl.project_id || null, tpl.project_text || '', tpl.description || '', gid, tpl.color || '#f59e0b', s.series_id, occStart);
@@ -204,6 +212,19 @@ function extendSeries(db, now = new Date()) {
         added++;
       }
       db.prepare('UPDATE planning_series SET materialized_until = ? WHERE series_id = ?').run(horizon, s.series_id);
+      // Erinnerungen mitziehen: jede logische Erinnerung (reminder_group je Nutzer), die eine Zeile am
+      // bisher letzten Vorkommen hat, gilt als „offen bis Ende" → auf die neuen Vorkommen kopieren
+      // (Wert = der des letzten Vorkommens, deckt vorherige „ab hier"-Änderungen korrekt ab).
+      if (insRem && prevLast && newGroups.length) {
+        try {
+          const endRems = db.prepare('SELECT * FROM planning_reminders WHERE series_id = ? AND occurrence_date = ?').all(s.series_id, prevLast);
+          for (const rem of endRems) {
+            for (const ng of newGroups) {
+              insRem.run(rem.user_id, rem.reminder_group, ng.gid, null, s.series_id, ng.occ, rem.lead_num, rem.lead_unit, rem.remind_time);
+            }
+          }
+        } catch (_) { /* planning_reminders evtl. nicht vorhanden (alte DB) → ignorieren */ }
+      }
     });
     tx();
   }
