@@ -830,7 +830,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
         <button class="btn btn-outline btn-sm" id="back-btn">Zurück</button>
       </div>
       <form id="planning-form">
-        ${seriesInfoLine ? `<div class="form-group"><div class="planning-series-banner" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:0.6rem 0.8rem;font-size:0.9rem;">${seriesInfoLine}<div style="color:var(--text-light);font-size:0.82rem;margin-top:0.2rem;">Änderungen fragen den Umfang ab (nur dieser / folgende / ganze Serie). Die Taktung selbst änderst du über „Ab hier keine Wiederholung mehr" → neue Serie.</div></div></div>` : ''}
+        ${seriesInfoLine ? `<div class="form-group"><div class="planning-series-banner" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:0.6rem 0.8rem;font-size:0.9rem;">${seriesInfoLine}<div style="color:var(--text-light);font-size:0.82rem;margin-top:0.2rem;">Änderungen fragen den Umfang ab (nur dieser / folgende / ganze Serie). Die Taktung kannst du unten unter „Wiederholung" ändern (gilt ab diesem Termin oder ganze Serie).</div></div></div>` : ''}
         ${selfOnly ? `
         <div class="form-group">
           <label>Geplant für</label>
@@ -899,9 +899,8 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
             </span>
           </div>
         </div>
-        ${(!isEdit && !isGroupEdit) ? `
         <div class="form-group" id="pf-recur-group">
-          <label>Wiederholung (Serientermin)</label>
+          <label>${seriesLink ? 'Wiederholung (Taktung ändern)' : 'Wiederholung (Serientermin)'}</label>
           <select class="form-control" id="pf-recur">
             <option value="">Keine (einmalig)</option>
             <option value="weekly"></option>
@@ -916,7 +915,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
             <div><label style="font-weight:normal"><input type="radio" name="pfrend" value="until"> bis <input type="date" id="pf-recur-until" style="width:auto"></label></div>
           </div>
           <div id="pf-recur-preview" class="push-hint" style="display:none;margin-top:0.5rem"></div>
-        </div>` : ''}
+        </div>
         <button type="submit" class="btn btn-primary btn-block">${(isEdit || isGroupEdit) ? 'Speichern' : 'Planung erstellen'}</button>
         ${(isEdit || isGroupEdit) ? `<button type="button" class="btn btn-outline btn-block" id="replan-entry" style="margin-top:0.5rem">Auftrag erneut planen</button>` : ''}
         ${((isEdit || isGroupEdit) && seriesLink) ? `<button type="button" class="btn btn-outline btn-block" id="series-stop-here" style="margin-top:0.5rem">🔁✕ Ab hier keine Wiederholung mehr</button>` : ''}
@@ -969,12 +968,22 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
   function setupRecurrence() {
     const sel = document.getElementById('pf-recur'); if (!sel) return;
     fillRecurOptions();
+    // Bestehende Serie: aktuelle Taktung vorbelegen (damit man sie sieht und ändern kann)
+    if (seriesLink && seriesRule && seriesRule.series) {
+      const s = seriesRule.series;
+      sel.value = s.freq || '';
+      const endRadio = document.querySelector(`input[name="pfrend"][value="${s.end_type || 'never'}"]`);
+      if (endRadio) endRadio.checked = true;
+      if (s.end_type === 'count' && document.getElementById('pf-recur-count')) document.getElementById('pf-recur-count').value = s.end_count || 1;
+      if (s.end_type === 'until' && document.getElementById('pf-recur-until')) document.getElementById('pf-recur-until').value = s.end_until || '';
+    }
     const deb = () => { clearTimeout(recurTimer); recurTimer = setTimeout(updateRecurPreview, 250); };
     sel.addEventListener('change', updateRecurPreview);
     document.querySelectorAll('input[name="pfrend"]').forEach(r => r.addEventListener('change', updateRecurPreview));
     document.getElementById('pf-recur-count')?.addEventListener('input', () => { const c = document.querySelector('input[name="pfrend"][value="count"]'); if (c) c.checked = true; deb(); });
     document.getElementById('pf-recur-until')?.addEventListener('change', () => { const u = document.querySelector('input[name="pfrend"][value="until"]'); if (u) u.checked = true; updateRecurPreview(); });
     document.getElementById('pf-single-date')?.addEventListener('change', () => setTimeout(updateRecurAll, 0));
+    updateRecurPreview(); // Bei bestehender Serie: Ende-Optionen + Vorschau direkt zeigen
   }
 
   $app().innerHTML = layout(content, 'planning');
@@ -1052,10 +1061,41 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
     if (!daysToSend.length) { toast('Mindestens einen Tag hinzufügen', 'error'); return; }
 
     const seriesInfo = seriesLink;
+    const rec = getRecurrence();
+    if (rec && rec.end_type === 'until' && !rec.end_until) { toast('Bitte ein Enddatum für die Serie wählen', 'error'); return; }
 
     try {
+      // A) Normale Planung im Bearbeiten → in eine Serie umwandeln
+      if ((isEdit || isGroupEdit) && !seriesInfo && rec) {
+        const body = { ...common, days: daysToSend, recurrence: rec };
+        if (isGroupEdit) body.group_id = editGroupId; else body.entry_id = editId;
+        const r = await api('POST', '/api/planning/to-series', body);
+        toast(`Serie erstellt (${r.count} Termine)`, 'success');
+        navigate('/planning'); return;
+      }
+      // B) Serientermin bearbeiten
       if ((isEdit || isGroupEdit) && seriesInfo) {
-        // Serientermin bearbeiten → Umfang abfragen
+        const sr = (seriesRule && seriesRule.series) || {};
+        const sameRec = rec && rec.freq === sr.freq && rec.end_type === sr.end_type
+          && (rec.end_type !== 'count' || Number(rec.end_count) === Number(sr.end_count))
+          && (rec.end_type !== 'until' || rec.end_until === (sr.end_until || ''));
+        // B1) Taktung auf „Keine" → ab diesem Termin beenden
+        if (!rec) {
+          if (!(await confirmModal('Ab diesem Termin keine Wiederholung mehr?\n\nDieser Termin und alle vergangenen bleiben, spätere Wiederholungen werden entfernt.', { title: 'Wiederholung beenden', okLabel: 'Ab hier beenden' }))) return;
+          await api('POST', '/api/planning/series/' + seriesInfo.series_id + '/stop', { after: seriesInfo.occurrence_date });
+          toast('Wiederholung ab hier beendet', 'success'); navigate('/planning'); return;
+        }
+        // B2) Taktung geändert → Umtakten (Split): ab wann?
+        if (!sameRec) {
+          const scope = await choiceModal('Die neue Taktung – ab wann soll sie gelten?', [
+            { value: 'following', label: 'Ab diesem Termin (Vergangenes bleibt)', primary: true },
+            { value: 'series', label: 'Ganze Serie (ab heute)' },
+          ], { title: 'Wiederholung ändern' });
+          if (!scope) return;
+          const r = await api('POST', '/api/planning/series/' + seriesInfo.series_id + '/retakt', { scope, occurrence_date: seriesInfo.occurrence_date, ...common, days: daysToSend, recurrence: rec });
+          toast(`Wiederholung geändert (${r.count} Termine)`, 'success'); navigate('/planning'); return;
+        }
+        // B3) Taktung unverändert → Felder/Tage mit Umfang-Dialog
         const scope = await choiceModal('Serientermin bearbeiten: Was soll geändert werden?', [
           { value: 'occurrence', label: 'Nur diesen Termin' },
           { value: 'following', label: 'Diesen + alle folgenden' },

@@ -183,6 +183,32 @@ const uniq = arr => [...new Set(arr)];
     ok('Dienstag 14.07. (erste Occurrence) bleibt', esSt.some(e => e.date === '2026-07-14'));
     ok('Serie erhalten (alle Zeilen series_id)', esSt.every(e => e.series_id === st) && esSt.every(e => (e.assigned_users||[]).some(a=>a.user_id===anna.id)));
 
+    // 15) Normale Planung → Serie machen (to-series)
+    const conv = (await req('POST','/api/planning', admin, { date:'2026-07-10', time_from:'07:00', time_to:'15:30', client:'Conv', assigned_user_ids:[anna.id] })).body.entry;
+    r = await req('POST','/api/planning/to-series', admin, { entry_id: conv.id, days:[{ date:'2026-07-10', time_from:'07:00', time_to:'15:30', break_minutes:30 }], client:'Conv', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:4 } });
+    ok('to-series: 4 Vorkommen, Serie', r.body.series === true && r.body.count === 4);
+    ok('to-series: Original-Einzeleintrag weg', !((await req('GET','/api/planning', admin)).body.entries || []).some(e => e.id === conv.id));
+    const convE = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e => e.client === 'Conv' && e.series_id);
+    ok('to-series: 4 Vorkommen als Serie (10/17/24/31.07.)', JSON.stringify(uniq(convE.map(e=>e.occurrence_date)).sort()) === JSON.stringify(['2026-07-10','2026-07-17','2026-07-24','2026-07-31']));
+
+    // 16) Serie UMTAKTEN „diesen + folgende" (Split): wöchentl. → 4. Freitag monatlich ab 24.07.
+    r = await req('POST','/api/planning', admin, { date:'2026-07-10', time_from:'07:00', time_to:'15:30', client:'Retakt', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:5 } });
+    const oldSid = r.body.series_id; // 10/17/24/31.07., 07.08.
+    r = await req('POST','/api/planning/series/' + oldSid + '/retakt', admin, { scope:'following', occurrence_date:'2026-07-24', days:[{ date:'2026-07-24', time_from:'07:00', time_to:'15:30', break_minutes:30 }], client:'Retakt', assigned_user_ids:[anna.id], recurrence:{ freq:'monthly_weekday', end_type:'count', end_count:3 } });
+    const newSid = r.body.series_id;
+    ok('retakt following: neue Serie 3 Vorkommen', r.body.count === 3 && newSid && newSid !== oldSid);
+    const oldE = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e => e.series_id === oldSid);
+    ok('retakt: alte Serie behält nur Vergangenes (10./17.07.)', JSON.stringify(uniq(oldE.map(e=>e.occurrence_date)).sort()) === JSON.stringify(['2026-07-10','2026-07-17']));
+    const newE = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e => e.series_id === newSid);
+    ok('retakt: neue Serie = 4. Freitag monatlich (24.07./28.08./25.09.)', JSON.stringify(uniq(newE.map(e=>e.occurrence_date)).sort()) === JSON.stringify(['2026-07-24','2026-08-28','2026-09-25']));
+
+    // 17) Serie UMTAKTEN ohne recurrence → nur beenden ab occurrence_date (Vergangenes bleibt)
+    r = await req('POST','/api/planning', admin, { date:'2026-07-10', time_from:'07:00', time_to:'15:30', client:'Retakt2', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:5 } });
+    const sid2 = r.body.series_id;
+    await req('POST','/api/planning/series/' + sid2 + '/retakt', admin, { scope:'following', occurrence_date:'2026-07-24' });
+    const e2 = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e => e.series_id === sid2);
+    ok('retakt ohne recurrence: nur Vergangenes (10./17.07.)', JSON.stringify(uniq(e2.map(e=>e.occurrence_date)).sort()) === JSON.stringify(['2026-07-10','2026-07-17']));
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Series (API): ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);

@@ -67,6 +67,20 @@ function materializeSeries(db, createdBy, rule, template, assignedUserIds, occur
   return seriesId;
 }
 
+// Legt aus Regel + Vorlage (buildTemplate-Ergebnis) + Zuweisung eine Serie an (Vorkommen ab optional fromDate).
+// Liefert { series_id, count }. Muss innerhalb einer Transaktion laufen.
+function createSeriesFrom(db, createdBy, rule, tmpl, assigned, fromDate) {
+  const horizon = rule.end_type === 'never' ? addMonthsISO(todayISO(), 24) : null;
+  const opts = {};
+  if (fromDate) opts.from = fromDate;
+  if (horizon) opts.horizon = horizon;
+  const starts = recur.computeOccurrences(rule, opts);
+  if (!starts.length) return { series_id: null, count: 0 };
+  const templateObj = { tplDays: tmpl.tplDays, assigned_user_ids: assigned, address: tmpl.address, client: tmpl.client, project_id: tmpl.project_id, project_text: tmpl.project_text, description: tmpl.description, color: tmpl.color };
+  const sid = materializeSeries(db, createdBy, rule, templateObj, assigned, starts, horizon || starts[starts.length - 1]);
+  return { series_id: sid, count: starts.length };
+}
+
 // Alle Planungen abrufen (für alle User sichtbar)
 router.get('/', authenticate, (req, res) => {
   const db = getDb();
@@ -648,6 +662,60 @@ router.put('/series/:seriesId', authenticate, canPlan, (req, res) => {
   const updated = tx();
   broadcast('planning', req.headers['x-tab-id']);
   res.json({ success: true, updated });
+});
+
+// Normale Planung → Serie machen: Original (Einzel/Gruppe) löschen, Serie ab deren Datum materialisieren.
+router.post('/to-series', authenticate, canPlan, (req, res) => {
+  const db = getDb();
+  const rv = validRecurrence(req.body.recurrence);
+  if (!rv) return res.status(400).json({ error: 'Ungültige Wiederholungs-Angaben' });
+  const template = buildTemplate(req.body);
+  if (!template) return res.status(400).json({ error: 'Mindestens ein gültiger Tag ist erforderlich' });
+  const assigned = Array.isArray(req.body.assigned_user_ids) ? req.body.assigned_user_ids.map(Number) : [];
+  if (!assigned.length) return res.status(400).json({ error: 'Mindestens ein Mitarbeiter muss zugewiesen werden' });
+  if (!canPlanAll(req.user) && (assigned.length !== 1 || assigned[0] !== req.user.id)) return res.status(403).json({ error: 'Du darfst nur dich selbst verplanen' });
+  const rule = { ...rv, anchor_date: template.anchor };
+  const spanDays = Math.max(...template.tplDays.map(d => d.offset));
+  const tx = db.transaction(() => {
+    if (req.body.group_id) db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(req.body.group_id);
+    else if (req.body.entry_id) db.prepare('DELETE FROM planning_entries WHERE id = ?').run(Number(req.body.entry_id));
+    return createSeriesFrom(db, req.user.id, rule, template, assigned, null);
+  });
+  const r = tx();
+  if (!r.series_id) return res.status(400).json({ error: 'Die Serie ergibt keine Termine' });
+  broadcast('planning', req.headers['x-tab-id']);
+  const occ = null;
+  res.status(201).json({ success: true, series: true, series_id: r.series_id, count: r.count, days_per_occurrence: template.tplDays.length, overlap: false });
+});
+
+// Serie UMTAKTEN (Split): scope 'following' (ab occurrence_date) | 'series' (ab heute). Ohne recurrence →
+// nur beenden (ab occurrence_date, Vergangenes bleibt). Alte Serie endet vor der Grenze, neue beginnt dort.
+router.post('/series/:seriesId/retakt', authenticate, canPlan, (req, res) => {
+  const db = getDb();
+  const series = loadSeriesOr(req, res, db);
+  if (!series) return;
+  const scope = req.body.scope === 'series' ? 'series' : 'following';
+  const occ = req.body.occurrence_date;
+  if (!occ) return res.status(400).json({ error: 'occurrence_date fehlt' });
+  const boundary = scope === 'series' ? todayISO() : occ;
+  const rv = req.body.recurrence ? validRecurrence(req.body.recurrence) : null;
+  const template = buildTemplate(req.body);
+  const assigned = Array.isArray(req.body.assigned_user_ids) ? req.body.assigned_user_ids.map(Number) : (() => { try { return (JSON.parse(series.template || '{}').assigned_user_ids) || []; } catch (_) { return []; } })();
+
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, boundary);
+    if (boundary <= series.anchor_date) {
+      db.prepare('DELETE FROM planning_series WHERE series_id = ?').run(series.series_id);
+    } else {
+      db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE series_id=?").run(addDaysISO(boundary, -1), addDaysISO(boundary, -1), series.series_id);
+    }
+    if (!rv || !template) return { ended: true };
+    const rule = { ...rv, anchor_date: template.anchor }; // Anker = geöffnetes Vorkommen (Taktung leitet sich daraus ab)
+    return createSeriesFrom(db, series.created_by, rule, template, assigned, boundary);
+  });
+  const r = tx();
+  broadcast('planning', req.headers['x-tab-id']);
+  res.json({ success: true, ...r });
 });
 
 // Serie beenden. Ohne body: künftige ab heute entfernen (Vergangenes bleibt). Mit { after: <occurrence_date> }:
