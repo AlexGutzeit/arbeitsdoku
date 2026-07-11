@@ -1,4 +1,5 @@
-// API-Test: Planungs-Erinnerungen (CRUD, mehrere pro Termin, Rechte, occurrence vs series vs Einzeltag).
+// API-Test: Planungs-Erinnerungen (pro-Vorkommen-Modell). CRUD, Rechte, Serien-Scope (nur dieser/
+// dieser+folgende/alle) beim Anlegen/Ändern/Löschen inkl. „nur dieser"=Loch, remind_time, to-series.
 // Start: node tests/planning-reminders-api.js
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path');
@@ -14,7 +15,14 @@ function req(method, p, token, body) {
 const tok = async (u, pw) => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const nextMon = () => { const d = new Date(); while (d.getDay() !== 1) d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
 const addCal = (isoStr, n) => { const d = new Date(isoStr + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
-const groupOf = async (t, id) => ((await req('GET','/api/planning', t)).body.entries || []).find(e => e.id === id);
+// Vorkommen einer Serie als [{od, gid}] sortiert.
+async function seriesOccs(t, sid) {
+  const es = ((await req('GET','/api/planning', t)).body.entries || []).filter(e => e.series_id === sid);
+  const m = {}; es.forEach(e => { m[e.occurrence_date] = e.group_id; });
+  return Object.keys(m).sort().map(od => ({ od, gid: m[od] }));
+}
+const remOn = async (t, gid) => ((await req('GET','/api/planning/reminders?group_id=' + gid, t)).body.reminders) || [];
+const leadOf = async (t, gid) => { const rs = await remOn(t, gid); return rs[0] ? rs[0].lead_num + rs[0].lead_unit : null; };
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
@@ -24,98 +32,80 @@ const groupOf = async (t, id) => ((await req('GET','/api/planning', t)).body.ent
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/planning-reminders-api-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    // anna + bob: Mitarbeiter OHNE Planungsrecht
     const anna = (await req('POST','/api/users', admin, { username:'anna', password:'annapw', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const bob  = (await req('POST','/api/users', admin, { username:'bob',  password:'bobpw',  name:'Bob',  role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const annaT = await tok('anna','annapw');
-    const bobT  = await tok('bob','bobpw');
     const MON = nextMon();
 
-    // Einzeltag-Planung für Anna (keine group_id → entry_id-Ziel)
+    // ===== A) Einzelplanung: anlegen / mehrere / ändern / löschen =====
     const eA = (await req('POST','/api/planning', admin, { date:MON, time_from:'07:00', time_to:'15:30', client:'KundeA', assigned_user_ids:[anna.id] })).body.entry;
-    ok('Einzelplanung hat keine group_id', !eA.group_id);
-    // Mehrtägige Planung für Anna (group_id)
-    const gRes = (await req('POST','/api/planning', admin, { days:[
-      { date:MON, time_from:'07:00', time_to:'15:30' }, { date:addCal(MON,1), time_from:'07:00', time_to:'15:30' } ],
-      client:'KundeG', assigned_user_ids:[anna.id] })).body;
-    const gA = gRes.group_id;
-    ok('Mehrtag-Planung hat group_id', !!gA);
-    // Einzelplanung für Bob
+    ok('Einzelplanung ohne group_id', !eA.group_id);
+    const a1 = await req('POST','/api/planning/reminders', annaT, { entry_id:eA.id, lead_num:1, lead_unit:'week' });
+    ok('Einzel-Erinnerung angelegt (created 1)', a1.status === 201 && a1.body.created === 1);
+    await req('POST','/api/planning/reminders', annaT, { entry_id:eA.id, lead_num:1, lead_unit:'day', remind_time:'18:00' });
+    let la = (await req('GET','/api/planning/reminders?entry_id='+eA.id, annaT)).body.reminders;
+    ok('zwei Erinnerungen gelistet', la.length === 2);
+    ok('remind_time: eine 18:00, eine default null', la.filter(r=>r.remind_time==='18:00').length===1 && la.filter(r=>r.remind_time===null).length===1);
+    // ändern (PUT) der Woche-Erinnerung → 2 Tage
+    const weekRem = la.find(r => r.lead_unit === 'week');
+    await req('PUT','/api/planning/reminders/'+weekRem.id, annaT, { lead_num:2, lead_unit:'day', scope:'occurrence' });
+    la = (await req('GET','/api/planning/reminders?entry_id='+eA.id, annaT)).body.reminders;
+    ok('Einzel-Erinnerung geändert (kein week mehr)', !la.some(r=>r.lead_unit==='week') && la.some(r=>r.lead_num===2&&r.lead_unit==='day'));
+    // löschen einer
+    await req('DELETE','/api/planning/reminders/'+la[0].id, annaT);
+    ok('eine gelöscht → 1 übrig', ((await req('GET','/api/planning/reminders?entry_id='+eA.id, annaT)).body.reminders).length === 1);
+
+    // ===== B) Rechte =====
     const eB = (await req('POST','/api/planning', admin, { date:MON, time_from:'09:00', time_to:'12:00', client:'KundeB', assigned_user_ids:[bob.id] })).body.entry;
+    ok('Anna auf Bobs Termin → 403', (await req('POST','/api/planning/reminders', annaT, { entry_id:eB.id, lead_num:1, lead_unit:'day' })).status === 403);
+    ok('Admin auf Bobs Termin → 201', (await req('POST','/api/planning/reminders', admin, { entry_id:eB.id, lead_num:1, lead_unit:'day' })).status === 201);
 
-    // 1) Anna setzt Erinnerung auf eigene Einzelplanung (entry_id) + zweite (mehrere erlaubt)
-    const r1 = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eA.id, lead_num:1, lead_unit:'week' });
-    ok('Anna: Erinnerung (1 Woche) angelegt', r1.status === 201 && r1.body.reminder.entry_id === eA.id);
-    const r2 = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eA.id, lead_num:1, lead_unit:'day' });
-    ok('Anna: zweite Erinnerung (1 Tag) angelegt', r2.status === 201);
-    const dup = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eA.id, lead_num:1, lead_unit:'week' });
-    ok('Duplikat (gleicher Vorlauf) → idempotent, keine neue', dup.status === 200 && dup.body.reminder.id === r1.body.reminder.id);
-    const list1 = (await req('GET','/api/planning/reminders?entry_id='+eA.id, annaT)).body.reminders;
-    ok('Anna sieht genau 2 Erinnerungen', list1.length === 2, JSON.stringify(list1.map(x=>x.lead_unit)));
+    // ===== C) Serien-Szenario (7 Vorkommen) =====
+    const s = (await req('POST','/api/planning', admin, { date:MON, time_from:'07:00', time_to:'15:30', client:'Serie', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:7 } })).body;
+    const occ = await seriesOccs(admin, s.series_id);
+    ok('7er-Serie angelegt', occ.length === 7);
+    // Occ3 (Index 2): „dieser + folgende"
+    const set3 = await req('POST','/api/planning/reminders', annaT, { series_id:s.series_id, occurrence_date:occ[2].od, group_id:occ[2].gid, scope:'following', lead_num:1, lead_unit:'week' });
+    ok('Occ3 following: 5 Vorkommen materialisiert (occ3–7)', set3.body.created === 5);
+    let mine = (await req('GET','/api/planning/reminders/mine', annaT)).body.reminders;
+    let withGid = new Set(mine.map(r=>r.group_id));
+    ok('Occ1+Occ2 haben KEINE Erinnerung', !withGid.has(occ[0].gid) && !withGid.has(occ[1].gid));
+    ok('Occ3–Occ7 haben Erinnerung', occ.slice(2).every(o=>withGid.has(o.gid)));
+    // Occ5 (Index 4): ändern „dieser + folgende" → 2 Tage
+    const r5 = (await remOn(annaT, occ[4].gid))[0];
+    await req('PUT','/api/planning/reminders/'+r5.id, annaT, { lead_num:2, lead_unit:'day', scope:'following' });
+    ok('Occ3+Occ4 unverändert (1 week)', (await leadOf(annaT,occ[2].gid))==='1week' && (await leadOf(annaT,occ[3].gid))==='1week');
+    ok('Occ5–Occ7 geändert (2 day)', (await leadOf(annaT,occ[4].gid))==='2day' && (await leadOf(annaT,occ[5].gid))==='2day' && (await leadOf(annaT,occ[6].gid))==='2day');
+    // „nur dieser" = Loch: Occ4 löschen (occurrence)
+    const r4 = (await remOn(annaT, occ[3].gid))[0];
+    await req('DELETE','/api/planning/reminders/'+r4.id+'?scope=occurrence', annaT);
+    ok('Occ4 gelöscht (Loch), Occ3 + Occ5 bleiben', (await remOn(annaT,occ[3].gid)).length===0 && (await remOn(annaT,occ[2].gid)).length===1 && (await remOn(annaT,occ[4].gid)).length===1);
+    // Occ7 löschen „alle" → gesamte reminder_group weg (occ3,5,6,7)
+    const r7 = (await remOn(annaT, occ[6].gid))[0];
+    await req('DELETE','/api/planning/reminders/'+r7.id+'?scope=all', annaT);
+    mine = (await req('GET','/api/planning/reminders/mine', annaT)).body.reminders;
+    ok('Löschen „alle" auf Occ7: KEINE Serien-Erinnerung mehr (auch Occ3 weg)', !mine.some(r=>r.series_id===s.series_id));
 
-    // 2) Rechte: Anna darf NICHT auf Bobs Planung
-    const forbidden = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eB.id, lead_num:1, lead_unit:'day' });
-    ok('Anna auf Bobs Termin → 403', forbidden.status === 403);
-    // Admin darf auf Bobs Planung (canPlanAll)
-    const adminOnBob = await req('POST','/api/planning/reminders', admin, { target_type:'occurrence', entry_id:eB.id, lead_num:2, lead_unit:'day' });
-    ok('Admin auf Bobs Termin → 201', adminOnBob.status === 201);
+    // ===== D) Serien-Scope „nur dieser" beim Anlegen =====
+    const only = await req('POST','/api/planning/reminders', annaT, { series_id:s.series_id, occurrence_date:occ[1].od, group_id:occ[1].gid, scope:'occurrence', lead_num:3, lead_unit:'day' });
+    ok('„nur dieser" legt genau 1 Zeile an', only.body.created === 1);
+    ok('nur Occ2 hat sie', (await remOn(annaT,occ[1].gid)).length===1 && (await remOn(annaT,occ[0].gid)).length===0 && (await remOn(annaT,occ[2].gid)).length===0);
 
-    // 3) Gruppen-Ziel (group_id)
-    const rg = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', group_id:gA, lead_num:3, lead_unit:'day' });
-    ok('Anna: Gruppen-Erinnerung angelegt', rg.status === 201 && rg.body.reminder.group_id === gA);
-    const listG = (await req('GET','/api/planning/reminders?group_id='+gA, annaT)).body.reminders;
-    ok('Gruppen-Liste zeigt 1', listG.length === 1);
+    // ===== E) Validierung =====
+    ok('lead_num 0 → 400', (await req('POST','/api/planning/reminders', annaT, { entry_id:eA.id, lead_num:0, lead_unit:'day' })).status === 400);
+    ok('lead_unit "hour" (entfernt) → 400', (await req('POST','/api/planning/reminders', annaT, { entry_id:eA.id, lead_num:1, lead_unit:'hour' })).status === 400);
+    ok('ungültige Uhrzeit → 400', (await req('POST','/api/planning/reminders', annaT, { entry_id:eA.id, lead_num:1, lead_unit:'day', remind_time:'25:00' })).status === 400);
+    ok('ohne Ziel → 400', (await req('POST','/api/planning/reminders', annaT, { lead_num:1, lead_unit:'day' })).status === 400);
 
-    // 4) Serien-Ziel
-    const s = (await req('POST','/api/planning', admin, { date:MON, time_from:'07:00', time_to:'15:30', client:'KundeS', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:4 } })).body;
-    const rs = await req('POST','/api/planning/reminders', annaT, { target_type:'series', series_id:s.series_id, lead_num:2, lead_unit:'day' });
-    ok('Anna: Serien-Erinnerung angelegt', rs.status === 201 && rs.body.reminder.target_type === 'series');
-    const listS = (await req('GET','/api/planning/reminders?series_id='+s.series_id, annaT)).body.reminders;
-    ok('Serien-Liste zeigt 1', listS.length === 1);
-
-    // 4c) Serien-Scope „ab hier" (from_occurrence)
-    const occs = [...new Set(((await req('GET','/api/planning', admin)).body.entries || []).filter(x=>x.series_id===s.series_id).map(x=>x.occurrence_date))].sort();
-    const follow = await req('POST','/api/planning/reminders', annaT, { target_type:'series', series_id:s.series_id, from_occurrence:occs[1], lead_num:1, lead_unit:'day' });
-    ok('Serien-Erinnerung „ab hier" (from_occurrence gesetzt)', follow.status === 201 && follow.body.reminder.from_occurrence === occs[1]);
-
-    // 4d) Einzel→Serie: eigene Benachrichtigung wandert mit (reminder_scope=all)
+    // ===== F) Einzel→Serie: Erinnerung wandert mit (reminder_scope=all) =====
     const single = (await req('POST','/api/planning', admin, { date:MON, time_from:'12:00', time_to:'13:00', client:'Conv', assigned_user_ids:[anna.id] })).body.entry;
-    await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:single.id, lead_num:1, lead_unit:'week', remind_time:'08:00' });
+    await req('POST','/api/planning/reminders', annaT, { entry_id:single.id, lead_num:1, lead_unit:'week', remind_time:'08:00' });
     const conv = await req('POST','/api/planning/to-series', admin, { date:MON, time_from:'12:00', time_to:'13:00', assigned_user_ids:[anna.id], entry_id:single.id, recurrence:{ freq:'weekly', end_type:'count', end_count:3 }, reminder_scope:'all' });
     ok('to-series erstellt Serie', conv.status === 201 && !!conv.body.series_id);
-    const annaAll = (await req('GET','/api/planning/reminders/mine', annaT)).body.reminders;
-    const migrated = annaAll.find(r => r.series_id === conv.body.series_id);
-    ok('Benachrichtigung auf Serie übertragen (series_id, kein entry_id, remind_time erhalten)', !!migrated && migrated.target_type === 'series' && !migrated.entry_id && migrated.remind_time === '08:00');
-    ok('alte Einzel-Erinnerung entfernt', !annaAll.some(r => r.entry_id === single.id));
-
-    // 4b) remind_time (Uhrzeit): Default NULL (= Beginn-Uhrzeit), eigene Uhrzeit, getrennt gelistet
-    const eTime = (await req('POST','/api/planning', admin, { date:MON, time_from:'10:00', time_to:'11:00', client:'Time', assigned_user_ids:[anna.id] })).body.entry;
-    const defTime = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eTime.id, lead_num:1, lead_unit:'day' });
-    ok('remind_time default = null (Beginn-Uhrzeit)', defTime.body.reminder.remind_time === null);
-    const evening = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eTime.id, lead_num:1, lead_unit:'day', remind_time:'18:00' });
-    ok('eigene Uhrzeit 18:00 angelegt (kein Duplikat)', evening.status === 201 && evening.body.reminder.remind_time === '18:00' && evening.body.reminder.id !== defTime.body.reminder.id);
-    const timeList = (await req('GET','/api/planning/reminders?entry_id='+eTime.id, annaT)).body.reminders;
-    ok('beide Uhrzeit-Varianten getrennt gelistet', timeList.length === 2 && timeList.filter(x=>x.remind_time === '18:00').length === 1);
-    const badTime = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eTime.id, lead_num:1, lead_unit:'day', remind_time:'25:00' });
-    ok('ungültige Uhrzeit → 400', badTime.status === 400);
-
-    // 5) Validierung
-    const bad1 = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eA.id, lead_num:0, lead_unit:'day' });
-    ok('lead_num 0 → 400', bad1.status === 400);
-    const bad2 = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', entry_id:eA.id, lead_num:1, lead_unit:'hour' });
-    ok('lead_unit "hour" (entfernt) → 400', bad2.status === 400);
-    const bad3 = await req('POST','/api/planning/reminders', annaT, { target_type:'occurrence', lead_num:1, lead_unit:'day' });
-    ok('ohne Ziel → 400', bad3.status === 400);
-
-    // 6) Löschen — nur eigene
-    const delOther = await req('DELETE','/api/planning/reminders/'+adminOnBob.body.reminder.id, annaT);
-    ok('Anna kann fremde Erinnerung nicht löschen → 404', delOther.status === 404);
-    const del = await req('DELETE','/api/planning/reminders/'+r2.body.reminder.id, annaT);
-    ok('Anna löscht eigene Erinnerung → success', del.status === 200 && del.body.success);
-    const list2 = (await req('GET','/api/planning/reminders?entry_id='+eA.id, annaT)).body.reminders;
-    ok('nach Löschen nur noch 1', list2.length === 1);
-    const delAgain = await req('DELETE','/api/planning/reminders/'+r2.body.reminder.id, annaT);
-    ok('erneutes Löschen → 404', delAgain.status === 404);
+    const convOcc = await seriesOccs(admin, conv.body.series_id);
+    const mineC = (await req('GET','/api/planning/reminders/mine', annaT)).body.reminders;
+    ok('Erinnerung auf ALLE 3 Vorkommen übertragen (remind_time erhalten)', convOcc.every(o => mineC.some(r=>r.group_id===o.gid && r.remind_time==='08:00' && r.series_id===conv.body.series_id)));
+    ok('alte Einzel-Erinnerung entfernt', !mineC.some(r=>r.entry_id===single.id));
 
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Reminders-API: ${pass} ok, ${fail} fehlgeschlagen`);

@@ -22,9 +22,9 @@ function addEntry(db, { date, tf = '07:00', tt = '15:30', group_id = null, serie
   db.prepare('INSERT INTO planning_assignments (planning_id,user_id) VALUES (?,?)').run(r.lastInsertRowid, userId);
   return r.lastInsertRowid;
 }
-function addReminder(db, { userId, target_type = 'occurrence', group_id = null, entry_id = null, series_id = null, lead_num, lead_unit, remind_time = null, from_occurrence = null }) {
-  return db.prepare(`INSERT INTO planning_reminders (user_id,target_type,group_id,entry_id,series_id,lead_num,lead_unit,remind_time,from_occurrence)
-    VALUES (?,?,?,?,?,?,?,?,?)`).run(userId, target_type, group_id, entry_id, series_id, lead_num, lead_unit, remind_time, from_occurrence).lastInsertRowid;
+function addReminder(db, { userId, group_id = null, entry_id = null, series_id = null, occurrence_date = null, reminder_group = null, lead_num, lead_unit, remind_time = null }) {
+  return db.prepare(`INSERT INTO planning_reminders (user_id,reminder_group,group_id,entry_id,series_id,occurrence_date,lead_num,lead_unit,remind_time)
+    VALUES (?,?,?,?,?,?,?,?,?)`).run(userId, reminder_group, group_id, entry_id, series_id, occurrence_date, lead_num, lead_unit, remind_time).lastInsertRowid;
 }
 const sentCount = (db, rid) => db.prepare('SELECT COUNT(*) n FROM planning_reminder_sent WHERE reminder_id=?').get(rid).n;
 const setPlanningPref = (db, userId, on) => db.prepare(`INSERT INTO push_prefs (user_id, planning) VALUES (?, ?)
@@ -56,27 +56,28 @@ const setPlanningPref = (db, userId, on) => db.prepare(`INSERT INTO push_prefs (
   setPlanningPref(db, uid, true);
   ok('nach Wieder-an: Nachhol-Erinnerung kommt (Termin noch zukünftig)', (await firePlanningReminders(db, nowAt('2026-07-17 09:00'))) === 1 && sentCount(db, r3) === 1);
 
-  // ── T4: Serien-Erinnerung feuert je Vorkommen genau einmal ──
-  const S = crypto.randomUUID();
-  addEntry(db, { date: '2026-08-07', userId: uid, series_id: S, occurrence_date: '2026-08-07', group_id: crypto.randomUUID(), client: 'CS' });
-  addEntry(db, { date: '2026-08-14', userId: uid, series_id: S, occurrence_date: '2026-08-14', group_id: crypto.randomUUID(), client: 'CS' });
-  const rs = addReminder(db, { userId: uid, target_type: 'series', series_id: S, lead_num: 1, lead_unit: 'day' });
+  // ── T4: Gruppen-Erinnerung (Mehrtag/Serien-Vorkommen per group_id) feuert zur frühesten Tag-Zeit ──
+  const G = crypto.randomUUID();
+  addEntry(db, { date: '2026-08-07', tf: '07:00', userId: uid, group_id: G, client: 'CG' });
+  addEntry(db, { date: '2026-08-08', tf: '09:00', userId: uid, group_id: G, client: 'CG' });
+  const rg = addReminder(db, { userId: uid, group_id: G, lead_num: 1, lead_unit: 'day' }); // fireWall 2026-08-06 07:00 (frühester Tag/Zeit)
+  ok('Gruppe: Tag davor 06:59 noch nicht fällig', (await firePlanningReminders(db, nowAt('2026-08-06 06:59'))) === 0 && sentCount(db, rg) === 0);
   await firePlanningReminders(db, nowAt('2026-08-06 07:00'));
-  ok('Serie: 1. Vorkommen gefeuert', sentCount(db, rs) === 1);
+  ok('Gruppe: zur frühesten Tag-Zeit gefeuert', sentCount(db, rg) === 1);
   await firePlanningReminders(db, nowAt('2026-08-06 07:05'));
-  ok('Serie: 1. Vorkommen nicht doppelt', sentCount(db, rs) === 1);
-  await firePlanningReminders(db, nowAt('2026-08-13 07:00'));
-  ok('Serie: 2. Vorkommen gefeuert', sentCount(db, rs) === 2);
+  ok('Gruppe: nicht doppelt', sentCount(db, rg) === 1);
 
-  // ── T4b: Serien-Scope „ab hier" (from_occurrence) → nur Vorkommen ab dem Datum feuern ──
-  const SF = crypto.randomUUID();
-  addEntry(db, { date: '2026-09-11', userId: uid, series_id: SF, occurrence_date: '2026-09-11', group_id: crypto.randomUUID(), client: 'CF' });
-  addEntry(db, { date: '2026-09-18', userId: uid, series_id: SF, occurrence_date: '2026-09-18', group_id: crypto.randomUUID(), client: 'CF' });
-  const rf = addReminder(db, { userId: uid, target_type: 'series', series_id: SF, lead_num: 1, lead_unit: 'day', from_occurrence: '2026-09-18' });
-  await firePlanningReminders(db, nowAt('2026-09-10 07:00')); // Tag vor dem 1. Vorkommen
-  ok('from_occurrence: 1. Vorkommen NICHT gefeuert (vor Grenze)', sentCount(db, rf) === 0);
-  await firePlanningReminders(db, nowAt('2026-09-17 07:00')); // Tag vor dem 2. Vorkommen
-  ok('from_occurrence: 2. Vorkommen gefeuert', sentCount(db, rf) === 1);
+  // ── T4b: zwei Vorkommen einer Serie = zwei unabhängige Zeilen (pro-Vorkommen) ──
+  const g1 = crypto.randomUUID(), g2 = crypto.randomUUID();
+  addEntry(db, { date: '2026-09-11', userId: uid, series_id: 'SF', occurrence_date: '2026-09-11', group_id: g1, client: 'CF' });
+  addEntry(db, { date: '2026-09-18', userId: uid, series_id: 'SF', occurrence_date: '2026-09-18', group_id: g2, client: 'CF' });
+  const rg1 = crypto.randomUUID();
+  const rf1 = addReminder(db, { userId: uid, group_id: g1, series_id: 'SF', occurrence_date: '2026-09-11', reminder_group: rg1, lead_num: 1, lead_unit: 'day' });
+  const rf2 = addReminder(db, { userId: uid, group_id: g2, series_id: 'SF', occurrence_date: '2026-09-18', reminder_group: rg1, lead_num: 1, lead_unit: 'day' });
+  await firePlanningReminders(db, nowAt('2026-09-10 07:00'));
+  ok('Serie pro-Vorkommen: 1. Zeile gefeuert, 2. noch nicht', sentCount(db, rf1) === 1 && sentCount(db, rf2) === 0);
+  await firePlanningReminders(db, nowAt('2026-09-17 07:00'));
+  ok('Serie pro-Vorkommen: 2. Zeile gefeuert', sentCount(db, rf2) === 1);
 
   // ── T5: Abend-Erinnerung über eigene Uhrzeit (remind_time 18:00, 1 Tag vorher) ──
   const e5 = addEntry(db, { date: '2026-07-31', userId: uid, client: 'C5' }); // Termin 07:00

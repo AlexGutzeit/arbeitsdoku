@@ -945,17 +945,17 @@ function ensurePushSchema(targetDb) {
     // Serien-Vorkommen). Idempotent, laeuft bei Init UND Restore.
     targetDb.exec(`
       CREATE TABLE IF NOT EXISTS planning_reminders (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id     INTEGER NOT NULL,
-        target_type TEXT NOT NULL DEFAULT 'occurrence',
-        group_id    TEXT,
-        entry_id    INTEGER,
-        series_id   TEXT,
-        lead_num    INTEGER NOT NULL,
-        lead_unit   TEXT NOT NULL,
-        remind_time TEXT,
-        from_occurrence TEXT,
-        created_at  TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id        INTEGER NOT NULL,
+        reminder_group TEXT,
+        group_id       TEXT,
+        entry_id       INTEGER,
+        series_id      TEXT,
+        occurrence_date TEXT,
+        lead_num       INTEGER NOT NULL,
+        lead_unit      TEXT NOT NULL,
+        remind_time    TEXT,
+        created_at     TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
       CREATE TABLE IF NOT EXISTS planning_reminder_sent (
@@ -966,14 +966,17 @@ function ensurePushSchema(targetDb) {
         FOREIGN KEY (reminder_id) REFERENCES planning_reminders(id) ON DELETE CASCADE
       );
     `);
-    // remind_time-Spalte nachziehen (HH:MM; fehlt/NULL = Beginn-Uhrzeit des Termins).
+    // Erinnerungs-Spalten nachziehen (pro-Vorkommen-Modell): reminder_group verbindet die Zeilen einer
+    // logischen Erinnerung (Scope-Ops), occurrence_date = Startdatum des Vorkommens. remind_time = Uhrzeit.
     const rCols = targetDb.prepare("PRAGMA table_info(planning_reminders)").all();
     if (rCols.length && !rCols.some(c => c.name === 'remind_time')) {
       targetDb.exec("ALTER TABLE planning_reminders ADD COLUMN remind_time TEXT");
     }
-    // from_occurrence-Spalte nachziehen (Serien-Scope „ab hier": nur Vorkommen >= diesem Datum; NULL = alle).
-    if (rCols.length && !rCols.some(c => c.name === 'from_occurrence')) {
-      targetDb.exec("ALTER TABLE planning_reminders ADD COLUMN from_occurrence TEXT");
+    if (rCols.length && !rCols.some(c => c.name === 'reminder_group')) {
+      targetDb.exec("ALTER TABLE planning_reminders ADD COLUMN reminder_group TEXT");
+    }
+    if (rCols.length && !rCols.some(c => c.name === 'occurrence_date')) {
+      targetDb.exec("ALTER TABLE planning_reminders ADD COLUMN occurrence_date TEXT");
     }
   } catch (e) {
     console.error('ensurePushSchema fehlgeschlagen:', e.message);

@@ -67,15 +67,8 @@ function fmtWall(wallStr) {
 // Betroffene Vorkommen einer Erinnerung als [{occ_key, startWall}] (startWall = frühester Tag + time_from).
 // occurrence: genau eines (group_id oder entry_id); series: alle materialisierten Vorkommen.
 function reminderOccurrences(db, r) {
-  if (r.target_type === 'series') {
-    // from_occurrence gesetzt → nur Vorkommen ab diesem Datum (Scope „dieser + folgende").
-    const rows = r.from_occurrence
-      ? db.prepare(`SELECT occurrence_date AS occ, MIN(date || ' ' || time_from) AS startwall
-          FROM planning_entries WHERE series_id = ? AND occurrence_date >= ? GROUP BY occurrence_date`).all(r.series_id, r.from_occurrence)
-      : db.prepare(`SELECT occurrence_date AS occ, MIN(date || ' ' || time_from) AS startwall
-          FROM planning_entries WHERE series_id = ? GROUP BY occurrence_date`).all(r.series_id);
-    return rows.filter(x => x.startwall).map(x => ({ occ_key: x.occ, startWall: x.startwall.slice(0, 16) }));
-  }
+  // Pro-Vorkommen-Modell: jede Zeile adressiert genau EIN Vorkommen (group_id für Serie/Mehrtag,
+  // entry_id für Einzeltag). Keine Serien-Expansion mehr.
   if (r.group_id) {
     const x = db.prepare(`SELECT MIN(date || ' ' || time_from) AS startwall FROM planning_entries WHERE group_id = ?`).get(r.group_id);
     return (x && x.startwall) ? [{ occ_key: 'g:' + r.group_id, startWall: x.startwall.slice(0, 16) }] : [];
@@ -111,7 +104,6 @@ function collectDueForUser(db, userId, nowParts) {
 
 // Repräsentativer Eintrag des Vorkommens (für Kunde/Beschreibung + Zuweisung).
 function occurrenceRepEntry(db, r, occKey) {
-  if (r.target_type === 'series') return db.prepare(`SELECT * FROM planning_entries WHERE series_id = ? AND occurrence_date = ? ORDER BY date, time_from LIMIT 1`).get(r.series_id, occKey);
   if (r.group_id) return db.prepare(`SELECT * FROM planning_entries WHERE group_id = ? ORDER BY date, time_from LIMIT 1`).get(r.group_id);
   return db.prepare(`SELECT * FROM planning_entries WHERE id = ?`).get(r.entry_id);
 }

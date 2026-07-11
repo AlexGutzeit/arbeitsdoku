@@ -66,39 +66,41 @@ async function showDay(p, iso, planning) {
     });
     ok('Anna: Menü nur „Benachrichtigung" (kein Bearbeiten/Löschen)', annaMenu.remind && !annaMenu.edit && !annaMenu.del, JSON.stringify(annaMenu));
 
-    // Dialog: anlegen (2), auflisten, löschen
+    // Dialog: anlegen / auflisten / bearbeiten / löschen (Einzeltermin, KEIN Serien-Scope)
     await p.evaluate(() => document.querySelector('.plan-menu-remind').click()); await sleep(400);
-    ok('Dialog offen (Vorlauf-Feld + Einheit)', !!(await p.$('#rem-num')) && !!(await p.$('#rem-unit')));
-    const addRem = async (num, unit) => { await p.evaluate((n,u)=>{ const nn=document.querySelector('#rem-num'); nn.value=String(n); document.querySelector('#rem-unit').value=u; }, num, unit); await p.evaluate(()=>document.querySelector('#rem-add').click()); await sleep(600); };
-    ok('Uhrzeit-Feld mit Beginn-Uhrzeit (07:00) vorbelegt', (await p.$eval('#rem-time', el => el.value)) === '07:00');
-    await addRem(1, 'week');
-    await addRem(1, 'day');
-    ok('zwei Erinnerungen in der Liste', (await p.$$('#rem-list .rem-del')).length === 2);
-    // Abend-Erinnerung mit eigener Uhrzeit 18:00
-    await p.evaluate(() => { document.querySelector('#rem-num').value='1'; document.querySelector('#rem-unit').value='day'; document.querySelector('#rem-time').value='18:00'; document.querySelector('#rem-add').click(); }); await sleep(700);
-    ok('drei Erinnerungen (Liste zeigt „um 18:00")', (await p.$$('#rem-list .rem-del')).length === 3 && /um 18:00/.test(await p.evaluate(()=>document.querySelector('#rem-list').innerHTML)));
-    await p.evaluate(() => document.querySelector('#rem-list .rem-del').click()); await sleep(600);
-    ok('nach Löschen zwei Erinnerungen', (await p.$$('#rem-list .rem-del')).length === 2);
+    ok('Dialog offen (Vorlauf + Einheit + Uhrzeit)', !!(await p.$('#rem-num')) && !!(await p.$('#rem-unit')) && !!(await p.$('#rem-time')));
+    ok('Uhrzeit vorbelegt mit Beginn-Uhrzeit (07:00)', (await p.$eval('#rem-time', el => el.value)) === '07:00');
+    const setForm = async (num, unit, time) => p.evaluate((n,u,t)=>{ document.querySelector('#rem-num').value=String(n); document.querySelector('#rem-unit').value=u; if(t) document.querySelector('#rem-time').value=t; }, num, unit, time||'');
+    const submit = async () => { await p.evaluate(()=>document.querySelector('#rem-submit').click()); await sleep(600); };
+    await setForm(1,'week'); await submit();
+    await setForm(1,'day','18:00'); await submit();
+    ok('zwei Erinnerungen gelistet (eine um 18:00)', (await p.$$('#rem-list .rem-del')).length === 2 && /um 18:00/.test(await p.evaluate(()=>document.querySelector('#rem-list').innerHTML)));
+    // Bearbeiten (✏️): erste auf 3 Tage ändern
+    await p.evaluate(() => document.querySelector('#rem-list .rem-edit').click()); await sleep(200);
+    ok('Bearbeiten lädt Werte + Button „Änderung speichern"', /Änderung/.test(await p.$eval('#rem-submit', el=>el.textContent)));
+    await setForm(3,'day'); await submit();
+    ok('nach Bearbeiten: weiter 2, eine „3 Tag(e)"', (await p.$$('#rem-list .rem-del')).length === 2 && /3 Tag/.test(await p.evaluate(()=>document.querySelector('#rem-list').innerHTML)));
+    // Löschen (Einzeltermin: kein Scope-Dialog)
+    await p.evaluate(() => document.querySelector('#rem-list .rem-del').click()); await sleep(500);
+    ok('nach Löschen eine Erinnerung', (await p.$$('#rem-list .rem-del')).length === 1);
     await p.evaluate(() => document.querySelector('.modal [data-act="close"]').click()); await sleep(900);
-    const annaList = (await req('GET','/api/planning/reminders?entry_id='+eAnna.id, await tok('anna','annapw'))).body.reminders;
-    ok('API bestätigt: Anna hat 2 Erinnerungen (eine um 18:00)', annaList.length === 2 && annaList.filter(x=>x.remind_time === '18:00').length === 1);
-    // 🔔 in der Tagesansicht am Termin mit aktiver Erinnerung
     ok('Tagesansicht zeigt 🔔 an Annas Termin', /🔔/.test(await p.evaluate(() => { const el=[...document.querySelectorAll('.tl-plan-entry')].find(x=>/AnnaKunde/.test(x.textContent)); return el?el.innerHTML:''; })));
 
-    // Serien-Scope: Erinnerung „ganze Serie"
-    const serBtn = await p.$('.plan-menu-btn[data-remind="1"]:not([data-series=""])');
-    ok('Anna: ⋮ am Serientermin vorhanden', !!serBtn);
+    // Serien-Termin: Anlegen MIT Scope-Dialog „ganze Serie"
+    ok('Anna: ⋮ am Serientermin vorhanden', !!(await p.$('.plan-menu-btn[data-remind="1"]:not([data-series=""])')));
     await p.evaluate(() => document.querySelector('.plan-menu-btn[data-remind="1"]:not([data-series=""])').click()); await sleep(300);
     await p.evaluate(() => document.querySelector('.plan-menu-remind').click()); await sleep(400);
-    ok('Serien-Dialog zeigt 3 Scope-Optionen (dieser/folgende/ganze)', (await p.$$('input[name="rem-scope"]')).length === 3);
-    await p.evaluate(() => { document.querySelector('input[name="rem-scope"][value="all"]').checked = true; document.querySelector('#rem-num').value='2'; document.querySelector('#rem-unit').value='day'; document.querySelector('#rem-add').click(); }); await sleep(700);
-    await p.evaluate(() => document.querySelector('.modal [data-act="close"]').click()); await sleep(200);
-    const serList = (await req('GET','/api/planning/reminders?series_id='+sAnna.series_id, await tok('anna','annapw'))).body.reminders;
-    ok('API bestätigt: Serien-Erinnerung (ganze Serie) angelegt', serList.length === 1 && serList[0].target_type === 'series' && serList[0].from_occurrence === null);
+    await setForm(2,'day');
+    await p.evaluate(() => document.querySelector('#rem-submit').click()); await sleep(400);
+    ok('Serie: Scope-Dialog mit 3 Optionen', (await p.evaluate(() => [...document.querySelectorAll('.modal [data-val]')].map(b=>b.dataset.val))).join(',') === 'occurrence,following,all');
+    await p.evaluate(() => document.querySelector('.modal [data-val="all"]').click()); await sleep(800);
+    await p.evaluate(() => document.querySelector('.modal [data-act="close"]').click()); await sleep(900);
+    const serMine = (await req('GET','/api/planning/reminders/mine', await tok('anna','annapw'))).body.reminders.filter(r=>r.series_id===sAnna.series_id);
+    ok('„ganze Serie": Erinnerung auf allen 4 Vorkommen', serMine.length === 4);
 
     // 🔔 auch in der Wochenansicht
     await p.evaluate(() => { S.planningView = 'week'; renderPlanningContent(); }); await sleep(900);
-    ok('Wochenansicht zeigt 🔔', /🔔/.test(await p.evaluate(() => { const el=[...document.querySelectorAll('.grid-plan-entry')].find(x=>/AnnaKunde/.test(x.textContent)); return el?el.innerHTML:''; })));
+    ok('Wochenansicht zeigt 🔔', /🔔/.test(await p.evaluate(() => { const el=[...document.querySelectorAll('.grid-plan-entry')].find(x=>/AnnaSerie/.test(x.textContent)); return el?el.innerHTML:''; })));
 
     // „Planung" aus → Annas ⋮ verschwindet
     await showDay(p, MON, false);

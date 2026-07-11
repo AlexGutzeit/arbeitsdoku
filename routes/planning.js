@@ -181,73 +181,124 @@ function reminderTargetAllowed(db, user, t) {
   if (canPlanAll(user)) return true;
   return ids().includes(user.id);
 }
-const reminderOut = (r) => ({ id: r.id, target_type: r.target_type, group_id: r.group_id, entry_id: r.entry_id, series_id: r.series_id, lead_num: r.lead_num, lead_unit: r.lead_unit, remind_time: r.remind_time || null, from_occurrence: r.from_occurrence || null });
+const reminderOut = (r) => ({ id: r.id, reminder_group: r.reminder_group, group_id: r.group_id, entry_id: r.entry_id, series_id: r.series_id, occurrence_date: r.occurrence_date || null, lead_num: r.lead_num, lead_unit: r.lead_unit, remind_time: r.remind_time || null });
+// Vorkommen einer Serie als [{od (occurrence_date), gid (group_id)}]. Optional erst ab fromDate.
+function seriesOccurrences(db, seriesId, fromDate) {
+  const rows = fromDate
+    ? db.prepare(`SELECT occurrence_date AS od, MIN(group_id) AS gid FROM planning_entries WHERE series_id = ? AND occurrence_date >= ? GROUP BY occurrence_date`).all(seriesId, fromDate)
+    : db.prepare(`SELECT occurrence_date AS od, MIN(group_id) AS gid FROM planning_entries WHERE series_id = ? GROUP BY occurrence_date`).all(seriesId);
+  return rows.filter(x => x.gid);
+}
+// Materialisiert eine logische Erinnerung als eine Zeile JE Vorkommen (verbunden über reminder_group).
+// occs: [{gid?, eid?, od?}]. Doppelte (gleicher Vorlauf/Uhrzeit auf demselben Vorkommen) werden übersprungen.
+function materializeReminder(db, userId, occs, seriesId, lead, remind_time) {
+  const rgroup = crypto.randomUUID();
+  const ins = db.prepare(`INSERT INTO planning_reminders (user_id, reminder_group, group_id, entry_id, series_id, occurrence_date, lead_num, lead_unit, remind_time)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const dupq = db.prepare(`SELECT id FROM planning_reminders WHERE user_id = ?
+    AND COALESCE(group_id,'') = COALESCE(?, '') AND COALESCE(entry_id,0) = COALESCE(?, 0)
+    AND lead_num = ? AND lead_unit = ? AND COALESCE(remind_time,'') = COALESCE(?, '')`);
+  let created = 0;
+  for (const o of occs) {
+    const gid = o.gid || null, eid = o.eid || null;
+    if (dupq.get(userId, gid, eid, lead.num, lead.unit, remind_time)) continue;
+    ins.run(userId, rgroup, gid, eid, seriesId || null, o.od || null, lead.num, lead.unit, remind_time);
+    created++;
+  }
+  return { rgroup, created };
+}
 
-// Alle eigenen Erinnerungen (für die 🔔-Anzeige in der Planung). MUSS vor '/reminders' mit Query stehen? Nein
-// — Express matcht '/reminders/mine' vor '/reminders'. Liefert nur die Ziel-Schlüssel.
+// Alle eigenen Erinnerungen (für die 🔔-Anzeige in der Planung). '/reminders/mine' matcht vor '/reminders'.
 router.get('/reminders/mine', authenticate, (req, res) => {
   const db = getDb();
   const rows = db.prepare('SELECT * FROM planning_reminders WHERE user_id = ?').all(req.user.id);
   res.json({ reminders: rows.map(reminderOut) });
 });
 
-// Eigene Erinnerungen zu einem Termin/einer Serie lesen (group_id, entry_id und/oder series_id).
+// Eigene Erinnerungen auf EINEM Vorkommen lesen (group_id ODER entry_id) — pro-Vorkommen gespeichert.
 router.get('/reminders', authenticate, (req, res) => {
   const db = getDb();
   const groupId = req.query.group_id || null;
   const entryId = req.query.entry_id ? Number(req.query.entry_id) : null;
-  const seriesId = req.query.series_id || null;
-  if (!groupId && !entryId && !seriesId) return res.status(400).json({ error: 'group_id, entry_id oder series_id nötig' });
+  if (!groupId && !entryId) return res.status(400).json({ error: 'group_id oder entry_id nötig' });
   const rows = db.prepare(`SELECT * FROM planning_reminders WHERE user_id = ?
-    AND ((target_type = 'occurrence' AND group_id IS NOT NULL AND group_id = ?)
-      OR (target_type = 'occurrence' AND entry_id IS NOT NULL AND entry_id = ?)
-      OR (target_type = 'series' AND series_id IS NOT NULL AND series_id = ?))
-    ORDER BY id`).all(req.user.id, groupId, entryId, seriesId);
+    AND ((group_id IS NOT NULL AND group_id = ?) OR (entry_id IS NOT NULL AND entry_id = ?))
+    ORDER BY lead_unit, lead_num, id`).all(req.user.id, groupId, entryId);
   res.json({ reminders: rows.map(reminderOut) });
 });
 
-// Erinnerung anlegen (mehrere pro Ziel erlaubt; gleicher Vorlauf → idempotent).
+// Erinnerung anlegen. Serie: scope nur-dieser (occurrence) / dieser+folgende (following) / alle (all)
+// → materialisiert pro betroffenem Vorkommen eine Zeile. Nicht-Serie: genau ein Vorkommen.
 router.post('/reminders', authenticate, (req, res) => {
   const db = getDb();
   const b = req.body || {};
-  const target_type = b.target_type === 'series' ? 'series' : 'occurrence';
-  const group_id = target_type === 'occurrence' ? (b.group_id || null) : null;
-  const entry_id = (target_type === 'occurrence' && !group_id && b.entry_id) ? Number(b.entry_id) : null;
-  const series_id = target_type === 'series' ? (b.series_id || null) : null;
-  if (target_type === 'occurrence' && !group_id && !entry_id) return res.status(400).json({ error: 'group_id oder entry_id nötig' });
-  if (target_type === 'series' && !series_id) return res.status(400).json({ error: 'series_id nötig' });
   const lead = validLead(b.lead_num, b.lead_unit);
   if (!lead) return res.status(400).json({ error: 'Ungültiger Vorlauf' });
-  // Uhrzeit (HH:MM), zu der die Erinnerung gesendet wird. Fehlt/leer → NULL = Beginn-Uhrzeit des Termins.
   let remind_time = null;
   if (b.remind_time) { if (!REMIND_TIME_RE.test(b.remind_time)) return res.status(400).json({ error: 'Ungültige Uhrzeit' }); remind_time = b.remind_time; }
-  // Serien-Scope „ab hier": nur Vorkommen ab diesem occurrence_date. NULL = ganze Serie. Nur bei series.
-  let from_occurrence = null;
-  if (target_type === 'series' && b.from_occurrence) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(b.from_occurrence)) return res.status(400).json({ error: 'Ungültiges Datum' });
-    from_occurrence = b.from_occurrence;
+
+  const isSeries = !!b.series_id;
+  const t = isSeries ? { target_type: 'series', series_id: b.series_id }
+    : b.group_id ? { target_type: 'occurrence', group_id: b.group_id }
+      : { target_type: 'occurrence', entry_id: b.entry_id ? Number(b.entry_id) : null };
+  if (!t.series_id && !t.group_id && !t.entry_id) return res.status(400).json({ error: 'Ziel nötig (series_id/group_id/entry_id)' });
+  if (!reminderTargetAllowed(db, req.user, t)) return res.status(403).json({ error: 'Keine Berechtigung für diesen Termin' });
+
+  let occs;
+  if (isSeries) {
+    const scope = ['occurrence', 'following', 'all'].includes(b.scope) ? b.scope : 'all';
+    if (scope === 'occurrence') {
+      if (!b.group_id) return res.status(400).json({ error: 'group_id des Vorkommens nötig' });
+      occs = [{ gid: b.group_id, od: b.occurrence_date || null }];
+    } else {
+      occs = seriesOccurrences(db, b.series_id, scope === 'following' ? (b.occurrence_date || null) : null);
+    }
+  } else if (b.group_id) {
+    occs = [{ gid: b.group_id, od: null }];
+  } else {
+    occs = [{ eid: Number(b.entry_id), od: null }];
   }
-  if (!reminderTargetAllowed(db, req.user, { target_type, group_id, entry_id, series_id })) {
-    return res.status(403).json({ error: 'Keine Berechtigung für diesen Termin' });
-  }
-  const dup = db.prepare(`SELECT * FROM planning_reminders WHERE user_id = ? AND target_type = ?
-    AND COALESCE(group_id,'') = COALESCE(?, '') AND COALESCE(entry_id,0) = COALESCE(?, 0)
-    AND COALESCE(series_id,'') = COALESCE(?, '') AND lead_num = ? AND lead_unit = ?
-    AND COALESCE(remind_time,'') = COALESCE(?, '') AND COALESCE(from_occurrence,'') = COALESCE(?, '')`)
-    .get(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit, remind_time, from_occurrence);
-  if (dup) return res.status(200).json({ reminder: reminderOut(dup) });
-  const r = db.prepare(`INSERT INTO planning_reminders (user_id, target_type, group_id, entry_id, series_id, lead_num, lead_unit, remind_time, from_occurrence)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(req.user.id, target_type, group_id, entry_id, series_id, lead.num, lead.unit, remind_time, from_occurrence);
-  const row = db.prepare('SELECT * FROM planning_reminders WHERE id = ?').get(r.lastInsertRowid);
-  res.status(201).json({ reminder: reminderOut(row) });
+  if (!occs.length) return res.status(400).json({ error: 'Keine passenden Vorkommen' });
+
+  let result;
+  const tx = db.transaction(() => { result = materializeReminder(db, req.user.id, occs, isSeries ? b.series_id : null, lead, remind_time); });
+  tx();
+  res.status(201).json({ success: true, created: result.created, reminder_group: result.rgroup });
 });
 
-// Erinnerung löschen — nur eigene.
+// Erinnerung ändern (Vorlauf/Uhrzeit) mit Scope. Serie: occurrence/following/all über reminder_group.
+router.put('/reminders/:id', authenticate, (req, res) => {
+  const db = getDb();
+  const b = req.body || {};
+  const row = db.prepare('SELECT * FROM planning_reminders WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Erinnerung nicht gefunden' });
+  const lead = validLead(b.lead_num, b.lead_unit);
+  if (!lead) return res.status(400).json({ error: 'Ungültiger Vorlauf' });
+  let remind_time = null;
+  if (b.remind_time) { if (!REMIND_TIME_RE.test(b.remind_time)) return res.status(400).json({ error: 'Ungültige Uhrzeit' }); remind_time = b.remind_time; }
+  const scope = ['occurrence', 'following', 'all'].includes(b.scope) ? b.scope : 'occurrence';
+  let ids;
+  if (row.series_id && scope === 'following') ids = db.prepare('SELECT id FROM planning_reminders WHERE user_id = ? AND reminder_group = ? AND occurrence_date >= ?').all(req.user.id, row.reminder_group, row.occurrence_date).map(x => x.id);
+  else if (row.series_id && scope === 'all') ids = db.prepare('SELECT id FROM planning_reminders WHERE user_id = ? AND reminder_group = ?').all(req.user.id, row.reminder_group).map(x => x.id);
+  else ids = [row.id];
+  const upd = db.prepare('UPDATE planning_reminders SET lead_num = ?, lead_unit = ?, remind_time = ? WHERE id = ?');
+  const clr = db.prepare('DELETE FROM planning_reminder_sent WHERE reminder_id = ?');
+  const tx = db.transaction(() => { for (const id of ids) { upd.run(lead.num, lead.unit, remind_time, id); clr.run(id); } });
+  tx();
+  res.json({ success: true, updated: ids.length });
+});
+
+// Erinnerung löschen mit Scope. Serie: occurrence (nur dieses Vorkommen = Ausnahme/Loch) / following / all.
 router.delete('/reminders/:id', authenticate, (req, res) => {
   const db = getDb();
-  const r = db.prepare('DELETE FROM planning_reminders WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
-  if (r.changes === 0) return res.status(404).json({ error: 'Erinnerung nicht gefunden' });
-  res.json({ success: true });
+  const row = db.prepare('SELECT * FROM planning_reminders WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Erinnerung nicht gefunden' });
+  const scope = ['occurrence', 'following', 'all'].includes(req.query.scope) ? req.query.scope : 'occurrence';
+  let n;
+  if (row.series_id && scope === 'following') n = db.prepare('DELETE FROM planning_reminders WHERE user_id = ? AND reminder_group = ? AND occurrence_date >= ?').run(req.user.id, row.reminder_group, row.occurrence_date).changes;
+  else if (row.series_id && scope === 'all') n = db.prepare('DELETE FROM planning_reminders WHERE user_id = ? AND reminder_group = ?').run(req.user.id, row.reminder_group).changes;
+  else n = db.prepare('DELETE FROM planning_reminders WHERE id = ?').run(row.id).changes;
+  res.json({ success: true, deleted: n });
 });
 
 router.get('/:id', authenticate, (req, res) => {
@@ -793,15 +844,17 @@ router.post('/to-series', authenticate, canPlan, (req, res) => {
     if (req.body.group_id) db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(req.body.group_id);
     else if (req.body.entry_id) db.prepare('DELETE FROM planning_entries WHERE id = ?').run(Number(req.body.entry_id));
     const res2 = createSeriesFrom(db, req.user.id, rule, template, assigned, null);
-    // Erinnerungen auf die neue Serie umhängen (Scope wie gewählt).
+    // Erinnerungen auf die neue Serie umhängen (pro-Vorkommen, Scope wie gewählt). „following" == „all",
+    // da die Einzelplanung zum ersten Vorkommen wird.
     if (res2.series_id && oldRem.length) {
-      const anchor = db.prepare('SELECT group_id FROM planning_entries WHERE series_id = ? ORDER BY occurrence_date, date LIMIT 1').get(res2.series_id);
-      const anchorGid = anchor && anchor.group_id;
-      const ins = db.prepare(`INSERT INTO planning_reminders (user_id, target_type, group_id, entry_id, series_id, lead_num, lead_unit, remind_time, from_occurrence)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      const allOccs = seriesOccurrences(db, res2.series_id, null);
+      const firstOcc = allOccs[0];
       for (const rem of oldRem) {
-        if (remScope === 'occurrence') ins.run(rem.user_id, 'occurrence', anchorGid, null, null, rem.lead_num, rem.lead_unit, rem.remind_time, null);
-        else ins.run(rem.user_id, 'series', null, null, res2.series_id, rem.lead_num, rem.lead_unit, rem.remind_time, remScope === 'following' ? template.anchor : null);
+        const lead = { num: rem.lead_num, unit: rem.lead_unit };
+        const occs = remScope === 'occurrence'
+          ? (firstOcc ? [{ gid: firstOcc.gid, od: firstOcc.od }] : [])
+          : allOccs.map(o => ({ gid: o.gid, od: o.od }));
+        if (occs.length) materializeReminder(db, rem.user_id, occs, res2.series_id, lead, rem.remind_time || null);
       }
       const ids = oldRem.map(x => x.id);
       db.prepare(`DELETE FROM planning_reminders WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
