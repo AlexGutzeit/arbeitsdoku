@@ -909,6 +909,7 @@ function ensurePushSchema(targetDb) {
         bulletin INTEGER DEFAULT 1,
         notes    INTEGER DEFAULT 1,
         absences INTEGER DEFAULT 1,
+        planning INTEGER DEFAULT 1,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
       CREATE TABLE IF NOT EXISTS summary_schedules (
@@ -929,11 +930,39 @@ function ensurePushSchema(targetDb) {
     if (!cols.some(c => c.name === 'summaries_paused')) {
       targetDb.exec("ALTER TABLE push_prefs ADD COLUMN summaries_paused INTEGER DEFAULT 0");
     }
+    // Planungs-Erinnerungen: Kategorie-Schalter nachziehen (fehlt = an, wie die anderen Kategorien).
+    if (!cols.some(c => c.name === 'planning')) {
+      targetDb.exec("ALTER TABLE push_prefs ADD COLUMN planning INTEGER DEFAULT 1");
+    }
     // name-Spalte nachziehen, falls die Tabelle aus einer Vorversion ohne name stammt (idempotent).
     const sCols = targetDb.prepare("PRAGMA table_info(summary_schedules)").all();
     if (sCols.length && !sCols.some(c => c.name === 'name')) {
       targetDb.exec("ALTER TABLE summary_schedules ADD COLUMN name TEXT NOT NULL DEFAULT ''");
     }
+    // Planungs-Erinnerungen (Push vor einem Termin). Empfaenger = wer sie setzt; occurrence (eine
+    // Gruppe) oder series (alle kuenftigen Vorkommen). Feuerzeit wird zur Tick-Zeit aus den echten
+    // planning_entries berechnet. _sent verhindert Doppelversand (auch fuer spaeter materialisierte
+    // Serien-Vorkommen). Idempotent, laeuft bei Init UND Restore.
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS planning_reminders (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL,
+        target_type TEXT NOT NULL DEFAULT 'occurrence',
+        group_id    TEXT,
+        series_id   TEXT,
+        lead_num    INTEGER NOT NULL,
+        lead_unit   TEXT NOT NULL,
+        created_at  TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE TABLE IF NOT EXISTS planning_reminder_sent (
+        reminder_id INTEGER NOT NULL,
+        occ_key     TEXT NOT NULL,
+        sent_at     TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        PRIMARY KEY (reminder_id, occ_key),
+        FOREIGN KEY (reminder_id) REFERENCES planning_reminders(id) ON DELETE CASCADE
+      );
+    `);
   } catch (e) {
     console.error('ensurePushSchema fehlgeschlagen:', e.message);
   }

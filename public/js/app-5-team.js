@@ -187,6 +187,7 @@ const PUSH_CATS = [
   { key: 'absences', label: 'Abwesenheiten' },
   { key: 'bulletin', label: 'Schwarzes Brett' },
   { key: 'notes',    label: 'Notizen' },
+  { key: 'planning', label: 'Planung' },
 ];
 
 // Beim Login/App-Start: wenn die Browser-Erlaubnis bereits erteilt ist, das Geraete-Abo
@@ -261,10 +262,12 @@ async function initPushCard() {
   let active = false;
   try { active = !!(await getPushSubscription()); } catch (_) {}
 
-  let prefs = { orders: true, absences: true, bulletin: true, notes: true };
+  let prefs = { orders: true, absences: true, bulletin: true, notes: true, planning: true };
   if (active) {
     try { const p = await api('GET', '/api/push/prefs'); if (p) prefs = p; } catch (_) {}
   }
+  // Fuer das Planungs-⋮-Menue merken: Erinnerungs-Punkt nur zeigen, wenn Push aktiv + „Planung" an.
+  S.pushPlanning = active && prefs.planning !== false;
 
   const iosHint = isIOS() && !isStandalone()
     ? `<p class="push-hint">📱 Auf dem iPhone/iPad: App über „Teilen → Zum Home-Bildschirm" installieren, damit Benachrichtigungen ankommen.</p>`
@@ -330,7 +333,11 @@ async function initPushCard() {
   card.querySelectorAll('input[data-cat]').forEach(cb => {
     cb.addEventListener('change', async () => {
       const body = {}; body[cb.dataset.cat] = cb.checked;
-      try { await api('PUT', '/api/push/prefs', body); toast('Gespeichert', 'success'); }
+      try {
+        await api('PUT', '/api/push/prefs', body); toast('Gespeichert', 'success');
+        // „Planung"-Schalter beeinflusst den Erinnerungs-Punkt im Planungs-⋮-Menue sofort.
+        if (cb.dataset.cat === 'planning') S.pushPlanning = cb.checked;
+      }
       catch (e) { toast('Konnte Einstellung nicht speichern', 'error'); cb.checked = !cb.checked; }
     });
   });
@@ -341,7 +348,9 @@ async function initPushCard() {
 // --- Geplante Zusammenfassungen (Digest-Push) ---
 const SUMMARY_WD = [{ n: 1, l: 'Mo' }, { n: 2, l: 'Di' }, { n: 3, l: 'Mi' }, { n: 4, l: 'Do' }, { n: 5, l: 'Fr' }, { n: 6, l: 'Sa' }, { n: 7, l: 'So' }];
 function summaryCatOptions() {
-  return PUSH_CATS.filter(c => c.key !== 'orders' || S.user.role === 'chef' || S.user.role === 'admin');
+  // 'planning' ist ereignisbasiert (Planungs-Erinnerungen) und keine zaehlerbasierte Digest-Kategorie.
+  return PUSH_CATS.filter(c => c.key !== 'planning')
+    .filter(c => c.key !== 'orders' || S.user.role === 'chef' || S.user.role === 'admin');
 }
 const summaryCatLabel = (key) => (PUSH_CATS.find(c => c.key === key) || {}).label || key;
 const summaryDaysLabel = (arr) => SUMMARY_WD.filter(w => arr.includes(w.n)).map(w => w.l).join(', ');
