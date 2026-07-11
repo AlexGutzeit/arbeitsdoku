@@ -35,6 +35,18 @@ async function renderPlanningContent() {
     label = `${mNames[d.getMonth()]} ${d.getFullYear()}`;
   }
 
+  // „Planung"-Push-Schalter einmalig laden (steuert den Erinnerungs-Punkt im ⋮-Menü). Wie in
+  // initPushCard: nur zeigen, wenn Push auf diesem Gerät aktiv ist UND „Planung" an. Beim ersten Mal
+  // ist S.pushPlanning noch nicht gesetzt (Notifications-Seite ggf. nie geöffnet) → hier nachziehen.
+  if (S.pushPlanning === undefined) {
+    try {
+      const active = typeof pushSupported === 'function' && pushSupported() && !!(await getPushSubscription());
+      let planningOn = true;
+      if (active) { const p = await api('GET', '/api/push/prefs'); planningOn = !!(p && p.planning); }
+      S.pushPlanning = active && planningOn;
+    } catch (_) { S.pushPlanning = false; }
+  }
+
   let entries = [];
   let absences = [];
   try {
@@ -163,20 +175,23 @@ async function renderPlanningContent() {
       closePlanMenus();
       if (existingMenu) return; // Toggle: war offen → schließen
 
+      const canEd = btn.dataset.canedit === '1';
+      const canRem = btn.dataset.remind === '1';
       const menu = document.createElement('div');
       menu.className = 'plan-action-menu';
       menu.dataset.for = btn.dataset.id;
-      menu.innerHTML = `
-        <button class="plan-menu-edit" data-id="${btn.dataset.id}" data-group="${btn.dataset.group || ''}">&#9998; Bearbeiten</button>
-        <button class="plan-menu-del" data-id="${btn.dataset.id}">&#10005; L\u00f6schen</button>
-      `;
+      menu.innerHTML =
+        (canEd ? `<button class="plan-menu-edit" data-id="${btn.dataset.id}" data-group="${btn.dataset.group || ''}">&#9998; Bearbeiten</button>
+        <button class="plan-menu-del" data-id="${btn.dataset.id}">&#10005; L\u00f6schen</button>` : '') +
+        (canRem ? `<button class="plan-menu-remind" data-id="${btn.dataset.id}">&#128276; Benachrichtigung</button>` : '');
       // Positionierung: unterhalb des Buttons, relativ zum Viewport
       document.body.appendChild(menu);
       const rect = btn.getBoundingClientRect();
       menu.style.top = (rect.bottom + window.scrollY + 2) + 'px';
       menu.style.left = Math.max(4, rect.right + window.scrollX - menu.offsetWidth) + 'px';
 
-      menu.querySelector('.plan-menu-edit').addEventListener('click', (ev) => {
+      const editBtn = menu.querySelector('.plan-menu-edit');
+      if (editBtn) editBtn.addEventListener('click', (ev) => {
         ev.stopPropagation();
         hideTooltip();
         closePlanMenus();
@@ -186,7 +201,18 @@ async function renderPlanningContent() {
           navigate('/planning/edit/' + btn.dataset.id);
         }
       });
-      menu.querySelector('.plan-menu-del').addEventListener('click', async (ev) => {
+      const remindBtn = menu.querySelector('.plan-menu-remind');
+      if (remindBtn) remindBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        hideTooltip();
+        closePlanMenus();
+        openReminderDialog({
+          id: btn.dataset.id, group_id: btn.dataset.group || '', series_id: btn.dataset.series || '',
+          occurrence_date: btn.dataset.occ || '', client: btn.dataset.client || '', time_from: btn.dataset.time || '',
+        });
+      });
+      const delBtn = menu.querySelector('.plan-menu-del');
+      if (delBtn) delBtn.addEventListener('click', async (ev) => {
         ev.stopPropagation();
         closePlanMenus();
         const seriesId = btn.dataset.series;
@@ -239,6 +265,81 @@ async function renderPlanningContent() {
       scrollContainer.scrollTop = Math.max(0, scrollY);
     }
   }
+}
+
+// --- Planungs-Erinnerungen (Push vor einem Termin) ---
+const REMINDER_UNITS = [
+  { v: 'hour', l: 'Stunde(n)' },
+  { v: 'day', l: 'Tag(e)' },
+  { v: 'week', l: 'Woche(n)' },
+  { v: 'month', l: 'Monat(e)' },
+];
+const reminderUnitLabel = (u) => (REMINDER_UNITS.find(x => x.v === u) || {}).l || u;
+
+// Dialog zum Setzen/Entfernen von Erinnerungen für einen Termin. e: { id, group_id, series_id, client }.
+async function openReminderDialog(e) {
+  const isSeries = !!e.series_id;
+  const q = [];
+  if (e.group_id) q.push('group_id=' + encodeURIComponent(e.group_id));
+  else if (e.id) q.push('entry_id=' + encodeURIComponent(e.id));
+  if (e.series_id) q.push('series_id=' + encodeURIComponent(e.series_id));
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay dialog-modal';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header"><h3>&#128276; Benachrichtigung</h3></div>
+      <div class="modal-body">
+        <p style="margin:0 0 0.8rem;color:#6b7280;font-size:0.9rem">Erinnerung per Push vor dem Termin${e.client ? ' <strong>' + esc(e.client) + '</strong>' : ''}. Sie wird zur Termin-Uhrzeit minus Vorlauf verschickt.</p>
+        <div id="rem-list" style="margin-bottom:0.9rem"></div>
+        <div style="display:flex;gap:0.5rem;align-items:flex-end;flex-wrap:wrap">
+          <label style="flex:0 0 auto">Vorlauf<br><input id="rem-num" type="number" min="1" max="999" value="1" class="form-control" style="width:5rem"></label>
+          <label style="flex:1 1 8rem">&nbsp;<br><select id="rem-unit" class="form-control">${REMINDER_UNITS.map(u => `<option value="${u.v}"${u.v === 'week' ? ' selected' : ''}>${esc(u.l)}</option>`).join('')}</select></label>
+        </div>
+        ${isSeries ? `<div style="margin-top:0.6rem"><label style="display:block;margin-bottom:0.3rem">Gilt für:</label>
+          <label style="margin-right:1rem"><input type="radio" name="rem-scope" value="occurrence" checked> nur diesen Termin</label>
+          <label><input type="radio" name="rem-scope" value="series"> ganze Serie</label></div>` : ''}
+        <div style="margin-top:0.8rem"><button class="btn btn-primary btn-sm" id="rem-add">Erinnerung hinzufügen</button></div>
+      </div>
+      <div class="modal-footer" style="display:flex;justify-content:flex-end;padding:1rem">
+        <button class="btn btn-outline" data-act="close">Schließen</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); };
+  const onKey = (ev) => { if (ev.key === 'Escape') finish(); };
+  document.addEventListener('keydown', onKey);
+  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) finish(); });
+  overlay.querySelector('[data-act="close"]').addEventListener('click', finish);
+
+  const listEl = overlay.querySelector('#rem-list');
+  async function renderList() {
+    let reminders = [];
+    try { const r = await api('GET', '/api/planning/reminders?' + q.join('&')); reminders = (r && r.reminders) || []; } catch (_) {}
+    if (!reminders.length) { listEl.innerHTML = '<p style="margin:0;color:#9ca3af">Noch keine Erinnerung.</p>'; return; }
+    listEl.innerHTML = reminders.map(r => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid #f0f0f0">
+        <span>${r.lead_num} ${esc(reminderUnitLabel(r.lead_unit))} vorher${r.target_type === 'series' ? ' · <em>ganze Serie</em>' : ''}</span>
+        <button class="btn btn-sm btn-outline rem-del" data-id="${r.id}" title="Entfernen">&#10005;</button>
+      </div>`).join('');
+    listEl.querySelectorAll('.rem-del').forEach(b => b.addEventListener('click', async () => {
+      try { await api('DELETE', '/api/planning/reminders/' + b.dataset.id); renderList(); }
+      catch (err) { toast(err.message || 'Löschen fehlgeschlagen', 'error'); }
+    }));
+  }
+  overlay.querySelector('#rem-add').addEventListener('click', async () => {
+    const num = parseInt(overlay.querySelector('#rem-num').value, 10);
+    const unit = overlay.querySelector('#rem-unit').value;
+    if (!Number.isInteger(num) || num < 1) { toast('Bitte eine Zahl ≥ 1 eingeben', 'error'); return; }
+    const scope = isSeries ? ((overlay.querySelector('input[name="rem-scope"]:checked') || {}).value || 'occurrence') : 'occurrence';
+    const body = { target_type: scope === 'series' ? 'series' : 'occurrence', lead_num: num, lead_unit: unit };
+    if (scope === 'series') body.series_id = e.series_id;
+    else if (e.group_id) body.group_id = e.group_id;
+    else body.entry_id = e.id;
+    try { await api('POST', '/api/planning/reminders', body); toast('Erinnerung gespeichert', 'success'); renderList(); }
+    catch (err) { toast(err.message || 'Speichern fehlgeschlagen', 'error'); }
+  });
+  renderList();
 }
 
 function renderPlanningTimeline(entries, absences, canEdit) {
@@ -331,10 +432,13 @@ function renderPlanningTimeline(entries, absences, canEdit) {
       if (e.address) {
         actionsHtml += `<button type="button" class="plan-action-btn nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>`;
       }
-      // ⋮-Menü: „alle"-Planer/Manager in jeder Spalte; Self-Planer NUR in seiner eigenen Spalte
-      // (auch bei geteilten Einträgen, die in mehreren Spalten erscheinen).
-      if (canEdit && canEditEntry(e) && (canPlanAll() || col.id === S.user.id)) {
-        actionsHtml += `<button type="button" class="plan-menu-btn" data-id="${e.id}" data-group="${e.group_id || ''}" data-series="${e.series_id || ''}" data-occ="${e.occurrence_date || ''}" title="Aktionen">&#8942;</button>`;
+      // ⋮-Menü: Bearbeiten/Löschen für Planer (eigene Spalte bzw. „alle"-Planer). Zusätzlich der
+      // Erinnerungs-Punkt, sobald „Planung"-Push an ist — auch für Mitarbeiter OHNE Planungsrecht
+      // (dann nur „Benachrichtigung"), aber nur in der eigenen Spalte. Chef/Admin überall.
+      const mayEditThis = canEdit && canEditEntry(e) && (canPlanAll() || col.id === S.user.id);
+      const mayRemindThis = !!S.pushPlanning && (canPlanAll() || col.id === S.user.id);
+      if (mayEditThis || mayRemindThis) {
+        actionsHtml += `<button type="button" class="plan-menu-btn" data-id="${e.id}" data-group="${e.group_id || ''}" data-series="${e.series_id || ''}" data-occ="${e.occurrence_date || ''}" data-canedit="${mayEditThis ? '1' : ''}" data-remind="${mayRemindThis ? '1' : ''}" data-client="${esc(e.client || e.project_text || '')}" data-time="${esc(e.time_from || '')}" title="Aktionen">&#8942;</button>`;
       }
 
       const entryColor = e.color || '#f59e0b';
