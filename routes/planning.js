@@ -883,6 +883,15 @@ router.post('/series/:seriesId/retakt', authenticate, canPlan, (req, res) => {
   const assigned = Array.isArray(req.body.assigned_user_ids) ? req.body.assigned_user_ids.map(Number) : (() => { try { return (JSON.parse(series.template || '{}').assigned_user_ids) || []; } catch (_) { return []; } })();
 
   const tx = db.transaction(() => {
+    // „Bis Ende" laufende Erinnerungen der alten Serie merken (am letzten Vorkommen) → auf die neue Serie
+    // mitnehmen. „nur dieser"-Ausnahmen (nicht bis zum Ende) wandern bewusst nicht mit.
+    let endRems = [];
+    try {
+      const oldLast = (db.prepare('SELECT MAX(occurrence_date) AS m FROM planning_entries WHERE series_id = ?').get(series.series_id) || {}).m || null;
+      if (oldLast) endRems = db.prepare('SELECT * FROM planning_reminders WHERE series_id = ? AND occurrence_date = ?').all(series.series_id, oldLast);
+    } catch (_) {}
+    // Verwaiste Erinnerungen der zu löschenden Vorkommen entfernen.
+    try { db.prepare('DELETE FROM planning_reminders WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, boundary); } catch (_) {}
     db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, boundary);
     if (boundary <= series.anchor_date) {
       db.prepare('DELETE FROM planning_series WHERE series_id = ?').run(series.series_id);
@@ -891,7 +900,15 @@ router.post('/series/:seriesId/retakt', authenticate, canPlan, (req, res) => {
     }
     if (!rv || !template) return { ended: true };
     const rule = { ...rv, anchor_date: template.anchor }; // Anker = geöffnetes Vorkommen (Taktung leitet sich daraus ab)
-    return createSeriesFrom(db, series.created_by, rule, template, assigned, boundary);
+    const r2 = createSeriesFrom(db, series.created_by, rule, template, assigned, boundary);
+    // Dauerhafte Erinnerungen auf die neue (umgetaktete) Serie übertragen — pro Vorkommen.
+    if (r2.series_id && endRems.length) {
+      try {
+        const newOccs = seriesOccurrences(db, r2.series_id, null).map(o => ({ gid: o.gid, od: o.od }));
+        for (const rem of endRems) materializeReminder(db, rem.user_id, newOccs, r2.series_id, { num: rem.lead_num, unit: rem.lead_unit }, rem.remind_time || null);
+      } catch (_) {}
+    }
+    return r2;
   });
   const r = tx();
   broadcast('planning', req.headers['x-tab-id']);

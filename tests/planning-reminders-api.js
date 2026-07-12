@@ -122,6 +122,25 @@ const leadOf = async (t, gid) => { const rs = await remOn(t, gid); return rs[0] 
     const leadsG = await Promise.all(og.map(o=>leadOf(annaT,o.gid)));
     ok('„für alle": ALLE 5 Vorkommen wieder gleich (3 Tage)', leadsG.length===5 && leadsG.every(v=>v==='3day'), JSON.stringify(leadsG));
 
+    // ===== H) Verschieben: Erinnerung bleibt, remind_time unverändert (Feuertag folgt dem Termin) =====
+    const eMv = (await req('POST','/api/planning', admin, { date:MON, time_from:'07:00', time_to:'15:30', client:'Move2', assigned_user_ids:[anna.id] })).body.entry;
+    await req('POST','/api/planning/reminders', annaT, { entry_id:eMv.id, lead_num:1, lead_unit:'week', remind_time:'07:00' });
+    await req('PUT','/api/planning/'+eMv.id, admin, { days:[{ date:addCal(MON,14), time_from:'09:00', time_to:'15:30' }], assigned_user_ids:[anna.id], client:'Move2' });
+    const afterMv = (await req('GET','/api/planning/reminders?entry_id='+eMv.id, annaT)).body.reminders;
+    const entMv = ((await req('GET','/api/planning', admin)).body.entries || []).find(x=>x.id===eMv.id);
+    ok('Verschieben: Erinnerung bleibt, remind_time 07:00, Termin auf +14 Tage/09:00', afterMv.length===1 && afterMv[0].remind_time==='07:00' && entMv && entMv.date===addCal(MON,14) && entMv.time_from==='09:00');
+
+    // ===== I) Umtakten monatlich→wöchentlich überträgt dauerhafte Benachrichtigung =====
+    const sm = (await req('POST','/api/planning', admin, { date:'2027-03-10', time_from:'07:00', time_to:'15:30', client:'Retakt', assigned_user_ids:[anna.id], recurrence:{ freq:'monthly_date', end_type:'count', end_count:4 } })).body;
+    const mo = await seriesOccs(admin, sm.series_id);
+    await req('POST','/api/planning/reminders', annaT, { series_id:sm.series_id, occurrence_date:mo[0].od, group_id:mo[0].gid, scope:'all', lead_num:1, lead_unit:'week' });
+    const rk = await req('POST','/api/planning/series/'+sm.series_id+'/retakt', admin, { scope:'following', occurrence_date:mo[1].od, days:[{ date:mo[1].od, time_from:'07:00', time_to:'15:30' }], recurrence:{ freq:'weekly', end_type:'count', end_count:6 }, assigned_user_ids:[anna.id], client:'Retakt' });
+    ok('Umtakten erzeugt neue wöchentliche Serie (6)', rk.status===200 && rk.body.series_id && rk.body.count===6);
+    const wk = await seriesOccs(admin, rk.body.series_id);
+    const wkR = await Promise.all(wk.map(o=>remOn(annaT, o.gid)));
+    ok('Umtakten: ALLE 6 neuen wöchentlichen Vorkommen haben die Erinnerung', wk.length===6 && wkR.every(a=>a.length===1), JSON.stringify(wkR.map(a=>a.length)));
+    ok('Umtakten: altes 1. (monatliches) Vorkommen behält seine Erinnerung', (await remOn(annaT, mo[0].gid)).length===1);
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Reminders-API: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);
