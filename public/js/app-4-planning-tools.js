@@ -1263,11 +1263,21 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
         const sameRec = rec && rec.freq === sr.freq && rec.end_type === sr.end_type
           && (rec.end_type !== 'count' || Number(rec.end_count) === Number(sr.end_count))
           && (rec.end_type !== 'until' || rec.end_until === (sr.end_until || ''));
-        // B1) Taktung auf „Keine" → ab diesem Termin beenden
+        // B1) Taktung auf „Keine" → Wiederholung entfernen: ab hier beenden ODER nur diesen behalten
         if (!rec) {
-          if (!(await confirmModal('Ab diesem Termin keine Wiederholung mehr?\n\nDieser Termin und alle vergangenen bleiben, spätere Wiederholungen werden entfernt.', { title: 'Wiederholung beenden', okLabel: 'Ab hier beenden' }))) return;
-          await api('POST', '/api/planning/series/' + seriesInfo.series_id + '/stop', { after: seriesInfo.occurrence_date });
-          toast('Wiederholung ab hier beendet', 'success'); navigate('/planning'); return;
+          const how = await choiceModal('Wiederholung entfernen – wie?', [
+            { value: 'stop', label: 'Ab diesem Termin beenden (frühere Termine bleiben)', primary: true },
+            { value: 'keep', label: 'Nur diesen Termin behalten (Serie auflösen, Rest löschen)' },
+          ], { title: 'Wiederholung entfernen' });
+          if (!how) return;
+          if (how === 'keep') {
+            await api('POST', '/api/planning/series/' + seriesInfo.series_id + '/keep-single', { occurrence_date: seriesInfo.occurrence_date });
+            toast('Serie aufgelöst – dieser Termin bleibt als Einzelplanung', 'success');
+          } else {
+            await api('POST', '/api/planning/series/' + seriesInfo.series_id + '/stop', { after: seriesInfo.occurrence_date });
+            toast('Wiederholung ab hier beendet', 'success');
+          }
+          navigate('/planning'); return;
         }
         // B2) Taktung geändert → Umtakten (Split): ab wann?
         if (!sameRec) {

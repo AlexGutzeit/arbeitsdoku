@@ -165,6 +165,29 @@ const leadOf = async (t, gid) => { const rs = await remOn(t, gid); return rs[0] 
     ok('Stop: die bleibenden 1–3 behalten ihre Erinnerung', stopR.every(a=>a.length===1));
     ok('Stop: Erinnerungen der entfernten 4–5 sind weg (kein Orphan)', !((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).some(r=>r.group_id===so[3].gid || r.group_id===so[4].gid));
 
+    // ===== L) Serie auf 1 Vorkommen beenden → echte Einzelplanung (series_id gelöst, Erinnerung auf entry_id) =====
+    const sSg = (await req('POST','/api/planning', admin, { date:'2027-06-07', time_from:'07:00', time_to:'15:30', client:'StopSingle', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:4 } })).body;
+    const sgo = await seriesOccs(admin, sSg.series_id);
+    const eSg = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e=>e.client==='StopSingle');
+    const occ1Id = eSg.find(e=>e.occurrence_date===sgo[0].od).id;
+    await req('POST','/api/planning/reminders', annaT, { series_id:sSg.series_id, occurrence_date:sgo[0].od, group_id:sgo[0].gid, scope:'all', lead_num:1, lead_unit:'week' });
+    await req('POST','/api/planning/series/'+sSg.series_id+'/stop', admin, { after: sgo[0].od });
+    const remSg = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e=>e.client==='StopSingle');
+    ok('Stop auf 1: nur 1 Termin, series_id + group_id gelöst (echte Einzelplanung)', remSg.length===1 && !remSg[0].series_id && !remSg[0].group_id && remSg[0].id===occ1Id);
+    ok('Stop auf 1: Erinnerung auf entry_id umgehängt (nicht mehr Serie)', ((await req('GET','/api/planning/reminders?entry_id='+occ1Id, annaT)).body.reminders).length===1 && !((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).some(r=>r.series_id===sSg.series_id));
+
+    // ===== M) #11: „nur diesen behalten" (keep-single) — Rest davor UND danach weg =====
+    const sKp = (await req('POST','/api/planning', admin, { date:'2027-07-05', time_from:'07:00', time_to:'15:30', client:'KeepOne', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:5 } })).body;
+    const kpo = await seriesOccs(admin, sKp.series_id);
+    const eKp = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e=>e.client==='KeepOne');
+    const occ3Id = eKp.find(e=>e.occurrence_date===kpo[2].od).id;
+    await req('POST','/api/planning/reminders', annaT, { series_id:sKp.series_id, occurrence_date:kpo[0].od, group_id:kpo[0].gid, scope:'all', lead_num:1, lead_unit:'week' });
+    await req('POST','/api/planning/series/'+sKp.series_id+'/keep-single', admin, { occurrence_date: kpo[2].od });
+    const remKp = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e=>e.client==='KeepOne');
+    ok('keep-single: nur der gewählte (3.) Termin bleibt, als Einzelplanung', remKp.length===1 && remKp[0].id===occ3Id && !remKp[0].series_id && !remKp[0].group_id);
+    ok('keep-single: dessen Erinnerung bleibt (auf entry_id)', ((await req('GET','/api/planning/reminders?entry_id='+occ3Id, annaT)).body.reminders).length===1);
+    ok('keep-single: Erinnerungen der anderen Vorkommen weg', !((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).some(r=>r.series_id===sKp.series_id || r.group_id===kpo[0].gid || r.group_id===kpo[1].gid));
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Reminders-API: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);

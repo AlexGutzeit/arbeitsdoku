@@ -275,6 +275,31 @@ function pruneOrphanReminders(db) {
   } catch (_) {}
 }
 
+// Ist eine Serie auf höchstens EIN Vorkommen geschrumpft, ist sie keine Wiederholung mehr → Serien-
+// Verknüpfung lösen (kein 🔁, wird als Einzelplanung behandelt) und Regel entfernen. Bei einem
+// Einzeltag-Vorkommen wird auch die group_id gelöst und die Erinnerung von group_id → entry_id umgehängt.
+function detachEndedSeries(db, seriesId) {
+  try {
+    const occ = db.prepare('SELECT DISTINCT occurrence_date FROM planning_entries WHERE series_id = ?').all(seriesId).map(r => r.occurrence_date);
+    if (occ.length > 1) return; // noch mehrere Vorkommen → bleibt Serie
+    if (occ.length === 1) {
+      const rows = db.prepare('SELECT * FROM planning_entries WHERE series_id = ?').all(seriesId);
+      if (rows.length === 1) {
+        // Einzeltag → echte Einzelplanung: group_id/Serie lösen, Erinnerung von group_id auf entry_id umhängen.
+        const e = rows[0];
+        if (e.group_id) db.prepare('UPDATE planning_reminders SET group_id = NULL, entry_id = ?, series_id = NULL, occurrence_date = NULL WHERE group_id = ?').run(e.id, e.group_id);
+        db.prepare('UPDATE planning_entries SET series_id = NULL, occurrence_date = NULL, group_id = NULL WHERE id = ?').run(e.id);
+      } else {
+        // Mehrtägiges Vorkommen bleibt Gruppe; nur die Serien-Verknüpfung lösen (Einträge + Erinnerungen).
+        const gids = db.prepare('SELECT DISTINCT group_id FROM planning_entries WHERE series_id = ? AND group_id IS NOT NULL').all(seriesId).map(r => r.group_id);
+        for (const g of gids) db.prepare('UPDATE planning_reminders SET series_id = NULL, occurrence_date = NULL WHERE group_id = ?').run(g);
+        db.prepare('UPDATE planning_entries SET series_id = NULL, occurrence_date = NULL WHERE series_id = ?').run(seriesId);
+      }
+    }
+    db.prepare('DELETE FROM planning_series WHERE series_id = ?').run(seriesId);
+  } catch (_) {}
+}
+
 // Erinnerung ändern (Vorlauf/Uhrzeit) mit Scope. Serie: occurrence/following/all über reminder_group.
 router.put('/reminders/:id', authenticate, (req, res) => {
   const db = getDb();
@@ -943,9 +968,27 @@ router.post('/series/:seriesId/stop', authenticate, canPlan, (req, res) => {
       db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE series_id=?")
         .run(addDaysISO(today, -1), addDaysISO(today, -1), series.series_id);
     }
+    pruneOrphanReminders(db);
+    detachEndedSeries(db, series.series_id); // auf 1 Vorkommen geschrumpft → echte Einzelplanung (kein 🔁)
   });
   tx();
-  pruneOrphanReminders(db);
+  broadcast('planning', req.headers['x-tab-id']);
+  res.json({ success: true });
+});
+
+// #11: Aus einer Serie genau EIN Vorkommen als Einzelplanung behalten, den Rest (davor UND danach) löschen.
+router.post('/series/:seriesId/keep-single', authenticate, canPlan, (req, res) => {
+  const db = getDb();
+  const series = loadSeriesOr(req, res, db);
+  if (!series) return;
+  const occ = req.body && req.body.occurrence_date;
+  if (!occ) return res.status(400).json({ error: 'occurrence_date fehlt' });
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date <> ?').run(series.series_id, occ);
+    pruneOrphanReminders(db);                     // Erinnerungen der gelöschten Vorkommen weg
+    detachEndedSeries(db, series.series_id);       // das eine verbleibende Vorkommen wird Einzelplanung
+  });
+  tx();
   broadcast('planning', req.headers['x-tab-id']);
   res.json({ success: true });
 });

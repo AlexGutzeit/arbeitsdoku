@@ -51,7 +51,8 @@ const seriesN = async (t, sid) => ((await req('GET','/api/planning', t)).body.en
     ok('Folge-Dialog „neue Serie / fertig"', JSON.stringify(opts) === JSON.stringify(['new','done']), JSON.stringify(opts));
     await p.evaluate(() => document.querySelector('.modal [data-val="done"]').click()); await sleep(1200);
 
-    ok('Serie ab heute beendet: nur noch 1 Vorkommen (heute)', (await seriesN(admin, s.series_id)) === 1, 'n=' + (await seriesN(admin, s.series_id)));
+    const remainToday = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e => e.date === today);
+    ok('Serie ab heute beendet → heutiger Termin bleibt als Einzelplanung (keine series_id, kein 🔁)', remainToday.length === 1 && !remainToday[0].series_id, JSON.stringify(remainToday.map(e=>({d:e.date,s:e.series_id}))));
 
     // Normale Planung (ohne Serie): kein Serien-Banner, kein „ab hier"-Button, aber „erneut planen" da
     const n = (await req('POST','/api/planning', admin, { date:today, time_from:'08:00', time_to:'16:00', assigned_user_ids:[anna.id] })).body;

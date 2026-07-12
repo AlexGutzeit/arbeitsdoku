@@ -70,8 +70,8 @@ const uniq = a => [...new Set(a)];
     await p.evaluate(g => { location.hash = '#/planning/edit-group/' + g; }, grp17); await sleep(1400);
     await p.select('#pf-recur', ''); await sleep(400);
     await p.evaluate(() => document.querySelector('form button[type="submit"]').click()); await sleep(500);
-    ok('Keine → Bestätigung „ab hier beenden"', !!(await p.$('.modal [data-act="ok"]')));
-    await p.evaluate(() => document.querySelector('.modal [data-act="ok"]').click()); await sleep(1400);
+    ok('Keine → Auswahl (ab hier beenden / nur diesen behalten)', (await p.evaluate(() => [...document.querySelectorAll('.modal [data-val]')].map(b=>b.dataset.val))).join(',') === 'stop,keep');
+    await p.evaluate(() => document.querySelector('.modal [data-val="stop"]').click()); await sleep(1400);
     const occ3 = uniq((await plan(admin)).filter(e => e.series_id === s3.series_id).map(e => e.occurrence_date)).sort();
     ok('Keine: nur 10./17.07. bleiben (ab 17. beendet)', JSON.stringify(occ3) === JSON.stringify(['2026-07-10','2026-07-17']));
 
