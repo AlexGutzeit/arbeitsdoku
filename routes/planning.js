@@ -918,26 +918,29 @@ router.post('/series/:seriesId/retakt', authenticate, canPlan, (req, res) => {
   const rv = req.body.recurrence ? validRecurrence(req.body.recurrence) : null;
   const template = buildTemplate(req.body);
   const assigned = Array.isArray(req.body.assigned_user_ids) ? req.body.assigned_user_ids.map(Number) : (() => { try { return (JSON.parse(series.template || '{}').assigned_user_ids) || []; } catch (_) { return []; } })();
+  // Herkunft (lineage) — Umtakten „ab hier" ersetzt ALLES ab boundary in der gesamten Herkunft, auch eine
+  // frühere umgetaktete Fortsetzung (deren Daten jetzt überholt sind).
+  const lineage = (db.prepare('SELECT lineage_id FROM planning_entries WHERE series_id = ? AND occurrence_date = ? LIMIT 1').get(series.series_id, occ) || {}).lineage_id
+    || series.lineage_id || series.series_id;
 
   const tx = db.transaction(() => {
-    // „Bis Ende" laufende Erinnerungen der alten Serie merken (am letzten Vorkommen) → auf die neue Serie
+    // „Bis Ende" laufende Erinnerungen der Herkunft merken (am letzten Vorkommen) → auf die neue Serie
     // mitnehmen. „nur dieser"-Ausnahmen (nicht bis zum Ende) wandern bewusst nicht mit.
     let endRems = [];
     try {
-      const oldLast = (db.prepare('SELECT MAX(occurrence_date) AS m FROM planning_entries WHERE series_id = ?').get(series.series_id) || {}).m || null;
-      if (oldLast) endRems = db.prepare('SELECT * FROM planning_reminders WHERE series_id = ? AND occurrence_date = ?').all(series.series_id, oldLast);
+      const lineageLast = (db.prepare('SELECT MAX(occurrence_date) AS m FROM planning_entries WHERE lineage_id = ?').get(lineage) || {}).m || null;
+      if (lineageLast) endRems = db.prepare(`SELECT * FROM planning_reminders WHERE occurrence_date = ?
+        AND series_id IN (SELECT series_id FROM planning_series WHERE lineage_id = ?)`).all(lineageLast, lineage);
     } catch (_) {}
-    // Verwaiste Erinnerungen der zu löschenden Vorkommen entfernen.
-    try { db.prepare('DELETE FROM planning_reminders WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, boundary); } catch (_) {}
-    db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, boundary);
-    if (boundary <= series.anchor_date) {
-      db.prepare('DELETE FROM planning_series WHERE series_id = ?').run(series.series_id);
-    } else {
-      db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE series_id=?").run(addDaysISO(boundary, -1), addDaysISO(boundary, -1), series.series_id);
-    }
+    // Alle Vorkommen der Herkunft ab boundary löschen (inkl. überholter Folge-Serien).
+    db.prepare('DELETE FROM planning_entries WHERE lineage_id = ? AND occurrence_date >= ?').run(lineage, boundary);
+    // Regeln der Herkunft ohne verbleibende Vorkommen entfernen; den Rest (Vergangenheit) deaktivieren.
+    db.prepare('DELETE FROM planning_series WHERE lineage_id = ? AND NOT EXISTS (SELECT 1 FROM planning_entries pe WHERE pe.series_id = planning_series.series_id)').run(lineage);
+    db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE lineage_id = ?").run(addDaysISO(boundary, -1), addDaysISO(boundary, -1), lineage);
+    pruneOrphanReminders(db); // Erinnerungen der gelöschten Vorkommen weg
     if (!rv || !template) return { ended: true };
     const rule = { ...rv, anchor_date: template.anchor }; // Anker = geöffnetes Vorkommen (Taktung leitet sich daraus ab)
-    const r2 = createSeriesFrom(db, series.created_by, rule, template, assigned, boundary, series.lineage_id || series.series_id);
+    const r2 = createSeriesFrom(db, series.created_by, rule, template, assigned, boundary, lineage);
     // Dauerhafte Erinnerungen auf die neue (umgetaktete) Serie übertragen — pro Vorkommen.
     if (r2.series_id && endRems.length) {
       try {

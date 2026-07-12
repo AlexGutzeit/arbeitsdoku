@@ -208,6 +208,29 @@ const leadOf = async (t, gid) => { const rs = await remOn(t, gid); return rs[0] 
     const mineL = ((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).filter(r => r.entry_id===keep2Id || r.series_id===wSid || r.series_id===mSidL);
     ok('Kaskade: nur die Erinnerung des behaltenen Termins bleibt (auf entry_id), keine Serien-Reste', mineL.length===1 && mineL[0].entry_id===keep2Id && !mineL[0].series_id);
 
+    // ===== O) Doppeltes Umtakten: neuer Leger ab dem 5. überholt die Fortsetzung ab dem 7. =====
+    const sDb = (await req('POST','/api/planning', admin, { date:'2027-09-06', time_from:'07:00', time_to:'15:30', client:'Double', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:10 } })).body;
+    const wOrig = await seriesOccs(admin, sDb.series_id); const w5 = wOrig[4].od, w7 = wOrig[6].od;
+    await req('POST','/api/planning/reminders', annaT, { series_id:sDb.series_id, occurrence_date:wOrig[0].od, group_id:wOrig[0].gid, scope:'all', lead_num:1, lead_unit:'week' });
+    // 1. Umtakten: ab dem 7. monatlich (M1)
+    await req('POST','/api/planning/series/'+sDb.series_id+'/retakt', admin, { scope:'following', occurrence_date:w7, days:[{ date:w7, time_from:'07:00', time_to:'15:30' }], recurrence:{ freq:'monthly_date', end_type:'count', end_count:6 }, assigned_user_ids:[anna.id], client:'Double' });
+    let esD = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e=>e.client==='Double');
+    const m1 = (esD.find(e=>e.series_id && e.series_id!==sDb.series_id)||{}).series_id;
+    ok('1. Umtakten: weekly 1–6 + M1 ab dem 7.', (await seriesOccs(admin, sDb.series_id)).length===6 && (await seriesOccs(admin, m1))[0].od===w7);
+    // 2. Umtakten: ab dem 5. monatlich (M2) — überholt M1
+    await req('POST','/api/planning/series/'+sDb.series_id+'/retakt', admin, { scope:'following', occurrence_date:w5, days:[{ date:w5, time_from:'07:00', time_to:'15:30' }], recurrence:{ freq:'monthly_date', end_type:'count', end_count:6 }, assigned_user_ids:[anna.id], client:'Double' });
+    esD = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e=>e.client==='Double');
+    const m2 = (esD.find(e=>e.series_id && e.series_id!==sDb.series_id)||{}).series_id;
+    ok('2. Umtakten: weekly 1–4, überholte M1 (ab dem 7.) ist WEG', (await seriesOccs(admin, sDb.series_id)).length===4 && (await seriesOccs(admin, m1)).length===0);
+    ok('neuer Monats-Leger = 5. Termin', (await seriesOccs(admin, m2))[0].od===w5);
+    const allEntsD = ((await req('GET','/api/planning', admin)).body.entries || []);
+    const allGidsD = new Set(allEntsD.filter(e=>e.group_id).map(e=>e.group_id));
+    const allIdsD = new Set(allEntsD.map(e=>e.id));
+    const orphanD = ((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).filter(r => (r.group_id && !allGidsD.has(r.group_id)) || (r.entry_id && !allIdsD.has(r.entry_id)));
+    const m2occ = await seriesOccs(admin, m2);
+    const m2R = await Promise.all(m2occ.map(o=>remOn(annaT, o.gid)));
+    ok('doppeltes Umtakten: keine Waisen + M2 hat auf allen Vorkommen Erinnerung', orphanD.length===0 && m2occ.length>=2 && m2R.every(a=>a.length===1), 'orphans='+orphanD.length+' m2R='+JSON.stringify(m2R.map(a=>a.length)));
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Reminders-API: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);

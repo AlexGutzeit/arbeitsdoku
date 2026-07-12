@@ -97,7 +97,8 @@ App, wie die Erinnerung übernommen werden soll. Bei **nie endenden** Serien wä
 „ab hier" gesetzte Erinnerung automatisch mit den rollierend nachgeschobenen Terminen mit. Wird ein Termin
 **verschoben**, wandert die Erinnerung mit (der Tag folgt dem Termin, die eingestellte Uhrzeit bleibt); beim
 **Umtakten** einer Serie (z. B. monatlich → wöchentlich) wird eine dauerhafte Erinnerung auf die neue Taktung
-übernommen. Hat ein Termin
+übernommen; „ab hier neu takten" ersetzt dabei alles ab dem gewählten Termin über die **gesamte Herkunft** (auch
+eine bereits früher umgetaktete, jetzt überholte Fortsetzung). Hat ein Termin
 **mindestens eine** Erinnerung, zeigen **Tages- und Wochenansicht** eine **🔔** – unabhängig vom **🔁** der
 Serien (eine Serie mit Erinnerung trägt beide). Schaltet man „Planung" wieder **aus**, bleiben alle gesetzten Erinnerungen erhalten und sind nur
 **pausiert**; nach dem Wieder-Einschalten kommen sie wieder (noch zukünftige Termine als Nachhol-Erinnerung).
