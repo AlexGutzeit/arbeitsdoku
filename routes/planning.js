@@ -551,19 +551,22 @@ router.put('/group/:groupId', authenticate, canPlan, (req, res) => {
   const update = db.transaction(() => {
     // Serien-Verknüpfung der Gruppe merken (bleibt beim Bearbeiten einer Occurrence erhalten)
     const link = db.prepare('SELECT series_id, occurrence_date FROM planning_entries WHERE group_id = ? LIMIT 1').get(groupId) || {};
+    // lineage der Gruppe merken (bleibt beim Bearbeiten einer Occurrence erhalten)
+    const lin = (db.prepare('SELECT lineage_id FROM planning_entries WHERE group_id = ? LIMIT 1').get(groupId) || {}).lineage_id || null;
     // Alte Einträge der Gruppe löschen (CASCADE löscht auch assignments)
     db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(groupId);
 
-    // Entscheide ob weiterhin Gruppe oder Einzeleintrag
-    const newGroupId = days.length > 1 ? groupId : null;
+    // Entscheide ob weiterhin Gruppe oder Einzeleintrag. Ein Serien-Vorkommen behält die group_id auch
+    // eintägig (sonst verwaist die daran hängende Erinnerung + die Serien-Vorkommen-Identität geht verloren).
+    const newGroupId = (days.length > 1 || link.series_id) ? groupId : null;
 
     const ids = [];
     for (const day of days) {
       if (!day.date || !day.time_from || !day.time_to) continue;
       const result = db.prepare(`
-        INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(req.user.id, day.date, day.time_from, day.time_to, day.break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', newGroupId, color || '#f59e0b', link.series_id || null, link.occurrence_date || null);
+        INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date, lineage_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(req.user.id, day.date, day.time_from, day.time_to, day.break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', newGroupId, color || '#f59e0b', link.series_id || null, link.occurrence_date || null, lin);
 
       const planningId = result.lastInsertRowid;
       for (const uid of assigned_user_ids) {
@@ -575,6 +578,7 @@ router.put('/group/:groupId', authenticate, canPlan, (req, res) => {
   });
 
   const ids = update();
+  pruneOrphanReminders(db); // falls eine Nicht-Serie von mehrtägig auf 1 Tag schrumpft (group_id entfällt)
   broadcast('planning', req.headers['x-tab-id']);
   res.json({ success: true, count: ids.length, group_id: days.length > 1 ? groupId : null });
 });
