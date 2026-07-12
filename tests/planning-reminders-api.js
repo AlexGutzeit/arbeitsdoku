@@ -141,6 +141,30 @@ const leadOf = async (t, gid) => { const rs = await remOn(t, gid); return rs[0] 
     ok('Umtakten: ALLE 6 neuen wöchentlichen Vorkommen haben die Erinnerung', wk.length===6 && wkR.every(a=>a.length===1), JSON.stringify(wkR.map(a=>a.length)));
     ok('Umtakten: altes 1. (monatliches) Vorkommen behält seine Erinnerung', (await remOn(annaT, mo[0].gid)).length===1);
 
+    // ===== J) Planung löschen räumt die Erinnerung mit auf (kein Orphan) =====
+    const eDel = (await req('POST','/api/planning', admin, { date:MON, time_from:'06:00', time_to:'07:00', client:'Del', assigned_user_ids:[anna.id] })).body.entry;
+    await req('POST','/api/planning/reminders', annaT, { entry_id:eDel.id, lead_num:1, lead_unit:'day' });
+    ok('vor Löschen: Erinnerung da', ((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).some(r=>r.entry_id===eDel.id));
+    await req('DELETE','/api/planning/'+eDel.id, admin);
+    ok('Einzelplanung gelöscht → Erinnerung weg (kein Orphan)', !((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).some(r=>r.entry_id===eDel.id));
+    // Serie löschen (ganze) räumt alle Serien-Erinnerungen auf
+    const sDel = (await req('POST','/api/planning', admin, { date:MON, time_from:'06:00', time_to:'07:00', client:'SDel', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:3 } })).body;
+    const sdo = await seriesOccs(admin, sDel.series_id);
+    await req('POST','/api/planning/reminders', annaT, { series_id:sDel.series_id, occurrence_date:sdo[0].od, group_id:sdo[0].gid, scope:'all', lead_num:1, lead_unit:'day' });
+    await req('DELETE','/api/planning/series/'+sDel.series_id, admin, { scope:'series' });
+    ok('ganze Serie gelöscht → alle Erinnerungen weg', !((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).some(r=>r.series_id===sDel.series_id));
+
+    // ===== K) Serie ab hier beenden: Vergangenes (inkl. Erinnerung) bleibt, Zukunft (inkl. Erinnerung) weg =====
+    const sStop = (await req('POST','/api/planning', admin, { date:'2027-05-03', time_from:'07:00', time_to:'15:30', client:'Stop', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:5 } })).body;
+    const so = await seriesOccs(admin, sStop.series_id);
+    await req('POST','/api/planning/reminders', annaT, { series_id:sStop.series_id, occurrence_date:so[0].od, group_id:so[0].gid, scope:'all', lead_num:1, lead_unit:'day' });
+    await req('POST','/api/planning/series/'+sStop.series_id+'/stop', admin, { after: so[2].od }); // ab dem 3. beenden → 1..3 bleiben
+    const soAfter = await seriesOccs(admin, sStop.series_id);
+    ok('Stop ab dem 3.: Vorkommen 1–3 bleiben (Vergangenes/erste bleibt)', soAfter.length===3);
+    const stopR = await Promise.all(soAfter.map(o=>remOn(annaT, o.gid)));
+    ok('Stop: die bleibenden 1–3 behalten ihre Erinnerung', stopR.every(a=>a.length===1));
+    ok('Stop: Erinnerungen der entfernten 4–5 sind weg (kein Orphan)', !((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).some(r=>r.group_id===so[3].gid || r.group_id===so[4].gid));
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Reminders-API: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);

@@ -266,6 +266,15 @@ router.post('/reminders', authenticate, (req, res) => {
   res.status(201).json({ success: true, created: result.created, reminder_group: result.rgroup });
 });
 
+// Verwaiste Erinnerungen entfernen (Termin/Gruppe existiert nicht mehr). Nach Planungs-Löschungen aufrufen.
+function pruneOrphanReminders(db) {
+  try {
+    db.prepare(`DELETE FROM planning_reminders WHERE
+      (group_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM planning_entries pe WHERE pe.group_id = planning_reminders.group_id))
+      OR (entry_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM planning_entries pe WHERE pe.id = planning_reminders.entry_id))`).run();
+  } catch (_) {}
+}
+
 // Erinnerung ändern (Vorlauf/Uhrzeit) mit Scope. Serie: occurrence/following/all über reminder_group.
 router.put('/reminders/:id', authenticate, (req, res) => {
   const db = getDb();
@@ -723,6 +732,7 @@ router.delete('/series/:seriesId', authenticate, canPlan, (req, res) => {
   });
   const r = tx();
   if (r.error) return res.status(400).json({ error: r.error });
+  pruneOrphanReminders(db);
   broadcast('planning', req.headers['x-tab-id']);
   res.json({ success: true });
 });
@@ -935,6 +945,7 @@ router.post('/series/:seriesId/stop', authenticate, canPlan, (req, res) => {
     }
   });
   tx();
+  pruneOrphanReminders(db);
   broadcast('planning', req.headers['x-tab-id']);
   res.json({ success: true });
 });
@@ -962,6 +973,7 @@ router.delete('/group/:groupId', authenticate, canPlan, (req, res) => {
 
   const result = db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(req.params.groupId);
   if (result.changes === 0) return res.status(404).json({ error: 'Gruppe nicht gefunden' });
+  pruneOrphanReminders(db);
   broadcast('planning', req.headers['x-tab-id']);
   res.json({ success: true });
 });
@@ -996,6 +1008,7 @@ router.delete('/:id', authenticate, canPlan, (req, res) => {
   } else {
     db.prepare('DELETE FROM planning_entries WHERE id = ?').run(req.params.id);
   }
+  pruneOrphanReminders(db);
   broadcast('planning', req.headers['x-tab-id']);
   res.json({ success: true });
 });
