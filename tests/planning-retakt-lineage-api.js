@@ -86,6 +86,10 @@ const remOn = async (t, gid) => ((await req('GET','/api/planning/reminders?group
     await req('PUT','/api/planning/series/'+sMa.series_id, admin, { scope:'following', occurrence_date:om[0].od, assigned_user_ids:ma.slice(0,5) });
     om = await occMa();
     ok('5 MA „folgende" ab dem 1.: DURCHGEHEND 5 MA (auch die umgetaktete Fortsetzung)', om.length>=8 && om.every(o=>o.ma===5), 'ma='+om.map(o=>o.ma).join(','));
+    // „ganze Serie" (ALLE) auf 2 MA → ebenfalls herkunftsweit durchgehend
+    await req('PUT','/api/planning/series/'+om[0].sid, admin, { scope:'series', assigned_user_ids:ma.slice(0,2) });
+    om = await occMa();
+    ok('„ganze Serie" (ALLE) auf 2 MA: DURCHGEHEND 2 MA über alle Taktungen', om.length>=8 && om.every(o=>o.ma===2), 'ma='+om.map(o=>o.ma).join(','));
 
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Retakt-Lineage-API: ${pass} ok, ${fail} fehlgeschlagen`);
