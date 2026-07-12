@@ -182,8 +182,8 @@ function extendSeries(db, now = new Date()) {
   try { series = db.prepare("SELECT * FROM planning_series WHERE active = 1 AND end_type = 'never'").all(); } catch (_) { return 0; }
   let added = 0;
   const insEntry = db.prepare(`INSERT INTO planning_entries
-    (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date, lineage_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const insAssign = db.prepare('INSERT INTO planning_assignments (planning_id, user_id) VALUES (?, ?)');
   // Erinnerungen, die „bis zum Ende" laufen (Zeile am bisher letzten Vorkommen), auf neue Vorkommen mitziehen.
   let insRem = null;
@@ -206,7 +206,7 @@ function extendSeries(db, now = new Date()) {
         newGroups.push({ occ: occStart, gid });
         for (const td of tplDays) {
           const r = insEntry.run(s.created_by, addDaysISO(occStart, td.offset), td.time_from, td.time_to, td.break_minutes || 0,
-            tpl.address || '', tpl.client || '', tpl.project_id || null, tpl.project_text || '', tpl.description || '', gid, tpl.color || '#f59e0b', s.series_id, occStart);
+            tpl.address || '', tpl.client || '', tpl.project_id || null, tpl.project_text || '', tpl.description || '', gid, tpl.color || '#f59e0b', s.series_id, occStart, s.lineage_id || s.series_id);
           for (const uid of assigned) insAssign.run(r.lastInsertRowid, uid);
         }
         added++;

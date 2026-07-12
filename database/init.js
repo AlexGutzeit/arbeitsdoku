@@ -555,6 +555,12 @@ async function initDatabase() {
       db.exec("ALTER TABLE planning_entries ADD COLUMN occurrence_date TEXT");
       console.log('Migration: occurrence_date in planning_entries hinzugefügt.');
     }
+    // lineage_id: verbindet alle beim Umtakten (retakt) auseinander hervorgegangenen Serien einer Planung.
+    if (!planCols.some(c => c.name === 'lineage_id')) {
+      db.exec("ALTER TABLE planning_entries ADD COLUMN lineage_id TEXT");
+      db.exec("UPDATE planning_entries SET lineage_id = series_id WHERE series_id IS NOT NULL AND lineage_id IS NULL");
+      console.log('Migration: lineage_id in planning_entries hinzugefügt (Backfill = series_id).');
+    }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
   // Serien-Regeln (Wiederholungen in der Planung)
@@ -576,6 +582,12 @@ async function initDatabase() {
         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
       );
     `);
+    const seriesCols = db.prepare("PRAGMA table_info(planning_series)").all();
+    if (seriesCols.length && !seriesCols.some(c => c.name === 'lineage_id')) {
+      db.exec("ALTER TABLE planning_series ADD COLUMN lineage_id TEXT");
+      db.exec("UPDATE planning_series SET lineage_id = series_id WHERE lineage_id IS NULL");
+      console.log('Migration: lineage_id in planning_series hinzugefügt (Backfill = series_id).');
+    }
   } catch (e) { console.error('Migration planning_series fehlgeschlagen:', e.message); }
 
   // Migration: orders – quantity nullable + location-Spalten

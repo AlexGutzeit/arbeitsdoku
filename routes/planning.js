@@ -41,11 +41,12 @@ function buildTemplate(body) {
 
 // Erzeugt für jede Wiederplanung echte Tageszeilen (eigene group_id je Vorkommen) + Zuweisungen + Serien-Regel.
 // Muss innerhalb einer Transaktion laufen. Liefert die series_id.
-function materializeSeries(db, createdBy, rule, template, assignedUserIds, occurrences, materializedUntil) {
+function materializeSeries(db, createdBy, rule, template, assignedUserIds, occurrences, materializedUntil, lineageId) {
   const seriesId = crypto.randomUUID();
+  const lineage = lineageId || seriesId; // eigenständige Serie → Herkunft = sie selbst; Umtakten erbt die alte
   const insEntry = db.prepare(`INSERT INTO planning_entries
-    (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date, lineage_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const insAssign = db.prepare('INSERT INTO planning_assignments (planning_id, user_id) VALUES (?, ?)');
   for (const occStart of occurrences) {
     const groupId = crypto.randomUUID(); // jede Wiederholung ist eine Gruppe (auch eintägig)
@@ -53,23 +54,24 @@ function materializeSeries(db, createdBy, rule, template, assignedUserIds, occur
       const date = addDaysISO(occStart, td.offset);
       const r = insEntry.run(createdBy, date, td.time_from, td.time_to, td.break_minutes,
         template.address, template.client, template.project_id, template.project_text, template.description,
-        groupId, template.color, seriesId, occStart);
+        groupId, template.color, seriesId, occStart, lineage);
       for (const uid of assignedUserIds) insAssign.run(r.lastInsertRowid, uid);
     }
   }
   db.prepare(`INSERT INTO planning_series
-    (series_id, created_by, freq, anchor_date, interval_weeks, end_type, end_count, end_until, template, materialized_until, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`).run(
+    (series_id, created_by, freq, anchor_date, interval_weeks, end_type, end_count, end_until, template, materialized_until, active, lineage_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`).run(
     seriesId, createdBy, rule.freq, rule.anchor_date, rule.interval_weeks, rule.end_type,
     rule.end_count || null, rule.end_until || null,
     JSON.stringify({ tplDays: template.tplDays, assigned_user_ids: assignedUserIds, address: template.address, client: template.client, project_id: template.project_id, project_text: template.project_text, description: template.description, color: template.color }),
-    materializedUntil);
+    materializedUntil, lineage);
   return seriesId;
 }
 
 // Legt aus Regel + Vorlage (buildTemplate-Ergebnis) + Zuweisung eine Serie an (Vorkommen ab optional fromDate).
+// lineageId: beim Umtakten die Herkunft der Ursprungs-Serie mitgeben (sonst neue Herkunft).
 // Liefert { series_id, count }. Muss innerhalb einer Transaktion laufen.
-function createSeriesFrom(db, createdBy, rule, tmpl, assigned, fromDate) {
+function createSeriesFrom(db, createdBy, rule, tmpl, assigned, fromDate, lineageId) {
   const horizon = rule.end_type === 'never' ? addMonthsISO(todayISO(), 24) : null;
   const opts = {};
   if (fromDate) opts.from = fromDate;
@@ -77,7 +79,7 @@ function createSeriesFrom(db, createdBy, rule, tmpl, assigned, fromDate) {
   const starts = recur.computeOccurrences(rule, opts);
   if (!starts.length) return { series_id: null, count: 0 };
   const templateObj = { tplDays: tmpl.tplDays, assigned_user_ids: assigned, address: tmpl.address, client: tmpl.client, project_id: tmpl.project_id, project_text: tmpl.project_text, description: tmpl.description, color: tmpl.color };
-  const sid = materializeSeries(db, createdBy, rule, templateObj, assigned, starts, horizon || starts[starts.length - 1]);
+  const sid = materializeSeries(db, createdBy, rule, templateObj, assigned, starts, horizon || starts[starts.length - 1], lineageId);
   return { series_id: sid, count: starts.length };
 }
 
@@ -288,12 +290,12 @@ function detachEndedSeries(db, seriesId) {
         // Einzeltag → echte Einzelplanung: group_id/Serie lösen, Erinnerung von group_id auf entry_id umhängen.
         const e = rows[0];
         if (e.group_id) db.prepare('UPDATE planning_reminders SET group_id = NULL, entry_id = ?, series_id = NULL, occurrence_date = NULL WHERE group_id = ?').run(e.id, e.group_id);
-        db.prepare('UPDATE planning_entries SET series_id = NULL, occurrence_date = NULL, group_id = NULL WHERE id = ?').run(e.id);
+        db.prepare('UPDATE planning_entries SET series_id = NULL, occurrence_date = NULL, group_id = NULL, lineage_id = NULL WHERE id = ?').run(e.id);
       } else {
         // Mehrtägiges Vorkommen bleibt Gruppe; nur die Serien-Verknüpfung lösen (Einträge + Erinnerungen).
         const gids = db.prepare('SELECT DISTINCT group_id FROM planning_entries WHERE series_id = ? AND group_id IS NOT NULL').all(seriesId).map(r => r.group_id);
         for (const g of gids) db.prepare('UPDATE planning_reminders SET series_id = NULL, occurrence_date = NULL WHERE group_id = ?').run(g);
-        db.prepare('UPDATE planning_entries SET series_id = NULL, occurrence_date = NULL WHERE series_id = ?').run(seriesId);
+        db.prepare('UPDATE planning_entries SET series_id = NULL, occurrence_date = NULL, lineage_id = NULL WHERE series_id = ?').run(seriesId);
       }
     }
     db.prepare('DELETE FROM planning_series WHERE series_id = ?').run(seriesId);
@@ -935,7 +937,7 @@ router.post('/series/:seriesId/retakt', authenticate, canPlan, (req, res) => {
     }
     if (!rv || !template) return { ended: true };
     const rule = { ...rv, anchor_date: template.anchor }; // Anker = geöffnetes Vorkommen (Taktung leitet sich daraus ab)
-    const r2 = createSeriesFrom(db, series.created_by, rule, template, assigned, boundary);
+    const r2 = createSeriesFrom(db, series.created_by, rule, template, assigned, boundary, series.lineage_id || series.series_id);
     // Dauerhafte Erinnerungen auf die neue (umgetaktete) Serie übertragen — pro Vorkommen.
     if (r2.series_id && endRems.length) {
       try {
@@ -983,8 +985,13 @@ router.post('/series/:seriesId/keep-single', authenticate, canPlan, (req, res) =
   if (!series) return;
   const occ = req.body && req.body.occurrence_date;
   if (!occ) return res.status(400).json({ error: 'occurrence_date fehlt' });
+  // Herkunft (lineage) des geöffneten Vorkommens → erfasst auch umgetaktete Folge-Serien (z. B. Woche→Monat).
+  const lineage = (db.prepare('SELECT lineage_id FROM planning_entries WHERE series_id = ? AND occurrence_date = ? LIMIT 1').get(series.series_id, occ) || {}).lineage_id
+    || series.lineage_id || series.series_id;
   const tx = db.transaction(() => {
-    db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date <> ?').run(series.series_id, occ);
+    // ALLE Vorkommen derselben Herkunft löschen — außer dem einen, das behalten wird.
+    db.prepare('DELETE FROM planning_entries WHERE lineage_id = ? AND NOT (series_id = ? AND occurrence_date = ?)').run(lineage, series.series_id, occ);
+    db.prepare('DELETE FROM planning_series WHERE lineage_id = ?').run(lineage); // alle Regeln der Herkunft weg
     pruneOrphanReminders(db);                     // Erinnerungen der gelöschten Vorkommen weg
     detachEndedSeries(db, series.series_id);       // das eine verbleibende Vorkommen wird Einzelplanung
   });

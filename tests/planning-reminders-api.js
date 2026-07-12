@@ -188,6 +188,26 @@ const leadOf = async (t, gid) => { const rs = await remOn(t, gid); return rs[0] 
     ok('keep-single: dessen Erinnerung bleibt (auf entry_id)', ((await req('GET','/api/planning/reminders?entry_id='+occ3Id, annaT)).body.reminders).length===1);
     ok('keep-single: Erinnerungen der anderen Vorkommen weg', !((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).some(r=>r.series_id===sKp.series_id || r.group_id===kpo[0].gid || r.group_id===kpo[1].gid));
 
+    // ===== N) keep-single kaskadiert über umgetaktete Folge-Serien (Herkunft/lineage) =====
+    const sLn = (await req('POST','/api/planning', admin, { date:'2027-08-02', time_from:'07:00', time_to:'15:30', client:'Lineage', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:8 } })).body;
+    const wSid = sLn.series_id;
+    let wkL = await seriesOccs(admin, wSid);
+    await req('POST','/api/planning/reminders', annaT, { series_id:wSid, occurrence_date:wkL[0].od, group_id:wkL[0].gid, scope:'all', lead_num:1, lead_unit:'week' });
+    // 5. Vorkommen → monatlich (ab hier) → separate Folge-Serie, gleiche Herkunft
+    await req('POST','/api/planning/series/'+wSid+'/retakt', admin, { scope:'following', occurrence_date:wkL[4].od, days:[{ date:wkL[4].od, time_from:'07:00', time_to:'15:30' }], recurrence:{ freq:'monthly_date', end_type:'count', end_count:8 }, assigned_user_ids:[anna.id], client:'Lineage' });
+    let esL = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e=>e.client==='Lineage');
+    wkL = await seriesOccs(admin, wSid);
+    const mSidL = (esL.find(e=>e.series_id && e.series_id!==wSid)||{}).series_id;
+    const moL = await seriesOccs(admin, mSidL);
+    ok('Kaskade-Setup: Woche 1–4 + separate Monatsserie', wkL.length===4 && moL.length>=2);
+    const keep2Id = esL.find(e=>e.series_id===wSid && e.occurrence_date===wkL[1].od).id;
+    // keep-single auf dem 2. (wöchentlich) → soll AUCH die monatlichen mitnehmen
+    await req('POST','/api/planning/series/'+wSid+'/keep-single', admin, { occurrence_date: wkL[1].od });
+    esL = ((await req('GET','/api/planning', admin)).body.entries || []).filter(e=>e.client==='Lineage');
+    ok('Kaskade: nur der 2. bleibt (Einzelplanung), Woche 1/3/4 UND alle monatlichen weg', esL.length===1 && esL[0].id===keep2Id && !esL[0].series_id && !esL[0].group_id);
+    const mineL = ((await req('GET','/api/planning/reminders/mine', annaT)).body.reminders).filter(r => r.entry_id===keep2Id || r.series_id===wSid || r.series_id===mSidL);
+    ok('Kaskade: nur die Erinnerung des behaltenen Termins bleibt (auf entry_id), keine Serien-Reste', mineL.length===1 && mineL[0].entry_id===keep2Id && !mineL[0].series_id);
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Reminders-API: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);
