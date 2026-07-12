@@ -73,6 +73,20 @@ const remOn = async (t, gid) => ((await req('GET','/api/planning/reminders?group
     const r = (await req('GET','/api/planning/reminders?entry_id='+es[0].id, annaT)).body.reminders;
     ok('Einzeltermin behält genau eine Benachrichtigung, keine Waisen', r.length===1 && !r[0].series_id && (await orphans()).length===0);
 
+    // ===== Multi-MA über Umtakten: verschiedene MA gleichzeitig; „5 MA folgende" wirkt herkunftsweit =====
+    const ma = []; for (let i=1;i<=5;i++) ma.push((await req('POST','/api/users', admin, { username:'zma'+i, password:'p', name:'ZMA'+i, role:'mitarbeiter', hours_mon:8 })).body.user.id);
+    const occMa = async () => { const e2 = ((await req('GET','/api/planning', admin)).body.entries||[]).filter(x=>x.client==='MAtest' && x.occurrence_date); const m={}; e2.forEach(x=>{ if(!m[x.occurrence_date]) m[x.occurrence_date]={od:x.occurrence_date, sid:x.series_id, ma:(x.assigned_users||[]).length}; }); return Object.values(m).sort((a,bb)=>a.od<bb.od?-1:1); };
+    const sMa = (await req('POST','/api/planning', admin, { date:'2027-11-01', time_from:'07:00', time_to:'15:30', client:'MAtest', assigned_user_ids:ma.slice(0,4), recurrence:{ freq:'weekly', end_type:'count', end_count:8 } })).body;
+    let om = await occMa();
+    // ab dem 4. andere Taktung + nur 1 MA
+    await req('POST','/api/planning/series/'+om[3].sid+'/retakt', admin, { scope:'following', occurrence_date:om[3].od, days:[{ date:om[3].od, time_from:'07:00', time_to:'15:30' }], recurrence:{ freq:'monthly_date', end_type:'count', end_count:8 }, assigned_user_ids:[ma[4]], client:'MAtest' });
+    om = await occMa();
+    ok('Multi-MA: 2 Taktungen gleichzeitig mit verschiedenen MA (4 vs. 1)', new Set(om.map(o=>o.sid)).size===2 && om.filter(o=>o.sid===sMa.series_id).every(o=>o.ma===4) && om.filter(o=>o.sid!==sMa.series_id).every(o=>o.ma===1));
+    // erste Planung: 5 MA für „diese + folgende"
+    await req('PUT','/api/planning/series/'+sMa.series_id, admin, { scope:'following', occurrence_date:om[0].od, assigned_user_ids:ma.slice(0,5) });
+    om = await occMa();
+    ok('5 MA „folgende" ab dem 1.: DURCHGEHEND 5 MA (auch die umgetaktete Fortsetzung)', om.length>=8 && om.every(o=>o.ma===5), 'ma='+om.map(o=>o.ma).join(','));
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nPlanning-Retakt-Lineage-API: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);

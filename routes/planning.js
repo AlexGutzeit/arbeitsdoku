@@ -819,11 +819,17 @@ router.put('/series/:seriesId', authenticate, canPlan, (req, res) => {
     return res.json({ success: true, rematerialized: starts.length, days_per_occurrence: newTplDays.length });
   }
 
-  let where = 'series_id = ?'; const wp = [series.series_id];
-  if (scope === 'occurrence' || scope === 'following') {
+  // Feld-Änderungen wirken herkunftsweit: „folgende"/„ganze Serie" erfassen auch umgetaktete Folge-Serien.
+  const lineage = series.lineage_id || series.series_id;
+  let where, wp;
+  if (scope === 'occurrence') {
     if (!occ) return res.status(400).json({ error: 'occurrence_date fehlt' });
-    where += scope === 'occurrence' ? ' AND occurrence_date = ?' : ' AND occurrence_date >= ?';
-    wp.push(occ);
+    where = 'series_id = ? AND occurrence_date = ?'; wp = [series.series_id, occ];
+  } else if (scope === 'following') {
+    if (!occ) return res.status(400).json({ error: 'occurrence_date fehlt' });
+    where = 'lineage_id = ? AND occurrence_date >= ?'; wp = [lineage, occ];
+  } else {
+    where = 'lineage_id = ?'; wp = [lineage]; // ganze Herkunft
   }
 
   const setCols = [], setVals = [];
@@ -842,15 +848,18 @@ router.put('/series/:seriesId', authenticate, canPlan, (req, res) => {
         for (const uid of b.assigned_user_ids) db.prepare('INSERT INTO planning_assignments (planning_id, user_id) VALUES (?, ?)').run(pid, uid);
       }
     }
-    if (scope !== 'occurrence') { // Template für künftige (Scheduler-)Vorkommen mitziehen
-      let tpl; try { tpl = JSON.parse(series.template || '{}'); } catch (_) { tpl = {}; }
-      ['address', 'client', 'project_text', 'description', 'color'].forEach(k => { if (b[k] !== undefined) tpl[k] = b[k]; });
-      if (b.project_id !== undefined) tpl.project_id = b.project_id || null;
-      if (Array.isArray(b.assigned_user_ids)) tpl.assigned_user_ids = b.assigned_user_ids;
-      if (b.time_from !== undefined && Array.isArray(tpl.tplDays)) {
-        tpl.tplDays = tpl.tplDays.map(d => ({ ...d, time_from: b.time_from, time_to: b.time_to !== undefined ? b.time_to : d.time_to, break_minutes: b.break_minutes !== undefined ? b.break_minutes : d.break_minutes }));
+    if (scope !== 'occurrence') { // Template für künftige (Scheduler-)Vorkommen ALLER Herkunfts-Serien mitziehen
+      const lineageSeries = db.prepare('SELECT series_id, template FROM planning_series WHERE lineage_id = ?').all(lineage);
+      for (const ls of lineageSeries) {
+        let tpl; try { tpl = JSON.parse(ls.template || '{}'); } catch (_) { tpl = {}; }
+        ['address', 'client', 'project_text', 'description', 'color'].forEach(k => { if (b[k] !== undefined) tpl[k] = b[k]; });
+        if (b.project_id !== undefined) tpl.project_id = b.project_id || null;
+        if (Array.isArray(b.assigned_user_ids)) tpl.assigned_user_ids = b.assigned_user_ids;
+        if (b.time_from !== undefined && Array.isArray(tpl.tplDays)) {
+          tpl.tplDays = tpl.tplDays.map(d => ({ ...d, time_from: b.time_from, time_to: b.time_to !== undefined ? b.time_to : d.time_to, break_minutes: b.break_minutes !== undefined ? b.break_minutes : d.break_minutes }));
+        }
+        db.prepare('UPDATE planning_series SET template = ? WHERE series_id = ?').run(JSON.stringify(tpl), ls.series_id);
       }
-      db.prepare('UPDATE planning_series SET template = ? WHERE series_id = ?').run(JSON.stringify(tpl), series.series_id);
     }
     return ids.length;
   });
