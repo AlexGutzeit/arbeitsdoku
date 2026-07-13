@@ -417,6 +417,8 @@ async function initDatabase() {
   ensurePushSchema(db);
   // Auftrags-Board-Erweiterung (idempotent, hier UND im Restore-Pfad)
   ensureProjectSchema(db);
+  // Urlaubsanspruch-Historie (idempotent, hier UND im Restore-Pfad)
+  ensureVacationSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -880,6 +882,7 @@ function ensureAuditSchema(targetDb) {
   ensureEmploymentSchema(targetDb);
   ensurePushSchema(targetDb);
   ensureProjectSchema(targetDb);
+  ensureVacationSchema(targetDb);
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
@@ -1036,6 +1039,30 @@ function ensureProjectSchema(targetDb) {
     `);
   } catch (e) {
     console.error('ensureProjectSchema fehlgeschlagen:', e.message);
+  }
+}
+
+// Urlaubsanspruch-Historie: je Zeile ein Jahres-Anspruch ab valid_from MIT eigener Verfall-Regel
+// (carryover_mode never|yearend|date; carryover_until = Monat-Tag im Folgejahr, nur bei 'date').
+// KEIN Default-Anspruch, KEIN Backfill: fehlt eine Zeile, gilt Anspruch 0. Die Alt-Spalte
+// vacation_days_per_year bleibt unangetastet, wird aber vom Urlaubskonto NICHT genutzt.
+// Idempotent — laeuft bei Init UND nach Backup-Restore ([[feedback_abwaertskompatibilitaet]]).
+function ensureVacationSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS vacation_entitlements (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id         INTEGER NOT NULL,
+        valid_from      TEXT NOT NULL,
+        days            REAL DEFAULT 0,
+        carryover_mode  TEXT DEFAULT 'yearend',
+        carryover_until TEXT,
+        created_at      TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (e) {
+    console.error('ensureVacationSchema fehlgeschlagen:', e.message);
   }
 }
 

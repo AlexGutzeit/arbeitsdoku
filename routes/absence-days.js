@@ -120,23 +120,25 @@ function computeAbsenceSummary(db, userId, from, to) {
   return { summary, totalUniqueDays: uniqueAbsenceDays.size };
 }
 
-// Genommene Urlaubstage (approved) in einem Kalenderjahr — Krank & Feiertage abgezogen.
-function countUrlaubDaysInYear(db, userId, year) {
+// Liste der effektiven Urlaubs-Arbeitstage (ISO-Daten) eines Kalenderjahres für einen Status
+// ('approved' | 'pending'). Krank/Berufsschule/Innung + Feiertage verdrängen Urlaub (gleiche
+// Priorität wie überall), Wochenenden/Nicht-Arbeitstage zählen nie.
+function urlaubDaysInYear(db, userId, year, status) {
   const yStr = String(year);
   const from = yStr + '-01-01', to = yStr + '-12-31';
 
   const urlaubRows = db.prepare(`
     SELECT date_from, date_to FROM absences
-    WHERE user_id = ? AND type = 'urlaub' AND status = 'approved'
+    WHERE user_id = ? AND type = 'urlaub' AND status = ?
     AND date_from <= ? AND date_to >= ? AND deleted_at IS NULL
-  `).all(userId, to, from);
+  `).all(userId, status, to, from);
 
   const hasHours = buildScheduleCheck(db, userId);
   const holidaySet = buildHolidaySet(db, from, to);
-  // Urlaub wird von Krank UND Berufsschule/Innung verdrängt
+  // Urlaub wird von Krank UND Berufsschule/Innung verdrängt (nur genehmigte/aktive verdrängen)
   const displaceSet = buildDaySet(db, userId, ['krank', 'berufsschule', 'innung'], from, to, hasHours, holidaySet);
 
-  let count = 0;
+  const days = [];
   for (const row of urlaubRows) {
     const ef = row.date_from > from ? row.date_from : from;
     const et = row.date_to < to ? row.date_to : to;
@@ -144,16 +146,115 @@ function countUrlaubDaysInYear(db, userId, year) {
     const cur = new Date(ef + 'T12:00:00'), end = new Date(et + 'T12:00:00');
     while (cur <= end) {
       const ds = cur.toISOString().slice(0, 10);
-      if (hasHours(ds) && !holidaySet.has(ds) && !displaceSet.has(ds)) count++;
+      if (hasHours(ds) && !holidaySet.has(ds) && !displaceSet.has(ds)) days.push(ds);
       cur.setDate(cur.getDate() + 1);
     }
   }
-  return count;
+  return days;
+}
+
+// Genommene Urlaubstage (approved) in einem Kalenderjahr — Krank & Feiertage abgezogen.
+function countUrlaubDaysInYear(db, userId, year) {
+  return urlaubDaysInYear(db, userId, year, 'approved').length;
+}
+
+// Genehmigten Urlaub eines Jahres am Stichtag `nowStr` aufteilen:
+// genommen = Datum ≤ heute (Vergangenheit), geplant = Datum > heute (Zukunft).
+function urlaubSplitInYear(db, userId, year, nowStr) {
+  const days = urlaubDaysInYear(db, userId, year, 'approved');
+  let genommen = 0, geplant = 0;
+  for (const ds of days) { if (ds <= nowStr) genommen++; else geplant++; }
+  return { genommen, geplant };
+}
+
+// Offen beantragte (pending) Urlaubstage eines Jahres.
+function countUrlaubPendingInYear(db, userId, year) {
+  return urlaubDaysInYear(db, userId, year, 'pending').length;
+}
+
+const rnd2 = v => Math.round(v * 100) / 100;
+
+// Für ein Jahr geltende Anspruchszeile (jüngstes valid_from ≤ Jahresende) → { days, carryover_mode,
+// carryover_until }. Keine Zeile ≤ Jahr (oder Tabelle fehlt) ⇒ Anspruch 0, Modus 'yearend'.
+function entitlementFor(db, userId, year) {
+  const cutoff = String(year) + '-12-31';
+  let row = null;
+  try {
+    row = db.prepare(
+      `SELECT days, carryover_mode, carryover_until FROM vacation_entitlements
+       WHERE user_id = ? AND valid_from <= ? ORDER BY valid_from DESC LIMIT 1`
+    ).get(userId, cutoff);
+  } catch (_) { row = null; }
+  if (!row) return { days: 0, carryover_mode: 'yearend', carryover_until: null };
+  return {
+    days: row.days || 0,
+    carryover_mode: row.carryover_mode || 'yearend',
+    carryover_until: row.carryover_until || null,
+  };
+}
+
+// Jahr des ersten Anspruch-Eintrags (Start der Übertrag-Rekurrenz) oder null.
+function firstEntitlementYear(db, userId) {
+  try {
+    const r = db.prepare('SELECT MIN(valid_from) AS d FROM vacation_entitlements WHERE user_id = ?').get(userId);
+    if (r && r.d) return parseInt(String(r.d).slice(0, 4), 10);
+  } catch (_) {}
+  return null;
+}
+
+// Vollständiges Urlaubskonto für ein Jahr am Stichtag `now` (Date oder ISO-String; Default heute).
+// Übertrag läuft als Jahres-Rekurrenz ab dem ersten Anspruch-Jahr; der Verfallsmodus der FÜR EIN
+// JAHR geltenden Zeile bestimmt, was in das Folgejahr getragen wird (yearend=0, never=Rest,
+// date=Rest bis zum Stichtag im Folgejahr, danach verfallen). Vergangene Jahre bleiben unberührt.
+function vacationAccount(db, userId, year, now) {
+  const nowStr = now instanceof Date
+    ? now.toISOString().slice(0, 10)
+    : (typeof now === 'string' && now ? now.slice(0, 10) : new Date().toISOString().slice(0, 10));
+
+  const { genommen, geplant } = urlaubSplitInYear(db, userId, year, nowStr);
+  const anspruch = entitlementFor(db, userId, year).days;
+
+  let uebertrag = 0;
+  const startYear = firstEntitlementYear(db, userId);
+  if (startYear != null && startYear < year) {
+    let carry = 0;
+    for (let y = startYear; y < year; y++) {
+      const ent = entitlementFor(db, userId, y);
+      const split = urlaubSplitInYear(db, userId, y, nowStr);
+      const leftover = ent.days + carry - split.genommen - split.geplant;
+      if (ent.carryover_mode === 'never') {
+        carry = leftover;
+      } else if (ent.carryover_mode === 'date' && ent.carryover_until) {
+        const expiry = String(y + 1) + '-' + ent.carryover_until; // 'MM-DD'
+        carry = nowStr > expiry ? 0 : leftover;
+      } else {
+        carry = 0; // 'yearend' (Standard)
+      }
+    }
+    uebertrag = carry;
+  }
+
+  const verfuegbar = anspruch + uebertrag;
+  return {
+    anspruch: rnd2(anspruch),
+    uebertrag: rnd2(uebertrag),
+    verfuegbar: rnd2(verfuegbar),
+    genommen: rnd2(genommen),
+    geplant: rnd2(geplant),
+    nochZuPlanen: rnd2(verfuegbar - genommen - geplant),
+    rest: rnd2(verfuegbar - genommen),
+  };
 }
 
 module.exports = {
   computeAbsenceSummary,
   countUrlaubDaysInYear,
+  urlaubDaysInYear,
+  urlaubSplitInYear,
+  countUrlaubPendingInYear,
+  entitlementFor,
+  firstEntitlementYear,
+  vacationAccount,
   buildScheduleCheck,
   buildHolidaySet,
   buildDaySet,
