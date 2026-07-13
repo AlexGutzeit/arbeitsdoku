@@ -581,6 +581,78 @@ router.delete('/targets/:userId/:id', authenticate, (req, res) => {
   res.json({ targets });
 });
 
+// ── Urlaubsanspruch-Historie (vacation_entitlements) ────────────────────────────────
+// Versioniert wie user_target_hours: je Zeile { valid_from, days, carryover_mode, carryover_until }.
+// carryover_mode: 'never' | 'yearend' | 'date'; carryover_until nur bei 'date' (Monat-Tag 'MM-DD').
+const VAC_MODES = ['never', 'yearend', 'date'];
+function normVacationBody(body) {
+  const days = Math.max(0, parseFloat(String(body.days).replace(',', '.')) || 0);
+  let mode = VAC_MODES.includes(body.carryover_mode) ? body.carryover_mode : 'yearend';
+  let until = null;
+  if (mode === 'date') {
+    const m = /^(\d{2})-(\d{2})$/.exec(String(body.carryover_until || '').trim());
+    if (!m) return { error: 'Verfallsdatum (MM-TT) fehlt oder ungültig' };
+    const mm = +m[1], dd = +m[2];
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return { error: 'Verfallsdatum ungültig' };
+    until = `${m[1]}-${m[2]}`;
+  }
+  return { days, mode, until };
+}
+function listVacation(db, userId) {
+  return db.prepare(
+    'SELECT id, valid_from, days, carryover_mode, carryover_until FROM vacation_entitlements WHERE user_id = ? ORDER BY valid_from DESC'
+  ).all(userId);
+}
+
+// Historie lesen (eigene oder – als Manager – jede)
+router.get('/vacation/:userId', authenticate, (req, res) => {
+  const db = getDb();
+  if (req.user.role === 'mitarbeiter' && req.user.id !== Number(req.params.userId)) {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  res.json({ entitlements: listVacation(db, req.params.userId) });
+});
+
+// Anspruch-Zeile anlegen (nur Chef/Admin)
+router.post('/vacation/:userId', authenticate, (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'chef') {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  const userId = parseInt(req.params.userId, 10);
+  if (!userId || userId < 1) return res.status(400).json({ error: 'Ungültige Benutzer-ID' });
+  if (!req.body.valid_from) return res.status(400).json({ error: 'Gültig-ab-Datum ist Pflichtfeld' });
+  const n = normVacationBody(req.body);
+  if (n.error) return res.status(400).json({ error: n.error });
+  const db = getDb();
+  db.prepare('INSERT INTO vacation_entitlements (user_id, valid_from, days, carryover_mode, carryover_until) VALUES (?, ?, ?, ?, ?)')
+    .run(userId, req.body.valid_from, n.days, n.mode, n.until);
+  res.json({ entitlements: listVacation(db, userId) });
+});
+
+// Anspruch-Zeile ändern (nur Chef/Admin)
+router.put('/vacation/:userId/:id', authenticate, (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'chef') {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  if (!req.body.valid_from) return res.status(400).json({ error: 'Gültig-ab-Datum ist Pflichtfeld' });
+  const n = normVacationBody(req.body);
+  if (n.error) return res.status(400).json({ error: n.error });
+  const db = getDb();
+  db.prepare('UPDATE vacation_entitlements SET valid_from = ?, days = ?, carryover_mode = ?, carryover_until = ? WHERE id = ? AND user_id = ?')
+    .run(req.body.valid_from, n.days, n.mode, n.until, req.params.id, req.params.userId);
+  res.json({ entitlements: listVacation(db, req.params.userId) });
+});
+
+// Anspruch-Zeile löschen (nur Chef/Admin) — Löschen ALLER Zeilen erlaubt (⇒ Anspruch 0)
+router.delete('/vacation/:userId/:id', authenticate, (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'chef') {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  const db = getDb();
+  db.prepare('DELETE FROM vacation_entitlements WHERE id = ? AND user_id = ?').run(req.params.id, req.params.userId);
+  res.json({ entitlements: listVacation(db, req.params.userId) });
+});
+
 // Hilfsfunktionen
 function formatDE(d) {
   const [y, m, day] = d.split('-');
