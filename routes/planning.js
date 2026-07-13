@@ -193,8 +193,8 @@ function seriesOccurrences(db, seriesId, fromDate) {
 }
 // Materialisiert eine logische Erinnerung als eine Zeile JE Vorkommen (verbunden über reminder_group).
 // occs: [{gid?, eid?, od?}]. Doppelte (gleicher Vorlauf/Uhrzeit auf demselben Vorkommen) werden übersprungen.
-function materializeReminder(db, userId, occs, seriesId, lead, remind_time) {
-  const rgroup = crypto.randomUUID();
+function materializeReminder(db, userId, occs, seriesId, lead, remind_time, reminderGroup) {
+  const rgroup = reminderGroup || crypto.randomUUID(); // beim Umtakten/Übertragen die logische Erinnerung erhalten
   const ins = db.prepare(`INSERT INTO planning_reminders (user_id, reminder_group, group_id, entry_id, series_id, occurrence_date, lead_num, lead_unit, remind_time)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const dupq = db.prepare(`SELECT id FROM planning_reminders WHERE user_id = ?
@@ -904,7 +904,7 @@ router.post('/to-series', authenticate, canPlan, (req, res) => {
         const occs = remScope === 'occurrence'
           ? (firstOcc ? [{ gid: firstOcc.gid, od: firstOcc.od }] : [])
           : allOccs.map(o => ({ gid: o.gid, od: o.od }));
-        if (occs.length) materializeReminder(db, rem.user_id, occs, res2.series_id, lead, rem.remind_time || null);
+        if (occs.length) materializeReminder(db, rem.user_id, occs, res2.series_id, lead, rem.remind_time || null, rem.reminder_group);
       }
       const ids = oldRem.map(x => x.id);
       db.prepare(`DELETE FROM planning_reminders WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
@@ -958,7 +958,7 @@ router.post('/series/:seriesId/retakt', authenticate, canPlan, (req, res) => {
     if (r2.series_id && endRems.length) {
       try {
         const newOccs = seriesOccurrences(db, r2.series_id, null).map(o => ({ gid: o.gid, od: o.od }));
-        for (const rem of endRems) materializeReminder(db, rem.user_id, newOccs, r2.series_id, { num: rem.lead_num, unit: rem.lead_unit }, rem.remind_time || null);
+        for (const rem of endRems) materializeReminder(db, rem.user_id, newOccs, r2.series_id, { num: rem.lead_num, unit: rem.lead_unit }, rem.remind_time || null, rem.reminder_group);
       } catch (_) {}
     }
     return r2;
