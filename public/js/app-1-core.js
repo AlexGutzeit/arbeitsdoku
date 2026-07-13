@@ -551,13 +551,14 @@ function employedInRange(user, from, to) {
   return periods.some(p => p.s <= to && (!p.e || p.e >= from));
 }
 
-function toast(msg, type) {
+function toast(msg, type, duration) {
   let t = document.querySelector('.toast');
   if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
   t.textContent = msg;
   t.className = 'toast ' + (type || '');
   requestAnimationFrame(() => t.classList.add('show'));
-  setTimeout(() => t.classList.remove('show'), 3000);
+  clearTimeout(t._hideTimer);
+  t._hideTimer = setTimeout(() => t.classList.remove('show'), duration || 3000);
 }
 
 // --- Gestylte Dialoge (ersetzen native confirm()/prompt()) ---

@@ -296,7 +296,8 @@ async function renderStatisticsContent() {
               <tr><th>Typ</th><th>Arbeitstage</th></tr>
               ${rows}
             </table>
-            ${sd.urlaubTageJahr > 0 ? `<p style="margin-top:0.5rem;font-size:0.9rem">Urlaubstage genommen (${new Date().getFullYear()}): <strong>${sd.urlaubTageJahr} Arbeitstage</strong></p>` : ''}
+            ${sd.vacation ? `<p style="margin-top:0.5rem;font-size:0.9rem">Urlaub ${sd.year || new Date().getFullYear()}: <strong>${sd.vacation.genommen}</strong> genommen · <strong>${sd.vacation.geplant}</strong> geplant · <strong>${sd.vacation.nochZuPlanen}</strong> noch zu planen <span style="color:#666">(Anspruch ${sd.vacation.anspruch} + Übertrag ${sd.vacation.uebertrag} = ${sd.vacation.verfuegbar} Arbeitstage)</span></p>`
+              : (sd.urlaubTageJahr > 0 ? `<p style="margin-top:0.5rem;font-size:0.9rem">Urlaubstage genommen (${new Date().getFullYear()}): <strong>${sd.urlaubTageJahr} Arbeitstage</strong></p>` : '')}
           </div>`;
 
           // Bidirektionales Hover: Tabellenzeile → Chart hervorheben

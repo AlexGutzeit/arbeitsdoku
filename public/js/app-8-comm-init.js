@@ -918,7 +918,7 @@ function bindAbsenceCardActions(container) {
 
   container.querySelectorAll('.absence-approve').forEach(btn => {
     btn.addEventListener('click', async () => {
-      try { await api('POST', '/api/absences/' + btn.dataset.id + '/approve'); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
+      try { const r = await api('POST', '/api/absences/' + btn.dataset.id + '/approve'); if (r && r.warning) toast(r.warning, 'warning', 6000); renderAbsences(); } catch(e) { toast(e.message, 'error'); }
     });
   });
   container.querySelectorAll('.absence-reject').forEach(btn => {
@@ -1100,11 +1100,12 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
         if (reason === null) return; // Abbrechen → Bearbeitung verwerfen
         await api('PUT', '/api/absences/' + editId, { date_from, date_to, comment, reason: reason.trim() });
       } else {
-        await api('POST', '/api/absences', { type, date_from, date_to, comment, target_user_id });
+        const resp = await api('POST', '/api/absences', { type, date_from, date_to, comment, target_user_id });
+        if (resp && resp.warning) toast(resp.warning, 'warning', 6000);
       }
       document.getElementById('absence-form-overlay')?.remove();
       toast(editId ? 'Abwesenheit aktualisiert' : 'Abwesenheit eingetragen', 'success');
-     
+
       renderAbsences();
     } catch(e) { toast(e.message, 'error'); }
   });
@@ -1112,6 +1113,9 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
 
 let _inboxUserFilter = '';
 let _allAbsenceUserFilter = '';
+let _absTab = 'list';                         // Manager-Reiter: 'list' | 'vacation'
+let _vacOverviewYear = new Date().getFullYear();
+let _vacOverviewSearch = '';
 // Lazy-Render-Cache der Verlauf-Monate: Key "type|YYYY-MM" -> Array der Abwesenheiten.
 // Die Karten eines Monats werden erst beim Aufklappen ins DOM gebaut (spart Knoten bei vielen Einträgen).
 let _absHistory = {};
@@ -1156,10 +1160,10 @@ async function renderAbsences() {
   if (!mainEl) return;
 
   const thisYear = new Date().getFullYear().toString();
-  let urlaubTageJahr = 0;
+  let urlaubTageJahr = 0, myVac = null;
   try {
     const sd = await api('GET', `/api/absences/summary?from=${thisYear}-01-01&to=${thisYear}-12-31`);
-    if (sd) urlaubTageJahr = sd.urlaubTageJahr || 0;
+    if (sd) { urlaubTageJahr = sd.urlaubTageJahr || 0; myVac = sd.vacation || null; }
   } catch(e) {}
 
   // Mein Posteingang (für alle Rollen): Manager-Änderungen die quittiert werden müssen
@@ -1325,13 +1329,24 @@ async function renderAbsences() {
     </div>`;
   }).join('');
 
+  const isMgr = isManagerRole();
+  const showVac = isMgr && _absTab === 'vacation';
+  const tabBar = isMgr ? `
+      <div class="absence-tabs">
+        <button class="absence-tab ${_absTab === 'list' ? 'active' : ''}" data-tab="list">Liste</button>
+        <button class="absence-tab ${_absTab === 'vacation' ? 'active' : ''}" data-tab="vacation">Urlaubsübersicht</button>
+      </div>` : '';
   mainEl.innerHTML = `
-    <div class="card" style="max-width:900px;margin:0 auto">
+    <div class="card" style="max-width:${showVac ? '1200px' : '900px'};margin:0 auto">
       <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
         <h2>&#128197; Abwesenheit</h2>
-        ${!isManagerRole() ? `<span class="absence-counter">Urlaub ${thisYear}: <strong>${urlaubTageJahr} Arbeitstage</strong></span>` : ''}
-        <button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>
+        ${!isMgr ? `<span class="absence-counter">Urlaub ${thisYear}: ${myVac
+          ? `<strong>${myVac.genommen}</strong> genommen · <strong>${myVac.geplant}</strong> geplant · <strong>${myVac.nochZuPlanen}</strong> verbleibend <span class="absence-counter-of">(von ${myVac.verfuegbar})</span>`
+          : `<strong>${urlaubTageJahr} Arbeitstage</strong>`}</span>` : ''}
+        ${showVac ? '' : '<button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>'}
       </div>
+      ${tabBar}
+      ${showVac ? '<div id="vac-overview-wrap"><div class="loading"><div class="spinner"></div></div></div>' : `
       ${maInboxHtml}
       ${inboxHtml}
       <div class="absence-all-header">
@@ -1342,8 +1357,13 @@ async function renderAbsences() {
             ${allUsersForFilter.map(u => `<option value="${u.id}" ${_allAbsenceUserFilter == u.id ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}
           </select>` : ''}
       </div>
-      ${listHtml || '<p class="absence-empty">Keine Abwesenheiten eingetragen.</p>'}
+      ${listHtml || '<p class="absence-empty">Keine Abwesenheiten eingetragen.</p>'}`}
     </div>`;
+
+  mainEl.querySelectorAll('.absence-tab').forEach(btn => {
+    btn.addEventListener('click', () => { _absTab = btn.dataset.tab; renderAbsences(); });
+  });
+  if (showVac) renderVacationOverview();
 
   mainEl.querySelectorAll('.absence-new').forEach(btn => {
     btn.addEventListener('click', () => showAbsenceForm(null, btn.dataset.type, null, null, null));
@@ -1382,6 +1402,77 @@ function renderAbsenceType(type) {
   if (!ABSENCE_TYPES[type]) { renderAbsences(); return; }
   showAbsenceForm(null, type, null, null, null);
   renderAbsences();
+}
+
+// Manager-Reiter „Urlaubsübersicht": Urlaubskonto je Mitarbeiter (Jahr-Auswahl, Suche, PDF/CSV).
+async function renderVacationOverview() {
+  const wrap = document.getElementById('vac-overview-wrap');
+  if (!wrap) return;
+  const cur = new Date().getFullYear();
+  const years = [];
+  for (let y = cur + 1; y >= cur - 3; y--) years.push(y);
+  let data;
+  try { data = await api('GET', `/api/absences/vacation-overview?year=${_vacOverviewYear}`); }
+  catch (e) { wrap.innerHTML = '<p class="absence-empty">Konnte Urlaubsübersicht nicht laden.</p>'; return; }
+  const rows = data.rows || [];
+  const standDE = data.stand ? data.stand.split('-').reverse().join('.') : '';
+  wrap.innerHTML = `
+    <div class="vac-ov-controls">
+      <select id="vac-ov-year" class="form-control form-control-sm">
+        ${years.map(y => `<option value="${y}" ${y === _vacOverviewYear ? 'selected' : ''}>${y}</option>`).join('')}
+      </select>
+      <input type="search" id="vac-ov-search" class="form-control form-control-sm" placeholder="Mitarbeiter suchen…" value="${esc(_vacOverviewSearch)}">
+      <span class="vac-ov-stand">Stand: ${standDE}</span>
+      <button class="btn btn-outline btn-sm" id="vac-ov-pdf">PDF herunterladen</button>
+    </div>
+    <div class="vac-ov-scroll">
+      <table class="data-table vac-ov-table">
+        <thead><tr>
+          <th>Mitarbeiter</th><th>Anspruch</th><th>Übriger Vorjahr</th><th>Gesamt&shy;anspruch</th>
+          <th>Genommen</th><th>Geplant &amp; akzeptiert</th><th>Noch zu planen</th>
+          <th>Beantragt (offen)</th><th>Krank</th><th>FZA</th>
+        </tr></thead>
+        <tbody>
+          ${rows.length ? rows.map(r => `<tr data-name="${esc(r.name.toLowerCase())}">
+            <td class="vac-ov-name">${esc(r.name)}</td>
+            <td>${r.anspruch}</td><td>${r.uebertrag}</td><td><strong>${r.gesamtanspruch}</strong></td>
+            <td>${r.genommen}</td><td>${r.geplant}</td>
+            <td class="${r.nochZuPlanen < 0 ? 'vac-ov-neg' : ''}"><strong>${r.nochZuPlanen}</strong></td>
+            <td>${r.beantragt}</td><td>${r.krank}</td><td>${r.fza}</td>
+          </tr>`).join('') : '<tr><td colspan="10" class="absence-empty">Keine Mitarbeiter.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+  document.getElementById('vac-ov-year').addEventListener('change', e => { _vacOverviewYear = Number(e.target.value); _vacOverviewSearch = ''; renderVacationOverview(); });
+  const searchEl = document.getElementById('vac-ov-search');
+  const applyFilter = () => {
+    const q = _vacOverviewSearch.toLowerCase();
+    wrap.querySelectorAll('tbody tr[data-name]').forEach(tr => {
+      tr.style.display = (!q || tr.dataset.name.includes(q)) ? '' : 'none';
+    });
+  };
+  searchEl.addEventListener('input', e => { _vacOverviewSearch = e.target.value; applyFilter(); });
+  applyFilter();
+  document.getElementById('vac-ov-pdf').addEventListener('click', () => printVacationOverview(_vacOverviewYear, standDE, rows));
+}
+
+// Druck-/PDF-Ausgabe der Urlaubsübersicht (Browser „Als PDF speichern"). Kein Server-PDF nötig.
+function printVacationOverview(year, standDE, rows) {
+  const w = window.open('', '_blank');
+  if (!w) { toast('Popup blockiert – bitte erlauben', 'error'); return; }
+  const head = ['Mitarbeiter', 'Anspruch', 'Übriger Vorjahr', 'Gesamtanspruch', 'Genommen', 'Geplant & akzeptiert', 'Noch zu planen', 'Beantragt (offen)', 'Krank', 'FZA'];
+  const body = rows.map(r => [r.name, r.anspruch, r.uebertrag, r.gesamtanspruch, r.genommen, r.geplant, r.nochZuPlanen, r.beantragt, r.krank, r.fza]);
+  w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Urlaubsübersicht ${year}</title>
+    <style>body{font-family:Arial,sans-serif;margin:24px;color:#111}h1{font-size:18px}p{color:#555;font-size:12px}
+    table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{border:1px solid #ccc;padding:5px 7px;text-align:right}
+    th:first-child,td:first-child{text-align:left}thead{background:#f3f4f6}</style></head><body>
+    <h1>Urlaubsübersicht ${year}</h1><p>Stand: ${standDE}</p>
+    <table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${body.map(r => `<tr>${r.map((c, i) => `<td>${String(c).replace(/</g, '&lt;')}</td>`).join('')}</tr>`).join('')}</tbody></table>
+    </body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { try { w.print(); } catch (e) {} }, 300);
 }
 
 // --- Init ---

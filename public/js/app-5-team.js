@@ -929,6 +929,25 @@ async function showUserModal(user) {
             <label>Fr <input type="number" class="form-control form-control-sm" id="um-h-fri" value="6" min="0" max="24" step="0.01"></label>
           </div>
         </div>`}
+        ${isEdit ? `
+        <div class="form-section">
+          <label class="form-section-title">Urlaubsanspruch</label>
+          <div id="um-vac-list"><div class="loading"><div class="spinner"></div></div></div>
+          <div class="vac-add-row">
+            <label>Tage <input type="number" id="um-vac-days" step="0.5" min="0" value="0" class="form-control form-control-sm"></label>
+            <label>Rest verfällt
+              <select id="um-vac-mode" class="form-control form-control-sm">
+                <option value="yearend">zum Jahreswechsel</option>
+                <option value="never">nie</option>
+                <option value="date">am … (Folgejahr)</option>
+              </select>
+            </label>
+            <input type="text" id="um-vac-until" class="form-control form-control-sm" placeholder="MM-TT" value="03-31" style="display:none;max-width:5.5rem">
+            <label>gültig ab <input type="date" id="um-vac-from" class="form-control form-control-sm"></label>
+            <button type="button" class="btn btn-primary btn-sm" id="um-vac-add">Hinzufügen</button>
+          </div>
+          <div id="um-vac-stand" class="vac-stand"></div>
+        </div>` : ''}
         <div class="modal-actions">
           <button type="button" class="btn btn-outline" id="um-cancel">Abbrechen</button>
           <button type="submit" class="btn btn-primary">${isEdit ? 'Speichern' : 'Erstellen'}</button>
@@ -998,6 +1017,30 @@ async function showUserModal(user) {
         await api('POST', `/api/statistics/targets/${user.id}`, body);
         toast('Soll-Stunden gespeichert', 'success');
         await loadUserTargets(user.id);
+      } catch (e) { toast(e.message, 'error'); }
+    });
+
+    // Urlaubsanspruch-Verlauf + aktueller Stand
+    await loadUserVacation(user.id);
+    await loadUserVacationStand(user.id);
+    const vacMode = document.getElementById('um-vac-mode');
+    const vacUntil = document.getElementById('um-vac-until');
+    const syncVacUntil = () => { vacUntil.style.display = vacMode.value === 'date' ? '' : 'none'; };
+    vacMode.addEventListener('change', syncVacUntil); syncVacUntil();
+    document.getElementById('um-vac-add').addEventListener('click', async () => {
+      const from = document.getElementById('um-vac-from').value;
+      if (!from) { toast('Gültig-ab-Datum eingeben', 'error'); return; }
+      const body = {
+        valid_from: from,
+        days: parseFloat(String(document.getElementById('um-vac-days').value).replace(',', '.')) || 0,
+        carryover_mode: vacMode.value,
+        carryover_until: vacMode.value === 'date' ? vacUntil.value.trim() : null,
+      };
+      try {
+        await api('POST', `/api/statistics/vacation/${user.id}`, body);
+        toast('Urlaubsanspruch gespeichert', 'success');
+        await loadUserVacation(user.id);
+        await loadUserVacationStand(user.id);
       } catch (e) { toast(e.message, 'error'); }
     });
   }
@@ -1110,6 +1153,99 @@ async function loadUserTargets(userId) {
         } catch (e) { toast(e.message, 'error'); }
       });
     });
+  } catch (e) {}
+}
+
+// Urlaubsanspruch-Verlauf (versioniert wie Soll-Stunden): je Zeile Gültig-ab, Tage, Verfall-Regel.
+const VAC_MODE_LABELS = { yearend: 'zum Jahreswechsel', never: 'nie', date: 'am … (Folgejahr)' };
+async function loadUserVacation(userId) {
+  const container = document.getElementById('um-vac-list');
+  if (!container) return;
+  try {
+    const data = await api('GET', `/api/statistics/vacation/${userId}`);
+    if (!data) return;
+    const ents = data.entitlements || [];
+    if (!ents.length) {
+      container.innerHTML = '<div class="vac-empty">Noch kein Urlaubsanspruch hinterlegt – es wird mit 0 gerechnet.</div>';
+      return;
+    }
+    container.innerHTML = `<table class="data-table targets-table vac-table">
+      <tr><th>Gültig ab</th><th>Tage</th><th>Rest verfällt</th><th></th></tr>
+      ${ents.map(t => `
+        <tr data-vac-id="${t.id}">
+          <td><input type="date" class="form-control form-control-sm vac-from" value="${t.valid_from}"></td>
+          <td><input type="number" class="form-control form-control-sm vac-days" value="${t.days}" step="0.5" min="0"></td>
+          <td>
+            <select class="form-control form-control-sm vac-mode">
+              <option value="yearend" ${t.carryover_mode === 'yearend' ? 'selected' : ''}>zum Jahreswechsel</option>
+              <option value="never" ${t.carryover_mode === 'never' ? 'selected' : ''}>nie</option>
+              <option value="date" ${t.carryover_mode === 'date' ? 'selected' : ''}>am … (Folgejahr)</option>
+            </select>
+            <input type="text" class="form-control form-control-sm vac-until" placeholder="MM-TT" value="${esc(t.carryover_until || '03-31')}" style="max-width:5rem;${t.carryover_mode === 'date' ? '' : 'display:none'}">
+          </td>
+          <td class="actions target-actions">
+            <button type="button" class="btn btn-sm btn-outline save-vac" title="Speichern">&#10003;</button>
+            <button type="button" class="btn btn-sm btn-danger del-vac" title="Löschen">&#10005;</button>
+          </td>
+        </tr>`).join('')}
+    </table>`;
+    container.querySelectorAll('tr[data-vac-id]').forEach(tr => {
+      const mode = tr.querySelector('.vac-mode'), until = tr.querySelector('.vac-until');
+      mode.addEventListener('change', () => { until.style.display = mode.value === 'date' ? '' : 'none'; });
+    });
+    container.querySelectorAll('.save-vac').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tr = btn.closest('tr');
+        const from = tr.querySelector('.vac-from').value;
+        if (!from) { toast('Datum eingeben', 'error'); return; }
+        const mode = tr.querySelector('.vac-mode').value;
+        const body = {
+          valid_from: from,
+          days: parseFloat(String(tr.querySelector('.vac-days').value).replace(',', '.')) || 0,
+          carryover_mode: mode,
+          carryover_until: mode === 'date' ? tr.querySelector('.vac-until').value.trim() : null,
+        };
+        try {
+          await api('PUT', `/api/statistics/vacation/${userId}/${tr.dataset.vacId}`, body);
+          toast('Gespeichert', 'success');
+          await loadUserVacation(userId); await loadUserVacationStand(userId);
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    });
+    container.querySelectorAll('.del-vac').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.closest('tr').dataset.vacId;
+        try {
+          await api('DELETE', `/api/statistics/vacation/${userId}/${id}`);
+          toast('Eintrag gelöscht', 'success');
+          await loadUserVacation(userId); await loadUserVacationStand(userId);
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    });
+  } catch (e) {}
+}
+
+// Aktueller Urlaubsstand (read-only) mit Jahr-Auswahl — deckt die Chef/Admin-Sicht je MA ab.
+async function loadUserVacationStand(userId, year) {
+  const box = document.getElementById('um-vac-stand');
+  if (!box) return;
+  const cur = new Date().getFullYear();
+  const y = year || cur;
+  const years = [];
+  for (let yy = cur + 1; yy >= cur - 3; yy--) years.push(yy);
+  try {
+    const data = await api('GET', `/api/absences/summary?user_id=${userId}&from=${y}-01-01&to=${y}-12-31`);
+    const v = (data && data.vacation) || { anspruch: 0, uebertrag: 0, verfuegbar: 0, genommen: 0, geplant: 0, nochZuPlanen: 0 };
+    box.innerHTML = `
+      <span class="vac-stand-year">Stand
+        <select class="form-control form-control-sm vac-stand-select">
+          ${years.map(yy => `<option value="${yy}" ${yy === y ? 'selected' : ''}>${yy}</option>`).join('')}
+        </select>:
+      </span>
+      <strong>${v.genommen}</strong> genommen · <strong>${v.geplant}</strong> geplant ·
+      <strong>${v.nochZuPlanen}</strong> noch zu planen
+      <span class="vac-stand-detail">(Anspruch ${v.anspruch} + Übertrag ${v.uebertrag} = ${v.verfuegbar})</span>`;
+    box.querySelector('.vac-stand-select').addEventListener('change', (e) => loadUserVacationStand(userId, Number(e.target.value)));
   } catch (e) {}
 }
 
