@@ -234,16 +234,24 @@ router.patch('/:id/milestones/:mid/status', authenticate, (req, res) => {
 
 // Projekt in den Papierkorb legen (Soft-Delete, nur Chef/Admin). Zuweisungen/Ziele/Verknüpfungen bleiben
 // erhalten → volle Wiederherstellung möglich. Verschwindet vom Board.
+// Projektname sofort in die Freitexte sichern (nur wo leer): so bleibt der Name in Zeitnachweisen/Planungen/
+// Werkzeugen/Notizen erhalten, auch wenn das Projekt im Papierkorb liegt. project_id bleibt erhalten →
+// Wiederherstellen greift weiter; in der Anzeige hat project_name (Join) Vorrang, der Freitext ist Fallback.
 router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   const project = db.prepare('SELECT * FROM projects WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!project) return res.status(404).json({ error: 'Projekt nicht gefunden' });
+  db.prepare(`UPDATE entries SET project_text = ? WHERE project_id = ? AND (project_text IS NULL OR project_text = '')`).run(project.name, project.id);
+  db.prepare(`UPDATE planning_entries SET project_text = ? WHERE project_id = ? AND (project_text IS NULL OR project_text = '')`).run(project.name, project.id);
+  db.prepare(`UPDATE tool_checkouts SET project_text = ? WHERE project_id = ? AND (project_text IS NULL OR project_text = '')`).run(project.name, project.id);
+  db.prepare(`UPDATE notes SET project_text = ? WHERE project_id = ? AND (project_text IS NULL OR project_text = '')`).run(project.name, project.id);
   db.prepare("UPDATE projects SET deleted_at = strftime('%Y-%m-%d %H:%M:%f','now'), deleted_by = ? WHERE id = ?").run(req.user.id, project.id);
   broadcast('projects', req.headers['x-tab-id']);
   res.json({ success: true });
 });
 
-// Aus dem Papierkorb wiederherstellen (nur Chef/Admin). Name war nie freigegeben → kein Konflikt.
+// Aus dem Papierkorb wiederherstellen (nur Chef/Admin). Ein beim Löschen gesetzter Freitext bleibt als
+// Fallback stehen, wird aber vom wieder aufgelösten project_name (Join hat Vorrang) verdeckt → kein Konflikt.
 router.post('/:id/restore', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   const project = db.prepare('SELECT * FROM projects WHERE id = ? AND deleted_at IS NOT NULL').get(req.params.id);
