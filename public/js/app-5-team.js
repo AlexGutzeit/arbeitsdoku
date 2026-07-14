@@ -932,12 +932,12 @@ async function showUserModal(user) {
         ${isEdit ? `
         <div class="form-section">
           <label class="form-section-title">Urlaubsanspruch</label>
-          <div id="um-vac-list"><div class="loading"><div class="spinner"></div></div></div>
           <div class="vac-startcarry">
             <label>Start-Resturlaub (Übertrag) <input type="number" id="um-vac-startcarry" step="0.5" value="0" class="form-control form-control-sm"></label>
             <button type="button" class="btn btn-outline btn-sm" id="um-vac-startcarry-save">Übernehmen</button>
-            <span class="vac-startcarry-hint">einmaliger Übertrag ins erste erfasste Anspruchsjahr (wie Start-Überstunden)</span>
+            <span class="vac-startcarry-hint">Stand VOR der App / einmaliger Übertrag ins erste erfasste Anspruchsjahr</span>
           </div>
+          <div id="um-vac-list"><div class="loading"><div class="spinner"></div></div></div>
           <div class="vac-add-row">
             <label>Tage <input type="number" id="um-vac-days" step="0.5" min="0" value="0" class="form-control form-control-sm"></label>
             <label>Rest verfällt
