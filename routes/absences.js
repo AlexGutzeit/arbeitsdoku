@@ -1,4 +1,5 @@
 const express = require('express');
+const PDFDocument = require('pdfkit');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
@@ -194,32 +195,80 @@ router.get('/summary', authenticate, (req, res) => {
   res.json({ summary, totalUniqueDays, urlaubTageJahr, year, vacation });
 });
 
+// Urlaubskonto je aktivem Nicht-Admin-Nutzer (gemeinsame Quelle für JSON- und PDF-Ausgabe).
+function buildVacationOverview(db, year, now) {
+  const users = db.prepare("SELECT id, name FROM users WHERE role != 'admin' AND COALESCE(active,1) = 1 ORDER BY name").all();
+  const from = `${year}-01-01`, to = `${year}-12-31`;
+  return users.map(u => {
+    const v = vacationAccount(db, u.id, year, now);
+    const { summary } = computeAbsenceSummary(db, u.id, from, to);
+    return {
+      user_id: u.id, name: u.name,
+      anspruch: v.anspruch, uebertrag: v.uebertrag, gesamtanspruch: v.verfuegbar,
+      genommen: v.genommen, geplant: v.geplant, nochZuPlanen: v.nochZuPlanen,
+      beantragt: countUrlaubPendingInYear(db, u.id, year),
+      krank: summary.krank || 0, fza: summary.freizeitausgleich || 0,
+    };
+  });
+}
+
 // GET /api/absences/vacation-overview?year=YYYY — Urlaubskonto je Mitarbeiter (nur Manager/Buchhalter, read).
 router.get('/vacation-overview', authenticate, (req, res) => {
   if (!isManager(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
   const db = getDb();
   const year = parseInt(req.query.year, 10) || new Date().getFullYear();
   const now = new Date();
-  const users = db.prepare("SELECT id, name FROM users WHERE role != 'admin' AND COALESCE(active,1) = 1 ORDER BY name").all();
-  const from = `${year}-01-01`, to = `${year}-12-31`;
-  const rows = users.map(u => {
-    const v = vacationAccount(db, u.id, year, now);
-    const { summary } = computeAbsenceSummary(db, u.id, from, to);
-    return {
-      user_id: u.id,
-      name: u.name,
-      anspruch: v.anspruch,
-      uebertrag: v.uebertrag,
-      gesamtanspruch: v.verfuegbar,
-      genommen: v.genommen,
-      geplant: v.geplant,
-      nochZuPlanen: v.nochZuPlanen,
-      beantragt: countUrlaubPendingInYear(db, u.id, year),
-      krank: summary.krank || 0,
-      fza: summary.freizeitausgleich || 0,
-    };
-  });
-  res.json({ year, stand: now.toISOString().slice(0, 10), rows });
+  res.json({ year, stand: now.toISOString().slice(0, 10), rows: buildVacationOverview(db, year, now) });
+});
+
+// GET /api/absences/vacation-overview.pdf?year=YYYY — dieselbe Tabelle als echtes Server-PDF (Download).
+router.get('/vacation-overview.pdf', authenticate, (req, res) => {
+  if (!isManager(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
+  const db = getDb();
+  const year = parseInt(req.query.year, 10) || new Date().getFullYear();
+  const now = new Date();
+  const rows = buildVacationOverview(db, year, now);
+
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 40 });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Urlaubsuebersicht_${year}.pdf"`);
+  doc.pipe(res);
+
+  doc.fontSize(15).font('Helvetica-Bold').fillColor('#111').text(`Urlaubsübersicht ${year}`, 40, 40);
+  doc.fontSize(9).font('Helvetica').fillColor('#555').text(`Stand: ${now.toLocaleDateString('de-DE')}`);
+  doc.moveDown(0.6).fillColor('#111');
+
+  const cols = [
+    { k: 'name', label: 'Mitarbeiter', w: 150, align: 'left' },
+    { k: 'anspruch', label: 'Anspruch', w: 62 },
+    { k: 'uebertrag', label: 'Übriger Vorjahr', w: 76 },
+    { k: 'gesamtanspruch', label: 'Gesamtanspruch', w: 82 },
+    { k: 'genommen', label: 'Genommen', w: 66 },
+    { k: 'geplant', label: 'Geplant & akzept.', w: 84 },
+    { k: 'nochZuPlanen', label: 'Noch zu planen', w: 78 },
+    { k: 'beantragt', label: 'Beantragt (offen)', w: 84 },
+    { k: 'krank', label: 'Krank', w: 46 },
+    { k: 'fza', label: 'FZA', w: 42 },
+  ];
+  const totalW = cols.reduce((s, c) => s + c.w, 0);
+  const x0 = 40, rowH = 18;
+  let y = doc.y;
+  const drawRow = (vals, header) => {
+    if (y + rowH > doc.page.height - 40) { doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 }); y = 40; }
+    if (header) { doc.rect(x0, y, totalW, rowH).fill('#f3f4f6'); }
+    doc.font(header ? 'Helvetica-Bold' : 'Helvetica').fontSize(header ? 7.5 : 8.5).fillColor(header ? '#333' : '#111');
+    let x = x0;
+    for (const c of cols) {
+      doc.text(String(vals[c.k]), x + 3, y + 5, { width: c.w - 6, align: c.align || 'right', lineBreak: false });
+      x += c.w;
+    }
+    doc.moveTo(x0, y + rowH).lineTo(x0 + totalW, y + rowH).lineWidth(0.3).strokeColor('#cbd5e1').stroke();
+    y += rowH;
+  };
+  drawRow(cols.reduce((o, c) => { o[c.k] = c.label; return o; }, {}), true);
+  for (const r of rows) drawRow(r, false);
+
+  doc.end();
 });
 
 // GET /api/absences/pending — offene Anträge für Manager-Ansicht (Posteingang)

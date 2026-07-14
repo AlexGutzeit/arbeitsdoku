@@ -1453,26 +1453,21 @@ async function renderVacationOverview() {
   };
   searchEl.addEventListener('input', e => { _vacOverviewSearch = e.target.value; applyFilter(); });
   applyFilter();
-  document.getElementById('vac-ov-pdf').addEventListener('click', () => printVacationOverview(_vacOverviewYear, standDE, rows));
+  document.getElementById('vac-ov-pdf').addEventListener('click', () => exportVacationOverviewPdf(_vacOverviewYear));
 }
 
-// Druck-/PDF-Ausgabe der Urlaubsübersicht (Browser „Als PDF speichern"). Kein Server-PDF nötig.
-function printVacationOverview(year, standDE, rows) {
-  const w = window.open('', '_blank');
-  if (!w) { toast('Popup blockiert – bitte erlauben', 'error'); return; }
-  const head = ['Mitarbeiter', 'Anspruch', 'Übriger Vorjahr', 'Gesamtanspruch', 'Genommen', 'Geplant & akzeptiert', 'Noch zu planen', 'Beantragt (offen)', 'Krank', 'FZA'];
-  const body = rows.map(r => [r.name, r.anspruch, r.uebertrag, r.gesamtanspruch, r.genommen, r.geplant, r.nochZuPlanen, r.beantragt, r.krank, r.fza]);
-  w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Urlaubsübersicht ${year}</title>
-    <style>body{font-family:Arial,sans-serif;margin:24px;color:#111}h1{font-size:18px}p{color:#555;font-size:12px}
-    table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{border:1px solid #ccc;padding:5px 7px;text-align:right}
-    th:first-child,td:first-child{text-align:left}thead{background:#f3f4f6}</style></head><body>
-    <h1>Urlaubsübersicht ${year}</h1><p>Stand: ${standDE}</p>
-    <table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-    <tbody>${body.map(r => `<tr>${r.map((c, i) => `<td>${String(c).replace(/</g, '&lt;')}</td>`).join('')}</tr>`).join('')}</tbody></table>
-    </body></html>`);
-  w.document.close();
-  w.focus();
-  setTimeout(() => { try { w.print(); } catch (e) {} }, 300);
+// Echtes Server-PDF der Urlaubsübersicht herunterladen (fetch mit Token → Blob, wie exportProjectCsv).
+async function exportVacationOverviewPdf(year) {
+  try {
+    const res = await fetch(`/api/absences/vacation-overview.pdf?year=${year}`, { headers: { Authorization: 'Bearer ' + S.token } });
+    if (!res.ok) { toast('PDF-Export fehlgeschlagen', 'error'); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = ((res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || `Urlaubsuebersicht_${year}.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { toast('PDF-Export fehlgeschlagen', 'error'); }
 }
 
 // --- Init ---

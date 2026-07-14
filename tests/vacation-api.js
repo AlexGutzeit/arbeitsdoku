@@ -76,6 +76,18 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     r = await req('GET', '/api/absences/vacation-overview?year=2026', maT);
     ok('MA → 403', r.status === 403, 'status=' + r.status);
 
+    // PDF-Export (echtes Server-PDF)
+    const pdf = await new Promise((resPromise) => {
+      const rq = http.request({ host: 'localhost', port: PORT, path: '/api/absences/vacation-overview.pdf?year=2026', method: 'GET', headers: { Authorization: 'Bearer ' + admin } }, x => {
+        const chunks = []; x.on('data', c => chunks.push(c)); x.on('end', () => resPromise({ status: x.statusCode, type: x.headers['content-type'], buf: Buffer.concat(chunks) }));
+      }); rq.end();
+    });
+    ok('PDF: 200 + application/pdf + %PDF-Header', pdf.status === 200 && /application\/pdf/.test(pdf.type || '') && pdf.buf.slice(0, 4).toString() === '%PDF', `status=${pdf.status} type=${pdf.type} head=${pdf.buf.slice(0, 4).toString()}`);
+    const pdfMa = await new Promise((resPromise) => {
+      const rq = http.request({ host: 'localhost', port: PORT, path: '/api/absences/vacation-overview.pdf?year=2026', method: 'GET', headers: { Authorization: 'Bearer ' + maT } }, x => { x.on('data', () => {}); x.on('end', () => resPromise(x.statusCode)); }); rq.end();
+    });
+    ok('PDF: MA → 403', pdfMa === 403, 'status=' + pdfMa);
+
     // ── Beantragt (pending) wird ausgewiesen, NICHT abgezogen + Warnung ──
     console.log('\nbeantragt + Warnung:');
     const pend = await req('POST', '/api/absences', admin, { type: 'urlaub', date_from: '2026-09-01', date_to: '2026-09-30', target_user_id: ma.id });

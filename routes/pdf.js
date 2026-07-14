@@ -5,7 +5,7 @@ const fs = require('fs');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { calcTargetHours, calcActualHours, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
-const { computeAbsenceSummary, countUrlaubDaysInYear } = require('./absence-days');
+const { computeAbsenceSummary, countUrlaubDaysInYear, vacationAccount } = require('./absence-days');
 
 function fmtH(val) {
   const neg = val < 0;
@@ -362,10 +362,10 @@ router.get('/export', authenticate, (req, res) => {
           doc.font('Helvetica').text(parts.join(', '), 40, y);
           y += 13;
 
-          // Urlaubstage genommen im aktuellen Kalenderjahr (Krank/Feiertage abgezogen)
-          const thisYear = new Date().getFullYear();
-          const urlaubJahr = countUrlaubDaysInYear(db, targetUid, thisYear);
-          doc.text(`Urlaubstage genommen (${thisYear}): ${urlaubJahr} Arbeitstage`, 40, y);
+          // Urlaubskonto des Zeitraum-Jahres (genommen/geplant/Rest + Anspruch inkl. Übertrag)
+          const vYear = parseInt(String(date_from).slice(0, 4), 10) || new Date().getFullYear();
+          const vac = vacationAccount(db, targetUid, vYear, new Date());
+          doc.text(`Urlaub ${vYear}: ${vac.genommen} genommen, ${vac.geplant} geplant, ${vac.nochZuPlanen} noch zu planen (Anspruch ${vac.anspruch} + Übertrag ${vac.uebertrag} = ${vac.verfuegbar} Arbeitstage)`, 40, y);
           y += 14;
         }
       }
