@@ -116,6 +116,19 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     r = await req('PUT', `/api/statistics/vacation/${ma.id}/start-carry`, maT, { days: 9 });
     ok('MA start-carry → 403', r.status === 403, 'status=' + r.status);
 
+    // ── Audit-Log: Anlegen/Ändern/Löschen + Start-Resturlaub protokolliert ──
+    console.log('\nAudit-Log:');
+    const ce = await req('POST', `/api/statistics/vacation/${ma.id}`, admin, { valid_from: '2027-01-01', days: 22, carryover_mode: 'never' });
+    const newId = ce.body.entitlements.find(e => e.valid_from === '2027-01-01').id;
+    await req('PUT', `/api/statistics/vacation/${ma.id}/${newId}`, admin, { valid_from: '2027-01-01', days: 26, carryover_mode: 'yearend' });
+    await req('DELETE', `/api/statistics/vacation/${ma.id}/${newId}`, admin);
+    const auditOf = async (action) => (await req('GET', `/api/audit?action=${action}&limit=50`, admin)).body.logs || [];
+    ok('vacation_create protokolliert (mit MA-Name)', (await auditOf('vacation_create')).some(l => /Uwe Urlauber/.test(l.details)));
+    ok('vacation_update protokolliert (mit „→")', (await auditOf('vacation_update')).some(l => /→/.test(l.details)));
+    ok('vacation_delete protokolliert („gelöscht")', (await auditOf('vacation_delete')).some(l => /gelöscht/.test(l.details)));
+    ok('vacation_startcarry_update protokolliert', (await auditOf('vacation_startcarry_update')).length > 0);
+    ok('Audit-Log nur Admin (MA → 403)', (await req('GET', '/api/audit', maT)).status === 403);
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nVacation-API: ${pass} bestanden, ${fail} fehlgeschlagen` + (fails.length ? `\nFehlgeschlagen: ${fails.join(', ')}` : ''));
   process.exit(fail === 0 ? 0 : 1);

@@ -359,6 +359,10 @@ const AUDIT_LABELS = {
   user_deactivate: 'Mitarbeiter ausgestellt',
   user_reactivate: 'Mitarbeiter wiedereingestellt',
   user_delete: 'Benutzer gelöscht',
+  vacation_create: 'Urlaubsanspruch angelegt',
+  vacation_update: 'Urlaubsanspruch geändert',
+  vacation_delete: 'Urlaubsanspruch gelöscht',
+  vacation_startcarry_update: 'Start-Resturlaub geändert',
 };
 
 let _audit = { action: '', from: '', to: '', logs: [], total: 0, offset: 0, limit: 100 };

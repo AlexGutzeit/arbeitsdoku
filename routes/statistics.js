@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
+const { logAudit } = require('../audit');
 
 const router = express.Router();
 
@@ -603,6 +604,11 @@ function listVacation(db, userId) {
     'SELECT id, valid_from, days, carryover_mode, carryover_until FROM vacation_entitlements WHERE user_id = ? ORDER BY valid_from DESC'
   ).all(userId);
 }
+// Audit-Helfer: jede Anlage/Änderung/Löschung von Anspruch, Verfall-Modus und Start-Resturlaub protokollieren.
+const VAC_MODE_TXT = { never: 'nie', yearend: 'zum Jahreswechsel', date: 'am Datum' };
+const vacModeTxt = (mode, until) => (mode === 'date' ? `am ${until || '?'} (Folgejahr)` : (VAC_MODE_TXT[mode] || mode));
+const vacUserName = (db, id) => { const u = db.prepare('SELECT name FROM users WHERE id = ?').get(id); return u ? u.name : ('#' + id); };
+const auditVac = (db, req, action, details) => logAudit(db, { userId: req.user.id, username: req.user.username, action, details, ip: req.ip });
 
 // Historie lesen (eigene oder – als Manager – jede)
 router.get('/vacation/:userId', authenticate, (req, res) => {
@@ -623,7 +629,9 @@ router.put('/vacation/:userId/start-carry', authenticate, (req, res) => {
   const days = parseFloat(String(req.body.days).replace(',', '.'));
   if (!isFinite(days)) return res.status(400).json({ error: 'Ungültiger Wert' });
   const db = getDb();
+  const before = db.prepare('SELECT vacation_start_carry FROM users WHERE id = ?').get(req.params.userId);
   db.prepare('UPDATE users SET vacation_start_carry = ? WHERE id = ?').run(days, req.params.userId);
+  auditVac(db, req, 'vacation_startcarry_update', `${vacUserName(db, req.params.userId)}: Start-Resturlaub ${(before && before.vacation_start_carry) || 0} → ${days} Tage`);
   res.json({ start_carry: days });
 });
 
@@ -640,6 +648,7 @@ router.post('/vacation/:userId', authenticate, (req, res) => {
   const db = getDb();
   db.prepare('INSERT INTO vacation_entitlements (user_id, valid_from, days, carryover_mode, carryover_until) VALUES (?, ?, ?, ?, ?)')
     .run(userId, req.body.valid_from, n.days, n.mode, n.until);
+  auditVac(db, req, 'vacation_create', `${vacUserName(db, userId)}: ${n.days} Tage ab ${req.body.valid_from}, Verfall ${vacModeTxt(n.mode, n.until)}`);
   res.json({ entitlements: listVacation(db, userId) });
 });
 
@@ -652,8 +661,10 @@ router.put('/vacation/:userId/:id', authenticate, (req, res) => {
   const n = normVacationBody(req.body);
   if (n.error) return res.status(400).json({ error: n.error });
   const db = getDb();
+  const b = db.prepare('SELECT valid_from, days, carryover_mode, carryover_until FROM vacation_entitlements WHERE id = ? AND user_id = ?').get(req.params.id, req.params.userId);
   db.prepare('UPDATE vacation_entitlements SET valid_from = ?, days = ?, carryover_mode = ?, carryover_until = ? WHERE id = ? AND user_id = ?')
     .run(req.body.valid_from, n.days, n.mode, n.until, req.params.id, req.params.userId);
+  if (b) auditVac(db, req, 'vacation_update', `${vacUserName(db, req.params.userId)}: ${b.days}→${n.days} Tage, ab ${b.valid_from}→${req.body.valid_from}, Verfall ${vacModeTxt(b.carryover_mode, b.carryover_until)}→${vacModeTxt(n.mode, n.until)}`);
   res.json({ entitlements: listVacation(db, req.params.userId) });
 });
 
@@ -663,7 +674,9 @@ router.delete('/vacation/:userId/:id', authenticate, (req, res) => {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
   const db = getDb();
+  const b = db.prepare('SELECT valid_from, days, carryover_mode, carryover_until FROM vacation_entitlements WHERE id = ? AND user_id = ?').get(req.params.id, req.params.userId);
   db.prepare('DELETE FROM vacation_entitlements WHERE id = ? AND user_id = ?').run(req.params.id, req.params.userId);
+  if (b) auditVac(db, req, 'vacation_delete', `${vacUserName(db, req.params.userId)}: ${b.days} Tage ab ${b.valid_from}, Verfall ${vacModeTxt(b.carryover_mode, b.carryover_until)} gelöscht`);
   res.json({ entitlements: listVacation(db, req.params.userId) });
 });
 
