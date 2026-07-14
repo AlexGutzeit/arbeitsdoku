@@ -192,8 +192,16 @@ router.get('/summary', authenticate, (req, res) => {
   const urlaubTageJahr = countUrlaubDaysInYear(db, targetUid, year); // Abwärtskompat (nur genommen+geplant gesamt)
   const vacation = vacationAccount(db, targetUid, year, new Date());
 
-  res.json({ summary, totalUniqueDays, urlaubTageJahr, year, vacation });
+  res.json({ summary, totalUniqueDays, urlaubTageJahr, year, vacation, anyVacationConfigured: anyVacationConfigured(db) });
 });
+
+// Ist irgendwo im Betrieb ein Urlaubsanspruch (Zeile oder Start-Resturlaub) hinterlegt? Steuert, ob die
+// NEUEN Resturlaub-Ansichten (Manager-Reiter etc.) überhaupt erscheinen (sonst bleibt alles bei der alten Sicht).
+function anyVacationConfigured(db) {
+  try {
+    return !!db.prepare('SELECT 1 FROM vacation_entitlements LIMIT 1').get();
+  } catch (_) { return false; }
+}
 
 // Urlaubskonto je aktivem Nicht-Admin-Nutzer (gemeinsame Quelle für JSON- und PDF-Ausgabe).
 function buildVacationOverview(db, year, now) {
@@ -203,7 +211,7 @@ function buildVacationOverview(db, year, now) {
     const v = vacationAccount(db, u.id, year, now);
     const { summary } = computeAbsenceSummary(db, u.id, from, to);
     return {
-      user_id: u.id, name: u.name,
+      user_id: u.id, name: u.name, configured: v.configured,
       anspruch: v.anspruch, uebertrag: v.uebertrag, gesamtanspruch: v.verfuegbar,
       genommen: v.genommen, geplant: v.geplant, nochZuPlanen: v.nochZuPlanen,
       beantragt: countUrlaubPendingInYear(db, u.id, year),
@@ -257,9 +265,12 @@ router.get('/vacation-overview.pdf', authenticate, (req, res) => {
     if (y + rowH > doc.page.height - 40) { doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 }); y = 40; }
     if (header) { doc.rect(x0, y, totalW, rowH).fill('#f3f4f6'); }
     doc.font(header ? 'Helvetica-Bold' : 'Helvetica').fontSize(header ? 7.5 : 8.5).fillColor(header ? '#333' : '#111');
+    const calcCols = ['anspruch', 'uebertrag', 'gesamtanspruch', 'nochZuPlanen'];
     let x = x0;
     for (const c of cols) {
-      doc.text(String(vals[c.k]), x + 3, y + 5, { width: c.w - 6, align: c.align || 'right', lineBreak: false });
+      let t = String(vals[c.k]);
+      if (!header && vals.configured === false && calcCols.includes(c.k)) t = '–'; // ohne Anspruch keine Rechnung
+      doc.text(t, x + 3, y + 5, { width: c.w - 6, align: c.align || 'right', lineBreak: false });
       x += c.w;
     }
     doc.moveTo(x0, y + rowH).lineTo(x0 + totalW, y + rowH).lineWidth(0.3).strokeColor('#cbd5e1').stroke();

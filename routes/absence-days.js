@@ -220,6 +220,10 @@ function vacationAccount(db, userId, year, now) {
 
   let uebertrag = 0;
   const startYear = firstEntitlementYear(db, userId);
+  // „konfiguriert" = es gibt mindestens eine Anspruchszeile. Solange nicht, ist kein Resturlaub
+  // berechenbar → die UI zeigt die alte Ansicht (nur genommene Tage). Ein Start-Resturlaub allein
+  // (ohne Anspruchszeile) hat kein Bezugsjahr und zählt daher NICHT als konfiguriert.
+  const configured = startYear != null;
   if (startYear != null && year >= startYear) {
     let carry = startCarry; // carry_in(startYear)
     for (let y = startYear; y < year; y++) {
@@ -240,6 +244,7 @@ function vacationAccount(db, userId, year, now) {
 
   const verfuegbar = anspruch + uebertrag;
   return {
+    configured,
     anspruch: rnd2(anspruch),
     uebertrag: rnd2(uebertrag),
     verfuegbar: rnd2(verfuegbar),

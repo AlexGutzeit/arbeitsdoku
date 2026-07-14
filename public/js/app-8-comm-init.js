@@ -1160,10 +1160,10 @@ async function renderAbsences() {
   if (!mainEl) return;
 
   const thisYear = new Date().getFullYear().toString();
-  let urlaubTageJahr = 0, myVac = null;
+  let urlaubTageJahr = 0, myVac = null, anyVacCfg = false;
   try {
     const sd = await api('GET', `/api/absences/summary?from=${thisYear}-01-01&to=${thisYear}-12-31`);
-    if (sd) { urlaubTageJahr = sd.urlaubTageJahr || 0; myVac = sd.vacation || null; }
+    if (sd) { urlaubTageJahr = sd.urlaubTageJahr || 0; myVac = sd.vacation || null; anyVacCfg = !!sd.anyVacationConfigured; }
   } catch(e) {}
 
   // Mein Posteingang (für alle Rollen): Manager-Änderungen die quittiert werden müssen
@@ -1330,8 +1330,11 @@ async function renderAbsences() {
   }).join('');
 
   const isMgr = isManagerRole();
-  const showVac = isMgr && _absTab === 'vacation';
-  const tabBar = isMgr ? `
+  // Manager-Reiter (neue Urlaubsübersicht) erst zeigen, wenn irgendwo ein Anspruch hinterlegt ist —
+  // sonst bleibt die Abwesenheits-Ansicht exakt wie bisher.
+  const showTabs = isMgr && anyVacCfg;
+  const showVac = showTabs && _absTab === 'vacation';
+  const tabBar = showTabs ? `
       <div class="absence-tabs">
         <button class="absence-tab ${_absTab === 'list' ? 'active' : ''}" data-tab="list">Liste</button>
         <button class="absence-tab ${_absTab === 'vacation' ? 'active' : ''}" data-tab="vacation">Urlaubsübersicht</button>
@@ -1340,7 +1343,7 @@ async function renderAbsences() {
     <div class="card" style="max-width:${showVac ? '1200px' : '900px'};margin:0 auto">
       <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
         <h2>&#128197; Abwesenheit</h2>
-        ${!isMgr ? `<span class="absence-counter">Urlaub ${thisYear}: ${myVac
+        ${!isMgr ? `<span class="absence-counter">Urlaub ${thisYear}: ${(myVac && myVac.configured)
           ? `<strong>${myVac.genommen}</strong> genommen · <strong>${myVac.geplant}</strong> geplant · <strong>${myVac.nochZuPlanen}</strong> verbleibend <span class="absence-counter-of">(von ${myVac.verfuegbar})</span>`
           : `<strong>${urlaubTageJahr} Arbeitstage</strong>`}</span>` : ''}
         ${showVac ? '' : '<button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>'}
@@ -1433,13 +1436,13 @@ async function renderVacationOverview() {
           <th>Beantragt (offen)</th><th>Krank</th><th>FZA</th>
         </tr></thead>
         <tbody>
-          ${rows.length ? rows.map(r => `<tr data-name="${esc(r.name.toLowerCase())}">
+          ${rows.length ? rows.map(r => { const cfg = r.configured; const d = '–'; return `<tr data-name="${esc(r.name.toLowerCase())}">
             <td class="vac-ov-name">${esc(r.name)}</td>
-            <td>${r.anspruch}</td><td>${r.uebertrag}</td><td><strong>${r.gesamtanspruch}</strong></td>
+            <td>${cfg ? r.anspruch : d}</td><td>${cfg ? r.uebertrag : d}</td><td><strong>${cfg ? r.gesamtanspruch : d}</strong></td>
             <td>${r.genommen}</td><td>${r.geplant}</td>
-            <td class="${r.nochZuPlanen < 0 ? 'vac-ov-neg' : ''}"><strong>${r.nochZuPlanen}</strong></td>
+            <td class="${cfg && r.nochZuPlanen < 0 ? 'vac-ov-neg' : ''}"><strong>${cfg ? r.nochZuPlanen : d}</strong></td>
             <td>${r.beantragt}</td><td>${r.krank}</td><td>${r.fza}</td>
-          </tr>`).join('') : '<tr><td colspan="10" class="absence-empty">Keine Mitarbeiter.</td></tr>'}
+          </tr>`; }).join('') : '<tr><td colspan="10" class="absence-empty">Keine Mitarbeiter.</td></tr>'}
         </tbody>
       </table>
     </div>`;

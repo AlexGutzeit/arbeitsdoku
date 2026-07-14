@@ -47,6 +47,11 @@ function eq(name, got, want) { assert(name + ` (=${want})`, got === want, 'ist '
   eq('  anspruch', a.anspruch, 0);
   eq('  uebertrag', a.uebertrag, 0);
   eq('  rest', a.rest, 0);
+  eq('  configured=false (keine Zeile)', a.configured, false);
+  // Start-Resturlaub ALLEIN (ohne Anspruchszeile) → weiterhin nicht konfiguriert
+  db.prepare('UPDATE users SET vacation_start_carry = 5 WHERE id = ?').run(uid);
+  eq('  configured=false (nur Start-Resturlaub, keine Zeile)', vacationAccount(db, uid, 2026, NOW).configured, false);
+  db.prepare('UPDATE users SET vacation_start_carry = 0 WHERE id = ?').run(uid);
 
   // Urlaubsblöcke (nur Wochentage): 2025 = 10 AT (02.–13.06.), 2026 Vergangenheit = 5 AT (01.–05.06.),
   // 2026 Zukunft = 5 AT (03.–07.08., nach NOW).
@@ -64,6 +69,7 @@ function eq(name, got, want) { assert(name + ` (=${want})`, got === want, 'ist '
   resetEnt(); seedUrlaub();
   insEnt.run(uid, '2025-01-01', 30, 'yearend', null);
   a = vacationAccount(db, uid, 2026, NOW);
+  eq('  configured=true (Zeile vorhanden)', a.configured, true);
   eq('  anspruch', a.anspruch, 30);
   eq('  uebertrag (verfällt)', a.uebertrag, 0);
   eq('  genommen (≤ heute)', a.genommen, 5);

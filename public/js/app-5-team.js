@@ -1250,16 +1250,18 @@ async function loadUserVacationStand(userId, year) {
   for (let yy = cur + 1; yy >= cur - 3; yy--) years.push(yy);
   try {
     const data = await api('GET', `/api/absences/summary?user_id=${userId}&from=${y}-01-01&to=${y}-12-31`);
-    const v = (data && data.vacation) || { anspruch: 0, uebertrag: 0, verfuegbar: 0, genommen: 0, geplant: 0, nochZuPlanen: 0 };
-    box.innerHTML = `
-      <span class="vac-stand-year">Stand
+    const v = (data && data.vacation) || { anspruch: 0, uebertrag: 0, verfuegbar: 0, genommen: 0, geplant: 0, nochZuPlanen: 0, configured: false };
+    const yearSel = `<span class="vac-stand-year">Stand
         <select class="form-control form-control-sm vac-stand-select">
           ${years.map(yy => `<option value="${yy}" ${yy === y ? 'selected' : ''}>${yy}</option>`).join('')}
         </select>:
-      </span>
-      <strong>${v.genommen}</strong> genommen · <strong>${v.geplant}</strong> geplant ·
-      <strong>${v.nochZuPlanen}</strong> noch zu planen
-      <span class="vac-stand-detail">(Anspruch ${v.anspruch} + Übertrag ${v.uebertrag} = ${v.verfuegbar})</span>`;
+      </span>`;
+    box.innerHTML = v.configured
+      ? `${yearSel}
+        <strong>${v.genommen}</strong> genommen · <strong>${v.geplant}</strong> geplant ·
+        <strong>${v.nochZuPlanen}</strong> noch zu planen
+        <span class="vac-stand-detail">(Anspruch ${v.anspruch} + Übertrag ${v.uebertrag} = ${v.verfuegbar})</span>`
+      : `${yearSel} <strong>${v.genommen}</strong> genommen · <span class="vac-stand-detail">noch kein Anspruch hinterlegt – Resturlaub wird erst mit Anspruch berechnet</span>`;
     box.querySelector('.vac-stand-select').addEventListener('change', (e) => loadUserVacationStand(userId, Number(e.target.value)));
   } catch (e) {}
 }

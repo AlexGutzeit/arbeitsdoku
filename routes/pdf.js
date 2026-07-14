@@ -362,13 +362,20 @@ router.get('/export', authenticate, (req, res) => {
           doc.font('Helvetica').text(parts.join(', '), 40, y);
           y += 13;
 
-          // Urlaubskonto des Zeitraum-Jahres: fette Überschrift, Daten in der nächsten Zeile.
+          // Urlaub des Zeitraum-Jahres. Ist ein Anspruch hinterlegt → volles Konto (fette Überschrift +
+          // Datenzeile); sonst die ALTE Zeile (nur genommene Tage), solange nichts gerechnet werden kann.
           const vYear = parseInt(String(date_from).slice(0, 4), 10) || new Date().getFullYear();
           const vac = vacationAccount(db, targetUid, vYear, new Date());
-          doc.font('Helvetica-Bold').text(`Urlaub ${vYear}:`, 40, y);
-          y += 13;
-          doc.font('Helvetica').text(`${vac.genommen} genommen, ${vac.geplant} geplant, ${vac.nochZuPlanen} noch zu planen (Anspruch ${vac.anspruch} + Übertrag ${vac.uebertrag} = ${vac.verfuegbar} Arbeitstage)`, 40, y);
-          y += 14;
+          if (vac.configured) {
+            doc.font('Helvetica-Bold').text(`Urlaub ${vYear}:`, 40, y);
+            y += 13;
+            doc.font('Helvetica').text(`${vac.genommen} genommen, ${vac.geplant} geplant, ${vac.nochZuPlanen} noch zu planen (Anspruch ${vac.anspruch} + Übertrag ${vac.uebertrag} = ${vac.verfuegbar} Arbeitstage)`, 40, y);
+            y += 14;
+          } else {
+            const urlaubJahr = countUrlaubDaysInYear(db, targetUid, vYear);
+            doc.font('Helvetica').text(`Urlaubstage genommen (${vYear}): ${urlaubJahr} Arbeitstage`, 40, y);
+            y += 14;
+          }
         }
       }
     }

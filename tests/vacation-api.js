@@ -28,6 +28,11 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     const ma = (await req('POST', '/api/users', admin, { username: 'urlauber', password: 'p', name: 'Uwe Urlauber', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user;
     const maT = await tok('urlauber', 'p');
 
+    // ── Frisch (nichts konfiguriert) → alte Ansicht ──
+    console.log('\nGate „nichts konfiguriert":');
+    let r0 = await req('GET', `/api/absences/summary?user_id=${ma.id}&from=2026-01-01&to=2026-12-31`, admin);
+    ok('frisch: vacation.configured=false + anyVacationConfigured=false', r0.body.vacation.configured === false && r0.body.anyVacationConfigured === false, JSON.stringify({ c: r0.body.vacation.configured, any: r0.body.anyVacationConfigured }));
+
     // ── Entitlement-CRUD + Rechte ──
     console.log('\nEntitlement-CRUD:');
     let r = await req('POST', `/api/statistics/vacation/${ma.id}`, admin, { valid_from: '2026-01-01', days: 30, carryover_mode: 'yearend' });
@@ -61,6 +66,7 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     console.log('\nsummary.vacation:');
     r = await req('GET', `/api/absences/summary?user_id=${ma.id}&from=2026-01-01&to=2026-12-31`, admin);
     const v = r.body.vacation;
+    ok('nach Anspruch: configured=true + anyVacationConfigured=true', v.configured === true && r.body.anyVacationConfigured === true);
     ok('anspruch 25', v.anspruch === 25, JSON.stringify(v));
     ok('genommen 5 (Vergangenheit)', v.genommen === 5);
     ok('geplant 5 (Zukunft)', v.geplant === 5);
@@ -73,6 +79,8 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     const row = r.body.rows.find(x => x.user_id === ma.id);
     ok('Spalten stimmen (Anspruch/genommen/geplant/nochZuPlanen)', row.anspruch === 25 && row.genommen === 5 && row.geplant === 5 && row.nochZuPlanen === 15, JSON.stringify(row));
     ok('gesamtanspruch = 25', row.gesamtanspruch === 25);
+    ok('konfigurierter MA → configured=true', row.configured === true);
+    ok('unkonfigurierter MA (Max) → configured=false', (r.body.rows.find(x => x.name === 'Max Mustermann') || {}).configured === false);
     r = await req('GET', '/api/absences/vacation-overview?year=2026', maT);
     ok('MA → 403', r.status === 403, 'status=' + r.status);
 

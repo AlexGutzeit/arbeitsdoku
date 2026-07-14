@@ -49,6 +49,11 @@ function req(method, p, token, body) {
     await p.waitForSelector('#login-user'); await p.type('#login-user', 'admin'); await p.type('#login-pass', pw);
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]');
 
+    // --- 0) Vor jeder Konfiguration: Manager sieht KEINE Urlaubs-Reiter (alte Ansicht bleibt) ---
+    await p.evaluate(() => { location.hash = '#/absences'; }); await sleep(900);
+    await p.waitForSelector('.card', { timeout: 8000 });
+    ok('vor Konfiguration: keine Manager-Reiter', await p.$$eval('.absence-tab', els => els.length) === 0);
+
     // --- 1) Mitarbeiter-Formular: Urlaubsanspruch anlegen ---
     await p.evaluate(() => { location.hash = '#/users'; }); await sleep(900);
     await p.waitForSelector('.edit-user');
