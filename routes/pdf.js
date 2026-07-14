@@ -356,16 +356,18 @@ router.get('/export', authenticate, (req, res) => {
             berufsschule: 'Berufsschule', innung: 'Innung'
           };
           const parts = Object.entries(typeDays).map(([t, d]) => `${d} ${d === 1 ? 'Tag' : 'Tage'} ${typeLabels[t] || t}`);
-          ensureSpace(40); // Abwesenheits-Unterblock (3 Zeilen) zusammenhalten
+          ensureSpace(56); // Abwesenheits-Unterblock (Überschrift + Daten, Urlaub-Überschrift + Daten) zusammenhalten
           doc.font('Helvetica-Bold').fontSize(9).fillColor('#333').text('Abwesenheiten im Zeitraum:', 40, y);
           y += 13;
           doc.font('Helvetica').text(parts.join(', '), 40, y);
           y += 13;
 
-          // Urlaubskonto des Zeitraum-Jahres (genommen/geplant/Rest + Anspruch inkl. Übertrag)
+          // Urlaubskonto des Zeitraum-Jahres: fette Überschrift, Daten in der nächsten Zeile.
           const vYear = parseInt(String(date_from).slice(0, 4), 10) || new Date().getFullYear();
           const vac = vacationAccount(db, targetUid, vYear, new Date());
-          doc.text(`Urlaub ${vYear}: ${vac.genommen} genommen, ${vac.geplant} geplant, ${vac.nochZuPlanen} noch zu planen (Anspruch ${vac.anspruch} + Übertrag ${vac.uebertrag} = ${vac.verfuegbar} Arbeitstage)`, 40, y);
+          doc.font('Helvetica-Bold').text(`Urlaub ${vYear}:`, 40, y);
+          y += 13;
+          doc.font('Helvetica').text(`${vac.genommen} genommen, ${vac.geplant} geplant, ${vac.nochZuPlanen} noch zu planen (Anspruch ${vac.anspruch} + Übertrag ${vac.uebertrag} = ${vac.verfuegbar} Arbeitstage)`, 40, y);
           y += 14;
         }
       }
