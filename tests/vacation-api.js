@@ -97,6 +97,17 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     ok('beantragt > 0 ausgewiesen', row2.beantragt > 0, 'beantragt=' + row2.beantragt);
     ok('nochZuPlanen UNVERÄNDERT (pending nicht abgezogen)', row2.nochZuPlanen === 15, 'nochZuPlanen=' + row2.nochZuPlanen);
 
+    // ── Start-Resturlaub (Übertrag) ──
+    console.log('\nStart-Resturlaub:');
+    r = await req('PUT', `/api/statistics/vacation/${ma.id}/start-carry`, admin, { days: 6 });
+    ok('start-carry gesetzt (200)', r.status === 200 && r.body.start_carry === 6, JSON.stringify(r.body));
+    r = await req('GET', `/api/statistics/vacation/${ma.id}`, admin);
+    ok('GET liefert start_carry', r.body.start_carry === 6);
+    r = await req('GET', `/api/absences/summary?user_id=${ma.id}&from=2026-01-01&to=2026-12-31`, admin);
+    ok('summary: Übertrag = 6, verfuegbar = 31', r.body.vacation.uebertrag === 6 && r.body.vacation.verfuegbar === 31, JSON.stringify(r.body.vacation));
+    r = await req('PUT', `/api/statistics/vacation/${ma.id}/start-carry`, maT, { days: 9 });
+    ok('MA start-carry → 403', r.status === 403, 'status=' + r.status);
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nVacation-API: ${pass} bestanden, ${fail} fehlgeschlagen` + (fails.length ? `\nFehlgeschlagen: ${fails.join(', ')}` : ''));
   process.exit(fail === 0 ? 0 : 1);

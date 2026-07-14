@@ -610,7 +610,21 @@ router.get('/vacation/:userId', authenticate, (req, res) => {
   if (req.user.role === 'mitarbeiter' && req.user.id !== Number(req.params.userId)) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
-  res.json({ entitlements: listVacation(db, req.params.userId) });
+  let start_carry = 0;
+  try { const u = db.prepare('SELECT vacation_start_carry FROM users WHERE id = ?').get(req.params.userId); start_carry = (u && u.vacation_start_carry) || 0; } catch (_) {}
+  res.json({ entitlements: listVacation(db, req.params.userId), start_carry });
+});
+
+// Start-Resturlaub (einmaliger Übertrag ins erste Anspruchsjahr) setzen (nur Chef/Admin)
+router.put('/vacation/:userId/start-carry', authenticate, (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'chef') {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  const days = parseFloat(String(req.body.days).replace(',', '.'));
+  if (!isFinite(days)) return res.status(400).json({ error: 'Ungültiger Wert' });
+  const db = getDb();
+  db.prepare('UPDATE users SET vacation_start_carry = ? WHERE id = ?').run(days, req.params.userId);
+  res.json({ start_carry: days });
 });
 
 // Anspruch-Zeile anlegen (nur Chef/Admin)

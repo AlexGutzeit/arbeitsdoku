@@ -114,6 +114,19 @@ function eq(name, got, want) { assert(name + ` (=${want})`, got === want, 'ist '
   a = vacationAccount(db, uid, 2026, NOW);
   eq('  rest negativ', a.rest, -2);
 
+  // --- Start-Resturlaub (Übertrag ins erste erfasste Jahr) ---
+  console.log('\nStart-Resturlaub:');
+  resetEnt(); resetAbs();
+  insEnt.run(uid, '2026-01-01', 30, 'yearend', null);
+  db.prepare('UPDATE users SET vacation_start_carry = 7 WHERE id = ?').run(uid);
+  a = vacationAccount(db, uid, 2026, NOW);
+  eq('  Übertrag = Startsaldo 7 (erstes Jahr)', a.uebertrag, 7);
+  eq('  verfuegbar = 30 + 7', a.verfuegbar, 37);
+  // Folgejahr: yearend → Startsaldo verfällt mit dem Jahr, kein Dauer-Effekt
+  a = vacationAccount(db, uid, 2027, '2027-07-15');
+  eq('  2027 (yearend): Übertrag 0', a.uebertrag, 0);
+  db.prepare('UPDATE users SET vacation_start_carry = 0 WHERE id = ?').run(uid);
+
   console.log(`\nVacation-Account: ${pass} bestanden, ${fail} fehlgeschlagen` + (fails.length ? `\nFehlgeschlagen: ${fails.join(', ')}` : ''));
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -933,6 +933,11 @@ async function showUserModal(user) {
         <div class="form-section">
           <label class="form-section-title">Urlaubsanspruch</label>
           <div id="um-vac-list"><div class="loading"><div class="spinner"></div></div></div>
+          <div class="vac-startcarry">
+            <label>Start-Resturlaub (Übertrag) <input type="number" id="um-vac-startcarry" step="0.5" value="0" class="form-control form-control-sm"></label>
+            <button type="button" class="btn btn-outline btn-sm" id="um-vac-startcarry-save">Übernehmen</button>
+            <span class="vac-startcarry-hint">einmaliger Übertrag ins erste erfasste Anspruchsjahr (wie Start-Überstunden)</span>
+          </div>
           <div class="vac-add-row">
             <label>Tage <input type="number" id="um-vac-days" step="0.5" min="0" value="0" class="form-control form-control-sm"></label>
             <label>Rest verfällt
@@ -1040,6 +1045,14 @@ async function showUserModal(user) {
         await api('POST', `/api/statistics/vacation/${user.id}`, body);
         toast('Urlaubsanspruch gespeichert', 'success');
         await loadUserVacation(user.id);
+        await loadUserVacationStand(user.id);
+      } catch (e) { toast(e.message, 'error'); }
+    });
+    document.getElementById('um-vac-startcarry-save').addEventListener('click', async () => {
+      const days = parseFloat(String(document.getElementById('um-vac-startcarry').value).replace(',', '.')) || 0;
+      try {
+        await api('PUT', `/api/statistics/vacation/${user.id}/start-carry`, { days });
+        toast('Start-Resturlaub gespeichert', 'success');
         await loadUserVacationStand(user.id);
       } catch (e) { toast(e.message, 'error'); }
     });
@@ -1164,6 +1177,8 @@ async function loadUserVacation(userId) {
   try {
     const data = await api('GET', `/api/statistics/vacation/${userId}`);
     if (!data) return;
+    const sc = document.getElementById('um-vac-startcarry');
+    if (sc) sc.value = data.start_carry || 0;
     const ents = data.entitlements || [];
     if (!ents.length) {
       container.innerHTML = '<div class="vac-empty">Noch kein Urlaubsanspruch hinterlegt – es wird mit 0 gerechnet.</div>';

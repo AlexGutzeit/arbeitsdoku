@@ -214,10 +214,14 @@ function vacationAccount(db, userId, year, now) {
   const { genommen, geplant } = urlaubSplitInYear(db, userId, year, nowStr);
   const anspruch = entitlementFor(db, userId, year).days;
 
+  // Start-Resturlaub = einmaliger Übertrag ins erste erfasste Anspruchsjahr (carry_in(startYear)).
+  let startCarry = 0;
+  try { const r = db.prepare('SELECT vacation_start_carry FROM users WHERE id = ?').get(userId); startCarry = (r && r.vacation_start_carry) || 0; } catch (_) {}
+
   let uebertrag = 0;
   const startYear = firstEntitlementYear(db, userId);
-  if (startYear != null && startYear < year) {
-    let carry = 0;
+  if (startYear != null && year >= startYear) {
+    let carry = startCarry; // carry_in(startYear)
     for (let y = startYear; y < year; y++) {
       const ent = entitlementFor(db, userId, y);
       const split = urlaubSplitInYear(db, userId, y, nowStr);
@@ -231,7 +235,7 @@ function vacationAccount(db, userId, year, now) {
         carry = 0; // 'yearend' (Standard)
       }
     }
-    uebertrag = carry;
+    uebertrag = carry; // carry_in(year); bei year==startYear = startCarry
   }
 
   const verfuegbar = anspruch + uebertrag;

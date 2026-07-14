@@ -1061,6 +1061,11 @@ function ensureVacationSchema(targetDb) {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
     `);
+    // Start-Resturlaub (einmaliger Übertrag ins erste erfasste Anspruchsjahr), analog start_overtime.
+    const uCols = targetDb.prepare("PRAGMA table_info(users)").all();
+    if (!uCols.some(c => c.name === 'vacation_start_carry')) {
+      targetDb.exec("ALTER TABLE users ADD COLUMN vacation_start_carry REAL DEFAULT 0");
+    }
   } catch (e) {
     console.error('ensureVacationSchema fehlgeschlagen:', e.message);
   }
