@@ -373,7 +373,8 @@ router.get('/export', authenticate, (req, res) => {
             y += 14;
           } else {
             const urlaubJahr = countUrlaubDaysInYear(db, targetUid, vYear);
-            doc.font('Helvetica').text(`Urlaubstage genommen (${vYear}): ${urlaubJahr} Arbeitstage`, 40, y);
+            doc.font('Helvetica-Bold').text(`Urlaubstage genommen (${vYear})`, 40, y, { continued: true });
+            doc.font('Helvetica').text(`: ${urlaubJahr} Arbeitstage`);
             y += 14;
           }
         }
