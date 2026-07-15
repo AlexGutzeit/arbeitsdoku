@@ -657,6 +657,17 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .toast.success { background: var(--success); }
 .toast.warning { background: #b45309; }
 
+/* Passwort-Policy: Live-Checkliste (grün ✓ / rot ✗) + Feld-Einfärbung */
+.pw-reqs { list-style: none; margin: 0.35rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.15rem 0.9rem; font-size: 0.78rem; }
+.pw-reqs li { display: flex; align-items: center; gap: 0.3rem; }
+.pw-reqs li::before { font-weight: 700; width: 1em; text-align: center; }
+.pw-reqs li.ok { color: var(--success); }
+.pw-reqs li.ok::before { content: '\2713'; }
+.pw-reqs li.bad { color: var(--danger); }
+.pw-reqs li.bad::before { content: '\2717'; }
+input.pw-valid { border-color: var(--success) !important; box-shadow: 0 0 0 1px var(--success); }
+input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px var(--danger); }
+
 /* Urlaubskonto: Anspruch-Editor, Stand, Manager-Reiter + Übersichtstabelle */
 .vac-empty { font-size: 0.85rem; color: var(--text-lighter); padding: 0.3rem 0; }
 .vac-startcarry { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }

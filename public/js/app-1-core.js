@@ -561,6 +561,31 @@ function toast(msg, type, duration) {
   t._hideTimer = setTimeout(() => t.classList.remove('show'), duration || 3000);
 }
 
+// Passwort-Policy (spiegelt routes/users.js passwordPolicyError) — für die Live-Anzeige beim Setzen.
+function passwordChecks(pw) {
+  pw = pw || '';
+  return [
+    { ok: pw.length >= 8, text: 'Mindestens 8 Zeichen' },
+    { ok: /[a-z]/.test(pw), text: 'Kleinbuchstabe' },
+    { ok: /[A-Z]/.test(pw), text: 'Großbuchstabe' },
+    { ok: /[0-9]/.test(pw), text: 'Ziffer' },
+    { ok: /[^A-Za-z0-9]/.test(pw), text: 'Sonderzeichen' },
+  ];
+}
+function passwordAllOk(pw) { return (pw || '').length <= 72 && passwordChecks(pw).every(c => c.ok); }
+// Hängt Live-Feedback an ein Passwortfeld: färbt das Feld rot/grün und rendert die Checkliste (grün ✓ / rot ✗).
+function wirePwField(input, list) {
+  if (!input) return;
+  const render = () => {
+    const pw = input.value;
+    if (list) list.innerHTML = passwordChecks(pw).map(c => `<li class="${c.ok ? 'ok' : 'bad'}">${esc(c.text)}</li>`).join('');
+    input.classList.remove('pw-valid', 'pw-invalid');
+    if (pw) input.classList.add(passwordAllOk(pw) ? 'pw-valid' : 'pw-invalid');
+  };
+  input.addEventListener('input', render);
+  render();
+}
+
 // --- Gestylte Dialoge (ersetzen native confirm()/prompt()) ---
 // confirmModal: Promise<boolean> — true bei OK, false bei Abbrechen/Esc/Outside-Klick.
 function confirmModal(message, opts = {}) {

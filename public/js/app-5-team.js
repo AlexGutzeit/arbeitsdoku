@@ -856,6 +856,7 @@ async function showUserModal(user) {
           <button type="button" class="btn btn-outline btn-sm" id="um-reset-pw-btn">&#128274; Passwort zurücksetzen</button>
           <div id="um-reset-pw-form" style="display:none;margin-top:0.5rem;">
             <input type="password" class="form-control" id="um-pw-new" placeholder="Neues Passwort" style="margin-bottom:0.4rem;">
+            <ul class="pw-reqs" id="um-pw-reqs2"></ul>
             <input type="password" class="form-control" id="um-pw-repeat" placeholder="Wiederholen">
             <div style="display:flex;gap:0.5rem;margin-top:0.4rem;">
               <button type="button" class="btn btn-primary btn-sm" id="um-pw-save">Speichern</button>
@@ -866,6 +867,8 @@ async function showUserModal(user) {
         <div class="form-group">
           <label>Passwort</label>
           <input type="password" class="form-control" id="um-password" required>
+          <ul class="pw-reqs" id="um-pw-reqs"></ul>
+          <input type="password" class="form-control" id="um-password-repeat" placeholder="Passwort wiederholen" style="margin-top:0.4rem;">
         </div>`}
         <div class="form-row">
           <div class="form-group">
@@ -965,6 +968,11 @@ async function showUserModal(user) {
   document.getElementById('um-cancel').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
+  // Live-Passwort-Prüfung (Feld färbt sich rot/grün, Checkliste ✓/✗). Anlegen: Passwortfeld; Bearbeiten:
+  // das Zurücksetzen-Feld (existiert im DOM, auch wenn eingeklappt).
+  if (!isEdit) wirePwField(document.getElementById('um-password'), document.getElementById('um-pw-reqs'));
+  else wirePwField(document.getElementById('um-pw-new'), document.getElementById('um-pw-reqs2'));
+
   // Planungsrecht-Stufen koppeln: „alle" schließt „sich" zwingend ein.
   const planSelfCb = document.getElementById('um-can-plan');
   const planAllCb = document.getElementById('um-can-plan-all');
@@ -992,6 +1000,8 @@ async function showUserModal(user) {
       const pw1 = document.getElementById('um-pw-new').value;
       const pw2 = document.getElementById('um-pw-repeat').value;
       if (!pw1) { toast('Passwort eingeben', 'error'); return; }
+      if (!passwordAllOk(pw1)) { toast('Passwort erfüllt die Anforderungen nicht', 'error'); return; }
+      if (pw1.toLowerCase() === user.username.toLowerCase()) { toast('Passwort darf nicht dem Benutzernamen entsprechen', 'error'); return; }
       if (pw1 !== pw2) { toast('Passwörter stimmen nicht überein', 'error'); return; }
       try {
         await api('POST', `/api/users/${user.id}/reset-password`, { password: pw1 });
@@ -1085,7 +1095,11 @@ async function showUserModal(user) {
         toast('Mitarbeiter aktualisiert', 'success');
       } else {
         const pw = document.getElementById('um-password').value;
+        const pwRepeat = document.getElementById('um-password-repeat').value;
         if (!pw) { toast('Passwort erforderlich', 'error'); return; }
+        if (!passwordAllOk(pw)) { toast('Passwort erfüllt die Anforderungen nicht', 'error'); return; }
+        if (pw.toLowerCase() === (body.username || '').toLowerCase()) { toast('Passwort darf nicht dem Benutzernamen entsprechen', 'error'); return; }
+        if (pw !== pwRepeat) { toast('Passwörter stimmen nicht überein', 'error'); return; }
         body.password = pw;
         await api('POST', '/api/users', body);
         toast('Mitarbeiter erstellt', 'success');
