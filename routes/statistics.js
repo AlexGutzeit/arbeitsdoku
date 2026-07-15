@@ -586,7 +586,18 @@ router.delete('/targets/:userId/:id', authenticate, (req, res) => {
 // Versioniert wie user_target_hours: je Zeile { valid_from, days, carryover_mode, carryover_until }.
 // carryover_mode: 'never' | 'yearend' | 'date'; carryover_until nur bei 'date' (Monat-Tag 'MM-DD').
 const VAC_MODES = ['never', 'yearend', 'date'];
+// Kalendarisch gültiges ISO-Datum (YYYY-MM-DD)? (B4 — verhindert, dass Unsinns-Strings in valid_from landen
+// und die String-Vergleiche `valid_from <= …`/`MIN(valid_from)` still verfälschen.)
+const VAC_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function isValidVacDate(s) {
+  if (typeof s !== 'string' || !VAC_DATE_RE.test(s)) return false;
+  const d = new Date(s + 'T12:00:00');
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+// Tage je Monat (Februar 29, weil der Verfall in einem Schaltjahr liegen kann) — für S2.
+const VAC_DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 function normVacationBody(body) {
+  if (!isValidVacDate(body.valid_from)) return { error: 'Gültig-ab-Datum fehlt oder ungültig (YYYY-MM-DD)' };
   const days = Math.max(0, parseFloat(String(body.days).replace(',', '.')) || 0);
   let mode = VAC_MODES.includes(body.carryover_mode) ? body.carryover_mode : 'yearend';
   let until = null;
@@ -594,10 +605,10 @@ function normVacationBody(body) {
     const m = /^(\d{2})-(\d{2})$/.exec(String(body.carryover_until || '').trim());
     if (!m) return { error: 'Verfallsdatum (MM-TT) fehlt oder ungültig' };
     const mm = +m[1], dd = +m[2];
-    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return { error: 'Verfallsdatum ungültig' };
+    if (mm < 1 || mm > 12 || dd < 1 || dd > VAC_DAYS_IN_MONTH[mm - 1]) return { error: 'Verfallsdatum ungültig (unmöglicher Tag)' };
     until = `${m[1]}-${m[2]}`;
   }
-  return { days, mode, until };
+  return { valid_from: body.valid_from, days, mode, until };
 }
 function listVacation(db, userId) {
   return db.prepare(
@@ -642,13 +653,12 @@ router.post('/vacation/:userId', authenticate, (req, res) => {
   }
   const userId = parseInt(req.params.userId, 10);
   if (!userId || userId < 1) return res.status(400).json({ error: 'Ungültige Benutzer-ID' });
-  if (!req.body.valid_from) return res.status(400).json({ error: 'Gültig-ab-Datum ist Pflichtfeld' });
-  const n = normVacationBody(req.body);
+  const n = normVacationBody(req.body); // prüft valid_from-Format (B4) + carryover_until (S2)
   if (n.error) return res.status(400).json({ error: n.error });
   const db = getDb();
   db.prepare('INSERT INTO vacation_entitlements (user_id, valid_from, days, carryover_mode, carryover_until) VALUES (?, ?, ?, ?, ?)')
-    .run(userId, req.body.valid_from, n.days, n.mode, n.until);
-  auditVac(db, req, 'vacation_create', `${vacUserName(db, userId)}: ${n.days} Tage ab ${req.body.valid_from}, Verfall ${vacModeTxt(n.mode, n.until)}`);
+    .run(userId, n.valid_from, n.days, n.mode, n.until);
+  auditVac(db, req, 'vacation_create', `${vacUserName(db, userId)}: ${n.days} Tage ab ${n.valid_from}, Verfall ${vacModeTxt(n.mode, n.until)}`);
   res.json({ entitlements: listVacation(db, userId) });
 });
 
@@ -657,14 +667,13 @@ router.put('/vacation/:userId/:id', authenticate, (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'chef') {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
-  if (!req.body.valid_from) return res.status(400).json({ error: 'Gültig-ab-Datum ist Pflichtfeld' });
-  const n = normVacationBody(req.body);
+  const n = normVacationBody(req.body); // prüft valid_from-Format (B4) + carryover_until (S2)
   if (n.error) return res.status(400).json({ error: n.error });
   const db = getDb();
   const b = db.prepare('SELECT valid_from, days, carryover_mode, carryover_until FROM vacation_entitlements WHERE id = ? AND user_id = ?').get(req.params.id, req.params.userId);
   db.prepare('UPDATE vacation_entitlements SET valid_from = ?, days = ?, carryover_mode = ?, carryover_until = ? WHERE id = ? AND user_id = ?')
-    .run(req.body.valid_from, n.days, n.mode, n.until, req.params.id, req.params.userId);
-  if (b) auditVac(db, req, 'vacation_update', `${vacUserName(db, req.params.userId)}: ${b.days}→${n.days} Tage, ab ${b.valid_from}→${req.body.valid_from}, Verfall ${vacModeTxt(b.carryover_mode, b.carryover_until)}→${vacModeTxt(n.mode, n.until)}`);
+    .run(n.valid_from, n.days, n.mode, n.until, req.params.id, req.params.userId);
+  if (b) auditVac(db, req, 'vacation_update', `${vacUserName(db, req.params.userId)}: ${b.days}→${n.days} Tage, ab ${b.valid_from}→${n.valid_from}, Verfall ${vacModeTxt(b.carryover_mode, b.carryover_until)}→${vacModeTxt(n.mode, n.until)}`);
   res.json({ entitlements: listVacation(db, req.params.userId) });
 });
 

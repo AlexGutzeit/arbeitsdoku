@@ -44,6 +44,17 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     ok('PUT ändert Tage + Verfall (date)', r.body.entitlements[0].days === 25 && r.body.entitlements[0].carryover_mode === 'date' && r.body.entitlements[0].carryover_until === '03-31');
     r = await req('PUT', `/api/statistics/vacation/${ma.id}/${eid}`, admin, { valid_from: '2026-01-01', days: 25, carryover_mode: 'date' });
     ok('PUT date ohne Datum → 400', r.status === 400, 'status=' + r.status);
+
+    // ── B4: valid_from-Format + S2: unmögliche Verfall-Tage ──
+    ok('B4: valid_from Unsinn ("heute") → 400', (await req('POST', `/api/statistics/vacation/${ma.id}`, admin, { valid_from: 'heute', days: 10, carryover_mode: 'yearend' })).status === 400);
+    ok('B4: valid_from unmöglicher Tag (2026-13-40) → 400', (await req('POST', `/api/statistics/vacation/${ma.id}`, admin, { valid_from: '2026-13-40', days: 10, carryover_mode: 'yearend' })).status === 400);
+    ok('B4: valid_from dt. Format (15.07.2026) → 400', (await req('POST', `/api/statistics/vacation/${ma.id}`, admin, { valid_from: '15.07.2026', days: 10, carryover_mode: 'yearend' })).status === 400);
+    ok('B4: valid_from fehlt → 400', (await req('POST', `/api/statistics/vacation/${ma.id}`, admin, { days: 10, carryover_mode: 'yearend' })).status === 400);
+    ok('S2: carryover_until unmöglicher Tag (02-30) → 400', (await req('POST', `/api/statistics/vacation/${ma.id}`, admin, { valid_from: '2027-01-01', days: 10, carryover_mode: 'date', carryover_until: '02-30' })).status === 400);
+    ok('S2: carryover_until 02-29 (Schaltjahr) erlaubt → 200', (await req('POST', `/api/statistics/vacation/${ma.id}`, admin, { valid_from: '2028-01-01', days: 10, carryover_mode: 'date', carryover_until: '02-29' })).status === 200);
+    // Aufräumen: die beiden zusätzlich angelegten Zeilen (2027/2028) wieder entfernen, damit die weiteren Asserts stimmen
+    { const list = (await req('GET', `/api/statistics/vacation/${ma.id}`, admin)).body.entitlements; for (const e of list) if (e.valid_from === '2028-01-01') await req('DELETE', `/api/statistics/vacation/${ma.id}/${e.id}`, admin); }
+
     // zurück auf yearend/25
     await req('PUT', `/api/statistics/vacation/${ma.id}/${eid}`, admin, { valid_from: '2026-01-01', days: 25, carryover_mode: 'yearend' });
 
