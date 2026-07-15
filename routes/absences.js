@@ -25,16 +25,21 @@ function tooLongComment(c) { return typeof c === 'string' && c.length > COMMENT_
 
 // Hinweis (kein Block), wenn ein Urlaubs-Antrag den verfügbaren Resturlaub überschreitet.
 // Zählt genehmigt (genommen+geplant) + offen beantragt gegen den Gesamtanspruch des Jahres.
-function urlaubWarning(db, uid, type, dateFrom) {
+// (B5) Bei jahresübergreifendem Urlaub (z. B. 28.12.–05.01.) wird JEDES betroffene Jahr geprüft,
+// nicht nur das Startjahr — die Warnung nennt das erste überzogene Jahr.
+function urlaubWarning(db, uid, type, dateFrom, dateTo) {
   if (type !== 'urlaub' || uid == null) return null;
-  const year = parseInt(String(dateFrom).slice(0, 4), 10);
-  if (!year) return null;
-  const v = vacationAccount(db, uid, year, new Date());
-  const beantragt = countUrlaubPendingInYear(db, uid, year);
-  const verbraucht = v.genommen + v.geplant + beantragt;
-  if (verbraucht > v.verfuegbar) {
-    const rest = Math.round((v.verfuegbar - v.genommen - v.geplant) * 100) / 100;
-    return `Überschreitet den Resturlaub für ${year}: noch ${rest} Arbeitstage verfügbar.`;
+  const y0 = parseInt(String(dateFrom).slice(0, 4), 10);
+  const y1 = parseInt(String(dateTo || dateFrom).slice(0, 4), 10) || y0;
+  if (!y0) return null;
+  for (let year = y0; year <= y1; year++) {
+    const v = vacationAccount(db, uid, year, new Date());
+    const beantragt = countUrlaubPendingInYear(db, uid, year);
+    const verbraucht = v.genommen + v.geplant + beantragt;
+    if (verbraucht > v.verfuegbar) {
+      const rest = Math.round((v.verfuegbar - v.genommen - v.geplant) * 100) / 100;
+      return `Überschreitet den Resturlaub für ${year}: noch ${rest} Arbeitstage verfügbar.`;
+    }
   }
   return null;
 }
@@ -436,7 +441,7 @@ router.post('/', authenticate, (req, res) => {
 
   const absence = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(result.lastInsertRowid), db);
   broadcast('absences', req.headers['x-tab-id']);
-  res.status(201).json({ absence, warning: urlaubWarning(db, uid, type, date_from) });
+  res.status(201).json({ absence, warning: urlaubWarning(db, uid, type, date_from, date_to) });
 
   // Push analog Abwesenheits-Badge:
   const label = TYPE_LABELS[type] || type;
@@ -681,7 +686,7 @@ router.post('/:id/approve', authenticate, (req, res) => {
 
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
-  res.json({ absence: updated, warning: urlaubWarning(db, updated.user_id, updated.type, updated.date_from) });
+  res.json({ absence: updated, warning: urlaubWarning(db, updated.user_id, updated.type, updated.date_from, updated.date_to) });
 
   // Antrag genehmigt → der Mitarbeiter.
   if (updated.user_id && updated.user_id !== req.user.id) {

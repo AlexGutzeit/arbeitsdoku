@@ -8,15 +8,50 @@
 // Schedule-bewusst: nur Tage mit Soll-Stunden > 0; Wochenenden zählen nie.
 // Ohne hinterlegte Soll-Stunden gilt jeder Werktag als Arbeitstag (Verhalten wie zuvor).
 
+// Anstellungszeiträume (employment_periods) — für die Lücken-Erkennung bei ausgestellten/wieder
+// eingestellten Mitarbeitern. Konsistent zu statistics.js (dort schon in calcTargetHours genutzt).
+function getEmploymentPeriods(db, userId) {
+  try { return db.prepare('SELECT start_date, end_date FROM employment_periods WHERE user_id = ? ORDER BY start_date ASC').all(userId); }
+  catch (_) { return []; } // Tabelle fehlt (sehr altes Backup) → wie durchgehend angestellt
+}
+function isEmployedOn(periods, dateStr) {
+  if (!periods || periods.length === 0) return true;
+  for (const p of periods) if (p.start_date <= dateStr && (!p.end_date || dateStr <= p.end_date)) return true;
+  return false;
+}
+// Liegt dateStr in einer INTERNEN Lücke (Ausstellung→Wiedereinstellung), also nicht angestellt, aber
+// innerhalb der Gesamt-Spanne [erste Einstellung … offen/letztes Ende]? „Vor der ersten Einstellung" zählt
+// bewusst NICHT (sonst verlöre jeder frisch angelegte MA rückwirkend seinen davor liegenden Bestand).
+function inEmploymentHole(periods, dateStr) {
+  if (!periods || periods.length === 0) return false;
+  if (isEmployedOn(periods, dateStr)) return false;
+  if (dateStr < periods[0].start_date) return false;
+  if (periods.some(p => !p.end_date)) return true;
+  const lastEnd = periods.reduce((m, p) => (p.end_date && p.end_date > m ? p.end_date : m), '');
+  return dateStr <= lastEnd;
+}
+// Liegt das GANZE Jahr in einer internen Lücke? → Anspruch 0 (automatisch, wie Soll=0 in der Statistik).
+function yearFullyInHole(periods, year) {
+  if (!periods || periods.length === 0) return false;
+  const from = year + '-01-01', to = year + '-12-31';
+  if (periods.some(p => p.start_date <= to && (!p.end_date || p.end_date >= from))) return false; // eine Periode überlappt das Jahr
+  if (to < periods[0].start_date) return false;                                                    // ganzes Jahr vor erster Anstellung
+  if (periods.some(p => !p.end_date)) return true;
+  const lastEnd = periods.reduce((m, p) => (p.end_date && p.end_date > m ? p.end_date : m), '');
+  return from <= lastEnd;
+}
+
 // hasHours(dateStr): ist dieser Tag laut Schedule ein Arbeitstag? (kein Feiertag-Check)
 function buildScheduleCheck(db, userId) {
   const schedRows = db.prepare(
     'SELECT hours_mon,hours_tue,hours_wed,hours_thu,hours_fri,valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from ASC'
   ).all(userId);
+  const periods = getEmploymentPeriods(db, userId);
   const schKeys = [null, 'hours_mon', 'hours_tue', 'hours_wed', 'hours_thu', 'hours_fri', null];
   return function hasHours(dateStr) {
     const day = new Date(dateStr + 'T12:00:00').getDay();
     if (day === 0 || day === 6) return false;
+    if (inEmploymentHole(periods, dateStr)) return false; // (B6) interne Nicht-Anstellungslücke zählt nicht
     let active = schedRows[0];
     for (const t of schedRows) { if (t.valid_from <= dateStr) active = t; else break; }
     return active ? (active[schKeys[day]] || 0) > 0 : true;
@@ -185,12 +220,13 @@ function entitlementFor(db, userId, year) {
        WHERE user_id = ? AND valid_from <= ? ORDER BY valid_from DESC LIMIT 1`
     ).get(userId, cutoff);
   } catch (_) { row = null; }
-  if (!row) return { days: 0, carryover_mode: 'yearend', carryover_until: null };
-  return {
-    days: row.days || 0,
-    carryover_mode: row.carryover_mode || 'yearend',
-    carryover_until: row.carryover_until || null,
-  };
+  const base = row
+    ? { days: row.days || 0, carryover_mode: row.carryover_mode || 'yearend', carryover_until: row.carryover_until || null }
+    : { days: 0, carryover_mode: 'yearend', carryover_until: null };
+  // Volles internes Nicht-Anstellungsjahr (Ausstellung→Wiedereinstellung) → 0 Tage Anspruch. Der Verfall-Modus
+  // der eigentlich geltenden Zeile bleibt, damit der Übertrag konsistent (per Policy) behandelt wird.
+  if (yearFullyInHole(getEmploymentPeriods(db, userId), year)) base.days = 0;
+  return base;
 }
 
 // Jahr des ersten Anspruch-Eintrags (Start der Übertrag-Rekurrenz) oder null.

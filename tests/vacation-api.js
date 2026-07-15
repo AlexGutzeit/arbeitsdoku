@@ -140,6 +140,15 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     ok('vacation_startcarry_update protokolliert', (await auditOf('vacation_startcarry_update')).length > 0);
     ok('Audit-Log nur Admin (MA → 403)', (await req('GET', '/api/audit', maT)).status === 403);
 
+    // ── B5: jahresübergreifender Antrag prüft AUCH das Folgejahr ──
+    console.log('\nB5 — Antrag über den Jahreswechsel:');
+    const b5 = (await req('POST', '/api/users', admin, { username: 'grenzgang', password: 'Test1234!', name: 'Grenz Gang', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user;
+    await req('POST', `/api/statistics/vacation/${b5.id}`, admin, { valid_from: '2026-01-01', days: 30, carryover_mode: 'yearend' });
+    await req('POST', `/api/statistics/vacation/${b5.id}`, admin, { valid_from: '2027-01-01', days: 2, carryover_mode: 'yearend' }); // 2027 nur 2 Tage Anspruch
+    // Antrag 28.12.2026–08.01.2027: Dezember-Teil (≤30) passt, Januar-Teil (>2) sprengt 2027
+    const r5 = await req('POST', '/api/absences', admin, { type: 'urlaub', date_from: '2026-12-28', date_to: '2027-01-08', target_user_id: b5.id });
+    ok('Warnung nennt das Folgejahr 2027 (nicht nur 2026)', /2027/.test(r5.body.warning || ''), 'warning=' + r5.body.warning);
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nVacation-API: ${pass} bestanden, ${fail} fehlgeschlagen` + (fails.length ? `\nFehlgeschlagen: ${fails.join(', ')}` : ''));
   process.exit(fail === 0 ? 0 : 1);
