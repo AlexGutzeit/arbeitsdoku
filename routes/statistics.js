@@ -502,8 +502,8 @@ router.post('/targets/:userId', authenticate, (req, res) => {
 
   const db = getDb();
   const { hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from } = req.body;
-  if (!valid_from) {
-    return res.status(400).json({ error: 'Gültig-ab-Datum ist Pflichtfeld' });
+  if (!isValidVacDate(valid_from)) {
+    return res.status(400).json({ error: 'Gültig-ab-Datum fehlt oder ungültig (YYYY-MM-DD)' });
   }
 
   const hpw = (hours_mon || 0) + (hours_tue || 0) + (hours_wed || 0) + (hours_thu || 0) + (hours_fri || 0);
@@ -531,8 +531,8 @@ router.put('/targets/:userId/:id', authenticate, (req, res) => {
   }
   const db = getDb();
   const { hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from } = req.body;
-  if (!valid_from) {
-    return res.status(400).json({ error: 'Gültig-ab-Datum ist Pflichtfeld' });
+  if (!isValidVacDate(valid_from)) {
+    return res.status(400).json({ error: 'Gültig-ab-Datum fehlt oder ungültig (YYYY-MM-DD)' });
   }
 
   const hpw = (hours_mon || 0) + (hours_tue || 0) + (hours_wed || 0) + (hours_thu || 0) + (hours_fri || 0);
