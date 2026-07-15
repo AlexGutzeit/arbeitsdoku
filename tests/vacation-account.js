@@ -133,6 +133,32 @@ function eq(name, got, want) { assert(name + ` (=${want})`, got === want, 'ist '
   eq('  2027 (yearend): Übertrag 0', a.uebertrag, 0);
   db.prepare('UPDATE users SET vacation_start_carry = 0 WHERE id = ?').run(uid);
 
+  // --- Überziehung (Minusurlaub): Minus-Saldo wird zum Jahreswechsel VORGETRAGEN, nicht genullt ---
+  console.log('\nÜberziehung / Minus-Saldo:');
+  resetEnt(); resetAbs();
+  insEnt.run(uid, '2025-01-01', 30, 'yearend', null);
+  insEnt.run(uid, '2026-01-01', 30, 'yearend', null);
+  insUrlaub.run(uid, '2025-06-02', '2025-06-27', 'approved'); // 20 AT
+  insUrlaub.run(uid, '2025-07-07', '2025-07-18', 'approved'); // 10 AT
+  insUrlaub.run(uid, '2025-08-04', '2025-08-05', 'approved'); // 2 AT → 32 genommen (> 30 Anspruch)
+  a = vacationAccount(db, uid, 2026, NOW);
+  eq('  yearend: Übertrag 2026 = -2 (Minus vorgetragen, NICHT genullt)', a.uebertrag, -2);
+  eq('  yearend: Gesamtanspruch 2026 = 28 (30 − 2)', a.verfuegbar, 28);
+  // Gegenprobe: POSITIVER Rest verfällt bei yearend weiterhin (kein Vortrag)
+  resetAbs();
+  insUrlaub.run(uid, '2025-06-02', '2025-06-13', 'approved'); // 10 AT → Rest 2025 = +20
+  a = vacationAccount(db, uid, 2026, NOW);
+  eq('  yearend: positiver Rest verfällt weiter → Übertrag 0', a.uebertrag, 0);
+  // date-Modus: nach dem Verfall-Stichtag verfällt Positives, ein Minus wird trotzdem getragen
+  resetEnt(); resetAbs();
+  insEnt.run(uid, '2025-01-01', 30, 'date', '03-31');
+  insEnt.run(uid, '2026-01-01', 30, 'date', '03-31');
+  insUrlaub.run(uid, '2025-06-02', '2025-06-27', 'approved');
+  insUrlaub.run(uid, '2025-07-07', '2025-07-18', 'approved');
+  insUrlaub.run(uid, '2025-08-04', '2025-08-05', 'approved'); // 32
+  a = vacationAccount(db, uid, 2026, NOW); // NOW (15.07.) > 31.03. → Positives wäre verfallen
+  eq('  date nach Stichtag: Minus -2 wird getragen', a.uebertrag, -2);
+
   console.log(`\nVacation-Account: ${pass} bestanden, ${fail} fehlgeschlagen` + (fails.length ? `\nFehlgeschlagen: ${fails.join(', ')}` : ''));
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });

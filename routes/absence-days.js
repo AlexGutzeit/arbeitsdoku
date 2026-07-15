@@ -230,13 +230,16 @@ function vacationAccount(db, userId, year, now) {
       const ent = entitlementFor(db, userId, y);
       const split = urlaubSplitInYear(db, userId, y, nowStr);
       const leftover = ent.days + carry - split.genommen - split.geplant;
+      // Verfall betrifft nur NICHT genutzte (positive) Tage. Ein negativer Saldo (Überziehung/Minusurlaub)
+      // ist eine Schuld und wird IMMER vorgetragen — auch bei „yearend"/nach dem „date"-Stichtag. Deshalb bei
+      // Verfall: Math.min(leftover, 0) statt hart 0.
       if (ent.carryover_mode === 'never') {
         carry = leftover;
       } else if (ent.carryover_mode === 'date' && ent.carryover_until) {
         const expiry = String(y + 1) + '-' + ent.carryover_until; // 'MM-DD'
-        carry = nowStr > expiry ? 0 : leftover;
+        carry = nowStr > expiry ? Math.min(leftover, 0) : leftover;
       } else {
-        carry = 0; // 'yearend' (Standard)
+        carry = Math.min(leftover, 0); // 'yearend': positives verfällt, negatives (Minus) wird vorgetragen
       }
     }
     uebertrag = carry; // carry_in(year); bei year==startYear = startCarry
