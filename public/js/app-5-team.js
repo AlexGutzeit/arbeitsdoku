@@ -936,13 +936,13 @@ async function showUserModal(user) {
         <div class="form-section">
           <label class="form-section-title">Urlaubsanspruch</label>
           <div class="vac-startcarry">
-            <label>Start-Resturlaub (Übertrag) <input type="number" id="um-vac-startcarry" step="0.5" value="0" class="form-control form-control-sm"></label>
+            <label>Start-Resturlaub (Übertrag) <input type="text" inputmode="decimal" id="um-vac-startcarry" value="0" placeholder="z.B. 5 oder -0,5" class="form-control form-control-sm"></label>
             <button type="button" class="btn btn-outline btn-sm" id="um-vac-startcarry-save">Übernehmen</button>
             <span class="vac-startcarry-hint">Stand VOR der App / einmaliger Übertrag ins erste erfasste Anspruchsjahr</span>
           </div>
           <div id="um-vac-list"><div class="loading"><div class="spinner"></div></div></div>
           <div class="vac-add-row">
-            <label>Tage <input type="number" id="um-vac-days" step="0.5" min="0" value="0" class="form-control form-control-sm"></label>
+            <label>Tage <input type="text" inputmode="decimal" id="um-vac-days" value="0" placeholder="z.B. 30 oder 2,5" class="form-control form-control-sm"></label>
             <label>Rest verfällt
               <select id="um-vac-mode" class="form-control form-control-sm">
                 <option value="yearend">zum Jahreswechsel</option>
@@ -1192,7 +1192,7 @@ async function loadUserVacation(userId) {
     const data = await api('GET', `/api/statistics/vacation/${userId}`);
     if (!data) return;
     const sc = document.getElementById('um-vac-startcarry');
-    if (sc) sc.value = data.start_carry || 0;
+    if (sc) sc.value = String(data.start_carry || 0).replace('.', ',');
     const ents = data.entitlements || [];
     if (!ents.length) {
       container.innerHTML = '<div class="vac-empty">Noch kein Urlaubsanspruch hinterlegt – es wird mit 0 gerechnet.</div>';
@@ -1203,7 +1203,7 @@ async function loadUserVacation(userId) {
       ${ents.map(t => `
         <tr data-vac-id="${t.id}">
           <td><input type="date" class="form-control form-control-sm vac-from" value="${t.valid_from}"></td>
-          <td><input type="number" class="form-control form-control-sm vac-days" value="${t.days}" step="0.5" min="0"></td>
+          <td><input type="text" inputmode="decimal" class="form-control form-control-sm vac-days" value="${String(t.days).replace('.', ',')}"></td>
           <td>
             <select class="form-control form-control-sm vac-mode">
               <option value="yearend" ${t.carryover_mode === 'yearend' ? 'selected' : ''}>zum Jahreswechsel</option>
