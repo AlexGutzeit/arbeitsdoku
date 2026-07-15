@@ -6,6 +6,9 @@ const { logAudit } = require('../audit');
 
 const router = express.Router();
 
+// Gültige Rollen. 'admin' darf ausschließlich durch Admins vergeben werden (siehe POST/PUT).
+const ROLES = ['mitarbeiter', 'buchhalter', 'chef', 'admin'];
+
 // Felder, die im Audit-Log nachvollziehbar protokolliert werden (Label + Formatter).
 // Das Passwort wird BEWUSST nie geloggt.
 const USER_AUDIT_FIELDS = [
@@ -120,11 +123,10 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
     return res.status(400).json({ error: 'Benutzername, Passwort, Name und Rolle sind Pflichtfelder' });
   }
 
-  const validRoles = ['mitarbeiter', 'buchhalter', 'chef'];
-  if (req.user.role !== 'admin') {
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ error: 'Ungültige Rolle' });
-    }
+  // Nur bekannte Rollen; die Admin-Rolle ausschließlich durch Admins (Nicht-Admins: reduzierte Menge).
+  const allowedRoles = req.user.role === 'admin' ? ROLES : ['mitarbeiter', 'buchhalter', 'chef'];
+  if (!allowedRoles.includes(role)) {
+    return res.status(400).json({ error: 'Ungültige Rolle' });
   }
 
   const db = getDb();
@@ -169,6 +171,18 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   }
 
   const { username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload } = req.body;
+
+  // Rollen-Absicherung (serverseitig, nicht nur im Frontend): nur bekannte Rollen zulassen und die
+  // Admin-Rolle ausschließlich durch Admins vergeben — sonst könnte ein Chef per direktem API-Call einen
+  // Nutzer (oder sich selbst) zu Admin hochstufen. Greift nur bei tatsächlicher Rollen-Änderung.
+  if (role !== undefined && role !== user.role) {
+    if (!ROLES.includes(role)) {
+      return res.status(400).json({ error: 'Ungültige Rolle' });
+    }
+    if (role === 'admin' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Nur Admins dürfen die Admin-Rolle vergeben' });
+    }
+  }
 
   // Rechte-Stufen normalisieren: jeweils mitgeschicktes Feld übernehmen, sonst Bestand behalten;
   // „alle" impliziert immer „sich".
