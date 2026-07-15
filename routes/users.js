@@ -184,6 +184,13 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     }
   }
 
+  // Benutzernamen-Eindeutigkeit (wie beim Anlegen): ein umbenannter Nutzer darf keinen bereits vergebenen
+  // Namen bekommen — sonst gäbe es zwei Zeilen mit gleichem username und die Anmeldung wäre mehrdeutig.
+  if (username && username !== user.username) {
+    const clash = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, req.params.id);
+    if (clash) return res.status(409).json({ error: 'Benutzername bereits vergeben' });
+  }
+
   // Rechte-Stufen normalisieren: jeweils mitgeschicktes Feld übernehmen, sonst Bestand behalten;
   // „alle" impliziert immer „sich".
   const newPlanAll = can_plan_all !== undefined ? (can_plan_all ? 1 : 0) : (user.can_plan_all || 0);

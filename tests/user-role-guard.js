@@ -62,6 +62,18 @@ const roleOf = async (admin, id) => (await req('GET', `/api/users/${id}`, admin)
     r = await req('PUT', `/api/users/${opfer.id}`, chef, { name: 'egal' });
     ok('Chef → bestehenden Admin bearbeiten: 403 (Guard bleibt)', r.status === 403, 'status=' + r.status);
 
+    // ── B2: Benutzernamen-Eindeutigkeit im PUT ──
+    console.log('\nB2 — username-Eindeutigkeit:');
+    const u1 = (await req('POST', '/api/users', admin, { username: 'name_a', password: 'test1234', name: 'A', role: 'mitarbeiter' })).body.user;
+    const u2 = (await req('POST', '/api/users', admin, { username: 'name_b', password: 'test1234', name: 'B', role: 'mitarbeiter' })).body.user;
+    r = await req('PUT', `/api/users/${u2.id}`, admin, { username: 'name_a' });
+    ok('PUT auf bereits vergebenen Benutzernamen: 409', r.status === 409, 'status=' + r.status);
+    ok('Benutzername unverändert nach 409', (await req('GET', `/api/users/${u2.id}`, admin)).body.user.username === 'name_b');
+    r = await req('PUT', `/api/users/${u2.id}`, admin, { username: 'name_b', name: 'B neu' });
+    ok('PUT mit unverändertem eigenen Namen: 200 (kein Fehlalarm)', r.status === 200, 'status=' + r.status);
+    r = await req('PUT', `/api/users/${u2.id}`, admin, { username: 'name_c' });
+    ok('PUT auf freien Benutzernamen: 200', r.status === 200, 'status=' + r.status);
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nUser-Role-Guard: ${pass} bestanden, ${fail} fehlgeschlagen` + (fails.length ? `\nFehlgeschlagen: ${fails.join(', ')}` : ''));
   process.exit(fail === 0 ? 0 : 1);
