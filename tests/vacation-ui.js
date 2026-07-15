@@ -34,7 +34,7 @@ function req(method, p, token, body) {
     for (let i = 0; i < 40; i++) { try { const h = await req('GET', '/health'); if (h.status === 200) break; } catch (_) {} await sleep(150); }
     const pw = (fs.readFileSync('/tmp/vacation-ui-srv.log', 'utf8').match(/admin\s+->\s+(\S+)/) || [])[1];
     const admin = (await req('POST', '/api/auth/login', null, { username: 'admin', password: pw })).body.token;
-    const uwe = (await req('POST', '/api/users', admin, { username: 'uwe', password: 'test', name: 'Uwe Urlauber', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user;
+    const uwe = (await req('POST', '/api/users', admin, { username: 'uwe', password: 'Test1234!', name: 'Uwe Urlauber', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user;
     // genehmigten Urlaub anlegen (Vergangenheit + Zukunft relativ zu heute)
     const mk = async (from, to) => (await req('POST', '/api/absences', admin, { type: 'urlaub', date_from: from, date_to: to, target_user_id: uwe.id })).body.absence.id;
     await req('POST', `/api/absences/${await mk('2026-06-01', '2026-06-05')}/approve`, admin);
@@ -103,7 +103,7 @@ function req(method, p, token, body) {
     const ctx2 = await browser.createBrowserContext();
     const p2 = await ctx2.newPage(); await p2.setViewport({ width: 1000, height: 800 });
     await p2.goto(BASE, { waitUntil: 'networkidle2' });
-    await p2.waitForSelector('#login-user'); await p2.type('#login-user', 'uwe'); await p2.type('#login-pass', 'test');
+    await p2.waitForSelector('#login-user'); await p2.type('#login-user', 'uwe'); await p2.type('#login-pass', 'Test1234!');
     await p2.click('#login-form button[type="submit"]'); await p2.waitForSelector('a[href="#/absences"]', { timeout: 8000 });
     await p2.evaluate(() => { location.hash = '#/absences'; }); await sleep(900);
     await p2.waitForSelector('.absence-counter', { timeout: 8000 });

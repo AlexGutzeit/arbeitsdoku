@@ -14,7 +14,7 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(d?{'Content-Length':Buffer.byteLength(d)}:{}) } }, x => { let s=''; x.on('data',c=>s+=c); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (d) r.write(d); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const plan = async (t) => (await req('GET','/api/planning', t)).body.entries || [];
 const uniq = a => [...new Set(a)];
 
@@ -27,7 +27,7 @@ const uniq = a => [...new Set(a)];
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/planning-recur-edit-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const anna = (await req('POST','/api/users', admin, { username:'anna', password:'test', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const anna = (await req('POST','/api/users', admin, { username:'anna', password:'Test1234!', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
 
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
     const p = await browser.newPage(); await p.setViewport({ width:1000, height:1150 });

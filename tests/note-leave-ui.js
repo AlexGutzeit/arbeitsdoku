@@ -20,7 +20,7 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
@@ -32,9 +32,9 @@ const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, {
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/note-leave-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const O = (await req('POST','/api/users', admin, { username:'owner', password:'test', name:'OWNER', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const B = (await req('POST','/api/users', admin, { username:'empf', password:'test', name:'EMPF', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const O2 = (await req('POST','/api/users', admin, { username:'owner2', password:'test', name:'ZWEITER', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const O = (await req('POST','/api/users', admin, { username:'owner', password:'Test1234!', name:'OWNER', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const B = (await req('POST','/api/users', admin, { username:'empf', password:'Test1234!', name:'EMPF', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const O2 = (await req('POST','/api/users', admin, { username:'owner2', password:'Test1234!', name:'ZWEITER', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const tO = await tok('owner'), tO2 = await tok('owner2'), tB = await tok('empf');
     const note = (await req('POST','/api/notes', tO, { title:'Geteilte UI-Notiz', body:'Inhalt' })).body.note;
     await req('PUT','/api/notes/'+note.id+'/shares', tO, { shares:[{ user_id:B.id, permission:'read' }] });
@@ -48,7 +48,7 @@ const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, {
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
     const p = await browser.newPage(); await p.setViewport({ width:1000, height:900 });
     await p.goto(BASE, { waitUntil:'networkidle2' });
-    await p.waitForSelector('#login-user'); await p.type('#login-user','empf'); await p.type('#login-pass','test');
+    await p.waitForSelector('#login-user'); await p.type('#login-user','empf'); await p.type('#login-pass','Test1234!');
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]');
     await p.evaluate(() => { location.hash = '#/notes'; }); await sleep(1200);
 

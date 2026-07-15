@@ -20,10 +20,10 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const boardHas = (p, n) => p.evaluate(n => [...document.querySelectorAll('.proj-name')].some(e => e.textContent.trim()===n), n);
 const urgencyOf = async (admin, id, done) => ((await req('GET','/api/projects'+(done?'?done=1':''), admin)).body.projects.find(x=>x.id===id)||{}).urgency;
-const login = async (p, u, pw='test') => {
+const login = async (p, u, pw='Test1234!') => {
   await p.goto(BASE, { waitUntil:'networkidle2' });
   await p.evaluate(()=>{ try{localStorage.clear()}catch(_){}});
   await p.goto(BASE, { waitUntil:'networkidle2' });
@@ -42,7 +42,7 @@ const goBoard = async (p) => { await p.evaluate(()=>{ location.hash='#/projects'
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/board-arch-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const ma = (await req('POST','/api/users', admin, { username:'ma', password:'test', name:'Mitarbeiter A', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const ma = (await req('POST','/api/users', admin, { username:'ma', password:'Test1234!', name:'Mitarbeiter A', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const projA = (await req('POST','/api/projects', admin, { name:'Ampel Auftrag', client:'Kunde A', urgency:'gelb', assigned_user_ids:[ma.id] })).body.project;
     ok('Setup: MA + Auftrag (gelb)', !!(ma && projA && projA.urgency==='gelb'));
 
@@ -82,7 +82,7 @@ const goBoard = async (p) => { await p.evaluate(()=>{ location.hash='#/projects'
 
     // ===== MA: keine Ampel, kein Archiv =====
     console.log('\n[MA-Gating]');
-    await login(p, 'ma', 'test'); await goBoard(p);
+    await login(p, 'ma', 'Test1234!'); await goBoard(p);
     ok('MA: KEINE klickbare Ampel-Flagge', await p.evaluate(()=>!document.querySelector('.proj-flag-btn')));
     ok('MA: KEIN Archiv-Toggle', await p.evaluate(()=>!document.getElementById('board-archive-toggle')));
 

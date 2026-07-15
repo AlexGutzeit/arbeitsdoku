@@ -54,7 +54,7 @@ const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console
     ok('Admin-Login', !!admin);
 
     // Markante Daten anlegen
-    const u = (await reqJSON('POST','/api/users', admin, { username:'backuptarget', password:'test', name:'BACKUP-TARGET', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const u = (await reqJSON('POST','/api/users', admin, { username:'backuptarget', password:'Test1234!', name:'BACKUP-TARGET', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     ok('Testnutzer angelegt', !!(u && u.id));
 
     // Backup herunterladen (Zip)

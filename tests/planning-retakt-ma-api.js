@@ -21,7 +21,7 @@ const tok = async (u, pw) => (await req('POST','/api/auth/login', null, { userna
     const apw = (fs.readFileSync('/tmp/retakt-ma-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
     const annaT = await tok('admin', apw); // Reminder als admin (canPlanAll)
-    const ma = []; for (let i=1;i<=6;i++) ma.push((await req('POST','/api/users', admin, { username:'m'+i, password:'p', name:'M'+i, role:'mitarbeiter', hours_mon:8 })).body.user.id);
+    const ma = []; for (let i=1;i<=6;i++) ma.push((await req('POST','/api/users', admin, { username:'m'+i, password:'Passw0rd!', name:'M'+i, role:'mitarbeiter', hours_mon:8 })).body.user.id);
 
     // Geordnete, eindeutige Vorkommen (nach Datum) über die Herkunft (client MA): {od, sid, gid, ma, rem}
     const occInfo = async () => {

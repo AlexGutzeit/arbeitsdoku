@@ -20,7 +20,7 @@ function req(method, p, token, body) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console.log('  ✗ '+n+(e?'  → '+e:'')));
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
@@ -31,8 +31,8 @@ const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, {
     for (let i=0;i<40;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/push-summaries-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    await req('POST','/api/users', admin, { username:'xma', password:'test', name:'XMA', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
-    await req('POST','/api/users', admin, { username:'xma2', password:'test', name:'XMA2', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    await req('POST','/api/users', admin, { username:'xma', password:'Test1234!', name:'XMA', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    await req('POST','/api/users', admin, { username:'xma2', password:'Test1234!', name:'XMA2', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
     const t1 = await tok('xma'), t2 = await tok('xma2');
     ok('Setup (admin + 2 MA)', !!(admin && t1 && t2));
 

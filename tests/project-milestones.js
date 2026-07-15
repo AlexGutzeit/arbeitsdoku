@@ -20,7 +20,7 @@ function req(method, p, token, body) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console.log('  ✗ '+n+(e?'  → '+e:'')));
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const getProj = async (t, id) => (await req('GET','/api/projects/'+id, t)).body.project;
 
 (async () => {
@@ -32,7 +32,7 @@ const getProj = async (t, id) => (await req('GET','/api/projects/'+id, t)).body.
     for (let i=0;i<40;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/project-ms-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const mk = async (o) => (await req('POST','/api/users', admin, { password:'test', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8, ...o })).body.user;
+    const mk = async (o) => (await req('POST','/api/users', admin, { password:'Test1234!', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8, ...o })).body.user;
     const m1 = await mk({ username:'m1', name:'M1' });  // zugeteilt
     const m2 = await mk({ username:'m2', name:'M2' });  // nicht zugeteilt
     const tm1 = await tok('m1'), tm2 = await tok('m2');

@@ -32,7 +32,7 @@ function req(m, p, t, b) {
     for (let i = 0; i < 40; i++) { try { const h = await req('GET', '/health'); if (h.status === 200) break; } catch (_) {} await sleep(150); }
     const pw = (fs.readFileSync('/tmp/vacation-audit-ui-srv.log', 'utf8').match(/admin\s+->\s+(\S+)/) || [])[1];
     const admin = (await req('POST', '/api/auth/login', null, { username: 'admin', password: pw })).body.token;
-    const u = (await req('POST', '/api/users', admin, { username: 'nina', password: 'test', name: 'Nina Neuzugang', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user;
+    const u = (await req('POST', '/api/users', admin, { username: 'nina', password: 'Test1234!', name: 'Nina Neuzugang', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user;
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const p = await browser.newPage(); await p.setViewport({ width: 1280, height: 950 });

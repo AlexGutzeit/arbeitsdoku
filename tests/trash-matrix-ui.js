@@ -23,7 +23,7 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tokenOf = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tokenOf = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 
 // ---- UI-Helfer ----
 async function loginUI(p, user, pass) {
@@ -54,7 +54,7 @@ const navInfo = (p) => p.evaluate(() => ({
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/trash-matrix-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tokenOf('admin', apw);
-    const mk = (u, role) => req('POST','/api/users', admin, { username:u, password:'test', name:u.toUpperCase(), role, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    const mk = (u, role) => req('POST','/api/users', admin, { username:u, password:'Test1234!', name:u.toUpperCase(), role, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
     const chef = (await mk('xchef','chef')).body.user;
     const buch = (await mk('xbuch','buchhalter')).body.user;
     const ma1  = (await mk('xma1','mitarbeiter')).body.user;
@@ -76,7 +76,7 @@ const navInfo = (p) => p.evaluate(() => ({
     await req('DELETE','/api/absences/'+absX.id, cTok, { reason:'Engpass auf Baustelle' });  // Chef löscht genehmigte
     ok('1b) Chef hat genehmigten Urlaub gelöscht', (await req('GET','/api/absences?from=2026-10-05&to=2026-10-07', t1)).body.absences.every(a=>a.id!==absX.id));
 
-    await loginUI(p, 'xma1', 'test');
+    await loginUI(p, 'xma1', 'Test1234!');
     await goHash(p, '#/deleted-absences');
     let v = await p.evaluate((id) => ({
       sees: !!document.querySelector('.reapply-absence[data-id="'+id+'"]'),
@@ -122,7 +122,7 @@ const navInfo = (p) => p.evaluate(() => ({
     // ============================================================
     const e1 = (await req('POST','/api/entries', t1, { date:'2026-10-06', time_from:'07:00', time_to:'15:00', break_minutes:30 })).body.entry;
     await req('DELETE','/api/entries/'+e1.id, t1);
-    await loginUI(p, 'xma1', 'test');
+    await loginUI(p, 'xma1', 'Test1234!');
     await goHash(p, '#/deleted-entries');
     let ev = await p.evaluate((id) => ({ sees: !!document.querySelector('.restore-entry[data-id="'+id+'"]') }), e1.id);
     ok('3a) ma1 sieht eigenen gelöschten Eintrag mit „Wiederherstellen"', ev.sees, JSON.stringify(ev));
@@ -140,7 +140,7 @@ const navInfo = (p) => p.evaluate(() => ({
     await req('DELETE','/api/entries/'+e2.id, t2);
     const e3 = (await req('POST','/api/entries', t1, { date:'2026-10-13', time_from:'07:00', time_to:'15:00', break_minutes:30 })).body.entry; // ma1
     await req('DELETE','/api/entries/'+e3.id, admin, { reason:'vom Admin entfernt' }); // admin löscht ma1s Eintrag
-    await loginUI(p, 'xma1', 'test');
+    await loginUI(p, 'xma1', 'Test1234!');
     await goHash(p, '#/deleted-entries');
     const e4 = await p.evaluate((idA, idB) => ({
       seesMa2: !!document.querySelector('.restore-entry[data-id="'+idA+'"]'),
@@ -158,11 +158,11 @@ const navInfo = (p) => p.evaluate(() => ({
     // ============================================================
     head('SZENARIO 5 — Rollen-Sichtbarkeit der Papierkorb-Tabs + Abwesenheits-Button');
     // ============================================================
-    await loginUI(p, 'xma1', 'test');  let n = await navInfo(p);
+    await loginUI(p, 'xma1', 'Test1234!');  let n = await navInfo(p);
     ok('5a) ma1: Papierkorb mit Einträge+Abwesenheiten, OHNE Mitarbeiter-Tab', n.group&&n.entries&&n.absences&&!n.users, JSON.stringify(n));
-    await loginUI(p, 'xbuch', 'test'); n = await navInfo(p);
+    await loginUI(p, 'xbuch', 'Test1234!'); n = await navInfo(p);
     ok('5b) Buchhalter: wie MA (kein Mitarbeiter-Tab)', n.group&&n.entries&&n.absences&&!n.users, JSON.stringify(n));
-    await loginUI(p, 'xchef', 'test'); n = await navInfo(p);
+    await loginUI(p, 'xchef', 'Test1234!'); n = await navInfo(p);
     ok('5c) Chef: alle drei Tabs (inkl. Mitarbeiter)', n.group&&n.entries&&n.absences&&n.users, JSON.stringify(n));
     await goHash(p, '#/deleted-absences');
     const chefBtn = await p.evaluate(() => ({ reapply: document.querySelectorAll('.reapply-absence').length, restore: document.querySelectorAll('.restore-absence').length }));
@@ -175,7 +175,7 @@ const navInfo = (p) => p.evaluate(() => ({
     // ============================================================
     const eB = (await req('POST','/api/entries', bTok, { date:'2026-10-14', time_from:'09:00', time_to:'12:00', break_minutes:0 })).body.entry; // buch eigener
     await req('DELETE','/api/entries/'+eB.id, bTok);
-    await loginUI(p, 'xbuch', 'test');
+    await loginUI(p, 'xbuch', 'Test1234!');
     await goHash(p, '#/deleted-entries');
     const bv = await p.evaluate((own, foreign) => ({ own: !!document.querySelector('.restore-entry[data-id="'+own+'"]'), foreign: !!document.querySelector('.restore-entry[data-id="'+foreign+'"]') }), eB.id, e2.id);
     ok('6a) Buchhalter sieht eigenen gelöschten Eintrag', bv.own, JSON.stringify(bv));
@@ -187,8 +187,8 @@ const navInfo = (p) => p.evaluate(() => ({
     // ============================================================
     await req('POST','/api/users/'+ma2.id+'/deactivate', cTok, {});
     ok('7a) Chef hat ma2 ausgestellt (active=0)', (await req('GET','/api/users/inactive', cTok)).body.users.some(u=>u.id===ma2.id));
-    ok('7b) Ausgestellter ma2 kann sich nicht mehr einloggen', (await req('POST','/api/auth/login', null, { username:'xma2', password:'test' })).status >= 400);
-    await loginUI(p, 'xchef', 'test');
+    ok('7b) Ausgestellter ma2 kann sich nicht mehr einloggen', (await req('POST','/api/auth/login', null, { username:'xma2', password:'Test1234!' })).status >= 400);
+    await loginUI(p, 'xchef', 'Test1234!');
     await goHash(p, '#/deleted-users');
     const seesU = await p.evaluate((id) => !!document.querySelector('.reactivate-user[data-id="'+id+'"]'), ma2.id);
     ok('7c) Chef sieht ma2 im Papierkorb→Mitarbeiter mit „Wiedereinstellen"', seesU, ''+seesU);
@@ -197,7 +197,7 @@ const navInfo = (p) => p.evaluate(() => ({
     await p.evaluate(() => { const i = document.getElementById('pm-input'); if (i) { i.value = '2026-11-02'; i.dispatchEvent(new Event('input', { bubbles:true })); } });
     await p.evaluate(() => { const b = document.querySelector('.dialog-modal [data-act="ok"]'); if (b) b.click(); });
     await sleep(1200);
-    ok('7d) ma2 ist wieder aktiv (Login wieder möglich)', (await req('POST','/api/auth/login', null, { username:'xma2', password:'test' })).status === 200);
+    ok('7d) ma2 ist wieder aktiv (Login wieder möglich)', (await req('POST','/api/auth/login', null, { username:'xma2', password:'Test1234!' })).status === 200);
     ok('7e) ma1 (MA) → /api/users/inactive verboten (403)', (await req('GET','/api/users/inactive', t1)).status === 403);
 
     // ============================================================

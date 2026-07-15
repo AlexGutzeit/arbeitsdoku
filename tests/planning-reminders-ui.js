@@ -41,8 +41,8 @@ async function showDay(p, iso, planning) {
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/planning-reminders-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const anna = (await req('POST','/api/users', admin, { username:'anna', password:'annapw', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const paul = (await req('POST','/api/users', admin, { username:'paul', password:'paulpw', name:'Paul', role:'mitarbeiter', can_plan:1, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const anna = (await req('POST','/api/users', admin, { username:'anna', password:'Annapw12!', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const paul = (await req('POST','/api/users', admin, { username:'paul', password:'Paulpw12!', name:'Paul', role:'mitarbeiter', can_plan:1, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const MON = nextMon();
     // Annas Einzeltermin, Annas Serie, Pauls Einzeltermin (alle am MON)
     const eAnna = (await req('POST','/api/planning', admin, { date:MON, time_from:'07:00', time_to:'15:30', client:'AnnaKunde', assigned_user_ids:[anna.id] })).body.entry;
@@ -54,7 +54,7 @@ async function showDay(p, iso, planning) {
     const errors = []; p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type()==='error') errors.push(m.text()); });
 
     // ===== Anna (kein Planungsrecht) =====
-    await loginBrowser(p, 'anna', 'annapw');
+    await loginBrowser(p, 'anna', 'Annapw12!');
     await showDay(p, MON, true);
     // Annas Einzeltermin: ⋮ vorhanden, nur „Benachrichtigung"
     const annaBtn = await p.$('.plan-menu-btn[data-series=""][data-canedit=""][data-remind="1"]');
@@ -95,7 +95,7 @@ async function showDay(p, iso, planning) {
     ok('Serie: Scope-Dialog mit 3 Optionen', (await p.evaluate(() => [...document.querySelectorAll('.modal [data-val]')].map(b=>b.dataset.val))).join(',') === 'occurrence,following,all');
     await p.evaluate(() => document.querySelector('.modal [data-val="all"]').click()); await sleep(800);
     await p.evaluate(() => document.querySelector('.modal [data-act="close"]').click()); await sleep(900);
-    const serMine = (await req('GET','/api/planning/reminders/mine', await tok('anna','annapw'))).body.reminders.filter(r=>r.series_id===sAnna.series_id);
+    const serMine = (await req('GET','/api/planning/reminders/mine', await tok('anna','Annapw12!'))).body.reminders.filter(r=>r.series_id===sAnna.series_id);
     ok('„ganze Serie": Erinnerung auf allen 4 Vorkommen', serMine.length === 4);
 
     // 🔔 auch in der Wochenansicht
@@ -107,7 +107,7 @@ async function showDay(p, iso, planning) {
     ok('Anna: mit „Planung" aus kein ⋮ mehr', !(await p.$('.plan-menu-btn[data-canedit=""]')));
 
     // ===== Paul (mit Planungsrecht) =====
-    await loginBrowser(p, 'paul', 'paulpw');
+    await loginBrowser(p, 'paul', 'Paulpw12!');
     await showDay(p, MON, true);
     const paulBtn = await p.$('.plan-menu-btn[data-canedit="1"][data-remind="1"]');
     ok('Paul: ⋮ vorhanden (edit + remind)', !!paulBtn);

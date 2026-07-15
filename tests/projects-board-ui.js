@@ -22,7 +22,7 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const inColumn = (p, colName, projName) => p.evaluate((cn, pn) => {
   const col = [...document.querySelectorAll('.board-col')].find(c => ((c.querySelector('.board-col-head')||{}).textContent || '').includes(cn));
   if (!col) return false;
@@ -50,8 +50,8 @@ async function tileAction(p, id, btnClass) {
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/projects-board-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const A = (await req('POST','/api/users', admin, { username:'m1', password:'test', name:'M1', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const B = (await req('POST','/api/users', admin, { username:'m2', password:'test', name:'M2', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const A = (await req('POST','/api/users', admin, { username:'m1', password:'Test1234!', name:'M1', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const B = (await req('POST','/api/users', admin, { username:'m2', password:'Test1234!', name:'M2', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     // Seed-Projekte (leere DB hat Alpha/Beta) — via API deterministisch
     const pAlpha = (await req('POST','/api/projects', admin, { name:'Auftrag Alpha', client:'Kunde A', address:'Weg 1', note:'Notiz A', urgency:'rot', assigned_user_ids:[A.id, B.id] })).body.project;
     const pGruen = (await req('POST','/api/projects', admin, { name:'Grün Job', urgency:'gruen', assigned_user_ids:[A.id] })).body.project;
@@ -120,7 +120,7 @@ async function tileAction(p, id, btnClass) {
     ok('Löschen: Freier Auftrag weg', !(await inColumn(p, 'Nicht zugewiesen', 'Freier Auftrag')));
 
     // ===== MITARBEITER (M1) =====
-    await login(p, 'm1', 'test'); await goBoard(p);
+    await login(p, 'm1', 'Test1234!'); await goBoard(p);
     ok('MA: kein FAB', await p.evaluate(() => !document.getElementById('fab-new')));
     const maBtns = await p.evaluate((id) => {
       const t = document.querySelector(`.proj-tile[data-id="${id}"]`); if (t) t.click();

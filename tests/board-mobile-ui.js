@@ -21,7 +21,7 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
@@ -33,7 +33,7 @@ const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, {
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/board-mobile-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const mk = async (n) => (await req('POST','/api/users', admin, { username:n.toLowerCase(), password:'test', name:n, role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const mk = async (n) => (await req('POST','/api/users', admin, { username:n.toLowerCase(), password:'Test1234!', name:n, role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const a = await mk('Anna'), b = await mk('Bernd'), c = await mk('Carla');
     const U = ['rot','orange','gelb','gruen'];
     for (let i=1;i<=12;i++) await req('POST','/api/projects', admin, { name:'Auftrag '+i, client:'Kunde '+i, address:(i%2?'Weg '+i+', 10115 Berlin':''), note:'Notiz '+i, urgency:U[i%4], assigned_user_ids:[a.id] });

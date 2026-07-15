@@ -43,15 +43,15 @@ const plan = (tok, d, ids, from='07:00', to='16:00') => req('POST','/api/plannin
     const admin = (await req('POST','/api/auth/login', null, { username:'admin', password:pw })).body.token;
     ok('Admin-Login', !!admin);
 
-    const mk = (u, canPlan, canPlanAll) => req('POST','/api/users', admin, { username:u, password:'test', name:u.toUpperCase(), role:'mitarbeiter', can_plan:canPlan, can_plan_all:canPlanAll, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    const mk = (u, canPlan, canPlanAll) => req('POST','/api/users', admin, { username:u, password:'Test1234!', name:u.toUpperCase(), role:'mitarbeiter', can_plan:canPlan, can_plan_all:canPlanAll, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
     const A = (await mk('aplan', 1, 1)).body.user;   // „alle"-Planer
     const S = (await mk('splan', 1, 0)).body.user;   // Self-Planer
     const N = (await mk('nplan', 0, 0)).body.user;   // normaler MA
     ok('Nutzer angelegt (A=alle, S=sich, N=0)', !!(A && S && N) && A.id && S.id && N.id);
     ok('„alle"-Recht impliziert „sich" (A.can_plan=1)', A.can_plan === 1, JSON.stringify(A.can_plan));
 
-    const aTok = (await req('POST','/api/auth/login', null, { username:'aplan', password:'test' })).body.token;
-    const sTok = (await req('POST','/api/auth/login', null, { username:'splan', password:'test' })).body.token;
+    const aTok = (await req('POST','/api/auth/login', null, { username:'aplan', password:'Test1234!' })).body.token;
+    const sTok = (await req('POST','/api/auth/login', null, { username:'splan', password:'Test1234!' })).body.token;
 
     // --- POST-Durchsetzung Self-Planer ---
     let r = await plan(sTok, '2026-08-10', [S.id]);

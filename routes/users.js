@@ -9,6 +9,19 @@ const router = express.Router();
 // Gültige Rollen. 'admin' darf ausschließlich durch Admins vergeben werden (siehe POST/PUT).
 const ROLES = ['mitarbeiter', 'buchhalter', 'chef', 'admin'];
 
+// Passwort-Policy (serverseitig erzwungen — Quelle der Wahrheit; das Frontend spiegelt sie nur).
+// Gilt beim Anlegen UND Zurücksetzen. Der Login prüft NICHTS davon → Altpasswörter bleiben nutzbar.
+function passwordPolicyError(pw, username) {
+  if (typeof pw !== 'string' || pw.length < 8) return 'Passwort: mindestens 8 Zeichen';
+  if (pw.length > 72) return 'Passwort: höchstens 72 Zeichen';        // bcrypt nutzt nur die ersten 72 Bytes
+  if (!/[a-z]/.test(pw)) return 'Passwort: mindestens ein Kleinbuchstabe';
+  if (!/[A-Z]/.test(pw)) return 'Passwort: mindestens ein Großbuchstabe';
+  if (!/[0-9]/.test(pw)) return 'Passwort: mindestens eine Ziffer';
+  if (!/[^A-Za-z0-9]/.test(pw)) return 'Passwort: mindestens ein Sonderzeichen';
+  if (username && pw.toLowerCase() === String(username).toLowerCase()) return 'Passwort darf nicht dem Benutzernamen entsprechen';
+  return null;
+}
+
 // Felder, die im Audit-Log nachvollziehbar protokolliert werden (Label + Formatter).
 // Das Passwort wird BEWUSST nie geloggt.
 const USER_AUDIT_FIELDS = [
@@ -129,6 +142,9 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
     return res.status(400).json({ error: 'Ungültige Rolle' });
   }
 
+  const pwErr = passwordPolicyError(password, username);
+  if (pwErr) return res.status(400).json({ error: pwErr });
+
   const db = getDb();
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
   if (existing) {
@@ -229,9 +245,8 @@ router.post('/:id/reset-password', authenticate, authorize('chef'), async (req, 
     return res.status(403).json({ error: 'Admin-Passwort kann nur von Admins geändert werden' });
   }
   const { password } = req.body;
-  if (!password || password.length < 4) {
-    return res.status(400).json({ error: 'Passwort muss mindestens 4 Zeichen haben' });
-  }
+  const pwErr = passwordPolicyError(password, user.username);
+  if (pwErr) return res.status(400).json({ error: pwErr });
   let hash;
   try { hash = await bcrypt.hash(password, 10); } // kooperativ (blockiert den Event-Loop nicht)
   catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }

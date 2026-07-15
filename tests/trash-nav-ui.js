@@ -39,8 +39,8 @@ const navState = (p) => p.evaluate(() => ({
     for (let i=0;i<40;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const pw = (fs.readFileSync('/tmp/trash-nav-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = (await req('POST','/api/auth/login', null, { username:'admin', password:pw })).body.token;
-    await req('POST','/api/users', admin, { username:'wkr', password:'test', name:'Worker', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
-    await req('POST','/api/users', admin, { username:'boss', password:'test', name:'Boss', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    await req('POST','/api/users', admin, { username:'wkr', password:'Test1234!', name:'Worker', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    await req('POST','/api/users', admin, { username:'boss', password:'Test1234!', name:'Boss', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
     ok('Setup: Worker + Chef angelegt', !!admin);
 
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
@@ -48,7 +48,7 @@ const navState = (p) => p.evaluate(() => ({
 
     // Mitarbeiter
     await p.goto(BASE, { waitUntil:'networkidle2' });
-    await p.waitForSelector('#login-user'); await p.type('#login-user','wkr'); await p.type('#login-pass','test');
+    await p.waitForSelector('#login-user'); await p.type('#login-user','wkr'); await p.type('#login-pass','Test1234!');
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]'); await sleep(400);
     let s = await navState(p);
     ok('MA: Papierkorb-Gruppe sichtbar', s.group, JSON.stringify(s));
@@ -58,7 +58,7 @@ const navState = (p) => p.evaluate(() => ({
     // Chef
     await p.evaluate(() => { localStorage.clear(); });
     await p.goto(BASE, { waitUntil:'networkidle2' });
-    await p.waitForSelector('#login-user'); await p.type('#login-user','boss'); await p.type('#login-pass','test');
+    await p.waitForSelector('#login-user'); await p.type('#login-user','boss'); await p.type('#login-pass','Test1234!');
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]'); await sleep(400);
     s = await navState(p);
     ok('Chef: Papierkorb-Gruppe + alle drei Tabs', s.group && s.entries && s.absences && s.users, JSON.stringify(s));

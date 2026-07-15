@@ -20,7 +20,7 @@ function req(method, p, token, body) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console.log('  ✗ '+n+(e?'  → '+e:'')));
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const notesOf = async (t) => ((await req('GET','/api/notes', t)).body.notes || []);
 
 (async () => {
@@ -32,8 +32,8 @@ const notesOf = async (t) => ((await req('GET','/api/notes', t)).body.notes || [
     for (let i=0;i<40;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/note-leave-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const O = (await req('POST','/api/users', admin, { username:'owner', password:'test', name:'OWNER', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const B = (await req('POST','/api/users', admin, { username:'empf', password:'test', name:'EMPF', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const O = (await req('POST','/api/users', admin, { username:'owner', password:'Test1234!', name:'OWNER', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const B = (await req('POST','/api/users', admin, { username:'empf', password:'Test1234!', name:'EMPF', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const tO = await tok('owner'), tB = await tok('empf');
     ok('Setup (owner + empfänger)', !!(O && B && tO && tB));
 
@@ -60,7 +60,7 @@ const notesOf = async (t) => ((await req('GET','/api/notes', t)).body.notes || [
     ok('Owner hakt B wieder an → B sieht Notiz wieder', (await notesOf(tB)).some(n => n.id === note.id));
 
     // Fremder ohne Freigabe kann nicht „verlassen"
-    const C = (await req('POST','/api/users', admin, { username:'dritt', password:'test', name:'DRITT', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const C = (await req('POST','/api/users', admin, { username:'dritt', password:'Test1234!', name:'DRITT', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const tC = await tok('dritt');
     ok('Nicht-Freigegebener /share/self → 404', (await req('DELETE','/api/notes/'+note.id+'/share/self', tC)).status === 404);
 

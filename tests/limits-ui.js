@@ -43,7 +43,7 @@ const setVal = (p, id, v) => p.evaluate((id, v) => { const el = document.getElem
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/limits-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = (await req('POST','/api/auth/login', null, { username:'admin', password:apw })).body.token;
-    await req('POST','/api/users', admin, { username:'xchef', password:'test', name:'XCHEF', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    await req('POST','/api/users', admin, { username:'xchef', password:'Test1234!', name:'XCHEF', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
     ok('Setup', !!admin);
 
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
@@ -94,7 +94,7 @@ const setVal = (p, id, v) => p.evaluate((id, v) => { const el = document.getElem
     ok('Nach Reload vorbefüllt (2 GB / 20 / 8)', vals.storage==='2' && vals.storageUnit==='GB' && vals.file==='20' && vals.brand==='8', JSON.stringify(vals));
 
     // --- Nicht-Admin (Chef): keine Limits-Karte ---
-    await loginUI(p, 'xchef', 'test');
+    await loginUI(p, 'xchef', 'Test1234!');
     await p.evaluate(() => { location.hash = '#/settings'; }); await sleep(1200);
     const chefSees = await p.evaluate(() => ({ settingsLoaded: !!document.querySelector('.main'), hasLimitCard: !!document.getElementById('doc-limit-save') }));
     ok('Chef: Einstellungen geladen, aber KEINE Limits-Karte', chefSees.settingsLoaded && chefSees.hasLimitCard === false, JSON.stringify(chefSees));

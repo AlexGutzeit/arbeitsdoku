@@ -21,8 +21,8 @@ const remOn = async (t, gid) => ((await req('GET','/api/planning/reminders?group
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/retakt-lineage-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const anna = (await req('POST','/api/users', admin, { username:'anna', password:'p', name:'Anna', role:'mitarbeiter', hours_mon:8 })).body.user;
-    const annaT = await tok('anna', 'p');
+    const anna = (await req('POST','/api/users', admin, { username:'anna', password:'Passw0rd!', name:'Anna', role:'mitarbeiter', hours_mon:8 })).body.user;
+    const annaT = await tok('anna', 'Passw0rd!');
 
     // Geordnete, eindeutige Vorkommen (nach Datum) über die ganze Herkunft (client Multi).
     const orderedOcc = async () => {
@@ -74,7 +74,7 @@ const remOn = async (t, gid) => ((await req('GET','/api/planning/reminders?group
     ok('Einzeltermin behält genau eine Benachrichtigung, keine Waisen', r.length===1 && !r[0].series_id && (await orphans()).length===0);
 
     // ===== Multi-MA über Umtakten: verschiedene MA gleichzeitig; „5 MA folgende" wirkt herkunftsweit =====
-    const ma = []; for (let i=1;i<=5;i++) ma.push((await req('POST','/api/users', admin, { username:'zma'+i, password:'p', name:'ZMA'+i, role:'mitarbeiter', hours_mon:8 })).body.user.id);
+    const ma = []; for (let i=1;i<=5;i++) ma.push((await req('POST','/api/users', admin, { username:'zma'+i, password:'Passw0rd!', name:'ZMA'+i, role:'mitarbeiter', hours_mon:8 })).body.user.id);
     const occMa = async () => { const e2 = ((await req('GET','/api/planning', admin)).body.entries||[]).filter(x=>x.client==='MAtest' && x.occurrence_date); const m={}; e2.forEach(x=>{ if(!m[x.occurrence_date]) m[x.occurrence_date]={od:x.occurrence_date, sid:x.series_id, ma:(x.assigned_users||[]).length}; }); return Object.values(m).sort((a,bb)=>a.od<bb.od?-1:1); };
     const sMa = (await req('POST','/api/planning', admin, { date:'2027-11-01', time_from:'07:00', time_to:'15:30', client:'MAtest', assigned_user_ids:ma.slice(0,4), recurrence:{ freq:'weekly', end_type:'count', end_count:8 } })).body;
     let om = await occMa();

@@ -21,8 +21,8 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
-const login = async (p, u, pw='test') => {
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const login = async (p, u, pw='Test1234!') => {
   await p.goto(BASE, { waitUntil:'networkidle2' }); await p.evaluate(()=>{try{localStorage.clear()}catch(_){}});
   await p.goto(BASE, { waitUntil:'networkidle2' });
   await p.waitForSelector('#login-user'); await p.type('#login-user', u); await p.type('#login-pass', pw);
@@ -44,7 +44,7 @@ async function waitFor(page, fn, arg, timeout=6000) { const s=Date.now(); while(
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/project-ms-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const mk = async (o) => (await req('POST','/api/users', admin, { password:'test', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8, ...o })).body.user;
+    const mk = async (o) => (await req('POST','/api/users', admin, { password:'Test1234!', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8, ...o })).body.user;
     const m1 = await mk({ username:'m1', name:'Mitarbeiter A' }); // zugeteilt
     const m2 = await mk({ username:'m2', name:'Mitarbeiter B' }); // nicht zugeteilt
     ok('Setup: 2 MA', !!(m1 && m2));

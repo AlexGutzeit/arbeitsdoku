@@ -33,7 +33,7 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     const pw = (fs.readFileSync('/tmp/vacation-multi-ui-srv.log', 'utf8').match(/admin\s+->\s+(\S+)/) || [])[1];
     const admin = await tok('admin', pw);
 
-    const mkU = async (un, nm) => (await req('POST', '/api/users', admin, { username: un, password: 'test', name: nm, role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user;
+    const mkU = async (un, nm) => (await req('POST', '/api/users', admin, { username: un, password: 'Test1234!', name: nm, role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user;
     const ent = (uid, vf, d, m, u) => req('POST', `/api/statistics/vacation/${uid}`, admin, { valid_from: vf, days: d, carryover_mode: m, carryover_until: u || null });
     const sc = (uid, d) => req('PUT', `/api/statistics/vacation/${uid}/start-carry`, admin, { days: d });
     const mk = async (uid, ty, f, t) => (await req('POST', '/api/absences', admin, { type: ty, date_from: f, date_to: t, target_user_id: uid })).body.absence.id;
@@ -119,7 +119,7 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     const maHeader = async (user) => {
       const ctx = await browser.createBrowserContext(); const pm = await ctx.newPage(); await pm.setViewport({ width: 1000, height: 800 });
       await pm.goto(BASE, { waitUntil: 'networkidle2' });
-      await pm.waitForSelector('#login-user'); await pm.type('#login-user', user); await pm.type('#login-pass', 'test');
+      await pm.waitForSelector('#login-user'); await pm.type('#login-user', user); await pm.type('#login-pass', 'Test1234!');
       await pm.click('#login-form button[type="submit"]'); await pm.waitForSelector('a[href="#/absences"]', { timeout: 8000 });
       await pm.evaluate(() => { location.hash = '#/absences'; }); await sleep(800);
       await pm.waitForSelector('.absence-counter', { timeout: 8000 });

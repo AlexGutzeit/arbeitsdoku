@@ -29,7 +29,7 @@ const roleOf = async (admin, id) => (await req('GET', `/api/users/${id}`, admin)
     const chefLogin = await login('chef', cpw);
     const chef = chefLogin.body.token;
     const chefId = chefLogin.body.user.id;
-    const opfer = (await req('POST', '/api/users', admin, { username: 'opfer', password: 'test1234', name: 'Opfer', role: 'mitarbeiter' })).body.user;
+    const opfer = (await req('POST', '/api/users', admin, { username: 'opfer', password: 'Test1234!', name: 'Opfer', role: 'mitarbeiter' })).body.user;
     ok('Setup: admin + chef Login, MA angelegt', !!(admin && chef && opfer));
 
     // ── Kern von B1: Chef darf NICHT zu admin hochstufen ──
@@ -44,7 +44,7 @@ const roleOf = async (admin, id) => (await req('GET', `/api/users/${id}`, admin)
     r = await req('PUT', `/api/users/${opfer.id}`, chef, { role: 'superuser' });
     ok('Chef → ungültige Rolle: 400', r.status === 400, 'status=' + r.status);
 
-    r = await req('POST', '/api/users', chef, { username: 'x_admin', password: 'test1234', name: 'X', role: 'admin' });
+    r = await req('POST', '/api/users', chef, { username: 'x_admin', password: 'Test1234!', name: 'X', role: 'admin' });
     ok('Chef → POST role=admin: 400 (Regression, war schon so)', r.status === 400, 'status=' + r.status);
 
     // ── Erlaubtes bleibt erlaubt ──
@@ -64,8 +64,8 @@ const roleOf = async (admin, id) => (await req('GET', `/api/users/${id}`, admin)
 
     // ── B2: Benutzernamen-Eindeutigkeit im PUT ──
     console.log('\nB2 — username-Eindeutigkeit:');
-    const u1 = (await req('POST', '/api/users', admin, { username: 'name_a', password: 'test1234', name: 'A', role: 'mitarbeiter' })).body.user;
-    const u2 = (await req('POST', '/api/users', admin, { username: 'name_b', password: 'test1234', name: 'B', role: 'mitarbeiter' })).body.user;
+    const u1 = (await req('POST', '/api/users', admin, { username: 'name_a', password: 'Test1234!', name: 'A', role: 'mitarbeiter' })).body.user;
+    const u2 = (await req('POST', '/api/users', admin, { username: 'name_b', password: 'Test1234!', name: 'B', role: 'mitarbeiter' })).body.user;
     r = await req('PUT', `/api/users/${u2.id}`, admin, { username: 'name_a' });
     ok('PUT auf bereits vergebenen Benutzernamen: 409', r.status === 409, 'status=' + r.status);
     ok('Benutzername unverändert nach 409', (await req('GET', `/api/users/${u2.id}`, admin)).body.user.username === 'name_b');

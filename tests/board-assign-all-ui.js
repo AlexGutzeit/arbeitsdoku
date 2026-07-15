@@ -21,7 +21,7 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const inColumn = (p, colName, projName) => p.evaluate((cn, pn) => {
   const col = [...document.querySelectorAll('.board-col')].find(c => ((c.querySelector('.board-col-head')||{}).textContent || '').includes(cn));
   return !!col && [...col.querySelectorAll('.proj-name')].some(el => el.textContent.trim() === pn);
@@ -37,7 +37,7 @@ const inColumn = (p, colName, projName) => p.evaluate((cn, pn) => {
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/board-assign-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const mk = async (o) => (await req('POST','/api/users', admin, { password:'test', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8, ...o })).body.user;
+    const mk = async (o) => (await req('POST','/api/users', admin, { password:'Test1234!', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8, ...o })).body.user;
     const chef = await mk({ username:'chef2', name:'Chef Zwei', role:'chef' });
     const bh   = await mk({ username:'bh',    name:'Bucha Halter', role:'buchhalter' });
     const ma   = await mk({ username:'ma',    name:'Mitarbeiter A' });

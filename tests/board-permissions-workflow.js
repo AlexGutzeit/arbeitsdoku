@@ -30,11 +30,11 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const ymd = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const plusDays = n => { const d = new Date(); d.setDate(d.getDate()+n); return ymd(d); };
 
-const login = async (p, u, pw='test') => {
+const login = async (p, u, pw='Test1234!') => {
   await p.goto(BASE, { waitUntil:'networkidle2' });
   await p.evaluate(() => { try { localStorage.clear(); } catch(_){} });
   await p.goto(BASE, { waitUntil:'networkidle2' });
@@ -57,7 +57,7 @@ const boardHas = (p, name) => p.evaluate(n => [...document.querySelectorAll('.pr
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/board-perms-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const mkUser = async (o) => (await req('POST','/api/users', admin, { password:'test', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8, ...o })).body.user;
+    const mkUser = async (o) => (await req('POST','/api/users', admin, { password:'Test1234!', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8, ...o })).body.user;
     const chef2 = await mkUser({ username:'chef2', name:'Chef Zwei', role:'chef' });
     const bh    = await mkUser({ username:'bh',    name:'Bucha Halter', role:'buchhalter' });
     const pall  = await mkUser({ username:'pall',  name:'Planer Alle',  can_plan:1, can_plan_all:1 });

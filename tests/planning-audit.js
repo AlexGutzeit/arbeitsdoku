@@ -32,7 +32,7 @@ const auditDetails = async (t, action) => ((await req('GET','/api/audit?action='
     for (let i=0;i<40;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/planning-audit-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = (await req('POST','/api/auth/login', null, { username:'admin', password:apw })).body.token;
-    const A = (await req('POST','/api/users', admin, { username:'alex', password:'test', name:'Alex', role:'mitarbeiter', can_plan:0, can_plan_all:0, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const A = (await req('POST','/api/users', admin, { username:'alex', password:'Test1234!', name:'Alex', role:'mitarbeiter', can_plan:0, can_plan_all:0, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     ok('Setup Alex angelegt', !!A);
 
     // Anlege-Audit enthält semantische Stufe

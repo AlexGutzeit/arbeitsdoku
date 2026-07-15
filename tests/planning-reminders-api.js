@@ -32,9 +32,9 @@ const leadOf = async (t, gid) => { const rs = await remOn(t, gid); return rs[0] 
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/planning-reminders-api-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const anna = (await req('POST','/api/users', admin, { username:'anna', password:'annapw', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const bob  = (await req('POST','/api/users', admin, { username:'bob',  password:'bobpw',  name:'Bob',  role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const annaT = await tok('anna','annapw');
+    const anna = (await req('POST','/api/users', admin, { username:'anna', password:'Annapw12!', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const bob  = (await req('POST','/api/users', admin, { username:'bob',  password:'Bobpw123!',  name:'Bob',  role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const annaT = await tok('anna','Annapw12!');
     const MON = nextMon();
 
     // ===== A) Einzelplanung: anlegen / mehrere / ändern / löschen =====

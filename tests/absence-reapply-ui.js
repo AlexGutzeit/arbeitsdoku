@@ -32,8 +32,8 @@ function req(method, p, token, body) {
     for (let i=0;i<40;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const pw = (fs.readFileSync('/tmp/absence-reapply-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = (await req('POST','/api/auth/login', null, { username:'admin', password:pw })).body.token;
-    await req('POST','/api/users', admin, { username:'wkr', password:'test', name:'Worker', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
-    const tok = (await req('POST','/api/auth/login', null, { username:'wkr', password:'test' })).body.token;
+    await req('POST','/api/users', admin, { username:'wkr', password:'Test1234!', name:'Worker', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    const tok = (await req('POST','/api/auth/login', null, { username:'wkr', password:'Test1234!' })).body.token;
     // MA legt eine Abwesenheit an und löscht sie (landet im Papierkorb)
     const D = '2026-09-15';
     const a = (await req('POST','/api/absences', tok, { type:'krank', date_from:D, date_to:D })).body.absence;
@@ -43,7 +43,7 @@ function req(method, p, token, body) {
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
     const p = await browser.newPage(); await p.setViewport({ width:1200, height:820 });
     await p.goto(BASE, { waitUntil:'networkidle2' });
-    await p.waitForSelector('#login-user'); await p.type('#login-user','wkr'); await p.type('#login-pass','test');
+    await p.waitForSelector('#login-user'); await p.type('#login-user','wkr'); await p.type('#login-pass','Test1234!');
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]');
     await p.evaluate(() => { location.hash = '#/deleted-absences'; }); await sleep(1000);
 

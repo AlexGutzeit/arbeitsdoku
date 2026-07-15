@@ -39,16 +39,16 @@ const has = (resp, id) => ((resp.body && (resp.body.entries || resp.body.absence
     const admin = (await req('POST','/api/auth/login', null, { username:'admin', password:pw })).body.token;
     ok('Admin-Login', !!admin);
 
-    const mk = (u, role) => req('POST','/api/users', admin, { username:u, password:'test', name:u.toUpperCase(), role, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    const mk = (u, role) => req('POST','/api/users', admin, { username:u, password:'Test1234!', name:u.toUpperCase(), role, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
     const chef = (await mk('cheffe','chef')).body.user;
     const m1 = (await mk('worker1','mitarbeiter')).body.user;
     const m2 = (await mk('worker2','mitarbeiter')).body.user;
     const tmp = (await mk('templing','mitarbeiter')).body.user;
     ok('Nutzer angelegt (chef, m1, m2, tmp)', !!(chef&&m1&&m2&&tmp));
 
-    const cTok = (await req('POST','/api/auth/login', null, { username:'cheffe', password:'test' })).body.token;
-    const t1 = (await req('POST','/api/auth/login', null, { username:'worker1', password:'test' })).body.token;
-    const t2 = (await req('POST','/api/auth/login', null, { username:'worker2', password:'test' })).body.token;
+    const cTok = (await req('POST','/api/auth/login', null, { username:'cheffe', password:'Test1234!' })).body.token;
+    const t1 = (await req('POST','/api/auth/login', null, { username:'worker1', password:'Test1234!' })).body.token;
+    const t2 = (await req('POST','/api/auth/login', null, { username:'worker2', password:'Test1234!' })).body.token;
 
     // m1 legt Eintrag + zwei Abwesenheiten an und löscht sie; m2 legt Eintrag an und löscht ihn
     const e1 = (await req('POST','/api/entries', t1, { date:'2026-08-20', time_from:'07:00', time_to:'15:00', break_minutes:30 })).body.entry;

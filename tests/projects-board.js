@@ -20,7 +20,7 @@ function req(method, p, token, body) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console.log('  ✗ '+n+(e?'  → '+e:'')));
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const board = async (t, done) => ((await req('GET','/api/projects'+(done?'?done=1':''), t)).body.projects || []);
 
 (async () => {
@@ -32,8 +32,8 @@ const board = async (t, done) => ((await req('GET','/api/projects'+(done?'?done=
     for (let i=0;i<40;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/projects-board-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const A = (await req('POST','/api/users', admin, { username:'m1', password:'test', name:'M1', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const B = (await req('POST','/api/users', admin, { username:'m2', password:'test', name:'M2', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const A = (await req('POST','/api/users', admin, { username:'m1', password:'Test1234!', name:'M1', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const B = (await req('POST','/api/users', admin, { username:'m2', password:'Test1234!', name:'M2', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const t1 = await tok('m1');
     ok('Setup (admin + 2 MA)', !!(A && B && t1));
 

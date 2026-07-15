@@ -21,7 +21,7 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 // Datum, das exakt k Arbeitstage (Mo–Fr) nach heute liegt — Wochenenden werden übersprungen.
 // So ist `available` (Arbeitstage) im Test deterministisch = k, unabhängig vom Wochentag des Laufs.
@@ -42,7 +42,7 @@ const detailText = (p, id) => p.evaluate(id => { const d = document.querySelecto
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/project-due-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const anna = (await req('POST','/api/users', admin, { username:'anna', password:'test', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const anna = (await req('POST','/api/users', admin, { username:'anna', password:'Test1234!', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     const P = (o) => req('POST','/api/projects', admin, { assigned_user_ids:[anna.id], ...o }).then(r => r.body.project);
     // Alle Fristen in ARBEITSTAGEN, damit die Fälle laufunabhängig gelten.
     // behind: Frist in 10 AT, Restaufwand 30 AT (alle offen) → rot, goalPct=(0+10)/30*100≈33, „20 AT über"

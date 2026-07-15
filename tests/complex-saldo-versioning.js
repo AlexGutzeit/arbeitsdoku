@@ -47,7 +47,7 @@ function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); retu
   // Frischen Test-Mitarbeiter anlegen: alle Wochentage 8h Soll (Wochen-Soll 40)
   const uname = 'tutest_' + Date.now();
   const cu = await api('POST', '/api/users', {
-    username: uname, password: 'test1234', name: 'Test Mitarbeiter', role: 'mitarbeiter',
+    username: uname, password: 'test', name: 'Test Mitarbeiter', role: 'mitarbeiter',
     hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8,
   });
   const uid = cu.data.user.id;

@@ -24,7 +24,7 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 
 // Zukunftstag (Alex ab heute angestellt → Zukunft, damit planbar/sichtbar)
 function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -40,8 +40,8 @@ const D = (()=>{ const d=new Date(); d.setDate(d.getDate()+10); return ymd(d); }
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/planning-right-transitions-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const A = (await req('POST','/api/users', admin, { username:'alex', password:'test', name:'Alex', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const X = (await req('POST','/api/users', admin, { username:'kollege', password:'test', name:'Kollege', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const A = (await req('POST','/api/users', admin, { username:'alex', password:'Test1234!', name:'Alex', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const X = (await req('POST','/api/users', admin, { username:'kollege', password:'Test1234!', name:'Kollege', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     // Kollege hat eine Abwesenheit (für die „fremde Abwesenheit sichtbar?"-Unterscheidung)
     await req('POST','/api/absences', admin, { type:'krank', date_from:D, date_to:D, target_user_id:X.id });
     ok('Setup: Alex + Kollege (mit Abwesenheit)', !!(A && X));
@@ -56,7 +56,7 @@ const D = (()=>{ const d=new Date(); d.setDate(d.getDate()+10); return ymd(d); }
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
     const p = await browser.newPage(); await p.setViewport({ width:1200, height:820 });
     await p.goto(BASE, { waitUntil:'networkidle2' });
-    await p.waitForSelector('#login-user'); await p.type('#login-user','alex'); await p.type('#login-pass','test');
+    await p.waitForSelector('#login-user'); await p.type('#login-user','alex'); await p.type('#login-pass','Test1234!');
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]');
 
     const reloadPlanningFAB = async () => {

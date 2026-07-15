@@ -34,7 +34,7 @@ function req(method, p, token, body) {
     const pw = (fs.readFileSync('/tmp/self-planning-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = (await req('POST','/api/auth/login', null, { username:'admin', password:pw })).body.token;
     // Self-Planer anlegen (nur „sich")
-    await req('POST','/api/users', admin, { username:'self', password:'test', name:'Self Planer', role:'mitarbeiter', can_plan:1, can_plan_all:0, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    await req('POST','/api/users', admin, { username:'self', password:'Test1234!', name:'Self Planer', role:'mitarbeiter', can_plan:1, can_plan_all:0, hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
     ok('Setup: Admin + Self-Planer angelegt', !!admin);
 
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
@@ -72,7 +72,7 @@ function req(method, p, token, body) {
     // --- 2) Self-Planer: Planungsformular ohne Mitarbeiter-Auswahl ---
     await p.evaluate(async () => { await fetch('/api/auth/logout', { method:'POST', headers:{ Authorization:'Bearer '+localStorage.getItem('token') } }).catch(()=>{}); localStorage.clear(); });
     await p.goto(BASE, { waitUntil:'networkidle2' });
-    await p.waitForSelector('#login-user'); await p.type('#login-user','self'); await p.type('#login-pass','test');
+    await p.waitForSelector('#login-user'); await p.type('#login-user','self'); await p.type('#login-pass','Test1234!');
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]');
     await p.evaluate(() => { location.hash = '#/planning/new'; }); await sleep(900);
     const formState = await p.evaluate(() => ({

@@ -25,8 +25,8 @@ const tok = async (u, pw) => (await req('POST', '/api/auth/login', null, { usern
     for (let i = 0; i < 50; i++) { try { const h = await req('GET', '/health'); if (h.status === 200) break; } catch (_) {} await sleep(150); }
     const apw = (fs.readFileSync('/tmp/vacation-api-srv.log', 'utf8').match(/admin\s+->\s+(\S+)/) || [])[1];
     const admin = await tok('admin', apw);
-    const ma = (await req('POST', '/api/users', admin, { username: 'urlauber', password: 'p', name: 'Uwe Urlauber', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user;
-    const maT = await tok('urlauber', 'p');
+    const ma = (await req('POST', '/api/users', admin, { username: 'urlauber', password: 'Passw0rd!', name: 'Uwe Urlauber', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user;
+    const maT = await tok('urlauber', 'Passw0rd!');
 
     // ── Frisch (nichts konfiguriert) → alte Ansicht ──
     console.log('\nGate „nichts konfiguriert":');

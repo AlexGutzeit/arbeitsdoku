@@ -127,8 +127,8 @@ const MB = 1024 * 1024;
     r = await reqJSON('PUT','/api/settings/branding-limit', token, { fileValue:'0', fileUnit:'MB' });
     ok('Branding-Limit ≤ 0 → 400', r.status===400, String(r.status));
     // admin-only: Chef bekommt 403
-    await reqJSON('POST','/api/users', token, { username:'cheflimit', password:'test', name:'CHEF', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
-    const cTok = (await reqJSON('POST','/api/auth/login', null, { username:'cheflimit', password:'test' })).body.token;
+    await reqJSON('POST','/api/users', token, { username:'cheflimit', password:'Test1234!', name:'CHEF', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    const cTok = (await reqJSON('POST','/api/auth/login', null, { username:'cheflimit', password:'Test1234!' })).body.token;
     r = await reqJSON('PUT','/api/settings/branding-limit', cTok, { fileValue:'3', fileUnit:'MB' });
     ok('Branding-Limit als Chef → 403 (nur Admin)', r.status===403, String(r.status));
 

@@ -21,7 +21,7 @@ const tok = async (u, pw) => (await req('POST','/api/auth/login', null, { userna
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/rem-time-lineage-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    const a = (await req('POST','/api/users', admin, { username:'a', password:'p', name:'A', role:'mitarbeiter', hours_mon:8 })).body.user;
+    const a = (await req('POST','/api/users', admin, { username:'a', password:'Passw0rd!', name:'A', role:'mitarbeiter', hours_mon:8 })).body.user;
 
     // Vorkommen geordnet + Reminder-Zeit/-Id/-Vorlauf
     const oi = async () => { const es = ((await req('GET','/api/planning', admin)).body.entries||[]).filter(e=>e.client==='TZ' && e.occurrence_date); const seen={}; const out=[]; for (const e of es.sort((x,y)=>x.occurrence_date<y.occurrence_date?-1:1)) { if(seen[e.occurrence_date])continue; seen[e.occurrence_date]=1; const rs=(await req('GET','/api/planning/reminders?group_id='+e.group_id,admin)).body.reminders||[]; out.push({od:e.occurrence_date,sid:e.series_id,gid:e.group_id,rt:rs[0]&&rs[0].remind_time,rid:rs[0]&&rs[0].id,ln:rs[0]&&rs[0].lead_num,lu:rs[0]&&rs[0].lead_unit,n:rs.length}); } return out; };

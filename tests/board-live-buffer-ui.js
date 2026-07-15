@@ -21,7 +21,7 @@ function req(method, p, token, body) {
     const r = http.request({ host:'localhost', port:PORT, path:p, method, headers:{ 'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{}), ...(data?{'Content-Length':Buffer.byteLength(data)}:{}) } }, x => { let s=''; x.on('data',d=>s+=d); x.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; res({status:x.statusCode, body:j}); }); });
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
-const tok = async (u, pw='test') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
+const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
 const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 // Datum exakt k Arbeitstage (Mo–Fr) nach heute — Wochenenden überspringen (available = k, laufunabhängig).
 const dueInWorkdays = k => { const d = new Date(); let c = 0; while (c < k) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) c++; } return d.toISOString().slice(0, 10); };
@@ -52,8 +52,8 @@ async function loginPage(browser, base, user, pw) {
     for (let i=0;i<50;i++){ try{ const h=await req('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const apw = (fs.readFileSync('/tmp/board-live-buffer-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
-    await req('POST','/api/users', admin, { username:'chefliv', password:'test', name:'Chefin Live', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
-    const jakob = (await req('POST','/api/users', admin, { username:'jakobliv', password:'test', name:'Jakob Wolf', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    await req('POST','/api/users', admin, { username:'chefliv', password:'Test1234!', name:'Chefin Live', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
+    const jakob = (await req('POST','/api/users', admin, { username:'jakobliv', password:'Test1234!', name:'Jakob Wolf', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     // Frist in 30 ARBEITSTAGEN, 2 offene Ziele à 10 AT → Rest 20 AT, Puffer vorhanden (Luft ~33%).
     // Nach „Ziel 1 erledigt": Rest 10 AT → mehr Luft (~50%) + grünes Segment erscheint.
     const pr = (await req('POST','/api/projects', admin, { name:'Live-Balken', assigned_user_ids:[jakob.id], due_date:dueInWorkdays(30), milestones:[{title:'Ziel 1', est_days:10},{title:'Ziel 2', est_days:10}] })).body.project;
@@ -62,8 +62,8 @@ async function loginPage(browser, base, user, pw) {
     browser = await puppeteer.launch({ executablePath:CHROME, headless:'shell', args:['--no-sandbox','--disable-setuid-sandbox'] });
     // 3 isolierte Browser-Kontexte (getrennte Sessions): A=admin (ändert), B=chef, C=jakob (beobachten)
     const A = await loginPage(browser, BASE, 'admin', apw);
-    const B = await loginPage(browser, BASE, 'chefliv', 'test');
-    const C = await loginPage(browser, BASE, 'jakobliv', 'test');
+    const B = await loginPage(browser, BASE, 'chefliv', 'Test1234!');
+    const C = await loginPage(browser, BASE, 'jakobliv', 'Test1234!');
 
     const buf0B = await bufSlim(B, pr.id), buf0C = await bufSlim(C, pr.id);
     ok('B: Luft anfangs vorhanden (~33%)', buf0B > 25 && buf0B < 42, 'buf=' + buf0B);
