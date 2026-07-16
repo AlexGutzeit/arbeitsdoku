@@ -154,6 +154,8 @@ doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusamm
 - **Schwarzes Brett bearbeiten** – darf Aushänge verfassen
 - **Dokumente hochladen** – darf in der Dateiablage hochladen/verwalten
 
+> Diese Einzelrechte gelten nur für **Mitarbeiter/Buchhalter**. **Chef und Admin** haben Planung, Schwarzes Brett und Datei-Upload ohnehin über ihre Rolle – im Bearbeiten-Formular werden die Checkboxen für sie darum ausgeblendet (und die Flags nicht gespeichert).
+
 > Geänderte Rechte greifen für den betroffenen Nutzer **ohne Ab-/Anmelden** – ein Seiten-Reload (F5) bzw. das Zurückkehren zum Tab genügt.
 
 ---

@@ -473,6 +473,7 @@ async function initDatabase() {
   // Migration: can_plan_all Spalte (Planungsrecht-Stufe „alle" — can_plan allein = nur „sich")
   // Backfill: Bestandsplaner (can_plan=1) behalten das Recht, ALLE zu planen.
   ensurePlanAll(db);
+  normalizeManagerRights(db); // #9: Chef/Admin von redundanten Einzelrechten bereinigen
 
   // Migration: Bestehende target_hours_per_week in user_target_hours übernehmen
   try {
@@ -876,6 +877,7 @@ function ensureAuditSchema(targetDb) {
     }
     // can_plan_all separat (mit Backfill aus can_plan), damit Bestandsplaner aus alten Backups „alle" behalten.
     ensurePlanAll(targetDb);
+    normalizeManagerRights(targetDb); // #9: Chef/Admin von redundanten Einzelrechten bereinigen
   } catch (e) {
     console.error('ensureAuditSchema fehlgeschlagen:', e.message);
   }
@@ -899,6 +901,24 @@ function ensurePlanAll(targetDb) {
     }
   } catch (e) {
     console.error('ensurePlanAll fehlgeschlagen:', e.message);
+  }
+}
+
+// #9: Chef/Admin planen/verwalten ohnehin per Rolle (siehe planning.js/bulletin.js/documents.js) — die
+// Einzelrecht-Flags can_plan/can_plan_all/can_bulletin/can_upload sind für sie redundant und nur verwirrend.
+// Wir halten die Invariante „Manager tragen keine Einzelrechte" auch im Bestand sauber. Idempotent, nur wenn
+// wirklich etwas zu bereinigen ist (kein unnötiges Schreiben) — läuft bei Init UND nach Restore.
+function normalizeManagerRights(targetDb) {
+  try {
+    const n = targetDb.prepare(
+      "SELECT COUNT(*) AS c FROM users WHERE role IN ('chef','admin') AND (can_plan=1 OR can_plan_all=1 OR can_bulletin=1 OR can_upload=1)"
+    ).get().c;
+    if (n > 0) {
+      targetDb.exec("UPDATE users SET can_plan=0, can_plan_all=0, can_bulletin=0, can_upload=0 WHERE role IN ('chef','admin')");
+      console.log(`Normalisierung: ${n} Chef/Admin-Konto/-Konten von redundanten Einzelrechten bereinigt (#9).`);
+    }
+  } catch (e) {
+    console.error('normalizeManagerRights fehlgeschlagen:', e.message);
   }
 }
 
@@ -1131,4 +1151,4 @@ function reloadFromFile(filePath) {
   ensureAuditSchema(db);
 }
 
-module.exports = { getDb, closeDb, setDb, initDatabase, saveToFile, reloadFromFile, writeFileAtomic, DB_PATH, get SQL() { return SQL; } };
+module.exports = { getDb, closeDb, setDb, initDatabase, saveToFile, reloadFromFile, writeFileAtomic, normalizeManagerRights, DB_PATH, get SQL() { return SQL; } };

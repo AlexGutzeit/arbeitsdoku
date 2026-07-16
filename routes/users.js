@@ -135,8 +135,10 @@ router.get('/:id', authenticate, authorize('chef'), (req, res) => {
 router.post('/', authenticate, authorize('chef'), async (req, res) => {
   const { username, password, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri } = req.body;
   // „alle" impliziert immer „sich" (can_plan_all=1 ⇒ can_plan=1).
-  const planAll = can_plan_all ? 1 : 0;
-  const planSelf = (can_plan || can_plan_all) ? 1 : 0;
+  let planAll = can_plan_all ? 1 : 0;
+  let planSelf = (can_plan || can_plan_all) ? 1 : 0;
+  let bulletin = can_bulletin ? 1 : 0;
+  let upload = can_upload ? 1 : 0;
 
   if (!username || !password || !name || !role) {
     return res.status(400).json({ error: 'Benutzername, Passwort, Name und Rolle sind Pflichtfelder' });
@@ -147,6 +149,8 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   if (!allowedRoles.includes(role)) {
     return res.status(400).json({ error: 'Ungültige Rolle' });
   }
+  // #9: Chef/Admin haben Planung/Schwarzes Brett/Upload per Rolle — Einzelrecht-Flags redundant → 0.
+  if (role === 'chef' || role === 'admin') { planAll = 0; planSelf = 0; bulletin = 0; upload = 0; }
 
   const pwErr = passwordPolicyError(password, username);
   if (pwErr) return res.status(400).json({ error: pwErr });
@@ -165,7 +169,7 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }
   const result = db.prepare(
     "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-  ).run(username, hash, name, role, hpw, start_overtime || 0, planSelf, planAll, can_bulletin ? 1 : 0, can_upload ? 1 : 0);
+  ).run(username, hash, name, role, hpw, start_overtime || 0, planSelf, planAll, bulletin, upload);
 
   const userId = result.lastInsertRowid;
   const today = new Date().toISOString().slice(0, 10);
@@ -220,9 +224,15 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
 
   // Rechte-Stufen normalisieren: jeweils mitgeschicktes Feld übernehmen, sonst Bestand behalten;
   // „alle" impliziert immer „sich".
-  const newPlanAll = can_plan_all !== undefined ? (can_plan_all ? 1 : 0) : (user.can_plan_all || 0);
+  let newPlanAll = can_plan_all !== undefined ? (can_plan_all ? 1 : 0) : (user.can_plan_all || 0);
   let newPlanSelf = can_plan !== undefined ? (can_plan ? 1 : 0) : (user.can_plan || 0);
   if (newPlanAll) newPlanSelf = 1;
+  let newBulletin = can_bulletin !== undefined ? (can_bulletin ? 1 : 0) : (user.can_bulletin || 0);
+  let newUpload = can_upload !== undefined ? (can_upload ? 1 : 0) : (user.can_upload || 0);
+  // #9: Chef/Admin haben Planung/Schwarzes Brett/Upload ohnehin per Rolle — die Einzelrecht-Flags sind
+  // redundant und werden für sie immer auf 0 gehalten (auch gegen direkte API-Aufrufe).
+  const effRole = role || user.role;
+  if (effRole === 'chef' || effRole === 'admin') { newPlanAll = 0; newPlanSelf = 0; newBulletin = 0; newUpload = 0; }
 
   db.prepare(
     'UPDATE users SET username=?, name=?, role=?, target_hours_per_week=?, start_overtime=?, can_plan=?, can_plan_all=?, can_bulletin=?, can_upload=? WHERE id=?'
@@ -234,8 +244,8 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     start_overtime !== undefined ? start_overtime : (user.start_overtime || 0),
     newPlanSelf,
     newPlanAll,
-    can_bulletin !== undefined ? (can_bulletin ? 1 : 0) : (user.can_bulletin || 0),
-    can_upload !== undefined ? (can_upload ? 1 : 0) : (user.can_upload || 0),
+    newBulletin,
+    newUpload,
     req.params.id
   );
 

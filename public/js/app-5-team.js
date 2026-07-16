@@ -885,7 +885,10 @@ async function showUserModal(user) {
             <input type="number" class="form-control" id="um-start-overtime" value="${user?.start_overtime ?? 0}" step="0.01">
           </div>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="um-rights-role-hint" style="display:none;">
+          <p class="push-hint" style="margin:0;">Chef und Admin haben Planungs-, Schwarzes-Brett- und Upload-Recht automatisch (per Rolle) – Einzelrechte sind hier nicht nötig.</p>
+        </div>
+        <div class="form-group" id="um-rights-group">
           <label style="display:block;margin-bottom:0.3rem;">Planungsrecht</label>
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
             <input type="checkbox" id="um-can-plan" ${user?.can_plan ? 'checked' : ''}>
@@ -984,6 +987,18 @@ async function showUserModal(user) {
   // „sich" abwählen → „alle" kann nicht mehr gelten (greift nur, solange „sich" nicht gesperrt ist).
   planSelfCb.addEventListener('change', () => { if (!planSelfCb.checked) planAllCb.checked = false; });
   syncPlanRights();
+
+  // #9: Chef/Admin planen/verwalten ohnehin per Rolle → den Einzelrechte-Block ausblenden (Hinweis zeigen).
+  const roleSel = document.getElementById('um-role');
+  const rightsGroup = document.getElementById('um-rights-group');
+  const rightsHint = document.getElementById('um-rights-role-hint');
+  const syncRightsVisibility = () => {
+    const isMgr = roleSel.value === 'chef' || roleSel.value === 'admin';
+    if (rightsGroup) rightsGroup.style.display = isMgr ? 'none' : '';
+    if (rightsHint) rightsHint.style.display = isMgr ? '' : 'none';
+  };
+  roleSel.addEventListener('change', syncRightsVisibility);
+  syncRightsVisibility();
 
   // Passwort zurücksetzen (nur bei Bearbeitung)
   if (isEdit) {
