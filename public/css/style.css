@@ -687,7 +687,7 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .vac-ov-controls .vac-ov-stand { font-size: 0.8rem; color: var(--text-lighter); margin-left: auto; }
 .vac-ov-scroll { overflow-x: auto; }
 .vac-ov-table { width: 100%; font-size: 0.85rem; border-collapse: collapse; }
-.vac-ov-table th, .vac-ov-table td { padding: 0.4rem 0.55rem; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+.vac-ov-table th, .vac-ov-table td { padding: 0.4rem 0.55rem; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--border); }
 .vac-ov-table th:first-child, .vac-ov-table td.vac-ov-name { text-align: left; }
 .vac-ov-table thead th { position: sticky; top: 0; background: var(--bg); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-lighter); }
 .vac-ov-table td.vac-ov-neg { color: var(--danger); }

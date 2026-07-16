@@ -275,7 +275,7 @@ router.get('/vacation-overview.pdf', authenticate, (req, res) => {
     for (const c of cols) {
       let t = String(vals[c.k]);
       if (!header && vals.configured === false && calcCols.includes(c.k)) t = '–'; // ohne Anspruch keine Rechnung
-      doc.text(t, x + 3, y + 5, { width: c.w - 6, align: c.align || 'right', lineBreak: false });
+      doc.text(t, x + 3, y + 5, { width: c.w - 6, align: c.align || 'center', lineBreak: false });
       x += c.w;
     }
     doc.moveTo(x0, y + rowH).lineTo(x0 + totalW, y + rowH).lineWidth(0.3).strokeColor('#cbd5e1').stroke();
