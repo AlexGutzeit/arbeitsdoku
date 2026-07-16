@@ -74,6 +74,28 @@ const roleOf = async (admin, id) => (await req('GET', `/api/users/${id}`, admin)
     r = await req('PUT', `/api/users/${u2.id}`, admin, { username: 'name_c' });
     ok('PUT auf freien Benutzernamen: 200', r.status === 200, 'status=' + r.status);
 
+    // ── S3: der LETZTE aktive Admin darf nicht herabgestuft/ausgestellt werden ──
+    console.log('\nS3 — Schutz des letzten Admins:');
+    const adminId = (await login('admin', apw)).body.user.id;
+    // Aktuell zwei aktive Admins (Seed-admin + opfer). opfer herabstufen ist erlaubt → wieder 1 Admin (Seed).
+    r = await req('PUT', `/api/users/${opfer.id}`, admin, { role: 'mitarbeiter' });
+    ok('Admin → anderen Admin (nicht der letzte) herabstufen: 200', r.status === 200 && (await roleOf(admin, opfer.id)) === 'mitarbeiter', 'status=' + r.status);
+    // Jetzt ist der Seed-admin der einzige Admin: sich selbst herabstufen muss scheitern.
+    r = await req('PUT', `/api/users/${adminId}`, admin, { role: 'mitarbeiter' });
+    ok('Admin → letzten Admin herabstufen: 400', r.status === 400, 'status=' + r.status);
+    ok('Letzter Admin bleibt admin', (await roleOf(admin, adminId)) === 'admin');
+    // Und ausstellen des letzten Admins per API ebenfalls nicht.
+    r = await req('POST', `/api/users/${adminId}/deactivate`, admin, {});
+    ok('Admin → letzten Admin ausstellen: 400', r.status === 400, 'status=' + r.status);
+    // Mit einem zweiten Admin ist Herabstufen wieder erlaubt.
+    const admin2 = (await req('POST', '/api/users', admin, { username: 'admin2', password: 'Test1234!', name: 'Admin Zwei', role: 'admin' })).body.user;
+    r = await req('PUT', `/api/users/${admin2.id}`, admin, { role: 'mitarbeiter' });
+    ok('Admin → zweiten Admin (nicht der letzte) herabstufen: 200', r.status === 200 && (await roleOf(admin, admin2.id)) === 'mitarbeiter', 'status=' + r.status);
+    // Nicht-letzten Admin ausstellen bleibt erlaubt.
+    const admin3 = (await req('POST', '/api/users', admin, { username: 'admin3', password: 'Test1234!', name: 'Admin Drei', role: 'admin' })).body.user;
+    r = await req('POST', `/api/users/${admin3.id}/deactivate`, admin, {});
+    ok('Admin → zweiten Admin (nicht der letzte) ausstellen: 200', r.status === 200, 'status=' + r.status);
+
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nUser-Role-Guard: ${pass} bestanden, ${fail} fehlgeschlagen` + (fails.length ? `\nFehlgeschlagen: ${fails.join(', ')}` : ''));
   process.exit(fail === 0 ? 0 : 1);

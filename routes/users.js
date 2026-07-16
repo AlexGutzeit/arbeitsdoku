@@ -9,6 +9,12 @@ const router = express.Router();
 // Gültige Rollen. 'admin' darf ausschließlich durch Admins vergeben werden (siehe POST/PUT).
 const ROLES = ['mitarbeiter', 'buchhalter', 'chef', 'admin'];
 
+// Anzahl AKTIVER Admins außer einem bestimmten Nutzer — für den „letzter Admin"-Schutz (S3):
+// der letzte verbleibende Admin darf nicht herabgestuft/ausgestellt werden (sonst 0 Admins → Aussperrung).
+function otherActiveAdmins(db, exceptId) {
+  return db.prepare("SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND COALESCE(active,1) = 1 AND id != ?").get(exceptId).c;
+}
+
 // Passwort-Policy (serverseitig erzwungen — Quelle der Wahrheit; das Frontend spiegelt sie nur).
 // Gilt beim Anlegen UND Zurücksetzen. Der Login prüft NICHTS davon → Altpasswörter bleiben nutzbar.
 function passwordPolicyError(pw, username) {
@@ -198,6 +204,11 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     if (role === 'admin' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Nur Admins dürfen die Admin-Rolle vergeben' });
     }
+    // S3: den LETZTEN aktiven Admin nicht herabstufen — sonst gäbe es 0 Admins und niemand käme mehr an die
+    // Admin-Funktionen. Bei mehreren Admins ist das Herabstufen erlaubt.
+    if (user.role === 'admin' && role !== 'admin' && user.active !== 0 && otherActiveAdmins(db, user.id) === 0) {
+      return res.status(400).json({ error: 'Der letzte Admin kann nicht herabgestuft werden — lege zuerst einen weiteren Admin an.' });
+    }
   }
 
   // Benutzernamen-Eindeutigkeit (wie beim Anlegen): ein umbenannter Nutzer darf keinen bereits vergebenen
@@ -268,6 +279,11 @@ router.post('/:id/deactivate', authenticate, authorize('chef'), (req, res) => {
   }
   if (Number(req.params.id) === req.user.id) {
     return res.status(400).json({ error: 'Sich selbst kann man nicht ausstellen' });
+  }
+  // S3: auch beim Ausstellen den letzten aktiven Admin schützen (falls je jemand einen Admin über den API-Weg
+  // ausstellen wollte, der der einzige verbliebene ist).
+  if (user.role === 'admin' && otherActiveAdmins(db, user.id) === 0) {
+    return res.status(400).json({ error: 'Der letzte Admin kann nicht ausgestellt werden — lege zuerst einen weiteren Admin an.' });
   }
   if (user.active === 0) return res.status(409).json({ error: 'Mitarbeiter ist bereits ausgestellt' });
 
