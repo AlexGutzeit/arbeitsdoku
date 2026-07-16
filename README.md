@@ -144,6 +144,8 @@ doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusamm
 | **Buchhalter** | **Lesende** Manager-Sicht auf alle Mitarbeiterdaten/Statistiken/Nachweise (kein Verwalten von Stammdaten). Bei Abwesenheiten **read-only**: sieht alle, kann aber fremde **nicht** genehmigen/ablehnen/löschen/bearbeiten und keine Fremd-/Feiertagseinträge anlegen (eigene Abwesenheiten normal). Papierkorb: nur eigene. |
 | **Mitarbeiter** | Nur die **eigenen** Daten (Zeiten, Abwesenheiten, Planung) + globale Feiertage. Papierkorb: sieht/stellt nur **selbst Gelöschtes** wieder her (kein Zugriff auf ausgestellte Mitarbeiter). Ausnahme: das **Auftrags-Board** ist bewusst für alle sichtbar (damit sich jeder freie Arbeit ziehen kann); anlegen/ändern/erledigen bleibt Chef/Admin. |
 
+> **Aussperr-Schutz:** Der **letzte** verbleibende (aktive) Admin kann weder herabgestuft noch ausgestellt werden – die App würde sonst ohne Administrator dastehen. Lege zuerst einen weiteren Admin an; bei mehreren Admins sind Herabstufen und Ausstellen ganz normal möglich.
+
 **Zusätzliche Einzelrechte** (pro Benutzer unter *Mitarbeiter → Bearbeiten* vergebbar):
 
 - **Planungsrecht** – zwei Stufen, getrennt vergebbar:
