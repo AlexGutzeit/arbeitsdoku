@@ -190,7 +190,12 @@ router.post('/', authenticate, (req, res) => {
     if (!user_id) {
       return res.status(400).json({ error: 'Admin muss einen Mitarbeiter auswählen' });
     }
-    targetUserId = user_id;
+    // B5: user_id muss ein existierender, aktiver Nicht-Admin sein (statt blind zu übernehmen).
+    const target = db.prepare("SELECT id, role, COALESCE(active,1) AS active FROM users WHERE id = ?").get(user_id);
+    if (!target || target.active === 0 || target.role === 'admin') {
+      return res.status(400).json({ error: 'Ungültiger Mitarbeiter' });
+    }
+    targetUserId = target.id;
   }
 
   const net_hours = calculateNetHours(time_from, time_to, break_minutes || 0);

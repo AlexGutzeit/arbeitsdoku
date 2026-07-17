@@ -1060,9 +1060,13 @@ async function showUserModal(user) {
     document.getElementById('um-vac-add').addEventListener('click', async () => {
       const from = document.getElementById('um-vac-from').value;
       if (!from) { toast('Gültig-ab-Datum eingeben', 'error'); return; }
+      // B4: ungültige Eingabe nicht still zu 0 machen, sondern melden.
+      const daysRaw = String(document.getElementById('um-vac-days').value).trim().replace(',', '.');
+      const days = parseFloat(daysRaw);
+      if (daysRaw === '' || !isFinite(days)) { toast('Bitte eine gültige Zahl für die Urlaubstage eingeben', 'error'); return; }
       const body = {
         valid_from: from,
-        days: parseFloat(String(document.getElementById('um-vac-days').value).replace(',', '.')) || 0,
+        days,
         carryover_mode: vacMode.value,
         carryover_until: vacMode.value === 'date' ? vacUntil.value.trim() : null,
       };
@@ -1074,7 +1078,10 @@ async function showUserModal(user) {
       } catch (e) { toast(e.message, 'error'); }
     });
     document.getElementById('um-vac-startcarry-save').addEventListener('click', async () => {
-      const days = parseFloat(String(document.getElementById('um-vac-startcarry').value).replace(',', '.')) || 0;
+      // B4: leer = 0 (bewusst erlaubt), aber unsinnige Eingabe nicht still zu 0 machen.
+      const raw = String(document.getElementById('um-vac-startcarry').value).trim().replace(',', '.');
+      const days = raw === '' ? 0 : parseFloat(raw);
+      if (raw !== '' && !isFinite(days)) { toast('Bitte eine gültige Zahl für den Start-Resturlaub eingeben', 'error'); return; }
       try {
         await api('PUT', `/api/statistics/vacation/${user.id}/start-carry`, { days });
         toast('Start-Resturlaub gespeichert', 'success');
@@ -1085,6 +1092,8 @@ async function showUserModal(user) {
 
   document.getElementById('user-modal-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn && submitBtn.disabled) return; // B3: Anfrage schon unterwegs → Doppel-Submit verhindern
     const body = {
       name: document.getElementById('um-name').value,
       username: document.getElementById('um-username').value,
@@ -1104,6 +1113,7 @@ async function showUserModal(user) {
       body.hours_fri = parseFloat(document.getElementById('um-h-fri').value) || 0;
       body.target_hours_per_week = body.hours_mon + body.hours_tue + body.hours_wed + body.hours_thu + body.hours_fri;
     }
+    if (submitBtn) submitBtn.disabled = true; // B3
     try {
       if (isEdit) {
         await api('PUT', '/api/users/' + user.id, body);
@@ -1122,6 +1132,7 @@ async function showUserModal(user) {
       overlay.remove();
       renderUsers();
     } catch (err) { toast(err.message, 'error'); }
+    finally { if (submitBtn) submitBtn.disabled = false; } // B3: Button wieder freigeben (bei Fehler/Validierungs-Abbruch)
   });
 }
 

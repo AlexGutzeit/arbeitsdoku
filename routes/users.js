@@ -152,6 +152,11 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   // #9: Chef/Admin haben Planung/Schwarzes Brett/Upload per Rolle — Einzelrecht-Flags redundant → 0.
   if (role === 'chef' || role === 'admin') { planAll = 0; planSelf = 0; bulletin = 0; upload = 0; }
 
+  // B5: start_overtime muss eine Zahl sein (negativ erlaubt = Start mit Überstunden-Schuld).
+  if (start_overtime !== undefined && start_overtime !== null && !Number.isFinite(Number(start_overtime))) {
+    return res.status(400).json({ error: 'Start-Überstunden müssen eine Zahl sein' });
+  }
+
   const pwErr = passwordPolicyError(password, username);
   if (pwErr) return res.status(400).json({ error: pwErr });
 
@@ -169,10 +174,11 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }
   const result = db.prepare(
     "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-  ).run(username, hash, name, role, hpw, start_overtime || 0, planSelf, planAll, bulletin, upload);
+  ).run(username, hash, name, role, hpw, Number(start_overtime) || 0, planSelf, planAll, bulletin, upload);
 
   const userId = result.lastInsertRowid;
-  const today = new Date().toISOString().slice(0, 10);
+  // B6: „heute" in Europe/Berlin (wie im Rest der App) statt UTC — sonst nahe Mitternacht 1 Tag daneben.
+  const today = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
   db.prepare(
     'INSERT INTO user_target_hours (user_id, hours_per_week, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(userId, hpw, hMon, hTue, hWed, hThu, hFri, today);
@@ -215,6 +221,11 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     }
   }
 
+  // B5: start_overtime muss eine Zahl sein (negativ erlaubt = Start mit Überstunden-Schuld).
+  if (start_overtime !== undefined && start_overtime !== null && !Number.isFinite(Number(start_overtime))) {
+    return res.status(400).json({ error: 'Start-Überstunden müssen eine Zahl sein' });
+  }
+
   // Benutzernamen-Eindeutigkeit (wie beim Anlegen): ein umbenannter Nutzer darf keinen bereits vergebenen
   // Namen bekommen — sonst gäbe es zwei Zeilen mit gleichem username und die Anmeldung wäre mehrdeutig.
   if (username && username !== user.username) {
@@ -241,7 +252,7 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     name || user.name,
     role || user.role,
     target_hours_per_week !== undefined ? target_hours_per_week : user.target_hours_per_week,
-    start_overtime !== undefined ? start_overtime : (user.start_overtime || 0),
+    start_overtime !== undefined ? Number(start_overtime) : (user.start_overtime || 0),
     newPlanSelf,
     newPlanAll,
     newBulletin,
