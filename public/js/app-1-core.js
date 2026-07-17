@@ -134,7 +134,7 @@ function calcActualHours(entries) {
 
 function entryTooltipHtml(e) {
   const rv = e.has_regie || 0;
-  const regieText = rv === 0 ? 'Nein' : rv === 1 ? ('Ja – ' + (e.regie_user_name || '')) : REGIE_LABELS[rv] || 'Ja';
+  const regieText = rv === 0 ? 'Nein' : rv === 1 ? ('Ja – ' + esc(e.regie_user_name || '')) : REGIE_LABELS[rv] || 'Ja';
   const lines = [
     `<strong>${esc(e.project_name || e.project_text || 'Kein Projekt')}</strong>`,
     `Zeit: ${esc(e.time_from)} - ${esc(e.time_to)} (${fmtH(e.net_hours)} netto)`,
