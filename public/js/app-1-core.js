@@ -22,6 +22,7 @@ const S = {
   welcomeWeekOffset: 0,
   badges: { bulletin: 0, notes: 0, orders: 0 },
   hasLegal: { impressum: false, datenschutz: false }, // ob Impressum/Datenschutz hinterlegt sind (für Links)
+  _lastRoute: '/welcome', // letzte Seite vor Impressum/Datenschutz (für den „Zurück"-Link)
 };
 
 // --- API Helper ---
@@ -702,6 +703,7 @@ function render() {
   const r0 = getRoute();
   // Rechtsseiten sind bewusst OHNE Login erreichbar (Impressumspflicht) → vor dem Auth-Guard behandeln.
   if (r0 === '/impressum' || r0 === '/datenschutz') { renderLegal(r0.slice(1)); return; }
+  S._lastRoute = r0; // letzte „echte" Seite merken → „Zurück" aus Impressum/Datenschutz kehrt dorthin zurück
   if (!S.token || !S.user) { renderLogin(); return; }
   const route = getRoute();
   if (route.startsWith('/entry/new')) renderEntryForm();

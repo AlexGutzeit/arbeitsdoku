@@ -59,6 +59,13 @@ const DAT = 'Verantwortliche Stelle: Musterfirma GmbH. Zwecke: Arbeitszeiterfass
     ok('Menü zeigt Impressum-Eintrag', (await pa.$('.sidebar nav a[href="#/impressum"]')) !== null);
     ok('Menü zeigt Datenschutz-Eintrag', (await pa.$('.sidebar nav a[href="#/datenschutz"]')) !== null);
 
+    // "Zurück" kehrt zur VORHERIGEN Seite zurück (nicht fix zum Zeitnachweis)
+    await pa.evaluate(() => { location.hash = '#/statistics'; }); await sleep(700);
+    await pa.evaluate(() => { location.hash = '#/impressum'; }); await sleep(700);
+    await pa.waitForSelector('.legal-back a');
+    await pa.click('.legal-back a'); await sleep(700);
+    ok('Zurück kehrt zur vorherigen Seite (statistics)', (await pa.evaluate(() => location.hash)) === '#/statistics');
+
     // ── Ausgeloggt: Login-Seite zeigt Links, Rechtsseite pre-login, XSS-sicher ──
     console.log('Pre-Login + XSS-Sicherheit:');
     const pp = await freshCtx(browser);

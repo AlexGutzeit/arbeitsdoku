@@ -53,7 +53,7 @@ async function renderLegal(kind) {
   const body = (raw && raw.trim())
     ? esc(raw).replace(/\n/g, '<br>')
     : `<p class="legal-empty">Für diese Seite wurde noch kein Inhalt hinterlegt.${(S.user && canSeeSettings()) ? ' Du kannst ihn unter <a href="#/settings">Einstellungen → Rechtliches</a> eintragen.' : ''}</p>`;
-  const back = (S.token && S.user) ? '<a href="#/">← Zurück</a>' : '<a href="#/login">← Zurück zur Anmeldung</a>';
+  const back = (S.token && S.user) ? `<a href="#${S._lastRoute || '/welcome'}">← Zurück</a>` : '<a href="#/login">← Zurück zur Anmeldung</a>';
   const card = `<div class="legal-page"><h1>${esc(title)}</h1><div class="legal-body">${body}</div><p class="legal-back">${back}</p></div>`;
   if (S.token && S.user) {
     $app().innerHTML = layout(card, kind);
