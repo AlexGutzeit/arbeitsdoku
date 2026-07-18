@@ -51,7 +51,7 @@ Jeder Punkt entspricht einem Menüpunkt in der App.
 | **🏖️ Abwesenheit** | Krank, Urlaub, Freizeitausgleich, Sonderurlaub, Feiertag, Berufsschule, Innung. Urlaub/FZA/Sonderurlaub durchlaufen einen **Genehmigungs-Workflow**. Prioritätsbewusste Tageszählung (Feiertag > Krank > Schule/Innung > Urlaub/FZA) und korrekte Soll-Stunden-/Überstunden-Verrechnung. **Arbeiten trotz Abwesenheit ist möglich** und wird sauber verrechnet: an Urlaub/Schule/Feiertag-Tagen zählt gebuchte Zeit voll als Überstunden, bei **FZA** sinkt nur der Abzug. **Krank** ist überstundenneutral bis zur normalen Tagesleistung (Soll = min(gearbeitete Stunden, Normal-Soll)) – Mehrarbeit darüber hinaus zählt als Überstunden. **Urlaubskonto** (sobald ein Anspruch hinterlegt ist – sonst bleibt es bei der alten Anzeige „Urlaub JAHR: X Arbeitstage"): jeder Mitarbeiter sieht im Kopf seinen Stand „Urlaub JAHR: X genommen · Y geplant · Z verbleibend". **Genommen** = genehmigt & in der Vergangenheit, **geplant** = genehmigt & in der Zukunft. Wird eine Abwesenheit **gelöscht**, fließen die Tage automatisch wieder zurück. Übersteigt ein Antrag den Resturlaub, erscheint ein **Warnhinweis** (blockiert aber nicht). **Chef/Admin/Buchhalter** haben zusätzlich den Reiter **„Urlaubsübersicht"** (erscheint erst, sobald irgendwo ein Anspruch gepflegt ist) mit einer Tabelle je Mitarbeiter (Jahr-Auswahl, Namenssuche, Stand-Datum, **PDF-Download**): Anspruch · Übriger Anspruch vom Vorjahr · Gesamtanspruch · Genommen · Geplant und akzeptiert · Noch zu planen · **Beantragt (offen)** · Krank · FZA. Mitarbeiter **ohne** hinterlegten Anspruch erscheinen mit **„–"** in den Anspruch-Spalten (ihre echten Abwesenheiten werden trotzdem gezählt). Auch der **Arbeitsnachweis-PDF** zeigt das Urlaubskonto (bzw. ohne Anspruch die alte Zeile „Urlaubstage genommen"). Der Anspruch samt Verfall-Regel und Start-Resturlaub wird je Mitarbeiter unter **👥 Mitarbeiter** gepflegt. |
 | **📈 Statistik** | Soll-/Ist-Stunden und Überstunden je Zeitraum und Mitarbeiter, mit Diagrammen. |
 | **📄 PDF-Export** | Druckfertiger Arbeitsnachweis (Einträge + Abwesenheiten + Stunden-Zusammenfassung) als PDF, gefiltert nach Zeitraum/Mitarbeiter/Projekt. |
-| **⚙️ Einstellungen** | White-Label-Branding (Logo + App-Icon; **max. Bild-Dateigröße admin-einstellbar, Default 5 MB**), Dokumenten-Speicherlimit (Gesamt + pro Datei), Datenbank-Backup/Restore. *(Chef/Admin; Größenlimits nur Admin)* |
+| **⚙️ Einstellungen** | White-Label-Branding (Logo + App-Icon; **max. Bild-Dateigröße admin-einstellbar, Default 5 MB**), **Impressum & Datenschutz** (konfigurierbare Rechtstexte, erscheinen als Links auf Login-Seite + Menü), Dokumenten-Speicherlimit (Gesamt + pro Datei), Datenbank-Backup/Restore. *(Chef/Admin; Größenlimits nur Admin)* |
 | **📜 Audit-Log** | Revisionssicheres Protokoll: An-/Abmeldungen (Login erfolgreich/fehlgeschlagen, manuelle Abmeldung, Sitzungs-Timeout), Benutzeränderungen, Einstellungs-/Branding-Änderungen, Backups u. a. Benutzeranlage mit allen Parametern, Änderungen feldgenau als „alt → neu" (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)* |
 | **🗑️ Papierkorb** | Gelöschte Einträge und Abwesenheiten bleiben mit Begründung erhalten (GoBD). **Gelöschte Zeit­einträge** können wiederhergestellt werden – jeder sieht/stellt wieder her, was er selbst gelöscht hat; Chef/Admin alles. **Gelöschte Abwesenheiten** werden für Chef/Mitarbeiter/Buchhalter **nicht** wiederhergestellt (das brächte sie als bereits genehmigt zurück und könnte mit zwischenzeitlicher Planung kollidieren) – stattdessen „**Neu beantragen**": ein frischer Antrag mit den alten Daten, der wieder durch die Genehmigung läuft. Nur der **Admin** kann eine Abwesenheit echt **wiederherstellen** (Ausnahme für versehentliche Löschungen). Im Unterreiter **Mitarbeiter** liegen ausgestellte Mitarbeiter zum Wiedereinstellen (**Chef/Admin** – Mitarbeiter haben darauf keinen Zugriff); endgültiges Löschen (mit allen Daten) ist dort nur als Admin und nur für zuvor ausgestellte Mitarbeiter möglich. Im Unterreiter **Projekte** liegen gelöschte Aufträge (inkl. Zuweisungen/Zwischenziele); **Chef/Admin** können sie **wiederherstellen** oder **endgültig löschen** (mit Bestätigung). |
 
@@ -379,6 +379,19 @@ konfigurierbar (Chef/Admin) – **ohne Code-Änderung**.
 - **Reset-Button** stellt das Standard-Icon wieder her.
 - Nach Branding-Änderungen lädt die App automatisch neu. Bereits als PWA installierte Geräte müssen
   neu installiert werden, damit das neue Icon übernommen wird.
+
+### Impressum & Datenschutz (rechtlich)
+
+Da die App öffentlich erreichbar ist, sind in DE i. d. R. ein **Impressum** (§5 DDG) und eine
+**Datenschutzerklärung** (Art. 13 DSGVO) nötig. Beide Texte sind **admin-/chef-konfigurierbar** (nicht
+hartkodiert, white-label-tauglich): *Einstellungen → Rechtliches (Impressum & Datenschutz)*.
+
+- Sobald ein Text hinterlegt ist, erscheint der jeweilige Link **auf der Anmeldeseite** (bewusst **ohne Login**
+  erreichbar – Impressumspflicht) und **im Menü** (für alle Rollen). Leere Texte blenden den Link aus.
+- Öffentlicher Endpunkt `GET /api/legal` (auth-frei) liefert die Texte; die Anzeige ist HTML-escaped
+  (kein Rich-Text, XSS-sicher).
+- **Hinweis:** Die App stellt nur die technische Möglichkeit bereit. Inhalte (v. a. wegen der Beschäftigten-
+  und Krankheitsdaten) sollte der/die Datenschutzbeauftragte bzw. eine Rechtsberatung prüfen und einfügen.
 
 ---
 

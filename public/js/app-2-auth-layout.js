@@ -18,8 +18,49 @@ function renderLogin() {
           <button type="submit" class="btn btn-primary btn-block">Anmelden</button>
         </form>
       </div>
+      ${legalLinksHtml()}
     </div>`;
   document.getElementById('login-form').addEventListener('submit', handleLogin);
+}
+
+// Dezente Impressum/Datenschutz-Links — nur zeigen, was hinterlegt ist (white-label: frischer Deploy bleibt sauber).
+function legalLinksHtml() {
+  const parts = [];
+  if (S.hasLegal.impressum) parts.push('<a href="#/impressum">Impressum</a>');
+  if (S.hasLegal.datenschutz) parts.push('<a href="#/datenschutz">Datenschutz</a>');
+  return parts.length ? `<div class="login-legal">${parts.join(' · ')}</div>` : '';
+}
+
+// Öffentlich abrufbare Flags (auch ausgeloggt), damit Login-Seite + Nav wissen, ob Rechtstexte existieren.
+async function loadLegalFlags() {
+  try {
+    const d = await api('GET', '/api/legal');
+    if (!d) return;
+    S.hasLegal = {
+      impressum: !!(d.impressum && d.impressum.trim()),
+      datenschutz: !!(d.datenschutz && d.datenschutz.trim()),
+    };
+    if (S.hasLegal.impressum || S.hasLegal.datenschutz) render(); // Links/Nav nachziehen
+  } catch (_) {}
+}
+
+// Rechtsseite (Impressum/Datenschutz). Funktioniert eingeloggt UND ausgeloggt (Impressumspflicht).
+async function renderLegal(kind) {
+  const title = kind === 'datenschutz' ? 'Datenschutzerklärung' : 'Impressum';
+  let data = null;
+  try { data = await api('GET', '/api/legal'); } catch (_) {}
+  const raw = data ? (kind === 'datenschutz' ? data.datenschutz : data.impressum) : '';
+  const body = (raw && raw.trim())
+    ? esc(raw).replace(/\n/g, '<br>')
+    : `<p class="legal-empty">Für diese Seite wurde noch kein Inhalt hinterlegt.${(S.user && canSeeSettings()) ? ' Du kannst ihn unter <a href="#/settings">Einstellungen → Rechtliches</a> eintragen.' : ''}</p>`;
+  const back = (S.token && S.user) ? '<a href="#/">← Zurück</a>' : '<a href="#/login">← Zurück zur Anmeldung</a>';
+  const card = `<div class="legal-page"><h1>${esc(title)}</h1><div class="legal-body">${body}</div><p class="legal-back">${back}</p></div>`;
+  if (S.token && S.user) {
+    $app().innerHTML = layout(card, kind);
+    bindLayout();
+  } else {
+    $app().innerHTML = `<div class="login-container"><div class="login-card legal-standalone">${card}</div></div>`;
+  }
 }
 
 async function handleLogin(e) {
@@ -237,6 +278,13 @@ function layout(content, activeNav) {
           ${isChefOrAdmin() ? `<a href="#/deleted-projects" class="nav-subitem ${activeNav === 'deleted-projects' ? 'active' : ''}">Projekte</a>` : ''}
           ${showUsers ? `<a href="#/deleted-users" class="nav-subitem ${activeNav === 'deleted-users' ? 'active' : ''}">Mitarbeiter</a>` : ''}
         </div>
+        ${(S.hasLegal.impressum || S.hasLegal.datenschutz) ? `<div class="sidebar-divider"></div>
+        ${S.hasLegal.impressum ? `<a href="#/impressum" class="${activeNav === 'impressum' ? 'active' : ''}">
+          <span class="icon">&#167;</span> Impressum
+        </a>` : ''}
+        ${S.hasLegal.datenschutz ? `<a href="#/datenschutz" class="${activeNav === 'datenschutz' ? 'active' : ''}">
+          <span class="icon">&#128274;</span> Datenschutz
+        </a>` : ''}` : ''}
       </nav>
     </div>
     <div class="header">

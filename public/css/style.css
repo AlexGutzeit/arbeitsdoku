@@ -35,12 +35,24 @@ body {
 /* === Login === */
 .login-container {
   display: flex;
+  flex-direction: column;
+  gap: 1rem;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
   padding: 1rem;
   background: linear-gradient(135deg, var(--primary) 0%, #1C4A28 100%);
 }
+/* Impressum/Datenschutz-Links unter der Login-Karte + Rechtsseiten */
+.login-legal { text-align: center; font-size: 0.85rem; }
+.login-legal a { color: rgba(255, 255, 255, 0.85); text-decoration: none; margin: 0 0.15rem; }
+.login-legal a:hover { text-decoration: underline; }
+.login-card.legal-standalone { max-width: 760px; text-align: left; }
+.legal-page { max-width: 760px; margin: 0 auto; padding: 1rem; }
+.legal-page h1 { margin-bottom: 1rem; }
+.legal-body { line-height: 1.6; overflow-wrap: anywhere; }
+.legal-empty { color: var(--text-light); }
+.legal-back { margin-top: 1.5rem; }
 .login-card {
   background: var(--card);
   border-radius: 16px;

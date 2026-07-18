@@ -21,6 +21,7 @@ const S = {
   filterAbsenceType: '',
   welcomeWeekOffset: 0,
   badges: { bulletin: 0, notes: 0, orders: 0 },
+  hasLegal: { impressum: false, datenschutz: false }, // ob Impressum/Datenschutz hinterlegt sind (für Links)
 };
 
 // --- API Helper ---
@@ -698,6 +699,9 @@ function getRoute() {
 const $app = () => document.getElementById('app');
 
 function render() {
+  const r0 = getRoute();
+  // Rechtsseiten sind bewusst OHNE Login erreichbar (Impressumspflicht) → vor dem Auth-Guard behandeln.
+  if (r0 === '/impressum' || r0 === '/datenschutz') { renderLegal(r0.slice(1)); return; }
   if (!S.token || !S.user) { renderLogin(); return; }
   const route = getRoute();
   if (route.startsWith('/entry/new')) renderEntryForm();

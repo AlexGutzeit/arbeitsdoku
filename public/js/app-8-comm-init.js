@@ -1498,6 +1498,7 @@ window.addEventListener('beforeunload', () => {
 window.addEventListener('DOMContentLoaded', () => {
   if (!S.token) navigate('/login');
   render();
+  loadLegalFlags(); // öffentlich; blendet Impressum/Datenschutz-Links ein (auch ausgeloggt)
   if (S.token) { initSSE(); loadBadges(); syncPushSubscription(); refreshUser(); }
 });
 // Beim Zurückkehren zum Tab Rechte/Rolle auffrischen (greift ohne F5, sobald der Tab wieder sichtbar ist).

@@ -91,6 +91,14 @@ function renderIndex(req, res) {
   res.send(html);
 }
 
+// GET /api/legal — ÖFFENTLICH (auth-frei, damit Impressum/Datenschutz auch VOR dem Login lesbar sind).
+// White-label: fehlende Keys → leer. Rohtext; die sichere Ausgabe (esc + Zeilenumbruch) macht das Frontend.
+router.get('/api/legal', (req, res) => {
+  const s = loadSettings();
+  res.set('Cache-Control', 'no-store');
+  res.json({ impressum: s.legal_impressum || '', datenschutz: s.legal_datenschutz || '' });
+});
+
 router.get('/', renderIndex);
 router.get('/index.html', renderIndex);
 

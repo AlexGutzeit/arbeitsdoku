@@ -115,6 +115,7 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
   const {
     company_name, company_street, company_zip, company_city,
     app_name, app_short_name, theme_color, background_color,
+    legal_impressum, legal_datenschutz,
   } = req.body;
 
   // Validierung Branding-Felder
@@ -130,10 +131,18 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
   if (background_color !== undefined && background_color !== '' && !HEX_RE.test(background_color)) {
     return res.status(400).json({ error: 'Hintergrund-Color muss Hex-Format #RRGGBB sein' });
   }
+  // Rechtstexte (Freitext) — nur Längenbegrenzung, damit die DB nicht missbräuchlich aufgebläht wird.
+  for (const [k, label] of [['legal_impressum', 'Impressum'], ['legal_datenschutz', 'Datenschutzerklärung']]) {
+    const v = req.body[k];
+    if (v !== undefined && typeof v === 'string' && v.length > 50000) {
+      return res.status(400).json({ error: `${label} darf maximal 50 000 Zeichen haben` });
+    }
+  }
 
   const fields = {
     company_name, company_street, company_zip, company_city,
     app_name, app_short_name, theme_color, background_color,
+    legal_impressum, legal_datenschutz,
   };
   const changes = [];
   for (const [key, value] of Object.entries(fields)) {

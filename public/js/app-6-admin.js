@@ -74,6 +74,25 @@ async function renderSettings() {
       </div>
 
       <div class="card">
+        <h2 style="margin-bottom:1rem;">Rechtliches (Impressum &amp; Datenschutz)</h2>
+        <div class="warning-box" style="margin-bottom:1rem;">
+          Für den öffentlich erreichbaren Betrieb gesetzlich vorgeschrieben. Sobald ausgefüllt, erscheinen die Texte
+          als Links auf der Anmeldeseite und im Menü. (Ersetzt keine Rechtsberatung.)
+        </div>
+        <form id="legal-form">
+          <div class="form-group">
+            <label>Impressum</label>
+            <textarea class="form-control" id="s-legal-impressum" rows="8" placeholder="Firmenname, Anschrift, Vertretungsberechtigte/r, Kontakt (E-Mail/Telefon), ggf. USt-IdNr. …">${esc(S.settings.legal_impressum || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label>Datenschutzerklärung</label>
+            <textarea class="form-control" id="s-legal-datenschutz" rows="12" placeholder="Verantwortliche Stelle, Zwecke &amp; Rechtsgrundlagen der Verarbeitung, Speicherdauer, Rechte der Betroffenen …">${esc(S.settings.legal_datenschutz || '')}</textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">Rechtstexte speichern</button>
+        </form>
+      </div>
+
+      <div class="card">
         <h2 style="margin-bottom:1rem;">App-Branding</h2>
         <div class="warning-box" style="margin-bottom:1rem;">
           App-Name, Farben und Icon der installierten PWA-App. Nach dem Speichern muss die App auf jedem Gerät einmal neu geladen werden (Pull-to-Refresh oder Browser-Reload). Bei bereits installierter PWA (Homescreen-Icon) ggf. neu installieren.
@@ -194,6 +213,18 @@ async function renderSettings() {
         company_city: document.getElementById('s-city').value,
       });
       toast('Einstellungen gespeichert', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  // Rechtstexte (Chef + Admin) speichern
+  document.getElementById('legal-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const imp = document.getElementById('s-legal-impressum').value;
+    const dat = document.getElementById('s-legal-datenschutz').value;
+    try {
+      await api('PUT', '/api/settings', { legal_impressum: imp, legal_datenschutz: dat });
+      S.hasLegal = { impressum: !!imp.trim(), datenschutz: !!dat.trim() }; // Links/Nav sofort mitziehen
+      toast('Rechtstexte gespeichert', 'success');
     } catch (err) { toast(err.message, 'error'); }
   });
 
