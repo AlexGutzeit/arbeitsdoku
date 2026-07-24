@@ -1484,6 +1484,20 @@ async function releaseCurrentLock() {
 document.addEventListener('click', () => {
   document.querySelectorAll('.plan-action-menu').forEach(m => m.remove());
 });
+// Doppel-Submit-Schutz fürs Auge (Ebene 2, app-weit): beim Absenden eines Formulars den Speichern-Button
+// ausgrauen, damit man nicht 5× klickt (die Korrektheit garantiert ohnehin api() über Request-Coalescing).
+// Bubble-Phase + „:not([disabled])": läuft NACH dem eigenen Submit-Handler des Formulars, sodass ein bereits
+// vorhandener Schutz (z. B. B3 im Mitarbeiter-Formular) nicht doppelt/aushebelnd wirkt.
+document.addEventListener('submit', (e) => {
+  const form = e.target;
+  if (!form || typeof form.querySelector !== 'function') return;
+  const btn = form.querySelector('button[type="submit"]:not([disabled])');
+  if (!btn) return;
+  btn.disabled = true;
+  const reenable = () => { btn.disabled = false; };
+  const t = setTimeout(reenable, 1500); // Failsafe – deckt den Klick-Sturm ab; danach wieder bedienbar
+  form.addEventListener('input', () => { clearTimeout(t); reenable(); }, { once: true }); // Validierungsfehler → sofort frei
+});
 window.addEventListener('hashchange', () => { releaseCurrentLock(); render(); });
 window.addEventListener('beforeunload', () => {
   if (_editingNoteLockId && S.token) {

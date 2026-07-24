@@ -413,6 +413,42 @@ function splitOffSelf(db, req, res, sid, originalEntryIds) {
 }
 
 // Planung erstellen (einzeln oder Gruppe)
+// Ebene 3 (Doppel-Submit-Gürtel, Backend): Hat DERSELBE Nutzer eben (≤10 s) eine identische Planung angelegt —
+// gleiche zugewiesene Personen-Menge inklusive? Dann die bestehende zurückgeben statt ein zweites Mal einzufügen.
+// Fängt Mehrfach-Submits ab, die NICHT schon im Browser (api-Coalescing) zusammengefasst wurden: z. B.
+// Verbindungsabbruch mit Retry oder Reload mitten im Speichern. Zeitfenster in UTC (created_at ist UTC).
+// Fail-open: fehlt created_at auf einem Altstand, gibt es einfach keine Dedup statt eines Crashs.
+function sameAssignees(db, planningId, assignedIds) {
+  const want = [...new Set((assignedIds || []).map(Number))].sort((a, b) => a - b).join(',');
+  const got = db.prepare('SELECT user_id FROM planning_assignments WHERE planning_id = ? ORDER BY user_id')
+    .all(planningId).map(a => a.user_id).join(',');
+  return got === want;
+}
+// f = { date, time_from, time_to, break_minutes, address, client, project_id, project_text, description }.
+// Nur ein VOLLSTÄNDIG identischer Payload (alle inhaltlichen Felder gleich) gilt als Duplikat — genau wie das
+// Frontend-Coalescing den ganzen Body vergleicht. So werden echte Doppel-Submits gefangen, aber zwei bewusst
+// verschiedene Einträge (z. B. anderer Kunde bei gleicher Zeit) NICHT fälschlich zusammengelegt.
+function recentDuplicatePlanning(db, createdBy, f, assignedIds, grouped) {
+  try {
+    const rows = db.prepare(`
+      SELECT id, group_id FROM planning_entries
+      WHERE created_by = ? AND date = ? AND time_from = ? AND time_to = ?
+        AND IFNULL(break_minutes, 0) = IFNULL(?, 0)
+        AND IFNULL(address, '') = IFNULL(?, '')
+        AND IFNULL(client, '') = IFNULL(?, '')
+        AND IFNULL(project_id, -1) = IFNULL(?, -1)
+        AND IFNULL(project_text, '') = IFNULL(?, '')
+        AND IFNULL(description, '') = IFNULL(?, '')
+        AND series_id IS NULL AND group_id IS ${grouped ? 'NOT NULL' : 'NULL'}
+        AND created_at >= strftime('%Y-%m-%d %H:%M:%f', 'now', '-10 seconds')
+    `).all(createdBy, f.date, f.time_from, f.time_to, f.break_minutes || 0, f.address || '', f.client || '', f.project_id || null, f.project_text || '', f.description || '');
+    for (const r of rows) {
+      if (sameAssignees(db, r.id, assignedIds)) return r;
+    }
+  } catch (_) { /* fail-open (z. B. created_at fehlt) → keine Dedup, aber kein Crash */ }
+  return null;
+}
+
 router.post('/', authenticate, canPlan, (req, res) => {
   const db = getDb();
   const { days, address, client, project_id, project_text, description, assigned_user_ids, color } = req.body;
@@ -457,6 +493,20 @@ router.post('/', authenticate, canPlan, (req, res) => {
       return res.status(400).json({ error: 'Mindestens ein Mitarbeiter muss zugewiesen werden' });
     }
 
+    // Ebene 3: identischen Eintrag der letzten Sekunden nicht doppelt anlegen → bestehenden zurückgeben.
+    const dup = recentDuplicatePlanning(db, req.user.id,
+      { date, time_from, time_to, break_minutes, address, client, project_id, project_text, description },
+      assigned_user_ids, false);
+    if (dup) {
+      const entry = db.prepare('SELECT * FROM planning_entries WHERE id = ?').get(dup.id);
+      const assigned = db.prepare(`
+        SELECT pa.user_id, u.name as user_name
+        FROM planning_assignments pa JOIN users u ON pa.user_id = u.id
+        WHERE pa.planning_id = ?
+      `).all(dup.id);
+      return res.status(201).json({ entry: { ...entry, assigned_users: assigned }, deduped: true });
+    }
+
     const insert = db.transaction(() => {
       const result = db.prepare(`
         INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, color)
@@ -488,6 +538,19 @@ router.post('/', authenticate, canPlan, (req, res) => {
   }
   if (!assigned_user_ids || !assigned_user_ids.length) {
     return res.status(400).json({ error: 'Mindestens ein Mitarbeiter muss zugewiesen werden' });
+  }
+
+  // Ebene 3: identische Mehrtages-Planung der letzten Sekunden nicht doppelt anlegen (Signatur = erster
+  // gültiger Tag + zugewiesene Personen) → bestehende Gruppe zurückgeben.
+  const firstDay = days.find(d => d.date && d.time_from && d.time_to);
+  if (firstDay) {
+    const dup = recentDuplicatePlanning(db, req.user.id,
+      { date: firstDay.date, time_from: firstDay.time_from, time_to: firstDay.time_to, break_minutes: firstDay.break_minutes, address, client, project_id, project_text, description },
+      assigned_user_ids, true);
+    if (dup && dup.group_id) {
+      const count = db.prepare('SELECT COUNT(*) AS c FROM planning_entries WHERE group_id = ?').get(dup.group_id).c;
+      return res.status(201).json({ success: true, count, group_id: dup.group_id, deduped: true });
+    }
   }
 
   const groupId = days.length > 1 ? crypto.randomUUID() : null;

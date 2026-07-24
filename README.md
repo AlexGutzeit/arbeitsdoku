@@ -450,6 +450,12 @@ node -e "const b=require('bcryptjs'),fs=require('fs'),i=require('sql.js'); i().t
 ```
 Danach mit `admin` / `NeuesPasswort123!` anmelden und in der App ändern.
 
+**Mehrfach auf „Speichern" geklickt (langsames Netz) – wird jetzt doppelt angelegt?**
+Nein. Die App fängt versehentliches Mehrfach-Speichern app-weit ab: Beim Absenden wird der Speichern-Button
+gesperrt, und identische, gleichzeitig laufende Aktionen werden zu **einer** zusammengefasst – es entsteht nur
+**ein** Eintrag. Für Planungen greift zusätzlich ein Server-Riegel (identische Planung innerhalb weniger
+Sekunden wird nicht doppelt eingefügt), der auch bei Verbindungsabbruch mit automatischem Neuversuch schützt.
+
 **Über-/Minusstunden stimmen nicht.**
 Pro Mitarbeiter müssen **Soll-Stunden** hinterlegt sein (*Mitarbeiter → Bearbeiten*). Ohne sie kann
 das Stundenkonto nicht korrekt berechnet werden. Man kann **mehrere „Gültig ab"-Einträge** hinterlegen,

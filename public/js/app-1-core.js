@@ -26,25 +26,43 @@ const S = {
 };
 
 // --- API Helper ---
+// Doppel-Submit-Schutz (app-weit): identische, GLEICHZEITIG laufende Schreib-Anfragen werden zu EINER
+// zusammengefasst. Klickt jemand bei wackeligem Netz 5× auf „Speichern", startet nur der erste Klick einen
+// echten fetch; die weiteren erhalten dasselbe Promise → real geht nur EIN Request/Insert raus. Nach dem
+// Abschluss wird der Schlüssel wieder freigegeben, sodass ein bewusster erneuter Versuch normal funktioniert.
+const _inflightApi = new Map();
 async function api(method, url, body, isFormData) {
-  const opts = { method, headers: {} };
-  if (S.token) opts.headers['Authorization'] = 'Bearer ' + S.token;
-  opts.headers['X-Tab-Id'] = S.tabId;
-  if (body && !isFormData) {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
-  } else if (body && isFormData) {
-    opts.body = body;
+  const mutating = /^(POST|PUT|PATCH|DELETE)$/i.test(method);
+  // Nur JSON-Schreibanfragen deduplizieren; GETs (idempotent) und FormData-Uploads bleiben unberührt.
+  const dedupKey = (mutating && !isFormData) ? `${method} ${url} ${body ? JSON.stringify(body) : ''}` : null;
+  if (dedupKey && _inflightApi.has(dedupKey)) return _inflightApi.get(dedupKey);
+
+  const run = (async () => {
+    const opts = { method, headers: {} };
+    if (S.token) opts.headers['Authorization'] = 'Bearer ' + S.token;
+    opts.headers['X-Tab-Id'] = S.tabId;
+    if (body && !isFormData) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    } else if (body && isFormData) {
+      opts.body = body;
+    }
+    const res = await fetch(url, opts);
+    if (res.status === 401 && !url.includes('/auth/login')) { logout(); return null; }
+    if (res.headers.get('content-type')?.includes('json')) {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Fehler');
+      return data;
+    }
+    if (!res.ok) throw new Error('Fehler');
+    return res;
+  })();
+
+  if (dedupKey) {
+    _inflightApi.set(dedupKey, run);
+    run.finally(() => _inflightApi.delete(dedupKey));
   }
-  const res = await fetch(url, opts);
-  if (res.status === 401 && !url.includes('/auth/login')) { logout(); return null; }
-  if (res.headers.get('content-type')?.includes('json')) {
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Fehler');
-    return data;
-  }
-  if (!res.ok) throw new Error('Fehler');
-  return res;
+  return run;
 }
 
 // --- Utilities ---
