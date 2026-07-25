@@ -1595,6 +1595,22 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .wh-rain { font-size: 0.65rem; color: #3b82f6; min-height: 0.9em; }
 .wh-time { font-size: 0.65rem; color: var(--text-lighter); }
 
+/* Wochenvorhersage: je Tag früh/mittag/abend */
+.weather-week { margin-top: 0.9rem; border-top: 1px solid var(--border); padding-top: 0.6rem; }
+.ww-row { display: grid; grid-template-columns: 4.5rem repeat(3, 1fr); align-items: center; gap: 0.25rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
+.ww-row:last-child { border-bottom: none; }
+.ww-row.ww-head { border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+.ww-head .ww-cell { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-lighter); }
+.ww-row.ww-today { background: var(--primary-light); border-radius: 8px; }
+.ww-day { display: flex; flex-direction: column; line-height: 1.15; padding-left: 0.25rem; }
+.ww-day strong { font-size: 0.85rem; }
+.ww-day span { font-size: 0.68rem; color: var(--text-lighter); }
+.ww-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.ww-cell.ww-empty { color: var(--text-lighter); font-size: 0.8rem; }
+.ww-icon { font-size: 1.05rem; line-height: 1.2; }
+.ww-temp { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+.ww-rain { font-size: 0.62rem; color: #3b82f6; min-height: 0.9em; }
+
 /* === Bulletin Board === */
 .bulletin-list { max-width: 800px; margin: 0 auto; }
 .bulletin-card {

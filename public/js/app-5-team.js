@@ -575,7 +575,8 @@ async function renderWelcome() {
             &#128168; ${c.wind_speed_10m} km/h &nbsp; &#128167; ${c.relative_humidity_2m}%
           </div>
         </div>
-        <div class="wh-scroll"><div class="wh-timeline">${hourlyHtml}</div></div>`;
+        <div class="wh-scroll"><div class="wh-timeline">${hourlyHtml}</div></div>
+        ${weekForecastHtml(h)}`;
     }
   } catch (e) {
     const wDiv = document.getElementById('welcome-weather');
@@ -592,6 +593,50 @@ async function renderWelcome() {
     const acceptBtn = e.target.closest('.accept-welcome-plan');
     if (acceptBtn) { navigate('/planning/accept/' + acceptBtn.dataset.id); return; }
   });
+}
+
+// Wochenvorhersage aus den stündlichen Daten: je Tag drei Blöcke (früh 6–11, mittag 12–17, abend 18–22).
+// Gruppierung über die Zeitstempel (nicht per Index-Rechnung) → robust gegen Zeitumstellung (23-/25-Stunden-Tage).
+function weekForecastHtml(h) {
+  if (!h || !h.time || h.time.length <= 24) return ''; // nur heutiger Tag vorhanden → keine Wochenansicht
+  const SLOTS = [{ label: 'früh', from: 6, to: 11 }, { label: 'mittag', from: 12, to: 17 }, { label: 'abend', from: 18, to: 22 }];
+  const byDay = new Map();
+  h.time.forEach((t, i) => {
+    const [day, hm] = String(t).split('T');
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push({ i, hour: parseInt(hm, 10) });
+  });
+  const todayStr = new Date().toLocaleDateString('sv-SE');
+  const rows = [];
+  for (const [dayStr, entries] of byDay) {
+    const cells = SLOTS.map(s => {
+      const idx = entries.filter(e => e.hour >= s.from && e.hour <= s.to).map(e => e.i);
+      if (!idx.length) return '<div class="ww-cell ww-empty">–</div>';
+      const temps = idx.map(i => h.temperature_2m?.[i]).filter(v => typeof v === 'number');
+      const avg = temps.length ? Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) : null;
+      const counts = {};
+      idx.forEach(i => { const c = h.weather_code?.[i]; if (c !== undefined && c !== null) counts[c] = (counts[c] || 0) + 1; });
+      const codes = Object.keys(counts);
+      const code = codes.length ? Number(codes.sort((a, b) => counts[b] - counts[a])[0]) : 0;
+      const rains = idx.map(i => h.precipitation_probability?.[i]).filter(v => typeof v === 'number');
+      const rain = rains.length ? Math.max(...rains) : 0;
+      return `<div class="ww-cell">
+        <div class="ww-icon">${weatherIcon(code)}</div>
+        <div class="ww-temp">${avg !== null ? avg + '°' : '–'}</div>
+        <div class="ww-rain">${rain > 0 ? rain + '%' : '&nbsp;'}</div>
+      </div>`;
+    }).join('');
+    const dObj = new Date(dayStr + 'T12:00:00');
+    const label = dayStr === todayStr ? 'Heute' : dObj.toLocaleDateString('de-DE', { weekday: 'short' });
+    const short = dObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    rows.push(`<div class="ww-row${dayStr === todayStr ? ' ww-today' : ''}">
+      <div class="ww-day"><strong>${label}</strong><span>${short}</span></div>${cells}</div>`);
+  }
+  if (rows.length < 2) return '';
+  return `<div class="weather-week">
+    <div class="ww-row ww-head"><div class="ww-day"></div>${SLOTS.map(s => `<div class="ww-cell">${s.label}</div>`).join('')}</div>
+    ${rows.join('')}
+  </div>`;
 }
 
 function weatherDescription(code) {
