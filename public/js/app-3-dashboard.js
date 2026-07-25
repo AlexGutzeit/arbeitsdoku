@@ -764,11 +764,28 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   const isEdit = !!entry;
   const source = continueEntry || planningEntry || projectSource;
   const today = formatDateISO(new Date());
+
+  // Startzeit-Vorschlag: Der ERSTE Eintrag eines Tages beginnt um 07:00, jeder weitere schließt an den
+  // zuletzt gebuchten an (Endzeit des spätesten Eintrags dieses Mitarbeiters an DIESEM Datum). Spart bei
+  // Folgeaufträgen das Tippen. Immer nur ein Vorschlag — überschreibbar (z. B. für Nachträge).
+  async function suggestStart(dateStr, userId) {
+    if (!dateStr) return '07:00';
+    try {
+      const params = new URLSearchParams({ date_from: dateStr, date_to: dateStr });
+      if (userId) params.set('user_id', String(userId));
+      const data = await api('GET', '/api/entries?' + params.toString());
+      const list = ((data && data.entries) || []).filter(e => !userId || e.user_id === Number(userId));
+      if (!list.length) return '07:00';
+      return list.reduce((max, e) => (e.time_to && e.time_to > max ? e.time_to : max), '00:00') || '07:00';
+    } catch (_) { return '07:00'; }
+  }
   const title = isEdit ? 'Eintrag bearbeiten' : (projectSource ? 'Auftrag als Zeitnachweis übernehmen' : (planningEntry ? 'Eintrag aus Planung erstellen' : (continueEntry ? 'Weiter arbeiten' : 'Neuer Eintrag')));
 
   const nowTime = `${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}`;
   const date = isEdit ? entry.date : today;
-  const timeFrom = isEdit ? entry.time_from : (planningEntry ? planningEntry.time_from : '07:00');
+  // Neue Einträge (ohne Planungs-Vorgabe): an den letzten Eintrag des Tages anschließen, sonst 07:00.
+  const timeFrom = isEdit ? entry.time_from
+    : (planningEntry ? planningEntry.time_from : await suggestStart(date, isAdmin() ? null : S.user.id));
   const timeTo = isEdit ? entry.time_to : nowTime;
   const breakMin = isEdit ? entry.break_minutes : (planningEntry ? planningEntry.break_minutes : 30);
   const address = isEdit ? entry.address : (source ? source.address : '');
@@ -912,6 +929,25 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   document.getElementById('ef-to').addEventListener('change', updateNet);
   updateNet();
 
+  // Startzeit-Vorschlag nachziehen, wenn Datum oder Mitarbeiter gewechselt wird (nur bei NEUEN Einträgen und
+  // nur solange der Vorschlag unverändert ist — hat der Nutzer die Zeit selbst gesetzt, bleibt sie stehen).
+  if (!isEdit) {
+    let lastSuggested = timeFrom;
+    const refreshStart = async () => {
+      const fromEl = document.getElementById('ef-from');
+      if (!fromEl || fromEl.value !== lastSuggested) return; // manuell geändert → nicht überschreiben
+      const d = document.getElementById('ef-date')?.value;
+      const uSel = document.getElementById('ef-user');
+      const uid = uSel ? Number(uSel.value) : (isAdmin() ? null : S.user.id);
+      const s = await suggestStart(d, uid);
+      if (fromEl.value === lastSuggested) { fromEl.value = s; lastSuggested = s; updateNet(); }
+    };
+    document.getElementById('ef-date')?.addEventListener('change', refreshStart);
+    document.getElementById('ef-user')?.addEventListener('change', refreshStart);
+    // Admin: beim Öffnen steht schon ein Mitarbeiter im Feld → dessen letzte Endzeit übernehmen
+    if (document.getElementById('ef-user')) refreshStart();
+  }
+
   // Regie-Toggle
   document.getElementById('ef-regie').addEventListener('change', (e) => {
     document.getElementById('ef-regie-user').style.display = e.target.value === '1' ? '' : 'none';
@@ -961,10 +997,14 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
       project_id: document.getElementById('ef-project').value || null,
       project_text: document.getElementById('ef-project-text').value,
       description: document.getElementById('ef-desc').value,
-      personal_note: document.getElementById('ef-note')?.value || '',
       has_regie: Number(document.getElementById('ef-regie').value),
       regie_user_id: document.getElementById('ef-regie').value === '1' ? Number(document.getElementById('ef-regie-user').value) : null,
     };
+    // A16: Die persönliche Notiz nur mitschicken, wenn das Feld überhaupt angezeigt wird. Für Chef/Buchhalter
+    // ist es ausgeblendet — vorher wurde trotzdem '' gesendet und damit die private Notiz des Mitarbeiters
+    // beim Bearbeiten seines Eintrags stillschweigend gelöscht.
+    const noteEl = document.getElementById('ef-note');
+    if (noteEl) body.personal_note = noteEl.value;
     // Admin muss Mitarbeiter auswählen
     const userSelect = document.getElementById('ef-user');
     if (userSelect) {
