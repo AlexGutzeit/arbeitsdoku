@@ -85,9 +85,10 @@ router.get('/weather', authenticate, async (req, res) => {
     const lat = geoData[0].lat;
     const lon = geoData[0].lon;
 
-    // Wetter via Open-Meteo (aktuell + stündlich + täglich). forecast_days=7 → heutiger Tagesverlauf UND
-    // Wochenvorhersage (je Tag früh/mittag/abend) aus denselben stündlichen Daten.
-    const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code,sunrise,sunset&timezone=Europe/Berlin&forecast_days=7`);
+    // Wetter via Open-Meteo (aktuell + stündlich + täglich). forecast_days=16 = API-Maximum → Tagesverlauf,
+    // stündliche Vorhersage (erste Woche, dort rechnen die hochauflösenden Modelle) und danach die grobe
+    // früh/mittag/abend-Vorschau kommen alle aus denselben stündlichen Daten. Darüber hinaus gibt es keine Daten.
+    const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code,sunrise,sunset&timezone=Europe/Berlin&forecast_days=16`);
     const wData = await wRes.json();
 
     const result = { city: city || zip, current: wData.current, hourly: wData.hourly, daily: wData.daily };

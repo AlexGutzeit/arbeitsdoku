@@ -539,27 +539,9 @@ async function renderWelcome() {
       const c = w.current;
       const d = w.daily;
       const h = w.hourly;
-      const nowHour = new Date().getHours();
-
-      // Stündlichen Verlauf bauen (nur 6-22 Uhr)
-      let hourlyHtml = '';
-      const tempMin = Math.min(...h.temperature_2m.slice(6, 23));
-      const tempMax = Math.max(...h.temperature_2m.slice(6, 23));
-      const tempRange = tempMax - tempMin || 1;
-      for (let i = 6; i <= 22; i++) {
-        const temp = h.temperature_2m[i];
-        const code = h.weather_code[i];
-        const rain = h.precipitation_probability[i];
-        const barPct = Math.round(((temp - tempMin) / tempRange) * 100);
-        const isNow = i === nowHour;
-        hourlyHtml += `<div class="wh-col${isNow ? ' wh-now' : ''}">
-          <div class="wh-temp">${Math.round(temp)}°</div>
-          <div class="wh-bar-wrap"><div class="wh-bar" style="height:${Math.max(barPct, 8)}%"></div></div>
-          <div class="wh-icon">${weatherIcon(code)}</div>
-          ${rain > 0 ? `<div class="wh-rain">${rain}%</div>` : '<div class="wh-rain">&nbsp;</div>'}
-          <div class="wh-time">${i}h</div>
-        </div>`;
-      }
+      const byDay = groupHoursByDay(h);
+      const todayStr = new Date().toLocaleDateString('sv-SE');
+      const todayHours = (byDay.get(todayStr) || []).filter(e => e.hour >= 6 && e.hour <= 22);
 
       wDiv.innerHTML = `<h3>&#9925; Wetter in ${esc(w.city)}</h3>
         <div class="weather-current">
@@ -575,8 +557,8 @@ async function renderWelcome() {
             &#128168; ${c.wind_speed_10m} km/h &nbsp; &#128167; ${c.relative_humidity_2m}%
           </div>
         </div>
-        <div class="wh-scroll"><div class="wh-timeline">${hourlyHtml}</div></div>
-        ${weekForecastHtml(h)}`;
+        ${hourlyStripHtml(h, todayHours, new Date().getHours())}
+        ${weekForecastHtml(h, byDay, todayStr)}`;
     }
   } catch (e) {
     const wDiv = document.getElementById('welcome-weather');
@@ -592,22 +574,67 @@ async function renderWelcome() {
     if (navBtn) { openNav(navBtn.dataset.addr); return; }
     const acceptBtn = e.target.closest('.accept-welcome-plan');
     if (acceptBtn) { navigate('/planning/accept/' + acceptBtn.dataset.id); return; }
+    // Wetter-Vorschau: Tag antippen → stündlichen Verlauf auf-/zuklappen
+    const wwRow = e.target.closest('.ww-row[data-day]');
+    if (wwRow) {
+      const detail = wwRow.parentElement?.querySelector('.ww-detail');
+      if (detail) {
+        const wasOpen = !detail.hasAttribute('hidden');
+        if (wasOpen) detail.setAttribute('hidden', ''); else detail.removeAttribute('hidden');
+        wwRow.classList.toggle('ww-open', !wasOpen);
+      }
+      return;
+    }
   });
 }
 
-// Wochenvorhersage aus den stündlichen Daten: je Tag drei Blöcke (früh 6–11, mittag 12–17, abend 18–22).
-// Gruppierung über die Zeitstempel (nicht per Index-Rechnung) → robust gegen Zeitumstellung (23-/25-Stunden-Tage).
-function weekForecastHtml(h) {
-  if (!h || !h.time || h.time.length <= 24) return ''; // nur heutiger Tag vorhanden → keine Wochenansicht
-  const SLOTS = [{ label: 'früh', from: 6, to: 11 }, { label: 'mittag', from: 12, to: 17 }, { label: 'abend', from: 18, to: 22 }];
+// Stundenwerte nach Kalendertag gruppieren — über die Zeitstempel, NICHT per Index-Rechnung
+// (robust gegen Zeitumstellung: 23-/25-Stunden-Tage).
+function groupHoursByDay(h) {
   const byDay = new Map();
-  h.time.forEach((t, i) => {
+  (h && h.time ? h.time : []).forEach((t, i) => {
     const [day, hm] = String(t).split('T');
     if (!byDay.has(day)) byDay.set(day, []);
     byDay.get(day).push({ i, hour: parseInt(hm, 10) });
   });
-  const todayStr = new Date().toLocaleDateString('sv-SE');
-  const rows = [];
+  return byDay;
+}
+
+// Stündlicher Verlaufsstreifen (Temperatur-Balken + Symbol + Regen + Uhrzeit) für eine Stundenliste.
+// Wird für den heutigen Tag UND für die aufklappbaren Tage der Vorschau genutzt.
+function hourlyStripHtml(h, entries, highlightHour) {
+  if (!entries || !entries.length) return '';
+  const temps = entries.map(e => h.temperature_2m?.[e.i]).filter(v => typeof v === 'number');
+  if (!temps.length) return '';
+  const tempMin = Math.min(...temps), tempMax = Math.max(...temps);
+  const range = (tempMax - tempMin) || 1;
+  const cols = entries.map(e => {
+    const temp = h.temperature_2m?.[e.i];
+    const code = h.weather_code?.[e.i] ?? 0;
+    const rain = h.precipitation_probability?.[e.i] ?? 0;
+    const barPct = typeof temp === 'number' ? Math.round(((temp - tempMin) / range) * 100) : 0;
+    const isNow = highlightHour !== null && highlightHour !== undefined && e.hour === highlightHour;
+    return `<div class="wh-col${isNow ? ' wh-now' : ''}">
+      <div class="wh-temp">${typeof temp === 'number' ? Math.round(temp) + '°' : '–'}</div>
+      <div class="wh-bar-wrap"><div class="wh-bar" style="height:${Math.max(barPct, 8)}%"></div></div>
+      <div class="wh-icon">${weatherIcon(code)}</div>
+      <div class="wh-rain">${rain > 0 ? rain + '%' : '&nbsp;'}</div>
+      <div class="wh-time">${e.hour}h</div>
+    </div>`;
+  }).join('');
+  return `<div class="wh-scroll"><div class="wh-timeline">${cols}</div></div>`;
+}
+
+// Vorschau der Folgetage: je Tag früh (6–11) / mittag (12–17) / abend (18–22).
+// Die ersten HOURLY_DAYS Tage rechnen auf den hochauflösenden Modellen → dort ist zusätzlich der STÜNDLICHE
+// Verlauf per Antippen aufklappbar. Danach nur noch die groben Blöcke; jenseits der API-Reichweite (16 Tage)
+// gibt es keine Daten mehr — darauf weist eine Fußzeile hin.
+const WEATHER_HOURLY_DAYS = 7;
+function weekForecastHtml(h, byDay, todayStr) {
+  if (!byDay || byDay.size <= 1) return '';
+  const SLOTS = [{ label: 'früh', from: 6, to: 11 }, { label: 'mittag', from: 12, to: 17 }, { label: 'abend', from: 18, to: 22 }];
+  const items = [];
+  let dayIdx = 0;
   for (const [dayStr, entries] of byDay) {
     const cells = SLOTS.map(s => {
       const idx = entries.filter(e => e.hour >= s.from && e.hour <= s.to).map(e => e.i);
@@ -627,15 +654,26 @@ function weekForecastHtml(h) {
       </div>`;
     }).join('');
     const dObj = new Date(dayStr + 'T12:00:00');
-    const label = dayStr === todayStr ? 'Heute' : dObj.toLocaleDateString('de-DE', { weekday: 'short' });
+    const isToday = dayStr === todayStr;
+    const label = isToday ? 'Heute' : dObj.toLocaleDateString('de-DE', { weekday: 'short' });
     const short = dObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-    rows.push(`<div class="ww-row${dayStr === todayStr ? ' ww-today' : ''}">
-      <div class="ww-day"><strong>${label}</strong><span>${short}</span></div>${cells}</div>`);
+    // Stündlich nur für die ersten Tage (dort sind die Daten fein genug)
+    const hourly = dayIdx < WEATHER_HOURLY_DAYS
+      ? hourlyStripHtml(h, entries.filter(e => e.hour >= 6 && e.hour <= 22), isToday ? new Date().getHours() : null)
+      : '';
+    items.push(`<div class="ww-item">
+      <div class="ww-row${isToday ? ' ww-today' : ''}${hourly ? ' ww-clickable' : ''}"${hourly ? ` data-day="${dayStr}"` : ''}>
+        <div class="ww-day"><strong>${label}</strong><span>${short}</span>${hourly ? '<span class="ww-caret">&#9656;</span>' : ''}</div>${cells}
+      </div>
+      ${hourly ? `<div class="ww-detail" hidden>${hourly}</div>` : ''}
+    </div>`);
+    dayIdx++;
   }
-  if (rows.length < 2) return '';
+  if (items.length < 2) return '';
   return `<div class="weather-week">
     <div class="ww-row ww-head"><div class="ww-day"></div>${SLOTS.map(s => `<div class="ww-cell">${s.label}</div>`).join('')}</div>
-    ${rows.join('')}
+    ${items.join('')}
+    <p class="ww-note">Die ersten ${WEATHER_HOURLY_DAYS} Tage lassen sich für den stündlichen Verlauf antippen. Für weiter entfernte Tage liegen keine Vorhersagedaten vor.</p>
   </div>`;
 }
 
