@@ -998,7 +998,8 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
       <div id="abs-feiertag-hint" class="absence-feiertag-hint"${isFeiertag ? '' : ' style="display:none"'}>Gilt für alle Mitarbeiter</div>`;
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  // „Heute" in Europe/Berlin (nicht UTC) — sonst schlägt das Formular zwischen 00:00 und 02:00 den Vortag vor.
+  const today = new Date().toLocaleDateString('sv-SE');
   const formHtml = `
     <div class="absence-form-overlay" id="absence-form-overlay">
       <div class="absence-form-card">
@@ -1007,22 +1008,22 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
         <div class="form-group">
           <label>Typ</label>
           <select id="abs-type" class="form-control" ${editId ? 'disabled' : ''}>
-            ${typeOpts || `<option value="${preType}">${preType}</option>`}
+            ${typeOpts || `<option value="${esc(preType)}">${esc(preType)}</option>`}
           </select>
         </div>
         <div class="form-row">
           <div class="form-group">
             <label>Von</label>
-            <input type="date" id="abs-from" class="form-control" value="${preFrom || today}">
+            <input type="date" id="abs-from" class="form-control" value="${esc(preFrom || today)}">
           </div>
           <div class="form-group">
             <label>Bis</label>
-            <input type="date" id="abs-to" class="form-control" value="${preTo || today}">
+            <input type="date" id="abs-to" class="form-control" value="${esc(preTo || today)}">
           </div>
         </div>
         <div class="form-group">
           <label>Kommentar (optional)</label>
-          <textarea id="abs-comment" class="form-control" rows="2">${preComment || ''}</textarea>
+          <textarea id="abs-comment" class="form-control" rows="2">${esc(preComment || '')}</textarea>
         </div>
         <div class="form-actions">
           <button class="btn btn-primary" id="abs-save">${editId ? 'Speichern' : 'Eintragen'}</button>

@@ -838,6 +838,14 @@ router.put('/series/:seriesId', authenticate, canPlan, (req, res) => {
   const db = getDb();
   const series = loadSeriesOr(req, res, db);
   if (!series) return;
+  // Self-Planer darf auch über die Serien-Route niemanden ausser sich selbst zuweisen (gleicher Guard wie in
+  // POST /, PUT /:id, PUT /group/:id — hier fehlte er, sodass Fremde in die Serie geschrieben werden konnten).
+  if (!canPlanAll(req.user) && req.body.assigned_user_ids !== undefined) {
+    const ids = (req.body.assigned_user_ids || []).map(Number);
+    if (ids.length !== 1 || ids[0] !== req.user.id) {
+      return res.status(403).json({ error: 'Du darfst nur dich selbst verplanen' });
+    }
+  }
   const scope = req.body.scope || 'series';
   const occ = req.body.occurrence_date;
   const b = req.body;
@@ -945,6 +953,25 @@ router.post('/to-series', authenticate, canPlan, (req, res) => {
   const assigned = Array.isArray(req.body.assigned_user_ids) ? req.body.assigned_user_ids.map(Number) : [];
   if (!assigned.length) return res.status(400).json({ error: 'Mindestens ein Mitarbeiter muss zugewiesen werden' });
   if (!canPlanAll(req.user) && (assigned.length !== 1 || assigned[0] !== req.user.id)) return res.status(403).json({ error: 'Du darfst nur dich selbst verplanen' });
+  // Die QUELLE (Einzel-/Gruppenplanung) wird unten gelöscht — dafür braucht es dieselbe Eigentumsprüfung wie in
+  // PUT/DELETE. Ohne sie könnte ein Self-Planer eine FREMDE Planung per beliebiger group_id/entry_id löschen.
+  if (!canPlanAll(req.user)) {
+    const sid = req.user.id;
+    if (req.body.group_id) {
+      const current = assignedIdsOfGroup(db, req.body.group_id);
+      if (!current.length) return res.status(404).json({ error: 'Gruppe nicht gefunden' });
+      if (!current.includes(sid) || current.some(id => id !== sid)) {
+        return res.status(403).json({ error: 'Das ist nicht deine Planung' });
+      }
+    } else if (req.body.entry_id) {
+      const src = db.prepare('SELECT id FROM planning_entries WHERE id = ?').get(Number(req.body.entry_id));
+      if (!src) return res.status(404).json({ error: 'Planung nicht gefunden' });
+      const current = assignedIdsOfEntry(db, src.id);
+      if (!current.includes(sid) || current.some(id => id !== sid)) {
+        return res.status(403).json({ error: 'Das ist nicht deine Planung' });
+      }
+    }
+  }
   const rule = { ...rv, anchor_date: template.anchor };
   const spanDays = Math.max(...template.tplDays.map(d => d.offset));
   // Wie sollen bestehende Erinnerungen der Einzel-/Gruppenplanung auf die neue Serie übertragen werden?

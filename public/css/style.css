@@ -1264,7 +1264,8 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 /* Werkzeugliste */
 .tool-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 8px; border: 1px solid var(--border); gap: 0.5rem; flex-wrap: wrap; }
 .tool-checkout-form { width: 100%; flex-basis: 100%; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.08); margin-top: 0.25rem; }
-.tool-checkout-form .form-row { margin: 0; gap: 0.5rem; flex-wrap: wrap; }
+.tool-checkout-form .form-row { display: flex; flex-wrap: wrap; margin: 0; gap: 0.5rem; }
+.tool-checkout-form .form-row .form-group { flex: 1; }
 .tool-checkout-form .form-group { margin: 0; }
 .tool-checkout-form label { font-size: 0.78rem; margin-bottom: 0.2rem; }
 .tool-checkout-form .form-control { font-size: 0.85rem; padding: 0.3rem 0.5rem; }
@@ -1426,18 +1427,6 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   margin-bottom: 1.25rem;
 }
 .welcome-section h3 { font-size: 1.05rem; margin-bottom: 0.75rem; color: var(--text); display: flex; align-items: center; gap: 0.5rem; }
-/* Erprobungs-Hinweis (Web Push Beta) */
-.erprobung-banner {
-  background: #fff8e1;
-  border: 1px solid #f0d98c;
-  border-left: 4px solid #e0a800;
-  border-radius: var(--radius);
-  padding: 0.85rem 1rem;
-  margin-bottom: 1.25rem;
-  color: #6b5400;
-}
-.erprobung-banner strong { display: block; font-size: 0.95rem; margin-bottom: 0.25rem; }
-.erprobung-banner p { margin: 0; font-size: 0.88rem; line-height: 1.45; }
 /* Benachrichtigungs-Karte (Web Push) */
 .push-status { font-size: 0.7rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 999px; margin-left: auto; }
 .push-status.push-on { background: var(--primary-light); color: var(--primary-hover); }
@@ -1981,8 +1970,10 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .absence-form-card { background: var(--card); border-radius: 12px; padding: 1.5rem; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
 .absence-form-card h3 { margin: 0 0 1rem; }
 .absence-feiertag-hint { font-size: 0.85rem; color: #b45309; background: #fef3c7; border-radius: 6px; padding: 0.4rem 0.75rem; margin-bottom: 0.75rem; }
-.form-row { display: flex; gap: 0.75rem; }
-.form-row .form-group { flex: 1; }
+/* Hinweis: .form-row ist oben als GRID definiert (mit Mobil-Umbruch auf eine Spalte per Media-Query).
+   Hier stand früher ein globales `display:flex`, das später kam und die Mobil-Regel unwirksam machte —
+   auf dem Handy standen dadurch z. B. Datum+Von+Bis+Pause nebeneinander. Nicht wieder einführen. */
+.form-row .form-group { min-width: 0; }
 .form-actions { display: flex; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
 
 /* Timeline-Abwesenheits-Banner */

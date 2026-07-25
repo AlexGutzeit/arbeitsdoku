@@ -218,10 +218,6 @@ async function renderNotifications() {
   $app().innerHTML = layout(`
     <div class="welcome-page">
       <div class="welcome-header"><h1>&#128276; Benachrichtigungen</h1></div>
-      <div class="erprobung-banner">
-        <strong>&#129514; Erprobung</strong>
-        <p>Diese Funktion ist noch in der Testphase. Bitte verlass dich noch nicht zu 100 % darauf – einzelne Benachrichtigungen können verspätet kommen oder ausbleiben. Rückmeldung (klappt / klappt nicht) gerne an den Admin. Danke!</p>
-      </div>
       <div class="welcome-section" id="push-card">
         <div class="loading"><div class="spinner"></div></div>
       </div>
@@ -965,7 +961,7 @@ async function showUserModal(user) {
           </div>
           <div class="form-group">
             <label>Start-Überstunden (h)</label>
-            <input type="number" class="form-control" id="um-start-overtime" value="${user?.start_overtime ?? 0}" step="0.01">
+            <input type="text" inputmode="decimal" class="form-control" id="um-start-overtime" value="${numDe(user?.start_overtime ?? 0)}">
           </div>
         </div>
         <div class="form-group" id="um-rights-role-hint" style="display:none;">
@@ -996,11 +992,11 @@ async function showUserModal(user) {
           <div id="um-targets-list"><div class="loading"><div class="spinner"></div></div></div>
           <div class="targets-add-days">
             <div class="day-hours-row">
-              <label>Mo <input type="number" id="um-target-mon" step="0.01" min="0" max="24" value="8" class="form-control form-control-sm"></label>
-              <label>Di <input type="number" id="um-target-tue" step="0.01" min="0" max="24" value="8" class="form-control form-control-sm"></label>
-              <label>Mi <input type="number" id="um-target-wed" step="0.01" min="0" max="24" value="8" class="form-control form-control-sm"></label>
-              <label>Do <input type="number" id="um-target-thu" step="0.01" min="0" max="24" value="8" class="form-control form-control-sm"></label>
-              <label>Fr <input type="number" id="um-target-fri" step="0.01" min="0" max="24" value="6" class="form-control form-control-sm"></label>
+              <label>Mo <input type="text" inputmode="decimal" id="um-target-mon" value="8" class="form-control form-control-sm"></label>
+              <label>Di <input type="text" inputmode="decimal" id="um-target-tue" value="8" class="form-control form-control-sm"></label>
+              <label>Mi <input type="text" inputmode="decimal" id="um-target-wed" value="8" class="form-control form-control-sm"></label>
+              <label>Do <input type="text" inputmode="decimal" id="um-target-thu" value="8" class="form-control form-control-sm"></label>
+              <label>Fr <input type="text" inputmode="decimal" id="um-target-fri" value="6" class="form-control form-control-sm"></label>
             </div>
             <div class="targets-add-bottom">
               <input type="date" id="um-target-from" class="form-control">
@@ -1011,11 +1007,11 @@ async function showUserModal(user) {
         <div class="form-section">
           <label class="form-section-title">Soll-Stunden pro Tag</label>
           <div class="day-hours-row">
-            <label>Mo <input type="number" class="form-control form-control-sm" id="um-h-mon" value="8" min="0" max="24" step="0.01"></label>
-            <label>Di <input type="number" class="form-control form-control-sm" id="um-h-tue" value="8" min="0" max="24" step="0.01"></label>
-            <label>Mi <input type="number" class="form-control form-control-sm" id="um-h-wed" value="8" min="0" max="24" step="0.01"></label>
-            <label>Do <input type="number" class="form-control form-control-sm" id="um-h-thu" value="8" min="0" max="24" step="0.01"></label>
-            <label>Fr <input type="number" class="form-control form-control-sm" id="um-h-fri" value="6" min="0" max="24" step="0.01"></label>
+            <label>Mo <input type="text" inputmode="decimal" class="form-control form-control-sm" id="um-h-mon" value="8"></label>
+            <label>Di <input type="text" inputmode="decimal" class="form-control form-control-sm" id="um-h-tue" value="8"></label>
+            <label>Mi <input type="text" inputmode="decimal" class="form-control form-control-sm" id="um-h-wed" value="8"></label>
+            <label>Do <input type="text" inputmode="decimal" class="form-control form-control-sm" id="um-h-thu" value="8"></label>
+            <label>Fr <input type="text" inputmode="decimal" class="form-control form-control-sm" id="um-h-fri" value="6"></label>
           </div>
         </div>`}
         ${isEdit ? `
@@ -1118,14 +1114,14 @@ async function showUserModal(user) {
     document.getElementById('um-target-add')?.addEventListener('click', async () => {
       const from = document.getElementById('um-target-from').value;
       if (!from) { toast('Gültig-ab-Datum eingeben', 'error'); return; }
-      const body = {
-        hours_mon: parseFloat(document.getElementById('um-target-mon').value) || 0,
-        hours_tue: parseFloat(document.getElementById('um-target-tue').value) || 0,
-        hours_wed: parseFloat(document.getElementById('um-target-wed').value) || 0,
-        hours_thu: parseFloat(document.getElementById('um-target-thu').value) || 0,
-        hours_fri: parseFloat(document.getElementById('um-target-fri').value) || 0,
-        valid_from: from,
-      };
+      // A6: ungültige Eingabe melden statt still 0 zu speichern (fließt direkt in die Soll-/Überstunden).
+      const body = { valid_from: from };
+      for (const [id, key, label] of [['um-target-mon', 'hours_mon', 'Montag'], ['um-target-tue', 'hours_tue', 'Dienstag'],
+        ['um-target-wed', 'hours_wed', 'Mittwoch'], ['um-target-thu', 'hours_thu', 'Donnerstag'], ['um-target-fri', 'hours_fri', 'Freitag']]) {
+        const v = numFromField(id, 0, 0, 24);
+        if (v === null) { toast(`Soll-Stunden ${label}: bitte eine Zahl zwischen 0 und 24 eingeben`, 'error'); return; }
+        body[key] = v;
+      }
       try {
         await api('POST', `/api/statistics/targets/${user.id}`, body);
         toast('Soll-Stunden gespeichert', 'success');
@@ -1177,11 +1173,14 @@ async function showUserModal(user) {
     e.preventDefault();
     const submitBtn = e.target.querySelector('button[type="submit"]');
     if (submitBtn && submitBtn.disabled) return; // B3: Anfrage schon unterwegs → Doppel-Submit verhindern
+    // A6: ungültige Zahlen NICHT still zu 0 machen — sie gehen direkt in die Überstundenrechnung.
+    const startOt = numFromField('um-start-overtime', 0);
+    if (startOt === null) { toast('Start-Überstunden: bitte eine gültige Zahl eingeben', 'error'); return; }
     const body = {
       name: document.getElementById('um-name').value,
       username: document.getElementById('um-username').value,
       role: document.getElementById('um-role').value,
-      start_overtime: parseFloat(document.getElementById('um-start-overtime').value) || 0,
+      start_overtime: startOt,
       can_plan: document.getElementById('um-can-plan').checked,
       can_plan_all: document.getElementById('um-can-plan-all').checked,
       can_bulletin: document.getElementById('um-can-bulletin').checked,
@@ -1189,11 +1188,13 @@ async function showUserModal(user) {
     };
     // Bei neuem User Tages-Stunden setzen
     if (!isEdit) {
-      body.hours_mon = parseFloat(document.getElementById('um-h-mon').value) || 0;
-      body.hours_tue = parseFloat(document.getElementById('um-h-tue').value) || 0;
-      body.hours_wed = parseFloat(document.getElementById('um-h-wed').value) || 0;
-      body.hours_thu = parseFloat(document.getElementById('um-h-thu').value) || 0;
-      body.hours_fri = parseFloat(document.getElementById('um-h-fri').value) || 0;
+      const dayIds = [['um-h-mon', 'hours_mon', 'Montag'], ['um-h-tue', 'hours_tue', 'Dienstag'], ['um-h-wed', 'hours_wed', 'Mittwoch'],
+        ['um-h-thu', 'hours_thu', 'Donnerstag'], ['um-h-fri', 'hours_fri', 'Freitag']];
+      for (const [id, key, label] of dayIds) {
+        const v = numFromField(id, 0, 0, 24);
+        if (v === null) { toast(`Soll-Stunden ${label}: bitte eine Zahl zwischen 0 und 24 eingeben`, 'error'); return; }
+        body[key] = v;
+      }
       body.target_hours_per_week = body.hours_mon + body.hours_tue + body.hours_wed + body.hours_thu + body.hours_fri;
     }
     if (submitBtn) submitBtn.disabled = true; // B3
@@ -1232,11 +1233,11 @@ async function loadUserTargets(userId) {
         return `
         <tr data-target-id="${t.id}">
           <td><input type="date" class="form-control form-control-sm target-from" value="${t.valid_from}"></td>
-          <td><input type="number" class="form-control form-control-sm t-mon" value="${t.hours_mon||0}" step="0.01" min="0" max="24"></td>
-          <td><input type="number" class="form-control form-control-sm t-tue" value="${t.hours_tue||0}" step="0.01" min="0" max="24"></td>
-          <td><input type="number" class="form-control form-control-sm t-wed" value="${t.hours_wed||0}" step="0.01" min="0" max="24"></td>
-          <td><input type="number" class="form-control form-control-sm t-thu" value="${t.hours_thu||0}" step="0.01" min="0" max="24"></td>
-          <td><input type="number" class="form-control form-control-sm t-fri" value="${t.hours_fri||0}" step="0.01" min="0" max="24"></td>
+          <td><input type="text" inputmode="decimal" class="form-control form-control-sm t-mon" value="${numDe(t.hours_mon||0)}"></td>
+          <td><input type="text" inputmode="decimal" class="form-control form-control-sm t-tue" value="${numDe(t.hours_tue||0)}"></td>
+          <td><input type="text" inputmode="decimal" class="form-control form-control-sm t-wed" value="${numDe(t.hours_wed||0)}"></td>
+          <td><input type="text" inputmode="decimal" class="form-control form-control-sm t-thu" value="${numDe(t.hours_thu||0)}"></td>
+          <td><input type="text" inputmode="decimal" class="form-control form-control-sm t-fri" value="${numDe(t.hours_fri||0)}"></td>
           <td class="target-sum">${sum}h</td>
           <td class="actions target-actions">
             <button type="button" class="btn btn-sm btn-outline save-target" title="Speichern">&#10003;</button>
@@ -1264,14 +1265,14 @@ async function loadUserTargets(userId) {
         const id = tr.dataset.targetId;
         const from = tr.querySelector('.target-from').value;
         if (!from) { toast('Datum eingeben', 'error'); return; }
-        const body = {
-          hours_mon: parseFloat(tr.querySelector('.t-mon').value)||0,
-          hours_tue: parseFloat(tr.querySelector('.t-tue').value)||0,
-          hours_wed: parseFloat(tr.querySelector('.t-wed').value)||0,
-          hours_thu: parseFloat(tr.querySelector('.t-thu').value)||0,
-          hours_fri: parseFloat(tr.querySelector('.t-fri').value)||0,
-          valid_from: from,
-        };
+        // A6: ungültige Eingabe melden statt still 0 zu speichern.
+        const body = { valid_from: from };
+        for (const [sel, key, label] of [['.t-mon', 'hours_mon', 'Montag'], ['.t-tue', 'hours_tue', 'Dienstag'],
+          ['.t-wed', 'hours_wed', 'Mittwoch'], ['.t-thu', 'hours_thu', 'Donnerstag'], ['.t-fri', 'hours_fri', 'Freitag']]) {
+          const v = numFromField(tr.querySelector(sel), 0, 0, 24);
+          if (v === null) { toast(`Soll-Stunden ${label}: bitte eine Zahl zwischen 0 und 24 eingeben`, 'error'); return; }
+          body[key] = v;
+        }
         try {
           await api('PUT', `/api/statistics/targets/${userId}/${id}`, body);
           toast('Gespeichert', 'success');

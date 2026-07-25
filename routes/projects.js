@@ -172,6 +172,7 @@ router.get('/:id/stats', authenticate, (req, res) => {
     SELECT e.user_id, u.name, ROUND(SUM(e.net_hours), 2) AS hours, COUNT(*) AS entries
     FROM entries e JOIN users u ON u.id = e.user_id
     WHERE (e.project_id = ? OR (e.project_text = ? AND e.project_text <> '')) AND u.role <> 'admin'
+      AND e.deleted_at IS NULL
     GROUP BY e.user_id
     ORDER BY hours DESC, u.name ASC
   `).all(project.id, project.name);
@@ -191,6 +192,7 @@ router.get('/:id/entries.csv', authenticate, (req, res) => {
     SELECT u.name AS user_name, e.date, e.time_from, e.time_to, e.break_minutes, e.net_hours
     FROM entries e JOIN users u ON u.id = e.user_id
     WHERE (e.project_id = ? OR (e.project_text = ? AND e.project_text <> '')) AND u.role <> 'admin'
+      AND e.deleted_at IS NULL
     ORDER BY e.date ASC, e.time_from ASC
   `).all(project.id, project.name);
 

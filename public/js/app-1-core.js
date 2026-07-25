@@ -66,12 +66,35 @@ async function api(method, url, body, isFormData) {
 }
 
 // --- Utilities ---
+// HTML-escapen für Text UND Attribute. Wichtig: textContent→innerHTML escapt " und ' NICHT — in
+// `value="${esc(x)}"`/`data-x="${esc(x)}"` könnte ein Anführungszeichen sonst aus dem Attribut ausbrechen.
+// Deshalb werden Quotes zusätzlich ersetzt (im Textkontext unschädlich, der Browser zeigt sie normal an).
 function esc(str) {
   if (!str) return '';
   const d = document.createElement('div');
   d.textContent = str;
-  return d.innerHTML;
+  return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+// Zahl aus einem Eingabefeld lesen. Leer → Default; Komma erlaubt; UNGÜLTIG → null, damit der Aufrufer eine
+// Meldung zeigen kann statt still 0 zu speichern. Wichtig: Ein <input type="number"> mit unlesbarem Inhalt
+// liefert value==="" — das erkennt man nur an validity.badInput, sonst sähe es wie „leer gelassen" aus.
+function numFromField(idOrEl, def, min, max) {
+  const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
+  if (!el) return def;
+  if (el.validity && el.validity.badInput) return null;
+  const raw = String(el.value).trim().replace(',', '.');
+  if (raw === '') return def;
+  const n = parseFloat(raw);
+  if (!isFinite(n)) return null;
+  // Bereichsgrenzen (ersetzen die frühere min/max-Prüfung der type=number-Felder)
+  if (min !== undefined && n < min) return null;
+  if (max !== undefined && n > max) return null;
+  return n;
+}
+
+// Zahl für die Anzeige in einem Eingabefeld: deutsches Dezimalkomma (7.5 → „7,5").
+function numDe(v) { return String(v ?? 0).replace('.', ','); }
 
 async function loadBadges() {
   if (!S.token) return;
