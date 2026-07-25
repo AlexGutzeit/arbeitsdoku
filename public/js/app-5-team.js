@@ -772,6 +772,10 @@ async function renderBulletinForm(editId) {
       const data = await api('GET', '/api/bulletin');
       if (data) entry = data.entries.find(e => e.id === Number(editId));
     } catch (e) { toast(e.message, 'error'); navigate('/bulletin'); return; }
+    // A17: Ist der Aushang inzwischen weg (Auto-Löschdatum abgelaufen oder von jemand anderem gelöscht),
+    // darf das Formular NICHT stillschweigend in den Anlege-Modus kippen — sonst tippt man in ein
+    // scheinbares „Bearbeiten"-Formular und erzeugt in Wahrheit einen zweiten Eintrag.
+    if (!entry) { toast('Dieser Aushang existiert nicht mehr.', 'error'); navigate('/bulletin'); return; }
   }
 
   const isEdit = !!entry;

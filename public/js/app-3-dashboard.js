@@ -765,27 +765,38 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   const source = continueEntry || planningEntry || projectSource;
   const today = formatDateISO(new Date());
 
-  // Startzeit-Vorschlag: Der ERSTE Eintrag eines Tages beginnt um 07:00, jeder weitere schließt an den
-  // zuletzt gebuchten an (Endzeit des spätesten Eintrags dieses Mitarbeiters an DIESEM Datum). Spart bei
-  // Folgeaufträgen das Tippen. Immer nur ein Vorschlag — überschreibbar (z. B. für Nachträge).
-  async function suggestStart(dateStr, userId) {
-    if (!dateStr) return '07:00';
+  // Endzeit des letzten Eintrags dieses Mitarbeiters an DIESEM Datum — oder null, wenn noch nichts gebucht ist.
+  async function lastEndOfDay(dateStr, userId) {
+    if (!dateStr) return null;
     try {
       const params = new URLSearchParams({ date_from: dateStr, date_to: dateStr });
       if (userId) params.set('user_id', String(userId));
       const data = await api('GET', '/api/entries?' + params.toString());
       const list = ((data && data.entries) || []).filter(e => !userId || e.user_id === Number(userId));
-      if (!list.length) return '07:00';
-      return list.reduce((max, e) => (e.time_to && e.time_to > max ? e.time_to : max), '00:00') || '07:00';
-    } catch (_) { return '07:00'; }
+      if (!list.length) return null;
+      const max = list.reduce((m, e) => (e.time_to && e.time_to > m ? e.time_to : m), '00:00');
+      return max === '00:00' ? null : max;
+    } catch (_) { return null; }
+  }
+
+  // Startzeit-Vorschlag. Reihenfolge bewusst so:
+  //   1. Endzeit des letzten Eintrags des Tages — die REALITÄT hat Vorrang. Auch wenn eine Planung eine
+  //      frühere Startzeit vorsieht: Endete der Auftrag davor erst um 11, darf nicht 10 vorgeschlagen
+  //      werden, sonst entstünde eine Überlappung (doppelt gebuchte Zeit).
+  //   2. sonst die geplante Startzeit (erster Auftrag des Tages aus der Planung)
+  //   3. sonst 07:00 (Tagesbeginn)
+  // Immer nur ein Vorschlag — jederzeit überschreibbar (z. B. für Nachträge).
+  async function suggestStart(dateStr, userId, plannedFrom) {
+    const lastEnd = await lastEndOfDay(dateStr, userId);
+    return lastEnd || plannedFrom || '07:00';
   }
   const title = isEdit ? 'Eintrag bearbeiten' : (projectSource ? 'Auftrag als Zeitnachweis übernehmen' : (planningEntry ? 'Eintrag aus Planung erstellen' : (continueEntry ? 'Weiter arbeiten' : 'Neuer Eintrag')));
 
   const nowTime = `${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}`;
   const date = isEdit ? entry.date : today;
-  // Neue Einträge (ohne Planungs-Vorgabe): an den letzten Eintrag des Tages anschließen, sonst 07:00.
+  // Neue Einträge: an den letzten Eintrag des Tages anschließen; sonst geplante Startzeit; sonst 07:00.
   const timeFrom = isEdit ? entry.time_from
-    : (planningEntry ? planningEntry.time_from : await suggestStart(date, isAdmin() ? null : S.user.id));
+    : await suggestStart(date, isAdmin() ? null : S.user.id, planningEntry ? planningEntry.time_from : null);
   const timeTo = isEdit ? entry.time_to : nowTime;
   const breakMin = isEdit ? entry.break_minutes : (planningEntry ? planningEntry.break_minutes : 30);
   const address = isEdit ? entry.address : (source ? source.address : '');
@@ -939,7 +950,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
       const d = document.getElementById('ef-date')?.value;
       const uSel = document.getElementById('ef-user');
       const uid = uSel ? Number(uSel.value) : (isAdmin() ? null : S.user.id);
-      const s = await suggestStart(d, uid);
+      const s = await suggestStart(d, uid, planningEntry ? planningEntry.time_from : null);
       if (fromEl.value === lastSuggested) { fromEl.value = s; lastSuggested = s; updateNet(); }
     };
     document.getElementById('ef-date')?.addEventListener('change', refreshStart);

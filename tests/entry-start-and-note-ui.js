@@ -71,6 +71,34 @@ const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
     von = await p.evaluate(() => document.getElementById('ef-from').value);
     ok('manuelle Eingabe bleibt bei Datumswechsel stehen', von === '09:15', 'von=' + von);
 
+    // ── 4b) Realität schlägt Planung. Eigener MA ohne Einträge, denn „Planung übernehmen" bucht IMMER
+    // auf heute — der MA oben hat heute schon gebucht.
+    console.log('Planung vs. Realität:');
+    const pma = (await req('POST', '/api/users', admin, { username: 'planma', password: 'Test1234!', name: 'Plan MA', role: 'mitarbeiter' })).body.user;
+    const pmaTok = (await login('planma', 'Test1234!')).body.token;
+    const plan = await req('POST', '/api/planning', admin, { date: today, time_from: '10:00', time_to: '12:00', assigned_user_ids: [pma.id], client: 'Geplant' });
+    const planId = plan.body && plan.body.entry && plan.body.entry.id;
+    ok('Planung 10:00–12:00 angelegt', !!planId, JSON.stringify(plan.body).slice(0, 80));
+
+    const ctxP = await (browser.createBrowserContext ? browser.createBrowserContext() : browser.createIncognitoBrowserContext());
+    const pp = await ctxP.newPage(); await pp.setViewport({ width: 1200, height: 950 });
+    await pp.goto(BASE, { waitUntil: 'networkidle2' });
+    await pp.waitForSelector('#login-user'); await pp.type('#login-user', 'planma'); await pp.type('#login-pass', 'Test1234!');
+    await pp.click('#login-form button[type="submit"]'); await pp.waitForSelector('a[href="#/planning"]'); await sleep(400);
+
+    // Noch nichts gebucht → geplante Startzeit 10:00
+    await pp.evaluate((id) => { location.hash = '#/planning/accept/' + id; }, planId); await sleep(1700);
+    await pp.waitForSelector('#ef-from');
+    let vonP = await pp.evaluate(() => document.getElementById('ef-from').value);
+    ok('erster Auftrag des Tages → geplante Zeit 10:00', vonP === '10:00', 'von=' + vonP);
+
+    // Vorgänger endete real erst 11:00 → Vorschlag 11:00 (NICHT die geplanten 10:00 → keine Überlappung)
+    await req('POST', '/api/entries', pmaTok, { date: today, time_from: '07:00', time_to: '11:00', project_text: 'Vorgänger' });
+    await pp.evaluate(() => { location.hash = '#/'; }); await sleep(800);
+    await pp.evaluate((id) => { location.hash = '#/planning/accept/' + id; }, planId); await sleep(1700);
+    vonP = await pp.evaluate(() => document.getElementById('ef-from').value);
+    ok('Vorgänger endete 11:00 → 11:00 statt geplanter 10:00', vonP === '11:00', 'von=' + vonP);
+
     // ── 5) A16: Chef bearbeitet EIGENEN Eintrag mit privater Notiz → Notiz bleibt erhalten.
     // (Fremde Einträge darf ohnehin nur der Admin bearbeiten, und der sieht das Notizfeld. Betroffen ist
     // also der Fall „Chef/Buchhalter bearbeitet einen eigenen Eintrag, an dem eine Notiz hängt".)
@@ -100,6 +128,25 @@ const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
     const after = (await req('GET', '/api/entries/' + e.id, chefTok)).body.entry;
     ok('Beschreibung wurde übernommen', after && after.description === 'vom Chef ergänzt', JSON.stringify(after && after.description));
     ok('private Notiz ist NICHT gelöscht', after && after.personal_note === 'GEHEIME NOTIZ', JSON.stringify(after && after.personal_note));
+
+
+    // ── 6) A17: Aushang bearbeiten, der nicht mehr existiert → Hinweis + zurück, KEINE stille Neuanlage.
+    console.log('A17 — gelöschter Aushang:');
+    const bul = (await req('POST', '/api/bulletin', admin, { title: 'A17-Test', text: 'weg gleich' })).body.entry;
+    ok('Aushang angelegt', !!bul);
+    const before = ((await req('GET', '/api/bulletin', admin)).body.entries || []).length;
+    await req('DELETE', '/api/bulletin/' + bul.id, admin);           // inzwischen gelöscht
+    await p.evaluate((id) => { location.hash = '#/bulletin/edit/' + id; }, bul.id);
+    await sleep(1500);
+    const a17 = await p.evaluate(() => ({
+      hash: location.hash,
+      toast: document.querySelector('.toast')?.textContent || '',
+      formDa: !!document.getElementById('bulletin-form'),
+    }));
+    ok('Hinweis „existiert nicht mehr"', /existiert nicht mehr/i.test(a17.toast), 'toast=' + a17.toast);
+    ok('zurück zur Aushang-Liste (kein Formular)', a17.hash === '#/bulletin' && !a17.formDa, JSON.stringify(a17));
+    const after17 = ((await req('GET', '/api/bulletin', admin)).body.entries || []).length;
+    ok('kein neuer Aushang entstanden', after17 === before - 1, `vorher ${before} → jetzt ${after17}`);
 
   } finally { if (browser) await browser.close(); srv.kill('SIGTERM'); }
   console.log(`\nStartzeit + Notiz: ${pass} bestanden, ${fail} fehlgeschlagen` + (fails.length ? `\nFehlgeschlagen: ${fails.join(', ')}` : ''));
