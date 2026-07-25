@@ -626,9 +626,9 @@ function hourlyStripHtml(h, entries, highlightHour) {
 }
 
 // Vorschau der Folgetage: je Tag früh (6–11) / mittag (12–17) / abend (18–22).
-// Die ersten HOURLY_DAYS Tage rechnen auf den hochauflösenden Modellen → dort ist zusätzlich der STÜNDLICHE
-// Verlauf per Antippen aufklappbar. Danach nur noch die groben Blöcke; jenseits der API-Reichweite (16 Tage)
-// gibt es keine Daten mehr — darauf weist eine Fußzeile hin.
+// Tage innerhalb WEATHER_HOURLY_DAYS rechnen auf den hochauflösenden Modellen → dort ist zusätzlich der
+// STÜNDLICHE Verlauf per Antippen aufklappbar. Weiter voraus gibt es keine belastbaren Daten — darauf weist
+// eine Fußzeile hin. (Backend liefert aktuell genau diese 7 Tage.)
 const WEATHER_HOURLY_DAYS = 7;
 function weekForecastHtml(h, byDay, todayStr) {
   if (!byDay || byDay.size <= 1) return '';
@@ -673,7 +673,7 @@ function weekForecastHtml(h, byDay, todayStr) {
   return `<div class="weather-week">
     <div class="ww-row ww-head"><div class="ww-day"></div>${SLOTS.map(s => `<div class="ww-cell">${s.label}</div>`).join('')}</div>
     ${items.join('')}
-    <p class="ww-note">Die ersten ${WEATHER_HOURLY_DAYS} Tage lassen sich für den stündlichen Verlauf antippen. Für weiter entfernte Tage liegen keine Vorhersagedaten vor.</p>
+    <p class="ww-note">Tag antippen zeigt den stündlichen Verlauf. Für weiter entfernte Tage liegen keine Vorhersagedaten vor.</p>
   </div>`;
 }
 
