@@ -519,8 +519,12 @@ async function renderWelcome() {
     el.textContent = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
   }
   updateClock();
-  const clockInterval = setInterval(() => {
-    if (!document.getElementById('welcome-clock')) { clearInterval(clockInterval); return; }
+  // Alten Timer sicher beenden: Die Selbst-Abschaltung unten greift nur, wenn das Element VERSCHWINDET —
+  // bei einem Neuaufbau der Willkommensseite (z. B. durch SSE) gibt es aber sofort wieder ein #welcome-clock,
+  // sodass sich sonst mit jedem Ereignis ein weiterer Sekundentakt ansammelt (Akku/Ruckeln auf Tablets).
+  if (window._welcomeClockInterval) clearInterval(window._welcomeClockInterval);
+  window._welcomeClockInterval = setInterval(() => {
+    if (!document.getElementById('welcome-clock')) { clearInterval(window._welcomeClockInterval); window._welcomeClockInterval = null; return; }
     updateClock();
   }, 1000);
 

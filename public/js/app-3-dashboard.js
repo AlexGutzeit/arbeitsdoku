@@ -221,7 +221,19 @@ async function renderDashboardContent() {
   let searchTimeout;
   document.getElementById('filter-search')?.addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => { S.filterSearch = e.target.value; renderDashboardContent(); }, 300);
+    const val = e.target.value;
+    const pos = e.target.selectionStart;
+    searchTimeout = setTimeout(async () => {
+      S.filterSearch = val;
+      await renderDashboardContent();
+      // Der Neuaufbau ersetzt das Eingabefeld → Fokus und Cursor zurückholen. Ohne das schließt sich auf dem
+      // Handy nach 300 ms die Tastatur und der Cursor springt ans Ende (Tippen wird unmöglich).
+      const el = document.getElementById('filter-search');
+      if (el && document.activeElement !== el) {
+        el.focus();
+        try { el.setSelectionRange(pos, pos); } catch (_) {}
+      }
+    }, 300);
   });
   // Employee chips
   mainEl.querySelectorAll('.emp-chip').forEach(chip => {

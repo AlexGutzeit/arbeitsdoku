@@ -126,18 +126,31 @@ let _sseStopped = false;
 let _sseReconnectTimer = null;
 let _sseBackoff = 1000;
 
+// Tippt der Nutzer gerade, oder hat er ein Eingabeformular offen? Dann NICHT live neu aufbauen — sonst
+// verschwindet das halb ausgefüllte Formular, sobald ein Kollege etwas speichert (Datenverlust).
+// Die Änderung des Kollegen sieht er beim nächsten eigenen Seitenwechsel.
+function _editorBusy(...areaSelectors) {
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)) return true;
+  for (const sel of areaSelectors) {
+    const el = document.querySelector(sel);
+    if (el && el.offsetParent !== null && el.innerHTML.trim() !== '') return true;
+  }
+  return false;
+}
+
 function _sseOnMessage(e) {
   let p; try { p = JSON.parse(e.data); } catch (_) { return; }
   // Bestellungs-Badge immer aktualisieren (live-Zähler, auch eigene Aktionen)
   if (p.type === 'orders') loadBadges();
   if (p.originTab === S.tabId) return;
   const route = getRoute();
-  if (p.type === 'orders'   && route === '/orders')                              renderOrders();
-  if (p.type === 'notes'    && route === '/notes' && !_editingNoteLockId)        renderNotizen();
+  if (p.type === 'orders'   && route === '/orders' && !_editorBusy('#order-form-area'))   renderOrders();
+  if (p.type === 'notes'    && route === '/notes' && !_editingNoteLockId && !_editorBusy('#note-form-area')) renderNotizen();
   if (p.type === 'bulletin' && route === '/bulletin')                            renderBulletin();
-  if (p.type === 'planning' && route === '/planning')                            renderPlanningContent();
-  if (p.type === 'tools'    && route === '/tools')                               renderTools();
-  if (p.type === 'projects' && route === '/projects')                            renderProjects();
+  if (p.type === 'planning' && route === '/planning' && !_editorBusy())          renderPlanningContent();
+  if (p.type === 'tools'    && route === '/tools' && !_editorBusy('.tool-checkout-form[style*="block"]')) renderTools();
+  if (p.type === 'projects' && route === '/projects' && !_editorBusy())          renderProjects();
   if (p.type === 'entries') {
     if (route === '/statistics')                       renderStatistics();
     else if (route === '/' || route === '/dashboard')  renderDashboardContent();  // #1: Dashboard-Zeitliste live
@@ -148,7 +161,7 @@ function _sseOnMessage(e) {
   if (p.type === 'absences') {
     loadBadges();  // immer, damit Nav-Badge auf jeder Route live aktualisiert wird
     if (route.startsWith('/absences'))       renderAbsences();
-    else if (route === '/' || route === '')  renderDashboardContent();
+    else if (route === '/' || route === '/dashboard')  renderDashboardContent(); // /dashboard fehlte hier
     else if (route === '/welcome')           renderWelcome();
     else if (route === '/planning')          renderPlanningContent();
     else if (route === '/statistics')        renderStatistics();

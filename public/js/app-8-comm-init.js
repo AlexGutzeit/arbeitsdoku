@@ -1033,6 +1033,11 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
     </div>
   `;
 
+  // A5: Ein bereits offenes Formular zuerst entfernen. Sonst lägen zwei Overlays übereinander und alle
+  // Handler (getElementById) griffen auf das ERSTE zu — man tippt sichtbar ins zweite, gespeichert würden
+  // die Werte des unsichtbaren ersten.
+  document.getElementById('absence-form-overlay')?.remove();
+
   const overlay = document.createElement('div');
   overlay.innerHTML = formHtml;
   document.body.appendChild(overlay.firstElementChild);

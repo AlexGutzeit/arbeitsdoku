@@ -272,8 +272,17 @@ function vacationAccount(db, userId, year, now) {
       if (ent.carryover_mode === 'never') {
         carry = leftover;
       } else if (ent.carryover_mode === 'date' && ent.carryover_until) {
+        // Verfall an einem Stichtag im Folgejahr. Wichtig: Es verfällt nur der bis dahin NICHT GENUTZTE Rest.
+        // Urlaub, den der MA vor dem Stichtag genommen hat, wurde aus dem Übertrag bedient und darf nicht
+        // nachträglich gegen den neuen Jahresanspruch gerechnet werden (sonst stünde er später zu Unrecht im
+        // Minus). Ein negativer Saldo ist Schuld und wird wie überall immer vorgetragen.
         const expiry = String(y + 1) + '-' + ent.carryover_until; // 'MM-DD'
-        carry = nowStr > expiry ? Math.min(leftover, 0) : leftover;
+        if (nowStr <= expiry || leftover <= 0) {
+          carry = leftover; // Stichtag noch nicht erreicht (bzw. Schuld) → unverändert vortragen
+        } else {
+          const usedBeforeExpiry = urlaubDaysInYear(db, userId, y + 1, 'approved').filter(ds => ds <= expiry).length;
+          carry = Math.min(leftover, usedBeforeExpiry); // nur der verbrauchte Teil bleibt erhalten
+        }
       } else {
         carry = Math.min(leftover, 0); // 'yearend': positives verfällt, negatives (Minus) wird vorgetragen
       }

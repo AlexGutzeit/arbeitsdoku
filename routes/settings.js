@@ -96,7 +96,11 @@ router.get('/weather', authenticate, async (req, res) => {
     res.json(result);
   } catch (e) {
     console.error('Weather error:', e.message, e.cause || '');
-    res.json({ error: 'Wetterdaten nicht verfügbar', city: city || zip });
+    // Auch Fehlschläge kurz cachen: Sonst löst JEDER Aufruf der Willkommensseite eine neue Geocoding-Anfrage
+    // aus, während der Dienst gestört ist — Nominatim erlaubt ~1 Anfrage/s und sperrt sonst die Server-IP.
+    const errResult = { error: 'Wetterdaten nicht verfügbar', city: city || zip };
+    weatherCache = { data: errResult, ts: Date.now() - (15 * 60 * 1000) + (2 * 60 * 1000) }; // ~2 Min gültig
+    res.json(errResult);
   }
 });
 

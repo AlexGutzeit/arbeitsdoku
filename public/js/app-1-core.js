@@ -647,12 +647,15 @@ function confirmModal(message, opts = {}) {
       </div>`;
     document.body.appendChild(overlay);
     const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); resolve(val); };
-    const onKey = (e) => { if (e.key === 'Escape') finish(false); else if (e.key === 'Enter') finish(true); };
+    // Enter bestätigt NUR harmlose Dialoge. Bei destruktiven (danger) würde ein versehentliches Enter —
+    // etwa direkt nach dem Tippen in einem Formular — sonst „Löschen" auslösen. Dort ist bewusst ein Klick nötig.
+    const onKey = (e) => { if (e.key === 'Escape') finish(false); else if (e.key === 'Enter' && !danger) finish(true); };
     document.addEventListener('keydown', onKey);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(false); });
     overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(false));
     overlay.querySelector('[data-act="ok"]').addEventListener('click', () => finish(true));
-    overlay.querySelector('[data-act="ok"]').focus();
+    // Fokus bei destruktiven Dialogen auf „Abbrechen" (sichere Vorauswahl), sonst auf OK.
+    overlay.querySelector(danger ? '[data-act="cancel"]' : '[data-act="ok"]').focus();
   });
 }
 // choiceModal: Mehrfach-Auswahl. choices: [{ value, label, danger?, primary? }]. Liefert value oder null (Abbruch).

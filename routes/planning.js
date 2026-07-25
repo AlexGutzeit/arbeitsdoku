@@ -8,7 +8,10 @@ const recur = require('../planning-recurrence');
 const router = express.Router();
 
 // ——— Serientermine (Wiederholungen) ———
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// „Heute" in Europe/Berlin wie im Rest der App (audit.js, scheduler.js, users.js). Mit UTC lieferte das
+// zwischen 00:00 und 02:00 Ortszeit den VORTAG — dann hätte z. B. „Serie ab heute beenden" einen Tag zu viel
+// gelöscht („Vergangenes bleibt" wäre verletzt).
+const todayISO = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
 const addDaysISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const addMonthsISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
 const diffDays = (aISO, bISO) => Math.round((new Date(bISO + 'T00:00:00Z') - new Date(aISO + 'T00:00:00Z')) / 86400000);
@@ -540,16 +543,23 @@ router.post('/', authenticate, canPlan, (req, res) => {
     return res.status(400).json({ error: 'Mindestens ein Mitarbeiter muss zugewiesen werden' });
   }
 
-  // Ebene 3: identische Mehrtages-Planung der letzten Sekunden nicht doppelt anlegen (Signatur = erster
-  // gültiger Tag + zugewiesene Personen) → bestehende Gruppe zurückgeben.
-  const firstDay = days.find(d => d.date && d.time_from && d.time_to);
+  // Ebene 3: identische Mehrtages-Planung der letzten Sekunden nicht doppelt anlegen → bestehende Gruppe
+  // zurückgeben. WICHTIG: Es müssen ALLE Tage übereinstimmen. Verglich man nur den ersten Tag, würde eine
+  // bewusst andere Planung („Mo+Di" gefolgt von „Mo+Mi") als Dublette geschluckt und der Mittwoch fehlte —
+  // bei gemeldetem Erfolg.
+  const validDays = days.filter(d => d.date && d.time_from && d.time_to);
+  const firstDay = validDays[0];
   if (firstDay) {
     const dup = recentDuplicatePlanning(db, req.user.id,
       { date: firstDay.date, time_from: firstDay.time_from, time_to: firstDay.time_to, break_minutes: firstDay.break_minutes, address, client, project_id, project_text, description },
       assigned_user_ids, true);
     if (dup && dup.group_id) {
-      const count = db.prepare('SELECT COUNT(*) AS c FROM planning_entries WHERE group_id = ?').get(dup.group_id).c;
-      return res.status(201).json({ success: true, count, group_id: dup.group_id, deduped: true });
+      const sig = (arr) => arr.map(d => `${d.date}|${d.time_from}|${d.time_to}|${d.break_minutes || 0}`).sort().join(';');
+      const existing = db.prepare('SELECT date, time_from, time_to, break_minutes FROM planning_entries WHERE group_id = ?').all(dup.group_id);
+      if (sig(existing) === sig(validDays)) {
+        return res.status(201).json({ success: true, count: existing.length, group_id: dup.group_id, deduped: true });
+      }
+      // Tage weichen ab → echte, neue Planung: normal weiter anlegen (kein Dedup).
     }
   }
 
