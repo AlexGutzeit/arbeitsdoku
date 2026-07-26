@@ -762,7 +762,9 @@ function employedInRange(user, from, to) {
   return periods.some(p => p.s <= to && (!p.e || p.e >= from));
 }
 
+let _letzteMeldung = 0;   // wann zuletzt etwas eingeblendet wurde (siehe Entwurfs-Hinweis)
 function toast(msg, type, duration) {
+  _letzteMeldung = Date.now();
   let t = document.querySelector('.toast');
   if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
   t.textContent = msg;
@@ -1060,7 +1062,14 @@ window.addEventListener('pagehide', entwuerfeSichern);
 // Seitenwechsel: sichern und kurz Bescheid geben. Dieser Listener wird VOR dem render()-Listener
 // in app-8 angemeldet (Datei laedt frueher) und laeuft daher noch am alten Formular.
 window.addEventListener('hashchange', () => {
-  if (entwuerfeSichern() > 0) toast('Entwurf gesichert', 'success');
+  if (entwuerfeSichern() === 0) return;
+  // Der Hinweis ist die unwichtigste Meldung der App — er darf NIE eine andere ueberdecken.
+  // Beispiel: ein inzwischen geloeschter Aushang meldet „existiert nicht mehr" und springt
+  // zurueck; dabei feuert ein zweites hashchange. Ohne diese Sperre haette der Entwurfs-Hinweis
+  // die Erklaerung ueberschrieben und der Nutzer haette nie erfahren, warum er wieder in der
+  // Liste steht. Es gibt nur EIN Meldungsfeld, jede Meldung ersetzt die vorherige.
+  if (Date.now() - _letzteMeldung < 3000) return;
+  toast('Entwurf gesichert', 'success');
 });
 
 function render() {

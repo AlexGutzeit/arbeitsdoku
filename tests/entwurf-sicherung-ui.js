@@ -134,6 +134,22 @@ async function inDenHintergrund(p) {
     await p.click('#entwurf-uebernehmen'); await sleep(400);
     ok('Eingabe zurueck', (await getVal(p, 'ef-client')) === 'Versehentlich verlassen');
 
+    // ── Der Hinweis darf keine wichtigere Meldung ueberdecken ─────────────
+    // Es gibt nur EIN Meldungsfeld. Wuerde „Entwurf gesichert" eine Fehlermeldung ersetzen,
+    // erfuehre der Nutzer nie, warum er ploetzlich woanders steht.
+    console.log('Vorrang der Meldungen:');
+    const bul = (await req('POST', '/api/bulletin', admin, { title: 'Gleich geloescht', text: 'x' })).body.entry;
+    await req('DELETE', '/api/bulletin/' + bul.id, admin);
+    await neustart('#/entry/new');
+    if (await leisteDa(p)) { await p.click('#entwurf-verwerfen'); await sleep(300); }
+    await setVal(p, 'ef-client', 'Etwas Getipptes'); await sleep(800);
+    await p.evaluate(id => { location.hash = '#/bulletin/edit/' + id; }, bul.id);
+    await sleep(1800);
+    const meldung = await p.evaluate(() => { const t = document.querySelector('.toast'); return t ? t.textContent : ''; });
+    ok('Fehlermeldung bleibt stehen, der Entwurfs-Hinweis draengt sich nicht vor',
+      /existiert nicht mehr/i.test(meldung), JSON.stringify(meldung));
+    ok('der Entwurf wurde trotzdem gesichert', (await entwuerfe(p)).length >= 1, JSON.stringify(await entwuerfe(p)));
+
     // ── Projekt gewaehlt UND Adresse von Hand geaendert ───────────────────
     // Die Projekt-Auswahl traegt beim Wechseln Adresse/Kunde/Notiz des Projekts ein. Beim
     // Wiederherstellen darf diese Automatik die selbst getippten Werte NICHT ueberschreiben.
