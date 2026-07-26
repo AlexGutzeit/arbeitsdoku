@@ -1,4 +1,5 @@
-// Zwei-Client-Test (echtes SSE): Was passiert bei mir, wenn ein KOLLEGE etwas speichert?
+// Zwei-BROWSER-Test (echtes SSE): Was passiert bei mir, wenn ein KOLLEGE in seinem eigenen Browser
+// über die Oberfläche speichert?
 //  Frage 1: Bleibt meine Scrollposition erhalten?
 //  Frage 2: Gehen meine halb eingetippten Daten verloren?
 // Geprüft für Werkzeuge, Notizen, Bestellungen, Projekte, Abwesenheiten und das Auftrags-Board.
@@ -21,9 +22,10 @@ function req(m, p, t, b) {
 const login = (u, pw) => req('POST', '/api/auth/login', null, { username: u, password: pw });
 const today = new Date().toLocaleDateString('sv-SE');
 
-// „Kollege speichert" — bewusst über einen EIGENEN Kanal (nicht der Browser des Testnutzers),
-// damit das SSE-Ereignis wirklich von außen kommt.
-async function kollegeSpeichert(fn) { await fn(); await sleep(1800); }
+// „Kollege speichert" — in seinem EIGENEN Browser-Fenster über die echte Oberfläche, damit das
+// SSE-Ereignis genau so entsteht wie im Alltag (inkl. eigener Tab-Kennung).
+let _kollege = null;
+async function kollegeSpeichert(fn) { await fn(); await sleep(1900); }
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
@@ -48,13 +50,32 @@ async function kollegeSpeichert(fn) { await fn(); await sleep(1800); }
     await p.waitForSelector('#login-user'); await p.type('#login-user', 'chef'); await p.type('#login-pass', cpw);
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]'); await sleep(800);
 
+    // ── Der KOLLEGE: eigener Browser-Kontext, eigene Anmeldung, eigene SSE-Verbindung ──
+    const ctxK = await (browser.createBrowserContext ? browser.createBrowserContext() : browser.createIncognitoBrowserContext());
+    _kollege = await ctxK.newPage(); await _kollege.setViewport({ width: 900, height: 700 });
+    await _kollege.goto(BASE, { waitUntil: 'networkidle2' });
+    await _kollege.waitForSelector('#login-user'); await _kollege.type('#login-user', 'admin'); await _kollege.type('#login-pass', apw);
+    await _kollege.click('#login-form button[type="submit"]'); await _kollege.waitForSelector('a[href="#/planning"]'); await sleep(800);
+    ok('Kollege ist in einem eigenen Browser angemeldet', await _kollege.evaluate(() => !!S.token && !!S.tabId));
+    ok('beide Browser haben unterschiedliche Tab-Kennungen',
+      (await p.evaluate(() => S.tabId)) !== (await _kollege.evaluate(() => S.tabId)));
+
     // ══ FRAGE 1: Scrollposition bei einem Live-Update ══
     console.log('Frage 1 — Scrollposition bei Live-Update eines Kollegen:');
     await p.evaluate(() => { location.hash = '#/tools'; }); await sleep(1600);
     await p.evaluate(() => window.scrollTo(0, 500)); await sleep(450);
     const vorScroll = await p.evaluate(() => Math.round(window.scrollY));
     const werkzeugeVorher = await p.evaluate(() => document.querySelectorAll('.tool-row, .tool-item, tr[data-tool-id]').length);
-    await kollegeSpeichert(() => req('POST', '/api/tools', admin, { name: 'Kollege-Werkzeug' }));
+    await kollegeSpeichert(async () => {   // Kollege legt im eigenen Browser ein Werkzeug an
+      await _kollege.evaluate(() => { location.hash = '#/tools'; }); await sleep(1500);
+      await _kollege.evaluate(async () => {
+        const inp = document.querySelector('#tool-name, #new-tool-name, input[name="tool"]');
+        if (inp) { inp.value = 'Kollege-Werkzeug'; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+        const btn = document.querySelector('#tool-add, .tool-add, #add-tool-btn');
+        if (btn) btn.click();
+        else await api('POST', '/api/tools', { name: 'Kollege-Werkzeug' });   // Fallback: aus SEINEM Browser
+      });
+    });
     const nachScroll = await p.evaluate(() => Math.round(window.scrollY));
     const werkzeugeNachher = await p.evaluate(() => document.querySelectorAll('.tool-row, .tool-item, tr[data-tool-id]').length);
     ok('Live-Update kam an (Liste wurde aktualisiert)', werkzeugeNachher > werkzeugeVorher || werkzeugeVorher === 0, `${werkzeugeVorher} → ${werkzeugeNachher}`);
@@ -74,7 +95,7 @@ async function kollegeSpeichert(fn) { await fn(); await sleep(1800); }
       return true;
     });
     if (notizForm) {
-      await kollegeSpeichert(() => req('POST', '/api/notes', admin, { title: 'Kollegen-Notiz' }));
+      await kollegeSpeichert(() => _kollege.evaluate(() => api('POST', '/api/notes', { title: 'Kollegen-Notiz' })));
       const notizDa = await p.evaluate(() => {
         const t = document.querySelector('#note-form-area input, #note-form-area textarea');
         return t ? t.value : null;
@@ -95,7 +116,7 @@ async function kollegeSpeichert(fn) { await fn(); await sleep(1800); }
       return true;
     });
     if (bestellForm) {
-      await kollegeSpeichert(() => req('POST', '/api/orders', admin, { product: 'Kollegen-Bestellung' }));
+      await kollegeSpeichert(() => _kollege.evaluate(() => api('POST', '/api/orders', { product: 'Kollegen-Bestellung' })));
       const bestellDa = await p.evaluate(() => { const t = document.querySelector('#order-form-area input, #order-form-area textarea'); return t ? t.value : null; });
       ok('Bestell-Formular überlebt Live-Update', bestellDa === 'HALBE BESTELLUNG', 'wert=' + bestellDa);
     } else ok('Bestell-Formular geöffnet (übersprungen)', true);
@@ -111,7 +132,7 @@ async function kollegeSpeichert(fn) { await fn(); await sleep(1800); }
       return true;
     });
     if (projForm) {
-      await kollegeSpeichert(() => req('POST', '/api/projects', admin, { name: 'Kollegen-Projekt ' + Date.now() }));
+      await kollegeSpeichert(() => _kollege.evaluate(() => api('POST', '/api/projects', { name: 'Kollegen-Projekt ' + Date.now() })));
       const projDa = await p.evaluate(() => { const n = document.getElementById('pf2-name'); return n ? n.value : null; });
       ok('Projekt-Formular überlebt Live-Update (auch ohne Fokus)', projDa === 'GEÄNDERTER NAME', 'wert=' + projDa);
     } else ok('Projekt-Formular geöffnet (übersprungen)', true);
@@ -120,7 +141,7 @@ async function kollegeSpeichert(fn) { await fn(); await sleep(1800); }
     await p.evaluate(() => { location.hash = '#/absences'; }); await sleep(1700);
     await p.evaluate(() => { showAbsenceForm(null, 'krank', null, null, null); }); await sleep(500);
     await p.evaluate(() => { const c = document.getElementById('abs-comment'); if (c) c.value = 'MEIN KOMMENTAR'; document.activeElement?.blur?.(); });
-    await kollegeSpeichert(() => req('POST', '/api/absences', admin, { type: 'krank', date_from: today, date_to: today, target_user_id: 3 }));
+    await kollegeSpeichert(() => _kollege.evaluate((d) => api('POST', '/api/absences', { type: 'krank', date_from: d, date_to: d, target_user_id: 3 }), today));
     const absDa = await p.evaluate(() => { const c = document.getElementById('abs-comment'); return c ? c.value : null; });
     ok('Abwesenheits-Dialog überlebt Live-Update', absDa === 'MEIN KOMMENTAR', 'wert=' + absDa);
     await p.evaluate(() => document.getElementById('abs-cancel')?.click()); await sleep(300);
@@ -133,7 +154,7 @@ async function kollegeSpeichert(fn) { await fn(); await sleep(1800); }
       await p.evaluate(() => { const b = document.querySelector('.board-scroll'); b.scrollLeft = 250; b.dispatchEvent(new Event('scroll', { bubbles: true })); });
       await sleep(450);
       const vorB = await p.evaluate(() => document.querySelector('.board-scroll').scrollLeft);
-      await kollegeSpeichert(() => req('POST', '/api/projects', admin, { name: 'Board-Update ' + Date.now() }));
+      await kollegeSpeichert(() => _kollege.evaluate(() => api('POST', '/api/projects', { name: 'Board-Update ' + Date.now() })));
       const nachB = await p.evaluate(() => { const b = document.querySelector('.board-scroll'); return b ? b.scrollLeft : -1; });
       ok('Board-Position bleibt bei Live-Update', Math.abs(nachB - vorB) < 60, `${vorB} → ${nachB}`);
     } else ok('Board seitlich scrollbar (übersprungen)', true);
