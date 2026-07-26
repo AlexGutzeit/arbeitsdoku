@@ -173,14 +173,14 @@ async function startAbsenceDelete(page, label) {
     const lj = await lr.json();
     if (!lj.token) return { err: 'Admin-Login fehlgeschlagen (Passwort "test"? DB anonymisiert?)', body: lj };
     const cr = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + lj.token },
-      body: JSON.stringify({ username: u, password: 'test', name: 'Abwesenheits-Test', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8, target_hours_per_week: 40 }) });
+      body: JSON.stringify({ username: u, password: 'Test1234!', name: 'Abwesenheits-Test', role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8, target_hours_per_week: 40 }) });
     return { status: cr.status, body: await cr.json() };
   }, TESTUSER);
   check('Testnutzer angelegt (Admin)', setup.status === 201, JSON.stringify(setup));
   if (setup.status !== 201) { console.log('\nAbbruch: Setup fehlgeschlagen.'); await browser.close(); process.exit(1); }
 
   await page.type('#login-user', TESTUSER);
-  await page.type('#login-pass', 'test');
+  await page.type('#login-pass', 'Test1234!');   // Passwortregel: min. 8 Zeichen (admin im Klon bleibt 'test')
   await page.click('#login-form button[type="submit"]');
   await page.waitForSelector('a[href="#/absences"]', { timeout: 8000 });
   await page.evaluate(() => { window.location.hash = '#/absences'; });
