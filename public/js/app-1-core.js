@@ -331,6 +331,77 @@ function suppressTooltip() {
   setTimeout(() => { _tooltipSuppressed = false; }, 500);
 }
 
+// Langer Druck zeigt die Details eines Eintrags (B7).
+// Am Rechner erscheinen sie beim Drueberfahren mit der Maus — auf dem Handy gibt es kein
+// „Drueberfahren", dort waere der einzige Weg, den Eintrag zum Bearbeiten zu oeffnen und wieder
+// abzubrechen. Deshalb: gedrueckt halten = nachschauen, kurz tippen = wie bisher oeffnen.
+// `htmlFor` wird erst beim Ausloesen aufgerufen, damit immer die aktuellen Daten gezeigt werden.
+const LP_DAUER_MS = 500;      // ab hier gilt es als „gehalten"
+const LP_WACKEL_PX = 8;       // Scrollen/Wischen bricht ab
+const LP_SICHTBAR_MS = 4000;  // danach blendet die Sprechblase von selbst aus
+
+// Nach dem Loslassen feuert der Browser noch einen Klick. Der darf nach einem langen Druck NICHT
+// durchgehen, sonst zeigt die App die Details und oeffnet gleichzeitig das Bearbeiten-Formular.
+// Der Riegel haengt am DOKUMENT: liegt der Finger auf dem Eintrag selbst (nicht auf einem
+// Kind-Element), laufen Capture- und Bubble-Listener desselben Elements in REGISTRIERUNGS-
+// reihenfolge — ein Riegel am Eintrag kaeme dann zu spaet, weil der vorhandene Klick-Handler
+// frueher angemeldet wurde. Am Dokument greift Capture immer zuerst.
+// Chrome schickt nach jeder Beruehrung zusaetzlich Maus-Ersatzereignisse (mouseover/mousemove),
+// damit alte Seiten ohne Touch-Unterstuetzung funktionieren. Die duerfen den Hover-Tooltip NICHT
+// ausloesen — sonst blitzt er auf dem Handy bei jedem Antippen und sogar beim Scrollen auf.
+// Kurz nach einer Beruehrung gilt ein Mausereignis daher als unecht. Geraete mit Maus UND
+// Touch (Convertible) behalten den Hover-Tooltip, sobald sie wirklich die Maus benutzen.
+let _letzteBeruehrung = 0;
+document.addEventListener('touchstart', () => { _letzteBeruehrung = Date.now(); }, { passive: true, capture: true });
+document.addEventListener('touchend', () => { _letzteBeruehrung = Date.now(); }, { passive: true, capture: true });
+function istMauszeiger() { return Date.now() - _letzteBeruehrung > 700; }
+
+let _lpKlickSperren = false, _lpSperrTimer = null, _lpRiegelDa = false;
+function _lpRiegelAnmelden() {
+  if (_lpRiegelDa) return;
+  _lpRiegelDa = true;
+  document.addEventListener('click', ev => {
+    if (!_lpKlickSperren) return;
+    _lpKlickSperren = false;
+    clearTimeout(_lpSperrTimer);
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+  }, true);
+}
+
+function attachLongPressTooltip(el, htmlFor) {
+  _lpRiegelAnmelden();
+  let timer = null, x = 0, y = 0, verrutscht = false;
+  const stop = () => { clearTimeout(timer); timer = null; };
+  el.addEventListener('touchstart', ev => {
+    if (!ev.touches || ev.touches.length !== 1) return;   // Zwei Finger = Zoomen, nicht halten
+    verrutscht = false;
+    x = ev.touches[0].clientX; y = ev.touches[0].clientY;
+    stop();
+    timer = setTimeout(() => {
+      if (verrutscht) return;
+      const html = htmlFor();
+      if (!html) return;
+      hideTooltip();
+      showTooltip(html, x, y);
+      setTimeout(hideTooltip, LP_SICHTBAR_MS);
+      // Klick sperren. Falls doch keiner kommt (Finger wandert weg), nach kurzer Zeit loesen —
+      // sonst schluckt der Riegel spaeter einen voellig unbeteiligten Klick.
+      _lpKlickSperren = true;
+      clearTimeout(_lpSperrTimer);
+      _lpSperrTimer = setTimeout(() => { _lpKlickSperren = false; }, 1000);
+    }, LP_DAUER_MS);
+  }, { passive: true });
+  el.addEventListener('touchmove', ev => {
+    if (!ev.touches || !ev.touches.length) return;
+    if (Math.abs(ev.touches[0].clientX - x) > LP_WACKEL_PX || Math.abs(ev.touches[0].clientY - y) > LP_WACKEL_PX) {
+      verrutscht = true; stop();
+    }
+  }, { passive: true });
+  el.addEventListener('touchend', stop, { passive: true });
+  el.addEventListener('touchcancel', () => { stop(); _lpKlickSperren = false; }, { passive: true });
+}
+
 function regieHtmlBadge(entry, extraStyle) {
   const v = entry.has_regie || 0;
   if (v === 0) return `<span class="regie-badge regie-no"${extraStyle ? ' style="' + extraStyle + '"' : ''}>&#10008; Nein</span>`;

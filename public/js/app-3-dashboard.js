@@ -260,13 +260,20 @@ async function renderDashboardContent() {
   visibleEntries.forEach(e => { entryMap[e.id] = e; });
   mainEl.querySelectorAll('[data-entry-id]').forEach(el => {
     el.addEventListener('mouseenter', (ev) => {
+      if (!istMauszeiger()) return;   // Maus-Ersatzereignis nach einer Beruehrung
       const e = entryMap[el.dataset.entryId];
       if (e) showTooltip(entryTooltipHtml(e), ev.clientX, ev.clientY);
     });
     el.addEventListener('mousemove', (ev) => {
+      if (!istMauszeiger()) return;
       if (tooltipEl && tooltipEl.style.display !== 'none') showTooltip(tooltipEl.innerHTML, ev.clientX, ev.clientY);
     });
     el.addEventListener('mouseleave', hideTooltip);
+    // Auf dem Handy dasselbe per langem Druck (B7) — die Planung kann das laengst.
+    attachLongPressTooltip(el, () => {
+      const e = entryMap[el.dataset.entryId];
+      return e ? entryTooltipHtml(e) : '';
+    });
   });
   // Nav-Buttons in Übersichten
   mainEl.querySelectorAll('.nav-to-addr').forEach(btn => {

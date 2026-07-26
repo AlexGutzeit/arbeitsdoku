@@ -135,40 +135,19 @@ async function renderPlanningContent() {
 
     // Desktop: Hover-Tooltip
     el.addEventListener('mouseenter', (ev) => {
+      if (!istMauszeiger()) return;   // Maus-Ersatzereignis nach einer Beruehrung
       if (e) showTooltip(planEntryTooltipHtml(e), ev.clientX, ev.clientY);
     });
     el.addEventListener('mousemove', (ev) => {
+      if (!istMauszeiger()) return;
       if (tooltipEl && tooltipEl.style.display !== 'none') showTooltip(tooltipEl.innerHTML, ev.clientX, ev.clientY);
     });
     el.addEventListener('mouseleave', hideTooltip);
 
-    // Mobile: Long-Press (500ms)
-    let pressTimer = null;
-    let pressX = 0, pressY = 0, moved = false;
-    el.addEventListener('touchstart', (ev) => {
-      moved = false;
-      pressX = ev.touches[0].clientX;
-      pressY = ev.touches[0].clientY;
-      pressTimer = setTimeout(() => {
-        if (!moved && e) {
-          hideTooltip();
-          showTooltip(planEntryTooltipHtml(e), pressX, pressY);
-          // Tooltip nach 4 Sekunden automatisch ausblenden
-          setTimeout(hideTooltip, 4000);
-        }
-      }, 500);
-    }, { passive: true });
-    el.addEventListener('touchmove', (ev) => {
-      const dx = ev.touches[0].clientX - pressX;
-      const dy = ev.touches[0].clientY - pressY;
-      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
-        moved = true;
-        clearTimeout(pressTimer);
-      }
-    }, { passive: true });
-    el.addEventListener('touchend', () => {
-      clearTimeout(pressTimer);
-    });
+    // Handy: langer Druck zeigt die Details. Gemeinsame Funktion mit dem Zeitnachweis (B7) —
+    // sie unterdrueckt zusaetzlich den Klick nach dem Loslassen, der hier vorher noch durchging
+    // und den Termin ungewollt uebernommen hat.
+    attachLongPressTooltip(el, () => (e ? planEntryTooltipHtml(e) : ''));
 
     // Click → Eintrag übernehmen (nur ohne Long-Press)
     el.addEventListener('click', (ev) => {
