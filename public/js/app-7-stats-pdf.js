@@ -197,9 +197,9 @@ async function renderStatisticsContent() {
       </div>
       ${showNav ? `
       <div class="date-nav">
-        <button id="stats-prev">&#8249;</button>
+        <button id="stats-prev" aria-label="Vorheriger Zeitraum" title="Zurück">&#8249;</button>
         <span class="current-period">${stats.range.label}</span>
-        <button id="stats-next">&#8250;</button>
+        <button id="stats-next" aria-label="Nächster Zeitraum" title="Weiter">&#8250;</button>
         <button id="stats-today" class="date-today-btn">Jetzt</button>
       </div>` : `<div class="date-nav"><span class="current-period">${stats.range.label}</span></div>`}
       ${chipsHtml}

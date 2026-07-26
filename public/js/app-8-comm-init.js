@@ -110,7 +110,7 @@ function renderOrderedList(orders) {
         <div class="order-meta">Bestellt von ${esc(o.user_name)} am ${requestedDate}</div>
         <div class="order-meta">Bestellung ausgelöst${o.ordered_by_name ? ' von ' + esc(o.ordered_by_name) : ''} am ${orderedDate}</div>
       </div>
-      ${isAdmin ? `<div class="order-actions"><button class="btn btn-sm btn-danger ordered-del-btn" data-id="${o.id}">&times;</button></div>` : ''}
+      ${isAdmin ? `<div class="order-actions"><button class="btn btn-sm btn-danger ordered-del-btn" data-id="${o.id}" aria-label="Bestellung ${esc(o.product)} löschen" title="Löschen">&times;</button></div>` : ''}
     </div>`;
   }).join('');
 }
@@ -673,7 +673,8 @@ async function showShareDialog(note) {
     });
   });
 
-  const close = () => overlay.remove();
+  const aufraeumen = dialogBarrierefrei(overlay);
+  const close = () => { overlay.remove(); aufraeumen(); };
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   overlay.querySelector('#share-cancel').addEventListener('click', close);
   overlay.querySelector('#share-save').addEventListener('click', async () => {
@@ -728,7 +729,8 @@ async function showOfferDialog(note) {
   `;
   document.body.appendChild(overlay);
 
-  const close = () => overlay.remove();
+  const aufraeumen = dialogBarrierefrei(overlay);
+  const close = () => { overlay.remove(); aufraeumen(); };
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   overlay.querySelector('#offer-cancel').addEventListener('click', close);
   overlay.querySelector('#offer-send').addEventListener('click', async () => {
@@ -1053,6 +1055,15 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
   const overlay = document.createElement('div');
   overlay.innerHTML = formHtml;
   document.body.appendChild(overlay.firstElementChild);
+  const absAufraeumen = dialogBarrierefrei(document.getElementById('absence-form-overlay'));
+  const absSchliessen = () => { document.getElementById('absence-form-overlay')?.remove(); absAufraeumen(); };
+  // Escape schliesst den Dialog — wie bei allen anderen auch.
+  const absOnKey = (e) => {
+    if (e.key !== 'Escape') return;
+    document.removeEventListener('keydown', absOnKey);
+    absSchliessen();
+  };
+  document.addEventListener('keydown', absOnKey);
 
   // Manager, der für jemanden „neu beantragt": Ziel-Mitarbeiter vorauswählen.
   if (preUser) {
@@ -1061,7 +1072,8 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
   }
 
   document.getElementById('abs-cancel').addEventListener('click', () => {
-    document.getElementById('absence-form-overlay')?.remove();
+    document.removeEventListener('keydown', absOnKey);
+    absSchliessen();
   });
 
   document.getElementById('abs-type')?.addEventListener('change', () => {
@@ -1126,7 +1138,8 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
         const resp = await api('POST', '/api/absences', { type, date_from, date_to, comment, target_user_id });
         if (resp && resp.warning) toast(resp.warning, 'warning', 6000);
       }
-      document.getElementById('absence-form-overlay')?.remove();
+      document.removeEventListener('keydown', absOnKey);
+      absSchliessen();
       entwurfLoeschen(absEntwurf);
       toast(editId ? 'Abwesenheit aktualisiert' : 'Abwesenheit eingetragen', 'success');
 

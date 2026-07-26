@@ -88,6 +88,13 @@ Darauf ist sie ausgelegt:
 * **Zoom ist nicht gesperrt** – Aufziehen mit zwei Fingern funktioniert überall.
 * **Große Trefferflächen:** Auf Touchgeräten haben kleine Symbol- und Textknöpfe eine unsichtbar
   vergrößerte Fläche, ohne dass sich das Aussehen ändert. Mit Maus bleibt alles wie gewohnt.
+* **Mit Tastatur und Screenreader bedienbar:** Dialoge sind als solche gekennzeichnet und tragen ihren
+  Titel als Beschriftung; der Fokus **springt hinein und bleibt darin** (kein blindes Tippen in die Seite
+  dahinter), **Escape** schließt, und danach kehrt der Fokus **zum auslösenden Knopf** zurück. Während ein
+  Dialog offen ist, wird der Hintergrund für Screenreader ausgeblendet. Rückmeldungen („gespeichert",
+  Fehlermeldungen) werden als Statusbereich **vorgelesen** statt nur eingeblendet. Kopfleiste, Navigation
+  und Hauptbereich sind als Bereiche benannt, der aktive Menüpunkt als *aktuelle Seite*; Symbol-Knöpfe
+  (‹ › ✎ ✕ ⋮) haben einen lesbaren Namen.
 * **Lesbare Nebentexte:** Graue Zusatzangaben erfüllen den WCAG-AA-Kontrast (4,5:1) – auch auf den
   hellgrauen Flächen und den eingefärbten Karten, nicht nur auf Weiß.
 
@@ -458,6 +465,10 @@ Push-Tests (kein Browser nötig): `node tests/push-api.js` (Abo-/Einstellungs-En
 Planungs-Erinnerungen: `node tests/planning-reminders-api.js` (CRUD/Rechte),
 `node tests/planning-reminders-scheduler.js` (Feuerlogik, Pause, Serie-Dedupe, Digest-Bündelung),
 `node tests/planning-reminders-ui.js` (⋮-Menü + Dialog).
+
+Tastatur/Screenreader: `node tests/barrierefrei-ui.js` (Fokusfalle in Dialogen, Escape, Fokus-Rückkehr,
+Landmarken, Namen der Symbol-Knöpfe), `node tests/barrierefrei-prodklon.js` gegen eine Kopie der
+Produktivdaten.
 
 Listen-Suche: `node tests/listen-suche-ui.js` (alle sechs Listen, Fokus beim Tippen, UND-Suche,
 Knöpfe der gefundenen Zeile bleiben funktionsfähig), `node tests/listen-suche-prodklon.js` gegen

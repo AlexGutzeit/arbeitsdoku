@@ -107,9 +107,9 @@ async function renderWelcomeWeek() {
 
   container.innerHTML = `
     <h3 style="display:flex;align-items:center;gap:0.5rem;">
-      ${S.welcomeWeekOffset !== 0 ? '<button class="btn btn-sm btn-outline" id="welcome-week-prev">&#8249;</button>' : ''}
+      ${S.welcomeWeekOffset !== 0 ? '<button class="btn btn-sm btn-outline" id="welcome-week-prev" aria-label="Vorherige Woche" title="Woche zurück">&#8249;</button>' : ''}
       <span>&#128197; ${S.welcomeWeekOffset === 0 ? 'Deine Woche' : 'KW ' + getISOWeek(kwFrom)} (${formatDateDE(kwFrom)} - ${formatDateDE(kwTo)})</span>
-      <button class="btn btn-sm btn-outline" id="welcome-week-next">&#8250;</button>
+      <button class="btn btn-sm btn-outline" id="welcome-week-next" aria-label="Nächste Woche" title="Woche weiter">&#8250;</button>
     </h3>
     ${planHtml}`;
 
@@ -1062,8 +1062,10 @@ async function showUserModal(user) {
 
   document.body.appendChild(overlay);
 
-  document.getElementById('um-cancel').addEventListener('click', () => overlay.remove());
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  const umAufraeumen = dialogBarrierefrei(overlay);
+  const umSchliessen = () => { overlay.remove(); umAufraeumen(); };
+  document.getElementById('um-cancel').addEventListener('click', umSchliessen);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) umSchliessen(); });
 
   // Live-Passwort-Prüfung (Feld färbt sich rot/grün, Checkliste ✓/✗). Anlegen: Passwortfeld; Bearbeiten:
   // das Zurücksetzen-Feld (existiert im DOM, auch wenn eingeklappt).

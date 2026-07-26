@@ -852,7 +852,8 @@ async function pickTargetFolder(excludeRootId) {
         <div class="modal-actions"><button class="btn btn-outline" id="doc-picker-cancel">Abbrechen</button></div>
       </div>`;
     document.body.appendChild(overlay);
-    const done = (val) => { overlay.remove(); resolve(val); };
+    const aufraeumen = dialogBarrierefrei(overlay);
+    const done = (val) => { overlay.remove(); aufraeumen(); resolve(val); };
     overlay.querySelectorAll('.doc-picker-item').forEach(b => b.addEventListener('click', () => {
       done(b.dataset.id ? Number(b.dataset.id) : null);
     }));

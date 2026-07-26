@@ -90,9 +90,9 @@ async function renderPlanningContent() {
       <button class="${view === 'month' ? 'active' : ''}" data-pview="month">Monat</button>
     </div>
     <div class="date-nav">
-      <button id="plan-prev">&#8249;</button>
+      <button id="plan-prev" aria-label="Vorheriger Zeitraum" title="Zurück">&#8249;</button>
       <span class="current-period">${label}</span>
-      <button id="plan-next">&#8250;</button>
+      <button id="plan-next" aria-label="Nächster Zeitraum" title="Weiter">&#8250;</button>
       <button id="plan-today" class="date-today-btn">Jetzt</button>
     </div>
     ${contentHtml}`;
@@ -316,7 +316,8 @@ async function openReminderDialog(e) {
   document.body.appendChild(overlay);
   let changed = false; // beim Schließen die Planung neu rendern (🔔 aktualisieren)
   let editingId = null;
-  const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); if (changed) renderPlanningContent(); };
+  const aufraeumen = dialogBarrierefrei(overlay);
+  const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); if (changed) renderPlanningContent(); };
   const onKey = (ev) => { if (ev.key === 'Escape') finish(); };
   document.addEventListener('keydown', onKey);
   overlay.addEventListener('click', (ev) => { if (ev.target === overlay) finish(); });
@@ -1484,8 +1485,8 @@ async function renderTools() {
         <div class="tool-actions">
           ${actions}
           <button class="btn btn-sm btn-outline tool-history" data-id="${t.id}" data-name="${esc(t.name)}">Historie</button>
-          ${canManage ? `<button class="btn btn-sm btn-outline tool-edit" data-id="${t.id}" data-name="${esc(t.name)}">&#9998;</button>` : ''}
-          ${canManage ? `<button class="btn btn-sm btn-danger tool-delete" data-id="${t.id}">&#10005;</button>` : ''}
+          ${canManage ? `<button class="btn btn-sm btn-outline tool-edit" data-id="${t.id}" data-name="${esc(t.name)}" aria-label="Werkzeug ${esc(t.name)} umbenennen" title="Umbenennen">&#9998;</button>` : ''}
+          ${canManage ? `<button class="btn btn-sm btn-danger tool-delete" data-id="${t.id}" aria-label="Werkzeug ${esc(t.name)} löschen" title="Löschen">&#10005;</button>` : ''}
         </div>
         ${inlineForm}
       </div>`;

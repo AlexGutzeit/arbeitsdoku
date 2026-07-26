@@ -476,11 +476,14 @@ function chooseNavModal(address, options) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); };
+  const aufraeumen = dialogBarrierefrei(overlay);
+  const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); };
   const onKey = (e) => { if (e.key === 'Escape') finish(); };
   document.addEventListener('keydown', onKey);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(); });
   overlay.querySelector('[data-act="cancel"]').addEventListener('click', finish);
+  const ersteWahl = overlay.querySelector('.nav-choose-btn');
+  if (ersteWahl) ersteWahl.focus();
   overlay.querySelectorAll('.nav-choose-btn').forEach(b => {
     b.addEventListener('click', () => {
       const id = b.dataset.nav;
@@ -766,7 +769,16 @@ let _letzteMeldung = 0;   // wann zuletzt etwas eingeblendet wurde (siehe Entwur
 function toast(msg, type, duration) {
   _letzteMeldung = Date.now();
   let t = document.querySelector('.toast');
-  if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+  if (!t) {
+    t = document.createElement('div');
+    t.className = 'toast';
+    // Ohne diese drei Angaben bleibt jede Rueckmeldung („gespeichert", „Bis-Zeit muss nach
+    // Von-Zeit liegen") fuer einen Screenreader unsichtbar — sie taucht nur optisch auf.
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
+    t.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(t);
+  }
   t.textContent = msg;
   t.className = 'toast ' + (type || '');
   requestAnimationFrame(() => t.classList.add('show'));
@@ -801,6 +813,52 @@ function wirePwField(input, list) {
 
 // --- Gestylte Dialoge (ersetzen native confirm()/prompt()) ---
 // confirmModal: Promise<boolean> — true bei OK, false bei Abbrechen/Esc/Outside-Klick.
+// ================================================================
+// Dialoge barrierefrei machen (B8b)
+// ================================================================
+// Bisher konnte man mit der Tabulatortaste AUS einem offenen Dialog heraus in die Seite dahinter
+// wandern — man tippt dann blind in ein Formular, das man gar nicht sieht. Screenreader lasen die
+// Seite dahinter ebenfalls weiter vor, und nach dem Schliessen landete der Fokus am Seitenanfang
+// statt beim ausloesenden Knopf.
+// Diese Funktion ergaenzt: Rolle + Beschriftung, Fokus bleibt im Dialog, Hintergrund wird fuer
+// Screenreader ausgeblendet, und beim Schliessen kehrt der Fokus dorthin zurueck, wo er herkam.
+// Rueckgabe: Aufraeum-Funktion, die NACH dem Entfernen des Overlays aufgerufen werden muss.
+let _dialogNr = 0;
+const FOKUSIERBAR = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+function dialogBarrierefrei(overlay) {
+  const vorher = document.activeElement;
+  const box = overlay.querySelector('.modal, .absence-form-card, .card') || overlay.firstElementChild || overlay;
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  const titel = box.querySelector('h2, h3, h4');
+  if (titel) {
+    if (!titel.id) titel.id = 'dlg-titel-' + (++_dialogNr);
+    box.setAttribute('aria-labelledby', titel.id);
+  }
+  const felder = () => [...box.querySelectorAll(FOKUSIERBAR)]
+    .filter(el => el.checkVisibility ? el.checkVisibility() : el.offsetParent !== null);
+  const onTab = (e) => {
+    if (e.key !== 'Tab') return;
+    const f = felder();
+    if (!f.length) { e.preventDefault(); return; }
+    const erster = f[0], letzter = f[f.length - 1];
+    if (!box.contains(document.activeElement)) { e.preventDefault(); erster.focus(); return; }
+    if (e.shiftKey && document.activeElement === erster) { e.preventDefault(); letzter.focus(); }
+    else if (!e.shiftKey && document.activeElement === letzter) { e.preventDefault(); erster.focus(); }
+  };
+  document.addEventListener('keydown', onTab, true);
+  const app = document.getElementById('app');
+  if (app) app.setAttribute('aria-hidden', 'true');
+  return () => {
+    document.removeEventListener('keydown', onTab, true);
+    // Erst freigeben, wenn wirklich KEIN Dialog mehr offen ist (Dialog auf Dialog kommt vor).
+    if (app && !document.querySelector('[role="dialog"]')) app.removeAttribute('aria-hidden');
+    if (vorher && document.contains(vorher) && typeof vorher.focus === 'function') {
+      try { vorher.focus(); } catch (_) {}
+    }
+  };
+}
+
 function confirmModal(message, opts = {}) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -816,7 +874,8 @@ function confirmModal(message, opts = {}) {
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); resolve(val); };
+    const aufraeumen = dialogBarrierefrei(overlay);
+    const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); resolve(val); };
     // Enter bestätigt NUR harmlose Dialoge. Bei destruktiven (danger) würde ein versehentliches Enter —
     // etwa direkt nach dem Tippen in einem Formular — sonst „Löschen" auslösen. Dort ist bewusst ein Klick nötig.
     const onKey = (e) => { if (e.key === 'Escape') finish(false); else if (e.key === 'Enter' && !danger) finish(true); };
@@ -842,12 +901,15 @@ function choiceModal(message, choices, opts = {}) {
           <button class="btn btn-outline" data-act="cancel">${esc(opts.cancelLabel || 'Abbrechen')}</button>
         </div>`;
     document.body.appendChild(overlay);
-    const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); resolve(val); };
+    const aufraeumen = dialogBarrierefrei(overlay);
+    const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); resolve(val); };
     const onKey = (e) => { if (e.key === 'Escape') finish(null); };
     document.addEventListener('keydown', onKey);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
     overlay.querySelectorAll('[data-val]').forEach(b => b.addEventListener('click', () => finish(b.dataset.val)));
     overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(null));
+    const ersterKnopf = overlay.querySelector('[data-val]') || overlay.querySelector('[data-act="cancel"]');
+    if (ersterKnopf) ersterKnopf.focus();   // Fokus MUSS in den Dialog, sonst greift die Falle nicht
   });
 }
 // promptModal: Promise<string|null> — String bei OK, null bei Abbrechen/Esc (wie natives prompt()).
@@ -876,13 +938,16 @@ function promptModal(message, opts = {}) {
         </div>
       </div>`;
     document.body.appendChild(overlay);
+    const aufraeumen = dialogBarrierefrei(overlay);
     const input = overlay.querySelector('#pm-input');
     const errEl = overlay.querySelector('#pm-error');
-    const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); resolve(val); };
+    const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); resolve(val); };
     const submit = () => {
       if (opts.required && !input.value.trim()) {
         errEl.textContent = opts.requiredMsg || 'Pflichtfeld – bitte ausfüllen.';
         errEl.style.display = '';
+        input.setAttribute('aria-invalid', 'true');
+        input.setAttribute('aria-describedby', 'pm-error');
         input.focus();
         return;
       }

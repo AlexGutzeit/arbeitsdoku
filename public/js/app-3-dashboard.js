@@ -163,9 +163,9 @@ async function renderDashboardContent() {
       <button class="${S.view === 'month' ? 'active' : ''}" data-view="month">Monat</button>
     </div>
     <div class="date-nav">
-      <button id="date-prev">&#8249;</button>
+      <button id="date-prev" aria-label="Vorheriger Zeitraum" title="Zurück">&#8249;</button>
       <span class="current-period">${getPeriodLabel()}</span>
-      <button id="date-next">&#8250;</button>
+      <button id="date-next" aria-label="Nächster Zeitraum" title="Weiter">&#8250;</button>
       <button id="date-today" class="date-today-btn">Jetzt</button>
     </div>
     <div class="summary-grid">

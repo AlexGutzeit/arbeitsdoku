@@ -225,12 +225,12 @@ function layout(content, activeNav) {
 
   return `
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
-    <div class="sidebar" id="sidebar">
+    <div class="sidebar" id="sidebar" role="navigation" aria-label="Hauptmenü">
       <div class="sidebar-header">
         <h2>${esc(S.user.name)}</h2>
         <span class="role-badge">${roleName(S.user.role)}</span>
       </div>
-      <nav>
+      <nav aria-label="Bereiche">
         <a href="#/welcome" class="${activeNav === 'welcome' ? 'active' : ''}">
           <span class="icon">&#127968;</span> Willkommen
         </a>
@@ -303,15 +303,15 @@ function layout(content, activeNav) {
         </a>` : ''}` : ''}
       </nav>
     </div>
-    <div class="header">
-      <button class="menu-btn" id="menu-btn">&#9776;</button>
+    <div class="header" role="banner">
+      <button class="menu-btn" id="menu-btn" aria-label="Menü öffnen" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
       <span class="title">Arbeitsdoku</span>
       <div class="user-info">
         <span class="user-name">${esc(S.user.name)}</span>
         <button class="logout-btn" id="logout-btn">Abmelden</button>
       </div>
     </div>
-    <div class="main">${content}</div>
+    <div class="main" role="main" id="hauptbereich">${content}</div>
     ${activeNav === 'planning' ? (canEditPlanning() ? '<button class="fab" id="fab-new" title="Neue Planung">+</button>' : '')
     : activeNav === 'projects' ? (isChefOrAdmin() ? '<button class="fab" id="fab-new" title="Neues Projekt">+</button>' : '')
     : activeNav === 'bulletin' ? (canEditBulletin() ? '<button class="fab" id="fab-new" title="Neuer Eintrag">+</button>' : '')
@@ -329,20 +329,31 @@ function bindLayout() {
   const logoutBtn = document.getElementById('logout-btn');
   const fab = document.getElementById('fab-new');
 
-  if (menuBtn) menuBtn.addEventListener('click', () => {
-    sidebar.classList.add('open');
-    overlay.classList.add('open');
+  // Der aktive Menuepunkt ist bisher nur farblich markiert — eine CSS-Klasse sagt einem
+  // Screenreader nichts. aria-current benennt ihn als „aktuelle Seite" (B8b). Zentral hier statt
+  // in ~20 Vorlagen einzeln.
+  if (sidebar) sidebar.querySelectorAll('nav a').forEach(a => {
+    if (a.classList.contains('active')) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
   });
-  if (overlay) overlay.addEventListener('click', () => {
-    sidebar.classList.remove('open');
-    overlay.classList.remove('open');
-  });
+
+  const menueAuf = (auf) => {
+    sidebar.classList.toggle('open', auf);
+    overlay.classList.toggle('open', auf);
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', auf ? 'true' : 'false');
+  };
+  if (menuBtn) menuBtn.addEventListener('click', () => menueAuf(true));
+  if (overlay) overlay.addEventListener('click', () => menueAuf(false));
   // Close sidebar on nav click
   if (sidebar) sidebar.querySelectorAll('nav a').forEach(a => {
-    a.addEventListener('click', () => {
-      sidebar.classList.remove('open');
-      overlay.classList.remove('open');
-    });
+    a.addEventListener('click', () => menueAuf(false));
+  });
+  // Escape schliesst das ausgeklappte Menue (auf dem Handy liegt es ueber dem Inhalt).
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebar && sidebar.classList.contains('open')) {
+      menueAuf(false);
+      if (menuBtn) menuBtn.focus();
+    }
   });
   // Papierkorb-Gruppe per Tippen auf-/zuklappen (Touch-Geraete; Desktop nutzt zusaetzlich Hover via CSS)
   const pkLabel = document.getElementById('nav-papierkorb-label');
