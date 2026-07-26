@@ -89,6 +89,32 @@ const today = new Date().toLocaleDateString('sv-SE');
       ok('seitliche Position bleibt erhalten', gescrollt > 0 ? Math.abs(danach - gescrollt) < 40 : true, `vorher ${gescrollt} → nachher ${danach}`);
     } else ok('scrollbarer Bereich vorhanden (übersprungen)', true);
 
+
+    // ── 6) Auftrags-Board: weit rechts gescrollt, Projekt bearbeitet + gespeichert (Alex' Fall) ──
+    console.log('Auftrags-Board nach dem Speichern:');
+    for (let i = 1; i <= 8; i++) await req('POST', '/api/projects', admin, { name: `Board-Projekt ${i}` });
+    const mas = [];
+    for (let i = 1; i <= 6; i++) mas.push((await req('POST', '/api/users', admin, { username: 'boardma' + i, password: 'Test1234!', name: 'Board MA ' + i, role: 'mitarbeiter' })).body.user);
+    await p.setViewport({ width: 900, height: 700 });
+    await p.evaluate(() => { location.hash = '#/projects'; }); await sleep(2000);
+    const bInfo = await p.evaluate(() => { const b = document.querySelector('.board-scroll'); return b ? { da: true, scrollbar: b.scrollWidth > b.clientWidth } : { da: false }; });
+    ok('Auftrags-Board vorhanden', bInfo.da);
+    if (bInfo.da && bInfo.scrollbar) {
+      await p.evaluate(() => { const b = document.querySelector('.board-scroll'); b.scrollLeft = 300; b.dispatchEvent(new Event('scroll', { bubbles: true })); });
+      await sleep(450);
+      const vor = await p.evaluate(() => document.querySelector('.board-scroll').scrollLeft);
+      ok('Board nach rechts gescrollt', vor > 100, 'links=' + vor);
+      const weg = await p.evaluate(async () => {
+        const btn = document.querySelector('.proj-edit'); if (!btn) return 'kein-edit';
+        btn.click(); await new Promise(r => setTimeout(r, 700));
+        const save = document.getElementById('pf2-save'); if (!save) return 'kein-save';
+        save.click(); return 'ok';
+      });
+      await sleep(2000);
+      const nach = await p.evaluate(() => { const b = document.querySelector('.board-scroll'); return b ? b.scrollLeft : -1; });
+      ok('Board bleibt nach dem Speichern an der Position', weg === 'ok' && Math.abs(nach - vor) < 60, `${weg}: ${vor} → ${nach}`);
+    } else ok('Board seitlich scrollbar (übersprungen)', true);
+
     // ── 5) Der Merker arbeitet sauber ──
     const state = await p.evaluate(() => { viewStateSave(); const r = _viewState.route; viewStateReset(); return { hatteRoute: !!r, nachReset: _viewState.route }; });
     ok('Zustand wird pro Seite gemerkt', state.hatteRoute === true);
