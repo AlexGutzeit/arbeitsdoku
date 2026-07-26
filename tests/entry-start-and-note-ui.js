@@ -99,6 +99,34 @@ const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
     vonP = await pp.evaluate(() => document.getElementById('ef-from').value);
     ok('Vorgänger endete 11:00 → 11:00 statt geplanter 10:00', vonP === '11:00', 'von=' + vonP);
 
+
+    // ── 4c) Planung für MORGEN wird HEUTE übernommen, Vorgänger heute bis 10:00.
+    // Erwartung: Datum = heute, Von = 10:00 (Realität), Bis = jetzt — NICHT das Planungsdatum/-zeit.
+    console.log('Planung für morgen, heute übernommen:');
+    const m2 = (await req('POST', '/api/users', admin, { username: 'morgenma', password: 'Test1234!', name: 'Morgen MA', role: 'mitarbeiter' })).body.user;
+    const m2Tok = (await login('morgenma', 'Test1234!')).body.token;
+    await req('POST', '/api/entries', m2Tok, { date: today, time_from: '07:00', time_to: '10:00', project_text: 'Erster Auftrag' });
+    const plan2 = await req('POST', '/api/planning', admin, { date: tomorrow, time_from: '11:00', time_to: '13:00', assigned_user_ids: [m2.id], client: 'Morgen geplant' });
+    const plan2Id = plan2.body && plan2.body.entry && plan2.body.entry.id;
+    ok('Planung für morgen 11:00–13:00 angelegt', !!plan2Id);
+
+    const ctxM = await (browser.createBrowserContext ? browser.createBrowserContext() : browser.createIncognitoBrowserContext());
+    const pm = await ctxM.newPage(); await pm.setViewport({ width: 1200, height: 950 });
+    await pm.goto(BASE, { waitUntil: 'networkidle2' });
+    await pm.waitForSelector('#login-user'); await pm.type('#login-user', 'morgenma'); await pm.type('#login-pass', 'Test1234!');
+    await pm.click('#login-form button[type="submit"]'); await pm.waitForSelector('a[href="#/planning"]'); await sleep(400);
+    await pm.evaluate((id) => { location.hash = '#/planning/accept/' + id; }, plan2Id); await sleep(1700);
+    await pm.waitForSelector('#ef-from');
+    const res4c = await pm.evaluate(() => ({
+      datum: document.getElementById('ef-date').value,
+      von: document.getElementById('ef-from').value,
+      bis: document.getElementById('ef-to').value,
+    }));
+    const jetzt = `${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}`;
+    ok('Datum = HEUTE (nicht das Planungsdatum morgen)', res4c.datum === today, 'datum=' + res4c.datum);
+    ok('Von = 10:00 (Ende des ersten Auftrags, nicht geplante 11:00)', res4c.von === '10:00', 'von=' + res4c.von);
+    ok('Bis = jetzt (nicht geplante 13:00)', res4c.bis === jetzt, 'bis=' + res4c.bis + ' erwartet ' + jetzt);
+
     // ── 5) A16: Chef bearbeitet EIGENEN Eintrag mit privater Notiz → Notiz bleibt erhalten.
     // (Fremde Einträge darf ohnehin nur der Admin bearbeiten, und der sieht das Notizfeld. Betroffen ist
     // also der Fall „Chef/Buchhalter bearbeitet einen eigenen Eintrag, an dem eine Notiz hängt".)
