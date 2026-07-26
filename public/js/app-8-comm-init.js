@@ -73,7 +73,7 @@ function fmtOrderLocation(o) {
 }
 
 function renderOrderList(orders, manage) {
-  if (!orders.length) return '<p style="color:#94a3b8;text-align:center">Keine offenen Bestellungen</p>';
+  if (!orders.length) return '<p style="color:var(--text-lighter);text-align:center">Keine offenen Bestellungen</p>';
   return orders.map(o => {
     const isOwn = o.user_id === S.user.id;
     const canEdit = isOwn || manage;
@@ -94,7 +94,7 @@ function renderOrderList(orders, manage) {
 }
 
 function renderOrderedList(orders) {
-  if (!orders.length) return '<p style="color:#94a3b8;text-align:center">Keine Bestellungen im letzten Monat</p>';
+  if (!orders.length) return '<p style="color:var(--text-lighter);text-align:center">Keine Bestellungen im letzten Monat</p>';
   const isAdmin = S.user.role === 'admin';
   return orders.map(o => {
     const requestedDate = o.created_at ? formatDateTimeDE(o.created_at) : '';
@@ -392,7 +392,7 @@ function filterNotizen() {
 }
 
 function renderNoteList(notes) {
-  if (!notes.length) return '<p style="color:#94a3b8;margin-top:1rem">Keine Notizen</p>';
+  if (!notes.length) return '<p style="color:var(--text-lighter);margin-top:1rem">Keine Notizen</p>';
   const uid = S.user.id;
   return notes.map(n => {
     const isOwner = n.user_id === uid;
@@ -700,7 +700,7 @@ async function showOfferDialog(note) {
         <h3>Notiz weitergeben</h3>
       </div>
       <div class="modal-body">
-        <p style="margin-bottom:0.75rem;color:#64748b;font-size:0.85rem">W\u00e4hle Empf\u00e4nger f\u00fcr eine Kopie von "${esc(note.title)}":</p>
+        <p style="margin-bottom:0.75rem;color:var(--text-light);font-size:0.85rem">W\u00e4hle Empf\u00e4nger f\u00fcr eine Kopie von "${esc(note.title)}":</p>
         ${users.map(u => `
           <label style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;cursor:pointer">
             <input type="checkbox" class="offer-user-cb" value="${u.id}">

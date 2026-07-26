@@ -65,6 +65,32 @@ const { initDatabase, getDb, saveToFile } = require('./database/init');
 ```
 Dann Server gegen diese DB starten und `BASE=http://localhost:<port> node tests/browser-absences.js`.
 
+## Bedienung auf dem Handy: Zoom, Trefferflächen, Kontrast (Puppeteer)
+
+```bash
+node tests/touch-ux-ui.js          # frische Test-DB
+node tests/ux-runde1-prodklon.js   # gegen eine KOPIE der Produktivdaten (nur lesend)
+```
+
+Beide Tests messen die **Wirklichkeit im Browser**, nicht die CSS-Angabe:
+
+* **Trefferfläche** — der Test tastet mit `document.elementFromPoint()` rund um einen Knopf ab und
+  ermittelt, wo ein Tipp den Knopf tatsächlich trifft. So fällt auch auf, wenn eine vergrößerte
+  Fläche vom `overflow: hidden` des Eintrags beschnitten wird oder einen Nachbarknopf verschluckt.
+* **Kontrast** — die gerenderten Farben werden ausgelesen, halbtransparente Hintergründe von unten
+  nach oben überlagert (sonst misst man z. B. das Rollen-Abzeichen auf der farbigen Kopfleiste
+  falsch) und daraus das WCAG-Verhältnis gerechnet. Gefordert sind 4,5:1 für graue Nebentexte.
+* **Gegenprobe mit Maus** — mit `pointer: fine` darf sich nichts verändern; die Touch-Regeln greifen
+  ausschließlich auf Touchgeräten.
+
+Den Prod-Klon vorher holen (er liegt bewusst außerhalb des Projekts und wird nie beschrieben):
+
+```bash
+scp <server>:/pfad/arbeitsdoku/data/arbeitsdoku.db /tmp/prodklon.db
+```
+
+Fehlt die Kopie, überspringt sich `ux-runde1-prodklon.js` mit Hinweis statt zu scheitern.
+
 ## Browser-Smoke-Test (echte UI-Klicks, Puppeteer)
 
 ```bash

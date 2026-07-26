@@ -8,8 +8,14 @@
   --bg: #f1f5f9;
   --card: #ffffff;
   --text: #1e293b;
-  --text-light: #64748b;
-  --text-lighter: #94a3b8;
+  /* Nebentexte (B8a). Frueher #64748b / #94a3b8 — auf Weiss gerade noch bzw. gar nicht lesbar,
+     auf der hellgrauen App-Flaeche (--bg) und auf eingefaerbten Karten (z. B. .tool-out #fee2e2)
+     aber unter der WCAG-AA-Grenze von 4,5:1. Diese Werte halten AA auf ALLEN drei Untergruenden:
+       --text-light   auf #fff 8,3:1 · auf --bg 7,5:1 · auf #fee2e2 6,4:1
+       --text-lighter auf #fff 6,0:1 · auf --bg 5,4:1 · auf #fee2e2 4,7:1
+     Draussen auf dem Baustellen-Display ist genau das der Unterschied zwischen lesbar und nicht. */
+  --text-light: #4b5563;
+  --text-lighter: #5a6472;
   --border: #e2e8f0;
   --success: #16a34a;
   --success-light: #dcfce7;
@@ -1141,7 +1147,7 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 }
 .stats-chart-card h3 {
   font-size: 0.9rem;
-  color: #64748b;
+  color: var(--text-light);
   margin-bottom: 0.75rem;
 }
 .stats-chart-wide { min-width: 0; }
@@ -1156,7 +1162,7 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 }
 .stats-user-details h3 {
   font-size: 0.9rem;
-  color: #64748b;
+  color: var(--text-light);
   margin-bottom: 0.75rem;
 }
 
@@ -1169,7 +1175,7 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 }
 .stats-targets h3 {
   font-size: 0.9rem;
-  color: #64748b;
+  color: var(--text-light);
   margin-bottom: 0.75rem;
 }
 
@@ -1291,6 +1297,27 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .btn-nav { font-size: 1.1rem; padding: 0.3rem 0.5rem; line-height: 1; white-space: nowrap; }
 .tl-nav-btn, .grid-nav-btn { background: none; border: none; cursor: pointer; font-size: 0.85rem; padding: 0; line-height: 1; opacity: 0.8; }
 .tl-nav-btn:hover, .grid-nav-btn:hover { opacity: 1; }
+
+/* === Trefferflaechen auf Touchgeraeten (B2) ===
+   Kleine Icon-/Textknoepfe sind mit dem Finger kaum zu treffen; daneben getippt oeffnet
+   der umgebende Eintrag. Statt die Knoepfe zu vergroessern (Layout wuerde verrutschen)
+   legen wir eine UNSICHTBARE Flaeche darueber — die Optik bleibt exakt gleich.
+   Die Elternboxen .tl-entry / .grid-entry haben overflow:hidden, die Flaeche kann also
+   nie in Nachbareintraege ragen. Mit Maus (pointer: fine) aendert sich gar nichts. */
+@media (pointer: coarse) {
+  .tl-nav-btn, .grid-nav-btn, .btn-sm, .btn-xs { position: relative; }
+  .tl-nav-btn::after, .grid-nav-btn::after {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%); width: 44px; height: 44px;
+  }
+  /* Im dichten Raster schmaler, damit die Flaeche nicht den Projekttext daneben schluckt. */
+  .grid-nav-btn::after { width: 26px; }
+  /* Textknoepfe stehen nebeneinander: nur in der Hoehe wachsen, sonst ueberlappen sie sich. */
+  .btn-sm::after, .btn-xs::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 50%;
+    transform: translateY(-50%); height: 40px;
+  }
+}
 .welcome-task-actions { display: flex; gap: 0.25rem; align-items: center; flex-shrink: 0; }
 
 @media (max-width: 768px) {
@@ -1399,6 +1426,9 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 }
 @media (pointer: coarse) {
   .plan-action-btn { min-width: 44px; min-height: 44px; font-size: 1.3rem; }
+  /* Das ⋮-Menue sitzt direkt neben den 44px-Aktionsknoepfen — gleiche Groesse, sonst
+     trifft man mit dem Finger den Nachbarn (im schlimmsten Fall „Loeschen"). */
+  .plan-menu-btn { min-width: 44px; min-height: 44px; width: auto; height: auto; font-size: 1.2rem; }
 }
 .grid-plan-entry {
   background: var(--warning-light);
@@ -1813,13 +1843,13 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .order-item:hover { border-color: var(--primary); }
 .order-content { flex: 1; min-width: 0; }
 .order-product { font-size: 0.95rem; }
-.order-comment { font-size: 0.85rem; color: #64748b; margin-top: 2px; }
-.order-meta { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; }
+.order-comment { font-size: 0.85rem; color: var(--text-light); margin-top: 2px; }
+.order-meta { font-size: 0.75rem; color: var(--text-lighter); margin-top: 4px; }
 .order-actions { display: flex; gap: 0.25rem; flex-shrink: 0; align-items: center; }
 .order-done { opacity: 0.5; background: #f8fafc; }
 .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; min-width: unset; }
 .order-form .form-group label { font-size: 0.8rem; margin-bottom: 2px; }
-.order-location { color: #64748b; font-size: 0.85rem; }
+.order-location { color: var(--text-light); font-size: 0.85rem; }
 
 /* === Notizen === */
 .note-card { padding: 0.85rem; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem; transition: border-color 0.15s; cursor: pointer; }
@@ -1829,8 +1859,8 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .note-card-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
 .note-title { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .note-project { font-size: 0.82rem; color: var(--primary); margin-top: 2px; }
-.note-preview { font-size: 0.85rem; color: #64748b; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.note-meta { font-size: 0.75rem; color: #94a3b8; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.note-preview { font-size: 0.85rem; color: var(--text-light); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note-meta { font-size: 0.75rem; color: var(--text-lighter); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .note-actions { display: flex; gap: 0.25rem; flex-shrink: 0; align-items: center; }
 .note-filters { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .note-filters select, .note-filters input { flex: 1; min-width: 150px; }

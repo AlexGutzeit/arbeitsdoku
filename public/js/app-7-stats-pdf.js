@@ -401,7 +401,7 @@ function drawPieChart(canvas, data) {
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = '#6b7280';
     ctx.font = '14px system-ui';
     ctx.textAlign = 'center';
     ctx.fillText('Keine Daten', cx, cy);
@@ -490,7 +490,7 @@ function drawTimeChart(canvas, timeline, users, absences = [], highlightType = n
   // Y-Achse Linien
   const ySteps = 5;
   ctx.font = '11px system-ui';
-  ctx.fillStyle = '#94a3b8';
+  ctx.fillStyle = '#6b7280';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   for (let i = 0; i <= ySteps; i++) {
@@ -510,7 +510,7 @@ function drawTimeChart(canvas, timeline, users, absences = [], highlightType = n
   timeline.forEach((t, i) => {
     if (i % labelEvery !== 0 && i !== timeline.length - 1) return;
     const x = pad.left + i * xStep;
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = '#6b7280';
     ctx.fillText(t.label, x, pad.top + ch + 8);
   });
 

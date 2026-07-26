@@ -430,6 +430,11 @@ Planungs-Erinnerungen: `node tests/planning-reminders-api.js` (CRUD/Rechte),
 `node tests/planning-reminders-scheduler.js` (Feuerlogik, Pause, Serie-Dedupe, Digest-Bündelung),
 `node tests/planning-reminders-ui.js` (⋮-Menü + Dialog).
 
+Bedienung auf dem Handy: `node tests/touch-ux-ui.js` misst die tatsächlichen Trefferflächen
+(per `elementFromPoint`, nicht nur die CSS-Angabe) und rechnet die Textkontraste aus den echten
+Browser-Farben nach. `node tests/ux-runde1-prodklon.js` wiederholt das gegen eine **Kopie** der
+Produktivdaten unter `/tmp/prodklon.db` (fehlt die Kopie, überspringt sich der Test).
+
 Technik-Stack: Node.js/Express · `sql.js` (SQLite in WASM) · `pdfkit` (PDF) · `sharp` (Icons) ·
 `bcryptjs` · `jsonwebtoken` · `multer` · `web-push` (Push) · Vanilla-JS-Frontend (kein Framework, kein Build).
 

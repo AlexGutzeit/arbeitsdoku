@@ -359,7 +359,7 @@ async function openReminderDialog(e) {
   async function renderList() {
     let reminders = [];
     try { const r = await api('GET', '/api/planning/reminders?' + q); reminders = (r && r.reminders) || []; } catch (_) {}
-    if (!reminders.length) { listEl.innerHTML = '<p style="margin:0;color:#9ca3af">Noch keine Erinnerung.</p>'; return; }
+    if (!reminders.length) { listEl.innerHTML = '<p style="margin:0;color:var(--text-lighter)">Noch keine Erinnerung.</p>'; return; }
     listEl.innerHTML = reminders.map(r => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid #f0f0f0">
         <span>${r.lead_num} ${esc(reminderUnitLabel(r.lead_unit))} vorher · um ${esc(r.remind_time || e.time_from || '–')}${r.series_id ? ' · <em>Serie</em>' : ''}</span>
