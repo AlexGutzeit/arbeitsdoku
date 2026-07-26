@@ -153,6 +153,7 @@ async function renderPlanningContent() {
     el.addEventListener('click', (ev) => {
       if (ev.target.closest('.plan-action-btn') || ev.target.closest('.plan-menu-btn') || ev.target.closest('.plan-action-menu')) return;
       hideTooltip();
+      S._uebernahmeVon = '/planning';
       navigate('/planning/accept/' + el.dataset.planningId);
     });
   });

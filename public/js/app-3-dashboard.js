@@ -1007,7 +1007,13 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     if (addr) openNav(addr, { force: true }); else toast('Keine Adresse eingetragen', 'error');
   });
 
-  document.getElementById('back-btn').addEventListener('click', () => navigate(planningEntry ? '/planning' : '/'));
+  document.getElementById('back-btn').addEventListener('click', () => {
+    // Bei einer übernommenen Planung dorthin zurück, wo das Übernehmen ausgelöst wurde
+    // (Willkommensseite oder Planung). Ohne Merker — etwa nach einem Neuladen — wie bisher zur Planung.
+    const ziel = planningEntry ? (S._uebernahmeVon || '/planning') : '/';
+    S._uebernahmeVon = null;
+    navigate(ziel);
+  });
 
   // Entwurfs-Sicherung (B4). Schluessel je Datensatz, damit der Entwurf von Eintrag 42 nicht in
   // Eintrag 43 auftaucht; „neu" bekommt zusaetzlich die Herkunft (Planung/Fortsetzen/Projekt).

@@ -573,7 +573,7 @@ async function renderWelcome() {
     const navBtn = e.target.closest('.nav-to-addr');
     if (navBtn) { openNav(navBtn.dataset.addr); return; }
     const acceptBtn = e.target.closest('.accept-welcome-plan');
-    if (acceptBtn) { navigate('/planning/accept/' + acceptBtn.dataset.id); return; }
+    if (acceptBtn) { S._uebernahmeVon = '/welcome'; navigate('/planning/accept/' + acceptBtn.dataset.id); return; }
     // Wetter-Vorschau: Tag antippen → stündlichen Verlauf auf-/zuklappen
     const wwRow = e.target.closest('.ww-row[data-day]');
     if (wwRow) {

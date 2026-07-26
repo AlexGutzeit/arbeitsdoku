@@ -34,6 +34,10 @@ const S = {
   badges: { bulletin: 0, notes: 0, orders: 0 },
   hasLegal: { impressum: false, datenschutz: false }, // ob Impressum/Datenschutz hinterlegt sind (für Links)
   _lastRoute: '/welcome', // letzte Seite vor Impressum/Datenschutz (für den „Zurück"-Link)
+  // Woher kam das Übernehmen einer Planung? Der „Zurück"-Knopf im Zeiteintrag soll dorthin
+  // zurückführen — von der Willkommensseite aus also zur Willkommensseite und nicht zur Planung.
+  // Nach einem Neuladen der Seite ist der Merker leer; dann gilt wie bisher die Planung.
+  _uebernahmeVon: null,
 };
 
 // --- API Helper ---
