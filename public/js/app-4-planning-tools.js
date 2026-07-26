@@ -14,6 +14,7 @@ async function renderPlanning() {
 }
 
 async function renderPlanningContent() {
+  const _tok = renderToken();
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
   mainEl.classList.add('main-wide');
@@ -65,7 +66,12 @@ async function renderPlanningContent() {
     ]);
     if (planData) entries = planData.entries;
     if (absData) absences = filterApprovedAbsences(absData.absences);
-  } catch (e) {}
+  } catch (e) {
+    if (renderStale(_tok)) return;
+    renderLoadError('.main', e.message, () => renderPlanningContent());
+    return;
+  }
+  if (renderStale(_tok)) return;   // verspätete Antwort nicht in die neue Seite schreiben
 
   const canEdit = canEditPlanning();
 

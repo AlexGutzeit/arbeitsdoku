@@ -25,7 +25,15 @@ if ('serviceWorker' in navigator) {
       });
     });
   });
+  // Beim ALLERERSTEN Besuch gibt es noch keinen Controller: Der Service Worker uebernimmt die offene Seite
+  // per clients.claim(), was ebenfalls 'controllerchange' ausloest. Ein Reload waere dort unnoetig (die Seite
+  // ist bereits aktuell) und wuerde eine gerade getippte Anmeldung verwerfen. Nur bei einem echten
+  // Controller-WECHSEL (= Update) neu laden, und das hoechstens einmal.
+  const hadController = !!navigator.serviceWorker.controller;
+  let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || refreshing) return;
+    refreshing = true;
     location.reload();
   });
 }

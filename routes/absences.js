@@ -412,6 +412,12 @@ router.post('/', authenticate, (req, res) => {
     if (!canManageAbsences(req.user)) {
       return res.status(403).json({ error: 'Keine Berechtigung für Fremdeintrag' });
     }
+    // Ziel-Mitarbeiter muss existieren und aktiv sein (analog POST /api/entries) — sonst entstünden
+    // verwaiste Abwesenheiten, die in keiner Auswertung auftauchen.
+    const target = db.prepare("SELECT id, role, COALESCE(active,1) AS active FROM users WHERE id = ?").get(Number(target_user_id));
+    if (!target || target.active === 0 || target.role === 'admin') {
+      return res.status(400).json({ error: 'Ungültiger Mitarbeiter' });
+    }
     uid = Number(target_user_id);
     created_by = req.user.id;
     // urlaub/freizeitausgleich/sonderurlaub → pending (MA muss akzeptieren)

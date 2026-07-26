@@ -857,24 +857,32 @@ function ensureAuditSchema(targetDb) {
         snapshot TEXT
       );
     `);
-    const eCols = targetDb.prepare("PRAGMA table_info(entries)").all();
-    if (!eCols.find(c => c.name === 'deleted_at')) {
-      targetDb.prepare("ALTER TABLE entries ADD COLUMN deleted_at TEXT").run();
-      targetDb.prepare("ALTER TABLE entries ADD COLUMN deleted_by INTEGER").run();
-    }
-    const aCols = targetDb.prepare("PRAGMA table_info(absences)").all();
-    if (!aCols.find(c => c.name === 'deleted_at')) {
-      targetDb.prepare("ALTER TABLE absences ADD COLUMN deleted_at TEXT").run();
-      targetDb.prepare("ALTER TABLE absences ADD COLUMN deleted_by INTEGER").run();
-    }
-    // Berechtigungs-Spalten der users-Tabelle absichern — die Auth-Middleware liest sie bei
-    // JEDER Anfrage. Fehlen sie nach Restore eines alten Backups, wuerde jede Anfrage brechen.
-    const uCols = targetDb.prepare("PRAGMA table_info(users)").all();
-    for (const col of ['can_plan', 'can_bulletin', 'can_upload']) {
-      if (!uCols.find(c => c.name === col)) {
-        targetDb.prepare(`ALTER TABLE users ADD COLUMN ${col} INTEGER DEFAULT 0`).run();
-      }
-    }
+    // WICHTIG: Jeden Schritt EINZELN absichern. Vorher hing alles in einem gemeinsamen try — schlug ein
+    // früherer Schritt fehl (z. B. eine Tabelle fehlt im alten Backup), wurden ALLE folgenden Absicherungen
+    // übersprungen, insbesondere die users-Spalten, die die Anmeldung bei jeder Anfrage liest.
+    const addCol = (table, col, ddl) => {
+      try {
+        const cols = targetDb.prepare(`PRAGMA table_info(${table})`).all();
+        if (!cols.length) return;                       // Tabelle existiert nicht → nichts zu tun
+        if (!cols.find(c => c.name === col)) targetDb.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`).run();
+      } catch (e) { console.error(`Restore-Migration ${table}.${col} fehlgeschlagen:`, e.message); }
+    };
+    addCol('entries', 'deleted_at', 'TEXT');
+    addCol('entries', 'deleted_by', 'INTEGER');
+    addCol('absences', 'deleted_at', 'TEXT');
+    addCol('absences', 'deleted_by', 'INTEGER');
+    // Spalten, die die Auth-Middleware bei JEDER Anfrage liest. Fehlen sie nach dem Restore eines sehr alten
+    // Backups, bricht jede Anfrage mit "no such column" — niemand käme mehr rein (auch der Admin nicht),
+    // bis der Server neu startet.
+    addCol('users', 'can_plan', 'INTEGER DEFAULT 0');
+    addCol('users', 'can_bulletin', 'INTEGER DEFAULT 0');
+    addCol('users', 'can_upload', 'INTEGER DEFAULT 0');
+    addCol('users', 'start_overtime', 'REAL DEFAULT 0');
+    addCol('users', 'target_hours_per_week', 'REAL DEFAULT 40');
+    addCol('users', 'active', 'INTEGER DEFAULT 1');
+    addCol('users', 'vacation_start_carry', 'REAL DEFAULT 0');
+    addCol('users', 'deactivated_at', 'TEXT');
+    addCol('users', 'deactivated_by', 'INTEGER');
     // can_plan_all separat (mit Backfill aus can_plan), damit Bestandsplaner aus alten Backups „alle" behalten.
     ensurePlanAll(targetDb);
     normalizeManagerRights(targetDb); // #9: Chef/Admin von redundanten Einzelrechten bereinigen

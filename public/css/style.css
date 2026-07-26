@@ -2007,3 +2007,8 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 /* Gestylte Dialoge (confirmModal/promptModal) müssen über allen anderen Overlays liegen
    (z. B. dem Abwesenheits-Formular mit z-index 1100), damit ihre Buttons klickbar sind. */
 .dialog-modal { z-index: 3000; }
+
+/* Ladefehler statt endlosem Spinner (z. B. kein Empfang auf der Baustelle) */
+.load-error { text-align: center; padding: 2rem 1rem; color: var(--text); }
+.load-error p { margin: 0 0 0.5rem; }
+.load-error .load-error-msg { color: var(--text-light); font-size: 0.9rem; margin-bottom: 1rem; }

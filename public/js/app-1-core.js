@@ -3,9 +3,20 @@
 // ================================================================
 
 // --- State ---
+// Beschädigter localStorage (abgestürzter Tab, voller Speicher) darf die App NICHT komplett lahmlegen:
+// Ohne Absicherung wirft JSON.parse hier auf Modulebene → kein Skript läuft mehr → weiße Seite, man kann
+// sich nicht einmal abmelden. Im Zweifel lieber ausloggen als abstürzen.
+function _readStoredUser() {
+  try { return JSON.parse(localStorage.getItem('user') || 'null'); }
+  catch (_) {
+    try { localStorage.removeItem('user'); localStorage.removeItem('token'); } catch (__) {}
+    return null;
+  }
+}
+
 const S = {
   token: localStorage.getItem('token'),
-  user: JSON.parse(localStorage.getItem('user') || 'null'),
+  user: _readStoredUser(),
   tabId: Math.random().toString(36).slice(2),
   sse: null,
   entries: [],
@@ -95,6 +106,29 @@ function numFromField(idOrEl, def, min, max) {
 
 // Zahl für die Anzeige in einem Eingabefeld: deutsches Dezimalkomma (7.5 → „7,5").
 function numDe(v) { return String(v ?? 0).replace('.', ','); }
+
+// --- Render-Wettlauf verhindern ---------------------------------------------------------------
+// Render-Funktionen laden erst Daten (await) und schreiben danach in .main. Kommt eine langsame Antwort
+// verspätet an, würde sie den Inhalt der inzwischen geöffneten Seite überschreiben. Jede Render-Funktion
+// zieht darum zu Beginn eine Marke; vor dem Schreiben wird geprüft, ob sie noch die aktuelle ist.
+let _renderSeq = 0;
+function renderToken() { return ++_renderSeq; }
+function renderStale(tok) { return tok !== _renderSeq; }
+
+// Ladefehler sichtbar machen statt den Spinner ewig drehen zu lassen (Baustelle ohne Empfang!).
+// Zeigt Meldung + „Erneut versuchen"; der Knopf ruft die übergebene Funktion erneut auf.
+function renderLoadError(target, msg, retryFn) {
+  const el = typeof target === 'string' ? document.querySelector(target) : target;
+  if (!el) return;
+  const id = 'retry-' + Math.random().toString(36).slice(2);
+  el.innerHTML = `<div class="load-error">
+      <p><strong>&#9888; Konnte nicht geladen werden</strong></p>
+      <p class="load-error-msg">${esc(msg || 'Keine Verbindung zum Server.')}</p>
+      <button class="btn btn-outline" id="${id}">Erneut versuchen</button>
+    </div>`;
+  const btn = document.getElementById(id);
+  if (btn && typeof retryFn === 'function') btn.addEventListener('click', () => retryFn());
+}
 
 async function loadBadges() {
   if (!S.token) return;

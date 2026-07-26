@@ -1129,6 +1129,7 @@ let _collapsedSections;
 try { _collapsedSections = new Set(JSON.parse(localStorage.getItem('absenceCollapsed') || '[]')); } catch(e) { _collapsedSections = new Set(); }
 
 async function renderAbsences() {
+  const _tok = renderToken();
   const topicToMark = isManagerRole() ? 'absences' : 'absence_status';
   S.badges.absences = 0;
   refreshBadges();
@@ -1163,7 +1164,7 @@ async function renderAbsences() {
   const myAckItemIds = new Set(myAckItems.map(a => a.id));
 
   const mainEl = document.querySelector('.main');
-  if (!mainEl) return;
+  if (!mainEl || renderStale(_tok)) return;   // inzwischen andere Seite offen
 
   const thisYear = new Date().getFullYear().toString();
   let urlaubTageJahr = 0, myVac = null, anyVacCfg = false;

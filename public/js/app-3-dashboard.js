@@ -17,6 +17,7 @@ async function renderDashboard() {
 }
 
 async function renderDashboardContent() {
+  const _tok = renderToken();
   const range = getDateRange();
   const params = new URLSearchParams({ date_from: range.from, date_to: range.to });
   if (S.filterProjectId) params.set('project_id', S.filterProjectId);
@@ -37,7 +38,13 @@ async function renderDashboardContent() {
     } else {
       S.allEntries = S.entries;
     }
-  } catch (e) { toast(e.message, 'error'); return; }
+  } catch (e) {
+    if (renderStale(_tok)) return;                 // inzwischen woanders → nichts überschreiben
+    toast(e.message, 'error');
+    renderLoadError('.main', e.message, () => renderDashboardContent()); // kein ewiger Spinner
+    return;
+  }
+  if (renderStale(_tok)) return;                   // verspätete Antwort verwerfen
 
   // Summenstunden: gefilterte Ansicht für Anzeige
   let visibleEntries = S.entries;

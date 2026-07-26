@@ -626,6 +626,9 @@ router.put('/group/:groupId', authenticate, canPlan, (req, res) => {
     const link = db.prepare('SELECT series_id, occurrence_date FROM planning_entries WHERE group_id = ? LIMIT 1').get(groupId) || {};
     // lineage der Gruppe merken (bleibt beim Bearbeiten einer Occurrence erhalten)
     const lin = (db.prepare('SELECT lineage_id FROM planning_entries WHERE group_id = ? LIMIT 1').get(groupId) || {}).lineage_id || null;
+    // Ursprünglichen Ersteller merken: Die Gruppe wird zum Aktualisieren gelöscht und neu angelegt — ohne das
+    // stünde danach der Bearbeiter als Ersteller drin (falsche Herkunft in Anzeige/Protokoll).
+    const origCreator = (db.prepare('SELECT created_by FROM planning_entries WHERE group_id = ? LIMIT 1').get(groupId) || {}).created_by || req.user.id;
     // Alte Einträge der Gruppe löschen (CASCADE löscht auch assignments)
     db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(groupId);
 
@@ -639,7 +642,7 @@ router.put('/group/:groupId', authenticate, canPlan, (req, res) => {
       const result = db.prepare(`
         INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date, lineage_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(req.user.id, day.date, day.time_from, day.time_to, day.break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', newGroupId, color || '#f59e0b', link.series_id || null, link.occurrence_date || null, lin);
+      `).run(origCreator, day.date, day.time_from, day.time_to, day.break_minutes || 0, address || '', client || '', project_id || null, project_text || '', description || '', newGroupId, color || '#f59e0b', link.series_id || null, link.occurrence_date || null, lin);
 
       const planningId = result.lastInsertRowid;
       for (const uid of assigned_user_ids) {

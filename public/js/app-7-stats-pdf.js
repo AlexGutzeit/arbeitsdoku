@@ -128,6 +128,7 @@ async function renderStatistics() {
 }
 
 async function renderStatisticsContent() {
+  const _tok = renderToken();
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
 
@@ -152,7 +153,13 @@ async function renderStatisticsContent() {
   try {
     stats = await api('GET', '/api/statistics?' + params.toString());
     if (!stats) return;
-  } catch (e) { toast(e.message, 'error'); return; }
+  } catch (e) {
+    if (renderStale(_tok)) return;
+    toast(e.message, 'error');
+    renderLoadError('.main', e.message, () => renderStatisticsContent());
+    return;
+  }
+  if (renderStale(_tok)) return;   // verspätete Antwort verwerfen
 
   // Period-Label
   const periodLabels = { day: 'Tag', week: 'Woche', month: 'Monat', year: 'Jahr', total: 'Gesamt' };
