@@ -1288,6 +1288,12 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   .tool-actions { width: 100%; justify-content: flex-end; margin-top: 0.5rem; }
 }
 
+/* Suchfeld ueber einer Liste (B6) — immer sichtbar, ein Feld das man erst aufklappen muss
+   wird nicht benutzt. Auf dem Handy kostet es eine Zeile. */
+.list-search { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.85rem; }
+.list-search-input { flex: 1; min-width: 0; }
+.list-search-count { font-size: 0.82rem; color: var(--text-light); white-space: nowrap; flex-shrink: 0; }
+
 /* Entwurfs-Leiste (B4): oben im Formular, wenn ein ungespeicherter Entwurf vorliegt */
 .draft-bar {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem;

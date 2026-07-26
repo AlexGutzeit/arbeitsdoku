@@ -1473,7 +1473,9 @@ async function renderTools() {
         inlineForm = checkoutFormHtml(t.id, '&#10003; Übernehmen', 'takeover');
       }
 
-      return `<div class="tool-item ${statusClass}">
+      // Suchtext (B6): Name, wer es hat und wo — genau die Angaben, die auch sichtbar sind.
+      const suchtext = [t.name, statusText, locationParts.join(' ')].filter(Boolean).join(' ');
+      return `<div class="tool-item ${statusClass}" data-suchtext="${esc(suchtext)}">
         <div class="tool-info">
           <strong>${esc(t.name)}</strong>
           <span class="tool-status">${statusText}</span>
@@ -1500,6 +1502,7 @@ async function renderTools() {
         <input type="text" class="form-control" id="tool-name" placeholder="Werkzeugname" style="flex:1;">
         <button class="btn btn-primary" id="tool-add">Hinzufügen</button>
       </div>` : ''}
+      ${tools.length ? listenSucheHtml('werkzeug', 'Werkzeug, Person oder Ort suchen …') : ''}
       <div id="tools-list">${toolsHtml}</div>
     </div>
     <div id="tool-history-modal" class="modal-overlay" style="display:none;">
@@ -1511,6 +1514,8 @@ async function renderTools() {
         <div id="history-content"></div>
       </div>
     </div>`;
+
+  bindListenSuche('werkzeug', '#tools-list');
 
   // Werkzeug hinzufügen
   document.getElementById('tool-add')?.addEventListener('click', async () => {

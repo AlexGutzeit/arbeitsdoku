@@ -23,6 +23,7 @@ async function renderOrders() {
         <button class="btn btn-primary" id="order-add-btn">+ Hinzuf&uuml;gen</button>
       </div>
       <div id="order-form-area"></div>
+      ${orders.length ? listenSucheHtml('bestellung', 'Produkt, Ort, Notiz oder Person suchen …') : ''}
       <div id="order-list">${renderOrderList(orders, manage)}</div>
       <div style="margin-top:2rem">
         <button class="btn btn-outline" id="toggle-ordered" style="width:100%">Letzte Bestellungen anzeigen</button>
@@ -30,6 +31,8 @@ async function renderOrders() {
       </div>
     </div>
   `;
+
+  bindListenSuche('bestellung', '#order-list');
 
   document.getElementById('order-add-btn').addEventListener('click', () => {
     showOrderForm(null, orders, manage);
@@ -78,7 +81,8 @@ function renderOrderList(orders, manage) {
     const isOwn = o.user_id === S.user.id;
     const canEdit = isOwn || manage;
     const created = o.created_at ? formatDateTimeDE(o.created_at) : '';
-    return `<div class="order-item" data-id="${o.id}">
+    const suchtext = [fmtOrderQty(o), o.product, o.location_text, o.comment, o.user_name].filter(Boolean).join(' ');
+    return `<div class="order-item" data-id="${o.id}" data-suchtext="${esc(suchtext)}">
       <div class="order-content">
         <div class="order-product">${fmtOrderQty(o)}${esc(o.product)}${fmtOrderLocation(o)}</div>
         ${o.comment ? `<div class="order-comment">${esc(o.comment)}</div>` : ''}

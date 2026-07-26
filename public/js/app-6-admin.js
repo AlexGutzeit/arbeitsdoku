@@ -521,7 +521,8 @@ async function renderDeletedEntries() {
   const entries = (data && data.entries) || [];
   const rows = entries.map(e => {
     const proj = e.project_name || e.project_text || '';
-    return `<tr>
+    const suchtext = [e.date, e.user_name, proj, e.deleted_by_name, e.delete_reason].filter(Boolean).join(' ');
+    return `<tr data-suchtext="${esc(suchtext)}">
       <td style="white-space:nowrap;">${esc(e.date)}</td>
       <td>${esc(e.user_name)}</td>
       <td style="white-space:nowrap;">${esc(e.time_from)}–${esc(e.time_to)}</td>
@@ -542,17 +543,20 @@ async function renderDeletedEntries() {
           Soft-gelöschte Zeiteinträge bleiben für die Revisionssicherheit (GoBD) erhalten und sind hier einsehbar.
           Wiederherstellen setzt den Eintrag zurück; der Vorgang wird im Änderungsverlauf protokolliert.
         </p>
+        ${entries.length ? listenSucheHtml('papierkorb-eintraege', 'Datum, Mitarbeiter, Projekt oder Begründung suchen …') : ''}
         <div style="overflow-x:auto;">
           <table class="data-table" style="width:100%;font-size:0.88rem;">
             <thead><tr>
               <th>Datum</th><th>Mitarbeiter</th><th>Zeit</th><th>Projekt</th>
               <th>Gelöscht am</th><th>Gelöscht von</th><th>Begründung</th><th></th>
             </tr></thead>
-            <tbody>${rows || '<tr><td colspan="8" style="color:var(--text-light);">Keine gelöschten Einträge.</td></tr>'}</tbody>
+            <tbody id="trash-entries-tbody">${rows || '<tr><td colspan="8" style="color:var(--text-light);">Keine gelöschten Einträge.</td></tr>'}</tbody>
           </table>
         </div>
       </div>
     </div>`;
+
+  bindListenSuche('papierkorb-eintraege', '#trash-entries-tbody');
 
   mainEl.querySelectorAll('.restore-entry').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -634,7 +638,7 @@ async function renderDeletedAbsences() {
   const rows = absences.map(a => {
     const t = ABSENCE_TYPES[a.type];
     const typeLabel = t ? `${t.icon} ${t.label}` : a.type;
-    return `<tr>
+    return `<tr data-suchtext="${esc([typeLabel, a.user_name, a.date_from, a.date_to, a.status, a.deleted_by_name, a.delete_reason].filter(Boolean).join(' '))}">
       <td>${esc(typeLabel)}</td>
       <td>${esc(a.user_name || '—')}</td>
       <td style="white-space:nowrap;">${esc(a.date_from)}${a.date_to !== a.date_from ? '–' + esc(a.date_to) : ''}</td>
@@ -659,17 +663,20 @@ async function renderDeletedAbsences() {
             ? 'Als Admin kannst du sie <strong>wiederherstellen</strong> (sie kommen als bereits genehmigt zurück); der Vorgang wird im Verlauf protokolliert.'
             : 'Sie werden <strong>nicht wiederhergestellt</strong> (das brächte sie als bereits genehmigt zurück) – stattdessen kannst du sie mit „Neu beantragen" als frischen Antrag erneut einreichen, der wieder durch die Genehmigung läuft.'}
         </p>
+        ${absences.length ? listenSucheHtml('papierkorb-abwesenheiten', 'Typ, Mitarbeiter, Zeitraum oder Begründung suchen …') : ''}
         <div style="overflow-x:auto;">
           <table class="data-table" style="width:100%;font-size:0.88rem;">
             <thead><tr>
               <th>Typ</th><th>Mitarbeiter</th><th>Zeitraum</th><th>Status</th>
               <th>Gelöscht am</th><th>Gelöscht von</th><th>Begründung</th><th></th>
             </tr></thead>
-            <tbody>${rows || '<tr><td colspan="8" style="color:var(--text-light);">Keine gelöschten Abwesenheiten.</td></tr>'}</tbody>
+            <tbody id="trash-absences-tbody">${rows || '<tr><td colspan="8" style="color:var(--text-light);">Keine gelöschten Abwesenheiten.</td></tr>'}</tbody>
           </table>
         </div>
       </div>
     </div>`;
+
+  bindListenSuche('papierkorb-abwesenheiten', '#trash-absences-tbody');
 
   mainEl.querySelectorAll('.reapply-absence').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -877,7 +884,7 @@ async function renderDocuments() {
   }).join('<span class="doc-crumb-sep"> / </span>');
 
   const folderRows = (data.folders || []).map(f => `
-    <div class="doc-row">
+    <div class="doc-row" data-suchtext="${esc(f.name)}">
       <a class="doc-link" href="#/documents/${f.id}"><span class="doc-icon">📁</span> ${esc(f.name)}</a>
       <span class="doc-meta">${f.subfolder_count} Ordner · ${f.document_count} Dateien</span>
       ${manage ? `<span class="doc-actions">
@@ -889,7 +896,7 @@ async function renderDocuments() {
 
   const docRows = (data.documents || []).map(d => {
     const label = d.title || d.original_name;
-    return `<div class="doc-row">
+    return `<div class="doc-row" data-suchtext="${esc([label, d.original_name, d.uploaded_by_name].filter(Boolean).join(' '))}">
       <span class="doc-link"><span class="doc-icon">${docFileIcon(d.original_name)}</span> ${esc(label)}</span>
       <span class="doc-meta">${docFormatSize(d.size)}${d.uploaded_by_name ? ` · ${esc(d.uploaded_by_name)}` : ''}</span>
       <span class="doc-actions">
@@ -924,12 +931,15 @@ async function renderDocuments() {
           <input type="file" id="doc-file-input" style="display:none" accept=".pdf,.docx,.xlsx,.pptx,.odt,.ods,.odp,.png,.jpg,.jpeg,.txt,.csv,.md">
           <span class="doc-toolbar-hint">PDF, Word/Excel/PowerPoint, OpenDocument (odt/ods/odp), PNG, JPG, TXT, CSV, Markdown — max. ${docFormatSize(st.fileLimit || 5 * 1024 * 1024)}</span>
         </div>` : ''}
+        ${(folderRows || docRows) ? listenSucheHtml('dokument', 'Ordner oder Datei suchen …') : ''}
         <div class="doc-list">
           ${folderRows}${docRows}
           ${(!folderRows && !docRows) ? '<p class="absence-empty">Dieser Ordner ist leer.</p>' : ''}
         </div>
       </div>
     </div>`;
+
+  bindListenSuche('dokument', '.doc-list');
 
   // Downloads (alle Rollen)
   mainEl.querySelectorAll('.doc-download').forEach(btn => {

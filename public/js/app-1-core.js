@@ -914,6 +914,79 @@ function getRoute() {
 const $app = () => document.getElementById('app');
 
 // ================================================================
+// Suchfeld fuer Listen (B6)
+// ================================================================
+// Werkzeuge, Mitarbeiter, Dokumente, Bestellungen und der Papierkorb hatten keine Suche —
+// man scrollte. Der Papierkorb waechst wegen der Revisionssicherheit sogar dauerhaft.
+// Gefiltert wird IM BROWSER: die Listen sind ohnehin schon vollstaendig geladen, eine neue
+// Server-Abfrage waere nur Wartezeit. Der Suchbegriff liegt neben der Liste (nicht im DOM),
+// damit er einen Neuaufbau ueberlebt — z. B. wenn ein Kollege etwas speichert und das
+// Live-Update die Liste neu zeichnet.
+const _listenSuche = {};
+
+function sucheBegriff(key) { return (_listenSuche[key] || '').trim().toLowerCase(); }
+// Alle eingegebenen Woerter muessen vorkommen (egal in welchem Feld und in welcher Reihenfolge)
+// — „bohr gross" findet die grosse Bohrmaschine.
+function sucheTrifft(key, ...texte) {
+  const q = sucheBegriff(key);
+  if (!q) return true;
+  const heu = texte.filter(t => t != null && t !== '').join(' ').toLowerCase();
+  return q.split(/\s+/).every(w => heu.includes(w));
+}
+function listenSucheHtml(key, platzhalter) {
+  return `<div class="list-search">
+    <input type="search" class="form-control list-search-input" id="ls-${esc(key)}"
+      placeholder="${esc(platzhalter || 'Suchen …')}" value="${esc(_listenSuche[key] || '')}"
+      autocomplete="off" data-kein-entwurf="1" aria-label="${esc(platzhalter || 'Liste durchsuchen')}">
+    <span class="list-search-count" id="ls-count-${esc(key)}"></span>
+  </div>`;
+}
+// Gefiltert wird durch AUSBLENDEN einzelner Zeilen, nicht durch Neubauen der Liste.
+// Damit bleiben alle bereits verdrahteten Knoepfe funktionsfaehig, das Suchfeld behaelt den
+// Fokus, und es entsteht kein neuer Wettlauf mit den Live-Updates.
+// Jede durchsuchbare Zeile traegt dafuer ein data-suchtext mit ihren sichtbaren Angaben.
+function listenSucheAnwenden(key, containerSel) {
+  const c = document.querySelector(containerSel);
+  if (!c) return;
+  const zeilen = [...c.querySelectorAll('[data-suchtext]')];
+  let sichtbar = 0;
+  zeilen.forEach(el => {
+    const treffer = sucheTrifft(key, el.dataset.suchtext);
+    el.style.display = treffer ? '' : 'none';
+    if (treffer) sichtbar++;
+  });
+  sucheAnzahl(key, sichtbar, zeilen.length);
+  // Der Hinweis kommt HINTER die Liste, nicht hinein: in einem <tbody> waere ein <div> ungueltiges
+  // HTML, und der Browser wuerde es aus der Tabelle heraussortieren.
+  const anker = c.closest('table') || c;
+  let leer = anker.parentNode && anker.parentNode.querySelector(':scope > .list-search-empty');
+  if (sucheBegriff(key) && sichtbar === 0 && zeilen.length) {
+    if (!leer && anker.parentNode) {
+      leer = document.createElement('div');
+      leer.className = 'empty-state list-search-empty';
+      anker.parentNode.insertBefore(leer, anker.nextSibling);
+    }
+    if (leer) {
+      leer.textContent = 'Kein Treffer für „' + (_listenSuche[key] || '') + '".';
+      leer.style.display = '';
+    }
+  } else if (leer) leer.style.display = 'none';
+}
+function bindListenSuche(key, containerSel) {
+  const el = document.getElementById('ls-' + key);
+  if (!el) return;
+  const anwenden = () => { _listenSuche[key] = el.value; listenSucheAnwenden(key, containerSel); };
+  el.addEventListener('input', anwenden);
+  el.addEventListener('search', anwenden);        // das „x" im Suchfeld
+  listenSucheAnwenden(key, containerSel);         // gemerkten Begriff nach einem Neuaufbau anwenden
+}
+function sucheAnzahl(key, sichtbar, gesamt) {
+  const el = document.getElementById('ls-count-' + key);
+  if (!el) return;
+  el.textContent = sucheBegriff(key) ? `${sichtbar} von ${gesamt}` : '';
+}
+
+// ================================================================
 // Entwurfs-Sicherung fuer Formulare (B4)
 // ================================================================
 // Warum ueberhaupt: Kommt waehrend des Ausfuellens ein Anruf, geht die App in den Hintergrund.

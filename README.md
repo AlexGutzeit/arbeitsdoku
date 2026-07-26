@@ -79,6 +79,12 @@ Darauf ist sie ausgelegt:
 * **Details ohne Umweg ansehen:** Einen Eintrag im Zeitnachweis oder einen Termin in der Planung
   **gedrückt halten** zeigt Kunde, Ort, Beschreibung und Pause als Sprechblase – am Rechner erscheinen
   dieselben Angaben beim Drüberfahren mit der Maus. Kurz antippen öffnet wie gewohnt.
+* **Suche in jeder langen Liste:** Werkzeuge, Mitarbeiter, Dokumente, Bestellungen und beide
+  Papierkorb-Ansichten haben ein Suchfeld – **immer sichtbar**, direkt über der Liste. Gesucht wird über
+  alle sichtbaren Angaben (beim Werkzeug also auch danach, **wer** es hat und **wo** es ist), mehrere
+  Wörter werden UND-verknüpft, Groß-/Kleinschreibung ist egal. Gefiltert wird im Gerät – kein Nachladen,
+  kein Warten. Der Zähler zeigt „3 von 34"; der Suchbegriff **überlebt Live-Aktualisierungen** durch
+  Kollegen. Besonders im Papierkorb hilft das, weil der wegen der Revisionssicherheit dauerhaft wächst.
 * **Zoom ist nicht gesperrt** – Aufziehen mit zwei Fingern funktioniert überall.
 * **Große Trefferflächen:** Auf Touchgeräten haben kleine Symbol- und Textknöpfe eine unsichtbar
   vergrößerte Fläche, ohne dass sich das Aussehen ändert. Mit Maus bleibt alles wie gewohnt.
@@ -452,6 +458,10 @@ Push-Tests (kein Browser nötig): `node tests/push-api.js` (Abo-/Einstellungs-En
 Planungs-Erinnerungen: `node tests/planning-reminders-api.js` (CRUD/Rechte),
 `node tests/planning-reminders-scheduler.js` (Feuerlogik, Pause, Serie-Dedupe, Digest-Bündelung),
 `node tests/planning-reminders-ui.js` (⋮-Menü + Dialog).
+
+Listen-Suche: `node tests/listen-suche-ui.js` (alle sechs Listen, Fokus beim Tippen, UND-Suche,
+Knöpfe der gefundenen Zeile bleiben funktionsfähig), `node tests/listen-suche-prodklon.js` gegen
+eine Kopie der Produktivdaten.
 
 Entwurfs-Sicherung: `node tests/entwurf-sicherung-ui.js` (alle sieben Formulare — App in den Hintergrund
 schicken, Tab neu öffnen, Entwurf wiederherstellen/verwerfen, Abmelden räumt auf),

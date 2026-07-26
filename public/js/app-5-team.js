@@ -870,6 +870,7 @@ async function renderUsers() {
         <h2>Mitarbeiter</h2>
         <button class="btn btn-primary btn-sm" id="add-user-btn">+ Neuer Mitarbeiter</button>
       </div>
+      ${listenSucheHtml('mitarbeiter', 'Name, Benutzername oder Rolle suchen …')}
       <div class="table-wrap">
         <table class="data-table">
           <thead>
@@ -881,9 +882,9 @@ async function renderUsers() {
               <th>Aktionen</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="users-tbody">
             ${S.users.filter(u => u.active !== 0).map(u => `
-              <tr>
+              <tr data-suchtext="${esc([u.name, u.username, roleName(u.role)].join(' '))}">
                 <td>${esc(u.name)}</td>
                 <td>${esc(u.username)}</td>
                 <td><span class="badge badge-${u.role}">${roleName(u.role)}</span></td>
@@ -898,6 +899,8 @@ async function renderUsers() {
         </table>
       </div>
     </div>`;
+
+  bindListenSuche('mitarbeiter', '#users-tbody');
 
   document.getElementById('add-user-btn').addEventListener('click', () => showUserModal());
 
