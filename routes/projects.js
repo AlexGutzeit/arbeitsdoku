@@ -3,6 +3,8 @@ const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 
+const { csvZelle, csvDatei } = require('../csv');
+
 const router = express.Router();
 
 const URGENCIES = ['gruen', 'gelb', 'orange', 'rot'];
@@ -196,7 +198,7 @@ router.get('/:id/entries.csv', authenticate, (req, res) => {
     ORDER BY e.date ASC, e.time_from ASC
   `).all(project.id, project.name);
 
-  const cell = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const cell = csvZelle;   // gemeinsame Konvention, siehe csv.js
   const deNum = (n) => String(Math.round((Number(n) || 0) * 100) / 100).replace('.', ',');
   const deDate = (d) => { const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]}` : String(d); };
   const lines = [];
@@ -209,7 +211,7 @@ router.get('/:id/entries.csv', authenticate, (req, res) => {
     lines.push([r.user_name, deDate(r.date), `${r.time_from}-${r.time_to}`, r.break_minutes || 0, deNum(r.net_hours)].map(cell).join(';'));
   }
   lines.push(['Gesamt', '', '', '', deNum(total)].map(cell).join(';'));
-  const csv = '﻿' + lines.join('\r\n'); // BOM für Excel-UTF-8
+  const csv = csvDatei(lines);
 
   const safe = (project.name || 'projekt').replace(/[^\w\-]+/g, '_').slice(0, 40) || 'projekt';
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');

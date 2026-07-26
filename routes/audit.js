@@ -2,6 +2,8 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 
+const { csvZelle, csvDatei } = require('../csv');
+
 const router = express.Router();
 
 // Gemeinsame WHERE-Klausel fuer Filter (action + Datumsbereich from/to). Parametrisiert.
@@ -46,11 +48,10 @@ router.get('/export', authenticate, authorize('admin'), (req, res) => {
     ORDER BY a.ts DESC, a.id DESC
   `).all(...params);
 
-  const cell = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const cell = csvZelle;   // gemeinsame Konvention, siehe csv.js
   const header = ['Zeit', 'Aktion', 'Benutzername', 'Name', 'Details', 'IP'].map(cell).join(';');
   const lines = rows.map(r => [r.ts, r.action, r.username, r.user_name, r.details, r.ip].map(cell).join(';'));
-  // BOM voranstellen, damit Excel UTF-8/Umlaute korrekt erkennt
-  const csv = '﻿' + [header, ...lines].join('\r\n');
+  const csv = csvDatei([header, ...lines]);
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="audit-log-${new Date().toISOString().slice(0, 10)}.csv"`);

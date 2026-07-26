@@ -6,6 +6,7 @@ const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { calcTargetHours, calcActualHours, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
 const { computeAbsenceSummary, countUrlaubDaysInYear, vacationAccount } = require('./absence-days');
+const { stundenFuerZeitraum } = require('./user-hours');
 
 function fmtH(val) {
   const neg = val < 0;
@@ -294,26 +295,20 @@ router.get('/export', authenticate, (req, res) => {
     for (const uid of statsUserIds) {
       const u = db.prepare('SELECT id, name, start_overtime FROM users WHERE id = ?').get(uid);
       if (!u) continue;
-      const earliest = getEarliestTargetDate(db, uid);
-      const userFrom = clampFrom(date_from, earliest);
-      const startOT = u.start_overtime || 0;
-      if (userFrom > date_to) {
-        userStats.push({ name: u.name, ist: 0, soll: 0, ueber: 0, ueber_gesamt: startOT });
+      // Gemeinsame Funktion — dieselbe wie im Statistik-Bildschirm und im Lohn-Export.
+      const h = stundenFuerZeitraum(db, uid, date_from, date_to, u.start_overtime);
+      if (h.ausserhalb) {
+        userStats.push({ name: u.name, ist: 0, soll: 0, ueber: 0, ueber_gesamt: h.startUeberstunden });
         continue;
       }
-      // Zeitraum-spezifisch
-      const userEntries = entries.filter(e => e.user_id === uid && e.date >= userFrom);
-      const ist = calcActualHours(userEntries);
-      const soll = calcTargetHours(db, uid, userFrom, date_to);
-      // Kumuliert: vom allerersten Tag bis date_to
-      let ueberGesamt = startOT;
-      if (earliest) {
-        const allEntries = db.prepare(
-          'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL'
-        ).all(uid, earliest, date_to);
-        ueberGesamt = startOT + calcActualHours(allEntries) - calcTargetHours(db, uid, earliest, date_to);
-      }
-      userStats.push({ name: u.name, ist, soll, ueber: ist - soll, ueber_gesamt: Math.round(ueberGesamt * 100) / 100 });
+      // Ist-Stunden BEWUSST weiterhin aus der (ggf. projektgefilterten) Eintragsliste — damit sich
+      // an den ausgewiesenen Zahlen NICHTS aendert. Die bekannte Ungenauigkeit bei gesetztem
+      // Projektfilter (Ist schrumpft, Soll nicht) wird bewusst NICHT hier mitgeaendert.
+      const istAusListe = calcActualHours(entries.filter(e => e.user_id === uid && e.date >= h.vonEffektiv));
+      userStats.push({
+        name: u.name, ist: istAusListe, soll: h.sollStunden,
+        ueber: istAusListe - h.sollStunden, ueber_gesamt: h.ueberstundenGesamt,
+      });
     }
 
     const totalSoll = userStats.reduce((s, u) => s + u.soll, 0);

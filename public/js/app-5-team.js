@@ -945,6 +945,11 @@ async function showUserModal(user) {
           <label>Benutzername</label>
           <input type="text" class="form-control" id="um-username" value="${esc(user?.username || '')}" required>
         </div>
+        <div class="form-group">
+          <label>Personalnummer <span class="push-hint">(optional, fürs Lohnbüro)</span></label>
+          <input type="text" class="form-control" id="um-personnel-no" value="${esc(user?.personnel_no || '')}"
+            maxlength="32" inputmode="text" autocomplete="off" placeholder="z. B. 0042">
+        </div>
         ${isEdit ? `
         <div class="form-group">
           <button type="button" class="btn btn-outline btn-sm" id="um-reset-pw-btn">&#128274; Passwort zurücksetzen</button>
@@ -1196,6 +1201,7 @@ async function showUserModal(user) {
     const body = {
       name: document.getElementById('um-name').value,
       username: document.getElementById('um-username').value,
+      personnel_no: document.getElementById('um-personnel-no').value,
       role: document.getElementById('um-role').value,
       start_overtime: startOt,
       can_plan: document.getElementById('um-can-plan').checked,

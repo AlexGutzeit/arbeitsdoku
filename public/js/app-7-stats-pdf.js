@@ -16,6 +16,8 @@ async function renderPdfExport() {
   const lastWeekRange = getWeekRange(lastWeekDate);
   const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 15);
   const lastMonthRange = getMonthRange(lastMonthDate);
+  // Lohn-Export: der Vormonat ist der Regelfall — der laufende Monat ist noch nicht abgeschlossen.
+  const vormonat = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
   const content = `
     <div class="card" style="max-width:600px;margin:0 auto;">
@@ -59,10 +61,49 @@ async function renderPdfExport() {
         </div>
         <button type="submit" class="btn btn-primary btn-block">PDF herunterladen</button>
       </form>
-    </div>`;
+    </div>
+    ${canViewAll() ? `
+    <div class="card" style="max-width:600px;margin:1rem auto 0;">
+      <h2 style="margin-bottom:0.5rem;">Lohn-Export (CSV)</h2>
+      <p class="push-hint" style="margin-bottom:1rem;">
+        Eine Zeile je Mitarbeiter mit Soll-, Ist- und Überstunden sowie Urlaubs-, Krank- und
+        FZA-Tagen des Monats — zum Öffnen in Excel.
+      </p>
+      <form id="lohn-form">
+        <div class="form-group">
+          <label for="lohn-monat">Monat</label>
+          <input type="month" class="form-control" id="lohn-monat" value="${vormonat}" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="lohn-btn">CSV herunterladen</button>
+      </form>
+    </div>` : ''}`;
 
   $app().innerHTML = layout(content, 'pdf');
   bindLayout();
+
+  // Lohn-Export: nur Chef/Admin/Buchhalter. Die Route prueft die Rolle zusaetzlich serverseitig —
+  // ausgeblendet ist nicht gesperrt.
+  document.getElementById('lohn-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const monat = document.getElementById('lohn-monat').value;
+    if (!monat) { toast('Bitte einen Monat wählen', 'error'); return; }
+    try {
+      const res = await fetch('/api/payroll/monat.csv?month=' + encodeURIComponent(monat), {
+        headers: { 'Authorization': 'Bearer ' + S.token },
+      });
+      if (!res.ok) throw new Error('Lohn-Export fehlgeschlagen');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a2 = document.createElement('a');
+      a2.href = url;
+      a2.download = `Lohn_${monat}.csv`;
+      document.body.appendChild(a2);
+      a2.click();
+      a2.remove();
+      URL.revokeObjectURL(url);
+      toast('Lohn-Export heruntergeladen', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  });
 
   const RANGES = { week: weekRange, lastWeek: lastWeekRange, month: monthRange, lastMonth: lastMonthRange };
 

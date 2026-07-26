@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { logAudit } = require('../audit');
+const { stundenFuerZeitraum } = require('./user-hours');
 
 const router = express.Router();
 
@@ -336,12 +337,14 @@ router.get('/', authenticate, (req, res) => {
       }
     }
 
-    const startOvertime = user.start_overtime || 0;
-    const earliest = getEarliestTargetDate(db, uid);
-    const userFrom = clampFrom(mainRange.from, earliest);
+    // Soll/Ist/Saldo kommen aus der GEMEINSAMEN Funktion — dieselbe, die auch das
+    // Arbeitsnachweis-PDF und der Lohn-Export benutzen (routes/user-hours.js).
+    const stunden = stundenFuerZeitraum(db, uid, mainRange.from, mainRange.to, user.start_overtime);
+    const startOvertime = stunden.startUeberstunden;
+    const userFrom = stunden.vonEffektiv;
 
     // Liegt der gesamte Zeitraum vor der User-Erstellung? → alles 0
-    if (userFrom > mainRange.to) {
+    if (stunden.ausserhalb) {
       userStats.push({
         user_id: uid, user_name: user.name, role: user.role,
         ist: 0, soll: 0, ueber: 0, start_overtime: startOvertime,
@@ -351,25 +354,15 @@ router.get('/', authenticate, (req, res) => {
       continue;
     }
 
-    // Ist/Soll für den gewählten Zeitraum
+    const ist = stunden.istStunden;
+    const soll = stunden.sollStunden;
+    const ueber = stunden.saldo;
+    const ueberGesamt = stunden.ueberstundenGesamt;
+
+    // Eigene Abfrage nur noch für die Projekt-Aufschlüsselung unten (braucht project_id/project_text).
     const entries = db.prepare(
       'SELECT date, time_from, time_to, break_minutes, net_hours, user_id, project_id, project_text FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL ORDER BY date'
     ).all(uid, userFrom, mainRange.to);
-
-    const ist = calcActualHours(entries);
-    const soll = calcTargetHours(db, uid, userFrom, mainRange.to);
-    const ueber = ist - soll;
-
-    // Kumulierte Überstunden: vom allerersten Tag bis Ende des gewählten Zeitraums
-    let ueberGesamt = startOvertime;
-    if (earliest) {
-      const allEntries = db.prepare(
-        'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL ORDER BY date'
-      ).all(uid, earliest, mainRange.to);
-      const gesamtIst = calcActualHours(allEntries);
-      const gesamtSoll = calcTargetHours(db, uid, earliest, mainRange.to);
-      ueberGesamt = startOvertime + gesamtIst - gesamtSoll;
-    }
 
     // Projekt-Aufschlüsselung
     const projectMap = {};
@@ -389,8 +382,9 @@ router.get('/', authenticate, (req, res) => {
     }
 
     // Timeline-Daten — Zeitraum pro Bucket auf User-Erstellung clampen
+    // (Anstellungsbeginn kommt aus derselben gemeinsamen Berechnung wie die Kennzahlen oben.)
     const timelineData = timeline.map(t => {
-      const tFrom = clampFrom(t.from, earliest);
+      const tFrom = clampFrom(t.from, stunden.angestelltAb);
       if (tFrom > t.to) return { label: t.label, ist: 0, soll: 0 };
       const tEntriesRows = db.prepare(
         'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL'
@@ -449,19 +443,12 @@ router.get('/overtime', authenticate, (req, res) => {
   const user = db.prepare('SELECT id, start_overtime FROM users WHERE id = ?').get(uid);
   if (!user) return res.status(404).json({ error: 'User nicht gefunden' });
 
-  const startOvertime = user.start_overtime || 0;
-  const earliest = getEarliestTargetDate(db, uid);
-  if (!earliest) return res.json({ overtime: startOvertime });
-
+  // Auch hier die gemeinsame Funktion: der kumulierte Ueberstundenstand ist dieselbe Rechnung,
+  // die Statistik, PDF und Lohn-Export verwenden. Der Zeitraum ist egal — `ueberstundenGesamt`
+  // laeuft immer vom allerersten Tag bis zum Stichtag.
   const dateTo = req.query.date_to || fmtDate(new Date());
-  const entries = db.prepare(
-    'SELECT date, time_from, time_to, break_minutes, net_hours, user_id FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL ORDER BY date'
-  ).all(uid, earliest, dateTo);
-
-  const ist = calcActualHours(entries);
-  const soll = calcTargetHours(db, uid, earliest, dateTo);
-  const overtime = Math.round((startOvertime + ist - soll) * 100) / 100;
-  res.json({ overtime });
+  const h = stundenFuerZeitraum(db, uid, dateTo, dateTo, user.start_overtime);
+  res.json({ overtime: h.ueberstundenGesamt });
 });
 
 // Soll-Stunden für einen Zeitraum berechnen

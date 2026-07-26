@@ -677,6 +677,18 @@ async function initDatabase() {
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
+  // Migration: personnel_no in users (Lohn-Export C1) — optionale Personalnummer des Lohnbueros.
+  // Bewusst TEXT ohne Eindeutigkeitspruefung: die Nummern vergibt das Lohnbuero, Format unbekannt
+  // (fuehrende Nullen kommen vor), und leer lassen muss erlaubt bleiben.
+  try {
+    const uCols = db.prepare("PRAGMA table_info(users)").all();
+    if (!uCols.some(c => c.name === 'personnel_no')) {
+      db.exec("ALTER TABLE users ADD COLUMN personnel_no TEXT");
+      markDirty();
+      console.log('Migration: personnel_no in users hinzugefuegt.');
+    }
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
+
   // Migration: created_by in absences
   try {
     const absCols = db.prepare("PRAGMA table_info(absences)").all();
@@ -883,6 +895,7 @@ function ensureAuditSchema(targetDb) {
     addCol('users', 'vacation_start_carry', 'REAL DEFAULT 0');
     addCol('users', 'deactivated_at', 'TEXT');
     addCol('users', 'deactivated_by', 'INTEGER');
+    addCol('users', 'personnel_no', 'TEXT');
     // can_plan_all separat (mit Backfill aus can_plan), damit Bestandsplaner aus alten Backups „alle" behalten.
     ensurePlanAll(targetDb);
     normalizeManagerRights(targetDb); // #9: Chef/Admin von redundanten Einzelrechten bereinigen
