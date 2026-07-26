@@ -107,6 +107,69 @@ function numFromField(idOrEl, def, min, max) {
 // Zahl für die Anzeige in einem Eingabefeld: deutsches Dezimalkomma (7.5 → „7,5").
 function numDe(v) { return String(v ?? 0).replace('.', ','); }
 
+// --- Ansicht über Neuaufbauten hinweg erhalten (Scrollposition + aufgeklappte Bereiche) --------
+// Jede Aktion (Speichern, Live-Update eines Kollegen, Filter) baut die Seite komplett neu auf. Ohne Hilfe
+// springt man dabei nach ganz oben, aufgeklappte Verläufe schließen sich und seitlich gescrollte Bereiche
+// stehen wieder links. Wir merken den Zustand fortlaufend PRO SEITE und stellen ihn nach dem Neuaufbau
+// wieder her — bei einem echten Seitenwechsel wird bewusst oben gestartet.
+const _viewState = { route: null, scroll: 0, open: new Set(), boxes: {} };
+const _SCROLLBOX_SEL = '.board-scroll, .timeline-scroll, .grid-scroll, .wh-scroll, .vac-ov-scroll, .table-scroll';
+
+// Stabile Kennung eines aufklappbaren Bereichs (ohne die kann er nicht wiedererkannt werden).
+function _viewKey(el, i) {
+  return el.id || el.dataset.id || el.dataset.absKey || el.dataset.uiKey || (el.className ? el.className + '#' + i : null);
+}
+
+function viewStateSave() {
+  _viewState.route = getRoute();
+  _viewState.scroll = window.scrollY || document.documentElement.scrollTop || 0;
+  const open = new Set();
+  document.querySelectorAll('details[open]').forEach((d, i) => { const k = _viewKey(d, i); if (k) open.add(k); });
+  _viewState.open = open;
+  const boxes = {};
+  document.querySelectorAll(_SCROLLBOX_SEL).forEach((b, i) => {
+    if (b.scrollLeft || b.scrollTop) boxes[(b.className || 'box') + '#' + i] = { l: b.scrollLeft, t: b.scrollTop };
+  });
+  _viewState.boxes = boxes;
+}
+
+function viewStateRestore() {
+  if (_viewState.route !== getRoute()) { window.scrollTo(0, 0); return; }  // andere Seite → oben beginnen
+  document.querySelectorAll('details').forEach((d, i) => {
+    const k = _viewKey(d, i);
+    if (k && _viewState.open.has(k)) d.open = true;
+  });
+  document.querySelectorAll(_SCROLLBOX_SEL).forEach((b, i) => {
+    const s = _viewState.boxes[(b.className || 'box') + '#' + i];
+    if (s) { b.scrollLeft = s.l; b.scrollTop = s.t; }
+  });
+  if (_viewState.scroll > 0) window.scrollTo(0, _viewState.scroll);
+}
+
+// Beim echten Seitenwechsel verwerfen, damit die neue Seite oben startet (und nicht die Position der alten erbt).
+function viewStateReset() { _viewState.route = null; _viewState.scroll = 0; _viewState.open = new Set(); _viewState.boxes = {}; }
+
+// Zustand fortlaufend mitschreiben …
+let _saveTimer = null;
+const _scheduleSave = () => { clearTimeout(_saveTimer); _saveTimer = setTimeout(viewStateSave, 120); };
+window.addEventListener('scroll', _scheduleSave, { passive: true });
+document.addEventListener('toggle', (e) => { if (e.target && e.target.tagName === 'DETAILS') viewStateSave(); }, true);
+document.addEventListener('scroll', (e) => { if (e.target && e.target.matches && e.target.matches(_SCROLLBOX_SEL)) _scheduleSave(); }, true);
+
+// … und nach jedem Neuaufbau der Hauptfläche automatisch wiederherstellen. Zentral per Beobachter, damit es
+// für JEDE Seite gilt und nicht an ~19 Render-Stellen einzeln gepflegt werden muss.
+let _restorePending = false;
+function initViewStateKeeper() {
+  const app = document.getElementById('app');
+  if (!app || app._viewKeeper) return;
+  app._viewKeeper = true;
+  new MutationObserver(() => {
+    if (_restorePending) return;
+    _restorePending = true;
+    requestAnimationFrame(() => { _restorePending = false; try { viewStateRestore(); } catch (_) {} });
+  }).observe(app, { childList: true, subtree: true });
+}
+
 // --- Render-Wettlauf verhindern ---------------------------------------------------------------
 // Render-Funktionen laden erst Daten (await) und schreiben danach in .main. Kommt eine langsame Antwort
 // verspätet an, würde sie den Inhalt der inzwischen geöffneten Seite überschreiben. Jede Render-Funktion

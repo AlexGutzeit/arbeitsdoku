@@ -1505,7 +1505,12 @@ document.addEventListener('submit', (e) => {
   const t = setTimeout(reenable, 1500); // Failsafe – deckt den Klick-Sturm ab; danach wieder bedienbar
   form.addEventListener('input', () => { clearTimeout(t); reenable(); }, { once: true }); // Validierungsfehler → sofort frei
 });
-window.addEventListener('hashchange', () => { releaseCurrentLock(); render(); });
+window.addEventListener('hashchange', () => {
+  releaseCurrentLock();
+  // Echter Seitenwechsel: gemerkte Ansicht der alten Seite verwerfen, damit die neue oben startet.
+  viewStateReset();
+  render();
+});
 window.addEventListener('beforeunload', () => {
   if (_editingNoteLockId && S.token) {
     const xhr = new XMLHttpRequest();
@@ -1517,6 +1522,7 @@ window.addEventListener('beforeunload', () => {
   }
 });
 window.addEventListener('DOMContentLoaded', () => {
+  initViewStateKeeper();   // Scrollposition + aufgeklappte Bereiche über Neuaufbauten hinweg erhalten
   if (!S.token) navigate('/login');
   render();
   loadLegalFlags(); // öffentlich; blendet Impressum/Datenschutz-Links ein (auch ausgeloggt)
