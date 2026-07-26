@@ -816,6 +816,9 @@ async function renderBulletinForm(editId) {
 
   document.getElementById('back-btn').addEventListener('click', () => navigate('/bulletin'));
 
+  const bfEntwurf = 'aushang:' + (isEdit ? editId : 'neu');
+  initDraftKeeper(document.getElementById('bulletin-form'), bfEntwurf);
+
   document.getElementById('bulletin-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = {
@@ -832,6 +835,7 @@ async function renderBulletinForm(editId) {
         await api('POST', '/api/bulletin', body);
         toast('Eintrag erstellt', 'success');
       }
+      entwurfLoeschen(bfEntwurf);
       navigate('/bulletin');
     } catch (err) { toast(err.message, 'error'); }
   });
@@ -1728,7 +1732,7 @@ async function renderProjectForm(project) {
   const fab = document.getElementById('fab-new'); if (fab) fab.style.display = 'none';
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
-    <div class="card" style="max-width:700px;margin:0 auto;">
+    <div class="card" id="projekt-form" style="max-width:700px;margin:0 auto;">
       <div class="card-header">
         <h2>${isEdit ? 'Projekt bearbeiten' : 'Neues Projekt / Auftrag'}</h2>
         <button class="btn btn-outline btn-sm" id="pf2-back">Zurück</button>
@@ -1782,6 +1786,22 @@ async function renderProjectForm(project) {
     const inputs = msListEl.querySelectorAll('.ms-edit-title'); if (inputs.length) inputs[inputs.length - 1].focus();
   });
 
+  // Entwurfs-Sicherung (B4): Zwischenziele (msRows) und die Haken der Zuweisung haben keine
+  // eigene Kennung — beides ueber den Zusatz-Haken mitnehmen.
+  const entwurfName = 'projekt:' + (isEdit ? project.id : 'neu');
+  initDraftKeeper(document.getElementById('projekt-form'), entwurfName, {
+    zusatzLesen: () => ({
+      ziele: msRows.map(r => ({ id: r.id, title: r.title, est_days: r.est_days })),
+      zugewiesen: [...document.querySelectorAll('.pf2-assignee:checked')].map(cb => cb.value),
+    }),
+    zusatzSchreiben: z => {
+      if (Array.isArray(z.ziele)) { msRows.length = 0; z.ziele.forEach(r => msRows.push(r)); renderMsRows(); }
+      if (Array.isArray(z.zugewiesen)) {
+        document.querySelectorAll('.pf2-assignee').forEach(cb => { cb.checked = z.zugewiesen.includes(cb.value); });
+      }
+    },
+  });
+
   document.getElementById('pf2-back').addEventListener('click', () => renderProjects());
   document.getElementById('pf2-nav').addEventListener('click', () => { const a = document.getElementById('pf2-address').value.trim(); if (a) openNav(a, { force: true }); else toast('Keine Adresse eingetragen', 'error'); });
   document.getElementById('pf2-save').addEventListener('click', async () => {
@@ -1804,6 +1824,7 @@ async function renderProjectForm(project) {
       if (isEdit) await api('PUT', '/api/projects/' + project.id, body);
       else await api('POST', '/api/projects', body);
       toast('Gespeichert', 'success');
+      entwurfLoeschen(entwurfName);
       renderProjects();
     } catch (err) { toast(err.message, 'error'); }
   });

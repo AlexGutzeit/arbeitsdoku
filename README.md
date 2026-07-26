@@ -62,6 +62,29 @@ Geräte-Auswahl der installierten Apps, iOS/Desktop eine kuratierte Liste; Wahl 
 Sichtbarkeit, mobil-optimiert/installierbar (PWA), Brute-Force-Schutz am Login, durchgehend
 parametrisierte SQL-Abfragen und HTML-Escaping (XSS-Schutz).
 
+### 📱 Für die Baustelle gedacht
+
+Die App wird überwiegend mit dem Handy in der Hand bedient – teils in der Sonne, teils mit Handschuhen.
+Darauf ist sie ausgelegt:
+
+* **Entwürfe gehen nicht verloren.** Kommt mitten im Ausfüllen ein Anruf, geht die App in den Hintergrund –
+  bei knappem Speicher **beendet das Betriebssystem sie**, ohne Rückfrage. Deshalb sichert die App den
+  Formularinhalt in genau dem Moment, in dem sie in den Hintergrund geht (und nebenbei beim Tippen).
+  Beim nächsten Öffnen desselben Formulars erscheint oben eine Leiste **„Nicht gespeicherter Entwurf von
+  14:32 gefunden – Wiederherstellen / Verwerfen"**. Nichts wird heimlich eingesetzt. Gilt für **alle**
+  Formulare (Zeiteintrag, Planung, Aushang, Notiz, Bestellung, Auftrag, Abwesenheit) – bei der Planung
+  inklusive der Mehrtages-Auswahl. Entwürfe verfallen nach 24 Stunden, verschwinden nach dem Speichern
+  und werden **beim Abmelden gelöscht** (geteilte Geräte). Wer ein Formular versehentlich verlässt, sieht
+  kurz **„Entwurf gesichert"** statt eines blockierenden Dialogs.
+* **Details ohne Umweg ansehen:** Einen Eintrag im Zeitnachweis oder einen Termin in der Planung
+  **gedrückt halten** zeigt Kunde, Ort, Beschreibung und Pause als Sprechblase – am Rechner erscheinen
+  dieselben Angaben beim Drüberfahren mit der Maus. Kurz antippen öffnet wie gewohnt.
+* **Zoom ist nicht gesperrt** – Aufziehen mit zwei Fingern funktioniert überall.
+* **Große Trefferflächen:** Auf Touchgeräten haben kleine Symbol- und Textknöpfe eine unsichtbar
+  vergrößerte Fläche, ohne dass sich das Aussehen ändert. Mit Maus bleibt alles wie gewohnt.
+* **Lesbare Nebentexte:** Graue Zusatzangaben erfüllen den WCAG-AA-Kontrast (4,5:1) – auch auf den
+  hellgrauen Flächen und den eingefärbten Karten, nicht nur auf Weiß.
+
 ### 🔔 Push-Benachrichtigungen (Web Push)
 
 Zusätzlich zu den Live-Zählern (die nur bei geöffneter App hochzählen) kann jeder Nutzer über den
@@ -429,6 +452,10 @@ Push-Tests (kein Browser nötig): `node tests/push-api.js` (Abo-/Einstellungs-En
 Planungs-Erinnerungen: `node tests/planning-reminders-api.js` (CRUD/Rechte),
 `node tests/planning-reminders-scheduler.js` (Feuerlogik, Pause, Serie-Dedupe, Digest-Bündelung),
 `node tests/planning-reminders-ui.js` (⋮-Menü + Dialog).
+
+Entwurfs-Sicherung: `node tests/entwurf-sicherung-ui.js` (alle sieben Formulare — App in den Hintergrund
+schicken, Tab neu öffnen, Entwurf wiederherstellen/verwerfen, Abmelden räumt auf),
+`node tests/entwurf-prodklon.js` gegen eine Kopie der Produktivdaten.
 
 Langer Druck (Details am Zeitnachweis/in der Planung): `node tests/longpress-details-ui.js` mit echter
 Touch-Simulation (halten/tippen/wischen) plus Gegenprobe mit der Maus, `node tests/longpress-prodklon.js`

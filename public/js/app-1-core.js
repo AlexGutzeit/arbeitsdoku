@@ -911,6 +911,158 @@ function getRoute() {
 // --- Render Engine ---
 const $app = () => document.getElementById('app');
 
+// ================================================================
+// Entwurfs-Sicherung fuer Formulare (B4)
+// ================================================================
+// Warum ueberhaupt: Kommt waehrend des Ausfuellens ein Anruf, geht die App in den Hintergrund.
+// Hat das Handy zu wenig Speicher, BEENDET das Betriebssystem sie — ohne Vorwarnung und ohne
+// Gelegenheit fuer eine Rueckfrage ('beforeunload' feuert auf Mobilgeraeten dabei nicht).
+// Der einzige verlaessliche Zeitpunkt ist 'visibilitychange' → hidden: der feuert bei Anruf,
+// Home-Taste und Bildschirm-Aus. Genau dort (und nebenbei beim Tippen) sichern wir.
+const ENTWURF_PRAEFIX = 'entwurf:';
+const ENTWURF_MAX_ALTER_MS = 24 * 60 * 60 * 1000;   // aeltere Entwuerfe nicht mehr anbieten
+const ENTWURF_SPEICHER_MS = 400;                    // Tippen entschaerfen
+let _entwuerfe = [];                                // gerade offene Formulare
+
+function _entwurfSchluessel(name) {
+  return ENTWURF_PRAEFIX + ((S.user && S.user.id) || 'anon') + ':' + name;
+}
+// Nur echte Eingabefelder mit stabiler Kennung. Dateien und Passwoerter bleiben aussen vor:
+// Dateien lassen sich ohnehin nicht wiederherstellen, Passwoerter haben in localStorage nichts verloren.
+function _entwurfFelder(container) {
+  return [...container.querySelectorAll('input, textarea, select')]
+    .filter(el => (el.id || el.name) && el.type !== 'file' && el.type !== 'password' && !el.dataset.keinEntwurf);
+}
+function _entwurfLesen(container) {
+  const daten = {};
+  _entwurfFelder(container).forEach(el => {
+    const k = el.id || el.name;
+    if (el.type === 'checkbox' || el.type === 'radio') daten[k] = el.checked;
+    else if (el.multiple) daten[k] = [...el.selectedOptions].map(o => o.value);
+    else daten[k] = el.value;
+  });
+  return daten;
+}
+// Reihenfolge ist hier entscheidend:
+//   1. Auswahlfelder/Haken setzen und ihre Aenderung melden — an ihnen haengt das Ein-/Ausblenden
+//      abhaengiger Bloecke (Regie-Empfaenger, Freitextfeld) UND Automatik, die andere Felder
+//      ueberschreibt: die Projekt-Auswahl traegt z. B. Adresse, Kunde und Notiz des Projekts ein.
+//   2. ERST DANACH die uebrigen Felder schreiben. Andersherum wuerde genau diese Automatik das
+//      gerade Wiederhergestellte wieder zerstoeren.
+// Bei Text-/Datums-/Zeitfeldern wird bewusst KEIN 'change' gemeldet — daran haengt u. a. der
+// Startzeit-Vorschlag, der die wiederhergestellte Uhrzeit ueberschreiben wuerde.
+function _entwurfSchreiben(container, daten) {
+  const istAuswahl = el => el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'radio';
+  const setzen = el => {
+    const k = el.id || el.name;
+    if (!(k in daten)) return;
+    if (el.type === 'checkbox' || el.type === 'radio') el.checked = !!daten[k];
+    else if (el.multiple) [...el.options].forEach(o => { o.selected = (daten[k] || []).includes(o.value); });
+    else el.value = daten[k];
+  };
+  const felder = _entwurfFelder(container);
+  felder.filter(istAuswahl).forEach(el => { setzen(el); el.dispatchEvent(new Event('change', { bubbles: true })); });
+  felder.filter(el => !istAuswahl(el)).forEach(el => {
+    setzen(el);
+    if (el.disabled) return;
+    el.dispatchEvent(new Event('input', { bubbles: true }));   // Anzeigen wie „netto Stunden" nachziehen
+  });
+}
+function entwurfLoeschen(name) {
+  try { localStorage.removeItem(_entwurfSchluessel(name)); } catch (_) {}
+  _entwuerfe = _entwuerfe.filter(e => e.name !== name);
+}
+function entwurfAllesLoeschen() {   // beim Abmelden: auf geteilten Geraeten darf nichts stehen bleiben
+  try {
+    Object.keys(localStorage).filter(k => k.startsWith(ENTWURF_PRAEFIX)).forEach(k => localStorage.removeItem(k));
+  } catch (_) {}
+  _entwuerfe = [];
+}
+function _entwurfAufraeumen() {     // abgelaufene Entwuerfe stillschweigend entsorgen
+  try {
+    Object.keys(localStorage).filter(k => k.startsWith(ENTWURF_PRAEFIX)).forEach(k => {
+      let d = null;
+      try { d = JSON.parse(localStorage.getItem(k)); } catch (_) {}
+      if (!d || !d.t || Date.now() - d.t > ENTWURF_MAX_ALTER_MS) localStorage.removeItem(k);
+    });
+  } catch (_) {}
+}
+// Speichert alle offenen Formulare, deren Inhalt sich seit dem Oeffnen geaendert hat.
+// Rueckgabe: Anzahl gesicherter Entwuerfe (fuer den Hinweis beim Verlassen).
+function entwuerfeSichern() {
+  let n = 0;
+  _entwuerfe = _entwuerfe.filter(e => document.contains(e.container));   // geschlossene Formulare raus
+  _entwuerfe.forEach(e => {
+    const jetzt = JSON.stringify(e.lesen());
+    if (jetzt === e.ausgangswert) return;   // unveraendert → kein Entwurf
+    try {
+      localStorage.setItem(_entwurfSchluessel(e.name), JSON.stringify({ t: Date.now(), ...JSON.parse(jetzt) }));
+      n++;
+    } catch (_) { /* Speicher voll: lieber nichts sichern als abstuerzen */ }
+  });
+  return n;
+}
+
+// opt.zusatzLesen/zusatzSchreiben: fuer Zustand, der NICHT in Eingabefeldern mit Kennung steht.
+// Beispiel Planung: die ausgewaehlten Tage liegen in einer JS-Liste, ihre Zeilen haben nur
+// data-idx. Ohne diesen Haken wuerde ein Entwurf die Mehrtages-Auswahl verlieren.
+function initDraftKeeper(container, name, opt) {
+  if (!container) return;
+  opt = opt || {};
+  _entwurfAufraeumen();
+  const lesen = () => ({ f: _entwurfLesen(container), z: opt.zusatzLesen ? opt.zusatzLesen() : null });
+  const ausgangswert = JSON.stringify(lesen());
+  _entwuerfe = _entwuerfe.filter(e => e.name !== name && document.contains(e.container));
+  _entwuerfe.push({ container, name, ausgangswert, lesen, opt });
+
+  let timer = null;
+  container.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(entwuerfeSichern, ENTWURF_SPEICHER_MS); });
+  container.addEventListener('change', () => { clearTimeout(timer); timer = setTimeout(entwuerfeSichern, ENTWURF_SPEICHER_MS); });
+
+  // Liegt ein Entwurf vor, der sich vom gerade geladenen Stand unterscheidet? Dann anbieten —
+  // nicht stillschweigend einsetzen, sonst stehen ploetzlich Werte da, die man nicht getippt hat.
+  let gespeichert = null;
+  try { gespeichert = JSON.parse(localStorage.getItem(_entwurfSchluessel(name)) || 'null'); } catch (_) {}
+  if (!gespeichert || !gespeichert.f) return;
+  if (Date.now() - (gespeichert.t || 0) > ENTWURF_MAX_ALTER_MS) { entwurfLoeschen(name); return; }
+  if (JSON.stringify({ f: gespeichert.f, z: gespeichert.z || null }) === ausgangswert) { entwurfLoeschen(name); return; }
+
+  const zeit = new Date(gespeichert.t);
+  const heute = zeit.toDateString() === new Date().toDateString();
+  const wann = (heute ? '' : zeit.toLocaleDateString('de-DE') + ', ')
+    + zeit.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  const leiste = document.createElement('div');
+  leiste.className = 'draft-bar';
+  leiste.innerHTML = `<span>Nicht gespeicherter Entwurf von ${esc(wann)} gefunden.</span>
+    <span class="draft-bar-actions">
+      <button type="button" class="btn btn-sm btn-primary" id="entwurf-uebernehmen">Wiederherstellen</button>
+      <button type="button" class="btn btn-sm btn-outline" id="entwurf-verwerfen">Verwerfen</button>
+    </span>`;
+  container.insertBefore(leiste, container.firstChild);
+  leiste.querySelector('#entwurf-uebernehmen').addEventListener('click', () => {
+    // Zusatz-Zustand ZUERST (er baut z. B. die Tageszeilen neu auf), dann die Felder.
+    if (opt.zusatzSchreiben && gespeichert.z) opt.zusatzSchreiben(gespeichert.z);
+    _entwurfSchreiben(container, gespeichert.f);
+    leiste.remove();
+    toast('Entwurf wiederhergestellt', 'success');
+  });
+  leiste.querySelector('#entwurf-verwerfen').addEventListener('click', () => {
+    entwurfLoeschen(name);
+    leiste.remove();
+    // Formular bleibt registriert, damit ab jetzt neu Getipptes wieder gesichert wird.
+    _entwuerfe.push({ container, name, ausgangswert, lesen, opt });
+  });
+}
+
+// App geht in den Hintergrund (Anruf, Home-Taste, Bildschirm aus) → der verlaessliche Moment.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') entwuerfeSichern(); });
+window.addEventListener('pagehide', entwuerfeSichern);
+// Seitenwechsel: sichern und kurz Bescheid geben. Dieser Listener wird VOR dem render()-Listener
+// in app-8 angemeldet (Datei laedt frueher) und laeuft daher noch am alten Formular.
+window.addEventListener('hashchange', () => {
+  if (entwuerfeSichern() > 0) toast('Entwurf gesichert', 'success');
+});
+
 function render() {
   const r0 = getRoute();
   // Rechtsseiten sind bewusst OHNE Login erreichbar (Impressumspflicht) → vor dem Auth-Guard behandeln.

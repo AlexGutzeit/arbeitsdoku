@@ -161,6 +161,9 @@ function showOrderForm(editOrder, orders, manage) {
   document.getElementById('of-product').focus();
   document.getElementById('of-cancel').addEventListener('click', () => { area.innerHTML = ''; });
 
+  const ofEntwurf = 'bestellung:' + (editOrder ? editOrder.id : 'neu');
+  initDraftKeeper(document.getElementById('order-form'), ofEntwurf);
+
   document.getElementById('order-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const qtyVal = document.getElementById('of-qty').value.trim();
@@ -181,6 +184,7 @@ function showOrderForm(editOrder, orders, manage) {
         await api('POST', '/api/orders', body);
         toast('Hinzugef\u00fcgt', 'success');
       }
+      entwurfLoeschen(ofEntwurf);
       renderOrders();
     } catch (err) { toast(err.message, 'error'); }
   });
@@ -572,6 +576,9 @@ function showNoteForm(editNote) {
     }
     renderNotizen();
   });
+  const nfEntwurf = 'notiz:' + (editNote ? editNote.id : 'neu');
+  initDraftKeeper(document.getElementById('note-form'), nfEntwurf);
+
   document.getElementById('note-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = {
@@ -589,6 +596,7 @@ function showNoteForm(editNote) {
         await api('POST', '/api/notes', body);
         toast('Erstellt', 'success');
       }
+      entwurfLoeschen(nfEntwurf);
       renderNotizen();
     } catch (err) { toast(err.message, 'error'); }
   });
@@ -1060,6 +1068,11 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
     if (hint) hint.style.display = isFeiertag ? '' : 'none';
   });
 
+  const absEntwurf = 'abwesenheit:' + (editId ? editId : 'neu');
+  // Behaelter ist die KARTE, nicht das Overlay — sonst schwebte die Entwurfs-Leiste
+  // ausserhalb des Dialogs auf dem abgedunkelten Hintergrund.
+  initDraftKeeper(document.querySelector('#absence-form-overlay .absence-form-card'), absEntwurf);
+
   document.getElementById('abs-save').addEventListener('click', async () => {
     const type = editId ? preType : document.getElementById('abs-type').value;
     const date_from = document.getElementById('abs-from').value;
@@ -1110,6 +1123,7 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
         if (resp && resp.warning) toast(resp.warning, 'warning', 6000);
       }
       document.getElementById('absence-form-overlay')?.remove();
+      entwurfLoeschen(absEntwurf);
       toast(editId ? 'Abwesenheit aktualisiert' : 'Abwesenheit eingetragen', 'success');
 
       renderAbsences();

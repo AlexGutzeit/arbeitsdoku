@@ -1009,6 +1009,13 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
 
   document.getElementById('back-btn').addEventListener('click', () => navigate(planningEntry ? '/planning' : '/'));
 
+  // Entwurfs-Sicherung (B4). Schluessel je Datensatz, damit der Entwurf von Eintrag 42 nicht in
+  // Eintrag 43 auftaucht; „neu" bekommt zusaetzlich die Herkunft (Planung/Fortsetzen/Projekt).
+  const entwurfName = isEdit ? 'eintrag:' + editId
+    : 'eintrag:neu' + (planningId ? ':plan' + planningId : '') + (continueId ? ':weiter' + continueId : '')
+      + (fromProjectId ? ':projekt' + fromProjectId : '');
+  initDraftKeeper(document.getElementById('entry-form'), entwurfName);
+
   // Form submit
   document.getElementById('entry-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1062,6 +1069,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
         await api('POST', '/api/entries', body);
         toast('Eintrag erstellt', 'success');
       }
+      entwurfLoeschen(entwurfName);   // gespeichert → Entwurf hat sich erledigt
       navigate('/');
     } catch (err) { toast(err.message, 'error'); }
   });

@@ -95,6 +95,7 @@ async function logout(manual) {
     api('POST', '/api/auth/logout').catch(() => {});
   }
   stopSSE();
+  entwurfAllesLoeschen();   // Entwuerfe enthalten Kunde/Adresse/Notiz — auf geteilten Geraeten nichts stehen lassen
   S.token = null;
   S.user = null;
   localStorage.removeItem('token');

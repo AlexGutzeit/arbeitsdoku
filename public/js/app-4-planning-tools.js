@@ -1194,6 +1194,24 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
     if (addr) openNav(addr, { force: true }); else toast('Keine Adresse eingetragen', 'error');
   });
 
+  // Entwurfs-Sicherung (B4). Die ausgewaehlten Tage stehen NICHT in Feldern mit Kennung, sondern
+  // in planDays — deshalb ueber den Zusatz-Haken mitsichern, sonst ginge die Mehrtages-Auswahl
+  // beim Wiederherstellen verloren.
+  const entwurfName = 'planung:' + (editId ? 'e' + editId : editGroupId ? 'g' + editGroupId
+    : replanId ? 'r' + replanId : fromProjectId ? 'p' + fromProjectId : 'neu');
+  initDraftKeeper(document.getElementById('planning-form'), entwurfName, {
+    zusatzLesen: () => ({ tage: planDays, mehrtags: multiMode }),
+    zusatzSchreiben: z => {
+      if (Array.isArray(z.tage)) planDays = z.tage;
+      if (typeof z.mehrtags === 'boolean') {
+        multiMode = z.mehrtags;
+        const t = document.getElementById('pf-multi-toggle');
+        if (t) { t.checked = multiMode; t.dispatchEvent(new Event('change', { bubbles: true })); }
+      }
+      refreshDayList();
+    },
+  });
+
   document.getElementById('planning-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     // Self-Planer: immer auf sich selbst; sonst die angehakten Mitarbeiter.
@@ -1289,6 +1307,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
           await api('PUT', '/api/planning/series/' + seriesInfo.series_id, { scope, occurrence_date: seriesInfo.occurrence_date, ...common, days: daysToSend, time_from: d0.time_from, time_to: d0.time_to, break_minutes: d0.break_minutes });
         }
         toast('Gespeichert', 'success');
+        entwurfLoeschen(entwurfName);
         navigate('/planning');
         return;
       }
@@ -1316,6 +1335,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
           toast('Planung erstellt', 'success');
         }
       }
+      entwurfLoeschen(entwurfName);   // gespeichert → Entwurf hat sich erledigt
       navigate('/planning');
     } catch (err) { toast(err.message, 'error'); }
   });
@@ -1360,6 +1380,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
         else await api('DELETE', '/api/planning/' + editId);
         toast('Planung gelöscht', 'success');
       }
+      entwurfLoeschen(entwurfName);   // Datensatz ist weg → ein Entwurf dazu waere sinnlos
       navigate('/planning');
     } catch (err) { toast(err.message, 'error'); }
   });

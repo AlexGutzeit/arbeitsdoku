@@ -1288,6 +1288,14 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   .tool-actions { width: 100%; justify-content: flex-end; margin-top: 0.5rem; }
 }
 
+/* Entwurfs-Leiste (B4): oben im Formular, wenn ein ungespeicherter Entwurf vorliegt */
+.draft-bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem;
+  background: var(--warning-light); border: 1px solid var(--warning); border-radius: 8px;
+  padding: 0.6rem 0.8rem; margin-bottom: 1rem; font-size: 0.88rem; color: #7c4a03;
+}
+.draft-bar-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+
 /* Entry Tooltip */
 .entry-tooltip { position: fixed; z-index: 2000; background: #1e293b; color: #f1f5f9; padding: 0.6rem 0.8rem; border-radius: 8px; font-size: 0.8rem; line-height: 1.5; max-width: 320px; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 .entry-tooltip strong { color: #fff; }
