@@ -267,6 +267,15 @@ router.get('/export', authenticate, (req, res) => {
 
   const totalNet = calcActualHours(entries);
 
+  // Ist ein Projektfilter gesetzt, enthaelt `entries` NUR dieses Projekt. Fuer Soll, Differenz und
+  // die Ist-Spalte je Mitarbeiter braucht es aber ALLE Stunden — sonst stuende „Projektstunden minus
+  // Gesamt-Soll" als Differenz im Dokument. Genau so macht es der Zeitnachweis bereits (dort wird
+  // beim Filtern eine zweite, ungefilterte Abfrage geladen), siehe app-3-dashboard.js.
+  const projektGefiltert = !!project_id;
+  const projektName = projektGefiltert
+    ? (db.prepare('SELECT name FROM projects WHERE id = ?').get(Number(project_id)) || {}).name
+    : null;
+
   // -- Zusammenfassung --
   y += 10;
   ensureSpace(24); // Trennlinie + Gesamtstunden-Zeile zusammenhalten
@@ -274,7 +283,9 @@ router.get('/export', authenticate, (req, res) => {
   doc.moveTo(40, y).lineTo(300, y).stroke();
   y += 8;
   doc.fontSize(9).font('Helvetica-Bold');
-  doc.text(`Gesamtstunden: ${fmtH(totalNet)}`, 40, y);
+  doc.text(projektGefiltert
+    ? `Gesamtstunden (${projektName || 'gewähltes Projekt'}): ${fmtH(totalNet)}`
+    : `Gesamtstunden: ${fmtH(totalNet)}`, 40, y);
   y += 14;
 
   // Statistik-Daten berechnen
@@ -301,22 +312,30 @@ router.get('/export', authenticate, (req, res) => {
         userStats.push({ name: u.name, ist: 0, soll: 0, ueber: 0, ueber_gesamt: h.startUeberstunden });
         continue;
       }
-      // Ist-Stunden BEWUSST weiterhin aus der (ggf. projektgefilterten) Eintragsliste — damit sich
-      // an den ausgewiesenen Zahlen NICHTS aendert. Die bekannte Ungenauigkeit bei gesetztem
-      // Projektfilter (Ist schrumpft, Soll nicht) wird bewusst NICHT hier mitgeaendert.
-      const istAusListe = calcActualHours(entries.filter(e => e.user_id === uid && e.date >= h.vonEffektiv));
+      // Ist-Stunden IMMER aus allen Eintraegen — auch bei gesetztem Projektfilter. Sonst stuende
+      // hier „Projektstunden gegen Gesamt-Soll", und die Spalte „+/-" waere frei erfunden.
       userStats.push({
-        name: u.name, ist: istAusListe, soll: h.sollStunden,
-        ueber: istAusListe - h.sollStunden, ueber_gesamt: h.ueberstundenGesamt,
+        name: u.name, ist: h.istStunden, soll: h.sollStunden,
+        ueber: h.saldo, ueber_gesamt: h.ueberstundenGesamt,
       });
     }
 
     const totalSoll = userStats.reduce((s, u) => s + u.soll, 0);
-    const totalUeber = totalNet - totalSoll;
+    // Differenz aus den GESAMT-Ist-Stunden, nicht aus der ggf. projektgefilterten Summe.
+    // Ohne Projektfilter sind beide identisch — dann aendert sich hier nichts.
+    const totalIstAlle = userStats.reduce((s, u) => s + u.ist, 0);
+    const totalUeber = totalIstAlle - totalSoll;
     const totalUeberGesamt = userStats.reduce((s, u) => s + u.ueber_gesamt, 0);
 
     // Zusammenfassung Text
     doc.font('Helvetica').fontSize(9);
+    // Bei gesetztem Projektfilter die Gesamtsumme zusaetzlich ausweisen — sonst wirkt die Differenz
+    // unten wie ein Widerspruch zur (gefilterten) Zeile „Gesamtstunden" darueber.
+    if (projektGefiltert) {
+      ensureSpace(14);
+      doc.text(`Gesamtstunden (alle Projekte): ${fmtH(totalIstAlle)}`, 40, y);
+      y += 14;
+    }
     ensureSpace(14);
     doc.text(`Soll-Stunden: ${fmtH(totalSoll)}`, 40, y);
     y += 14;

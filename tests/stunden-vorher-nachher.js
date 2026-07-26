@@ -203,7 +203,11 @@ const rund = (n) => Math.round((Number(n) || 0) * 100) / 100;
       const [a, n] = await Promise.all([pdfBytes(PORT_ALT, pfad), pdfBytes(PORT_NEU, pfad)]);
       const za = zahlenAusPdf(a), zn = zahlenAusPdf(n);
       ok('PDF mit Projektfilter: Zahlen gelesen', za.split(',').filter(Boolean).length >= 5, za.slice(0, 60));
-      ok('PDF mit Projektfilter ebenfalls identisch', za === zn, `Projekt „${p1.name}"`);
+      // MIT Projektfilter aendern sich die Zahlen BEWUSST: vorher stand dort „Projektstunden minus
+      // Gesamt-Soll" als Differenz. Der Test haelt fest, DASS sich hier etwas aendert — sonst waere
+      // die Korrektur gar nicht angekommen.
+      ok('PDF mit Projektfilter: Zahlen ändern sich (die Korrektur greift)', za !== zn,
+        `Projekt „${p1.name}" — vorher und nachher gleich, Korrektur fehlt?`);
     } else ok('Projekt für den Filtertest vorhanden', false, 'keine Projekte im Klon');
 
   } finally {
