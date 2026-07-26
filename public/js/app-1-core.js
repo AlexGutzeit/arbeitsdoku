@@ -112,7 +112,12 @@ function numDe(v) { return String(v ?? 0).replace('.', ','); }
 // springt man dabei nach ganz oben, aufgeklappte Verläufe schließen sich und seitlich gescrollte Bereiche
 // stehen wieder links. Wir merken den Zustand fortlaufend PRO SEITE und stellen ihn nach dem Neuaufbau
 // wieder her — bei einem echten Seitenwechsel wird bewusst oben gestartet.
-const _viewState = { route: null, scroll: 0, open: new Set(), boxes: {} };
+const _viewState = { route: null, scroll: 0, open: new Set(), boxes: {}, frisch: false };
+// Waehrend die Seite neu aufgebaut wird, springt der Browser von selbst (der Inhalt ist kurz weg,
+// die Seite schrumpft, die Position wird auf 0 geklemmt). Dieses Springen darf NICHT als
+// „der Nutzer hat gescrollt" verbucht werden — sonst merkt sich die App 0 und die muehsam
+// gescrollte Position ist verloren.
+let _imNeuaufbau = false;
 const _SCROLLBOX_SEL = '.board-scroll, .timeline-scroll, .grid-scroll, .wh-scroll, .vac-ov-scroll, .table-scroll';
 
 // Stabile Kennung eines aufklappbaren Bereichs (ohne die kann er nicht wiedererkannt werden).
@@ -134,7 +139,13 @@ function viewStateSave() {
 }
 
 function viewStateRestore() {
-  if (_viewState.route !== getRoute()) { window.scrollTo(0, 0); return; }  // andere Seite → oben beginnen
+  if (_viewState.route !== getRoute()) {
+    // Neue Seite → EINMAL nach oben. Das „einmal" ist entscheidend: ohne es riss jede spätere
+    // DOM-Änderung die Seite erneut hoch — auf der Willkommensseite tickt die Uhr im Sekundentakt,
+    // man scrollte also nach unten und wurde jede Sekunde wieder nach oben geworfen.
+    if (_viewState.frisch) { _viewState.frisch = false; window.scrollTo(0, 0); }
+    return;
+  }
   document.querySelectorAll('details').forEach((d, i) => {
     const k = _viewKey(d, i);
     if (k && _viewState.open.has(k)) d.open = true;
@@ -143,18 +154,37 @@ function viewStateRestore() {
     const s = _viewState.boxes[(b.className || 'box') + '#' + i];
     if (s) { b.scrollLeft = s.l; b.scrollTop = s.t; }
   });
-  if (_viewState.scroll > 0) window.scrollTo(0, _viewState.scroll);
+  // Die senkrechte Position nur anfassen, wenn sie wirklich abweicht. Da beim Scrollen sofort
+  // mitgeschrieben wird, stimmen Merker und Wirklichkeit im Normalfall ueberein — es passiert also
+  // gar nichts und die Wiederherstellung kann nicht gegen den Finger kaempfen.
+  const jetzt = window.scrollY || document.documentElement.scrollTop || 0;
+  if (_viewState.scroll > 0 && Math.abs(jetzt - _viewState.scroll) > 4) window.scrollTo(0, _viewState.scroll);
 }
 
 // Beim echten Seitenwechsel verwerfen, damit die neue Seite oben startet (und nicht die Position der alten erbt).
-function viewStateReset() { _viewState.route = null; _viewState.scroll = 0; _viewState.open = new Set(); _viewState.boxes = {}; }
+function viewStateReset() {
+  _viewState.route = null; _viewState.scroll = 0; _viewState.open = new Set(); _viewState.boxes = {};
+  _viewState.frisch = true;   // der EINE Sprung nach oben steht noch aus
+}
 
 // Zustand fortlaufend mitschreiben …
 let _saveTimer = null;
 const _scheduleSave = () => { clearTimeout(_saveTimer); _saveTimer = setTimeout(viewStateSave, 120); };
-window.addEventListener('scroll', _scheduleSave, { passive: true });
+// Beim Scrollen NUR die Position merken — sofort und ohne die Seite zu durchsuchen.
+// Vorher lief hier alle 120 ms ein querySelectorAll über sämtliche <details> und Scrollboxen; das
+// kostete waehrend des Scrollens spuerbar Zeit. Und weil der Wert dadurch bis zu 120 ms alt war,
+// stellte ein zwischenzeitlicher Neuaufbau eine veraltete Position wieder her → Rueckwaerts-Sprung.
+window.addEventListener('scroll', () => {
+  if (_imNeuaufbau) return;   // vom Neuaufbau verursacht, nicht vom Nutzer
+  _viewState.route = getRoute();
+  _viewState.scroll = window.scrollY || document.documentElement.scrollTop || 0;
+  _viewState.frisch = false;   // der Nutzer hat die Seite selbst positioniert
+}, { passive: true });
 document.addEventListener('toggle', (e) => { if (e.target && e.target.tagName === 'DETAILS') viewStateSave(); }, true);
-document.addEventListener('scroll', (e) => { if (e.target && e.target.matches && e.target.matches(_SCROLLBOX_SEL)) _scheduleSave(); }, true);
+document.addEventListener('scroll', (e) => {
+  if (_imNeuaufbau) return;
+  if (e.target && e.target.matches && e.target.matches(_SCROLLBOX_SEL)) _scheduleSave();
+}, true);
 
 // … und nach jedem Neuaufbau der Hauptfläche automatisch wiederherstellen. Zentral per Beobachter, damit es
 // für JEDE Seite gilt und nicht an ~19 Render-Stellen einzeln gepflegt werden muss.
@@ -163,10 +193,22 @@ function initViewStateKeeper() {
   const app = document.getElementById('app');
   if (!app || app._viewKeeper) return;
   app._viewKeeper = true;
-  new MutationObserver(() => {
+  new MutationObserver((eintraege) => {
+    // Reine Text-Änderungen sind KEIN Neuaufbau und dürfen nichts auslösen. Wichtigstes Beispiel:
+    // die Uhr auf der Willkommensseite schreibt jede Sekunde ihren Text neu — dabei wird nur ein
+    // Textknoten getauscht. Das löste bisher jede Sekunde eine Wiederherstellung aus.
+    const strukturell = eintraege.some(m =>
+      [...m.addedNodes, ...m.removedNodes].some(n => n.nodeType === 1));
+    if (!strukturell) return;
     if (_restorePending) return;
     _restorePending = true;
-    requestAnimationFrame(() => { _restorePending = false; try { viewStateRestore(); } catch (_) {} });
+    _imNeuaufbau = true;
+    requestAnimationFrame(() => {
+      _restorePending = false;
+      try { viewStateRestore(); } catch (_) {}
+      // Kurzer Nachlauf: das vom Umbau ausgeloeste Scroll-Ereignis trifft teils erst danach ein.
+      setTimeout(() => { _imNeuaufbau = false; }, 80);
+    });
   }).observe(app, { childList: true, subtree: true });
 }
 

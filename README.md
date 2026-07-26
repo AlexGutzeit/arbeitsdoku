@@ -466,6 +466,10 @@ Planungs-Erinnerungen: `node tests/planning-reminders-api.js` (CRUD/Rechte),
 `node tests/planning-reminders-scheduler.js` (Feuerlogik, Pause, Serie-Dedupe, Digest-Bündelung),
 `node tests/planning-reminders-ui.js` (⋮-Menü + Dialog).
 
+Scroll-Verhalten: `node tests/scroll-ruckeln-ui.js` (jede Seite wird durchgescrollt; jeder Rücksprung
+wird gemeldet – Seiten, die innen scrollen wie Planung und Auftrags-Board, werden dort gemessen),
+`node tests/scroll-ruckeln-prodklon.js` gegen eine Kopie der Produktivdaten.
+
 Tastatur/Screenreader: `node tests/barrierefrei-ui.js` (Fokusfalle in Dialogen, Escape, Fokus-Rückkehr,
 Landmarken, Namen der Symbol-Knöpfe), `node tests/barrierefrei-prodklon.js` gegen eine Kopie der
 Produktivdaten.
