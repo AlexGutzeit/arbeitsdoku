@@ -150,7 +150,9 @@ function _sseOnMessage(e) {
   if (p.type === 'bulletin' && route === '/bulletin')                            renderBulletin();
   if (p.type === 'planning' && route === '/planning' && !_editorBusy())          renderPlanningContent();
   if (p.type === 'tools'    && route === '/tools' && !_editorBusy('.tool-checkout-form[style*="block"]')) renderTools();
-  if (p.type === 'projects' && route === '/projects' && !_editorBusy())          renderProjects();
+  // Das Projekt-Formular liegt INNERHALB der Hauptfläche (kein Overlay) und hat keine eigene Route — ohne
+  // den Selektor würde es beim Speichern eines Kollegen weggerissen, sobald man gerade nicht tippt.
+  if (p.type === 'projects' && route === '/projects' && !_editorBusy('#pf2-save')) renderProjects();
   if (p.type === 'entries') {
     if (route === '/statistics')                       renderStatistics();
     else if (route === '/' || route === '/dashboard')  renderDashboardContent();  // #1: Dashboard-Zeitliste live
