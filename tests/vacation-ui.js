@@ -59,6 +59,12 @@ function req(method, p, token, body) {
     await p.waitForSelector('.edit-user');
     await p.evaluate((id) => document.querySelector(`.edit-user[data-id="${id}"]`).click(), uwe.id);
     await p.waitForSelector('#um-vac-list', { timeout: 8000 });
+    // Das Element ist da, BEVOR sein Inhalt nachgeladen ist — ohne dieses Warten liest der Test
+    // gelegentlich ins Leere und meldet einen Fehler, den es nicht gibt (etwa jeder dritte Lauf).
+    await p.waitForFunction(() => {
+      const el = document.getElementById('um-vac-list');
+      return el && el.textContent.trim().length > 0;
+    }, { timeout: 8000 });
     let emptyTxt = await p.evaluate(() => document.getElementById('um-vac-list').textContent);
     ok('Anfangs kein Anspruch (Hinweis „mit 0")', /mit 0/.test(emptyTxt), emptyTxt.trim().slice(0, 40));
 
