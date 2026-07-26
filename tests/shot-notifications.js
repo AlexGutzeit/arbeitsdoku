@@ -1,4 +1,7 @@
-// Einmal-Screenshot der Benachrichtigungen-Seite. Server muss auf BASE laufen.
+// Einmal-Screenshot der Benachrichtigungen-Seite — ein Werkzeug, kein Test.
+// Voraussetzung: laufender Server auf BASE (Default :3096) und SHOT_PASS gesetzt, z. B.
+//   BASE=http://localhost:3000 SHOT_PASS=test node tests/shot-notifications.js
+// Fehlt beides, ueberspringt sich das Skript — sonst faerbt es jeden Suite-Durchlauf rot.
 const puppeteer = require('puppeteer');
 const path = require('path');
 const os = require('os');
@@ -13,6 +16,16 @@ const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
+  const erreichbar = await new Promise(res => {
+    const r = require('http').get(BASE + '/health', x => { x.resume(); res(x.statusCode === 200); });
+    r.on('error', () => res(false));
+    r.setTimeout(2000, () => { r.destroy(); res(false); });
+  });
+  if (!erreichbar || !PASS) {
+    console.log('Uebersprungen: ' + (!erreichbar ? 'kein Server auf ' + BASE : 'SHOT_PASS nicht gesetzt') + '.');
+    console.log('  Beispiel: BASE=http://localhost:3000 SHOT_PASS=test node tests/shot-notifications.js');
+    process.exit(0);
+  }
   const browser = await puppeteer.launch({
     executablePath: CHROME, headless: 'shell',
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
