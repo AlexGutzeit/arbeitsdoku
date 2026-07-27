@@ -9,6 +9,8 @@ async function renderPdfExport() {
     }
   } catch (e) {}
 
+  await ladeAbschluss(true);   // frisch: der Stand aendert sich genau auf dieser Seite
+
   const now = new Date();
   const weekRange = getWeekRange(now);
   const monthRange = getMonthRange(now);
@@ -76,10 +78,15 @@ async function renderPdfExport() {
         </div>
         <button type="submit" class="btn btn-primary btn-block" id="lohn-btn">CSV herunterladen</button>
       </form>
+    </div>
+    <div class="card" style="max-width:600px;margin:1rem auto 0;" id="abschluss-karte">
+      <h2 style="margin-bottom:0.5rem;">Abrechnungs-Abschluss</h2>
+      ${abschlussKarteHtml()}
     </div>` : ''}`;
 
   $app().innerHTML = layout(content, 'pdf');
   bindLayout();
+  bindAbschlussKarte();
 
   // Lohn-Export: nur Chef/Admin/Buchhalter. Die Route prueft die Rolle zusaetzlich serverseitig —
   // ausgeblendet ist nicht gesperrt.
@@ -164,6 +171,7 @@ async function renderStatistics() {
       if (ud) S.users = ud.users;
     }
   } catch (e) {}
+  await ladeAbschluss(true);   // Stichtag + eigene abgerechnete Zahlen
 
   renderStatisticsContent();
 }
@@ -231,6 +239,7 @@ async function renderStatisticsContent() {
 
   mainEl.innerHTML = `
     <div class="stats-page">
+      ${abgerechnetHinweisHtml()}
       <div class="view-toggle stats-periods">
         ${['day','week','month','year','total'].map(p =>
           `<button class="${period === p ? 'active' : ''}" data-period="${p}">${periodLabels[p]}</button>`
@@ -726,3 +735,199 @@ function drawTimeChart(canvas, timeline, users, absences = [], highlightType = n
   };
 }
 
+
+// ── Abrechnungs-Abschluss (Karte auf der Export-Seite) ───────────────────────────────────────
+// Hier, weil der Abschluss direkt am Lohn-Export hängt: erst die CSV ziehen, dann den Monat
+// festschreiben. Die Karte ist reine Bedienung — geprüft und gesperrt wird serverseitig.
+
+const ABSCHLUSS_MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+function monatLabel(m) {
+  const t = /^(\d{4})-(\d{2})$/.exec(String(m || ''));
+  return t ? `${ABSCHLUSS_MONATE[Number(t[2]) - 1]} ${t[1]}` : String(m || '');
+}
+
+// Letzter vollständig vergangener Monat — weiter darf nicht abgeschlossen werden.
+function letzterVollerMonat() {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function abschlussKarteHtml() {
+  const a = S.abschluss || { bis: null, perioden: [], naechsterMonat: null };
+  const grenze = letzterVollerMonat();
+  const naechster = a.naechsterMonat;
+  const offen = !!(naechster && naechster <= grenze);
+  const perioden = (a.perioden || []).slice().reverse();   // neueste zuerst
+
+  return `
+    <p class="push-hint" style="margin-bottom:0.75rem;">
+      Ein abgeschlossener Monat ist schreibgeschützt und seine Zahlen sind festgehalten — der
+      Überstundenstand rechnet danach auf diesem Wert weiter. Nachträgliche Korrekturen sind nur
+      dem Administrator und nur mit Begründung möglich.
+    </p>
+    <p style="margin-bottom:0.75rem;">
+      ${a.bis
+        ? `<strong>Abgerechnet bis ${esc(datumDe(a.bis))}</strong>`
+        : '<strong>Bisher wurde noch kein Monat abgeschlossen.</strong> Solange das so bleibt, ändert sich nichts am bisherigen Verhalten.'}
+    </p>
+    ${offen ? `
+      <div class="push-hint" id="abschluss-offen" style="border-left:3px solid var(--warning,#e0a800);padding-left:0.6rem;margin-bottom:0.75rem;">
+        ${naechster === grenze
+          ? `${esc(monatLabel(naechster))} ist noch nicht abgeschlossen.`
+          : `Noch offen ab ${esc(monatLabel(naechster))} — bis einschließlich ${esc(monatLabel(grenze))}.`}
+      </div>` : ''}
+    ${offen ? `
+      <form id="abschluss-form">
+        <div class="form-group">
+          <label for="abschluss-monat">Abschließen bis einschließlich</label>
+          <input type="month" class="form-control" id="abschluss-monat" value="${esc(grenze)}"
+                 min="${esc(naechster)}" max="${esc(grenze)}" required>
+          <small class="push-hint">Zeiträume dürfen keine Lücken haben: alle offenen Monate bis
+          dahin werden der Reihe nach abgeschlossen.</small>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="abschluss-btn">Abschließen</button>
+      </form>` : `
+      <p class="push-hint">${a.bis ? 'Alle vergangenen Monate sind abgeschlossen.' : ''}</p>`}
+    ${perioden.length ? `
+      <h3 style="margin:1rem 0 0.5rem;font-size:1rem;">Abgeschlossene Zeiträume</h3>
+      <ul style="list-style:none;padding:0;margin:0;">
+        ${perioden.map((p, i) => `
+          <li style="padding:0.5rem 0;border-top:1px solid var(--border,#ddd);">
+            <div><strong>${esc(datumDe(p.periodFrom))} – ${esc(datumDe(p.periodTo))}</strong>
+              <span class="push-hint"> · ${p.zeilen.length} Mitarbeiter${p.closedByName ? ' · ' + esc(p.closedByName) : ''}</span></div>
+            <div style="margin-top:0.35rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+              <button class="btn btn-outline btn-sm abschluss-abweichung" data-id="${p.id}">Abweichungen prüfen</button>
+              ${i === 0 && isAdmin() ? `<button class="btn btn-danger btn-sm" id="abschluss-oeffnen" data-id="${p.id}">Wieder öffnen</button>` : ''}
+            </div>
+            <div class="abschluss-abw-box" id="abw-${p.id}" style="margin-top:0.5rem;"></div>
+          </li>`).join('')}
+      </ul>` : ''}`;
+}
+
+function bindAbschlussKarte() {
+  const karte = document.getElementById('abschluss-karte');
+  if (!karte) return;
+
+  const neuZeichnen = async () => {
+    await ladeAbschluss(true);
+    karte.innerHTML = '<h2 style="margin-bottom:0.5rem;">Abrechnungs-Abschluss</h2>' + abschlussKarteHtml();
+    bindAbschlussKarte();
+  };
+
+  document.getElementById('abschluss-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('abschluss-btn');
+    if (btn && btn.disabled) return;
+    const monat = document.getElementById('abschluss-monat').value;
+    if (!monat) { toast('Bitte einen Monat wählen', 'error'); return; }
+    const bestaetigt = await confirmModal(
+      `Alle offenen Monate bis einschließlich ${monatLabel(monat)} abschließen?\n\n`
+      + 'Danach sind diese Zeiträume schreibgeschützt. Änderungen daran kann nur noch der '
+      + 'Administrator vornehmen, und nur mit Begründung.',
+      { title: 'Abrechnung abschließen', okLabel: 'Abschließen' });
+    if (!bestaetigt) return;
+    if (btn) btn.disabled = true;
+    try {
+      const r = await api('POST', '/api/closure/bis', { month: monat });
+      const n = (r.erledigt || []).length;
+      toast(n === 1 ? `${monatLabel(r.erledigt[0].monat)} abgeschlossen`
+        : `${n} Monate abgeschlossen`, 'success');
+      // Ein Hindernis ist keine Fehlermeldung, sondern eine Auskunft: alles davor ist erledigt.
+      if (r.hindernis) toast(r.hindernis, 'error', 8000);
+      await neuZeichnen();
+    } catch (err) {
+      toast(err.message, 'error', 8000);
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  karte.querySelectorAll('.abschluss-abweichung').forEach(b => {
+    b.addEventListener('click', async () => {
+      const box = document.getElementById('abw-' + b.dataset.id);
+      box.textContent = 'Prüfe…';
+      try {
+        const r = await api('GET', `/api/closure/${b.dataset.id}/abweichung`);
+        box.innerHTML = abweichungHtml(r.abweichungen || []);
+      } catch (err) { box.textContent = err.message; }
+    });
+  });
+
+  document.getElementById('abschluss-oeffnen')?.addEventListener('click', async (e) => {
+    const id = e.currentTarget.dataset.id;
+    if (!(await confirmModal(
+      'Diesen Abschluss wieder öffnen?\n\nDer Zeitraum wird danach wieder normal bearbeitbar, '
+      + 'und der Überstundenstand rechnet ihn wieder mit. Der Vorgang wird protokolliert.',
+      { title: 'Abschluss aufheben', okLabel: 'Wieder öffnen', danger: true }))) return;
+    const grund = await promptModal('Warum wird der Abschluss aufgehoben? (Pflicht)',
+      { title: 'Begründung', required: true });
+    if (grund === null || !grund.trim()) return;
+    try {
+      await api('DELETE', '/api/closure/' + id, { reason: grund.trim() });
+      toast('Abschluss aufgehoben', 'success');
+      await neuZeichnen();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+}
+
+// „bezahlt X — heute berechnet Y". Bewusst mit Erklaerung: Dass die Monatszahlen abweichen, der
+// Gesamtstand aber stehen bleibt, sieht sonst wie ein Rechenfehler aus — es ist genau der Zweck.
+function abweichungHtml(abw) {
+  if (!abw.length) {
+    return '<span class="push-hint">Keine Abweichung — die Zahlen entsprechen noch genau dem, was abgerechnet wurde.</span>';
+  }
+  const LABEL = { soll: 'Soll', ist: 'Ist', saldo: 'Saldo', ueberstundenGesamt: 'Überstunden gesamt',
+    urlaub: 'Urlaub', krank: 'Krank', fza: 'FZA', sonderurlaub: 'Sonderurlaub',
+    berufsschule: 'Berufsschule', innung: 'Innung', feiertage: 'Feiertage' };
+  const zahl = (n) => String(Math.round(Number(n) * 100) / 100).replace('.', ',');
+  return `
+    <div class="push-hint" style="border-left:3px solid var(--warning,#e0a800);padding-left:0.6rem;">
+      Nach dem Abschluss wurde hier noch etwas geändert. Der <strong>Überstundenstand der
+      Mitarbeiter bleibt bewusst auf dem bezahlten Wert</strong> — die Differenz steht hier, damit
+      sie bewusst ans Lohnbüro nachgemeldet werden kann.
+    </div>
+    <ul style="list-style:none;padding:0;margin:0.5rem 0 0;">
+      ${abw.map(a => `
+        <li style="padding:0.25rem 0;">
+          <strong>${esc(a.name || '')}</strong>${a.entfernt ? ' <span class="push-hint">(nicht mehr in der Abrechnung)</span>' : ''}
+          <ul style="margin:0.2rem 0 0 1rem;padding:0;">
+            ${Object.entries(a.felder).map(([f, v]) => `
+              <li>${esc(LABEL[f] || f)}: bezahlt ${zahl(v.bezahlt)} — heute ${zahl(v.jetzt)}
+                <strong>(${v.differenz > 0 ? '+' : ''}${zahl(v.differenz)})</strong></li>`).join('')}
+          </ul>
+        </li>`).join('')}
+    </ul>`;
+}
+
+// Hinweis auf der Statistik-Seite: bis wann abgerechnet ist — und für den Mitarbeiter, welche
+// Zahlen für ihn festgehalten wurden. Er soll nachvollziehen können, was ans Lohnbüro ging,
+// statt sich zu wundern, warum sein Eintrag nicht mehr änderbar ist.
+function abgerechnetHinweisHtml() {
+  const a = S.abschluss;
+  if (!a || !a.bis) return '';
+  const zahl = (n) => String(Math.round(Number(n) * 100) / 100).replace('.', ',');
+  // Die jüngste Periode, in der eigene Zahlen stehen. Manager sehen hier alle Zeilen — für sie
+  // ist die ausführliche Ansicht die Karte auf der Export-Seite, deshalb nur der Stichtag.
+  let eigene = null;
+  if (S.user.role === 'mitarbeiter') {
+    for (const p of a.perioden || []) {
+      const z = (p.zeilen || []).find(x => Number(x.user_id) === Number(S.user.id));
+      if (z) eigene = { p, z };
+    }
+  }
+  return `
+    <div class="card" style="margin-bottom:0.75rem;">
+      <div>🔒 <strong>Abgerechnet bis ${esc(datumDe(a.bis))}.</strong>
+        <span class="push-hint">Zeiten bis zu diesem Tag sind festgeschrieben und nicht mehr änderbar.</span></div>
+      ${eigene ? `
+      <div style="margin-top:0.5rem;">
+        <div class="push-hint">Für Sie abgerechnet
+          (${esc(datumDe(eigene.p.periodFrom))} – ${esc(datumDe(eigene.p.periodTo))}):</div>
+        <div>Soll ${zahl(eigene.z.soll)} h · Ist ${zahl(eigene.z.ist)} h ·
+          Saldo ${zahl(eigene.z.saldo)} h · <strong>Überstunden gesamt ${zahl(eigene.z.ueberstunden_gesamt)} h</strong></div>
+      </div>` : ''}
+    </div>`;
+}

@@ -157,6 +157,45 @@ router.post('/', authenticate, authorize('admin', 'chef', 'buchhalter'), (req, r
   res.status(201).json({ id: closureId, periodFrom: bereich.von, periodTo: bereich.bis, anzahl: zeilen.length });
 });
 
+// Mehrere Monate am Stück abschließen, bis einschließlich `month`.
+//
+// Gedacht für den Fall, dass spät angefangen wird: Abschlüsse müssen lückenlos sein, also müsste
+// man sich sonst Monat für Monat vorarbeiten. Hier wird dieselbe Prüfung je Monat angewandt und
+// beim ersten Hindernis angehalten — abgeschlossen ist dann alles davor, und die Meldung sagt,
+// woran es lag. Ein stilles Überspringen gäbe es nie: das würde eine Lücke erzeugen.
+router.post('/bis', authenticate, authorize('admin', 'chef', 'buchhalter'), (req, res) => {
+  const db = getDb();
+  const ziel = monatsBereich(req.body && req.body.month);
+  if (!ziel) return res.status(400).json({ error: 'Ungültiger Monat (erwartet JJJJ-MM)' });
+
+  const heute = berlinNow().slice(0, 10);
+  const erledigt = [];
+  let hindernis = null;
+
+  for (let schutz = 0; schutz < 120; schutz++) {
+    const m = naechsterMonat(db);
+    if (!m || m > req.body.month) break;
+    const b = monatsBereich(m);
+    if (!b) { hindernis = `Monat ${m} ist unlesbar.`; break; }
+    if (b.bis >= heute) { hindernis = `${b.titel} ist noch nicht vorbei.`; break; }
+    const offen = offeneAntraege(db, b.von, b.bis);
+    if (offen.length) {
+      hindernis = `${b.titel}: ${offen.length} Antrag/Anträge sind noch nicht entschieden `
+        + `(${offen.map(o => o.name).filter((v, i, a) => a.indexOf(v) === i).join(', ')}).`;
+      break;
+    }
+    const { zeilen } = abschliessen(db, b, req.user);
+    erledigt.push({ monat: m, titel: b.titel, anzahl: zeilen.length });
+    logAudit(db, {
+      userId: req.user.id, username: req.user.username, action: 'closure_create',
+      details: `Abrechnung abgeschlossen: ${b.titel} (${zeilen.length} Mitarbeiter)`, ip: req.ip,
+    });
+  }
+
+  if (!erledigt.length && hindernis) return res.status(409).json({ error: hindernis });
+  res.status(erledigt.length ? 201 : 200).json({ erledigt, hindernis, bis: abgerechnetBis(db) });
+});
+
 // Was hat sich seit dem Abschluss an diesem Zeitraum verändert? Das ist der Ausweis für
 // nachträgliche Korrekturen: Der Saldo des Mitarbeiters bleibt auf dem bezahlten Stand, die
 // Differenz wird hier sichtbar — damit sie bewusst nachgemeldet werden kann statt still zu wirken.

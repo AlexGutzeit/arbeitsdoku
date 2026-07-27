@@ -446,6 +446,10 @@ const AUDIT_LABELS = {
   vacation_update: 'Urlaubsanspruch geändert',
   vacation_delete: 'Urlaubsanspruch gelöscht',
   vacation_startcarry_update: 'Start-Resturlaub geändert',
+  payroll_export: 'Lohn-Export erzeugt',
+  closure_create: 'Abrechnung abgeschlossen',
+  closure_reopen: 'Abschluss aufgehoben',
+  closure_override: 'Änderung im abgerechneten Zeitraum',
 };
 
 let _audit = { action: '', from: '', to: '', logs: [], total: 0, offset: 0, limit: 100 };

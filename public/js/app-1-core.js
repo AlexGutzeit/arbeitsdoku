@@ -1031,6 +1031,33 @@ async function ladeArbeitszeit() {
 }
 function arbeitszeitJetzt() { return S.arbeitszeit || ARBEITSZEIT_RUECKFALL; }
 
+// ── Abrechnungs-Abschluss ────────────────────────────────────────────────────────────────────
+// Der Stichtag, bis zu dem alles abgerechnet und damit schreibgeschützt ist (null = nichts
+// abgeschlossen, dann verhält sich die App wie vorher).
+//
+// Die Anzeige ist NUR Höflichkeit — gesperrt wird serverseitig. Ein ausgegrauter Knopf ist keine
+// Sperre; deshalb ist es auch unkritisch, wenn dieser Wert einmal veraltet ist.
+async function ladeAbschluss(frisch) {
+  if (S.abschluss && !frisch) return S.abschluss;
+  try {
+    const d = await api('GET', '/api/closure');
+    S.abschluss = d || { bis: null, perioden: [] };
+  } catch (_) { S.abschluss = { bis: null, perioden: [] }; }
+  return S.abschluss;
+}
+function abgerechnetBisJetzt() { return (S.abschluss && S.abschluss.bis) || null; }
+function istAbgerechnet(datum) {
+  const bis = abgerechnetBisJetzt();
+  return !!(bis && datum && String(datum).slice(0, 10) <= bis);
+}
+// „2026-06-30" → „30.06.2026"
+function datumDe(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : String(iso || '');
+}
+const ABGERECHNET_HINWEIS = (bis) =>
+  `Dieser Zeitraum ist abgerechnet (bis ${datumDe(bis)}) und kann nicht mehr geändert werden.`;
+
 // Standard-Tagesspanne aus den Firmenvorgaben: von = Arbeitsbeginn, bis = Beginn + Arbeitszeit + Pause.
 // Mit den Vorgabewerten kommt genau 07:00–15:30 / 30 min heraus — also exakt das, was bisher fest
 // im Code stand.

@@ -726,6 +726,7 @@ function navDate(dir) {
 // --- Entry Form ---
 async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   await ladeArbeitszeit();   // Firmenvorgaben fuer die Vorbelegung (einmal je Sitzung)
+  await ladeAbschluss();     // Stichtag der Abrechnung (fuer den Hinweis, gesperrt wird serverseitig)
   let entry = null;
   let continueEntry = null;
   let planningEntry = null;
@@ -879,6 +880,14 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   const isForeign = isEdit && !!entry && entry.user_id !== S.user.id;
   const showHistory = isEdit && isChefOrAdmin();
 
+  // Abrechnungs-Abschluss: Liegt der Eintrag in einem bezahlten Zeitraum, wird hier NICHT der
+  // Knopf ausgeblendet — das waere nur Kosmetik, gesperrt wird ohnehin serverseitig. Stattdessen
+  // erklaert ein Hinweis, warum das Speichern gleich abgelehnt wird, und der Admin bekommt vorab
+  // gesagt, dass er eine Begruendung angeben muss.
+  const entryDatum = isEdit ? entry.date : null;
+  const gesperrt = isEdit && istAbgerechnet(entryDatum);
+  const darfTrotzdem = gesperrt && isAdmin();
+
   const content = `
     <div class="card" style="max-width:600px;margin:0 auto;">
       <div class="card-header">
@@ -969,6 +978,13 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
         <div class="form-group">
           <label>Persönliche Notiz (nur für Sie sichtbar)</label>
           <textarea class="form-control" id="ef-note" rows="2" placeholder="Private Notiz...">${esc(personalNote)}</textarea>
+        </div>` : ''}
+        ${gesperrt ? `
+        <div class="push-hint" id="abgerechnet-hinweis" style="border-left:3px solid var(--warning,#e0a800);padding-left:0.6rem;margin-bottom:0.75rem;">
+          🔒 ${esc(ABGERECHNET_HINWEIS(abgerechnetBisJetzt()))}
+          ${darfTrotzdem
+            ? ' Als Administrator können Sie ihn dennoch ändern — Sie werden nach einer Begründung gefragt, und die Änderung wird protokolliert.'
+            : ' Wenden Sie sich an den Administrator.'}
         </div>` : ''}
         <button type="submit" class="btn btn-primary btn-block">${isEdit ? 'Speichern' : 'Eintrag erstellen'}</button>
         ${isEdit ? `<button type="button" class="btn btn-outline btn-block" id="continue-entry" style="margin-top:0.5rem">Auftrag fortsetzen</button>` : ''}
@@ -1109,14 +1125,18 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
       return;
     }
 
-    // GoBD: Begruendung abfragen — bei fremdem Eintrag Pflicht, bei eigenem optional
+    // GoBD: Begruendung abfragen — bei fremdem Eintrag Pflicht, bei eigenem optional.
+    // Im abgerechneten Zeitraum ist sie fuer den Admin ebenfalls Pflicht (der Server verlangt sie);
+    // fuer alle anderen bleibt sie optional, weil das Speichern ohnehin abgelehnt wird.
     if (isEdit) {
-      const reason = await promptModal(isForeign
-        ? 'Begründung für die Änderung dieses fremden Eintrags (Pflicht):'
-        : 'Begründung für die Änderung (optional):',
-        { title: 'Begründung', required: isForeign });
+      const pflicht = isForeign || darfTrotzdem;
+      const reason = await promptModal(
+        darfTrotzdem ? 'Warum wird dieser bereits abgerechnete Eintrag geändert? (Pflicht)'
+          : isForeign ? 'Begründung für die Änderung dieses fremden Eintrags (Pflicht):'
+          : 'Begründung für die Änderung (optional):',
+        { title: darfTrotzdem ? 'Änderung im abgerechneten Zeitraum' : 'Begründung', required: pflicht });
       if (reason === null) return; // Abbrechen → Bearbeitung verwerfen (nicht speichern)
-      if (isForeign && !reason.trim()) {
+      if (pflicht && !reason.trim()) {
         toast('Begründung erforderlich', 'error'); return;
       }
       body.reason = reason.trim();
@@ -1144,12 +1164,14 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   document.getElementById('delete-entry')?.addEventListener('click', async () => {
     if (!(await confirmModal('Eintrag wirklich löschen?', { title: 'Eintrag löschen', okLabel: 'Löschen' }))) return;
     const body = {};
-    const reason = await promptModal(isForeign
-      ? 'Begründung für das Löschen dieses fremden Eintrags (Pflicht):'
-      : 'Begründung für das Löschen (optional):',
-      { title: 'Begründung', required: isForeign });
+    const pflicht = isForeign || darfTrotzdem;
+    const reason = await promptModal(
+      darfTrotzdem ? 'Warum wird dieser bereits abgerechnete Eintrag gelöscht? (Pflicht)'
+        : isForeign ? 'Begründung für das Löschen dieses fremden Eintrags (Pflicht):'
+        : 'Begründung für das Löschen (optional):',
+      { title: darfTrotzdem ? 'Löschen im abgerechneten Zeitraum' : 'Begründung', required: pflicht });
     if (reason === null) return; // Abbrechen → Eintrag NICHT löschen (gilt auch bei optionalem Grund)
-    if (isForeign && !reason.trim()) {
+    if (pflicht && !reason.trim()) {
       toast('Begründung erforderlich', 'error'); return;
     }
     body.reason = reason.trim();
