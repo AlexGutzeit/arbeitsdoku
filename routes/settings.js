@@ -6,6 +6,7 @@ const sharp = require('sharp');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
+const { istUhrzeit } = require('../zeit');
 
 const router = express.Router();
 
@@ -104,6 +105,21 @@ router.get('/weather', authenticate, async (req, res) => {
   }
 });
 
+// Arbeitszeit-Vorgaben mit Rueckfall. EINE Stelle, damit Zeiteintrag, Planung und Mitarbeiter-Dialog
+// nie auseinanderlaufen. Die Vorgaben entsprechen dem, was bisher fest im Code stand (07:00-15:30,
+// 30 min Pause) — solange nichts umgestellt wird, aendert sich fuer niemanden etwas.
+function arbeitszeitVorgaben(db) {
+  const lies = (k) => { try { return db.prepare('SELECT value FROM settings WHERE key = ?').get(k)?.value; } catch (_) { return undefined; } };
+  const beginn = lies('work_start_default');
+  const stunden = Number(String(lies('work_hours_per_day') ?? '').replace(',', '.'));
+  const pause = parseInt(lies('break_minutes_default'), 10);
+  return {
+    work_start_default: istUhrzeit(beginn) ? beginn : '07:00',
+    work_hours_per_day: (stunden > 0 && stunden <= 24) ? stunden : 8,
+    break_minutes_default: (Number.isFinite(pause) && pause >= 0 && pause <= 480) ? pause : 30,
+  };
+}
+
 // Einstellungen abrufen
 router.get('/', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
@@ -115,6 +131,14 @@ router.get('/', authenticate, authorize('chef'), (req, res) => {
   res.json({ settings });
 });
 
+// Arbeitszeit-Vorgaben der Firma — fuer JEDEN Angemeldeten lesbar.
+// Bewusst ein eigener, schmaler Endpunkt statt GET '/' (das ist Chef/Admin-only und liefert alles,
+// inklusive Branding und Rechtstexten). Ein Mitarbeiter braucht nur diese drei Werte, damit sein
+// Zeiteintrags-Formular und die Planung richtig vorbelegt werden.
+router.get('/arbeitszeit', authenticate, (req, res) => {
+  res.json({ arbeitszeit: arbeitszeitVorgaben(getDb()) });
+});
+
 // Einstellungen aktualisieren
 router.put('/', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
@@ -122,6 +146,7 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
     company_name, company_street, company_zip, company_city,
     app_name, app_short_name, theme_color, background_color,
     legal_impressum, legal_datenschutz,
+    work_start_default, work_hours_per_day, break_minutes_default,
   } = req.body;
 
   // Validierung Branding-Felder
@@ -145,10 +170,25 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
     }
   }
 
+  // Arbeitszeit-Vorgaben pruefen, bevor sie gespeichert werden — sonst stuende spaeter eine
+  // unmoegliche Vorbelegung im Formular.
+  if (work_start_default !== undefined && work_start_default !== '' && !istUhrzeit(work_start_default)) {
+    return res.status(400).json({ error: 'Arbeitsbeginn: erwartet HH:MM (00:00 bis 23:59)' });
+  }
+  if (work_hours_per_day !== undefined && work_hours_per_day !== '') {
+    const h = Number(String(work_hours_per_day).replace(',', '.'));
+    if (!(h > 0 && h <= 24)) return res.status(400).json({ error: 'Arbeitszeit pro Tag: erwartet eine Zahl zwischen 0 und 24' });
+  }
+  if (break_minutes_default !== undefined && break_minutes_default !== '') {
+    const m = Number(break_minutes_default);
+    if (!Number.isInteger(m) || m < 0 || m > 480) return res.status(400).json({ error: 'Pause pro Tag: erwartet ganze Minuten zwischen 0 und 480' });
+  }
+
   const fields = {
     company_name, company_street, company_zip, company_city,
     app_name, app_short_name, theme_color, background_color,
     legal_impressum, legal_datenschutz,
+    work_start_default, work_hours_per_day, break_minutes_default,
   };
   const changes = [];
   for (const [key, value] of Object.entries(fields)) {

@@ -90,7 +90,7 @@ router.post('/test', authenticate, async (req, res) => {
 });
 
 // ===== Geplante Zusammenfassungen (Digest-Push) =====
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const { ZEIT_RE: TIME_RE } = require('../zeit');
 const NAME_MAX = 40;
 const scheduleOut = (r) => ({
   id: r.id,

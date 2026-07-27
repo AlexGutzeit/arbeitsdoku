@@ -6,9 +6,8 @@ const { recordEntryHistory, berlinNow } = require('../audit');
 
 const router = express.Router();
 
-// Validierungs-Helper
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-function isValidTime(s) { return typeof s === 'string' && TIME_RE.test(s); }
+// Validierungs-Helper — Uhrzeit-Pruefung gemeinsam in ../zeit.js
+const { istUhrzeit: isValidTime } = require('../zeit');
 // Gueltiges ISO-Datum (YYYY-MM-DD, kalendarisch real) — analog zu routes/absences.js
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 function isValidDate(s) {

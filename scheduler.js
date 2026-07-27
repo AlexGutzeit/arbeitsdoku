@@ -6,6 +6,22 @@ const { computeBadgeCounts } = require('./routes/badges');
 const push = require('./push');
 const recur = require('./planning-recurrence');
 
+// Standard-Tagesspanne aus den Firmen-Einstellungen (Arbeitsbeginn + Arbeitszeit + Pause).
+// Gleiche Rueckfallwerte wie im Frontend und in routes/settings.js: 07:00 / 8 h / 30 min.
+function standardTagVorgabe(db) {
+  const lies = (k) => { try { return db.prepare('SELECT value FROM settings WHERE key = ?').get(k)?.value; } catch (_) { return undefined; } };
+  const beginn = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(lies('work_start_default') || '')) ? lies('work_start_default') : '07:00';
+  const std = Number(String(lies('work_hours_per_day') ?? '').replace(',', '.'));
+  const pause = parseInt(lies('break_minutes_default'), 10);
+  const stunden = (std > 0 && std <= 24) ? std : 8;
+  const pauseMin = (Number.isFinite(pause) && pause >= 0 && pause <= 480) ? pause : 30;
+  const [h, m2] = beginn.split(':').map(Number);
+  const ende = h * 60 + m2 + Math.round(stunden * 60) + pauseMin;
+  const g = ((ende % 1440) + 1440) % 1440;
+  const bis = String(Math.floor(g / 60)).padStart(2, '0') + ':' + String(g % 60).padStart(2, '0');
+  return { time_from: beginn, time_to: bis, break_minutes: pauseMin };
+}
+
 const addDaysISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const addMonthsISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
 const SERIES_HORIZON_MONTHS = 24;
@@ -194,7 +210,9 @@ function extendSeries(db, now = new Date()) {
     const from = s.materialized_until ? addDaysISO(s.materialized_until, 1) : today;
     const occ = recur.computeOccurrences(rule, { horizon, from });
     let tpl; try { tpl = JSON.parse(s.template || '{}'); } catch (_) { tpl = {}; }
-    const tplDays = (tpl.tplDays && tpl.tplDays.length) ? tpl.tplDays : [{ offset: 0, time_from: '07:00', time_to: '15:30', break_minutes: 0 }];
+    // Notnagel fuer alte Serien ohne gespeicherte Tagesstruktur: die Firmenvorgaben aus den
+    // Einstellungen statt fest 07:00-15:30 (sonst haette eine Umstellung hier keine Wirkung).
+    const tplDays = (tpl.tplDays && tpl.tplDays.length) ? tpl.tplDays : [{ offset: 0, ...standardTagVorgabe(db) }];
     const assigned = tpl.assigned_user_ids || [];
     const tx = db.transaction(() => {
       // Bisheriges letztes Vorkommen merken (für die Erinnerungs-Mitführung).

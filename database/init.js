@@ -689,6 +689,19 @@ async function initDatabase() {
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
+  // Migration: work_start in users — ABWEICHENDER Arbeitsbeginn je Mitarbeiter.
+  // BEWUSST OHNE SQL-Vorgabe: leer (NULL) bedeutet „es gilt der Firmenwert aus den Einstellungen".
+  // Mit einer Vorgabe stuende bei jedem Bestandsnutzer fest '07:00' — eine spaetere Umstellung des
+  // Firmenwerts wuerde dann bei NIEMANDEM greifen. Genau der Fall, den das Feld loesen soll.
+  try {
+    const uCols = db.prepare("PRAGMA table_info(users)").all();
+    if (!uCols.some(c => c.name === 'work_start')) {
+      db.exec("ALTER TABLE users ADD COLUMN work_start TEXT");
+      markDirty();
+      console.log('Migration: work_start in users hinzugefuegt.');
+    }
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
+
   // Migration: created_by in absences
   try {
     const absCols = db.prepare("PRAGMA table_info(absences)").all();
@@ -896,6 +909,10 @@ function ensureAuditSchema(targetDb) {
     addCol('users', 'deactivated_at', 'TEXT');
     addCol('users', 'deactivated_by', 'INTEGER');
     addCol('users', 'personnel_no', 'TEXT');
+    // ZWINGEND: work_start wird in middleware/auth.js bei JEDER Anfrage mitgelesen. Fehlt die Spalte
+    // nach dem Wiederherstellen eines alten Backups, schlaegt dieser SELECT fehl und sperrt ALLE
+    // Nutzer aus — nicht nur den Arbeitsbeginn.
+    addCol('users', 'work_start', 'TEXT');
     // can_plan_all separat (mit Backfill aus can_plan), damit Bestandsplaner aus alten Backups „alle" behalten.
     ensurePlanAll(targetDb);
     normalizeManagerRights(targetDb); // #9: Chef/Admin von redundanten Einzelrechten bereinigen

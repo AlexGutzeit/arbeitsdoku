@@ -725,6 +725,7 @@ function navDate(dir) {
 
 // --- Entry Form ---
 async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
+  await ladeArbeitszeit();   // Firmenvorgaben fuer die Vorbelegung (einmal je Sitzung)
   let entry = null;
   let continueEntry = null;
   let planningEntry = null;
@@ -793,26 +794,73 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     } catch (_) { return null; }
   }
 
+  // Arbeitsbeginn des Mitarbeiters (je Person einstellbar, Vorgabe 07:00). Für den angemeldeten
+  // Nutzer aus S.user, für einen vom Admin gewählten aus S.users.
+  // Reihenfolge: eigener Wert des Mitarbeiters → Firmenwert aus den Einstellungen → 07:00.
+  // Leer beim Mitarbeiter heisst ausdruecklich „es gilt der Firmenwert" — nur so wirkt eine spaetere
+  // Umstellung der Firmenvorgabe auch bei den Bestandsmitarbeitern.
+  function arbeitsbeginnVon(userId) {
+    const id = userId ? Number(userId) : (S.user && Number(S.user.id));
+    // ZUERST der angemeldete Nutzer selbst: ein Mitarbeiter darf /api/users nicht laden, S.users ist
+    // bei ihm also leer — sein eigener Wert stuende sonst nirgends und er bekaeme faelschlich den
+    // Firmenwert. Erst danach in der Nutzerliste suchen (Admin hat dort einen anderen MA gewaehlt).
+    let eigener = (S.user && Number(S.user.id) === id) ? S.user.work_start : null;
+    if (!eigener) {
+      const u = (S.users || []).find(x => Number(x.id) === id);
+      eigener = u && u.work_start;
+    }
+    return eigener || arbeitszeitJetzt().work_start_default || '07:00';
+  }
+
   // Startzeit-Vorschlag. Reihenfolge bewusst so:
   //   1. Endzeit des letzten Eintrags des Tages — die REALITÄT hat Vorrang. Auch wenn eine Planung eine
   //      frühere Startzeit vorsieht: Endete der Auftrag davor erst um 11, darf nicht 10 vorgeschlagen
   //      werden, sonst entstünde eine Überlappung (doppelt gebuchte Zeit).
   //   2. sonst die geplante Startzeit (erster Auftrag des Tages aus der Planung)
-  //   3. sonst 07:00 (Tagesbeginn)
+  //   3. sonst der Arbeitsbeginn des Mitarbeiters
   // Immer nur ein Vorschlag — jederzeit überschreibbar (z. B. für Nachträge).
+  //
+  // Mitgeliefert wird, WOHER der Vorschlag stammt: 'echt' = Endzeit eines gebuchten Eintrags,
+  // 'annahme' = Planung oder Arbeitsbeginn. Der Unterschied entscheidet, wie eine Zeit korrigiert
+  // wird, die nach der aktuellen Uhrzeit läge (siehe zeitenAbgleichen).
   async function suggestStart(dateStr, userId, plannedFrom) {
     const lastEnd = await lastEndOfDay(dateStr, userId);
-    return lastEnd || plannedFrom || '07:00';
+    if (lastEnd) return { zeit: lastEnd, quelle: 'echt' };
+    return { zeit: plannedFrom || arbeitsbeginnVon(userId), quelle: 'annahme' };
+  }
+
+  // „Bis" darf nie vor „Von" liegen — sonst schlägt das Formular eine unmögliche Spanne vor und das
+  // Speichern scheitert an einer Prüfung, obwohl der Nutzer nichts falsch gemacht hat (Fall: vor
+  // dem Arbeitsbeginn einen Eintrag anlegen, etwa um 06:15 bei Arbeitsbeginn 07:00).
+  //
+  // WIE korrigiert wird, hängt davon ab, woher der Vorschlag kommt:
+  //   * 'annahme' (Arbeitsbeginn/Planung) → beide auf jetzt. Wer um 06:30 anfängt, hat um 06:30
+  //     angefangen; die Annahme 07:00 ist dann schlicht falsch.
+  //   * 'echt' (Endzeit eines gebuchten Eintrags) → „Von" bleibt stehen, „Bis" zieht hoch. Sonst
+  //     liefe der neue Eintrag IN den vorhandenen hinein (doppelt gebuchte Zeit) — genau das, was
+  //     die Reihenfolge oben verhindern soll. Fall: morgens den ganzen Tag im Voraus gebucht.
+  function zeitenAbgleichen(von, bis, quelle) {
+    if (von <= bis) return { von, bis };                       // Normalfall, nichts zu tun
+    return quelle === 'echt' ? { von, bis: von } : { von: bis, bis };
   }
   const title = isEdit ? 'Eintrag bearbeiten' : (projectSource ? 'Auftrag als Zeitnachweis übernehmen' : (planningEntry ? 'Eintrag aus Planung erstellen' : (continueEntry ? 'Weiter arbeiten' : 'Neuer Eintrag')));
 
   const nowTime = `${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}`;
   const date = isEdit ? entry.date : today;
   // Neue Einträge: an den letzten Eintrag des Tages anschließen; sonst geplante Startzeit; sonst 07:00.
-  const timeFrom = isEdit ? entry.time_from
-    : await suggestStart(date, isAdmin() ? null : S.user.id, planningEntry ? planningEntry.time_from : null);
-  const timeTo = isEdit ? entry.time_to : nowTime;
-  const breakMin = isEdit ? entry.break_minutes : (planningEntry ? planningEntry.break_minutes : 30);
+  let timeFrom, timeTo;
+  if (isEdit) {
+    timeFrom = entry.time_from;
+    timeTo = entry.time_to;
+  } else {
+    const v = await suggestStart(date, isAdmin() ? null : S.user.id, planningEntry ? planningEntry.time_from : null);
+    const abgeglichen = zeitenAbgleichen(v.zeit, nowTime, v.quelle);
+    timeFrom = abgeglichen.von;
+    timeTo = abgeglichen.bis;
+  }
+  // Pause: aus der uebernommenen Planung, sonst der Firmenwert aus den Einstellungen (Vorgabe 30 min).
+  const breakMin = isEdit ? entry.break_minutes
+    : (planningEntry ? planningEntry.break_minutes : arbeitszeitJetzt().break_minutes_default);
   const address = isEdit ? entry.address : (source ? source.address : '');
   const client = isEdit ? entry.client : (source ? source.client : '');
   const projectId = isEdit ? (entry.project_id || '') : (source ? (source.project_id || '') : '');
@@ -964,8 +1012,15 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
       const d = document.getElementById('ef-date')?.value;
       const uSel = document.getElementById('ef-user');
       const uid = uSel ? Number(uSel.value) : (isAdmin() ? null : S.user.id);
-      const s = await suggestStart(d, uid, planningEntry ? planningEntry.time_from : null);
-      if (fromEl.value === lastSuggested) { fromEl.value = s; lastSuggested = s; updateNet(); }
+      const v = await suggestStart(d, uid, planningEntry ? planningEntry.time_from : null);
+      const toEl = document.getElementById('ef-to');
+      const a = zeitenAbgleichen(v.zeit, (toEl && toEl.value) || nowTime, v.quelle);
+      if (fromEl.value !== lastSuggested) return;              // zwischenzeitlich manuell geändert
+      fromEl.value = a.von;
+      lastSuggested = a.von;                                   // den KORRIGIERTEN Wert merken,
+      // sonst hält die „manuell geändert"-Erkennung den Vorschlag für eine Nutzereingabe.
+      if (toEl && toEl.value !== a.bis) toEl.value = a.bis;
+      updateNet();
     };
     document.getElementById('ef-date')?.addEventListener('change', refreshStart);
     document.getElementById('ef-user')?.addEventListener('change', refreshStart);

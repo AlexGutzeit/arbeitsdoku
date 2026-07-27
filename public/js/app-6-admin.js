@@ -57,6 +57,29 @@ async function renderSettings() {
               <input type="text" class="form-control" id="s-city" value="${esc(S.settings.company_city || '')}" placeholder="Berlin">
             </div>
           </div>
+          <hr style="margin:1.25rem 0;border:none;border-top:1px solid var(--border);">
+          <h3 style="font-size:1.05rem;margin-bottom:0.35rem;">Arbeitszeiten</h3>
+          <p class="push-hint" style="margin-bottom:0.9rem;">
+            Gilt als Vorbelegung für die Planung und für den ersten Zeiteintrag eines Tages.
+            Bei einzelnen Mitarbeitern lässt sich ein abweichender Arbeitsbeginn hinterlegen —
+            wer dort nichts stehen hat, folgt diesen Werten. <strong>Bereits erfasste Zeiten und die
+            Soll-Stunden bleiben unberührt.</strong>
+          </p>
+          <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;">
+            <div class="form-group">
+              <label>Arbeitsbeginn</label>
+              <input type="time" class="form-control" id="s-work-start" value="${esc(S.settings.work_start_default || '07:00')}">
+            </div>
+            <div class="form-group">
+              <label>Arbeitszeit pro Tag (h)</label>
+              <input type="text" inputmode="decimal" class="form-control" id="s-work-hours" value="${esc(numDe(S.settings.work_hours_per_day || 8))}" placeholder="8">
+            </div>
+            <div class="form-group">
+              <label>Pause pro Tag (min)</label>
+              <input type="text" inputmode="numeric" class="form-control" id="s-break" value="${esc(S.settings.break_minutes_default || 30)}" placeholder="30">
+            </div>
+          </div>
+          <p class="push-hint" id="s-zeit-vorschau" style="margin-bottom:1rem;"></p>
           <button type="submit" class="btn btn-primary">Speichern</button>
         </form>
         <hr style="margin:1.5rem 0;border:none;border-top:1px solid var(--border);">
@@ -202,16 +225,45 @@ async function renderSettings() {
       </div>
     </div>`;
 
+  // Vorschau, damit sofort sichtbar ist, was die drei Werte zusammen bedeuten.
+  function zeitVorschau() {
+    const el = document.getElementById('s-zeit-vorschau');
+    if (!el) return;
+    const von = document.getElementById('s-work-start').value;
+    const std = numFromField('s-work-hours', null, 0.25, 24);
+    const pause = numFromField('s-break', null, 0, 480);
+    if (!von || std === null || pause === null) { el.textContent = ''; return; }
+    const [h, m] = von.split(':').map(Number);
+    const ende = h * 60 + m + Math.round(std * 60) + Math.round(pause);
+    const g = ((ende % 1440) + 1440) % 1440;
+    el.textContent = `Ergibt in der Planung: ${von} – ${String(Math.floor(g / 60)).padStart(2, '0')}:${String(g % 60).padStart(2, '0')} mit ${Math.round(pause)} min Pause.`;
+  }
+  ['s-work-start', 's-work-hours', 's-break'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', zeitVorschau);
+  });
+  zeitVorschau();
+
   // Settings form
   document.getElementById('settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
+      // Zahlenfelder: Komma erlauben und ungueltige Eingabe MELDEN statt still als 0 zu speichern
+      // (dieselbe Regel wie bei den Soll-Stunden).
+      const std = numFromField('s-work-hours', null, 0.25, 24);
+      if (std === null) { toast('Arbeitszeit pro Tag: bitte eine Zahl zwischen 0,25 und 24 eingeben', 'error'); return; }
+      const pause = numFromField('s-break', null, 0, 480);
+      if (pause === null) { toast('Pause pro Tag: bitte ganze Minuten zwischen 0 und 480 eingeben', 'error'); return; }
       await api('PUT', '/api/settings', {
         company_name: document.getElementById('s-company').value,
         company_street: document.getElementById('s-street').value,
         company_zip: document.getElementById('s-zip').value,
         company_city: document.getElementById('s-city').value,
+        work_start_default: document.getElementById('s-work-start').value,
+        work_hours_per_day: String(std),
+        break_minutes_default: String(Math.round(pause)),
       });
+      S.arbeitszeit = null;   // gemerkte Vorgaben verwerfen, sonst gilt in dieser Sitzung der alte Stand
+      zeitVorschau();
       toast('Einstellungen gespeichert', 'success');
     } catch (err) { toast(err.message, 'error'); }
   });

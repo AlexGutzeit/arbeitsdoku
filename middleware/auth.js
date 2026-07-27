@@ -36,7 +36,7 @@ function authenticate(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const db = getDb();
-    const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, COALESCE(active,1) AS active FROM users WHERE id = ?').get(decoded.userId);
+    const user = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, work_start, COALESCE(active,1) AS active FROM users WHERE id = ?").get(decoded.userId);
     if (!user) return res.status(401).json({ error: 'Benutzer nicht gefunden' });
     // Ausgestellte (active=0) Nutzer werden sofort ausgesperrt — auch wenn ihr Token noch nicht abgelaufen ist.
     // Prüfung läuft live gegen die DB: Wiedereinstellen (active=1) lässt dasselbe Token wieder greifen.

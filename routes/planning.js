@@ -153,7 +153,7 @@ router.get('/group/:groupId', authenticate, (req, res) => {
 // eigenen Termine erinnern lassen. Empfänger = wer sie setzt. MUSS vor '/:id' stehen (sonst fängt
 // '/:id' den Pfad „reminders" ab).
 const LEAD_UNITS = ['day', 'week', 'month'];
-const REMIND_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const { ZEIT_RE: REMIND_TIME_RE } = require('../zeit');
 function validLead(num, unit) {
   const n = Number(num);
   if (!Number.isInteger(n) || n < 1 || n > 999) return null;

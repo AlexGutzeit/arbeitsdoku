@@ -38,6 +38,9 @@ const S = {
   // zurückführen — von der Willkommensseite aus also zur Willkommensseite und nicht zur Planung.
   // Nach einem Neuladen der Seite ist der Merker leer; dann gilt wie bisher die Planung.
   _uebernahmeVon: null,
+  // Arbeitszeit-Vorgaben der Firma (Beginn, Stunden/Tag, Pause). Einmal je Sitzung geladen und
+  // hier gemerkt — sie ändern sich selten und werden an mehreren Stellen zur Vorbelegung gebraucht.
+  arbeitszeit: null,
 };
 
 // --- API Helper ---
@@ -1010,6 +1013,37 @@ function promptModal(message, opts = {}) {
     input.focus();
     if (!multiline) input.select();
   });
+}
+
+// Arbeitszeit-Vorgaben der Firma holen (einmal je Sitzung). Eigener, schmaler Endpunkt: die
+// vollständigen Einstellungen darf nur Chef/Admin lesen, diese drei Werte braucht aber jeder —
+// sonst wäre die Vorbelegung für Mitarbeiter falsch.
+// Bei Netzproblemen gelten dieselben Rückfallwerte wie im Backend (07:00 / 8 h / 30 min), damit die
+// Vorbelegung nie leer bleibt.
+const ARBEITSZEIT_RUECKFALL = { work_start_default: '07:00', work_hours_per_day: 8, break_minutes_default: 30 };
+async function ladeArbeitszeit() {
+  if (S.arbeitszeit) return S.arbeitszeit;
+  try {
+    const d = await api('GET', '/api/settings/arbeitszeit');
+    S.arbeitszeit = (d && d.arbeitszeit) || ARBEITSZEIT_RUECKFALL;
+  } catch (_) { S.arbeitszeit = ARBEITSZEIT_RUECKFALL; }
+  return S.arbeitszeit;
+}
+function arbeitszeitJetzt() { return S.arbeitszeit || ARBEITSZEIT_RUECKFALL; }
+
+// Standard-Tagesspanne aus den Firmenvorgaben: von = Arbeitsbeginn, bis = Beginn + Arbeitszeit + Pause.
+// Mit den Vorgabewerten kommt genau 07:00–15:30 / 30 min heraus — also exakt das, was bisher fest
+// im Code stand.
+function standardTag() {
+  const a = arbeitszeitJetzt();
+  const [h, m] = String(a.work_start_default).split(':').map(Number);
+  const startMin = h * 60 + m;
+  const endeMin = startMin + Math.round(Number(a.work_hours_per_day) * 60) + Number(a.break_minutes_default);
+  const fmt = (min) => {
+    const g = ((min % 1440) + 1440) % 1440;                 // über Mitternacht hinaus umbrechen
+    return String(Math.floor(g / 60)).padStart(2, '0') + ':' + String(g % 60).padStart(2, '0');
+  };
+  return { von: fmt(startMin), bis: fmt(endeMin), pause: Number(a.break_minutes_default) };
 }
 
 // --- Router ---

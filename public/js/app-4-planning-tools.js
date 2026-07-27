@@ -707,6 +707,7 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
 
 // --- Planning Form ---
 async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) {
+  await ladeArbeitszeit();   // Firmenvorgaben fuer die Tages-Vorbelegung
   suppressTooltip();
   let entry = null;
   let replanEntry = null;
@@ -798,7 +799,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
     // Neue Planung, „In Planung übernehmen" (Projekt-Quelle) UND „Auftrag erneut planen": heute als
     // echten Standardtag (ein Tag) vorbelegen → mit einem Klick speicherbar, weiter änderbar.
     const today = formatDateISO(S.planningDate || new Date());
-    planDays = [{ date: today, time_from: '07:00', time_to: '15:30', break_minutes: 30 }];
+    planDays = [{ date: today, time_from: standardTag().von, time_to: standardTag().bis, break_minutes: standardTag().pause }];
   }
 
   function renderDayRows() {
@@ -856,7 +857,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
     // Bestehende Zeiten beibehalten wenn Tag schon existiert
     const existing = {};
     planDays.forEach(d => { existing[d.date] = d; });
-    planDays = newDates.map(date => existing[date] || { date, time_from: '07:00', time_to: '15:30', break_minutes: 30 });
+    planDays = newDates.map(date => existing[date] || { date, time_from: standardTag().von, time_to: standardTag().bis, break_minutes: standardTag().pause });
     refreshDayList();
   }
 
@@ -891,7 +892,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
   let multiMode = planDays.length > 1;
 
   function renderSingleDaySection() {
-    const day = planDays[0] || { date: formatDateISO(new Date()), time_from: '07:00', time_to: '15:30', break_minutes: 30 };
+    const day = planDays[0] || { date: formatDateISO(new Date()), time_from: standardTag().von, time_to: standardTag().bis, break_minutes: standardTag().pause };
     return `
       <div class="form-row">
         <div class="form-group">
@@ -958,7 +959,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
         const newDate = dateInput.value;
         if (!newDate) { toast('Bitte Datum auswählen', 'error'); return; }
         if (planDays.some(d => d.date === newDate)) { toast('Tag bereits vorhanden', 'error'); return; }
-        planDays.push({ date: newDate, time_from: '07:00', time_to: '15:30', break_minutes: 30 });
+        planDays.push({ date: newDate, time_from: standardTag().von, time_to: standardTag().bis, break_minutes: standardTag().pause });
         planDays.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
         dateInput.value = '';
         refreshDayList();
@@ -1164,7 +1165,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
     document.getElementById('lbl-single').classList.toggle('active', !multiMode);
     document.getElementById('lbl-multi').classList.toggle('active', multiMode);
     if (multiMode && planDays.length === 0) {
-      planDays = [{ date: formatDateISO(new Date()), time_from: '07:00', time_to: '15:30', break_minutes: 30 }];
+      planDays = [{ date: formatDateISO(new Date()), time_from: standardTag().von, time_to: standardTag().bis, break_minutes: standardTag().pause }];
     }
     refreshDateSection();
   });

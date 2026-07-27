@@ -930,6 +930,7 @@ async function renderUsers() {
 }
 
 async function showUserModal(user) {
+  await ladeArbeitszeit();   // Firmenwert fuer den Hinweis „leer = …"
   const isEdit = !!user;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -949,6 +950,14 @@ async function showUserModal(user) {
           <label>Personalnummer <span class="push-hint">(optional, fürs Lohnbüro)</span></label>
           <input type="text" class="form-control" id="um-personnel-no" value="${esc(user?.personnel_no || '')}"
             maxlength="32" inputmode="text" autocomplete="off" placeholder="z. B. 0042">
+        </div>
+        <div class="form-group">
+          <label>Arbeitsbeginn
+            <span class="push-hint">(leer = Firmenwert ${esc(arbeitszeitJetzt().work_start_default)})</span>
+          </label>
+          <input type="time" class="form-control" id="um-work-start" value="${esc(user?.work_start || '')}">
+          <span class="push-hint">Nur ausfüllen, wenn dieser Mitarbeiter abweichend beginnt.
+            Vorschlag für den ersten Zeiteintrag des Tages.</span>
         </div>
         ${isEdit ? `
         <div class="form-group">
@@ -1202,6 +1211,7 @@ async function showUserModal(user) {
       name: document.getElementById('um-name').value,
       username: document.getElementById('um-username').value,
       personnel_no: document.getElementById('um-personnel-no').value,
+      work_start: document.getElementById('um-work-start').value,
       role: document.getElementById('um-role').value,
       start_overtime: startOt,
       can_plan: document.getElementById('um-can-plan').checked,

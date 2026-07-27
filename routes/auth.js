@@ -65,7 +65,8 @@ router.post('/login', loginLimiter, async (req, res) => {
       can_plan: !!user.can_plan,
       can_plan_all: !!user.can_plan_all,
       can_bulletin: !!user.can_bulletin,
-      can_upload: !!user.can_upload
+      can_upload: !!user.can_upload,
+      work_start: user.work_start || null   // leer = Firmenwert aus den Einstellungen
     }
   });
  } catch (e) {
