@@ -276,7 +276,7 @@ function layout(content, activeNav) {
           <span class="icon">&#128276;</span> Benachrichtigungen
         </a>
         <a href="#/pdf" class="${activeNav === 'pdf' ? 'active' : ''}">
-          <span class="icon">&#128196;</span> PDF-Export
+          <span class="icon">&#128196;</span> Export
         </a>
         ${showSettings ? `<a href="#/settings" class="${activeNav === 'settings' ? 'active' : ''}">
           <span class="icon">&#9881;</span> Einstellungen

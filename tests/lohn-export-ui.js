@@ -79,7 +79,21 @@ const anmelden = async (browser, user, pw) => {
     // ── Bedienung als Chef ────────────────────────────────────────────────
     console.log('Bedienung:');
     const p = await anmelden(browser, 'chef', pw('chef'));
+
+    // Der Menuepunkt heisst „Export" — auf der Seite liegen PDF UND Lohn-Export.
+    const menuText = await p.evaluate(() => {
+      const a2 = document.querySelector('nav a[href="#/pdf"]');
+      return a2 ? a2.textContent.trim() : null;
+    });
+    // Das Symbol steht mit im Link — daher auf den Wortlaut prüfen, nicht auf Gleichheit.
+    ok('Menüpunkt heißt „Export" (nicht mehr „PDF-Export")',
+      /\bExport$/.test(menuText || '') && !/PDF/.test(menuText || ''), JSON.stringify(menuText));
+
     await p.evaluate(() => { location.hash = '#/pdf'; }); await sleep(2000);
+    ok('beide Karten sind auf der Seite', await p.evaluate(() => {
+      const t = document.querySelector('.main').textContent;
+      return /PDF-Export/.test(t) && /Lohn-Export/.test(t);
+    }));
     ok('Monat ist auf den Vormonat voreingestellt',
       (await p.evaluate(() => document.getElementById('lohn-monat').value)) === VORMONAT,
       `erwartet ${VORMONAT}, ist ${await p.evaluate(() => document.getElementById('lohn-monat').value)}`);
