@@ -105,8 +105,17 @@ async function inDenHintergrund(p) {
     // ── Speichern raeumt den Entwurf weg ──────────────────────────────────
     console.log('Nach dem Speichern:');
     await setVal(p, 'ef-user', String(ma.id));
+    // Zeiten AUSDRUECKLICH setzen. Das Formular belegt „Bis" mit der aktuellen Uhrzeit vor, „Von"
+    // aber mit 07:00 (Standard fuer den ersten Eintrag des Tages) — laeuft der Test vor 7 Uhr
+    // morgens, waere die Vorbelegung 07:00-06:15 und das Speichern scheitert an der Zeitpruefung.
+    // Der Test soll die Entwurfs-Sicherung pruefen, nicht die Tageszeit des Testlaufs.
+    await setVal(p, 'ef-from', '08:00');
+    await setVal(p, 'ef-to', '16:00');
     await p.evaluate(() => document.getElementById('entry-form').requestSubmit()); await sleep(2000);
-    ok('Eintrag gespeichert', await p.evaluate(() => location.hash === '#/' || location.hash === ''), await p.evaluate(() => location.hash));
+    // Meldung mit ausgeben — sonst steht bei einem Fehlschlag nur „#/entry/new" da und man raet.
+    ok('Eintrag gespeichert', await p.evaluate(() => location.hash === '#/' || location.hash === ''),
+      (await p.evaluate(() => location.hash)) + ' | Meldung: '
+      + (await p.evaluate(() => (document.querySelector('.toast') || {}).textContent || '(keine)')));
     ok('Entwurf nach dem Speichern weg', (await entwuerfe(p)).length === 0, JSON.stringify(await entwuerfe(p)));
     await p.evaluate(() => { location.hash = '#/entry/new'; }); await sleep(2000);
     ok('frisches Formular bietet nichts mehr an', !(await leisteDa(p)));
