@@ -3,6 +3,7 @@ const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const { recordEntryHistory, berlinNow } = require('../audit');
+const { pruefeSperre, protokolliereEingriff } = require('../abschluss');
 
 const router = express.Router();
 
@@ -197,6 +198,10 @@ router.post('/', authenticate, (req, res) => {
     targetUserId = target.id;
   }
 
+  // Abrechnungs-Abschluss: kein Nachtragen in einen bezahlten Zeitraum (Admin nur mit Begruendung)
+  const sperre = pruefeSperre(db, [date], req.user, req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   const net_hours = calculateNetHours(time_from, time_to, break_minutes || 0);
 
   const result = db.prepare(`
@@ -205,6 +210,7 @@ router.post('/', authenticate, (req, res) => {
   `).run(targetUserId, date, time_from, time_to, break_minutes || 0, net_hours, address || '', client || '', project_id || null, project_text || '', description || '', personal_note || '', has_regie || 0, has_regie === 1 ? (regie_user_id || targetUserId) : null);
 
   const entry = db.prepare('SELECT * FROM entries WHERE id = ?').get(result.lastInsertRowid);
+  protokolliereEingriff(db, req, sperre, `Zeiteintrag ${date} angelegt`);
   broadcast('entries', req.headers['x-tab-id']);
   res.status(201).json({ entry });
 });
@@ -247,6 +253,11 @@ router.put('/:id', authenticate, (req, res) => {
   if (date && !isValidDate(date)) {
     return res.status(400).json({ error: 'Ungültiges Datum (erwartet YYYY-MM-DD, gültiger Kalendertag)' });
   }
+  // Abrechnungs-Abschluss: ALTES und NEUES Datum pruefen — sonst liesse sich ein Eintrag aus dem
+  // bezahlten Zeitraum herausschieben (oder nachtraeglich hinein).
+  const sperre = pruefeSperre(db, [entry.date, date], req.user, reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   const net_hours = calculateNetHours(newFrom, newTo, newBreak);
 
   const newRegie = has_regie !== undefined ? (has_regie || 0) : entry.has_regie;
@@ -276,6 +287,7 @@ router.put('/:id', authenticate, (req, res) => {
     WHERE e.id = ?
   `).get(req.params.id);
 
+  protokolliereEingriff(db, req, sperre, `Zeiteintrag ${entry.date} geändert`);
   broadcast('entries', req.headers['x-tab-id']);
   res.json({ entry: updated });
 });
@@ -293,10 +305,13 @@ router.delete('/:id', authenticate, (req, res) => {
     if (isForeign && !reason) {
       return res.status(400).json({ error: 'Begründung erforderlich beim Löschen eines fremden Eintrags' });
     }
+    const sperre = pruefeSperre(db, [entry.date], req.user, reason);
+    if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
     // Vorher-Abbild festhalten, dann Soft-Delete (Zeile bleibt fuer Pruefung erhalten)
     recordEntryHistory(db, entry, 'delete', req.user.id, reason);
     db.prepare("UPDATE entries SET deleted_at=?, deleted_by=? WHERE id=?")
       .run(berlinNow(), req.user.id, req.params.id);
+    protokolliereEingriff(db, req, sperre, `Zeiteintrag ${entry.date} gelöscht`);
     broadcast('entries', req.headers['x-tab-id']);
     return res.json({ success: true });
   }
@@ -332,9 +347,14 @@ router.post('/:id/restore', authenticate, (req, res) => {
   }
 
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  // Wiederherstellen holt einen geloeschten Eintrag ZURUECK in den Zeitraum — dieselbe Wirkung
+  // auf die Zahlen wie ein neuer Eintrag, also dieselbe Sperre.
+  const sperre = pruefeSperre(db, [entry.date], req.user, reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
   // Vorher-Abbild (geloeschter Zustand) festhalten, dann wiederherstellen
   recordEntryHistory(db, entry, 'restore', req.user.id, reason);
   db.prepare('UPDATE entries SET deleted_at = NULL, deleted_by = NULL WHERE id = ?').run(req.params.id);
+  protokolliereEingriff(db, req, sperre, `Zeiteintrag ${entry.date} wiederhergestellt`);
   broadcast('entries', req.headers['x-tab-id']);
   res.json({ success: true });
 });

@@ -3,6 +3,7 @@ const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { stundenFuerZeitraum } = require('./user-hours');
+const { pruefeSperre, pruefeSperreGlobal, protokolliereEingriff } = require('../abschluss');
 
 const router = express.Router();
 
@@ -71,7 +72,11 @@ function syncEmploymentStart(db, userId) {
 
 // Soll-Stunden für einen Zeitraum berechnen (berücksichtigt Änderungen + genehmigte Abwesenheiten
 // + Anstellungszeiträume: außerhalb der Anstellung zählt ein Tag 0 Soll-Stunden).
-function calcTargetHours(db, userId, from, to) {
+// ROH-Variante ohne Rundung. Gebraucht vom Abrechnungs-Abschluss: Der gerundete Wert ist NICHT
+// additiv — round(a)+round(b) != round(a+b) —, und der Abschluss teilt den Zeitraum am Stichtag.
+// Ohne diese Variante wanderte pro Abschluss bis zu ein Hundertstel Abweichung in den
+// Ueberstundenstand (gemessen in tests/abschluss-gleichheit.js, bevor es diese Funktion gab).
+function calcTargetHoursRaw(db, userId, from, to) {
   const targets = db.prepare(
     'SELECT hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from ASC'
   ).all(userId);
@@ -135,7 +140,11 @@ function calcTargetHours(db, userId, from, to) {
     cur.setDate(cur.getDate() + 1);
   }
 
-  return Math.round(total * 100) / 100;
+  return total;
+}
+
+function calcTargetHours(db, userId, from, to) {
+  return Math.round(calcTargetHoursRaw(db, userId, from, to) * 100) / 100;
 }
 
 // Schedule-bewusstes Tageszählen: nur Tage mit > 0 Soll-Stunden, Feiertage ausgeschlossen
@@ -178,7 +187,7 @@ function getEarliestTargetDate(db, userId) {
 }
 
 // Tatsächliche Arbeitszeit: überlappende Einträge nicht doppelt zählen
-function calcActualHours(entries) {
+function calcActualHoursRaw(entries) {
   const groups = {};
   for (const e of entries) {
     const key = `${e.user_id}_${e.date}`;
@@ -210,7 +219,11 @@ function calcActualHours(entries) {
     const netMin = Math.max(0, bruttoMin - totalBreak);
     total += netMin / 60;
   }
-  return Math.round(total * 100) / 100;
+  return total;
+}
+
+function calcActualHours(entries) {
+  return Math.round(calcActualHoursRaw(entries) * 100) / 100;
 }
 
 // Effektiven Startzeitpunkt für einen User ermitteln (max von range.from und frühestem Soll-Stunden-Datum)
@@ -493,6 +506,11 @@ router.post('/targets/:userId', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Gültig-ab-Datum fehlt oder ungültig (YYYY-MM-DD)' });
   }
 
+  // Eine rueckdatierte Soll-Stunden-Zeile veraendert das Soll im abgerechneten Zeitraum — und
+  // ueber syncEmploymentStart nebenbei sogar den Anstellungsbeginn.
+  const sperre = pruefeSperre(db, [valid_from], req.user, req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   const hpw = (hours_mon || 0) + (hours_tue || 0) + (hours_wed || 0) + (hours_thu || 0) + (hours_fri || 0);
 
   db.prepare('INSERT INTO user_target_hours (user_id, hours_per_week, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
@@ -504,6 +522,7 @@ router.post('/targets/:userId', authenticate, (req, res) => {
   ).get(req.params.userId);
   db.prepare('UPDATE users SET target_hours_per_week = ? WHERE id = ?').run(hpw, req.params.userId);
   syncEmploymentStart(db, userId);
+  protokolliereEingriff(db, req, sperre, `Soll-Stunden ab ${valid_from} angelegt`);
 
   const targets = db.prepare(
     'SELECT id, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from DESC'
@@ -522,6 +541,10 @@ router.put('/targets/:userId/:id', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Gültig-ab-Datum fehlt oder ungültig (YYYY-MM-DD)' });
   }
 
+  const alt = db.prepare('SELECT valid_from FROM user_target_hours WHERE id = ? AND user_id = ?').get(req.params.id, req.params.userId);
+  const sperre = pruefeSperre(db, [alt && alt.valid_from, valid_from], req.user, req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   const hpw = (hours_mon || 0) + (hours_tue || 0) + (hours_wed || 0) + (hours_thu || 0) + (hours_fri || 0);
 
   db.prepare('UPDATE user_target_hours SET hours_per_week = ?, hours_mon = ?, hours_tue = ?, hours_wed = ?, hours_thu = ?, hours_fri = ?, valid_from = ? WHERE id = ? AND user_id = ?').run(
@@ -536,6 +559,7 @@ router.put('/targets/:userId/:id', authenticate, (req, res) => {
     db.prepare('UPDATE users SET target_hours_per_week = ? WHERE id = ?').run(latest.hours_per_week, req.params.userId);
   }
   syncEmploymentStart(db, req.params.userId);
+  protokolliereEingriff(db, req, sperre, `Soll-Stunden ab ${valid_from} geändert`);
 
   const targets = db.prepare(
     'SELECT id, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from FROM user_target_hours WHERE user_id = ? ORDER BY valid_from DESC'
@@ -553,7 +577,11 @@ router.delete('/targets/:userId/:id', authenticate, (req, res) => {
   if (count.c <= 1) {
     return res.status(400).json({ error: 'Mindestens ein Soll-Stunden-Eintrag muss bestehen bleiben' });
   }
+  const weg = db.prepare('SELECT valid_from FROM user_target_hours WHERE id = ? AND user_id = ?').get(req.params.id, req.params.userId);
+  const sperre = pruefeSperre(db, [weg && weg.valid_from], req.user, req.body && req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
   db.prepare('DELETE FROM user_target_hours WHERE id = ? AND user_id = ?').run(req.params.id, req.params.userId);
+  protokolliereEingriff(db, req, sperre, `Soll-Stunden ab ${weg && weg.valid_from} gelöscht`);
 
   const latest = db.prepare(
     'SELECT hours_per_week FROM user_target_hours WHERE user_id = ? ORDER BY valid_from DESC LIMIT 1'
@@ -627,8 +655,12 @@ router.put('/vacation/:userId/start-carry', authenticate, (req, res) => {
   const days = parseFloat(String(req.body.days).replace(',', '.'));
   if (!isFinite(days)) return res.status(400).json({ error: 'Ungültiger Wert' });
   const db = getDb();
+  // Kein Datum, wirkt ab dem ersten Anspruchsjahr — also auch auf jeden abgerechneten Zeitraum.
+  const sperre = pruefeSperreGlobal(db, req.user, req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
   const before = db.prepare('SELECT vacation_start_carry FROM users WHERE id = ?').get(req.params.userId);
   db.prepare('UPDATE users SET vacation_start_carry = ? WHERE id = ?').run(days, req.params.userId);
+  protokolliereEingriff(db, req, sperre, 'Start-Resturlaub geändert');
   auditVac(db, req, 'vacation_startcarry_update', `${vacUserName(db, req.params.userId)}: Start-Resturlaub ${(before && before.vacation_start_carry) || 0} → ${days} Tage`);
   res.json({ start_carry: days });
 });
@@ -643,8 +675,11 @@ router.post('/vacation/:userId', authenticate, (req, res) => {
   const n = normVacationBody(req.body); // prüft valid_from-Format (B4) + carryover_until (S2)
   if (n.error) return res.status(400).json({ error: n.error });
   const db = getDb();
+  const sperre = pruefeSperre(db, [n.valid_from], req.user, req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
   db.prepare('INSERT INTO vacation_entitlements (user_id, valid_from, days, carryover_mode, carryover_until) VALUES (?, ?, ?, ?, ?)')
     .run(userId, n.valid_from, n.days, n.mode, n.until);
+  protokolliereEingriff(db, req, sperre, `Urlaubsanspruch ab ${n.valid_from} angelegt`);
   auditVac(db, req, 'vacation_create', `${vacUserName(db, userId)}: ${n.days} Tage ab ${n.valid_from}, Verfall ${vacModeTxt(n.mode, n.until)}`);
   res.json({ entitlements: listVacation(db, userId) });
 });
@@ -658,8 +693,11 @@ router.put('/vacation/:userId/:id', authenticate, (req, res) => {
   if (n.error) return res.status(400).json({ error: n.error });
   const db = getDb();
   const b = db.prepare('SELECT valid_from, days, carryover_mode, carryover_until FROM vacation_entitlements WHERE id = ? AND user_id = ?').get(req.params.id, req.params.userId);
+  const sperre = pruefeSperre(db, [b && b.valid_from, n.valid_from], req.user, req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
   db.prepare('UPDATE vacation_entitlements SET valid_from = ?, days = ?, carryover_mode = ?, carryover_until = ? WHERE id = ? AND user_id = ?')
     .run(n.valid_from, n.days, n.mode, n.until, req.params.id, req.params.userId);
+  protokolliereEingriff(db, req, sperre, `Urlaubsanspruch ab ${n.valid_from} geändert`);
   if (b) auditVac(db, req, 'vacation_update', `${vacUserName(db, req.params.userId)}: ${b.days}→${n.days} Tage, ab ${b.valid_from}→${n.valid_from}, Verfall ${vacModeTxt(b.carryover_mode, b.carryover_until)}→${vacModeTxt(n.mode, n.until)}`);
   res.json({ entitlements: listVacation(db, req.params.userId) });
 });
@@ -671,7 +709,10 @@ router.delete('/vacation/:userId/:id', authenticate, (req, res) => {
   }
   const db = getDb();
   const b = db.prepare('SELECT valid_from, days, carryover_mode, carryover_until FROM vacation_entitlements WHERE id = ? AND user_id = ?').get(req.params.id, req.params.userId);
+  const sperre = pruefeSperre(db, [b && b.valid_from], req.user, req.body && req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
   db.prepare('DELETE FROM vacation_entitlements WHERE id = ? AND user_id = ?').run(req.params.id, req.params.userId);
+  protokolliereEingriff(db, req, sperre, `Urlaubsanspruch ab ${b && b.valid_from} gelöscht`);
   if (b) auditVac(db, req, 'vacation_delete', `${vacUserName(db, req.params.userId)}: ${b.days} Tage ab ${b.valid_from}, Verfall ${vacModeTxt(b.carryover_mode, b.carryover_until)} gelöscht`);
   res.json({ entitlements: listVacation(db, req.params.userId) });
 });
@@ -704,6 +745,8 @@ function getISOWeek(date) {
 module.exports = router;
 module.exports.calcTargetHours = calcTargetHours;
 module.exports.calcActualHours = calcActualHours;
+module.exports.calcTargetHoursRaw = calcTargetHoursRaw;
+module.exports.calcActualHoursRaw = calcActualHoursRaw;
 module.exports.countScheduledDays = countScheduledDays;
 module.exports.fmtDate = fmtDate;
 module.exports.getEarliestTargetDate = getEarliestTargetDate;

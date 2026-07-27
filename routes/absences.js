@@ -6,6 +6,17 @@ const { broadcast } = require('../sse');
 const push = require('../push');
 const { computeAbsenceSummary, countUrlaubDaysInYear, vacationAccount, countUrlaubPendingInYear } = require('./absence-days');
 const { recordAbsenceHistory, berlinNow } = require('../audit');
+const { pruefeSperre, protokolliereEingriff } = require('../abschluss');
+
+// Abrechnungs-Abschluss: Fast jede Aktion auf einer Abwesenheit verschiebt die Soll-Stunden —
+// Genehmigen und Ablehnen genauso wie Anlegen oder Loeschen, denn erst der Status entscheidet, ob
+// die Tage zaehlen. Deshalb pruefen alle diese Routen denselben Zeitraum. proposed_* gehoert dazu:
+// Beim Quittieren eines Manager-Vorschlags werden diese Daten zu den echten.
+function sperreFuerAbwesenheit(db, absence, req) {
+  return pruefeSperre(db,
+    [absence.date_from, absence.date_to, absence.proposed_date_from, absence.proposed_date_to],
+    req.user, req.body && req.body.reason);
+}
 
 // Datumsbereich „TT.MM.–TT.MM." (bzw. ein einzelnes Datum, wenn von==bis) für Push-Texte.
 function fmtRange(from, to) {
@@ -440,12 +451,16 @@ router.post('/', authenticate, (req, res) => {
     return res.status(400).json({ error: conflictMessage(type, conflict) });
   }
 
+  const sperre = pruefeSperre(db, [date_from, date_to], req.user, req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   const result = db.prepare(`
     INSERT INTO absences (user_id, type, date_from, date_to, status, comment, created_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))
   `).run(uid, type, date_from, date_to, status, (comment || '').trim(), created_by);
 
   const absence = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(result.lastInsertRowid), db);
+  protokolliereEingriff(db, req, sperre, `Abwesenheit ${type} ${date_from}–${date_to} angelegt`);
   broadcast('absences', req.headers['x-tab-id']);
   res.status(201).json({ absence, warning: urlaubWarning(db, uid, type, date_from, date_to) });
 
@@ -503,6 +518,12 @@ router.put('/:id', authenticate, (req, res) => {
   if (conflict) {
     return res.status(400).json({ error: conflictMessage(absence.type, conflict) });
   }
+
+  // Alter UND neuer Zeitraum: sonst liesse sich eine Abwesenheit aus dem bezahlten Bereich schieben.
+  const sperre = pruefeSperre(db,
+    [absence.date_from, absence.date_to, absence.proposed_date_from, absence.proposed_date_to, date_from, date_to],
+    req.user, reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
 
   // GoBD: Vorher-Abbild festhalten, bevor irgendein UPDATE-Zweig die Daten ueberschreibt
   recordAbsenceHistory(db, absence, 'update', req.user.id, reason);
@@ -571,6 +592,7 @@ router.put('/:id', authenticate, (req, res) => {
   }
 
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
+  protokolliereEingriff(db, req, sperre, `Abwesenheit ${absence.type} ${absence.date_from}–${absence.date_to} geändert`);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
 
@@ -607,10 +629,14 @@ router.delete('/:id', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Begründung erforderlich beim Löschen einer fremden Abwesenheit' });
   }
 
+  const sperre = sperreFuerAbwesenheit(db, absence, req);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   // Vorher-Abbild festhalten, dann Soft-Delete (Zeile bleibt fuer Pruefung erhalten)
   recordAbsenceHistory(db, absence, 'delete', req.user.id, reason);
   db.prepare("UPDATE absences SET deleted_at = ?, deleted_by = ? WHERE id = ?")
     .run(berlinNow(), req.user.id, absence.id);
+  protokolliereEingriff(db, req, sperre, `Abwesenheit ${absence.type} ${absence.date_from}–${absence.date_to} gelöscht`);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ success: true });
 });
@@ -668,8 +694,12 @@ router.post('/:id/restore', authenticate, (req, res) => {
   if (!absence) return res.status(404).json({ error: 'Gelöschte Abwesenheit nicht gefunden' });
 
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  const sperre = sperreFuerAbwesenheit(db, absence, req);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   recordAbsenceHistory(db, absence, 'restore', req.user.id, reason);
   db.prepare('UPDATE absences SET deleted_at = NULL, deleted_by = NULL WHERE id = ?').run(req.params.id);
+  protokolliereEingriff(db, req, sperre, `Abwesenheit ${absence.type} ${absence.date_from}–${absence.date_to} wiederhergestellt`);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ success: true });
 });
@@ -682,6 +712,9 @@ router.post('/:id/approve', authenticate, (req, res) => {
   const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
+  const sperre = sperreFuerAbwesenheit(db, absence, req);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   const newStatus = AUTO_ACTIVE.includes(absence.type) ? 'active' : 'approved';
 
   db.prepare(`
@@ -692,6 +725,7 @@ router.post('/:id/approve', authenticate, (req, res) => {
 
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
   broadcast('absences', req.headers['x-tab-id']);
+  protokolliereEingriff(db, req, sperre, `Abwesenheit ${absence.type} ${absence.date_from}–${absence.date_to} genehmigt`);
   res.json({ absence: updated, warning: urlaubWarning(db, updated.user_id, updated.type, updated.date_from, updated.date_to) });
 
   // Antrag genehmigt → der Mitarbeiter.
@@ -711,6 +745,9 @@ router.post('/:id/reject', authenticate, (req, res) => {
   const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
+  const sperre = sperreFuerAbwesenheit(db, absence, req);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   db.prepare(`
     UPDATE absences SET status = 'rejected', processed_by = ?, processed_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
       updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
@@ -718,6 +755,7 @@ router.post('/:id/reject', authenticate, (req, res) => {
   `).run(req.user.id, absence.id);
 
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
+  protokolliereEingriff(db, req, sperre, `Abwesenheit ${absence.type} ${absence.date_from}–${absence.date_to} abgelehnt`);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
 
@@ -747,6 +785,9 @@ router.post('/:id/accept', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Nur pending Einträge können akzeptiert werden' });
   }
 
+  const sperre = sperreFuerAbwesenheit(db, absence, req);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   db.prepare(`
     UPDATE absences SET status = 'approved', processed_by = ?, processed_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
       updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
@@ -754,6 +795,7 @@ router.post('/:id/accept', authenticate, (req, res) => {
   `).run(req.user.id, absence.id);
 
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
+  protokolliereEingriff(db, req, sperre, `Abwesenheit ${absence.type} ${absence.date_from}–${absence.date_to} akzeptiert`);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
 });
@@ -775,6 +817,9 @@ router.post('/:id/reject-ma', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Nur pending Einträge können abgelehnt werden' });
   }
 
+  const sperre = sperreFuerAbwesenheit(db, absence, req);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   db.prepare(`
     UPDATE absences SET status = 'rejected', processed_by = ?, processed_at = strftime('%Y-%m-%d %H:%M:%f', 'now'),
       updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
@@ -782,6 +827,7 @@ router.post('/:id/reject-ma', authenticate, (req, res) => {
   `).run(req.user.id, absence.id);
 
   const updated = withUserName(db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(absence.id), db);
+  protokolliereEingriff(db, req, sperre, `Abwesenheit ${absence.type} ${absence.date_from}–${absence.date_to} vom Mitarbeiter abgelehnt`);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ absence: updated });
 });
@@ -812,6 +858,9 @@ router.post('/:id/acknowledge-ma', authenticate, (req, res) => {
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
   if (absence.user_id !== req.user.id) return res.status(403).json({ error: 'Keine Berechtigung' });
 
+  const sperre = sperreFuerAbwesenheit(db, absence, req);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   if (absence.proposed_date_from) {
     // MA akzeptiert Vorschlag → proposed Daten übernehmen, Status approved
     db.prepare(`
@@ -828,6 +877,7 @@ router.post('/:id/acknowledge-ma', authenticate, (req, res) => {
     `).run(absence.id);
   }
 
+  protokolliereEingriff(db, req, sperre, `Abwesenheit ${absence.type} ${absence.date_from}–${absence.date_to} quittiert`);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ success: true });
 });
@@ -844,6 +894,9 @@ router.post('/:id/reject-manager-edit', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Kein Manager-Vorschlag vorhanden — nur Quittieren möglich' });
   }
 
+  const sperre = sperreFuerAbwesenheit(db, absence, req);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   // Vorschlag abgelehnt: alte Daten (date_from/to) bleiben, proposed gelöscht
   // Status → pending damit Chef erneut entscheidet; created_by = user_id für Badge
   db.prepare(`
@@ -854,6 +907,7 @@ router.post('/:id/reject-manager-edit', authenticate, (req, res) => {
     WHERE id = ?
   `).run(absence.id);
 
+  protokolliereEingriff(db, req, sperre, `Abwesenheit ${absence.type} ${absence.date_from}–${absence.date_to}: Manager-Vorschlag abgelehnt`);
   broadcast('absences', req.headers['x-tab-id']);
   res.json({ success: true });
 });

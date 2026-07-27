@@ -71,6 +71,7 @@ function lohnZeilen(db, von, bis, titel) {
     }
 
     zeilen.push({
+      userId: u.id,                      // fuer den Abrechnungs-Abschluss; in der CSV nicht enthalten
       personalnummer: u.personnel_no || '',
       name: u.name,
       monat: titel,

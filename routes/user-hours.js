@@ -17,6 +17,45 @@
 // das Modul vollstaendig geladen und im require-Zwischenspeicher.
 function bausteine() { return require('./statistics'); }
 
+// abschluss.js bindet bewusst keine Routen ein — hier ist ein normales require gefahrlos.
+const { letzterAbschlussBis, snapshotZeile, tagDanach } = require('../abschluss');
+
+/**
+ * Kumulierte Ist- und Soll-Stunden vom Anstellungsbeginn bis `to` — UNGERUNDET.
+ *
+ * Warum ungerundet: calcActualHours/calcTargetHours runden am Ende ihres Zeitraums, und Rundung
+ * ist nicht additiv (round(a)+round(b) ≠ round(a+b)). Der Abschluss teilt den Zeitraum aber genau
+ * am Stichtag. Mit den gerundeten Werten wanderte pro Abschluss bis zu ein Hundertstel in den
+ * Überstundenstand — gemessen, nicht vermutet: tests/abschluss-gleichheit.js zeigte 0,01 h, bevor
+ * es diese Funktion gab. Mit den Rohwerten ist die Teilung exakt, und erst die Summe wird
+ * gerundet — also genau die Zahl, die vor dem Abschluss auch herauskam.
+ *
+ * Ist ein Zeitraum abgeschlossen, wird auf dessen festgehaltenen Rohwerten aufgesetzt statt neu
+ * gerechnet. Das ist der eigentliche Zweck: Eine nachträgliche Korrektur in einem bezahlten Monat
+ * kann den heutigen Stand nicht mehr verschieben.
+ *
+ * Rückfall auf die volle Rechnung auch dann, wenn es zwar einen Abschluss gibt, der Mitarbeiter
+ * darin aber fehlt — er kann später eingetreten sein. Ohne diesen Zweig bekäme ein Neuzugang
+ * stillschweigend 0 statt seiner eigenen Zahlen.
+ */
+function kumulierteRohwerte(db, userId, angestelltAb, to) {
+  const { calcActualHoursRaw, calcTargetHoursRaw } = bausteine();
+  let basisIst = 0, basisSoll = 0, ab = angestelltAb;
+  const c = letzterAbschlussBis(db, to);
+  if (c && c.period_to >= angestelltAb) {
+    const zeile = snapshotZeile(db, c.id, userId);
+    if (zeile) {
+      basisIst = Number(zeile.ist_kumuliert) || 0;
+      basisSoll = Number(zeile.soll_kumuliert) || 0;
+      ab = tagDanach(c.period_to);
+    }
+  }
+  return {
+    istRoh: basisIst + calcActualHoursRaw(eintraege(db, userId, ab, to)),
+    sollRoh: basisSoll + calcTargetHoursRaw(db, userId, ab, to),
+  };
+}
+
 const runde2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 const SPALTEN = 'date, time_from, time_to, break_minutes, net_hours, user_id';
@@ -69,11 +108,21 @@ function stundenFuerZeitraum(db, userId, from, to, startUeberstunden) {
   const sollStunden = calcTargetHours(db, userId, vonEffektiv, to);
 
   // Kumulierte Überstunden: vom allerersten Tag bis zum Ende des gewählten Zeitraums.
+  //
+  // Ist ein Monat abgerechnet, wird nicht mehr seit Firmenbeginn gerechnet, sondern auf dem
+  // festgehaltenen Stand aufgesetzt. Das ist der eigentliche Zweck des Abschlusses: Eine
+  // nachträgliche Korrektur in einem bezahlten Monat darf den heutigen Stand NICHT still
+  // verschieben. Sie wird stattdessen als Abweichung ausgewiesen (routes/closure.js).
+  //
+  // Nebenbei fällt damit die teuerste Abfrage der App weg — bisher lief sie bei jedem Aufruf
+  // über die gesamte Firmengeschichte (Bugliste v6, B11 „Wachstum").
   let ueberstundenGesamt = startOT;
   if (angestelltAb) {
-    ueberstundenGesamt = startOT
-      + calcActualHours(eintraege(db, userId, angestelltAb, to))
-      - calcTargetHours(db, userId, angestelltAb, to);
+    // runde2 auf jeden Summanden EINZELN — genau wie calcActualHours/calcTargetHours es taten,
+    // als hier noch über den gesamten Zeitraum am Stück gerechnet wurde. Nur so kommt bei
+    // abgeschlossenen und nicht abgeschlossenen Zeiträumen dieselbe Zahl heraus.
+    const kum = kumulierteRohwerte(db, userId, angestelltAb, to);
+    ueberstundenGesamt = startOT + runde2(kum.istRoh) - runde2(kum.sollRoh);
   }
 
   return {
@@ -83,4 +132,4 @@ function stundenFuerZeitraum(db, userId, from, to, startUeberstunden) {
   };
 }
 
-module.exports = { stundenFuerZeitraum };
+module.exports = { stundenFuerZeitraum, kumulierteRohwerte };

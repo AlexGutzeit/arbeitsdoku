@@ -8,6 +8,7 @@ const dbModule = require('../database/init');
 const { getDb, saveToFile, reloadFromFile, writeFileAtomic, DB_PATH } = dbModule;
 const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
+const { abgerechnetBis } = require('../abschluss');
 
 const router = express.Router();
 
@@ -249,7 +250,10 @@ router.post('/restore', authenticate, authorize('chef'), restoreUpload, (req, re
     // Audit in die wiederhergestellte DB schreiben (ensureAuditSchema hat audit_logs garantiert)
     logAudit(getDb(), {
       userId: req.user.id, username: req.user.username, action: 'backup_restore',
-      details: `Safety-Backup: ${path.basename(safetyZipPath)}, ${uploadFiles.length} Upload-Datei(en), ${documentFiles.length} Dokument(e)`,
+      // Ersetzt die komplette Datenbank — ein Abrechnungs-Stichtag kann das nicht abfangen.
+      // Deshalb hier wenigstens festhalten, ob abgerechnete Zeitraeume betroffen waren.
+      details: `Safety-Backup: ${path.basename(safetyZipPath)}, ${uploadFiles.length} Upload-Datei(en), ${documentFiles.length} Dokument(e)`
+        + (abgerechnetBis(getDb()) ? ` — BETRIFFT ABGERECHNETE ZEITRÄUME (bis ${abgerechnetBis(getDb())})` : ''),
       ip: req.ip,
     });
 

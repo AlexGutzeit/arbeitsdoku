@@ -419,6 +419,8 @@ async function initDatabase() {
   ensureProjectSchema(db);
   // Urlaubsanspruch-Historie (idempotent, hier UND im Restore-Pfad)
   ensureVacationSchema(db);
+  // Abrechnungs-Abschluss (idempotent, hier UND im Restore-Pfad)
+  ensureClosureSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -923,6 +925,7 @@ function ensureAuditSchema(targetDb) {
   ensurePushSchema(targetDb);
   ensureProjectSchema(targetDb);
   ensureVacationSchema(targetDb);
+  ensureClosureSchema(targetDb);
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
@@ -1126,6 +1129,69 @@ function ensureVacationSchema(targetDb) {
     }
   } catch (e) {
     console.error('ensureVacationSchema fehlgeschlagen:', e.message);
+  }
+}
+
+// Abrechnungs-Abschluss: abgeschlossene Monate + die dabei festgehaltenen Zahlen je Mitarbeiter.
+//
+// payroll_closure_rows ist ein BELEG dessen, was ans Lohnbuero ging — und zugleich die Rechenbasis
+// fuer den Ueberstundenstand (siehe routes/user-hours.js). Daraus folgen zwei Festlegungen, die
+// beide leicht falsch zu machen waeren:
+//
+// 1. ueberstunden_gesamt steht GENAU SO in der Zeile, wie der Wert zum Zeitpunkt des Abschlusses
+//    angezeigt und exportiert wurde (auf zwei Stellen gerundet). Ein "mathematisch genauerer"
+//    ungerundeter Wert waere hier falsch: Die Zeile ist der Beleg dessen, was im Lohn-Export
+//    stand und bezahlt wurde. Nebeneffekt: Am Stichtag selbst liefert die neue Rechenbasis
+//    exakt dieselbe Zahl wie die alte Rechnung.
+// 2. KEIN Fremdschluessel auf users. DELETE /api/users/:id loescht per Kaskade — der Beleg dessen,
+//    was bezahlt wurde, darf dabei nicht verschwinden. Deshalb stehen Name und Personalnummer als
+//    Kopie in der Zeile und bleiben lesbar, auch wenn es den Nutzer nicht mehr gibt.
+//
+// Leere Tabellen = Verhalten exakt wie vorher. Idempotent — laeuft bei Init UND nach
+// Backup-Restore ([[feedback_abwaertskompatibilitaet]]).
+function ensureClosureSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS payroll_closures (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        period_from    TEXT NOT NULL,
+        period_to      TEXT NOT NULL UNIQUE,
+        closed_at      TEXT NOT NULL,
+        closed_by      INTEGER,
+        closed_by_name TEXT
+      );
+      CREATE TABLE IF NOT EXISTS payroll_closure_rows (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        closure_id          INTEGER NOT NULL,
+        user_id             INTEGER,
+        personnel_no        TEXT,
+        name                TEXT,
+        soll                REAL DEFAULT 0,
+        ist                 REAL DEFAULT 0,
+        saldo               REAL DEFAULT 0,
+        ueberstunden_gesamt REAL DEFAULT 0,
+        ist_kumuliert       REAL DEFAULT 0,
+        soll_kumuliert      REAL DEFAULT 0,
+        urlaub              REAL DEFAULT 0,
+        krank               REAL DEFAULT 0,
+        fza                 REAL DEFAULT 0,
+        sonderurlaub        REAL DEFAULT 0,
+        berufsschule        REAL DEFAULT 0,
+        innung              REAL DEFAULT 0,
+        feiertage           REAL DEFAULT 0,
+        FOREIGN KEY (closure_id) REFERENCES payroll_closures(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_closure_rows ON payroll_closure_rows(closure_id, user_id);
+    `);
+    // Nachtrag fuer Datenbanken, die die Tabelle schon vor diesen beiden Spalten bekommen haben.
+    const cols = targetDb.prepare("PRAGMA table_info(payroll_closure_rows)").all();
+    for (const c of ['ist_kumuliert', 'soll_kumuliert']) {
+      if (!cols.some(x => x.name === c)) {
+        targetDb.exec(`ALTER TABLE payroll_closure_rows ADD COLUMN ${c} REAL DEFAULT 0`);
+      }
+    }
+  } catch (e) {
+    console.error('ensureClosureSchema fehlgeschlagen:', e.message);
   }
 }
 

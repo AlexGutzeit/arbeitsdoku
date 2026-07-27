@@ -36,7 +36,7 @@ rsync -az middleware/ "$DEPLOY_HOST:$DEPLOY_PATH/middleware/"
 # ACHTUNG: Dies ist eine FESTE Liste — eine neue Datei im Projektstamm landet sonst NICHT auf dem
 # Server, und der Dienst startet nach dem Neustart gar nicht mehr (require schlaegt fehl).
 # Beim Anlegen einer neuen Datei hier eintragen. Die Probe unten (--pruefen) faengt es ab.
-rsync -az server.js audit.js push.js sse.js scheduler.js planning-recurrence.js csv.js zeit.js .puppeteerrc.cjs package.json package-lock.json "$DEPLOY_HOST:$DEPLOY_PATH/"
+rsync -az server.js audit.js push.js sse.js scheduler.js planning-recurrence.js csv.js zeit.js abschluss.js .puppeteerrc.cjs package.json package-lock.json "$DEPLOY_HOST:$DEPLOY_PATH/"
 # Produktions-Dependencies abgleichen (z. B. neu hinzugekommenes web-push). --omit=dev laesst
 # Puppeteer & Co. aussen vor; ist nichts zu tun, ist der Schritt praktisch ein No-op.
 ssh "$DEPLOY_HOST" "${DEPLOY_NODE_BIN:+export PATH=\"$DEPLOY_NODE_BIN:\$PATH\"; }cd $DEPLOY_PATH && npm install --omit=dev --no-audit --no-fund"

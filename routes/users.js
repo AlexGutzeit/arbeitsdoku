@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
+const { pruefeSperre, pruefeSperreGlobal, protokolliereEingriff, abgerechnetBis } = require('../abschluss');
 const { istUhrzeit } = require('../zeit');
 
 const router = express.Router();
@@ -270,6 +271,16 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   const effRole = role || user.role;
   if (effRole === 'chef' || effRole === 'admin') { newPlanAll = 0; newPlanSelf = 0; newBulletin = 0; newUpload = 0; }
 
+  // Start-Überstunden und Wochenstunden verschieben das Saldo über den GESAMTEN Verlauf, also auch
+  // in bereits abgerechneten Zeiträumen — und tragen kein Datum, an dem sich das eingrenzen liesse.
+  // Deshalb hier die globale Sperre. Bewusst nur bei echter Wertaenderung: sonst waere auch eine
+  // blosse Umbenennung blockiert, obwohl sie keine Zahl bewegt.
+  const otNeu = start_overtime !== undefined ? Number(start_overtime) : Number(user.start_overtime || 0);
+  const thNeu = target_hours_per_week !== undefined ? Number(target_hours_per_week) : Number(user.target_hours_per_week || 0);
+  const zahlenAendernSich = otNeu !== Number(user.start_overtime || 0) || thNeu !== Number(user.target_hours_per_week || 0);
+  const sperre = zahlenAendernSich ? pruefeSperreGlobal(db, req.user, req.body.reason) : null;
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   const beginnGeprueft = normArbeitsbeginn(work_start);
   if (beginnGeprueft === null) return res.status(400).json({ error: 'Ungültiger Arbeitsbeginn (erwartet HH:MM, 00:00 bis 23:59)' });
   const beginnPut = beginnGeprueft !== undefined ? (beginnGeprueft || null) : (user.work_start || null);
@@ -296,6 +307,7 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_update',
     details: `${updated.username} (id=${req.params.id}): ` + (_changes.length ? _changes.join('; ') : 'keine Änderung'),
     ip: req.ip });
+  protokolliereEingriff(db, req, sperre, `Start-Überstunden/Wochenstunden von ${updated.username} geändert`);
   res.json({ user: updated });
 });
 
@@ -350,6 +362,10 @@ router.post('/:id/deactivate', authenticate, authorize('chef'), (req, res) => {
     return res.status(400).json({ error: `Austrittsdatum liegt vor dem Eintrittsdatum (${open.start_date})` });
   }
 
+  // Ein rueckdatiertes Austrittsdatum setzt das Soll ab da auf 0 — auch in abgerechneten Monaten.
+  const sperre = pruefeSperre(db, [employedUntil], req.user, req.body && req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   const ts = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
   db.prepare('UPDATE users SET active = 0, deactivated_at = ?, deactivated_by = ? WHERE id = ?').run(ts, req.user.id, req.params.id);
   if (open) {
@@ -363,6 +379,7 @@ router.post('/:id/deactivate', authenticate, authorize('chef'), (req, res) => {
   db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(req.params.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_deactivate',
     details: `Ausgestellt: ${user.username} (${user.role}, id=${req.params.id}), letzter Arbeitstag ${employedUntil}`, ip: req.ip });
+  protokolliereEingriff(db, req, sperre, `Austrittsdatum ${employedUntil} gesetzt`);
   res.json({ success: true });
 });
 
@@ -388,10 +405,14 @@ router.post('/:id/reactivate', authenticate, authorize('chef'), (req, res) => {
     return res.status(400).json({ error: `Wiedereintritt muss nach dem letzten Austritt (${lastEnd.d}) liegen` });
   }
 
+  const sperre = pruefeSperre(db, [startDate], req.user, req.body && req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
   db.prepare('UPDATE users SET active = 1, deactivated_at = NULL, deactivated_by = NULL WHERE id = ?').run(req.params.id);
   db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, NULL)').run(req.params.id, startDate);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_reactivate',
     details: `Wiedereingestellt: ${user.username} (${user.role}, id=${req.params.id}), Eintritt ${startDate}`, ip: req.ip });
+  protokolliereEingriff(db, req, sperre, `Wiedereintritt ${startDate} gesetzt`);
   res.json({ success: true });
 });
 
@@ -408,9 +429,15 @@ router.delete('/:id', authenticate, authorize('admin'), (req, res) => {
     return res.status(400).json({ error: 'Mitarbeiter muss zuerst ausgestellt werden, bevor er endgültig gelöscht werden kann' });
   }
 
+  // Der Hard-Delete loescht per Kaskade ALLE Eintraege des Nutzers — auch bereits abgerechnete.
+  // Eine Sperre waere hier Vortaeuschung (das Werkzeug ist bewusst der letzte Ausweg), aber der
+  // Vermerk muss im Protokoll stehen. Der Beleg selbst ueberlebt: payroll_closure_rows haengt
+  // bewusst NICHT an users (Name und Personalnummer stehen als Kopie darin).
+  const abgerechnet = abgerechnetBis(db);
   db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_delete',
-    details: `Endgueltig geloescht: ${user.username} (${user.role}, id=${req.params.id})`, ip: req.ip });
+    details: `Endgueltig geloescht: ${user.username} (${user.role}, id=${req.params.id})`
+      + (abgerechnet ? ` — BETRIFFT ABGERECHNETE ZEITRÄUME (bis ${abgerechnet})` : ''), ip: req.ip });
   res.json({ success: true });
 });
 
