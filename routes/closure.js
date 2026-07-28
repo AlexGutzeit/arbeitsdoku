@@ -49,11 +49,17 @@ function abweichungen(db, closure) {
   const titel = `${closure.period_from} – ${closure.period_to}`;
   const jetzt = new Map(lohnZeilen(db, closure.period_from, closure.period_to, titel)
     .map(z => [Number(z.userId), z]));
-  const gebucht = {}; const gruende = {};
+  // Entschieden ist entschieden: Uebernommene UND abgelehnte Zeilen geben den naechsten
+  // Abschluss frei. Nur die uebernommenen bewegen den Ueberstundenstand.
+  const entschieden = {}, uebernommen = {}, abgelehnt = {}, gruende = {};
   for (const k of korrekturenZuAbschluss(db, closure.id)) {
     const uid = Number(k.user_id);
-    gebucht[uid] = (gebucht[uid] || 0) + (Number(k.stunden) || 0);
-    if (k.grund) (gruende[uid] || (gruende[uid] = [])).push(k.grund);
+    const h = Number(k.stunden) || 0;
+    const wirkt = Number(k.wirksam ?? 1) === 1;
+    entschieden[uid] = (entschieden[uid] || 0) + h;
+    if (wirkt) uebernommen[uid] = (uebernommen[uid] || 0) + h;
+    else abgelehnt[uid] = (abgelehnt[uid] || 0) + h;
+    if (k.grund) (gruende[uid] || (gruende[uid] = [])).push((wirkt ? '' : 'abgelehnt: ') + k.grund);
   }
 
   const liste = [];
@@ -69,11 +75,12 @@ function abweichungen(db, closure) {
       if (d !== 0) felder[feld] = { bezahlt: a, jetzt: b, differenz: d };
     }
     const saldoDiff = Math.round(((neu ? Number(neu.saldo) || 0 : 0) - (Number(alt.saldo) || 0)) * 100) / 100;
-    const offen = Math.round((saldoDiff - (gebucht[uid] || 0)) * 100) / 100;
-    if (Object.keys(felder).length || offen !== 0 || gebucht[uid]) {
+    const offen = Math.round((saldoDiff - (entschieden[uid] || 0)) * 100) / 100;
+    if (Object.keys(felder).length || offen !== 0 || entschieden[uid]) {
       liste.push({
         userId: alt.user_id, name: alt.name, felder, entfernt: !neu,
-        saldoDifferenz: saldoDiff, uebernommen: gebucht[uid] || 0, offen,
+        saldoDifferenz: saldoDiff, uebernommen: uebernommen[uid] || 0,
+        abgelehnt: abgelehnt[uid] || 0, offen,
         kommentar: (gruende[uid] || []).join(' · '),
       });
     }
@@ -187,6 +194,7 @@ router.get('/', authenticate, (req, res) => {
     // Stand ploetzlich hoeher ist als die Summe seiner Monate.
     nachtraege: nachtraegeImZeitraum(db, req.user.id, '0000-01-01', '9999-12-31').map(n => ({
       stunden: n.stunden, wirksamAb: n.wirksam_ab, grund: n.grund || '',
+      wirksam: Number(n.wirksam ?? 1) === 1,
       herkunft: monatLabel(n.period_from), uebernommenVon: n.created_by_name, uebernommenAm: n.created_at,
     })),
     perioden: alle.map(p => {
@@ -311,7 +319,7 @@ router.get('/:id/abweichung', authenticate, authorize('admin', 'chef', 'buchhalt
  *
  * Ohne diesen Schritt wären nachgetragene Stunden zwar sichtbar, aber niemand bekäme sie je.
  */
-router.post('/:id/uebernehmen', authenticate, authorize('admin', 'chef', 'buchhalter'), (req, res) => {
+function entscheiden(req, res, wirksam) {
   const db = getDb();
   const p = db.prepare('SELECT * FROM payroll_closures WHERE id = ?').get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Abschluss nicht gefunden' });
@@ -321,9 +329,12 @@ router.post('/:id/uebernehmen', authenticate, authorize('admin', 'chef', 'buchha
 
   // Kommentar ist Pflicht: Im Folgemonat tauchen sonst Stunden auf, die niemand zuordnen kann —
   // im Lohn-Export, beim Mitarbeiter und im Protokoll steht deshalb IMMER, wofuer sie sind.
+  // Beim Ablehnen erst recht: Dort verfallen Stunden, das darf nie kommentarlos passieren.
   const grundRoh = String((req.body && req.body.reason) || '').trim();
   if (grundRoh.length < MIN_GRUND) {
-    return res.status(400).json({ error: 'Bitte einen Kommentar angeben — er erscheint im Lohn-Export und beim Mitarbeiter.' });
+    return res.status(400).json({ error: wirksam
+      ? 'Bitte einen Kommentar angeben — er erscheint im Lohn-Export und beim Mitarbeiter.'
+      : 'Bitte begründen, warum diese Stunden nicht gutgeschrieben werden.' });
   }
 
   // Wirksam ab dem Tag nach dem LETZTEN Stichtag — dort liegt der noch offene Zeitraum. Nicht ab
@@ -332,21 +343,35 @@ router.post('/:id/uebernehmen', authenticate, authorize('admin', 'chef', 'buchha
   const wirksamAb = tagDanach(abgerechnetBis(db));
   const grund = grundRoh;
   const ins = db.prepare(
-    `INSERT INTO payroll_adjustments (closure_id, user_id, name, stunden, wirksam_ab, grund, created_at, created_by, created_by_name)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    `INSERT INTO payroll_adjustments (closure_id, user_id, name, stunden, wirksam_ab, wirksam, grund, created_at, created_by, created_by_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   for (const a of offen) {
-    ins.run(p.id, a.userId, a.name, a.offen, wirksamAb, grund, berlinNow(), req.user.id, req.user.name || req.user.username);
+    ins.run(p.id, a.userId, a.name, a.offen, wirksamAb, wirksam ? 1 : 0, grund, berlinNow(), req.user.id, req.user.name || req.user.username);
   }
 
   logAudit(db, {
-    userId: req.user.id, username: req.user.username, action: 'closure_adjust',
-    details: `Nachträge aus ${deDatum(p.period_from)}–${deDatum(p.period_to)} übernommen, wirksam ab `
-      + `${deDatum(wirksamAb)}: ` + offen.map(a => `${a.name} ${zahlDe(a.offen)} h`).join(', ')
+    userId: req.user.id, username: req.user.username,
+    action: wirksam ? 'closure_adjust' : 'closure_discard',
+    details: `Nachträge aus ${deDatum(p.period_from)}–${deDatum(p.period_to)} `
+      + (wirksam ? `übernommen, wirksam ab ${deDatum(wirksamAb)}: ` : 'ABGELEHNT (nicht gutgeschrieben): ')
+      + offen.map(a => `${a.name} ${zahlDe(a.offen)} h`).join(', ')
       + `. Kommentar: ${grund}`,
     ip: req.ip,
   });
-  res.json({ uebernommen: offen.map(a => ({ name: a.name, stunden: a.offen })), wirksamAb, grund });
-});
+  res.json({
+    [wirksam ? 'uebernommen' : 'abgelehnt']: offen.map(a => ({ name: a.name, stunden: a.offen })),
+    wirksamAb, grund,
+  });
+}
+
+router.post('/:id/uebernehmen', authenticate, authorize('admin', 'chef', 'buchhalter'),
+  (req, res) => entscheiden(req, res, true));
+
+// Ablehnen: Die Differenz wird als ENTSCHIEDEN vermerkt, aber NICHT gutgeschrieben. Nötig, weil
+// eine offene Differenz den nächsten Abschluss blockiert — ohne diesen Weg gäbe es nur einen
+// Ausgang, und man müsste Stunden buchen, die längst anders abgegolten sind (bar, Freizeit).
+router.post('/:id/ablehnen', authenticate, authorize('admin', 'chef', 'buchhalter'),
+  (req, res) => entscheiden(req, res, false));
 
 // Aufheben: nur Admin, nur der LETZTE Abschluss, nur mit Begründung. Der letzte deshalb, weil
 // ein Loch in der Mitte die Rechenbasis aller späteren Zeiträume unterlaufen würde.

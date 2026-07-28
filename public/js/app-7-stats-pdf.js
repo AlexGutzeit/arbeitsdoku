@@ -854,6 +854,29 @@ function bindAbschlussKarte() {
       try {
         const r = await api('GET', `/api/closure/${b.dataset.id}/abweichung`);
         box.innerHTML = abweichungHtml(r.abweichungen || [], r.offenGesamt || 0, b.dataset.id);
+        // Ablehnen: bewusst NICHT gutschreiben. Ohne diesen Weg gäbe es nur einen Ausgang aus der
+        // Sperre, und man müsste Stunden buchen, die längst anders abgegolten sind.
+        box.querySelector('.abschluss-ablehnen')?.addEventListener('click', async (ev) => {
+          const knopf = ev.currentTarget;
+          if (!(await confirmModal(
+            'Die offenen Differenzen ablehnen?\n\n'
+            + 'Die Stunden werden dem Mitarbeiter NICHT gutgeschrieben und tauchen in keinem '
+            + 'Lohn-Export auf. Sinnvoll, wenn sie bereits anders abgegolten wurden — bar oder '
+            + 'mit Freizeit.\n\nDer Zeitraum gilt danach als entschieden.',
+            { title: 'Differenz ablehnen', okLabel: 'Ablehnen', danger: true }))) return;
+          const grund = await promptModal(
+            'Warum werden diese Stunden nicht gutgeschrieben? Der Text erscheint beim Mitarbeiter und im Protokoll.',
+            { title: 'Begründung der Ablehnung', placeholder: 'z. B. bereits bar ausgezahlt',
+              required: true, requiredMsg: 'Pflicht — hier verfallen Stunden, das darf nie kommentarlos passieren.' });
+          if (grund === null || !grund.trim()) return;
+          knopf.disabled = true;
+          try {
+            await api('POST', `/api/closure/${knopf.dataset.id}/ablehnen`, { reason: grund.trim() });
+            toast('Differenz abgelehnt — nicht gutgeschrieben', 'success', 6000);
+            await neuZeichnen();
+          } catch (err) { toast(err.message, 'error'); knopf.disabled = false; }
+        });
+
         box.querySelector('.abschluss-uebernehmen')?.addEventListener('click', async (ev) => {
           const knopf = ev.currentTarget;
           if (!(await confirmModal(
@@ -922,13 +945,21 @@ function abweichungHtml(abw, offenGesamt, id) {
            keinem Überstundenstand und würden ohne Übernahme nie ausgezahlt.`
         : 'Die Differenz ist bereits übernommen und im laufenden Zeitraum gutgeschrieben.'}
     </div>
-    ${offen !== 0 ? `<button class="btn btn-primary btn-sm abschluss-uebernehmen" data-id="${esc(String(id))}"
-        style="margin-top:0.5rem;">Differenz übernehmen (${mitVorzeichen(offen)} h)</button>` : ''}
+    ${offen !== 0 ? `<div style="margin-top:0.5rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm abschluss-uebernehmen" data-id="${esc(String(id))}">Differenz übernehmen (${mitVorzeichen(offen)} h)</button>
+        <button class="btn btn-outline btn-sm abschluss-ablehnen" data-id="${esc(String(id))}">Differenz ablehnen</button>
+      </div>
+      <div class="push-hint" style="margin-top:0.35rem;">Ablehnen heißt: Die Stunden werden
+        <strong>nicht</strong> gutgeschrieben — etwa weil sie bereits bar oder mit Freizeit
+        abgegolten wurden. Der Zeitraum gilt dann als entschieden und der nächste Abschluss ist
+        wieder möglich.</div>` : ''}
     <ul style="list-style:none;padding:0;margin:0.5rem 0 0;">
       ${abw.map(a => `
         <li style="padding:0.25rem 0;">
           <strong>${esc(a.name || '')}</strong>${a.entfernt ? ' <span class="push-hint">(nicht mehr in der Abrechnung)</span>' : ''}
-          ${a.uebernommen ? `<span class="push-hint"> · ${mitVorzeichen(a.uebernommen)} h bereits übernommen${a.kommentar ? ': „' + esc(a.kommentar) + '"' : ''}</span>` : ''}
+          ${a.uebernommen ? `<span class="push-hint"> · ${mitVorzeichen(a.uebernommen)} h übernommen</span>` : ''}
+          ${a.abgelehnt ? `<span class="push-hint"> · ${mitVorzeichen(a.abgelehnt)} h <strong>abgelehnt</strong></span>` : ''}
+          ${a.kommentar ? `<span class="push-hint"> · „${esc(a.kommentar)}"</span>` : ''}
           <ul style="margin:0.2rem 0 0 1rem;padding:0;">
             ${Object.entries(a.felder).map(([f, v]) => `
               <li>${esc(LABEL[f] || f)}: bezahlt ${zahl(v.bezahlt)} — heute ${zahl(v.jetzt)}
@@ -968,13 +999,22 @@ function abgerechnetHinweisHtml() {
         <div>Soll ${zahl(eigene.z.soll)} h · Ist ${zahl(eigene.z.ist)} h ·
           Saldo ${zahl(eigene.z.saldo)} h · <strong>Überstunden gesamt ${zahl(eigene.z.ueberstunden_gesamt)} h</strong></div>
       </div>` : ''}
-      ${(a.nachtraege || []).length ? `
+      ${(a.nachtraege || []).filter(n => n.wirksam !== false).length ? `
       <div style="margin-top:0.5rem;">
         <div class="push-hint">Im aktuellen Stand enthalten — nachträglich gutgeschrieben:</div>
         <ul style="margin:0.2rem 0 0;padding-left:1.1rem;">
-          ${a.nachtraege.map(n => `<li><strong>${mitVorzeichen(n.stunden)} h</strong> aus
+          ${a.nachtraege.filter(n => n.wirksam !== false).map(n => `<li><strong>${mitVorzeichen(n.stunden)} h</strong> aus
             ${esc(n.herkunft)}${n.grund ? ` — „${esc(n.grund)}"` : ''}
             <span class="push-hint">(gutgeschrieben ab ${esc(datumDe(n.wirksamAb))}${n.uebernommenVon ? ', ' + esc(n.uebernommenVon) : ''})</span></li>`).join('')}
+        </ul>
+      </div>` : ''}
+      ${(a.nachtraege || []).filter(n => n.wirksam === false).length ? `
+      <div style="margin-top:0.5rem;border-left:3px solid var(--warning,#e0a800);padding-left:0.6rem;">
+        <div class="push-hint">Nachträglich festgestellt, aber <strong>nicht</strong> gutgeschrieben:</div>
+        <ul style="margin:0.2rem 0 0;padding-left:1.1rem;">
+          ${a.nachtraege.filter(n => n.wirksam === false).map(n => `<li><strong>${mitVorzeichen(n.stunden)} h</strong> aus
+            ${esc(n.herkunft)}${n.grund ? ` — „${esc(n.grund)}"` : ''}
+            <span class="push-hint">(${n.uebernommenVon ? esc(n.uebernommenVon) : 'entschieden'})</span></li>`).join('')}
         </ul>
       </div>` : ''}
       ${offeneKorrektur ? `

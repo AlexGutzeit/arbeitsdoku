@@ -154,6 +154,44 @@ const zahlAus = (zeile, spalte) => Number(String(zeile.split(';')[spalte]).repla
     ok('die Übernahme steht mit Kommentar im Protokoll',
       /closure_adjust/.test(auditTxt) && auditTxt.includes('Noteinsatz Ostern'), auditTxt.slice(0, 120));
 
+    // ── Der zweite Ausgang: ABLEHNEN ──────────────────────────────────────────────────────
+    // Ohne ihn gaebe es nur einen Weg aus der Sperre — man muesste Stunden buchen, auch wenn sie
+    // laengst bar oder mit Freizeit abgegolten sind.
+    {
+      const standVorher = wert(await stand());
+      const zweiter = await req('POST', '/api/entries', admin, {
+        date: `${JAHR}-03-11`, time_from: '17:00', time_to: '19:00', break_minutes: 0,
+        user_id: uid, reason: 'Zweiter Nachtrag zum Ablehnen',
+      });
+      ok('zweiter Nachtrag im abgerechneten März angelegt', zweiter.status === 201, String(zweiter.status));
+      const maerz = (await req('GET', '/api/closure', chef)).body.perioden.find(p => p.periodFrom.endsWith('-03-01'));
+      ok('er erzeugt eine offene Differenz von 2 h', maerz && maerz.offenGesamt === 2, String(maerz && maerz.offenGesamt));
+
+      const ohneGrund = await req('POST', `/api/closure/${maerz.id}/ablehnen`, chef, {});
+      ok('Ablehnen ohne Begründung wird abgewiesen', ohneGrund.status === 400, String(ohneGrund.status));
+
+      const ab = await req('POST', `/api/closure/${maerz.id}/ablehnen`, chef, { reason: 'Bereits bar ausgezahlt' });
+      ok('mit Begründung lässt sich die Differenz ablehnen', ab.status === 200, `${ab.status} ${ab.body?.error || ''}`);
+      ok('der Überstundenstand bleibt dabei unverändert', wert(await stand()) === standVorher,
+        `${standVorher} → ${wert(await stand())}`);
+      ok('die Differenz gilt trotzdem als entschieden',
+        ((await req('GET', `/api/closure/${maerz.id}/abweichung`, chef)).body.offenGesamt) === 0);
+      const abw = (await req('GET', `/api/closure/${maerz.id}/abweichung`, chef)).body.abweichungen[0];
+      ok('sie wird als abgelehnt ausgewiesen', abw && abw.abgelehnt === 2, JSON.stringify(abw).slice(0, 160));
+
+      const csvNach = (await req('GET', `/api/payroll/monat.csv?month=${JAHR}-06`, admin)).text
+        .split('\r\n').find(z => z.includes('Max'));
+      ok('abgelehnte Stunden stehen NICHT in der Nachtrags-Spalte des Lohn-Exports',
+        zahlAus(csvNach, 14) === 4, `Spalte=${zahlAus(csvNach, 14)} — nur die 4 übernommenen dürfen dort stehen`);
+
+      const meins = (await req('GET', '/api/closure', maxA.token)).body.nachtraege;
+      ok('der Mitarbeiter sieht die Ablehnung mit Begründung',
+        meins.some(n => n.wirksam === false && /bar ausgezahlt/.test(n.grund)), JSON.stringify(meins).slice(0, 220));
+
+      const auditTxt = (await req('GET', '/api/audit?limit=200', admin)).text;
+      ok('die Ablehnung steht im Protokoll', /closure_discard/.test(auditTxt) && /bar ausgezahlt/.test(auditTxt));
+    }
+
     // ── Und der Abschluss geht wieder ─────────────────────────────────────────────────────
     const juni = await req('POST', '/api/closure', chef, { month: `${JAHR}-06` });
     ok('der Juni lässt sich jetzt abschließen', juni.status === 201, `${juni.status} ${juni.body?.error || ''}`);

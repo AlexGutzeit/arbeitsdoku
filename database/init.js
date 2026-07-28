@@ -1193,6 +1193,11 @@ function ensureClosureSchema(targetDb) {
         name            TEXT,
         stunden         REAL DEFAULT 0,
         wirksam_ab      TEXT NOT NULL,
+        -- 1 = uebernommen (wirkt auf den Ueberstundenstand), 0 = bewusst ABGELEHNT.
+        -- Abgelehnte Zeilen bewegen keine Zahl, gelten aber als entschieden und geben den
+        -- naechsten Monatsabschluss frei. Ohne sie gaebe es nur EINEN Ausgang aus der Sperre —
+        -- man muesste Stunden buchen, auch wenn sie laengst anders abgegolten sind.
+        wirksam         INTEGER DEFAULT 1,
         grund           TEXT,
         created_at      TEXT NOT NULL,
         created_by      INTEGER,
@@ -1210,6 +1215,9 @@ function ensureClosureSchema(targetDb) {
     const aCols = targetDb.prepare("PRAGMA table_info(payroll_adjustments)").all();
     if (aCols.length && !aCols.some(x => x.name === 'grund')) {
       targetDb.exec('ALTER TABLE payroll_adjustments ADD COLUMN grund TEXT');
+    }
+    if (aCols.length && !aCols.some(x => x.name === 'wirksam')) {
+      targetDb.exec('ALTER TABLE payroll_adjustments ADD COLUMN wirksam INTEGER DEFAULT 1');
     }
   } catch (e) {
     console.error('ensureClosureSchema fehlgeschlagen:', e.message);

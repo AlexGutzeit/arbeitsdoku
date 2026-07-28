@@ -70,7 +70,9 @@ function lohnZeilen(db, von, bis, titel) {
     const tag = (k) => Number(summary[k] || 0);
 
     // Uebernommene Nachtraege, die in DIESEM Monat wirksam werden — mit Herkunftsmonat.
-    const nachtraege = nachtraegeImZeitraum(db, u.id, von, bis);
+    // Nur die uebernommenen: Eine abgelehnte Differenz wird nicht gutgeschrieben und darf
+    // deshalb auch nicht in der Nachtrags-Spalte stehen — sonst zahlte das Buero sie doch.
+    const nachtraege = nachtraegeImZeitraum(db, u.id, von, bis).filter(n => Number(n.wirksam ?? 1) === 1);
     const nachtragStunden = Math.round(nachtraege.reduce((s, n) => s + (Number(n.stunden) || 0), 0) * 100) / 100;
     const nachtragHerkunft = nachtraege.map(n => {
       const wo = monatLabel(n.period_from);

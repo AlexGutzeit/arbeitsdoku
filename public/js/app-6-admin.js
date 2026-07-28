@@ -451,6 +451,7 @@ const AUDIT_LABELS = {
   closure_reopen: 'Abschluss aufgehoben',
   closure_override: 'Änderung im abgerechneten Zeitraum',
   closure_adjust: 'Nachtrag übernommen',
+  closure_discard: 'Nachtrag abgelehnt',
 };
 
 let _audit = { action: '', from: '', to: '', logs: [], total: 0, offset: 0, limit: 100 };

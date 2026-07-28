@@ -86,7 +86,8 @@ function snapshotZeile(db, closureId, userId) {
 function korrekturenSumme(db, userId, bis) {
   try {
     const r = db.prepare(
-      'SELECT COALESCE(SUM(stunden), 0) AS s FROM payroll_adjustments WHERE user_id = ? AND wirksam_ab <= ?'
+      // COALESCE(wirksam,1): Zeilen aus der Zeit vor dem Ablehnen-Kennzeichen sind uebernommen.
+      'SELECT COALESCE(SUM(stunden), 0) AS s FROM payroll_adjustments WHERE user_id = ? AND wirksam_ab <= ? AND COALESCE(wirksam, 1) = 1'
     ).get(userId, String(bis));
     return (r && Number(r.s)) || 0;
   } catch (_) { return 0; }
