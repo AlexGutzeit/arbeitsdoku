@@ -782,17 +782,86 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   const today = formatDateISO(new Date());
 
   // Endzeit des letzten Eintrags dieses Mitarbeiters an DIESEM Datum — oder null, wenn noch nichts gebucht ist.
-  async function lastEndOfDay(dateStr, userId) {
-    if (!dateStr) return null;
+  // Alle Einträge eines Tages für EINEN Mitarbeiter. Startzeit-Vorschlag und Restpause brauchen
+  // dieselbe Liste — sie wird deshalb einmal geholt und beiden gereicht.
+  async function tagesEintraege(dateStr, userId) {
+    if (!dateStr) return [];
     try {
       const params = new URLSearchParams({ date_from: dateStr, date_to: dateStr });
       if (userId) params.set('user_id', String(userId));
       const data = await api('GET', '/api/entries?' + params.toString());
-      const list = ((data && data.entries) || []).filter(e => !userId || e.user_id === Number(userId));
-      if (!list.length) return null;
-      const max = list.reduce((m, e) => (e.time_to && e.time_to > m ? e.time_to : m), '00:00');
-      return max === '00:00' ? null : max;
-    } catch (_) { return null; }
+      return ((data && data.entries) || []).filter(e => !userId || e.user_id === Number(userId));
+    } catch (_) { return []; }
+  }
+
+  function letzteEndzeit(liste) {
+    if (!liste.length) return null;
+    const max = liste.reduce((m, e) => (e.time_to && e.time_to > m ? e.time_to : m), '00:00');
+    return max === '00:00' ? null : max;
+  }
+
+  /**
+   * Gesetzlich vorgeschriebene Mindestpause nach § 4 Arbeitszeitgesetz, bezogen auf die
+   * ANWESENHEIT eines Tages (Brutto, also inklusive Pause).
+   *
+   * Das Gesetz bemisst die Pause an der Arbeitszeit — und die ist Anwesenheit MINUS Pause.
+   * Daraus wird schnell ein Ringelspiel: 9:45 Anwesenheit ergibt mit 30 min Pause 9:15
+   * Arbeitszeit (über 9 → 45 nötig), mit 45 min aber 9:00 (nicht über 9 → 30 genügt).
+   * Deshalb wird hier die KLEINSTE Pause gesucht, mit der die Vorschrift erfüllt ist — bei
+   * 9:45 also 45, weil 30 sie verletzen würde. Damit gibt es keine Schwingung.
+   *
+   * Fängt nebenbei die bekannte Sechs-Stunden-Falle: 6:20 Anwesenheit braucht 30 min Pause,
+   * sonst wären es 6:20 Arbeit am Stück.
+   */
+  function gesetzlichePause(bruttoMin) {
+    const noetig = (arbeitsMin) => arbeitsMin > 9 * 60 ? 45 : (arbeitsMin > 6 * 60 ? 30 : 0);
+    for (const p of [0, 30, 45]) {
+      if (noetig(bruttoMin - p) <= p) return p;
+    }
+    return 45;
+  }
+
+  const bruttoMinuten = (von, bis) => {
+    const [vh, vm] = String(von || '').split(':').map(Number);
+    const [bh, bm] = String(bis || '').split(':').map(Number);
+    if ([vh, vm, bh, bm].some(n => !Number.isFinite(n))) return 0;
+    return Math.max(0, (bh * 60 + bm) - (vh * 60 + vm));
+  };
+
+  /**
+   * Wie viel Pause ist an diesem Tag noch offen?
+   *
+   * Firmenpause minus alles, was am Tag schon eingetragen ist — nie unter 0. Damit steht beim
+   * zweiten Auftrag nicht noch einmal die volle Pause im Feld: Wer sie morgens genommen hat,
+   * nimmt sie nachmittags nicht ein zweites Mal.
+   *
+   * Es zählen ALLE Einträge des Tages, auch die, die jemand anderes für ihn erfasst hat — es ist
+   * sein Arbeitstag, unabhängig davon, wer getippt hat.
+   *
+   * @returns {{ rest: number, genommen: number, firma: number, hatEintraege: boolean }}
+   */
+  function restPause(liste, aktuellVon, aktuellBis) {
+    const firma = Number(arbeitszeitJetzt().break_minutes_default) || 0;
+    const genommen = liste.reduce((s, e) => s + (Number(e.break_minutes) || 0), 0);
+
+    // Anwesenheit des GANZEN Tages: die vorhandenen Einträge (netto + ihre Pause) plus das,
+    // was gerade im Formular steht. Erst damit lässt sich sagen, ob der Tag über 9 Stunden geht.
+    const bruttoBisher = liste.reduce(
+      (s, e) => s + (Number(e.net_hours) || 0) * 60 + (Number(e.break_minutes) || 0), 0);
+    const bruttoTag = bruttoBisher + bruttoMinuten(aktuellVon, aktuellBis);
+    const gesetzlich = gesetzlichePause(bruttoTag);
+
+    // Der Firmenwert ist die Untergrenze — das Gesetz kann ihn nur ANHEBEN, nie senken.
+    const ziel = Math.max(firma, gesetzlich);
+    return {
+      rest: Math.max(0, ziel - genommen), genommen, firma, gesetzlich, ziel,
+      bruttoTag, hatEintraege: liste.length > 0,
+      gesetzGreift: gesetzlich > firma,
+    };
+  }
+
+  async function lastEndOfDay(dateStr, userId) {
+    return letzteEndzeit(await tagesEintraege(dateStr, userId));
   }
 
   // Arbeitsbeginn des Mitarbeiters (je Person einstellbar, Vorgabe 07:00). Für den angemeldeten
@@ -824,8 +893,8 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   // Mitgeliefert wird, WOHER der Vorschlag stammt: 'echt' = Endzeit eines gebuchten Eintrags,
   // 'annahme' = Planung oder Arbeitsbeginn. Der Unterschied entscheidet, wie eine Zeit korrigiert
   // wird, die nach der aktuellen Uhrzeit läge (siehe zeitenAbgleichen).
-  async function suggestStart(dateStr, userId, plannedFrom) {
-    const lastEnd = await lastEndOfDay(dateStr, userId);
+  async function suggestStart(dateStr, userId, plannedFrom, liste) {
+    const lastEnd = liste ? letzteEndzeit(liste) : await lastEndOfDay(dateStr, userId);
     if (lastEnd) return { zeit: lastEnd, quelle: 'echt' };
     return { zeit: plannedFrom || arbeitsbeginnVon(userId), quelle: 'annahme' };
   }
@@ -859,9 +928,71 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     timeFrom = abgeglichen.von;
     timeTo = abgeglichen.bis;
   }
-  // Pause: aus der uebernommenen Planung, sonst der Firmenwert aus den Einstellungen (Vorgabe 30 min).
-  const breakMin = isEdit ? entry.break_minutes
-    : (planningEntry ? planningEntry.break_minutes : arbeitszeitJetzt().break_minutes_default);
+  // Pause. Beim BEARBEITEN bleibt der gespeicherte Wert unangetastet — würde hier die Restpause
+  // gerechnet, zeigte ein Eintrag mit voller Pause plötzlich 0, und einmal Speichern löschte sie.
+  //
+  // Sonst: Was am Tag schon erfasst ist, gewinnt immer (auch gegen eine übernommene Planung —
+  // sonst stünde die Pause zweimal im Tag). Ist der Tag noch leer, gilt der Planungswert, sonst
+  // der Firmenwert.
+  // Muss VOR der Vorbelegung stehen: const wird nicht hochgezogen.
+  /**
+   * Der vorgeschlagene Wert fürs Pausenfeld.
+   *
+   * `info.rest` trägt bereits alles: Firmenwert als Untergrenze, gesetzliche Anhebung, minus dem
+   * am Tag schon Erfassten. Eine übernommene Planung gilt nur auf einem noch leeren Tag — aber
+   * auch sie kann das Gesetz nicht unterbieten.
+   */
+  const pausenVorschlag = (info, planungsPause) => {
+    if (info.hatEintraege) return info.rest;
+    if (planungsPause != null) return Math.max(Number(planungsPause) || 0, info.gesetzlich || 0);
+    return info.rest;
+  };
+
+  // Ohne Tagesbezug (Admin, noch kein Mitarbeiter gewählt): Es ist nichts erfasst, also steht die
+  // VOLLE Firmenpause offen. `rest: 0` wäre falsch — das Feld zeigte dann 0 statt 30.
+  const leerePausenInfo = () => {
+    const f = Number(arbeitszeitJetzt().break_minutes_default) || 0;
+    return { rest: f, genommen: 0, firma: f, gesetzlich: 0, ziel: f, bruttoTag: 0, hatEintraege: false, gesetzGreift: false };
+  };
+  let pausenInfo = leerePausenInfo();
+  let breakMin;
+  if (isEdit) {
+    breakMin = entry.break_minutes;
+  } else {
+    // Ohne gewählten Mitarbeiter (Admin beim Öffnen) gibt es keinen Tagesbezug — dann Firmenwert;
+    // refreshVorschlag zieht nach, sobald jemand ausgewählt ist.
+    const uidFuerTag = isAdmin() ? null : S.user.id;
+    if (uidFuerTag) pausenInfo = restPause(await tagesEintraege(date, uidFuerTag), timeFrom, timeTo);
+    breakMin = pausenVorschlag(pausenInfo, planningEntry ? planningEntry.break_minutes : null);
+  }
+  // Der Text erklärt die Zahl im Feld. Ohne ihn wirkt eine 0 wie ein Fehler und ein Nachschlag
+  // von 15 min wie Willkür.
+  const STUNDEN = (min) => {
+    const h = Math.floor(min / 60), m = min % 60;
+    return m ? `${h} Std ${m} min` : `${h} Std`;
+  };
+  const pausenHinweis = (info) => {
+    if (info.gesetzGreift) {
+      const schwelle = info.gesetzlich === 45 ? 9 : 6;
+      // Die Rechnung folgt dem Arbeitszeitgesetz und gilt damit fuer Erwachsene. Fuer
+      // Auszubildende unter 18 gilt das Jugendarbeitsschutzgesetz mit LAENGEREN Pausen
+      // (60 min ab 6 Std). Die App kennt kein Geburtsdatum, kann das also nicht selbst
+      // unterscheiden — deshalb wird es gesagt statt stillschweigend uebergangen.
+      const kern = `Der Tag kommt auf ${STUNDEN(info.bruttoTag)} Anwesenheit. Ab ${schwelle} Stunden `
+        + `Arbeitszeit schreibt das Arbeitszeitgesetz ${info.gesetzlich} min Pause vor `
+        + `(Firmenwert: ${info.firma} min).`;
+      const jugend = ' Für Auszubildende unter 18 gilt das Jugendarbeitsschutzgesetz mit längeren Pausen.';
+      // Drei Fälle, drei Sätze. „es fehlen 0 min" wäre Unsinn, und ein Kleinbuchstabe nach dem
+      // Punkt liest sich wie ein Tippfehler — beides von tests/pause-beispiele.js aufgedeckt.
+      if (info.genommen === 0) return kern + jugend;
+      if (info.rest === 0) return `${kern} Bisher ${info.genommen} min erfasst — damit ist sie erfüllt.` + jugend;
+      return `${kern} Bisher ${info.genommen} min erfasst, es fehlen ${info.rest} min.` + jugend;
+    }
+    if (info.hatEintraege && info.genommen > 0) {
+      return `Firmenpause ${info.firma} min · heute schon ${info.genommen} min erfasst`;
+    }
+    return '';
+  };
   const address = isEdit ? entry.address : (source ? source.address : '');
   const client = isEdit ? entry.client : (source ? source.client : '');
   const projectId = isEdit ? (entry.project_id || '') : (source ? (source.project_id || '') : '');
@@ -927,6 +1058,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
         <div class="form-group">
           <label>Pause (Minuten)</label>
           <input type="number" class="form-control" id="ef-break" value="${breakMin}" min="0" step="5">
+          <small class="push-hint" id="ef-break-hinweis" ${pausenHinweis(pausenInfo) ? '' : 'style="display:none"'}>${esc(pausenHinweis(pausenInfo))}</small>
         </div>
         <div class="net-hours-display" id="ef-net">Netto: ${fmtH(netHours)}</div>
         <div class="form-group">
@@ -1022,26 +1154,57 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   // nur solange der Vorschlag unverändert ist — hat der Nutzer die Zeit selbst gesetzt, bleibt sie stehen).
   if (!isEdit) {
     let lastSuggested = timeFrom;
-    const refreshStart = async () => {
+    let letztePause = String(breakMin);
+    // Zieht Startzeit UND Restpause nach, wenn Datum oder Mitarbeiter wechseln. Beide haben ihre
+    // EIGENE „manuell geändert"-Erkennung: Wer nur die Pause angefasst hat, dem soll trotzdem die
+    // Startzeit nachgezogen werden — und umgekehrt.
+    const refreshVorschlag = async () => {
       const fromEl = document.getElementById('ef-from');
-      if (!fromEl || fromEl.value !== lastSuggested) return; // manuell geändert → nicht überschreiben
+      const breakEl = document.getElementById('ef-break');
       const d = document.getElementById('ef-date')?.value;
       const uSel = document.getElementById('ef-user');
       const uid = uSel ? Number(uSel.value) : (isAdmin() ? null : S.user.id);
-      const v = await suggestStart(d, uid, planningEntry ? planningEntry.time_from : null);
-      const toEl = document.getElementById('ef-to');
-      const a = zeitenAbgleichen(v.zeit, (toEl && toEl.value) || nowTime, v.quelle);
-      if (fromEl.value !== lastSuggested) return;              // zwischenzeitlich manuell geändert
-      fromEl.value = a.von;
-      lastSuggested = a.von;                                   // den KORRIGIERTEN Wert merken,
-      // sonst hält die „manuell geändert"-Erkennung den Vorschlag für eine Nutzereingabe.
-      if (toEl && toEl.value !== a.bis) toEl.value = a.bis;
+      // EINE Abfrage für beides.
+      const liste = uid ? await tagesEintraege(d, uid) : [];
+
+      if (fromEl && fromEl.value === lastSuggested) {
+        const v = await suggestStart(d, uid, planningEntry ? planningEntry.time_from : null, uid ? liste : undefined);
+        const toEl = document.getElementById('ef-to');
+        const a = zeitenAbgleichen(v.zeit, (toEl && toEl.value) || nowTime, v.quelle);
+        if (fromEl.value === lastSuggested) {
+          fromEl.value = a.von;
+          lastSuggested = a.von;                               // den KORRIGIERTEN Wert merken,
+          // sonst hält die „manuell geändert"-Erkennung den Vorschlag für eine Nutzereingabe.
+          if (toEl && toEl.value !== a.bis) toEl.value = a.bis;
+        }
+      }
+
+      if (breakEl && breakEl.value === letztePause) {
+        const vonJetzt = (document.getElementById('ef-from') || {}).value;
+        const bisJetzt = (document.getElementById('ef-to') || {}).value;
+        const info = uid ? restPause(liste, vonJetzt, bisJetzt) : leerePausenInfo();
+        const neu = pausenVorschlag(info, planningEntry ? planningEntry.break_minutes : null);
+        if (breakEl.value === letztePause) {
+          breakEl.value = String(neu);
+          letztePause = String(neu);
+        }
+        const hinweisEl = document.getElementById('ef-break-hinweis');
+        if (hinweisEl) {
+          const txt = pausenHinweis(info);
+          hinweisEl.textContent = txt;
+          hinweisEl.style.display = txt ? '' : 'none';
+        }
+      }
       updateNet();
     };
-    document.getElementById('ef-date')?.addEventListener('change', refreshStart);
-    document.getElementById('ef-user')?.addEventListener('change', refreshStart);
-    // Admin: beim Öffnen steht schon ein Mitarbeiter im Feld → dessen letzte Endzeit übernehmen
-    if (document.getElementById('ef-user')) refreshStart();
+    document.getElementById('ef-date')?.addEventListener('change', refreshVorschlag);
+    document.getElementById('ef-user')?.addEventListener('change', refreshVorschlag);
+    // Auch bei den Uhrzeiten: Erst wenn jemand „Bis" verlängert, geht der Tag über 9 Stunden —
+    // und genau dann muss der Pausenvorschlag mitwachsen.
+    document.getElementById('ef-from')?.addEventListener('change', refreshVorschlag);
+    document.getElementById('ef-to')?.addEventListener('change', refreshVorschlag);
+    // Admin: beim Öffnen steht schon ein Mitarbeiter im Feld → dessen Tag nachziehen
+    if (document.getElementById('ef-user')) refreshVorschlag();
   }
 
   // Regie-Toggle

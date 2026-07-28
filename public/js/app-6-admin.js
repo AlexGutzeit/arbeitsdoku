@@ -65,6 +65,14 @@ async function renderSettings() {
             wer dort nichts stehen hat, folgt diesen Werten. <strong>Bereits erfasste Zeiten und die
             Soll-Stunden bleiben unberührt.</strong>
           </p>
+          <p class="push-hint" style="margin-bottom:0.9rem;">
+            Die Pause ist eine <strong>Untergrenze</strong>: Geht ein Tag über 9 Stunden Arbeitszeit,
+            schlägt der Zeitnachweis von sich aus 45 Minuten vor (§ 4 Arbeitszeitgesetz) — auch wenn
+            hier weniger steht. <strong>Für Auszubildende unter 18 gilt das Jugendarbeitsschutzgesetz
+            mit längeren Pausen</strong> (60 Minuten ab 6 Stunden); das erkennt die App nicht von
+            selbst, weil ihr kein Geburtsdatum vorliegt. Keine Rechtsberatung — Tarifverträge können
+            abweichen.
+          </p>
           <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;">
             <div class="form-group">
               <label>Arbeitsbeginn</label>
