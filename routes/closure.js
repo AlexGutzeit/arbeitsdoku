@@ -16,7 +16,8 @@ const { logAudit, berlinNow } = require('../audit');
 const { monatsBereich, lohnZeilen } = require('./payroll');
 const { kumulierteRohwerte } = require('./user-hours');
 const { getEarliestTargetDate } = require('./statistics');
-const { abgerechnetBis, deDatum, MIN_GRUND } = require('../abschluss');
+const { abgerechnetBis, deDatum, MIN_GRUND, tagDanach, korrekturenZuAbschluss,
+  nachtraegeImZeitraum, monatLabel } = require('../abschluss');
 
 const router = express.Router();
 
@@ -31,6 +32,78 @@ function perioden(db) {
 
 function zeilenVon(db, closureId) {
   return db.prepare('SELECT * FROM payroll_closure_rows WHERE closure_id = ? ORDER BY name').all(closureId);
+}
+
+/**
+ * Was hat sich seit dem Abschluss an diesem Zeitraum verändert — und wie viel davon ist noch
+ * NICHT übernommen?
+ *
+ * Die offene Differenz ist der springende Punkt: Trägt der Administrator vier Stunden nach, sind
+ * die zwar sichtbar, aber sie stecken in keinem Überstundenstand und würden nie bezahlt. Erst die
+ * Übernahme bucht sie in den laufenden Zeitraum.
+ *
+ * Gerechnet wird auf dem SALDO (Ist minus Soll): Eine nachgetragene Abwesenheit verschiebt das
+ * Soll, ein nachgetragener Eintrag das Ist — für den Überstundenstand zählt die Differenz beider.
+ */
+function abweichungen(db, closure) {
+  const titel = `${closure.period_from} – ${closure.period_to}`;
+  const jetzt = new Map(lohnZeilen(db, closure.period_from, closure.period_to, titel)
+    .map(z => [Number(z.userId), z]));
+  const gebucht = {}; const gruende = {};
+  for (const k of korrekturenZuAbschluss(db, closure.id)) {
+    const uid = Number(k.user_id);
+    gebucht[uid] = (gebucht[uid] || 0) + (Number(k.stunden) || 0);
+    if (k.grund) (gruende[uid] || (gruende[uid] = [])).push(k.grund);
+  }
+
+  const liste = [];
+  for (const alt of zeilenVon(db, closure.id)) {
+    const uid = Number(alt.user_id);
+    const neu = jetzt.get(uid);
+    const felder = {};
+    for (const feld of ZEILEN_FELDER) {
+      const spalte = feld === 'ueberstundenGesamt' ? 'ueberstunden_gesamt' : feld;
+      const a = Number(alt[spalte]) || 0;
+      const b = neu ? (Number(neu[feld]) || 0) : 0;
+      const d = Math.round((b - a) * 100) / 100;
+      if (d !== 0) felder[feld] = { bezahlt: a, jetzt: b, differenz: d };
+    }
+    const saldoDiff = Math.round(((neu ? Number(neu.saldo) || 0 : 0) - (Number(alt.saldo) || 0)) * 100) / 100;
+    const offen = Math.round((saldoDiff - (gebucht[uid] || 0)) * 100) / 100;
+    if (Object.keys(felder).length || offen !== 0 || gebucht[uid]) {
+      liste.push({
+        userId: alt.user_id, name: alt.name, felder, entfernt: !neu,
+        saldoDifferenz: saldoDiff, uebernommen: gebucht[uid] || 0, offen,
+        kommentar: (gruende[uid] || []).join(' · '),
+      });
+    }
+  }
+  return liste;
+}
+
+const zahlDe = (n) => (n > 0 ? '+' : '') + String(Math.round(Number(n) * 100) / 100).replace('.', ',');
+
+function nachtragsHinweis(treffer) {
+  const namen = [...new Set(treffer.flatMap(t => t.betroffen.map(b => b.name)))];
+  return `In bereits abgeschlossenen Zeiträumen wurde nachträglich etwas geändert `
+    + `(${namen.join(', ')}). Diese Differenzen müssen erst übernommen oder verworfen werden — `
+    + `sonst gingen die Stunden verloren.`;
+}
+function nachtragsListe(treffer) {
+  return treffer.map(t => ({
+    id: t.closure.id, periodFrom: t.closure.period_from, periodTo: t.closure.period_to,
+    betroffen: t.betroffen.map(b => ({ name: b.name, offen: b.offen })),
+  }));
+}
+
+/** Alle Zeiträume mit noch nicht übernommener Differenz — blockiert den nächsten Abschluss. */
+function offeneDifferenzen(db) {
+  const treffer = [];
+  for (const p of perioden(db)) {
+    const betroffen = abweichungen(db, p).filter(a => a.offen !== 0);
+    if (betroffen.length) treffer.push({ closure: p, betroffen });
+  }
+  return treffer;
 }
 
 // Welcher Monat ist als nächstes dran? Lückenlos: immer der Monat NACH dem letzten Abschluss,
@@ -110,11 +183,25 @@ router.get('/', authenticate, (req, res) => {
   res.json({
     bis: abgerechnetBis(db),
     naechsterMonat: manager ? naechsterMonat(db) : null,
-    perioden: alle.map(p => ({
-      id: p.id, periodFrom: p.period_from, periodTo: p.period_to,
-      closedAt: p.closed_at, closedByName: p.closed_by_name,
-      zeilen: zeilenVon(db, p.id).filter(z => manager || Number(z.user_id) === Number(req.user.id)),
+    // Eigene uebernommene Nachtraege MIT Herkunft: Der Mitarbeiter soll nicht raetseln, warum sein
+    // Stand ploetzlich hoeher ist als die Summe seiner Monate.
+    nachtraege: nachtraegeImZeitraum(db, req.user.id, '0000-01-01', '9999-12-31').map(n => ({
+      stunden: n.stunden, wirksamAb: n.wirksam_ab, grund: n.grund || '',
+      herkunft: monatLabel(n.period_from), uebernommenVon: n.created_by_name, uebernommenAm: n.created_at,
     })),
+    perioden: alle.map(p => {
+      // Offene Nachtraege mitliefern: Der Mitarbeiter soll auf seiner Statistik sehen, dass sein
+      // Stand eine noch nicht uebernommene Korrektur NICHT enthaelt — sonst waere der Widerspruch
+      // zwischen Monats- und Gesamtzahl unerklaerlich.
+      const abw = abweichungen(db, p);
+      const meine = abw.filter(a => Number(a.userId) === Number(req.user.id));
+      return {
+        id: p.id, periodFrom: p.period_from, periodTo: p.period_to,
+        closedAt: p.closed_at, closedByName: p.closed_by_name,
+        zeilen: zeilenVon(db, p.id).filter(z => manager || Number(z.user_id) === Number(req.user.id)),
+        offenGesamt: Math.round((manager ? abw : meine).reduce((sum, a) => sum + a.offen, 0) * 100) / 100,
+      };
+    }),
   });
 });
 
@@ -146,6 +233,9 @@ router.post('/', authenticate, authorize('admin', 'chef', 'buchhalter'), (req, r
       offen: offen.map(o => ({ id: o.id, name: o.name, typ: o.type, von: o.date_from, bis: o.date_to })),
     });
   }
+
+  const nachtraege = offeneDifferenzen(db);
+  if (nachtraege.length) return res.status(409).json({ error: nachtragsHinweis(nachtraege), nachtraege: nachtragsListe(nachtraege) });
 
   const { closureId, zeilen } = abschliessen(db, bereich, req.user);
 
@@ -184,6 +274,8 @@ router.post('/bis', authenticate, authorize('admin', 'chef', 'buchhalter'), (req
         + `(${offen.map(o => o.name).filter((v, i, a) => a.indexOf(v) === i).join(', ')}).`;
       break;
     }
+    const nachtraege = offeneDifferenzen(db);
+    if (nachtraege.length) { hindernis = nachtragsHinweis(nachtraege); break; }
     const { zeilen } = abschliessen(db, b, req.user);
     erledigt.push({ monat: m, titel: b.titel, anzahl: zeilen.length });
     logAudit(db, {
@@ -204,26 +296,56 @@ router.get('/:id/abweichung', authenticate, authorize('admin', 'chef', 'buchhalt
   const p = db.prepare('SELECT * FROM payroll_closures WHERE id = ?').get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Abschluss nicht gefunden' });
 
-  const titel = `${p.period_from} – ${p.period_to}`;
-  const jetzt = lohnZeilen(db, p.period_from, p.period_to, titel);
-  const jetztNach = new Map(jetzt.map(z => [Number(z.userId), z]));
+  const liste = abweichungen(db, p);
+  res.json({
+    id: p.id, periodFrom: p.period_from, periodTo: p.period_to,
+    abweichungen: liste,
+    offenGesamt: Math.round(liste.reduce((s, a) => s + a.offen, 0) * 100) / 100,
+  });
+});
 
-  const abweichungen = [];
-  for (const alt of zeilenVon(db, p.id)) {
-    const neu = jetztNach.get(Number(alt.user_id));
-    const diffs = {};
-    for (const feld of ZEILEN_FELDER) {
-      const spalte = feld === 'ueberstundenGesamt' ? 'ueberstunden_gesamt' : feld;
-      const a = Number(alt[spalte]) || 0;
-      const b = neu ? (Number(neu[feld]) || 0) : 0;
-      const d = Math.round((b - a) * 100) / 100;
-      if (d !== 0) diffs[feld] = { bezahlt: a, jetzt: b, differenz: d };
-    }
-    if (Object.keys(diffs).length) {
-      abweichungen.push({ userId: alt.user_id, name: alt.name, felder: diffs, entfernt: !neu });
-    }
+/**
+ * Die Differenz übernehmen: Sie wird als Korrektur ab dem laufenden Zeitraum gebucht und geht
+ * damit in den nächsten Lohn-Export. Der festgehaltene Zeitraum bleibt als Beleg unverändert —
+ * bezahlt wurde damals, was damals bezahlt wurde.
+ *
+ * Ohne diesen Schritt wären nachgetragene Stunden zwar sichtbar, aber niemand bekäme sie je.
+ */
+router.post('/:id/uebernehmen', authenticate, authorize('admin', 'chef', 'buchhalter'), (req, res) => {
+  const db = getDb();
+  const p = db.prepare('SELECT * FROM payroll_closures WHERE id = ?').get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Abschluss nicht gefunden' });
+
+  const offen = abweichungen(db, p).filter(a => a.offen !== 0);
+  if (!offen.length) return res.status(409).json({ error: 'Für diesen Zeitraum gibt es keine offene Differenz.' });
+
+  // Kommentar ist Pflicht: Im Folgemonat tauchen sonst Stunden auf, die niemand zuordnen kann —
+  // im Lohn-Export, beim Mitarbeiter und im Protokoll steht deshalb IMMER, wofuer sie sind.
+  const grundRoh = String((req.body && req.body.reason) || '').trim();
+  if (grundRoh.length < MIN_GRUND) {
+    return res.status(400).json({ error: 'Bitte einen Kommentar angeben — er erscheint im Lohn-Export und beim Mitarbeiter.' });
   }
-  res.json({ id: p.id, periodFrom: p.period_from, periodTo: p.period_to, abweichungen });
+
+  // Wirksam ab dem Tag nach dem LETZTEN Stichtag — dort liegt der noch offene Zeitraum. Nicht ab
+  // dem Ende dieser Periode: dazwischen koennen weitere Monate abgeschlossen sein, deren Zahlen
+  // ebenfalls feststehen und sich nicht mehr aendern duerfen.
+  const wirksamAb = tagDanach(abgerechnetBis(db));
+  const grund = grundRoh;
+  const ins = db.prepare(
+    `INSERT INTO payroll_adjustments (closure_id, user_id, name, stunden, wirksam_ab, grund, created_at, created_by, created_by_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  for (const a of offen) {
+    ins.run(p.id, a.userId, a.name, a.offen, wirksamAb, grund, berlinNow(), req.user.id, req.user.name || req.user.username);
+  }
+
+  logAudit(db, {
+    userId: req.user.id, username: req.user.username, action: 'closure_adjust',
+    details: `Nachträge aus ${deDatum(p.period_from)}–${deDatum(p.period_to)} übernommen, wirksam ab `
+      + `${deDatum(wirksamAb)}: ` + offen.map(a => `${a.name} ${zahlDe(a.offen)} h`).join(', ')
+      + `. Kommentar: ${grund}`,
+    ip: req.ip,
+  });
+  res.json({ uebernommen: offen.map(a => ({ name: a.name, stunden: a.offen })), wirksamAb, grund });
 });
 
 // Aufheben: nur Admin, nur der LETZTE Abschluss, nur mit Begründung. Der letzte deshalb, weil

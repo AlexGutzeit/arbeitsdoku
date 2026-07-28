@@ -1182,13 +1182,34 @@ function ensureClosureSchema(targetDb) {
         FOREIGN KEY (closure_id) REFERENCES payroll_closures(id) ON DELETE CASCADE
       );
       CREATE INDEX IF NOT EXISTS idx_closure_rows ON payroll_closure_rows(closure_id, user_id);
+      -- Uebernommene Nachtraege: Wurde in einem bezahlten Monat nachtraeglich etwas geaendert,
+      -- bleibt der Beleg (payroll_closure_rows) unveraendert — die Differenz wird stattdessen
+      -- HIER gebucht und wirkt ab dem laufenden Zeitraum. Ohne das waeren nachgetragene Stunden
+      -- zwar sichtbar, aber wuerden nie bezahlt.
+      CREATE TABLE IF NOT EXISTS payroll_adjustments (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        closure_id      INTEGER NOT NULL,
+        user_id         INTEGER,
+        name            TEXT,
+        stunden         REAL DEFAULT 0,
+        wirksam_ab      TEXT NOT NULL,
+        grund           TEXT,
+        created_at      TEXT NOT NULL,
+        created_by      INTEGER,
+        created_by_name TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_adjust_user ON payroll_adjustments(user_id, wirksam_ab);
     `);
-    // Nachtrag fuer Datenbanken, die die Tabelle schon vor diesen beiden Spalten bekommen haben.
+    // Nachtrag fuer Datenbanken, die die Tabellen schon vor diesen Spalten bekommen haben.
     const cols = targetDb.prepare("PRAGMA table_info(payroll_closure_rows)").all();
     for (const c of ['ist_kumuliert', 'soll_kumuliert']) {
       if (!cols.some(x => x.name === c)) {
         targetDb.exec(`ALTER TABLE payroll_closure_rows ADD COLUMN ${c} REAL DEFAULT 0`);
       }
+    }
+    const aCols = targetDb.prepare("PRAGMA table_info(payroll_adjustments)").all();
+    if (aCols.length && !aCols.some(x => x.name === 'grund')) {
+      targetDb.exec('ALTER TABLE payroll_adjustments ADD COLUMN grund TEXT');
     }
   } catch (e) {
     console.error('ensureClosureSchema fehlgeschlagen:', e.message);

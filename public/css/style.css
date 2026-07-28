@@ -1323,6 +1323,12 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   .tl-nav-btn::after, .grid-nav-btn::after {
     content: ''; position: absolute; left: 50%; top: 50%;
     transform: translate(-50%, -50%); width: 44px; height: 44px;
+    /* z-index ist NOETIG, nicht Zierde: Ohne ihn ueberdecken die Nachbarzeilen der Kachel die
+       Flaeche, und vom 44-px-Ziel bleibt nur die Zeilenhoehe von 14 px uebrig — gemessen in
+       tests/touch-ux-ui.js, nachdem die Probe dort ehrlich zu messen begann. Dass die Flaeche
+       ein Stueck der Kachel schluckt, ist unschaedlich: Ein Tipp dort oeffnete sonst nur den
+       Eintrag, und genau das ist der Zweck eines Tap-Ziels. */
+    z-index: 2;
   }
   /* Im dichten Raster schmaler, damit die Flaeche nicht den Projekttext daneben schluckt. */
   .grid-nav-btn::after { width: 26px; }

@@ -184,8 +184,28 @@ async function oeffneEintrag(page, id, datum) {
     const abwText = await page.evaluate(() =>
       [...document.querySelectorAll('.abschluss-abw-box')].map(e => e.innerText).join(' '));
     ok('die Abweichung wird angezeigt', /bezahlt/.test(abwText), abwText.slice(0, 200));
-    ok('die Anzeige erklärt, warum der Gesamtstand stehen bleibt',
-      /bezahlten Wert/.test(abwText), abwText.slice(0, 300));
+    ok('die Anzeige warnt, dass die Stunden noch nicht übernommen sind',
+      /Noch nicht übernommen/.test(abwText), abwText.slice(0, 300));
+    ok('sie sagt, dass die Stunden sonst nie ausgezahlt würden',
+      /nie ausgezahlt/.test(abwText), abwText.slice(0, 300));
+
+    // ── Übernehmen: die Stunden müssen im Überstundenstand ankommen ───────────────────────
+    const standVor = (await req('GET', `/api/statistics/overtime?user_id=${maxId}`, adminA.token)).body;
+    const holWert = (o) => Number(o.overtime ?? o.ueberstunden ?? o.ueber_gesamt ?? 0);
+    ok('es gibt einen Übernehmen-Knopf', !!(await page.$('.abschluss-uebernehmen')));
+    // Der Kommentar ist Pflicht — beide Dialoge muessen beantwortet werden.
+    await page.evaluate(() => {
+      window.confirmModal = async () => true;
+      window.promptModal = async () => 'Noteinsatz, Stundenzettel nachgereicht';
+    });
+    await page.click('.abschluss-uebernehmen');
+    await page.waitForFunction(
+      () => /Abgerechnet bis/.test(document.getElementById('abschluss-karte')?.innerText || ''),
+      { timeout: 20000 });
+    await sleep(1200);
+    const standNach = (await req('GET', `/api/statistics/overtime?user_id=${maxId}`, adminA.token)).body;
+    ok('nach der Übernahme steigt der Überstundenstand',
+      holWert(standNach) > holWert(standVor), `${holWert(standVor)} → ${holWert(standNach)}`);
 
     // ── Wieder öffnen nur für den Admin ───────────────────────────────────────────────────
     ok('Chef sieht keinen „Wieder öffnen"-Knopf', !(await sichtbar(page, '#abschluss-oeffnen')));

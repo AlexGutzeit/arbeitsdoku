@@ -71,6 +71,60 @@ function snapshotZeile(db, closureId, userId) {
   } catch (_) { return null; }
 }
 
+/**
+ * Summe der übernommenen Nachträge, die auf den Stand bis `bis` wirken.
+ *
+ * ALLE mit wirksam_ab <= bis, ohne weitere Einschränkung. Doppelt gezählt werden kann hier nichts:
+ * Ein Nachtrag ist kein Zeiteintrag und steckt deshalb in keinem kumulierten Ist-Wert — weder in
+ * dem des Abschlusses, aus dem er stammt (der wurde vor der Änderung festgehalten), noch in dem
+ * eines späteren (der überspringt den eingefrorenen Zeitraum).
+ *
+ * Ein früherer Versuch, ihn nur „nach dem Stichtag der Rechenbasis" zu zählen, ließ ihn beim
+ * nächsten Monatsabschluss wieder VERSCHWINDEN — die Stunden wären erneut verloren gewesen.
+ * Gefunden von tests/abschluss-nachtrag.js.
+ */
+function korrekturenSumme(db, userId, bis) {
+  try {
+    const r = db.prepare(
+      'SELECT COALESCE(SUM(stunden), 0) AS s FROM payroll_adjustments WHERE user_id = ? AND wirksam_ab <= ?'
+    ).get(userId, String(bis));
+    return (r && Number(r.s)) || 0;
+  } catch (_) { return 0; }
+}
+
+/**
+ * Übernommene Nachträge, die in [von, bis] wirksam werden — mit ihrer Herkunft.
+ *
+ * Damit lässt sich überall dort, wo die Stunden auftauchen, sagen WOHER sie kommen. Ohne das
+ * stünden im Juli plötzlich vier Stunden mehr, die niemand zuordnen kann — genau die Verwirrung,
+ * die der Abschluss eigentlich beseitigen soll.
+ */
+function nachtraegeImZeitraum(db, userId, von, bis) {
+  try {
+    return db.prepare(
+      `SELECT a.*, c.period_from, c.period_to
+         FROM payroll_adjustments a LEFT JOIN payroll_closures c ON c.id = a.closure_id
+        WHERE a.user_id = ? AND a.wirksam_ab >= ? AND a.wirksam_ab <= ?
+        ORDER BY a.wirksam_ab, a.id`
+    ).all(userId, String(von), String(bis));
+  } catch (_) { return []; }
+}
+
+/** „2026-05-01" → „Mai 2026" */
+const MONATSNAMEN = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+function monatLabel(iso) {
+  const m = /^(\d{4})-(\d{2})/.exec(String(iso || ''));
+  return m ? `${MONATSNAMEN[Number(m[2]) - 1]} ${m[1]}` : String(iso || '');
+}
+
+/** Bereits übernommene Nachträge zu einem Abschluss (je Mitarbeiter). */
+function korrekturenZuAbschluss(db, closureId) {
+  try {
+    return db.prepare('SELECT * FROM payroll_adjustments WHERE closure_id = ?').all(closureId);
+  } catch (_) { return []; }
+}
+
 function istGesperrt(db, datum) {
   const bis = abgerechnetBis(db);
   return !!(bis && datum && String(datum) <= bis);
@@ -141,5 +195,6 @@ function protokolliereEingriff(db, req, sperre, was) {
 
 module.exports = {
   MIN_GRUND, deDatum, abgerechnetBis, letzterAbschlussBis, tagDanach, snapshotZeile,
+  korrekturenSumme, korrekturenZuAbschluss, nachtraegeImZeitraum, monatLabel,
   istGesperrt, darfEingreifen, pruefeSperre, pruefeSperreGlobal, protokolliereEingriff,
 };

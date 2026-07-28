@@ -16,6 +16,7 @@ const { csvZelle, csvDatei } = require('../csv');
 const { stundenFuerZeitraum } = require('./user-hours');
 const { computeAbsenceSummary } = require('./absence-days');
 const { getEmploymentPeriods, employmentOverlaps } = require('./statistics');
+const { nachtraegeImZeitraum, monatLabel } = require('../abschluss');
 
 const router = express.Router();
 
@@ -43,6 +44,11 @@ const SPALTEN = [
   'Personalnummer', 'Name', 'Monat',
   'Soll-Stunden', 'Ist-Stunden', 'Saldo', 'Überstunden gesamt',
   'Urlaub', 'Krank', 'FZA', 'Sonderurlaub', 'Berufsschule', 'Innung', 'Feiertage',
+  // Nachtraege aus bereits abgerechneten Monaten. BEWUSST eigene Spalten und NICHT in den
+  // Ist-Stunden: Gearbeitet wurden die Stunden im Vormonat, sie gehoeren nicht in die Ist-Zeit
+  // dieses Monats — im „Ueberstunden gesamt" stecken sie aber, und ohne Ausweis stuenden dort
+  // ploetzlich Stunden, die niemand zuordnen kann.
+  'Nachtrag Vormonat', 'Nachtrag Herkunft',
   'Beschäftigt bis',
 ];
 
@@ -62,6 +68,15 @@ function lohnZeilen(db, von, bis, titel) {
     const h = stundenFuerZeitraum(db, u.id, von, bis, u.start_overtime);
     const { summary } = computeAbsenceSummary(db, u.id, von, bis);
     const tag = (k) => Number(summary[k] || 0);
+
+    // Uebernommene Nachtraege, die in DIESEM Monat wirksam werden — mit Herkunftsmonat.
+    const nachtraege = nachtraegeImZeitraum(db, u.id, von, bis);
+    const nachtragStunden = Math.round(nachtraege.reduce((s, n) => s + (Number(n.stunden) || 0), 0) * 100) / 100;
+    const nachtragHerkunft = nachtraege.map(n => {
+      const wo = monatLabel(n.period_from);
+      const wert = (Number(n.stunden) > 0 ? '+' : '') + zahlDe(n.stunden);
+      return `${wo}: ${wert} h${n.grund ? ` (${n.grund})` : ''}`;
+    }).join(' · ');
 
     // „Beschaeftigt bis": nur wenn die Anstellung im Monat oder davor geendet hat.
     let bisDatum = '';
@@ -86,6 +101,7 @@ function lohnZeilen(db, von, bis, titel) {
       berufsschule: tag('berufsschule'),
       innung: tag('innung'),
       feiertage: tag('feiertag'),
+      nachtragStunden, nachtragHerkunft,
       beschaeftigtBis: bisDatum,
     });
   }
@@ -94,7 +110,7 @@ function lohnZeilen(db, von, bis, titel) {
 
 function baueCsv(zeilen, titel) {
   const lines = [SPALTEN.map(csvZelle).join(';')];
-  const summe = { soll: 0, ist: 0, saldo: 0, urlaub: 0, krank: 0, fza: 0, sonderurlaub: 0, berufsschule: 0, innung: 0, feiertage: 0 };
+  const summe = { soll: 0, ist: 0, saldo: 0, urlaub: 0, krank: 0, fza: 0, sonderurlaub: 0, berufsschule: 0, innung: 0, feiertage: 0, nachtragStunden: 0 };
   for (const z of zeilen) {
     for (const k of Object.keys(summe)) summe[k] += Number(z[k]) || 0;
     lines.push([
@@ -102,6 +118,7 @@ function baueCsv(zeilen, titel) {
       zahlDe(z.soll), zahlDe(z.ist), zahlDe(z.saldo), zahlDe(z.ueberstundenGesamt),
       zahlDe(z.urlaub), zahlDe(z.krank), zahlDe(z.fza), zahlDe(z.sonderurlaub),
       zahlDe(z.berufsschule), zahlDe(z.innung), zahlDe(z.feiertage),
+      zahlDe(z.nachtragStunden), z.nachtragHerkunft || '',
       z.beschaeftigtBis,
     ].map(csvZelle).join(';'));
   }
@@ -112,6 +129,7 @@ function baueCsv(zeilen, titel) {
     zahlDe(summe.soll), zahlDe(summe.ist), zahlDe(summe.saldo), '',
     zahlDe(summe.urlaub), zahlDe(summe.krank), zahlDe(summe.fza), zahlDe(summe.sonderurlaub),
     zahlDe(summe.berufsschule), zahlDe(summe.innung), zahlDe(summe.feiertage),
+    zahlDe(summe.nachtragStunden), '',
     '',
   ].map(csvZelle).join(';'));
   return csvDatei(lines);

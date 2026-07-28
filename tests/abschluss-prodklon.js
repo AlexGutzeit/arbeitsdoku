@@ -39,6 +39,7 @@ const sha = (f) => require('crypto').createHash('sha256').update(fs.readFileSync
   // (andere Klon-Tests migrieren dieselbe Quelldatei).
   {
     const d = new SQL.Database(fs.readFileSync(DB));
+    d.run('DROP TABLE IF EXISTS payroll_adjustments');
     d.run('DROP TABLE IF EXISTS payroll_closure_rows');
     d.run('DROP TABLE IF EXISTS payroll_closures');
     fs.writeFileSync(DB, Buffer.from(d.export()));

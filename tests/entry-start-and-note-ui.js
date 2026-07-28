@@ -11,6 +11,29 @@ const PORT = 3126, DB = '/tmp/entry-start-note.db', BASE = 'http://localhost:' +
 const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
   '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Browser-Uhr auf eine feste Tageszeit stellen. OHNE das prueft dieser Test die Uhrzeit des
+// Laufs statt die Vorbelegung: Vor dem Arbeitsbeginn schlaegt das Formular korrekt „jetzt" vor,
+// die Erwartung 07:00 stimmt dann nicht mehr — der Test war jahrelang gruen, weil er abends lief.
+// Feste Zeitstempel bleiben unveraendert; nur „jetzt" wird verschoben.
+const TEST_STUNDE = 12, TEST_MINUTE = 0;
+async function uhrStellen(page) {
+  await page.evaluateOnNewDocument((h, m) => {
+    const Echt = Date;
+    const basis = new Echt();
+    basis.setHours(h, m, 0, 0);
+    const versatz = basis.getTime() - Echt.now();
+    function Gestellt(...args) {
+      if (args.length === 0) return new Echt(Echt.now() + versatz);
+      return new Echt(...args);
+    }
+    Gestellt.prototype = Echt.prototype;
+    Gestellt.now = () => Echt.now() + versatz;
+    Gestellt.parse = Echt.parse;
+    Gestellt.UTC = Echt.UTC;
+    window.Date = Gestellt;
+  }, TEST_STUNDE, TEST_MINUTE);
+}
 let pass = 0, fail = 0; const fails = [];
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, fails.push(n), console.log('  ✗ ' + n + (e ? '  → ' + e : '')));
 function req(m, p, t, b) {
@@ -38,6 +61,7 @@ const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const p = await browser.newPage(); await p.setViewport({ width: 1200, height: 950 });
+    await uhrStellen(p);
     await p.goto(BASE, { waitUntil: 'networkidle2' });
     await p.waitForSelector('#login-user'); await p.type('#login-user', 'startma'); await p.type('#login-pass', 'Test1234!');
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]'); await sleep(400);
@@ -82,6 +106,7 @@ const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
 
     const ctxP = await (browser.createBrowserContext ? browser.createBrowserContext() : browser.createIncognitoBrowserContext());
     const pp = await ctxP.newPage(); await pp.setViewport({ width: 1200, height: 950 });
+    await uhrStellen(pp);
     await pp.goto(BASE, { waitUntil: 'networkidle2' });
     await pp.waitForSelector('#login-user'); await pp.type('#login-user', 'planma'); await pp.type('#login-pass', 'Test1234!');
     await pp.click('#login-form button[type="submit"]'); await pp.waitForSelector('a[href="#/planning"]'); await sleep(400);
@@ -112,6 +137,7 @@ const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
 
     const ctxM = await (browser.createBrowserContext ? browser.createBrowserContext() : browser.createIncognitoBrowserContext());
     const pm = await ctxM.newPage(); await pm.setViewport({ width: 1200, height: 950 });
+    await uhrStellen(pm);
     await pm.goto(BASE, { waitUntil: 'networkidle2' });
     await pm.waitForSelector('#login-user'); await pm.type('#login-user', 'morgenma'); await pm.type('#login-pass', 'Test1234!');
     await pm.click('#login-form button[type="submit"]'); await pm.waitForSelector('a[href="#/planning"]'); await sleep(400);
@@ -122,7 +148,9 @@ const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
       von: document.getElementById('ef-from').value,
       bis: document.getElementById('ef-to').value,
     }));
-    const jetzt = `${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}`;
+    // Aus der SEITE lesen: Node kennt die gestellte Uhr nicht.
+    const jetzt = await pm.evaluate(() =>
+      `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`);
     ok('Datum = HEUTE (nicht das Planungsdatum morgen)', res4c.datum === today, 'datum=' + res4c.datum);
     ok('Von = 10:00 (Ende des ersten Auftrags, nicht geplante 11:00)', res4c.von === '10:00', 'von=' + res4c.von);
     ok('Bis = jetzt (nicht geplante 13:00)', res4c.bis === jetzt, 'bis=' + res4c.bis + ' erwartet ' + jetzt);
@@ -137,6 +165,7 @@ const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
     // Eigener Browser-Kontext: sonst teilt sich die zweite Seite die Anmeldung des MA (gleicher localStorage).
     const ctx2 = await (browser.createBrowserContext ? browser.createBrowserContext() : browser.createIncognitoBrowserContext());
     const p2 = await ctx2.newPage(); await p2.setViewport({ width: 1200, height: 950 });
+    await uhrStellen(p2);
     await p2.goto(BASE, { waitUntil: 'networkidle2' });
     await p2.waitForSelector('#login-user'); await p2.type('#login-user', 'chef'); await p2.type('#login-pass', cpw);
     await p2.click('#login-form button[type="submit"]'); await p2.waitForSelector('a[href="#/planning"]'); await sleep(400);

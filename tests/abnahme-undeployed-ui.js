@@ -20,6 +20,26 @@ const login = (u, pw) => req('POST', '/api/auth/login', null, { username: u, pas
 const today = new Date().toLocaleDateString('sv-SE');
 const XSS = '</textarea><img src=x onerror="window.__xss=true">';
 
+// Stellt die Uhr des Browsers, damit tageszeitabhaengige Vorbelegungen pruefbar sind.
+// Feste Zeitstempel (new Date('2027-12-06')) bleiben unveraendert — nur „jetzt" wird verschoben.
+async function uhrStellen(page, stunde, minute) {
+  await page.evaluateOnNewDocument((h, m) => {
+    const Echt = Date;
+    const basis = new Echt();
+    basis.setHours(h, m, 0, 0);
+    const versatz = basis.getTime() - Echt.now();
+    function Gestellt(...args) {
+      if (args.length === 0) return new Echt(Echt.now() + versatz);
+      return new Echt(...args);
+    }
+    Gestellt.prototype = Echt.prototype;
+    Gestellt.now = () => Echt.now() + versatz;
+    Gestellt.parse = Echt.parse;
+    Gestellt.UTC = Echt.UTC;
+    window.Date = Gestellt;
+  }, stunde, minute);
+}
+
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
   const lg = fs.openSync('/tmp/abnahme-srv.log', 'w');
@@ -116,6 +136,11 @@ const XSS = '</textarea><img src=x onerror="window.__xss=true">';
     console.log('Runde 3 — Startzeit, private Notiz, Aushang:');
     const ctxM = await (browser.createBrowserContext ? browser.createBrowserContext() : browser.createIncognitoBrowserContext());
     const pm = await ctxM.newPage(); await pm.setViewport({ width: 1200, height: 950 });
+    // Browser-Uhr auf 09:00 stellen. Ohne das prueft dieser Abschnitt die Tageszeit des Laufs
+    // statt die Vorbelegung: Vor dem Arbeitsbeginn schlaegt das Formular korrekt „jetzt–jetzt"
+    // vor, und die Erwartung 07:00 stimmt dann nicht mehr. Genau daran ist dieser Test um 05:53
+    // rot geworden — abends lief er jahrelang gruen.
+    await uhrStellen(pm, 9, 0);
     await pm.goto(BASE, { waitUntil: 'networkidle2' });
     await pm.waitForSelector('#login-user'); await pm.type('#login-user', 'abnahme'); await pm.type('#login-pass', 'Test1234!');
     await pm.click('#login-form button[type="submit"]'); await pm.waitForSelector('a[href="#/planning"]'); await sleep(400);

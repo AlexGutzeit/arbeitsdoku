@@ -828,7 +828,9 @@ function bindAbschlussKarte() {
       `Alle offenen Monate bis einschließlich ${monatLabel(monat)} abschließen?\n\n`
       + 'Danach sind diese Zeiträume schreibgeschützt. Änderungen daran kann nur noch der '
       + 'Administrator vornehmen, und nur mit Begründung.',
-      { title: 'Abrechnung abschließen', okLabel: 'Abschließen' });
+      // danger:false — Abschliessen ist kein Loeschen. Sonst waere die Bestaetigung rot und
+      // Enter wuerde nicht bestaetigen (confirmModal sperrt das bei destruktiven Dialogen).
+      { title: 'Abrechnung abschließen', okLabel: 'Abschließen', danger: false });
     if (!bestaetigt) return;
     if (btn) btn.disabled = true;
     try {
@@ -851,7 +853,28 @@ function bindAbschlussKarte() {
       box.textContent = 'Prüfe…';
       try {
         const r = await api('GET', `/api/closure/${b.dataset.id}/abweichung`);
-        box.innerHTML = abweichungHtml(r.abweichungen || []);
+        box.innerHTML = abweichungHtml(r.abweichungen || [], r.offenGesamt || 0, b.dataset.id);
+        box.querySelector('.abschluss-uebernehmen')?.addEventListener('click', async (ev) => {
+          const knopf = ev.currentTarget;
+          if (!(await confirmModal(
+            'Die offenen Differenzen jetzt übernehmen?\n\n'
+            + 'Sie werden dem laufenden Zeitraum gutgeschrieben und gehen damit in den nächsten '
+            + 'Lohn-Export. Der abgeschlossene Monat bleibt als Beleg unverändert.',
+            { title: 'Nachtrag übernehmen', okLabel: 'Übernehmen', danger: false }))) return;
+          // Kommentar: Er steht spaeter im Lohn-Export, beim Mitarbeiter und im Protokoll — damit
+          // niemand raetselt, warum in diesem Monat zusaetzliche Stunden auftauchen.
+          const grund = await promptModal(
+            'Wofür sind diese Stunden? Der Text erscheint im Lohn-Export und beim Mitarbeiter.',
+            { title: 'Kommentar zum Nachtrag', placeholder: 'z. B. Krankmeldung nachgereicht',
+              required: true, requiredMsg: 'Pflicht — ohne Kommentar kann später niemand zuordnen, woher die Stunden kommen.' });
+          if (grund === null || !grund.trim()) return;
+          knopf.disabled = true;
+          try {
+            const u = await api('POST', `/api/closure/${knopf.dataset.id}/uebernehmen`, { reason: grund.trim() });
+            toast(`Übernommen, wirksam ab ${datumDe(u.wirksamAb)}`, 'success');
+            await neuZeichnen();
+          } catch (err) { toast(err.message, 'error'); knopf.disabled = false; }
+        });
       } catch (err) { box.textContent = err.message; }
     });
   });
@@ -875,7 +898,7 @@ function bindAbschlussKarte() {
 
 // „bezahlt X — heute berechnet Y". Bewusst mit Erklaerung: Dass die Monatszahlen abweichen, der
 // Gesamtstand aber stehen bleibt, sieht sonst wie ein Rechenfehler aus — es ist genau der Zweck.
-function abweichungHtml(abw) {
+function abweichungHtml(abw, offenGesamt, id) {
   if (!abw.length) {
     return '<span class="push-hint">Keine Abweichung — die Zahlen entsprechen noch genau dem, was abgerechnet wurde.</span>';
   }
@@ -883,20 +906,28 @@ function abweichungHtml(abw) {
     urlaub: 'Urlaub', krank: 'Krank', fza: 'FZA', sonderurlaub: 'Sonderurlaub',
     berufsschule: 'Berufsschule', innung: 'Innung', feiertage: 'Feiertage' };
   const zahl = (n) => String(Math.round(Number(n) * 100) / 100).replace('.', ',');
+  const mitVorzeichen = (n) => (Number(n) > 0 ? '+' : '') + zahl(n);
+  const offen = Math.round(Number(offenGesamt || 0) * 100) / 100;
   return `
     <div class="push-hint" style="border-left:3px solid var(--warning,#e0a800);padding-left:0.6rem;">
-      Nach dem Abschluss wurde hier noch etwas geändert. Der <strong>Überstundenstand der
-      Mitarbeiter bleibt bewusst auf dem bezahlten Wert</strong> — die Differenz steht hier, damit
-      sie bewusst ans Lohnbüro nachgemeldet werden kann.
+      Nach dem Abschluss wurde hier noch etwas geändert. Der abgeschlossene Monat bleibt als
+      <strong>Beleg unverändert</strong> — bezahlt wurde damals, was damals bezahlt wurde.
+      ${offen !== 0
+        ? `<strong>Noch nicht übernommen: ${mitVorzeichen(offen)} h.</strong> Diese Stunden stecken derzeit in
+           keinem Überstundenstand und würden ohne Übernahme nie ausgezahlt.`
+        : 'Die Differenz ist bereits übernommen und im laufenden Zeitraum gutgeschrieben.'}
     </div>
+    ${offen !== 0 ? `<button class="btn btn-primary btn-sm abschluss-uebernehmen" data-id="${esc(String(id))}"
+        style="margin-top:0.5rem;">Differenz übernehmen (${mitVorzeichen(offen)} h)</button>` : ''}
     <ul style="list-style:none;padding:0;margin:0.5rem 0 0;">
       ${abw.map(a => `
         <li style="padding:0.25rem 0;">
           <strong>${esc(a.name || '')}</strong>${a.entfernt ? ' <span class="push-hint">(nicht mehr in der Abrechnung)</span>' : ''}
+          ${a.uebernommen ? `<span class="push-hint"> · ${mitVorzeichen(a.uebernommen)} h bereits übernommen${a.kommentar ? ': „' + esc(a.kommentar) + '"' : ''}</span>` : ''}
           <ul style="margin:0.2rem 0 0 1rem;padding:0;">
             ${Object.entries(a.felder).map(([f, v]) => `
               <li>${esc(LABEL[f] || f)}: bezahlt ${zahl(v.bezahlt)} — heute ${zahl(v.jetzt)}
-                <strong>(${v.differenz > 0 ? '+' : ''}${zahl(v.differenz)})</strong></li>`).join('')}
+                <strong>(${mitVorzeichen(v.differenz)})</strong></li>`).join('')}
           </ul>
         </li>`).join('')}
     </ul>`;
@@ -909,6 +940,9 @@ function abgerechnetHinweisHtml() {
   const a = S.abschluss;
   if (!a || !a.bis) return '';
   const zahl = (n) => String(Math.round(Number(n) * 100) / 100).replace('.', ',');
+  const mitVorzeichen = (n) => (Number(n) > 0 ? '+' : '') + zahl(n);
+  const offeneKorrektur = Math.round((a.perioden || [])
+    .reduce((s, p) => s + (Number(p.offenGesamt) || 0), 0) * 100) / 100;
   // Die jüngste Periode, in der eigene Zahlen stehen. Manager sehen hier alle Zeilen — für sie
   // ist die ausführliche Ansicht die Karte auf der Export-Seite, deshalb nur der Stichtag.
   let eigene = null;
@@ -928,6 +962,21 @@ function abgerechnetHinweisHtml() {
           (${esc(datumDe(eigene.p.periodFrom))} – ${esc(datumDe(eigene.p.periodTo))}):</div>
         <div>Soll ${zahl(eigene.z.soll)} h · Ist ${zahl(eigene.z.ist)} h ·
           Saldo ${zahl(eigene.z.saldo)} h · <strong>Überstunden gesamt ${zahl(eigene.z.ueberstunden_gesamt)} h</strong></div>
+      </div>` : ''}
+      ${(a.nachtraege || []).length ? `
+      <div style="margin-top:0.5rem;">
+        <div class="push-hint">Im aktuellen Stand enthalten — nachträglich gutgeschrieben:</div>
+        <ul style="margin:0.2rem 0 0;padding-left:1.1rem;">
+          ${a.nachtraege.map(n => `<li><strong>${mitVorzeichen(n.stunden)} h</strong> aus
+            ${esc(n.herkunft)}${n.grund ? ` — „${esc(n.grund)}"` : ''}
+            <span class="push-hint">(gutgeschrieben ab ${esc(datumDe(n.wirksamAb))}${n.uebernommenVon ? ', ' + esc(n.uebernommenVon) : ''})</span></li>`).join('')}
+        </ul>
+      </div>` : ''}
+      ${offeneKorrektur ? `
+      <div style="margin-top:0.5rem;border-left:3px solid var(--warning,#e0a800);padding-left:0.6rem;">
+        In einem abgerechneten Monat wurde nachträglich etwas korrigiert
+        (${mitVorzeichen(offeneKorrektur)} h). Diese Stunden sind noch <strong>nicht</strong> in Ihrem
+        Überstundenstand enthalten — sie werden mit der nächsten Abrechnung gutgeschrieben.
       </div>` : ''}
     </div>`;
 }
