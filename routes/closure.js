@@ -364,15 +364,24 @@ router.delete('/:id', authenticate, authorize('admin'), (req, res) => {
     return res.status(409).json({ error: 'Es lässt sich nur der zuletzt abgeschlossene Zeitraum wieder öffnen.' });
   }
 
+  // Übernommene Nachträge dieses Zeitraums MÜSSEN mit weg. Sie wurden nur gebucht, WEIL der
+  // Zeitraum eingefroren war und seine Einträge nicht mehr zählten. Ist er wieder offen, zählen
+  // sie erneut direkt mit — die Korrektur daneben wäre dieselbe Zeit ein zweites Mal.
+  // Gemessen in tests/abschluss-haerte.js: ohne diese Zeile 4 h zu viel.
+  const nachtraege = korrekturenZuAbschluss(db, p.id);
+  const summe = Math.round(nachtraege.reduce((s, n) => s + (Number(n.stunden) || 0), 0) * 100) / 100;
+  db.prepare('DELETE FROM payroll_adjustments WHERE closure_id = ?').run(p.id);
   db.prepare('DELETE FROM payroll_closure_rows WHERE closure_id = ?').run(p.id);
   db.prepare('DELETE FROM payroll_closures WHERE id = ?').run(p.id);
 
   logAudit(db, {
     userId: req.user.id, username: req.user.username, action: 'closure_reopen',
-    details: `Abschluss ${deDatum(p.period_from)}–${deDatum(p.period_to)} aufgehoben. Grund: ${grund}`,
+    details: `Abschluss ${deDatum(p.period_from)}–${deDatum(p.period_to)} aufgehoben. Grund: ${grund}`
+      + (nachtraege.length ? ` — dabei ${nachtraege.length} übernommene(r) Nachtrag/Nachträge über `
+        + `${zahlDe(summe)} h zurückgenommen (der Zeitraum zählt jetzt wieder direkt).` : ''),
     ip: req.ip,
   });
-  res.json({ success: true });
+  res.json({ success: true, nachtraegeZurueckgenommen: nachtraege.length, stunden: summe });
 });
 
 module.exports = router;

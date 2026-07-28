@@ -883,14 +883,19 @@ function bindAbschlussKarte() {
     const id = e.currentTarget.dataset.id;
     if (!(await confirmModal(
       'Diesen Abschluss wieder öffnen?\n\nDer Zeitraum wird danach wieder normal bearbeitbar, '
-      + 'und der Überstundenstand rechnet ihn wieder mit. Der Vorgang wird protokolliert.',
+      + 'und der Überstundenstand rechnet ihn wieder mit. Bereits übernommene Nachträge aus diesem '
+      + 'Zeitraum werden dabei zurückgenommen — sonst zählten dieselben Stunden doppelt.\n\n'
+      + 'Der Vorgang wird protokolliert.',
       { title: 'Abschluss aufheben', okLabel: 'Wieder öffnen', danger: true }))) return;
     const grund = await promptModal('Warum wird der Abschluss aufgehoben? (Pflicht)',
       { title: 'Begründung', required: true });
     if (grund === null || !grund.trim()) return;
     try {
-      await api('DELETE', '/api/closure/' + id, { reason: grund.trim() });
-      toast('Abschluss aufgehoben', 'success');
+      const r = await api('DELETE', '/api/closure/' + id, { reason: grund.trim() });
+      toast(r.nachtraegeZurueckgenommen
+        ? `Abschluss aufgehoben — ${r.nachtraegeZurueckgenommen} Nachtrag/Nachträge über `
+          + `${String(Math.round(Number(r.stunden) * 100) / 100).replace('.', ',')} h zurückgenommen`
+        : 'Abschluss aufgehoben', 'success', 6000);
       await neuZeichnen();
     } catch (err) { toast(err.message, 'error'); }
   });
