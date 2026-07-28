@@ -52,6 +52,13 @@ function buildScheduleCheck(db, userId) {
     const day = new Date(dateStr + 'T12:00:00').getDay();
     if (day === 0 || day === 6) return false;
     if (inEmploymentHole(periods, dateStr)) return false; // (B6) interne Nicht-Anstellungslücke zählt nicht
+    // NACH dem letzten Austritt ebenso: Wer nicht mehr angestellt ist, hat keine Abwesenheitstage
+    // mehr. Ein Urlaub, der über den Austritt hinausreicht (13.–24., Austritt am 17.), wurde sonst
+    // VOLL gezählt — 10 Tage statt 5 — und ging so in den Lohn-Export und ins Urlaubskonto.
+    // Gefunden von tests/abschluss-ausstellen.js.
+    // Vor der ERSTEN Einstellung bleibt es bewusst beim Zählen (Begründung oben bei
+    // inEmploymentHole): Sonst verlöre jeder frisch angelegte Mitarbeiter seinen Altbestand.
+    if (periods.length && dateStr > periods[0].start_date && !isEmployedOn(periods, dateStr)) return false;
     let active = schedRows[0];
     for (const t of schedRows) { if (t.valid_from <= dateStr) active = t; else break; }
     return active ? (active[schKeys[day]] || 0) > 0 : true;
