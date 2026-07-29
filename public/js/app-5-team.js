@@ -485,6 +485,28 @@ async function renderWelcome() {
     </div>`;
   }
 
+  // Geburtstags-Einblendung — nur Chef/Admin/Buchhalter. Fuer die ganze Belegschaft waere sie
+  // einwilligungspflichtig; der Endpunkt gibt sie deshalb auch niemandem sonst heraus.
+  let geburtstage = [];
+  if (isChefOrAdmin() || (S.user && S.user.role === 'buchhalter')) {
+    try {
+      const g = await api('GET', '/api/users/geburtstage');
+      if (g) geburtstage = g.geburtstage || [];
+    } catch (e) {}
+  }
+  let geburtstagHtml = '';
+  if (geburtstage.length > 0) {
+    geburtstagHtml = `<div class="welcome-section">
+      <h3>&#127874; Geburtstag heute</h3>
+      ${geburtstage.map(g => `<div class="welcome-bulletin">
+        <div class="welcome-bulletin-header"><strong>${esc(g.name)} wird heute ${g.alter} &#127881;</strong></div>
+        ${g.am_29_februar
+          ? '<div class="welcome-bulletin-text">Geboren am 29. Februar — den gibt es dieses Jahr nicht, deshalb heute.</div>'
+          : ''}
+      </div>`).join('')}
+    </div>`;
+  }
+
   let eventBulletinHtml = '';
   if (eventBulletins.length > 0) {
     eventBulletinHtml = `<div class="welcome-section">
@@ -500,6 +522,7 @@ async function renderWelcome() {
         <div class="welcome-clock" id="welcome-clock"></div>
         <h1>Willkommen, ${esc(S.user.name)}!</h1>
       </div>
+      ${geburtstagHtml}
       <div class="welcome-section" id="welcome-week-container">
         <div class="loading"><div class="spinner"></div></div>
       </div>
@@ -956,6 +979,8 @@ async function showUserModal(user) {
             <span class="push-hint">(leer = Firmenwert ${esc(arbeitszeitJetzt().work_start_default)})</span>
           </label>
           <input type="time" class="form-control" id="um-work-start" value="${esc(user?.work_start || '')}">
+          <span class="push-hint">Nur ausfüllen, wenn dieser Mitarbeiter abweichend beginnt.
+            Vorschlag für den ersten Zeiteintrag des Tages.</span>
         </div>
         <div class="form-group">
           <label>Geburtsdatum</label>
@@ -964,8 +989,6 @@ async function showUserModal(user) {
             Jugendarbeitsschutzgesetz mit längeren Pausen. <strong>Bleibt das Feld leer, rechnet die
             App vorsichtshalber mit „unter 18"</strong> — lieber eine zu lange Pause vorschlagen als
             eine zu kurze.</small>
-          <span class="push-hint">Nur ausfüllen, wenn dieser Mitarbeiter abweichend beginnt.
-            Vorschlag für den ersten Zeiteintrag des Tages.</span>
         </div>
         ${isEdit ? `
         <div class="form-group">

@@ -130,6 +130,43 @@ router.get('/list', authenticate, (req, res) => {
   res.json({ users: attachEmployment(db, users) });
 });
 
+// Wer hat heute Geburtstag? Fuer die Einblendung auf der Willkommensseite.
+//
+// Datenschutz: Chef/Admin/Buchhalter bekommen `birth_date` ueber GET /api/users ohnehin — hier
+// wird also nichts Neues offengelegt. Fuer die BELEGSCHAFT waere eine Anzeige einwilligungspflichtig
+// (§ 26 BDSG traegt sie nicht), deshalb gibt es diesen Endpunkt bewusst nur fuer diese drei Rollen.
+// Trotzdem verlaesst das Geburtsdatum selbst den Server nicht — nur Name und Alter.
+// MUSS vor "/:id" stehen, sonst schluckt die Id-Route das Wort "geburtstage".
+router.get('/geburtstage', authenticate, authorize('chef', 'buchhalter'), (req, res) => {
+  const db = getDb();
+  // Ortszeit, nicht UTC: Um 01:00 Berliner Zeit ist es in UTC noch gestern — der Geburtstag ginge
+  // sonst eine Stunde zu spaet an und eine Stunde zu frueh aus.
+  const heute = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+  const [jahr, monat, tag] = heute.split('-').map(Number);
+  const schaltjahr = (jahr % 4 === 0 && jahr % 100 !== 0) || jahr % 400 === 0;
+  // Am 29. Februar Geborene haetten in drei von vier Jahren gar keinen Geburtstag. Sie werden in
+  // Nicht-Schaltjahren am 28. angezeigt — mit Vermerk, damit niemand denkt, das Datum sei falsch.
+  const ersatzFuer29 = !schaltjahr && monat === 2 && tag === 28;
+
+  const rollenFilter = req.user.role === 'admin' ? '' : "AND role != 'admin'";
+  const rows = db.prepare(
+    `SELECT id, name, birth_date FROM users
+      WHERE active = 1 AND birth_date IS NOT NULL AND birth_date != '' AND id != ? ${rollenFilter}
+      ORDER BY name`
+  ).all(req.user.id);
+
+  const geburtstage = [];
+  for (const r of rows) {
+    const [gJahr, gMonat, gTag] = String(r.birth_date).split('-').map(Number);
+    const echterTag = gMonat === monat && gTag === tag;
+    const vorgezogen = ersatzFuer29 && gMonat === 2 && gTag === 29;
+    if (!echterTag && !vorgezogen) continue;
+    // Alter: das begonnene Lebensjahr. Wer am 29.02. geboren ist, wird am 28.02. mitgezaehlt.
+    geburtstage.push({ id: r.id, name: r.name, alter: jahr - gJahr, am_29_februar: vorgezogen });
+  }
+  res.json({ geburtstage });
+});
+
 // Ausgestellte Mitarbeiter (Papierkorb-Reiter "Mitarbeiter"). Chef+Admin (MA haben keinen Zugriff).
 // MUSS vor "/:id" stehen.
 router.get('/inactive', authenticate, authorize('chef'), (req, res) => {
