@@ -112,6 +112,14 @@ Darauf ist sie ausgelegt:
 * **Lesbare Nebentexte:** Graue Zusatzangaben erfüllen den WCAG-AA-Kontrast (4,5:1) – auch auf den
   hellgrauen Flächen und den eingefärbten Karten, nicht nur auf Weiß.
 
+**Die Zähler holen sich den Stand nach jeder Verbindungslücke selbst.** Sie leben von der
+Live-Verbindung (SSE), und die kappt ein Handy, sobald der Bildschirm ausgeht oder der Browser in den
+Hintergrund rutscht. Alles, was in dieser Zeit passiert, käme nie an — der Zähler bliebe auf einem
+Stand stehen, den es nicht mehr gibt. Deshalb wird der echte Stand **nach jedem Verbindungsaufbau**
+und **bei jeder Rückkehr zum Tab** nachgeholt. Wichtig zu wissen, wenn man einem falschen Zähler
+nachgeht: **Liste und Zähler holen ihre Daten getrennt** — eine leere Bestellliste neben einem Zähler
+mit „1" ist deshalb kein Widerspruch, sondern genau dieses Symptom.
+
 ### 🔔 Push-Benachrichtigungen (Web Push)
 
 Zusätzlich zu den Live-Zählern (die nur bei geöffneter App hochzählen) kann jeder Nutzer über den
@@ -560,6 +568,14 @@ statt am heutigen, und ein nachgetragenes Geburtsdatum. Beim Bau dieses Tests wu
 Pausen-Tests rot: Ihre Testnutzer hatten kein Geburtsdatum und wurden damit als Jugendliche
 gerechnet. Sie tragen jetzt ausdrücklich ein Erwachsenen-Datum samt Begründung im Kommentar — sonst
 hätten sie unbemerkt die falsche Tabelle geprüft.
+
+Zähler nach einer Verbindungslücke: `node tests/badge-nachziehen-ui.js` — blockiert `/api/events`
+per Request-Interception (das ist das Handy im Standby), lässt jemand anderen die letzte Bestellung
+erledigen und prüft, dass der Zähler stehen bleibt — und nach Rückkehr zum Tab bzw. nach dem
+Wiederaufbau der Verbindung verschwindet. Dass der Kanal danach wirklich lebt, weist eine **weitere
+Live-Änderung** nach; `readyState` allein taugt dafür nicht, der Wert wechselt beim Wiederverbinden
+mehrfach. Gegenprobe gemacht: ohne die zwei Nachhol-Aufrufe werden genau die beiden entscheidenden
+Prüfungen rot.
 
 Geburtstags-Einblendung: `node tests/geburtstag-ui.js` — wer sie sehen darf (Mitarbeiter bekommt
 403), eigener Geburtstag ausgelassen, Ausgestellte und Leute ohne Datum nicht dabei, kein
