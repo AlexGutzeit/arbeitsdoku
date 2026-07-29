@@ -193,7 +193,14 @@ async function connectSSE() {
   if (_sseStopped || !S.token) return;
   const es = new EventSource('/api/events?ticket=' + encodeURIComponent(ticket));
   S.sse = es;
-  es.onopen = () => { _sseBackoff = 1000; }; // erfolgreiche Verbindung → Backoff zuruecksetzen
+  es.onopen = () => {
+    _sseBackoff = 1000;                     // erfolgreiche Verbindung → Backoff zuruecksetzen
+    // Die Zaehler werden sonst NUR gesendet, nie geholt. War die Verbindung weg (Handy im Standby,
+    // Funkloch, Tab im Hintergrund), sind alle Aenderungen aus dieser Zeit verloren — der Coin blieb
+    // dann auf einem Stand stehen, den es nicht mehr gibt, bis jemand die Seite neu laedt. Nach jedem
+    // Verbindungsaufbau also den echten Stand nachziehen.
+    loadBadges();
+  };
   es.onmessage = _sseOnMessage;
   es.onerror = () => {                  // getrennt / Ticket abgelaufen / Server-Force-Close → frisch verbinden
     try { es.close(); } catch (_) {}

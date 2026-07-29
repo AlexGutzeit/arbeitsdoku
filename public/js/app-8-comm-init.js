@@ -1559,7 +1559,10 @@ window.addEventListener('DOMContentLoaded', () => {
   loadLegalFlags(); // öffentlich; blendet Impressum/Datenschutz-Links ein (auch ausgeloggt)
   if (S.token) { initSSE(); loadBadges(); syncPushSubscription(); refreshUser(); }
 });
-// Beim Zurückkehren zum Tab Rechte/Rolle auffrischen (greift ohne F5, sobald der Tab wieder sichtbar ist).
+// Beim Zurückkehren zum Tab Rechte/Rolle auffrischen (greift ohne F5, sobald der Tab wieder sichtbar ist)
+// — und die Zähler gleich mit. Am Handy trennt das Betriebssystem den SSE-Kanal, sobald der Bildschirm
+// ausgeht; alles, was in dieser Zeit passiert, kommt nie an. Ohne dieses Nachziehen zeigte der Coin
+// noch eine offene Bestellung, die längst erledigt war.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && S.token) refreshUser();
+  if (document.visibilityState === 'visible' && S.token) { refreshUser(); loadBadges(); }
 });
