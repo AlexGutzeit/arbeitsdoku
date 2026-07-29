@@ -956,6 +956,14 @@ async function showUserModal(user) {
             <span class="push-hint">(leer = Firmenwert ${esc(arbeitszeitJetzt().work_start_default)})</span>
           </label>
           <input type="time" class="form-control" id="um-work-start" value="${esc(user?.work_start || '')}">
+        </div>
+        <div class="form-group">
+          <label>Geburtsdatum</label>
+          <input type="date" class="form-control" id="um-birth-date" value="${esc(user?.birth_date || '')}" max="${new Date().toISOString().slice(0, 10)}">
+          <small class="push-hint">Nur für die Pausenregeln: Unter 18 gilt das
+            Jugendarbeitsschutzgesetz mit längeren Pausen. <strong>Bleibt das Feld leer, rechnet die
+            App vorsichtshalber mit „unter 18"</strong> — lieber eine zu lange Pause vorschlagen als
+            eine zu kurze.</small>
           <span class="push-hint">Nur ausfüllen, wenn dieser Mitarbeiter abweichend beginnt.
             Vorschlag für den ersten Zeiteintrag des Tages.</span>
         </div>
@@ -1212,6 +1220,7 @@ async function showUserModal(user) {
       username: document.getElementById('um-username').value,
       personnel_no: document.getElementById('um-personnel-no').value,
       work_start: document.getElementById('um-work-start').value,
+      birth_date: document.getElementById('um-birth-date').value,
       role: document.getElementById('um-role').value,
       start_overtime: startOt,
       can_plan: document.getElementById('um-can-plan').checked,

@@ -84,6 +84,12 @@ const GESTERN = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
     const uid = maxA.user.id;
     const eintrag = (datum, von, bis, pause) => req('POST', '/api/entries', adminA.token,
       { date: datum, time_from: von, time_to: bis, break_minutes: pause, user_id: uid });
+    // Diese Prüfungen gelten der ERWACHSENEN-Tabelle (§ 4 ArbZG). Ohne Geburtsdatum nimmt die App
+    // vorsichtshalber „unter 18" an — das muss hier also ausdrücklich gesetzt werden, sonst prüfte
+    // der Test unbemerkt die Jugendschutz-Werte. (§ 11 JArbSchG: tests/pause-jugendschutz-ui.js)
+    const volljaehrig = new Date(); volljaehrig.setFullYear(volljaehrig.getFullYear() - 35);
+    await req('PUT', `/api/users/${uid}`, adminA.token, { birth_date: volljaehrig.toISOString().slice(0, 10) });
+
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const page = await browser.newPage();

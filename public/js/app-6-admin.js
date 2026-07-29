@@ -66,12 +66,11 @@ async function renderSettings() {
             Soll-Stunden bleiben unberührt.</strong>
           </p>
           <p class="push-hint" style="margin-bottom:0.9rem;">
-            Die Pause ist eine <strong>Untergrenze</strong>: Geht ein Tag über 9 Stunden Arbeitszeit,
-            schlägt der Zeitnachweis von sich aus 45 Minuten vor (§ 4 Arbeitszeitgesetz) — auch wenn
-            hier weniger steht. <strong>Für Auszubildende unter 18 gilt das Jugendarbeitsschutzgesetz
-            mit längeren Pausen</strong> (60 Minuten ab 6 Stunden); das erkennt die App nicht von
-            selbst, weil ihr kein Geburtsdatum vorliegt. Keine Rechtsberatung — Tarifverträge können
-            abweichen.
+            Die Pause ist eine <strong>Untergrenze</strong>: Wird ein Tag lang, schlägt der
+            Zeitnachweis von sich aus mehr vor — nach Arbeitszeitgesetz, bei unter 18-Jährigen nach
+            Jugendarbeitsschutzgesetz. Maßgeblich ist das <strong>Geburtsdatum</strong> beim
+            Mitarbeiter; fehlt es, wird vorsichtshalber „unter 18" angenommen. Keine Rechtsberatung —
+            Tarifverträge können abweichen.
           </p>
           <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;">
             <div class="form-group">

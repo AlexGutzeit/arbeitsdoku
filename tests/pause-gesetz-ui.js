@@ -88,6 +88,12 @@ const T = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
     const eintrag = (d, von, bis, p) => req('POST', '/api/entries', adminA.token,
       { date: d, time_from: von, time_to: bis, break_minutes: p, user_id: uid });
     await req('PUT', '/api/settings', adminA.token, { break_minutes_default: 30 });
+    // Diese Prüfungen gelten der ERWACHSENEN-Tabelle (§ 4 ArbZG). Ohne Geburtsdatum nimmt die App
+    // vorsichtshalber „unter 18" an — das muss hier also ausdrücklich gesetzt werden, sonst prüfte
+    // der Test unbemerkt die Jugendschutz-Werte. (§ 11 JArbSchG: tests/pause-jugendschutz-ui.js)
+    const volljaehrig = new Date(); volljaehrig.setFullYear(volljaehrig.getFullYear() - 35);
+    await req('PUT', `/api/users/${uid}`, adminA.token, { birth_date: volljaehrig.toISOString().slice(0, 10) });
+
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const page = await browser.newPage();
@@ -114,11 +120,11 @@ const T = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
     ok('er nennt die 9-Stunden-Schwelle', /Ab 9 Stunden/.test(hw), hw);
     ok('er nennt die Anwesenheit des Tages', /9 Std 45/.test(hw), hw);
     ok('und den Firmenwert zum Vergleich', /Firmenwert: 30/.test(hw), hw);
-    // Die Regel folgt dem Arbeitszeitgesetz (Erwachsene). Bei Azubis unter 18 gilt das
-    // Jugendarbeitsschutzgesetz mit laengeren Pausen — die App kennt kein Geburtsdatum und
-    // muss das deshalb sagen, statt es stillschweigend zu uebergehen.
-    ok('der Hinweis nennt die Ausnahme für Jugendliche',
-      /Jugendarbeitsschutzgesetz/.test(hw) && /unter 18/.test(hw), hw);
+    // Der Mitarbeiter ist volljährig und sein Geburtsdatum hinterlegt: Der Hinweis nennt deshalb
+    // das Arbeitszeitgesetz — nicht den Jugendschutz — und keine Annahme über das Alter.
+    ok('bei bekanntem Geburtsdatum kein Hinweis auf eine Annahme',
+      !/vorsichtshalber/.test(hw), hw);
+    ok('und nicht das Jugendarbeitsschutzgesetz', !/Jugendarbeitsschutzgesetz/.test(hw), hw);
 
     await setzeZeiten(page, '07:00', '18:00');           // 11 Std
     ok('11 Std → 45 min', (await feld(page, 'ef-break')) === '45', await feld(page, 'ef-break'));

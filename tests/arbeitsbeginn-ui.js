@@ -72,9 +72,13 @@ async function tabMitUhr(browser, ctx, hhmm, hash) {
 
     // ── Backend: Vorgabe, Setzen, Ablehnen ────────────────────────────────
     console.log('Arbeitsbeginn speichern:');
-    const frueh = (await req('POST', '/api/users', admin, { username: 'frueh', password: 'Test1234!', name: 'Frieda Früh', role: 'mitarbeiter', work_start: '06:00' })).body.user;
+    // birth_date gesetzt: Ohne Geburtsdatum nimmt die App vorsichtshalber „unter 18" an und
+    // schlaegt nach Jugendarbeitsschutzgesetz laengere Pausen vor. Hier geht es um den
+    // Arbeitsbeginn, nicht um die Alterstabellen (die stehen in pause-jugendschutz-ui.js).
+    const VOLLJAEHRIG = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 35); return d.toISOString().slice(0, 10); })();
+    const frueh = (await req('POST', '/api/users', admin, { username: 'frueh', password: 'Test1234!', name: 'Frieda Früh', role: 'mitarbeiter', work_start: '06:00', birth_date: VOLLJAEHRIG })).body.user;
     ok('angelegt mit 06:00', frueh && frueh.work_start === '06:00', JSON.stringify(frueh && frueh.work_start));
-    const normal = (await req('POST', '/api/users', admin, { username: 'normal', password: 'Test1234!', name: 'Norbert Normal', role: 'mitarbeiter' })).body.user;
+    const normal = (await req('POST', '/api/users', admin, { username: 'normal', password: 'Test1234!', name: 'Norbert Normal', role: 'mitarbeiter', birth_date: VOLLJAEHRIG })).body.user;
     ok('ohne Angabe → leer (= Firmenwert)', normal && !normal.work_start, JSON.stringify(normal && normal.work_start));
 
     for (const mist of ['25:99', 'abc', '7', '07:5']) {

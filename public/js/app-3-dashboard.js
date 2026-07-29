@@ -813,12 +813,42 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
    * Fängt nebenbei die bekannte Sechs-Stunden-Falle: 6:20 Anwesenheit braucht 30 min Pause,
    * sonst wären es 6:20 Arbeit am Stück.
    */
-  function gesetzlichePause(bruttoMin) {
-    const noetig = (arbeitsMin) => arbeitsMin > 9 * 60 ? 45 : (arbeitsMin > 6 * 60 ? 30 : 0);
-    for (const p of [0, 30, 45]) {
+  function gesetzlichePause(bruttoMin, jugendlich) {
+    // § 11 JArbSchG (unter 18): über 4½ bis 6 Std → 30 min, über 6 Std → 60 min.
+    // § 4 ArbZG (ab 18):        über 6 bis 9 Std → 30 min, über 9 Std → 45 min.
+    const noetig = jugendlich
+      ? (a) => a > 6 * 60 ? 60 : (a > 4.5 * 60 ? 30 : 0)
+      : (a) => a > 9 * 60 ? 45 : (a > 6 * 60 ? 30 : 0);
+    // Kandidaten sind die im Gesetz genannten Werte — nur sie ergeben eine erklärbare Zahl.
+    for (const p of (jugendlich ? [0, 30, 60] : [0, 30, 45])) {
       if (noetig(bruttoMin - p) <= p) return p;
     }
-    return 45;
+    return jugendlich ? 60 : 45;
+  }
+
+  /**
+   * Ist die Person am `datum` noch keine 18?
+   *
+   * OHNE Geburtsdatum wird „ja" angenommen — lieber eine zu lange Pause vorschlagen als eine zu
+   * kurze bei einem Minderjährigen. Gerechnet wird auf den Eintragstag, nicht auf heute: Wer im
+   * Mai 18 wird, fällt für einen Eintrag aus dem März noch unter den Jugendschutz.
+   */
+  // ZUERST der angemeldete Nutzer selbst: Ein Mitarbeiter darf /api/users nicht laden, für ihn
+  // ist S.users leer — derselbe Grund wie beim Arbeitsbeginn.
+  function geburtsdatumVon(userId) {
+    const id = userId ? Number(userId) : (S.user && Number(S.user.id));
+    if (S.user && Number(S.user.id) === id && S.user.birth_date) return S.user.birth_date;
+    const u = (S.users || []).find(x => Number(x.id) === id);
+    return (u && u.birth_date) || null;
+  }
+
+  function istJugendlich(userId, datum) {
+    const geburt = geburtsdatumVon(userId);
+    if (!geburt) return true;                                   // unbekannt → strengere Regel
+    const achtzehn = new Date(String(geburt) + 'T12:00:00Z');
+    if (isNaN(achtzehn.getTime())) return true;
+    achtzehn.setUTCFullYear(achtzehn.getUTCFullYear() + 18);
+    return String(datum || '') < achtzehn.toISOString().slice(0, 10);
   }
 
   const bruttoMinuten = (von, bis) => {
@@ -840,7 +870,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
    *
    * @returns {{ rest: number, genommen: number, firma: number, hatEintraege: boolean }}
    */
-  function restPause(liste, aktuellVon, aktuellBis) {
+  function restPause(liste, aktuellVon, aktuellBis, jugendlich, geburtBekannt) {
     const firma = Number(arbeitszeitJetzt().break_minutes_default) || 0;
     const genommen = liste.reduce((s, e) => s + (Number(e.break_minutes) || 0), 0);
 
@@ -849,13 +879,13 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     const bruttoBisher = liste.reduce(
       (s, e) => s + (Number(e.net_hours) || 0) * 60 + (Number(e.break_minutes) || 0), 0);
     const bruttoTag = bruttoBisher + bruttoMinuten(aktuellVon, aktuellBis);
-    const gesetzlich = gesetzlichePause(bruttoTag);
+    const gesetzlich = gesetzlichePause(bruttoTag, jugendlich);
 
     // Der Firmenwert ist die Untergrenze — das Gesetz kann ihn nur ANHEBEN, nie senken.
     const ziel = Math.max(firma, gesetzlich);
     return {
       rest: Math.max(0, ziel - genommen), genommen, firma, gesetzlich, ziel,
-      bruttoTag, hatEintraege: liste.length > 0,
+      bruttoTag, hatEintraege: liste.length > 0, jugendlich, geburtBekannt: !!geburtBekannt,
       gesetzGreift: gesetzlich > firma,
     };
   }
@@ -962,7 +992,10 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     // Ohne gewählten Mitarbeiter (Admin beim Öffnen) gibt es keinen Tagesbezug — dann Firmenwert;
     // refreshVorschlag zieht nach, sobald jemand ausgewählt ist.
     const uidFuerTag = isAdmin() ? null : S.user.id;
-    if (uidFuerTag) pausenInfo = restPause(await tagesEintraege(date, uidFuerTag), timeFrom, timeTo);
+    if (uidFuerTag) {
+      pausenInfo = restPause(await tagesEintraege(date, uidFuerTag), timeFrom, timeTo,
+        istJugendlich(uidFuerTag, date), !!geburtsdatumVon(uidFuerTag));
+    }
     breakMin = pausenVorschlag(pausenInfo, planningEntry ? planningEntry.break_minutes : null);
   }
   // Der Text erklärt die Zahl im Feld. Ohne ihn wirkt eine 0 wie ein Fehler und ein Nachschlag
@@ -973,15 +1006,15 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   };
   const pausenHinweis = (info) => {
     if (info.gesetzGreift) {
-      const schwelle = info.gesetzlich === 45 ? 9 : 6;
-      // Die Rechnung folgt dem Arbeitszeitgesetz und gilt damit fuer Erwachsene. Fuer
-      // Auszubildende unter 18 gilt das Jugendarbeitsschutzgesetz mit LAENGEREN Pausen
-      // (60 min ab 6 Std). Die App kennt kein Geburtsdatum, kann das also nicht selbst
-      // unterscheiden — deshalb wird es gesagt statt stillschweigend uebergangen.
+      const schwelle = info.jugendlich ? (info.gesetzlich === 60 ? 6 : '4½') : (info.gesetzlich === 45 ? 9 : 6);
+      // Die App kennt das Alter jetzt selbst und nennt deshalb das ZUTREFFENDE Gesetz.
+      const gesetz = info.jugendlich ? 'Jugendarbeitsschutzgesetz' : 'Arbeitszeitgesetz';
       const kern = `Der Tag kommt auf ${STUNDEN(info.bruttoTag)} Anwesenheit. Ab ${schwelle} Stunden `
-        + `Arbeitszeit schreibt das Arbeitszeitgesetz ${info.gesetzlich} min Pause vor `
+        + `Arbeitszeit schreibt das ${gesetz} ${info.gesetzlich} min Pause vor `
         + `(Firmenwert: ${info.firma} min).`;
-      const jugend = ' Für Auszubildende unter 18 gilt das Jugendarbeitsschutzgesetz mit längeren Pausen.';
+      // Nur wenn ohne Geburtsdatum gerechnet wurde, muss man sagen, worauf die Annahme beruht.
+      const jugend = (info.jugendlich && !info.geburtBekannt)
+        ? ' (Ohne Geburtsdatum wird vorsichtshalber „unter 18" angenommen.)' : '';
       // Drei Fälle, drei Sätze. „es fehlen 0 min" wäre Unsinn, und ein Kleinbuchstabe nach dem
       // Punkt liest sich wie ein Tippfehler — beides von tests/pause-beispiele.js aufgedeckt.
       if (info.genommen === 0) return kern + jugend;
@@ -1182,7 +1215,9 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
       if (breakEl && breakEl.value === letztePause) {
         const vonJetzt = (document.getElementById('ef-from') || {}).value;
         const bisJetzt = (document.getElementById('ef-to') || {}).value;
-        const info = uid ? restPause(liste, vonJetzt, bisJetzt) : leerePausenInfo();
+        const info = uid
+          ? restPause(liste, vonJetzt, bisJetzt, istJugendlich(uid, d), !!geburtsdatumVon(uid))
+          : leerePausenInfo();
         const neu = pausenVorschlag(info, planningEntry ? planningEntry.break_minutes : null);
         if (breakEl.value === letztePause) {
           breakEl.value = String(neu);

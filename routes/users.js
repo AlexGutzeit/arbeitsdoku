@@ -50,6 +50,23 @@ function passwordPolicyError(pw, username) {
 
 // Felder, die im Audit-Log nachvollziehbar protokolliert werden (Label + Formatter).
 // Das Passwort wird BEWUSST nie geloggt.
+// Geburtsdatum: nur fuer die Altersgrenze der Pausenregeln. Leer ist erlaubt und bedeutet
+// „unbekannt" — dann gilt der strengere Jugendschutz. Ein unmoegliches Datum wird abgewiesen,
+// damit aus einem Tippfehler kein falsches Alter wird.
+const GEBURT_FEHLER = 'Ungültiges Geburtsdatum (erwartet JJJJ-MM-TT, ein realer Tag, nicht in der Zukunft)';
+function normGeburtsdatum(v) {
+  if (v === undefined) return '';                       // Feld nicht mitgeschickt → unveraendert
+  const s = String(v ?? '').trim();
+  if (!s) return '';                                    // bewusst geleert
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(s + 'T12:00:00Z');
+  if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) return null;
+  const heute = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+  if (s > heute) return null;                           // in der Zukunft geboren gibt es nicht
+  if (s < '1900-01-01') return null;
+  return s;
+}
+
 const USER_AUDIT_FIELDS = [
   ['username', 'Benutzername', v => String(v ?? '')],
   ['name', 'Name', v => String(v ?? '')],
@@ -58,6 +75,7 @@ const USER_AUDIT_FIELDS = [
   ['start_overtime', 'Start-Überstunden', v => String(v ?? 0)],
   ['personnel_no', 'Personalnummer', v => String(v ?? '')],
   ['work_start', 'Arbeitsbeginn', v => (v ? String(v) : '(Firmenwert)')],
+  ['birth_date', 'Geburtsdatum', v => (v ? String(v) : '(nicht hinterlegt)')],
   ['can_bulletin', 'Recht Schwarzes Brett', v => (v ? 'Ja' : 'Nein')],
   ['can_upload', 'Recht Dokumente-Upload', v => (v ? 'Ja' : 'Nein')],
 ];
@@ -134,9 +152,9 @@ router.get('/', authenticate, authorize('chef', 'buchhalter'), (req, res) => {
   let users;
 
   if (req.user.role === 'admin') {
-    users = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, active, created_at FROM users ORDER BY name').all();
+    users = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, birth_date, active, created_at FROM users ORDER BY name').all();
   } else {
-    users = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, active, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
+    users = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, birth_date, active, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
   }
 
   res.json({ users: attachEmployment(db, users) });
@@ -147,7 +165,7 @@ router.get('/:id', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   let user;
 
-  user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, created_at FROM users WHERE id = ?').get(req.params.id);
+  user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(req.params.id);
 
   if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
   res.json({ user });
@@ -155,7 +173,7 @@ router.get('/:id', authenticate, authorize('chef'), (req, res) => {
 
 // Benutzer erstellen
 router.post('/', authenticate, authorize('chef'), async (req, res) => {
-  const { username, password, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, personnel_no, work_start } = req.body;
+  const { username, password, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, personnel_no, work_start, birth_date } = req.body;
   // „alle" impliziert immer „sich" (can_plan_all=1 ⇒ can_plan=1).
   let planAll = can_plan_all ? 1 : 0;
   let planSelf = (can_plan || can_plan_all) ? 1 : 0;
@@ -194,13 +212,15 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   // Arbeitsbeginn pruefen, BEVOR angelegt wird — sonst stuende eine unmoegliche Zeit in der Vorbelegung.
   const beginnNeu = work_start === undefined ? '' : normArbeitsbeginn(work_start);
   if (beginnNeu === null) return res.status(400).json({ error: 'Ungültiger Arbeitsbeginn (erwartet HH:MM, 00:00 bis 23:59)' });
+  const geburtNeu = normGeburtsdatum(birth_date);
+  if (geburtNeu === null) return res.status(400).json({ error: GEBURT_FEHLER });
 
   let hash;
   try { hash = await bcrypt.hash(password, 10); } // kooperativ (blockiert den Event-Loop nicht)
   catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }
   const result = db.prepare(
-    "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-  ).run(username, hash, name, role, hpw, Number(start_overtime) || 0, planSelf, planAll, bulletin, upload, normPersonalNr(personnel_no) ?? null, beginnNeu || null);
+    "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, birth_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(username, hash, name, role, hpw, Number(start_overtime) || 0, planSelf, planAll, bulletin, upload, normPersonalNr(personnel_no) ?? null, beginnNeu || null, geburtNeu || null);
 
   const userId = result.lastInsertRowid;
   // B6: „heute" in Europe/Berlin (wie im Rest der App) statt UTC — sonst nahe Mitternacht 1 Tag daneben.
@@ -211,7 +231,7 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   // Offener Anstellungszeitraum ab heute (Basis fuer die Soll-Stunden-Anrechnung)
   db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, NULL)').run(userId, today);
 
-  const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, created_at FROM users WHERE id = ?').get(userId);
+  const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(userId);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_create',
     details: `id=${userId} · ${userAuditCreate(user)}`, ip: req.ip });
   res.status(201).json({ user });
@@ -284,9 +304,12 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   const beginnGeprueft = normArbeitsbeginn(work_start);
   if (beginnGeprueft === null) return res.status(400).json({ error: 'Ungültiger Arbeitsbeginn (erwartet HH:MM, 00:00 bis 23:59)' });
   const beginnPut = beginnGeprueft !== undefined ? (beginnGeprueft || null) : (user.work_start || null);
+  const geburtGeprueft = normGeburtsdatum(req.body.birth_date);
+  if (geburtGeprueft === null) return res.status(400).json({ error: GEBURT_FEHLER });
+  const geburtPut = req.body.birth_date === undefined ? (user.birth_date || null) : (geburtGeprueft || null);
 
   db.prepare(
-    'UPDATE users SET username=?, name=?, role=?, target_hours_per_week=?, start_overtime=?, can_plan=?, can_plan_all=?, can_bulletin=?, can_upload=?, personnel_no=?, work_start=? WHERE id=?'
+    'UPDATE users SET username=?, name=?, role=?, target_hours_per_week=?, start_overtime=?, can_plan=?, can_plan_all=?, can_bulletin=?, can_upload=?, personnel_no=?, work_start=?, birth_date=? WHERE id=?'
   ).run(
     username || user.username,
     name || user.name,
@@ -299,10 +322,11 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     newUpload,
     normPersonalNr(personnel_no) !== undefined ? normPersonalNr(personnel_no) : (user.personnel_no ?? null),
     beginnPut,
+    geburtPut,
     req.params.id
   );
 
-  const updated = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, created_at FROM users WHERE id = ?').get(req.params.id);
+  const updated = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(req.params.id);
   const _changes = userAuditDiff(user, updated);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_update',
     details: `${updated.username} (id=${req.params.id}): ` + (_changes.length ? _changes.join('; ') : 'keine Änderung'),

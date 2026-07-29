@@ -691,6 +691,18 @@ async function initDatabase() {
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
+  // Migration: birth_date in users — nur fuer die Altersgrenze der Pausenregeln.
+  // BEWUSST leer lassbar: Fehlt das Datum, wird der STRENGERE Jugendschutz angenommen. Lieber
+  // eine zu lange Pause vorschlagen als eine zu kurze bei einem Minderjaehrigen.
+  try {
+    const cols = db.prepare("PRAGMA table_info(users)").all();
+    if (!cols.some(c => c.name === 'birth_date')) {
+      db.exec("ALTER TABLE users ADD COLUMN birth_date TEXT");
+      markDirty();
+      console.log('Migration: birth_date in users hinzugefuegt.');
+    }
+  } catch (e) { console.error('Migration birth_date fehlgeschlagen:', e.message); }
+
   // Migration: work_start in users — ABWEICHENDER Arbeitsbeginn je Mitarbeiter.
   // BEWUSST OHNE SQL-Vorgabe: leer (NULL) bedeutet „es gilt der Firmenwert aus den Einstellungen".
   // Mit einer Vorgabe stuende bei jedem Bestandsnutzer fest '07:00' — eine spaetere Umstellung des
@@ -915,6 +927,7 @@ function ensureAuditSchema(targetDb) {
     // nach dem Wiederherstellen eines alten Backups, schlaegt dieser SELECT fehl und sperrt ALLE
     // Nutzer aus — nicht nur den Arbeitsbeginn.
     addCol('users', 'work_start', 'TEXT');
+    addCol('users', 'birth_date', 'TEXT');
     // can_plan_all separat (mit Backfill aus can_plan), damit Bestandsplaner aus alten Backups „alle" behalten.
     ensurePlanAll(targetDb);
     normalizeManagerRights(targetDb); // #9: Chef/Admin von redundanten Einzelrechten bereinigen
