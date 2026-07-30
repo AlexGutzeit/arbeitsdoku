@@ -870,15 +870,46 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
    *
    * @returns {{ rest: number, genommen: number, firma: number, hatEintraege: boolean }}
    */
+  /**
+   * Anwesenheit eines Tages in Minuten — überlappende Einträge zählen NICHT doppelt.
+   *
+   * Zeitgleich dokumentierte Aufträge sind bei SenTec ausdrücklich gewollt (zwei Baustellen auf
+   * einem Beleg, Regie neben Festpreis). Für alles, was das Gesetz an der Anwesenheit festmacht,
+   * zählt aber die Uhr und nicht die Anzahl der Belege.
+   */
+  function anwesenheitMinuten(liste, aktuellVon, aktuellBis) {
+    const zuMin = (s) => {
+      const [h, m] = String(s || '').split(':').map(Number);
+      return (Number.isFinite(h) && Number.isFinite(m)) ? h * 60 + m : null;
+    };
+    const spannen = [];
+    for (const e of liste) {
+      const a = zuMin(e.time_from), b = zuMin(e.time_to);
+      if (a !== null && b !== null && b > a) spannen.push([a, b]);
+    }
+    const a = zuMin(aktuellVon), b = zuMin(aktuellBis);
+    if (a !== null && b !== null && b > a) spannen.push([a, b]);
+    if (!spannen.length) return 0;
+    spannen.sort((x, y) => x[0] - y[0]);
+    let summe = 0, von = spannen[0][0], bis = spannen[0][1];
+    for (let i = 1; i < spannen.length; i++) {
+      if (spannen[i][0] <= bis) bis = Math.max(bis, spannen[i][1]);
+      else { summe += bis - von; von = spannen[i][0]; bis = spannen[i][1]; }
+    }
+    return summe + (bis - von);
+  }
+
   function restPause(liste, aktuellVon, aktuellBis, jugendlich, geburtBekannt) {
     const firma = Number(arbeitszeitJetzt().break_minutes_default) || 0;
     const genommen = liste.reduce((s, e) => s + (Number(e.break_minutes) || 0), 0);
 
-    // Anwesenheit des GANZEN Tages: die vorhandenen Einträge (netto + ihre Pause) plus das,
-    // was gerade im Formular steht. Erst damit lässt sich sagen, ob der Tag über 9 Stunden geht.
-    const bruttoBisher = liste.reduce(
-      (s, e) => s + (Number(e.net_hours) || 0) * 60 + (Number(e.break_minutes) || 0), 0);
-    const bruttoTag = bruttoBisher + bruttoMinuten(aktuellVon, aktuellBis);
+    // Anwesenheit des GANZEN Tages — ÜBERLAPPUNGSFREI, nicht als Summe der Einträge.
+    //
+    // Wer zwei Aufträge zeitgleich dokumentiert (zweimal 07:00–12:00, beim Kunden 10 Stunden), war
+    // trotzdem nur 5 Stunden da. Die frühere Summe kam hier auf 10 Stunden und hob die Pause nach
+    // § 4 ArbZG auf 45 Minuten an — für eine Arbeitszeit, die es nie gab, und mit einem Gesetz
+    // begründet, das gar nicht greift. (Gefunden von Alex, 30.07.2026.)
+    const bruttoTag = anwesenheitMinuten(liste, aktuellVon, aktuellBis);
     const gesetzlich = gesetzlichePause(bruttoTag, jugendlich);
 
     // Der Firmenwert ist die Untergrenze — das Gesetz kann ihn nur ANHEBEN, nie senken.
@@ -888,6 +919,68 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
       bruttoTag, hatEintraege: liste.length > 0, jugendlich, geburtBekannt: !!geburtBekannt,
       gesetzGreift: gesetzlich > firma,
     };
+  }
+
+  // ── Höchstarbeitszeit ──────────────────────────────────────────────────────────────────────
+  //
+  // § 3 ArbZG: werktäglich 8 Stunden, verlängerbar auf 10, wenn der Schnitt über 24 Wochen bei 8
+  // bleibt. 10 Stunden sind die harte Decke.
+  // § 8 JArbSchG: 8 Stunden täglich UND 40 Stunden wöchentlich. 8½ an einzelnen Tagen nur, wenn an
+  // einem anderen Werktag derselben Woche verkürzt wird — das ist keine freie Option, sondern eine
+  // Bedingung. Die App nennt sie im Text und überlässt die Beurteilung dem Menschen (Alex' Wahl).
+  const MAX_TAG_ERWACHSEN = 10 * 60;
+  const MAX_TAG_JUGEND    = 8 * 60;
+  const MAX_WOCHE_JUGEND  = 40 * 60;
+
+  // Netto-Minuten einer Menge von Einträgen — über calcActualHours, damit sich überlappende
+  // Einträge nicht doppelt zählen (dieselbe Rechnung wie in Statistik und PDF).
+  function nettoMinuten(eintraege) {
+    return Math.round(calcActualHours(eintraege) * 60);
+  }
+
+  // Der Tag/die Woche MIT dem, was gerade im Formular steht. Beim Bearbeiten muss der eigene
+  // gespeicherte Eintrag raus, sonst zählt er doppelt — dieselbe Falle wie bei der Restpause.
+  function mitFormular(liste, eigeneId, userId, datum, von, bis, pause) {
+    const ohneSichSelbst = liste.filter(e => !eigeneId || Number(e.id) !== Number(eigeneId));
+    const jetzt = (von && bis && bis > von)
+      ? [{ user_id: Number(userId), date: datum, time_from: von, time_to: bis, break_minutes: Number(pause) || 0 }]
+      : [];
+    return ohneSichSelbst.concat(jetzt);
+  }
+
+  function montagDer(datum) {
+    const d = new Date(datum + 'T12:00:00Z');
+    const wt = d.getUTCDay();                       // 0 = Sonntag
+    d.setUTCDate(d.getUTCDate() + (wt === 0 ? -6 : 1 - wt));
+    return d.toISOString().slice(0, 10);
+  }
+  function plusTage(iso, n) {
+    const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  /**
+   * Text der Warnung — leer, solange alles im Rahmen ist.
+   * @returns {string}
+   */
+  function hoechstzeitWarnung(tagMin, wochenMin, jugendlich) {
+    const grenze = jugendlich ? MAX_TAG_JUGEND : MAX_TAG_ERWACHSEN;
+    const saetze = [];
+    if (tagMin > grenze) {
+      saetze.push(jugendlich
+        ? `Der Tag kommt auf ${STUNDEN(tagMin)} Arbeitszeit. Für unter 18-Jährige sind höchstens `
+          + `8 Stunden erlaubt; 8½ nur, wenn an einem anderen Tag derselben Woche verkürzt wird `
+          + `(§ 8 Jugendarbeitsschutzgesetz).`
+        : `Der Tag kommt auf ${STUNDEN(tagMin)} Arbeitszeit. Das Arbeitszeitgesetz erlaubt `
+          + `höchstens 10 Stunden (§ 3 ArbZG).`);
+    }
+    // Die Wochengrenze reisst man mit fünf normalen Tagen schneller als die Tagesgrenze — und beim
+    // Buchen fällt es niemandem auf, weil man immer nur einen Tag vor sich hat.
+    if (jugendlich && wochenMin !== null && wochenMin > MAX_WOCHE_JUGEND) {
+      saetze.push(`Die Woche kommt damit auf ${STUNDEN(wochenMin)}. Für unter 18-Jährige sind `
+        + `höchstens 40 Stunden pro Woche erlaubt (§ 8 Jugendarbeitsschutzgesetz).`);
+    }
+    return saetze.join(' ');
   }
 
   async function lastEndOfDay(dateStr, userId) {
@@ -1094,6 +1187,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
           <small class="push-hint" id="ef-break-hinweis" ${pausenHinweis(pausenInfo) ? '' : 'style="display:none"'}>${esc(pausenHinweis(pausenInfo))}</small>
         </div>
         <div class="net-hours-display" id="ef-net">Netto: ${fmtH(netHours)}</div>
+        <div class="warning-box" id="ef-zeit-warnung" role="status" style="display:none"></div>
         <div class="form-group">
           <label>Adresse / Arbeitsort</label>
           <div class="input-with-btn">
@@ -1182,6 +1276,50 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   document.getElementById('ef-from').addEventListener('change', updateNet);
   document.getElementById('ef-to').addEventListener('change', updateNet);
   updateNet();
+
+  // Höchstarbeitszeit prüfen — gilt für NEUE Einträge wie fürs Bearbeiten. Gerechnet wird der ganze
+  // Tag (alle Einträge dieser Person, überlappungsfrei), nicht nur die aktuelle Buchung: Genau so
+  // reisst man die Grenze unbemerkt — dreimal vier Stunden auf drei Auftraege.
+  // Es ist ein HINWEIS, keine Sperre. Wer elf Stunden gearbeitet hat, muss das eintragen können,
+  // sonst wird falsch dokumentiert — das wäre das groessere Problem.
+  const warnEl = document.getElementById('ef-zeit-warnung');
+  const pruefeHoechstzeit = async () => {
+    if (!warnEl) return;
+    const d = document.getElementById('ef-date')?.value;
+    const uSel = document.getElementById('ef-user');
+    const uid = uSel ? Number(uSel.value) : (isEdit ? Number(entry.user_id) : S.user.id);
+    const von = document.getElementById('ef-from')?.value;
+    const bis = document.getElementById('ef-to')?.value;
+    const pause = document.getElementById('ef-break')?.value;
+    if (!d || !uid || !von || !bis) { warnEl.style.display = 'none'; return; }
+
+    const jugendlich = istJugendlich(uid, d);
+    const tagListe = await tagesEintraege(d, uid);
+    const eigeneId = isEdit ? entry.id : null;
+    const tagMin = nettoMinuten(mitFormular(tagListe, eigeneId, uid, d, von, bis, pause));
+
+    // Die Woche wird nur geholt, wenn sie ueberhaupt eine Grenze hat (unter 18).
+    let wochenMin = null;
+    if (jugendlich) {
+      const mo = montagDer(d);
+      try {
+        const params = new URLSearchParams({ date_from: mo, date_to: plusTage(mo, 6), user_id: String(uid) });
+        const data = await api('GET', '/api/entries?' + params.toString());
+        const woche = ((data && data.entries) || []).filter(e => e.user_id === uid);
+        wochenMin = nettoMinuten(mitFormular(woche, eigeneId, uid, d, von, bis, pause));
+      } catch (_) { wochenMin = null; }
+    }
+
+    const txt = hoechstzeitWarnung(tagMin, wochenMin, jugendlich);
+    warnEl.textContent = txt ? '⚠️ ' + txt : '';
+    warnEl.style.display = txt ? '' : 'none';
+  };
+  for (const id of ['ef-date', 'ef-user', 'ef-from', 'ef-to', 'ef-break']) {
+    // Bewusst 'change' und nicht 'input': Sonst liefe bei jedem Tastendruck in der Pause eine
+    // Abfrage los, und bei halb getippten Uhrzeiten stuende kurz eine unsinnige Warnung da.
+    document.getElementById(id)?.addEventListener('change', pruefeHoechstzeit);
+  }
+  pruefeHoechstzeit();
 
   // Startzeit-Vorschlag nachziehen, wenn Datum oder Mitarbeiter gewechselt wird (nur bei NEUEN Einträgen und
   // nur solange der Vorschlag unverändert ist — hat der Nutzer die Zeit selbst gesetzt, bleibt sie stehen).

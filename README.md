@@ -43,7 +43,27 @@ Jeder Punkt entspricht einem Menüpunkt in der App.
 
 **Gesetzliche Mindestpause (§ 4 ArbZG):** Geht der Tag über **9 Stunden** Arbeitszeit, hebt die Vorbelegung von sich aus auf **45 Minuten** an — auch wenn der Firmenwert niedriger ist; der Firmenwert bleibt dabei die **Untergrenze**, das Gesetz kann ihn nur anheben. Ein Satz unter dem Feld erklärt es („Der Tag kommt auf 10 Std Anwesenheit. Ab 9 Stunden Arbeitszeit schreibt das Arbeitszeitgesetz 45 min Pause vor …"). Der Vorschlag zieht **beim Bearbeiten von „Von"/„Bis"** nach, sobald die Uhrzeit vollständig ist — nicht bei jedem Tastendruck, sonst spränge er bei halb getippten Zeiten.
 
+**Zeitgleiche Aufträge zählen nur einmal.** Wer zwei Aufträge parallel dokumentiert (zweimal
+07:00–12:00 — beim Kunden 10 Stunden), war trotzdem nur **5 Stunden anwesend**. Gerechnet wird
+deshalb die **überlappungsfreie** Anwesenheit. Vorher summierte die App die Einträge, kam auf 10
+Stunden und hob die Pause auf 45 Minuten an — für eine Arbeitszeit, die es nie gab, und mit einem
+Gesetz begründet, das gar nicht griff. Liegen die Aufträge dagegen **nacheinander** (07:00–12:00 und
+12:00–17:00), sind es echte 10 Stunden und die Anhebung greift zu Recht.
+
 Die Rechnung sucht die **kleinste** Pause, mit der die Vorschrift erfüllt ist. Das ist nötig, weil sich Pause und Arbeitszeit gegenseitig bedingen: Bei 9:45 Anwesenheit ergäben 30 Minuten Pause 9:15 Arbeitszeit (über 9 → 45 nötig), 45 Minuten aber 9:00 (nicht über 9 → 30 genügte). Ohne diese Formulierung pendelte der Vorschlag. Nebenbei fängt sie die **Sechs-Stunden-Falle**: 6:20 Anwesenheit ohne Pause wären 6:20 Arbeit am Stück, also sind 30 Minuten fällig.
+
+**Warnung bei Überschreitung der Höchstarbeitszeit:** Geht der **ganze Tag** über die gesetzliche
+Decke, erscheint unter den Netto-Stunden ein gelber Hinweis — bei Erwachsenen über **10 Stunden**
+(§ 3 ArbZG), bei unter 18-Jährigen über **8 Stunden** (§ 8 JArbSchG, samt der Bedingung, unter der
+8½ zulässig wären) und zusätzlich über **40 Stunden in der Woche**. Gerechnet werden **alle Einträge
+des Tages überlappungsfrei**, nicht nur die aktuelle Buchung — wer zwei Aufträge **zeitgleich**
+dokumentiert (7–11 und noch einmal 7–11) und danach bis 15:30 weiterarbeitet, hat 12 abgerechnete,
+aber nur **8 gearbeitete** Stunden; dann kommt zu Recht keine Warnung. Und es ist auch der Grund,
+warum überhaupt gerechnet wird — genau so reißt man die Grenze
+unbemerkt: dreimal vier Stunden auf drei Aufträge. Beim Bearbeiten wird der eigene gespeicherte
+Eintrag herausgerechnet, sonst zählte er doppelt. **Es ist ein Hinweis, keine Sperre:** Wer elf
+Stunden gearbeitet hat, muss das eintragen können — falsch zu dokumentieren wäre das größere
+Problem. Der Hinweis gilt für neue Einträge wie fürs Bearbeiten.
 
 **Zwei Alterstabellen (§ 4 ArbZG / § 11 JArbSchG):** Für **Jugendliche unter 18** gelten längere Pausen — **30 Minuten ab 4½** und **60 Minuten ab 6 Stunden** Arbeitszeit. Die App entscheidet das selbst: Aus dem **Geburtsdatum** des Mitarbeiters (Mitarbeiter → bearbeiten) errechnet sie das Alter **am Tag des Eintrags**, nicht am heutigen Tag — wer im Juli 18 wird, bekommt für einen nachgetragenen Juni-Eintrag noch die Jugendschutz-Werte. Der Hinweis unter dem Feld nennt jeweils das **zutreffende** Gesetz. **Ist das Geburtsdatum leer, rechnet die App vorsichtshalber „unter 18"** und sagt das im Hinweis dazu — lieber eine zu lange Pause vorschlagen als eine unzulässig kurze. Praktische Folge: Solange keine Geburtsdaten gepflegt sind, schlägt schon ein normaler 8-Stunden-Tag **60 Minuten** vor. Das Geburtsdatum wird beim Öffnen des Formulars frisch ausgewertet; die Sitzung des Mitarbeiters holt einen nachgetragenen Wert beim nächsten Wechsel zurück in die App ab — ohne neues Anmelden. Keine Rechtsberatung; Tarifverträge können abweichen. Nettostunden werden automatisch berechnet; überlappende Einträge werden nicht doppelt gezählt. |
 | **👥 Mitarbeiter** | Benutzerverwaltung (anlegen/bearbeiten/Rolle setzen), **Soll-Stunden pro Woche** (mit Historie), Start-Überstunden, Passwort zurücksetzen, Einzelrechte vergeben. **Arbeitsbeginn** je Mitarbeiter (optional, leer = Firmenwert aus den Einstellungen) — nur für Ausnahmen, die früher oder später anfangen. **Geburtsdatum** (optional): einziger Zweck ist die Pausen-Vorbelegung — daraus entscheidet die App, ob das Arbeitszeitgesetz oder das Jugendarbeitsschutzgesetz gilt. **Leer heißt „unter 18"**, nicht „unbekannt, also Erwachsener"; ein Hinweis am Feld sagt das. Zukünftige und unmögliche Daten werden abgewiesen, jede Änderung steht im Protokoll. Bei allen Stunden-/Tage-Feldern sind „**,**" und „**.**" als Dezimaltrenner erlaubt (z. B. `7,5`); eine unlesbare Eingabe wird **gemeldet** statt still als 0 gespeichert. **Passwort-Anforderungen** (beim Anlegen & Zurücksetzen, serverseitig erzwungen): mind. 8 Zeichen, je 1× Groß-/Kleinbuchstabe, Ziffer und Sonderzeichen, und ≠ Benutzername – die Bedingungen werden beim Tippen **live** angezeigt (grüner Haken/rotes ✗, Feld färbt sich rot/grün). Bestehende Anmeldungen bleiben davon unberührt. **Urlaubsanspruch (versioniert):** je Mitarbeiter lassen sich – analog zu den Soll-Stunden – **mehrere Anspruchszeilen** „X Tage, **gültig ab** Datum" per „+" anlegen und rückwirkend ändern/löschen (z. B. Start-Anspruch bei Eintritt, Erhöhung im 2. Jahr). **Ohne Eintrag zählt 0** (kein Default), und solange keine Zeile existiert, bleibt überall die **alte Ansicht** (nur genommene Tage) – die Resturlaub-Anzeigen erscheinen erst mit hinterlegtem Anspruch. Jede Zeile trägt ihre **eigene Verfall-Regel** – Resturlaub verfällt **nie / zum Jahreswechsel / an einem Datum im Folgejahr** –, sodass sich der Modus über die Zeit **umstellen lässt, ohne die Vergangenheit zu verändern** (ein Moduswechsel wirkt nur ab dem jeweiligen „gültig ab" vorwärts). Der Anspruch ist **jahresbezogen**: pro Jahr gilt die Zeile mit dem **jüngsten „gültig ab" bis Jahresende** (mehrere Zeilen im selben Jahr → die späteste gewinnt); die Rechnung beginnt am **frühesten** „gültig ab"-Jahr, nicht bei der Mitarbeiter-Anlage. Ein Feld **„Start-Resturlaub (Übertrag)"** trägt den Stand **vor** Einführung der App als einmaligen Übertrag ins erste erfasste Jahr (analog Start-Überstunden) – so lassen sich Bestands-Mitarbeiter ohne Nachtragen aller Vorjahre übernehmen. Eine Stand-Anzeige mit Jahr-Auswahl zeigt sofort genommen/geplant/verbleibend. **Ausstellen statt Löschen:** ausgeschiedene Mitarbeiter werden mit Austrittsdatum ausgestellt (kein Login mehr), ihre Zeiten/Abwesenheiten/Planungen bleiben aber vollständig erhalten und für ihren Anstellungszeitraum in Statistik und PDF berücksichtigt. Wiedereinstellen ist jederzeit möglich (auch mehrfach) – die Lücke zählt 0 Soll-Stunden. *(Chef/Admin)* |
@@ -561,6 +581,23 @@ Restpausen-Vorbelegung: `node tests/restpause-ui.js` — die Kette aus dem Allta
 „manuell geändert"-Erkennung), Übernahme aus der Planung bei leerem und bei belegtem Tag, Admin
 ohne und mit gewähltem Mitarbeiter, geänderter Firmenwert. Und der gefährliche Fall: Beim
 Bearbeiten steht die gespeicherte Pause im Feld und überlebt das Speichern.
+
+Höchstarbeitszeit an echten Daten: `node tests/hoechstzeit-prodklon.js` — nimmt **alle** Zahlen
+aller Mitarbeiter auf (31.086 Einzelwerte), löst im Browser die Warnung aus, nimmt erneut auf
+(**keine einzige Zahl bewegt sich**), speichert den überlangen Eintrag dann wirklich (**keine
+Blockade**, 11,0 h netto wie eingegeben) und löscht ihn wieder — danach stehen alle Zahlen wieder
+auf ihrem Ausgangswert. Mit Selbstkontrolle: Solange der Eintrag gespeichert ist, **müssen** sich
+Zahlen bewegt haben, sonst wäre der Vergleich blind.
+
+Höchstarbeitszeit: `node tests/hoechstarbeitszeit-ui.js` — die Grenze ist „mehr als", nicht „ab"
+(genau 10:00 ist noch erlaubt), sie zählt den **ganzen Tag** über mehrere Einträge, der eigene
+Eintrag zählt beim Bearbeiten **nicht doppelt**, und das Speichern bleibt möglich. Dazu die
+Wochengrenze der Jugendlichen. Beim Schreiben hing der Test zunächst im GoBD-Begründungsdialog, den
+das Bearbeiten öffnet — er bedient ihn jetzt.
+
+Zeitgleiche Aufträge: `node tests/pause-parallel-ui.js` — zweimal 07:00–12:00 parallel ergibt 5
+Stunden Anwesenheit, nicht 10; der Vorschlag bleibt bei der Firmenpause und nennt **kein** Gesetz.
+Mit Gegenprobe, dass dieselben Zeiten **nacheinander** sehr wohl die gesetzliche Anhebung auslösen.
 
 Jugendarbeitsschutz: `node tests/pause-jugendschutz-ui.js` — die drei Fälle nebeneinander (über 18,
 16-jährig, **ohne** Geburtsdatum), der Übergang am 18. Geburtstag, das Alter am **Eintragsdatum**
