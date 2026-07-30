@@ -595,6 +595,14 @@ Eintrag zählt beim Bearbeiten **nicht doppelt**, und das Speichern bleibt mögl
 Wochengrenze der Jugendlichen. Beim Schreiben hing der Test zunächst im GoBD-Begründungsdialog, den
 das Bearbeiten öffnet — er bedient ihn jetzt.
 
+Drei sich überschneidende Aufträge, Schritt für Schritt: `node tests/ueberschneidung-kette-ui.js`
+— 07:00–13:00, dann 12:00–16:00 (**9 Std** Anwesenheit) und 15:00–18:00 (**11 Std**), mit 30 und
+45 min Pause. Zeigt den Unterschied, auf den es ankommt: Der **Pausenvorschlag** hängt an der
+**Anwesenheit**, die **Warnung** an der **Arbeitszeit**. Bei 11 Std Anwesenheit und 75 min Pause
+sind es 9:45 Arbeitszeit — für den Erwachsenen also **keine** Warnung, für den Minderjährigen sehr
+wohl. Eine Stunde länger, und beide werden gewarnt. Dieselbe Kette wird für beide Altersgruppen
+gefahren.
+
 Die unangenehmen Lagen: `node tests/hoechstzeit-komplex-ui.js` — teilweise Überlappung (07–12 und
 11–16 sind 9 Std, nicht 10), ein Eintrag **vollständig innerhalb** eines anderen, drei getrennte
 Blöcke in einer Zehn-Stunden-Spanne (nur 6 Std Anwesenheit → kein Gesetz), der **Admin bucht für den
