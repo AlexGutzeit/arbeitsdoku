@@ -1640,7 +1640,6 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .ww-row:last-child { border-bottom: none; }
 .ww-row.ww-head { border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
 .ww-head .ww-cell { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-lighter); }
-.ww-row.ww-today { background: var(--primary-light); border-radius: 8px; }
 .ww-day { display: flex; flex-direction: column; line-height: 1.15; padding-left: 0.25rem; }
 .ww-day strong { font-size: 0.85rem; }
 .ww-day span { font-size: 0.68rem; color: var(--text-lighter); }

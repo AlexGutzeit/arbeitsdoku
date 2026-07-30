@@ -654,11 +654,16 @@ function hourlyStripHtml(h, entries, highlightHour) {
 // eine Fußzeile hin. (Backend liefert aktuell genau diese 7 Tage.)
 const WEATHER_HOURLY_DAYS = 7;
 function weekForecastHtml(h, byDay, todayStr) {
-  if (!byDay || byDay.size <= 1) return '';
+  if (!byDay) return '';
+  // Die Liste beginnt mit MORGEN. Der heutige Tag steht schon oben als stündlicher Verlauf; in der
+  // Liste kam er ein zweites Mal vor — aufgeklappt sogar mit demselben Streifen direkt darunter
+  // (Alex, 30.07.2026). ISO-Datumsangaben lassen sich als Text vergleichen.
+  const tage = [...byDay.entries()].filter(([dayStr]) => dayStr > todayStr);
+  if (!tage.length) return '';
   const SLOTS = [{ label: 'früh', from: 6, to: 11 }, { label: 'mittag', from: 12, to: 17 }, { label: 'abend', from: 18, to: 22 }];
   const items = [];
   let dayIdx = 0;
-  for (const [dayStr, entries] of byDay) {
+  for (const [dayStr, entries] of tage) {
     const cells = SLOTS.map(s => {
       const idx = entries.filter(e => e.hour >= s.from && e.hour <= s.to).map(e => e.i);
       if (!idx.length) return '<div class="ww-cell ww-empty">–</div>';
@@ -677,22 +682,22 @@ function weekForecastHtml(h, byDay, todayStr) {
       </div>`;
     }).join('');
     const dObj = new Date(dayStr + 'T12:00:00');
-    const isToday = dayStr === todayStr;
-    const label = isToday ? 'Heute' : dObj.toLocaleDateString('de-DE', { weekday: 'short' });
+    const label = dObj.toLocaleDateString('de-DE', { weekday: 'short' });
     const short = dObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-    // Stündlich nur für die ersten Tage (dort sind die Daten fein genug)
+    // Stündlich nur für die ersten Tage (dort sind die Daten fein genug). Keine „jetzt"-Markierung
+    // mehr — die gäbe es nur für heute, und heute steht nicht mehr in dieser Liste.
     const hourly = dayIdx < WEATHER_HOURLY_DAYS
-      ? hourlyStripHtml(h, entries.filter(e => e.hour >= 6 && e.hour <= 22), isToday ? new Date().getHours() : null)
+      ? hourlyStripHtml(h, entries.filter(e => e.hour >= 6 && e.hour <= 22), null)
       : '';
     items.push(`<div class="ww-item">
-      <div class="ww-row${isToday ? ' ww-today' : ''}${hourly ? ' ww-clickable' : ''}"${hourly ? ` data-day="${dayStr}"` : ''}>
+      <div class="ww-row${hourly ? ' ww-clickable' : ''}"${hourly ? ` data-day="${dayStr}"` : ''}>
         <div class="ww-day"><strong>${label}</strong><span>${short}</span>${hourly ? '<span class="ww-caret">&#9656;</span>' : ''}</div>${cells}
       </div>
       ${hourly ? `<div class="ww-detail" hidden>${hourly}</div>` : ''}
     </div>`);
     dayIdx++;
   }
-  if (items.length < 2) return '';
+  if (!items.length) return '';
   return `<div class="weather-week">
     <div class="ww-row ww-head"><div class="ww-day"></div>${SLOTS.map(s => `<div class="ww-cell">${s.label}</div>`).join('')}</div>
     ${items.join('')}
