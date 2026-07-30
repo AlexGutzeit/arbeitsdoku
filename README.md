@@ -498,9 +498,15 @@ Datenbank wird beim Hochziehen sicher aktualisiert. Trotzdem vor einem Update ei
 | `npm run dev` | Dev-Server auf Port `3001` mit separater `data/local.db` und Dev-JWT. |
 | `npm run clone-db` | Kopiert eine Datenbank per SSH und anonymisiert alle Passwörter zu `test` (interne Nutzung; Quelle in `.env.deploy`). |
 | `node scripts/generate-icons.js` | Erzeugt die Standard-Icons aus `public/icons/source.svg` neu. |
+| `node scripts/generate-test-index.js` | Schreibt die vollständige Testliste in `tests/README.md` (Beschreibung = erste Kommentarzeile jedes Tests). |
 
 Automatisierte Tests liegen unter `tests/` (Berechnungs-/Logiktests sowie echte Browser-Klick-Tests
-mit Puppeteer). Details in [`tests/README.md`](tests/README.md).
+mit Puppeteer). **Jeder Test startet sich seinen eigenen Server und legt seine eigene Datenbank an**
+— vorzubereiten ist nichts außer dem Chromium für die Browser-Tests. Die **vollständige Liste aller
+Tests** steht in [`tests/README.md`](tests/README.md); sie wird **erzeugt**, und
+`node tests/testliste-vollstaendigkeit.js` wird rot, sobald sie nicht mehr zum Stand von `tests/`
+passt. Die folgenden Abschnitte beschreiben nur die Tests, bei denen die *Methode* erklärungsbedürftig
+ist.
 
 Push-Tests (kein Browser nötig): `node tests/push-api.js` (Abo-/Einstellungs-Endpunkte),
 `node tests/push-targeting.js` (richtige Empfänger je Ereignis + 410-Bereinigung),
