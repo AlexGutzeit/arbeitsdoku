@@ -80,14 +80,16 @@ const anmelden = async (browser, user, pw) => {
     console.log('Bedienung:');
     const p = await anmelden(browser, 'chef', pw('chef'));
 
-    // Der Menuepunkt heisst „Export" — auf der Seite liegen PDF UND Lohn-Export.
+    // Der Menuepunkt heisst fuer Chef/Admin/Buchhalter „Abrechnung" — auf der Seite liegen PDF,
+    // Lohn-Export UND der Abrechnungs-Abschluss. (Hiess bis 30.07.2026 „Export"; das beschrieb die
+    // Technik statt des Zwecks. Die rollenabhaengige Beschriftung prueft tests/menue-abrechnung-ui.js.)
     const menuText = await p.evaluate(() => {
       const a2 = document.querySelector('nav a[href="#/pdf"]');
       return a2 ? a2.textContent.trim() : null;
     });
-    // Das Symbol steht mit im Link — daher auf den Wortlaut prüfen, nicht auf Gleichheit.
-    ok('Menüpunkt heißt „Export" (nicht mehr „PDF-Export")',
-      /\bExport$/.test(menuText || '') && !/PDF/.test(menuText || ''), JSON.stringify(menuText));
+    // Das Symbol steht mit im Link — daher auf den Wortlaut pruefen, nicht auf Gleichheit.
+    ok('Menüpunkt heißt für den Chef „Abrechnung"',
+      /\bAbrechnung$/.test(menuText || '') && !/Export/.test(menuText || ''), JSON.stringify(menuText));
 
     await p.evaluate(() => { location.hash = '#/pdf'; }); await sleep(2000);
     ok('beide Karten sind auf der Seite', await p.evaluate(() => {

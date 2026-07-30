@@ -229,6 +229,12 @@ function layout(content, activeNav) {
   const showSettings = canSeeSettings();
   const showAudit = isAdmin();
   const showNewEntry = canCreateEntries();
+  // Der Punkt hinter #/pdf ist je nach Rolle etwas anderes: Der Mitarbeiter findet dort nur den
+  // PDF-Download seiner eigenen Zeiten, Chef/Admin/Buchhalter zusaetzlich Lohn-CSV und den
+  // Abrechnungs-Abschluss. „Export" beschrieb die Technik, nicht den Zweck — und war fuer das
+  // Einfrieren abgerechneter Monate deutlich zu harmlos. Dieselbe Bedingung wie die Bloecke auf
+  // der Seite (canViewAll), damit Beschriftung und Inhalt nicht auseinanderlaufen.
+  const abrechnungsSicht = canViewAll();
 
   return `
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
@@ -283,7 +289,7 @@ function layout(content, activeNav) {
           <span class="icon">&#128276;</span> Benachrichtigungen
         </a>
         <a href="#/pdf" class="${activeNav === 'pdf' ? 'active' : ''}">
-          <span class="icon">&#128196;</span> Export
+          <span class="icon">${abrechnungsSicht ? '&#129534;' : '&#128196;'}</span> ${abrechnungsSicht ? 'Abrechnung' : 'PDF-Nachweis'}
         </a>
         ${showSettings ? `<a href="#/settings" class="${activeNav === 'settings' ? 'active' : ''}">
           <span class="icon">&#9881;</span> Einstellungen
