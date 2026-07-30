@@ -595,6 +595,14 @@ Eintrag zählt beim Bearbeiten **nicht doppelt**, und das Speichern bleibt mögl
 Wochengrenze der Jugendlichen. Beim Schreiben hing der Test zunächst im GoBD-Begründungsdialog, den
 das Bearbeiten öffnet — er bedient ihn jetzt.
 
+Die unangenehmen Lagen: `node tests/hoechstzeit-komplex-ui.js` — teilweise Überlappung (07–12 und
+11–16 sind 9 Std, nicht 10), ein Eintrag **vollständig innerhalb** eines anderen, drei getrennte
+Blöcke in einer Zehn-Stunden-Spanne (nur 6 Std Anwesenheit → kein Gesetz), der **Admin bucht für den
+Azubi** (Alter und Tag gehören dem Gewählten, nicht dem Angemeldeten) und ein **Kollege** mit 12
+Stunden am selben Tag, der nicht durchschlagen darf. Merke fürs Testen: Wer die Pause von Hand
+setzt, friert den Hinweis darunter ein (gewolltes Verhalten) — den Hinweis deshalb in einem eigenen
+Durchgang **ohne** Handanlegen ablesen.
+
 Zeitgleiche Aufträge: `node tests/pause-parallel-ui.js` — zweimal 07:00–12:00 parallel ergibt 5
 Stunden Anwesenheit, nicht 10; der Vorschlag bleibt bei der Firmenpause und nennt **kein** Gesetz.
 Mit Gegenprobe, dass dieselben Zeiten **nacheinander** sehr wohl die gesetzliche Anhebung auslösen.
