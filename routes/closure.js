@@ -196,6 +196,9 @@ router.get('/', authenticate, (req, res) => {
       stunden: n.stunden, wirksamAb: n.wirksam_ab, grund: n.grund || '',
       wirksam: Number(n.wirksam ?? 1) === 1,
       herkunft: monatLabel(n.period_from), uebernommenVon: n.created_by_name, uebernommenAm: n.created_at,
+      // Der Zeitraum, AUS dem der Nachtrag stammt — damit die Statistik ihn dem angewaehlten
+      // Monat zuordnen kann und nicht in jedem Monat alle Nachtraege zeigt.
+      herkunftVon: n.period_from || null, herkunftBis: n.period_to || null,
     })),
     perioden: alle.map(p => {
       // Offene Nachtraege mitliefern: Der Mitarbeiter soll auf seiner Statistik sehen, dass sein

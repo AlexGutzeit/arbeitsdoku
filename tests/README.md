@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**144 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**146 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -49,6 +49,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `abschluss-haerte.js` | Härtetest für den Abrechnungs-Abschluss: gezielt die Fälle, in denen die Mechanik brechen KANN. |
 | `abschluss-nachtrag.js` | Nachträge in einem bereits abgerechneten Monat: kommen die Stunden am Ende beim Mitarbeiter an? |
 | `abschluss-prodklon.js` | Abrechnungs-Abschluss gegen eine KOPIE der Produktivdaten. |
+| `abschluss-statistik-monat-ui.js` | Der „abgerechnet"-Hinweis auf der Statistik gehört zum ANGEWÄHLTEN Zeitraum. |
+| `abschluss-statistik-prodklon.js` | Der zeitraum-bezogene „abgerechnet"-Hinweis an ECHTEN Daten. |
 | `abschluss-ui-knoepfe.js` | Jeder Knopf und jeder Dialog des Abrechnungs-Abschlusses — im echten Browser bedient. |
 | `abschluss-ui.js` | Abrechnungs-Abschluss in der Oberfläche. |
 | `abschluss.js` | Abrechnungs-Abschluss: Wächter, Abschluss-Ablauf und Admin-Ausweg. |

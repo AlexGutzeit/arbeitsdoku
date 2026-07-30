@@ -239,7 +239,7 @@ async function renderStatisticsContent() {
 
   mainEl.innerHTML = `
     <div class="stats-page">
-      ${abgerechnetHinweisHtml()}
+      ${abgerechnetHinweisHtml(stats.range)}
       <div class="view-toggle stats-periods">
         ${['day','week','month','year','total'].map(p =>
           `<button class="${period === p ? 'active' : ''}" data-period="${p}">${periodLabels[p]}</button>`
@@ -972,26 +972,57 @@ function abweichungHtml(abw, offenGesamt, id) {
 // Hinweis auf der Statistik-Seite: bis wann abgerechnet ist — und für den Mitarbeiter, welche
 // Zahlen für ihn festgehalten wurden. Er soll nachvollziehen können, was ans Lohnbüro ging,
 // statt sich zu wundern, warum sein Eintrag nicht mehr änderbar ist.
-function abgerechnetHinweisHtml() {
+/**
+ * Hinweis „abgerechnet" — bezogen auf den ANGEWÄHLTEN Zeitraum, nicht auf den letzten Abschluss.
+ *
+ * Vorher stand auf jeder Ansicht derselbe Satz („Abgerechnet bis 30.06.") samt der Juni-Zahlen —
+ * auch wenn man den Mai ansah (Alex, 30.07.2026). Jetzt gilt: Es zählen die Abschlüsse, die sich
+ * mit dem angezeigten Zeitraum ÜBERSCHNEIDEN. Ist keiner dabei — etwa weil der Monat noch offen
+ * ist —, erscheint gar kein Hinweis.
+ *
+ * Bei Jahr/Gesamt überschneiden sich mehrere; dann bleibt es beim „bis"-Satz mit dem letzten davon.
+ *
+ * @param {{from:string,to:string}} [bereich] angezeigter Zeitraum; ohne Angabe wie bisher alles
+ */
+function abgerechnetHinweisHtml(bereich) {
   const a = S.abschluss;
   if (!a || !a.bis) return '';
   const zahl = (n) => String(Math.round(Number(n) * 100) / 100).replace('.', ',');
   const mitVorzeichen = (n) => (Number(n) > 0 ? '+' : '') + zahl(n);
-  const offeneKorrektur = Math.round((a.perioden || [])
+  // Überschneidung zweier Datumsspannen — ISO-Daten lassen sich als Text vergleichen.
+  const trifft = (von, bis) => !bereich || !bereich.from || !bereich.to
+    || (String(von) <= String(bereich.to) && String(bis) >= String(bereich.from));
+  const perioden = (a.perioden || []).filter(p => trifft(p.periodFrom, p.periodTo));
+  if (!perioden.length) return '';
+  const letzte = perioden[perioden.length - 1];
+  const einMonat = perioden.length === 1;
+  // Deckt der Abschluss den GANZEN angezeigten Zeitraum ab? Eine Woche kann über den Monatswechsel
+  // reichen (29.06.–05.07.) und ein Jahr über den letzten Stichtag hinaus. Dann stimmt „ist
+  // abgerechnet" zwar für den genannten Monat, aber nicht für alles, was auf dem Schirm steht —
+  // und das gehört dazugesagt. (Abschlüsse sind lückenlos, deshalb genügen Anfang und Ende.)
+  const vollstaendig = !bereich || !bereich.from || !bereich.to
+    || (String(bereich.from) >= String(perioden[0].periodFrom) && String(bereich.to) <= String(letzte.periodTo));
+  const nachtraege = (a.nachtraege || []).filter(n => trifft(n.herkunftVon || n.wirksamAb, n.herkunftBis || n.wirksamAb));
+  const offeneKorrektur = Math.round(perioden
     .reduce((s, p) => s + (Number(p.offenGesamt) || 0), 0) * 100) / 100;
   // Die jüngste Periode, in der eigene Zahlen stehen. Manager sehen hier alle Zeilen — für sie
-  // ist die ausführliche Ansicht die Karte auf der Export-Seite, deshalb nur der Stichtag.
+  // ist die ausführliche Ansicht die Karte auf der Abrechnungs-Seite, deshalb nur der Stichtag.
   let eigene = null;
   if (S.user.role === 'mitarbeiter') {
-    for (const p of a.perioden || []) {
+    for (const p of perioden) {
       const z = (p.zeilen || []).find(x => Number(x.user_id) === Number(S.user.id));
       if (z) eigene = { p, z };
     }
   }
   return `
     <div class="card" style="margin-bottom:0.75rem;">
-      <div>🔒 <strong>Abgerechnet bis ${esc(datumDe(a.bis))}.</strong>
-        <span class="push-hint">Zeiten bis zu diesem Tag sind festgeschrieben und nicht mehr änderbar.</span></div>
+      <div>🔒 <strong>${einMonat
+        ? esc(monatLabel(String(letzte.periodFrom).slice(0, 7))) + ' ist abgerechnet.'
+        : 'Abgerechnet bis ' + esc(datumDe(letzte.periodTo)) + '.'}</strong>
+        <span class="push-hint">${einMonat
+          ? 'Die Zeiten dieses Monats sind festgeschrieben und nicht mehr änderbar.'
+          : 'Zeiten bis zu diesem Tag sind festgeschrieben und nicht mehr änderbar.'}</span>
+        ${vollstaendig ? '' : '<span class="push-hint">Der angezeigte Zeitraum enthält auch Tage, die nicht abgerechnet sind.</span>'}</div>
       ${eigene ? `
       <div style="margin-top:0.5rem;">
         <div class="push-hint">Für Sie abgerechnet
@@ -999,20 +1030,20 @@ function abgerechnetHinweisHtml() {
         <div>Soll ${zahl(eigene.z.soll)} h · Ist ${zahl(eigene.z.ist)} h ·
           Saldo ${zahl(eigene.z.saldo)} h · <strong>Überstunden gesamt ${zahl(eigene.z.ueberstunden_gesamt)} h</strong></div>
       </div>` : ''}
-      ${(a.nachtraege || []).filter(n => n.wirksam !== false).length ? `
+      ${nachtraege.filter(n => n.wirksam !== false).length ? `
       <div style="margin-top:0.5rem;">
         <div class="push-hint">Im aktuellen Stand enthalten — nachträglich gutgeschrieben:</div>
         <ul style="margin:0.2rem 0 0;padding-left:1.1rem;">
-          ${a.nachtraege.filter(n => n.wirksam !== false).map(n => `<li><strong>${mitVorzeichen(n.stunden)} h</strong> aus
+          ${nachtraege.filter(n => n.wirksam !== false).map(n => `<li><strong>${mitVorzeichen(n.stunden)} h</strong> aus
             ${esc(n.herkunft)}${n.grund ? ` — „${esc(n.grund)}"` : ''}
             <span class="push-hint">(gutgeschrieben ab ${esc(datumDe(n.wirksamAb))}${n.uebernommenVon ? ', ' + esc(n.uebernommenVon) : ''})</span></li>`).join('')}
         </ul>
       </div>` : ''}
-      ${(a.nachtraege || []).filter(n => n.wirksam === false).length ? `
+      ${nachtraege.filter(n => n.wirksam === false).length ? `
       <div style="margin-top:0.5rem;border-left:3px solid var(--warning,#e0a800);padding-left:0.6rem;">
         <div class="push-hint">Nachträglich festgestellt, aber <strong>nicht</strong> gutgeschrieben:</div>
         <ul style="margin:0.2rem 0 0;padding-left:1.1rem;">
-          ${a.nachtraege.filter(n => n.wirksam === false).map(n => `<li><strong>${mitVorzeichen(n.stunden)} h</strong> aus
+          ${nachtraege.filter(n => n.wirksam === false).map(n => `<li><strong>${mitVorzeichen(n.stunden)} h</strong> aus
             ${esc(n.herkunft)}${n.grund ? ` — „${esc(n.grund)}"` : ''}
             <span class="push-hint">(${n.uebernommenVon ? esc(n.uebernommenVon) : 'entschieden'})</span></li>`).join('')}
         </ul>

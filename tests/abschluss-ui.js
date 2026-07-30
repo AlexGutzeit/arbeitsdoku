@@ -129,12 +129,19 @@ async function oeffneEintrag(page, id, datum) {
     ok('Gegenprobe: offener Zeitraum zeigt KEINEN Hinweis', !(await sichtbar(page, '#abgerechnet-hinweis')));
 
     // ── Statistik-Seite: Mitarbeiter sieht seine abgerechneten Zahlen ─────────────────────
+    // Seit 30.07.2026 gehört der Hinweis zum ANGEWÄHLTEN Zeitraum: Beim Öffnen steht die Statistik
+    // auf dem laufenden Monat, und der ist offen — dort erscheint zu Recht nichts mehr. Also erst
+    // auf den abgerechneten Monat stellen. (Details: tests/abschluss-statistik-monat-ui.js)
     await page.goto(BASIS + '/#/statistics', { waitUntil: 'networkidle0' });
-    try {
-      await page.waitForFunction(() => /Abgerechnet bis/.test(document.querySelector('.main')?.innerText || ''), { timeout: 15000 });
-    } catch (_) { /* Aussage macht die Pruefung unten — mit dem echten Text als Beleg */ }
+    await page.waitForSelector('.stats-page');
+    const heutigerStat = await text(page, '.main');
+    ok('laufender (offener) Monat zeigt KEINEN Abschluss-Hinweis',
+      !/abgerechnet/i.test(heutigerStat), heutigerStat.slice(0, 200));
+
+    await page.evaluate((d) => { S.statsPeriod = 'month'; S.statsDate = new Date(d + 'T12:00:00'); renderStatistics(); }, IM_JANUAR);
+    await new Promise(r => setTimeout(r, 1500));
     const stat = await text(page, '.main');
-    ok('Mitarbeiter sieht den Stichtag in der Statistik', /Abgerechnet bis 31\.03\./.test(stat));
+    ok('Mitarbeiter sieht im abgerechneten Monat dessen Hinweis', /Januar .* ist abgerechnet/.test(stat), stat.slice(0, 200));
     ok('Mitarbeiter sieht seine eigenen abgerechneten Zahlen',
       /Für Sie abgerechnet/.test(stat) && /Überstunden gesamt/.test(stat), stat.slice(0, 300));
 
