@@ -20,6 +20,13 @@ DEPLOY_SERVICE="${DEPLOY_SERVICE:-arbeitsdoku}"
 # (nicht-interaktiven SSH-)PATH liegt — z. B. ein entpacktes node-Tarball. In .env.deploy setzen.
 DEPLOY_NODE_BIN="${DEPLOY_NODE_BIN:-}"
 
+# Optionale ZWEITANLAGE (Rueckfallebene). Sie bekommt denselben Code, wird aber NICHT gestartet:
+# Zwei laufende Anlagen auf denselben Daten waeren schlimmer als gar keine Rueckfallebene. Ihr
+# Datenstand ist eingefroren; beim Umschalten zuerst die juengste Sicherung einspielen.
+DEPLOY_STANDBY_HOST="${DEPLOY_STANDBY_HOST:-}"
+DEPLOY_STANDBY_PATH="${DEPLOY_STANDBY_PATH:-$DEPLOY_PATH}"
+DEPLOY_STANDBY_NODE_BIN="${DEPLOY_STANDBY_NODE_BIN:-}"
+
 if [ "$DEPLOY_HOST" = "user@server.example" ]; then
   echo "Fehler: DEPLOY_HOST nicht gesetzt. Beispiel:"
   echo "  DEPLOY_HOST=user@server DEPLOY_PATH=/home/user/arbeitsdoku ./deploy.sh"
@@ -36,7 +43,8 @@ rsync -az middleware/ "$DEPLOY_HOST:$DEPLOY_PATH/middleware/"
 # ACHTUNG: Dies ist eine FESTE Liste — eine neue Datei im Projektstamm landet sonst NICHT auf dem
 # Server, und der Dienst startet nach dem Neustart gar nicht mehr (require schlaegt fehl).
 # Beim Anlegen einer neuen Datei hier eintragen. Die Probe unten (--pruefen) faengt es ab.
-rsync -az server.js audit.js push.js sse.js scheduler.js planning-recurrence.js csv.js zeit.js abschluss.js .puppeteerrc.cjs package.json package-lock.json "$DEPLOY_HOST:$DEPLOY_PATH/"
+STAMMDATEIEN="server.js audit.js push.js sse.js scheduler.js planning-recurrence.js csv.js zeit.js abschluss.js .puppeteerrc.cjs package.json package-lock.json"
+rsync -az $STAMMDATEIEN "$DEPLOY_HOST:$DEPLOY_PATH/"
 # Produktions-Dependencies abgleichen (z. B. neu hinzugekommenes web-push). --omit=dev laesst
 # Puppeteer & Co. aussen vor; ist nichts zu tun, ist der Schritt praktisch ein No-op.
 ssh "$DEPLOY_HOST" "${DEPLOY_NODE_BIN:+export PATH=\"$DEPLOY_NODE_BIN:\$PATH\"; }cd $DEPLOY_PATH && npm install --omit=dev --no-audit --no-fund"
@@ -46,14 +54,43 @@ ssh "$DEPLOY_HOST" "systemctl --user restart $DEPLOY_SERVICE"
 # "erfolgreich", wenn der Server nach dem Neustart gar nicht mehr hochkommt — etwa weil eine neue
 # Datei im Projektstamm oben in der festen Liste fehlt.
 echo "Warte auf den Dienst ..."
+gesund=0
 for i in $(seq 1 20); do
   if ssh "$DEPLOY_HOST" "curl -sf -o /dev/null http://localhost:3000/health" 2>/dev/null; then
-    echo "Erfolgreich deployed. (/health antwortet)"
-    exit 0
+    gesund=1; break
   fi
   sleep 2
 done
-echo "FEHLER: Der Dienst antwortet nach 40 s nicht auf /health."
-echo "Protokoll ansehen mit:"
-echo "  ssh $DEPLOY_HOST 'journalctl --user -u $DEPLOY_SERVICE -n 40 --no-pager'"
-exit 1
+if [ "$gesund" = "1" ]; then
+  echo "Erfolgreich deployed. (/health antwortet)"
+  standby_nachziehen
+  exit 0
+fi
+{
+  echo "FEHLER: Der Dienst antwortet nach 40 s nicht auf /health."
+  echo "Protokoll ansehen mit:"
+  echo "  ssh $DEPLOY_HOST 'journalctl --user -u $DEPLOY_SERVICE -n 40 --no-pager'"
+  exit 1
+}
+
+# ── Zweitanlage nachziehen ────────────────────────────────────────────────────────────────────
+# Damit im Zweifel umgeschaltet werden kann, OHNE erst eine alte Fassung vorzufinden. Nur Dateien:
+# kein Dienst-Neustart, kein /health — die Anlage soll ja gerade NICHT laufen.
+# Schlaegt es fehl (Rechner aus), ist das eine Warnung, kein Fehler: Die Hauptanlage steht bereits.
+standby_nachziehen() {
+  [ -n "$DEPLOY_STANDBY_HOST" ] || return 0
+  echo
+  echo "Ziehe die Zweitanlage nach: $DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH ..."
+  if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$DEPLOY_STANDBY_HOST" true 2>/dev/null; then
+    echo "WARNUNG: $DEPLOY_STANDBY_HOST ist nicht erreichbar — Zweitanlage bleibt auf altem Stand."
+    return 0
+  fi
+  rsync -az --delete public/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/public/" &&
+  rsync -az database/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/database/" &&
+  rsync -az routes/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/routes/" &&
+  rsync -az middleware/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/middleware/" &&
+  rsync -az $STAMMDATEIEN "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/" &&
+  ssh "$DEPLOY_STANDBY_HOST" "${DEPLOY_STANDBY_NODE_BIN:+export PATH=\"$DEPLOY_STANDBY_NODE_BIN:\$PATH\"; }cd $DEPLOY_STANDBY_PATH && npm install --omit=dev --no-audit --no-fund >/dev/null" &&
+  echo "Zweitanlage steht auf demselben Stand (Dienst bleibt bewusst aus)." ||
+  echo "WARNUNG: Die Zweitanlage konnte nicht vollstaendig nachgezogen werden."
+}
