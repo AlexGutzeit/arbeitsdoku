@@ -34,6 +34,28 @@ if [ "$DEPLOY_HOST" = "user@server.example" ]; then
   exit 1
 fi
 
+# ── Zweitanlage nachziehen ────────────────────────────────────────────────────────────────────
+# Damit im Zweifel umgeschaltet werden kann, OHNE erst eine alte Fassung vorzufinden. Nur Dateien:
+# kein Dienst-Neustart, kein /health — die Anlage soll ja gerade NICHT laufen.
+# Schlaegt es fehl (Rechner aus), ist das eine Warnung, kein Fehler: Die Hauptanlage steht bereits.
+standby_nachziehen() {
+  [ -n "$DEPLOY_STANDBY_HOST" ] || return 0
+  echo
+  echo "Ziehe die Zweitanlage nach: $DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH ..."
+  if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$DEPLOY_STANDBY_HOST" true 2>/dev/null; then
+    echo "WARNUNG: $DEPLOY_STANDBY_HOST ist nicht erreichbar — Zweitanlage bleibt auf altem Stand."
+    return 0
+  fi
+  rsync -az --delete public/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/public/" &&
+  rsync -az database/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/database/" &&
+  rsync -az routes/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/routes/" &&
+  rsync -az middleware/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/middleware/" &&
+  rsync -az $STAMMDATEIEN "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/" &&
+  ssh "$DEPLOY_STANDBY_HOST" "${DEPLOY_STANDBY_NODE_BIN:+export PATH=\"$DEPLOY_STANDBY_NODE_BIN:\$PATH\"; }cd $DEPLOY_STANDBY_PATH && npm install --omit=dev --no-audit --no-fund >/dev/null" &&
+  echo "Zweitanlage steht auf demselben Stand (Dienst bleibt bewusst aus)." ||
+  echo "WARNUNG: Die Zweitanlage konnte nicht vollstaendig nachgezogen werden."
+}
+
 echo "Deploye auf $DEPLOY_HOST:$DEPLOY_PATH ..."
 git push
 rsync -az --delete public/ "$DEPLOY_HOST:$DEPLOY_PATH/public/"
@@ -73,24 +95,3 @@ fi
   exit 1
 }
 
-# ── Zweitanlage nachziehen ────────────────────────────────────────────────────────────────────
-# Damit im Zweifel umgeschaltet werden kann, OHNE erst eine alte Fassung vorzufinden. Nur Dateien:
-# kein Dienst-Neustart, kein /health — die Anlage soll ja gerade NICHT laufen.
-# Schlaegt es fehl (Rechner aus), ist das eine Warnung, kein Fehler: Die Hauptanlage steht bereits.
-standby_nachziehen() {
-  [ -n "$DEPLOY_STANDBY_HOST" ] || return 0
-  echo
-  echo "Ziehe die Zweitanlage nach: $DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH ..."
-  if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$DEPLOY_STANDBY_HOST" true 2>/dev/null; then
-    echo "WARNUNG: $DEPLOY_STANDBY_HOST ist nicht erreichbar — Zweitanlage bleibt auf altem Stand."
-    return 0
-  fi
-  rsync -az --delete public/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/public/" &&
-  rsync -az database/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/database/" &&
-  rsync -az routes/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/routes/" &&
-  rsync -az middleware/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/middleware/" &&
-  rsync -az $STAMMDATEIEN "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/" &&
-  ssh "$DEPLOY_STANDBY_HOST" "${DEPLOY_STANDBY_NODE_BIN:+export PATH=\"$DEPLOY_STANDBY_NODE_BIN:\$PATH\"; }cd $DEPLOY_STANDBY_PATH && npm install --omit=dev --no-audit --no-fund >/dev/null" &&
-  echo "Zweitanlage steht auf demselben Stand (Dienst bleibt bewusst aus)." ||
-  echo "WARNUNG: Die Zweitanlage konnte nicht vollstaendig nachgezogen werden."
-}
