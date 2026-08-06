@@ -41,4 +41,19 @@ rsync -az server.js audit.js push.js sse.js scheduler.js planning-recurrence.js 
 # Puppeteer & Co. aussen vor; ist nichts zu tun, ist der Schritt praktisch ein No-op.
 ssh "$DEPLOY_HOST" "${DEPLOY_NODE_BIN:+export PATH=\"$DEPLOY_NODE_BIN:\$PATH\"; }cd $DEPLOY_PATH && npm install --omit=dev --no-audit --no-fund"
 ssh "$DEPLOY_HOST" "systemctl --user restart $DEPLOY_SERVICE"
-echo "Erfolgreich deployed."
+
+# Nachsehen, ob der Dienst wirklich wieder da ist. Ohne diese Probe meldet das Skript auch dann
+# "erfolgreich", wenn der Server nach dem Neustart gar nicht mehr hochkommt — etwa weil eine neue
+# Datei im Projektstamm oben in der festen Liste fehlt.
+echo "Warte auf den Dienst ..."
+for i in $(seq 1 20); do
+  if ssh "$DEPLOY_HOST" "curl -sf -o /dev/null http://localhost:3000/health" 2>/dev/null; then
+    echo "Erfolgreich deployed. (/health antwortet)"
+    exit 0
+  fi
+  sleep 2
+done
+echo "FEHLER: Der Dienst antwortet nach 40 s nicht auf /health."
+echo "Protokoll ansehen mit:"
+echo "  ssh $DEPLOY_HOST 'journalctl --user -u $DEPLOY_SERVICE -n 40 --no-pager'"
+exit 1
