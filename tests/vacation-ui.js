@@ -24,10 +24,27 @@ function req(method, p, token, body) {
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
 
+// UHR FESTGEHALTEN. Der Urlaubsanspruch ist JAHRESBEZOGEN, und „genommen" gegen „geplant"
+// entscheidet sich am heutigen Datum. Feste Zeitraeume im Test wandern deshalb mit der Zeit von
+// „Zukunft" nach „Vergangenheit" — am 07.08.2026 ist genau das passiert: „2026-08-03 bis
+// 2026-08-07" war beim Schreiben Zukunft und zaehlte ploetzlich als genommen.
+//
+// Die Zeitraeume relativ zu heute zu waehlen hilft nicht: Sie muessen ALLE IM SELBEN JAHR liegen
+// wie der Anspruch, und in einem Januar oder Dezember gibt es nicht auf beiden Seiten Platz.
+// Deshalb laeuft der Server hier mit einer festgehaltenen Uhr (Mitte des Testjahres); die
+// Zeitraeume bleiben fest und der Test veraltet nie.
+const TESTJAHR = 2026;
+const UHR_PRELOAD = path.join(os.tmpdir(), 'vacation-uhr-' + process.pid + '.js');
+fs.writeFileSync(UHR_PRELOAD, `const E = Date; const ziel = new E('${TESTJAHR}-07-15T12:00:00').getTime();
+const v = ziel - E.now();
+function G(...a) { return a.length === 0 ? new E(E.now() + v) : new E(...a); }
+G.prototype = E.prototype; G.now = () => E.now() + v; G.parse = E.parse; G.UTC = E.UTC;
+globalThis.Date = G;`);
+
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
   const lg = fs.openSync('/tmp/vacation-ui-srv.log', 'w');
-  const srv = spawn('node', ['server.js'], { cwd: path.join(__dirname, '..'),
+  const srv = spawn('node', ['-r', UHR_PRELOAD, 'server.js'], { cwd: path.join(__dirname, '..'),
     env: { ...process.env, PORT: String(PORT), DB_PATH: DB, JWT_SECRET: 'test-secret-mindestens-32-zeichen-lang' }, stdio: ['ignore', lg, lg] });
   let browser;
   try {
