@@ -24,15 +24,30 @@ const hole = (pfad) => new Promise(res => {
 });
 
 // Die zu übertragenden Pfade aus deploy.sh herauslesen — nicht hier doppelt pflegen.
+//
+// Seit die Dateien des Projektstamms in der Variablen $STAMMDATEIEN stehen (damit Hauptanlage und
+// Zweitanlage garantiert dasselbe bekommen), muss der Test sie AUFLÖSEN. Sonst liest er „$STAMMDATEIEN"
+// als Dateinamen und prüft in Wahrheit nichts mehr — genau das ist beim Umbau passiert.
 function pfadeAusDeploySkript() {
   const skript = fs.readFileSync(path.join(PROJEKT, 'deploy.sh'), 'utf8');
+  const variablen = {};
+  for (const zeile of skript.split('\n')) {
+    const m = /^\s*([A-Z_]+)="([^"]*)"\s*$/.exec(zeile);
+    if (m) variablen[m[1]] = m[2];
+  }
   const pfade = [];
   for (const zeile of skript.split('\n')) {
     if (!/^\s*rsync\s/.test(zeile)) continue;
-    // alles zwischen den Optionen und dem Ziel ("$DEPLOY_HOST:...)
-    const ohneZiel = zeile.replace(/"\$DEPLOY_HOST[^"]*"\s*$/, '');
-    for (const teil of ohneZiel.trim().split(/\s+/).slice(1)) {
-      if (teil.startsWith('-')) continue;
+    // alles zwischen den Optionen und dem Ziel ("$DEPLOY_HOST:… bzw. "$DEPLOY_STANDBY_HOST:…)
+    const ohneZiel = zeile.replace(/"\$DEPLOY(_STANDBY)?_HOST[^"]*"\s*(&&)?\s*$/, '');
+    for (let teil of ohneZiel.trim().split(/\s+/).slice(1)) {
+      if (teil.startsWith('-') || teil === '&&' || teil === '\\') continue;
+      if (teil.startsWith('$')) {                       // z. B. $STAMMDATEIEN
+        const wert = variablen[teil.slice(1)];
+        if (!wert) throw new Error('Unbekannte Variable in deploy.sh: ' + teil);
+        for (const einzeln of wert.trim().split(/\s+/)) pfade.push(einzeln.replace(/\/$/, ''));
+        continue;
+      }
       pfade.push(teil.replace(/\/$/, ''));
     }
   }
