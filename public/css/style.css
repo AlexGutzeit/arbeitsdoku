@@ -1604,6 +1604,12 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .welcome-bulletin--klickbar { cursor: pointer; }
 .welcome-bulletin--klickbar:hover { background: var(--bg); }
 .welcome-bulletin--klickbar:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+/* Anklickbarer Termin auf der Willkommensseite — gleiche Bedienung wie beim Aushang. */
+.welcome-task--klickbar { cursor: pointer; }
+.welcome-task--klickbar:hover { background: var(--bg); }
+.welcome-task--klickbar:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+/* Kurz hervorgehoben, wenn man von der Willkommensseite auf einen Termin getippt hat. */
+.tl-plan-entry--hervor { outline: 3px solid var(--primary); outline-offset: 2px; z-index: 20; }
 .welcome-bulletin-header { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
 .welcome-bulletin-header strong { font-size: 0.9rem; }
 .welcome-bulletin-event { font-size: 0.75rem; color: var(--primary); }

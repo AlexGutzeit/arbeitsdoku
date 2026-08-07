@@ -260,6 +260,18 @@ async function renderPlanningContent() {
       scrollContainer.scrollTop = Math.max(0, scrollY);
     }
   }
+
+  // Von der Willkommensseite auf einen Termin getippt? Dann zu genau diesem scrollen und ihn kurz
+  // hervorheben — NACH dem Scrollen zur Kernarbeitszeit, sonst wird es gleich wieder ueberschrieben.
+  if (S._planungZiel && view === 'day') {
+    const ziel = mainEl.querySelector(`.tl-plan-entry[data-planning-id="${S._planungZiel}"]`);
+    S._planungZiel = null;
+    if (ziel) {
+      ziel.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      ziel.classList.add('tl-plan-entry--hervor');
+      setTimeout(() => ziel.classList.remove('tl-plan-entry--hervor'), 2500);
+    }
+  }
 }
 
 // --- Planungs-Erinnerungen (Push vor einem Termin) ---

@@ -86,7 +86,11 @@ async function renderWelcomeWeek() {
       const planningsHtml = dayPlannings.map(e => {
         const proj = e.project_name || e.project_text || '';
         const colleagues = e.assigned_users.filter(u => u.user_id !== S.user.id).map(u => u.user_name);
-        return `<div class="welcome-task${isToday ? ' welcome-task-today' : ''}">
+        // Anklickbar wie die Aushaenge: fuehrt in die Tagesansicht der Planung zu genau diesem
+        // Termin. Die Knoepfe darin (Navigieren/Uebernehmen) fangen ihre Klicks selbst ab.
+        return `<div class="welcome-task welcome-task--klickbar${isToday ? ' welcome-task-today' : ''}"
+            role="button" tabindex="0" data-planung="${e.id}" data-planung-tag="${date}"
+            aria-label="Termin ${e.time_from} bis ${e.time_to} in der Tagesansicht öffnen">
           <div class="welcome-task-time"><strong>${dayLabel}</strong> ${e.time_from} - ${e.time_to}</div>
           <div class="welcome-task-details">
             ${proj ? `<span>&#128193; ${esc(proj)}</span>` : ''}
@@ -599,10 +603,20 @@ async function renderWelcome() {
   mainEl.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     const aushang = e.target.closest('[data-aushang]');
-    if (!aushang) return;
-    e.preventDefault();
-    S._aushangZiel = Number(aushang.dataset.aushang);
-    navigate('/bulletin');
+    if (aushang) {
+      e.preventDefault();
+      S._aushangZiel = Number(aushang.dataset.aushang);
+      navigate('/bulletin');
+      return;
+    }
+    const termin = e.target.closest('[data-planung]');
+    if (termin) {
+      e.preventDefault();
+      S._planungZiel = Number(termin.dataset.planung);
+      S.planningDate = new Date(termin.dataset.planungTag + 'T12:00:00');
+      S.planningView = 'day';
+      navigate('/planning');
+    }
   });
 
   // Navigation starten (delegiert, da Inhalt dynamisch)
@@ -611,6 +625,16 @@ async function renderWelcome() {
     if (navBtn) { openNav(navBtn.dataset.addr); return; }
     const acceptBtn = e.target.closest('.accept-welcome-plan');
     if (acceptBtn) { S._uebernahmeVon = '/welcome'; navigate('/planning/accept/' + acceptBtn.dataset.id); return; }
+    // Termin antippen → Planung, Tagesansicht, dort zum Termin springen.
+    // Knoepfe im Termin (Navigieren/Uebernehmen) sind oben schon behandelt und kommen nicht hierher.
+    const termin = e.target.closest('[data-planung]');
+    if (termin && !e.target.closest('button')) {
+      S._planungZiel = Number(termin.dataset.planung);
+      S.planningDate = new Date(termin.dataset.planungTag + 'T12:00:00');
+      S.planningView = 'day';
+      navigate('/planning');
+      return;
+    }
     // Aushang antippen → Schwarzes Brett, dort zum Eintrag springen
     const aushang = e.target.closest('[data-aushang]');
     if (aushang) { S._aushangZiel = Number(aushang.dataset.aushang); navigate('/bulletin'); return; }
