@@ -468,7 +468,11 @@ async function renderWelcome() {
     }
   } catch (e) {}
 
-  const bulletinCard = b => `<div class="welcome-bulletin">
+  // Anklickbar: fuehrt zum Schwarzen Brett und dort direkt zu diesem Aushang. Als Knopf statt als
+  // div, damit er auch per Tastatur erreichbar ist (die Barrierefreiheits-Pruefung achtet darauf).
+  const bulletinCard = b => `<div class="welcome-bulletin welcome-bulletin--klickbar"
+      role="button" tabindex="0" data-aushang="${b.id}"
+      aria-label="Aushang ${esc(b.title)} am Schwarzen Brett öffnen">
     <div class="welcome-bulletin-header">
       <strong>${esc(b.title)}</strong>
       ${b.event_date ? `<span class="welcome-bulletin-event">&#128197; ${formatDateDE(b.event_date)}</span>` : ''}
@@ -591,12 +595,25 @@ async function renderWelcome() {
   // Wochen-Planung laden
   await renderWelcomeWeek();
 
+  // Tastaturbedienung fuer die anklickbaren Aushaenge (Enter/Leertaste wie ein Knopf)
+  mainEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const aushang = e.target.closest('[data-aushang]');
+    if (!aushang) return;
+    e.preventDefault();
+    S._aushangZiel = Number(aushang.dataset.aushang);
+    navigate('/bulletin');
+  });
+
   // Navigation starten (delegiert, da Inhalt dynamisch)
   mainEl.addEventListener('click', (e) => {
     const navBtn = e.target.closest('.nav-to-addr');
     if (navBtn) { openNav(navBtn.dataset.addr); return; }
     const acceptBtn = e.target.closest('.accept-welcome-plan');
     if (acceptBtn) { S._uebernahmeVon = '/welcome'; navigate('/planning/accept/' + acceptBtn.dataset.id); return; }
+    // Aushang antippen → Schwarzes Brett, dort zum Eintrag springen
+    const aushang = e.target.closest('[data-aushang]');
+    if (aushang) { S._aushangZiel = Number(aushang.dataset.aushang); navigate('/bulletin'); return; }
     // Wetter-Vorschau: Tag antippen → stündlichen Verlauf auf-/zuklappen
     const wwRow = e.target.closest('.ww-row[data-day]');
     if (wwRow) {
@@ -751,12 +768,14 @@ async function renderBulletin() {
   } else {
     cardsHtml = entries.map(b => {
       const createdDate = formatDateDE(b.created_at?.slice(0, 10) || '');
-      return `<div class="bulletin-card${b.is_unread ? ' bulletin-card--unread' : ''}">
+      return `<div class="bulletin-card${b.is_unread ? ' bulletin-card--unread' : ''}" data-id="${b.id}">
         <div class="bulletin-header">
           <h3 class="bulletin-title">${esc(b.title)}</h3>
           ${canEdit ? `<div class="bulletin-actions">
-            <button class="btn btn-sm btn-outline edit-bulletin" data-id="${b.id}">Bearbeiten</button>
-            <button class="btn btn-sm btn-danger del-bulletin" data-id="${b.id}">Löschen</button>
+            <button class="btn btn-sm edit-bulletin" data-id="${b.id}"
+              title="Bearbeiten" aria-label="Aushang ${esc(b.title)} bearbeiten">&#9998;</button>
+            <button class="btn btn-sm del-btn del-bulletin" data-id="${b.id}"
+              title="Löschen" aria-label="Aushang ${esc(b.title)} löschen">&times;</button>
           </div>` : ''}
         </div>
         ${b.text ? `<div class="bulletin-text">${esc(b.text).replace(/\n/g, '<br>')}</div>` : ''}
@@ -777,6 +796,18 @@ async function renderBulletin() {
       </div>
       <div class="bulletin-list">${cardsHtml}</div>
     </div>`;
+
+  // Von der Willkommensseite hergesprungen? Dann zum gemeinten Aushang scrollen und ihn kurz
+  // hervorheben — sonst landet man bei vielen Aushaengen oben und sucht den, den man angetippt hat.
+  if (S._aushangZiel) {
+    const ziel = mainEl.querySelector(`.bulletin-card[data-id="${S._aushangZiel}"]`);
+    S._aushangZiel = null;
+    if (ziel) {
+      ziel.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      ziel.classList.add('bulletin-card--hervor');
+      setTimeout(() => ziel.classList.remove('bulletin-card--hervor'), 2500);
+    }
+  }
 
   mainEl.querySelectorAll('.edit-bulletin').forEach(btn => {
     btn.addEventListener('click', () => navigate('/bulletin/edit/' + btn.dataset.id));

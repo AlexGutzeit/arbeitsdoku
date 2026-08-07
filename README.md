@@ -161,7 +161,7 @@ Material-/Bestellanforderungen der Mitarbeiter; Chef sieht offene Bestellungen (
 
 #### 📌 Schwarzes Brett
 
-Aushänge/Ankündigungen fürs ganze Team, mit Benachrichtigungs-Badge.
+Aushänge/Ankündigungen fürs ganze Team, mit Benachrichtigungs-Badge. Aushänge lassen sich **bearbeiten und löschen** (Bleistift und ×, rechts neben dem Titel — Chef/Admin und wer das Einzelrecht hat). Wird ein Aushang auf der **Willkommensseite** eingeblendet, führt ein Antippen zum Schwarzen Brett und **direkt zu diesem Eintrag**, der dort kurz hervorgehoben wird; per Tastatur mit Enter oder Leertaste.
 
 #### 📝 Notizen
 

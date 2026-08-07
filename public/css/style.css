@@ -1600,6 +1600,10 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   border-left: 3px solid var(--primary);
 }
 .welcome-bulletin:last-child { margin-bottom: 0; }
+/* Anklickbarer Aushang auf der Willkommensseite: als Knopf bedienbar, aber optisch ruhig. */
+.welcome-bulletin--klickbar { cursor: pointer; }
+.welcome-bulletin--klickbar:hover { background: var(--bg); }
+.welcome-bulletin--klickbar:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .welcome-bulletin-header { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
 .welcome-bulletin-header strong { font-size: 0.9rem; }
 .welcome-bulletin-event { font-size: 0.75rem; color: var(--primary); }
@@ -1669,8 +1673,14 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   border-left: 4px solid var(--primary);
 }
 .bulletin-card--unread { background: var(--primary-light); }
-.bulletin-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
-.bulletin-title { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+/* Kurz hervorgehoben, wenn man von der Willkommensseite auf einen Aushang getippt hat. */
+.bulletin-card--hervor { outline: 3px solid var(--primary); outline-offset: 2px; transition: outline-color 0.4s; }
+@media (prefers-reduced-motion: reduce) { .bulletin-card--hervor { transition: none; } }
+.bulletin-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+/* Titel darf schrumpfen, die Symbole bleiben daneben — sonst rutschen sie am Handy unter den
+   Titel und sehen aus wie eine zweite Zeile des Textes. */
+.bulletin-title { font-size: 1.1rem; font-weight: 600; color: var(--text); flex: 1; min-width: 0; }
+.bulletin-actions { flex: 0 0 auto; }
 .bulletin-meta { font-size: 0.75rem; color: var(--text-lighter); display: flex; flex-wrap: wrap; gap: 0.15rem 0.75rem; margin-top: 0.5rem; }
 .bulletin-text { font-size: 0.9rem; color: var(--text); line-height: 1.5; white-space: pre-wrap; }
 .bulletin-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
@@ -1699,7 +1709,9 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 @media (max-width: 600px) {
   .welcome-grid { grid-template-columns: 1fr; }
   .welcome-clock { font-size: 2.2rem; }
-  .bulletin-header { flex-direction: column; }
+  /* Frueher standen hier breite Text-Knoepfe („Bearbeiten"/„Loeschen"), die am Handy neben dem
+     Titel keinen Platz hatten — daher die Umstellung auf Spalte. Seit es kleine Symbole sind,
+     passen sie daneben; die Umstellung liess sie wie eine zweite Titelzeile aussehen. */
   .bulletin-meta { text-align: left; margin-top: 0.25rem; }
 }
 
