@@ -142,7 +142,7 @@ async function renderPlanningContent() {
       if (!istMauszeiger()) return;
       if (tooltipEl && tooltipEl.style.display !== 'none') showTooltip(tooltipEl.innerHTML, ev.clientX, ev.clientY);
     });
-    el.addEventListener('mouseleave', hideTooltip);
+    el.addEventListener('mouseleave', () => { if (istMauszeiger()) hideTooltip(); });   // siehe app-3-dashboard.js
 
     // Handy: langer Druck zeigt die Details. Gemeinsame Funktion mit dem Zeitnachweis (B7) —
     // sie unterdrueckt zusaetzlich den Klick nach dem Loslassen, der hier vorher noch durchging

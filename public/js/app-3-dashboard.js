@@ -268,7 +268,10 @@ async function renderDashboardContent() {
       if (!istMauszeiger()) return;
       if (tooltipEl && tooltipEl.style.display !== 'none') showTooltip(tooltipEl.innerHTML, ev.clientX, ev.clientY);
     });
-    el.addEventListener('mouseleave', hideTooltip);
+    // Auch beim Verlassen auf ein echtes Maus-Ereignis pruefen. Chrome schickt nach jeder
+    // Beruehrung Maus-Ersatzereignisse; verschiebt sich dabei etwas unter dem Finger, kam ein
+    // mouseleave — und die per langem Druck geoeffnete Sprechblase war beim Loslassen wieder weg.
+    el.addEventListener('mouseleave', () => { if (istMauszeiger()) hideTooltip(); });
     // Auf dem Handy dasselbe per langem Druck (B7) — die Planung kann das laengst.
     attachLongPressTooltip(el, () => {
       const e = entryMap[el.dataset.entryId];

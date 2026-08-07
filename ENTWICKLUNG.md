@@ -14,6 +14,54 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-07 · Scrollflächen messen ihren Platz, statt ihn zu schätzen
+Im CSS standen seit dem allerersten Commit feste Schätzungen: Zeitleiste `100vh - 260px`,
+Auftrags-Board `100vh - 160px`. Die Zahl unterstellt, dass über der Fläche immer gleich viel steht.
+Das stimmt nirgends: In der **Planung** sind es nur 166 px — auf **jedem** Handy blieben unten
+exakt **94 px** ungenutzt (gemessen von 360×640 bis 430×932, immer dieselbe Zahl, weil der Fehler
+konstant ist und nicht mit dem Bildschirm skaliert). Auf dem **Zeitnachweis** steht umgekehrt viel
+darüber, dort wurde die Seite unnötig lang.
+
+Seitdem misst `passeScrollflaechenAn()` (`public/js/app-1-core.js`) nach jedem Neuaufbau und beim
+Drehen/Vergrößern: verfügbare Höhe = Fensterhöhe − Oberkante der Fläche − *was unter der Karte noch
+kommt* − 10 px Luft, mindestens 260 px. Gerechnet wird in **Dokument-Koordinaten**, damit das
+Ergebnis nicht davon abhängt, wie weit gerade gescrollt ist. Der Abzug für das, was darunter steht,
+ist keine Vorsicht auf Verdacht: Ohne ihn schöbe die Fläche eine Legende oder eine zweite Karte aus
+dem Bild.
+
+Die Höhe wird **vor** `viewStateRestore()` gesetzt — andersherum schnitte die neue Höhe die eben
+wiederhergestellte Scroll-Position wieder ab (siehe B10).
+
+**Falle beim Gegenprüfen:** Der erste Sabotage-Versuch schaltete nur den Aufruf im Beobachter ab —
+der Test blieb grün, weil `setViewport` das `resize`-Ereignis auslöst und die Messung darüber
+trotzdem lief. Erst als die **Funktion selbst** stillgelegt war, meldete `platznutzung-ui.js` die
+94 px zurück. Wer hier etwas prüft, muss beide Wege abschalten.
+
+**Was der Test NICHT verlangt:** dass unten nie Platz frei bleibt. Auf einem großen Monitor ist der
+Tag irgendwann vollständig im Bild — dann ist der Rest darunter keine Verschwendung, sondern
+schlicht nichts mehr da. Der Test unterscheidet das über `scrollHeight > clientHeight`.
+
+**Was die Änderung nebenbei aufgedeckt hat:** Nach dem Umbau fiel `longpress-details-ui.js` um —
+die per langem Druck geöffnete Sprechblase verschwand auf dem Zeitnachweis beim **Loslassen**
+wieder. Gemessen statt geraten: Während des Drucks war sie da, nach `touchend` schickte Chrome
+`mouseout`/`mouseleave` (Maus-Ersatzereignisse), und `el.addEventListener('mouseleave', hideTooltip)`
+hatte — anders als `mouseenter`/`mousemove` daneben — **keinen** `istMauszeiger()`-Wächter.
+
+Der Fehler lag also schon vorher im Code; die neue Höhe hat die Geometrie nur so verschoben, dass er
+zuschnappt. Auf einem echten Gerät hätte er jeden getroffen, der einen Eintrag nahe dem unteren
+Bildschirmrand hält. In `app-4-planning-tools.js` stand dieselbe ungeschützte Zeile und ist
+mitgefixt, obwohl der Test sie (noch) nicht traf.
+
+Die Ursache ist **nachgemessen, nicht vermutet**: Mit Wächter, aber ohne die zweite Änderung
+(Wegfall des kurzen `maxHeight`-Zurücksetzens) ist der Test grün — ohne Wächter, aber mit ihr fällt
+er um. Der Wächter ist die Korrektur; das Zurücksetzen wurde nur entfernt, weil es die Seite bei
+jedem Neuaufbau ein zweites Mal auslegte.
+
+Gleicher Anlass, zweite Änderung: Die drei Kennzahl-Karten des Zeitnachweises standen auf dem Handy
+**untereinander** (~200 px, bevor überhaupt Inhalt kam) und stehen jetzt **nebeneinander** (~85 px),
+wie auf der Statistik-Seite längst üblich. Zusammen passt der Zeitnachweis auf einem 411×795-Gerät
+wieder auf **einen** Bildschirm (vorher 1117 px Seitenlänge).
+
 ### 2026-08-07 · Nie ein zweiter Prozess auf der Produktions-Datenbank
 Die App hält die Datenbank vollständig im Arbeitsspeicher; `database/init.js` startet beim Laden
 einen Takt, der sie **alle 5 Sekunden als Ganzes** in die Datei zurückschreibt. Ein zweites

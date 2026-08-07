@@ -754,7 +754,10 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .timeline-scroll {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  /* Nur der erste Bildaufbau: danach misst passeScrollflaechenAn() den wirklich freien Platz.
+     dvh statt vh, weil vh auf dem Handy die Hoehe OHNE Adressleiste meint und dadurch zu gross ist. */
   max-height: calc(100vh - 260px);
+  max-height: calc(100dvh - 260px);
 }
 .timeline-container {
   display: flex;
@@ -1100,7 +1103,9 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 
 /* === Responsive === */
 @media (max-width: 640px) {
-  .summary-grid { grid-template-columns: 1fr; gap: 0.5rem; }
+  /* Untereinander verbrauchten die drei Karten rund 200 px, bevor ueberhaupt Inhalt kam.
+     Nebeneinander passen sie in eine Zeile — wie auf der Statistik-Seite laengst ueblich. */
+  .summary-grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.5rem; }
   .summary-card { padding: 0.75rem; }
   .summary-card .value { font-size: 1.25rem; }
   .form-row, .form-row-3 { grid-template-columns: 1fr; }
@@ -1512,7 +1517,7 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .board-head { padding: 0 0.25rem 0.5rem; }
 .board-head h2 { margin: 0; }
 /* Board scrollt in SICH (beide Leisten bleiben im Bild) — wie .timeline-scroll; Spaltenköpfe kleben oben. */
-.board-scroll { overflow: auto; -webkit-overflow-scrolling: touch; max-height: calc(100vh - 160px); padding-bottom: 0.5rem; }
+.board-scroll { overflow: auto; -webkit-overflow-scrolling: touch; max-height: calc(100dvh - 160px); padding-bottom: 0.5rem; }
 .board-columns { display: flex; gap: 0.75rem; align-items: flex-start; }
 .board-col { flex: 0 0 220px; width: 220px; background: var(--bg-soft, #f5f6f8); border: 1px solid var(--border); border-radius: 10px; align-self: stretch; }
 .board-col-head { position: sticky; top: 0; z-index: 3; background: var(--bg-soft, #f5f6f8); font-weight: 600; font-size: 0.9rem; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); border-radius: 10px 10px 0 0; }

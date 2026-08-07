@@ -193,6 +193,46 @@ document.addEventListener('scroll', (e) => {
   if (e.target && e.target.matches && e.target.matches(_SCROLLBOX_SEL)) _scheduleSave();
 }, true);
 
+// --- Scrollflächen so hoch machen, wie wirklich Platz ist -------------------------------------
+// Im CSS standen feste Schätzungen: Zeitleiste `100vh - 260px`, Auftrags-Board `100vh - 160px`.
+// Wie hoch das ist, was ÜBER der Fläche steht, ist aber je Seite verschieden. In der Planung waren
+// es nur 166 px — auf jedem Handy blieben deshalb 94 px ungenutzt (gemessen von 360x640 bis
+// 430x932, immer exakt 94). Auf dem Zeitnachweis steht dagegen viel darüber, dort wurde die Seite
+// unnötig lang. Also wird gemessen statt geschätzt.
+//
+// Gerechnet wird in DOKUMENT-Koordinaten, damit das Ergebnis nicht davon abhängt, wie weit gerade
+// gescrollt ist. Was UNTER der Karte noch kommt, wird abgezogen — sonst schöbe die Fläche eine
+// Legende oder eine weitere Karte aus dem Bild.
+const _FLAECHE_SEL = '.timeline-scroll, .board-scroll';
+const _FLAECHE_LUFT = 10;    // schmaler Rand, damit die Karte nicht am Bildschirmrand klebt
+const _FLAECHE_MIN = 260;    // darunter wird die Fläche unbrauchbar → dann lieber die Seite scrollen
+
+function passeScrollflaechenAn() {
+  const main = document.querySelector('.main');
+  if (!main) return;
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  document.querySelectorAll(_FLAECHE_SEL).forEach(box => {
+    // NICHT erst `maxHeight = ''` setzen und dann messen. Beide Messwerte hängen gar nicht von der
+    // eigenen Höhe ab: Die Oberkante bestimmt, was DARÜBER steht, und `darunter` ist die Höhe der
+    // Geschwister unter der Karte — die verschiebt sich mit, bleibt als Differenz also gleich.
+    // Das Zurücksetzen legte die Seite nur unnötig ein zweites Mal aus, bei jedem Neuaufbau.
+    // (Es war NICHT die Ursache der verschwundenen Sprechblase — das war ein ungeschütztes
+    // mouseleave, siehe app-3-dashboard.js. Nachgemessen: ohne Wächter fällt der Test auch ohne
+    // dieses Zurücksetzen um.)
+    const karte = box.closest('.timeline-wrapper, .board-wrapper') || box;
+    const obenImDokument = box.getBoundingClientRect().top + scrollY;
+    const darunter = Math.max(0, main.getBoundingClientRect().bottom - karte.getBoundingClientRect().bottom);
+    const platz = window.innerHeight - obenImDokument - darunter - _FLAECHE_LUFT;
+    const neu = Math.max(_FLAECHE_MIN, Math.round(platz)) + 'px';
+    if (box.style.maxHeight !== neu) box.style.maxHeight = neu;   // unnötige Neuberechnung vermeiden
+  });
+}
+
+let _flaechenTimer = null;
+function _flaechenNachziehen() { clearTimeout(_flaechenTimer); _flaechenTimer = setTimeout(passeScrollflaechenAn, 120); }
+window.addEventListener('resize', _flaechenNachziehen, { passive: true });
+window.addEventListener('orientationchange', _flaechenNachziehen, { passive: true });
+
 // … und nach jedem Neuaufbau der Hauptfläche automatisch wiederherstellen. Zentral per Beobachter, damit es
 // für JEDE Seite gilt und nicht an ~19 Render-Stellen einzeln gepflegt werden muss.
 let _restorePending = false;
@@ -212,6 +252,9 @@ function initViewStateKeeper() {
     _imNeuaufbau = true;
     requestAnimationFrame(() => {
       _restorePending = false;
+      // Erst die Höhe setzen, dann die Scroll-Position wiederherstellen: andersherum würde die
+      // frisch gesetzte Höhe die eben zurückgestellte Position wieder abschneiden.
+      try { passeScrollflaechenAn(); } catch (_) {}
       try { viewStateRestore(); } catch (_) {}
       // Kurzer Nachlauf: das vom Umbau ausgeloeste Scroll-Ereignis trifft teils erst danach ein.
       setTimeout(() => { _imNeuaufbau = false; }, 80);
