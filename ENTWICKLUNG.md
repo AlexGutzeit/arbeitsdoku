@@ -14,6 +14,20 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-07 · Nie ein zweiter Prozess auf der Produktions-Datenbank
+Die App hält die Datenbank vollständig im Arbeitsspeicher; `database/init.js` startet beim Laden
+einen Takt, der sie **alle 5 Sekunden als Ganzes** in die Datei zurückschreibt. Ein zweites
+Programm, das `initDatabase()` aufruft, bekommt eine **eigene Kopie** — und schreibt sie beim
+nächsten Takt über die Datei. Alles, was der laufende Server inzwischen gespeichert hat, wäre weg.
+
+Aufgefallen an einem Hilfsskript, das eine Betriebsmeldung verschicken sollte und dafür
+`push.notifyUsers` benutzte: Die Funktion löscht abgelaufene Abos, markiert die Kopie also als
+geändert. Ob es gutgeht, hing daran, ob der Prozess in unter fünf Sekunden fertig wird.
+
+**Regel:** Hilfsskripte neben dem laufenden Server öffnen die Datenbankdatei **selbst und nur
+lesend** (`new SQL.Database(fs.readFileSync(...))`), niemals über `database/init.js`. So macht es
+auch `make-backup.js`. Wer schreiben muss, tut es über die laufende Anwendung — nicht daneben.
+
 ### 2026-07-31 · Statistik: Abschluss-Hinweis gehört zum angewählten Zeitraum
 Der Hinweis „abgerechnet" zeigte auf **jeder** Ansicht den letzten Abschluss samt dessen Zahlen —
 auch beim Ansehen eines anderen Monats. Jetzt zählen die Abschlüsse, die sich mit dem angezeigten
