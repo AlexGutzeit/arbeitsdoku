@@ -51,9 +51,35 @@ standby_nachziehen() {
   rsync -az routes/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/routes/" &&
   rsync -az middleware/ "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/middleware/" &&
   rsync -az $STAMMDATEIEN "$DEPLOY_STANDBY_HOST:$DEPLOY_STANDBY_PATH/" &&
-  ssh "$DEPLOY_STANDBY_HOST" "${DEPLOY_STANDBY_NODE_BIN:+export PATH=\"$DEPLOY_STANDBY_NODE_BIN:\$PATH\"; }cd $DEPLOY_STANDBY_PATH && npm install --omit=dev --no-audit --no-fund >/dev/null" &&
-  echo "Zweitanlage steht auf demselben Stand (Dienst bleibt bewusst aus)." ||
-  echo "WARNUNG: Die Zweitanlage konnte nicht vollstaendig nachgezogen werden."
+  ssh "$DEPLOY_STANDBY_HOST" "${DEPLOY_STANDBY_NODE_BIN:+export PATH=\"$DEPLOY_STANDBY_NODE_BIN:\$PATH\"; }cd $DEPLOY_STANDBY_PATH && npm install --omit=dev --no-audit --no-fund >/dev/null" ||
+  { echo "WARNUNG: Die Zweitanlage konnte nicht vollstaendig nachgezogen werden."; return 0; }
+
+  # STARTPROBE. Dateien kopiert zu haben heisst nicht, dass die Anlage im Ernstfall hochkommt —
+  # eine vergessene Datei oder eine andere Node-Fassung faellt sonst erst auf, wenn man sie braucht.
+  # Deshalb hier ein Probestart, der NICHTS anfasst:
+  #   * eigener Port (3999), damit nichts mit dem echten Dienst kollidiert
+  #   * KOPIE der Datenbank in /tmp, die echte bleibt unberuehrt
+  #   * VAPID leer -> der Zeitplaner kann keine Push-Meldungen verschicken
+  # Danach wird der Probelauf beendet und die Kopie geloescht.
+  echo "Probestart auf der Zweitanlage ..."
+  if ssh "$DEPLOY_STANDBY_HOST" "${DEPLOY_STANDBY_NODE_BIN:+export PATH=\"$DEPLOY_STANDBY_NODE_BIN:\$PATH\"; }
+      cd $DEPLOY_STANDBY_PATH &&
+      cp data/arbeitsdoku.db /tmp/startprobe.db 2>/dev/null &&
+      PORT=3999 DB_PATH=/tmp/startprobe.db VAPID_PUBLIC= VAPID_PRIVATE= VAPID_SUBJECT= \
+        nohup node server.js >/tmp/startprobe.log 2>&1 &
+      probe_pid=\$!
+      sleep 6
+      erg=\$(curl -sf -m 5 http://localhost:3999/health || echo FEHLER)
+      # Gezielt ueber die PID beenden. 'pkill -f startprobe' faende das Suchmuster auch in der
+      # eigenen SSH-Befehlszeile und schoesse die Sitzung mit ab — genau so ist es passiert.
+      kill \$probe_pid 2>/dev/null
+      sleep 1
+      rm -f /tmp/startprobe.db
+      [ \"\$erg\" != FEHLER ] && echo \"  Probestart ok: \$erg\" || { echo '  Probestart FEHLGESCHLAGEN'; tail -5 /tmp/startprobe.log; exit 1; }"; then
+    echo "Zweitanlage steht auf demselben Stand und startet (Dienst bleibt bewusst aus)."
+  else
+    echo "WARNUNG: Die Zweitanlage hat die Dateien, startet damit aber NICHT. Im Ernstfall waere sie unbrauchbar."
+  fi
 }
 
 echo "Deploye auf $DEPLOY_HOST:$DEPLOY_PATH ..."
