@@ -62,19 +62,27 @@ standby_nachziehen() {
   #   * VAPID leer -> der Zeitplaner kann keine Push-Meldungen verschicken
   # Danach wird der Probelauf beendet und die Kopie geloescht.
   echo "Probestart auf der Zweitanlage ..."
+  # Wichtig: den Hintergrundstart NICHT an eine &&-Kette haengen. `cd … && cp … && node … &`
+  # schiebt die GANZE Kette in den Hintergrund, und $! ist dann die Nummer der Kette statt die
+  # von node — der kill danach trifft ins Leere und der Probelauf bleibt stehen (so geschehen).
   if ssh "$DEPLOY_STANDBY_HOST" "${DEPLOY_STANDBY_NODE_BIN:+export PATH=\"$DEPLOY_STANDBY_NODE_BIN:\$PATH\"; }
-      cd $DEPLOY_STANDBY_PATH &&
-      cp data/arbeitsdoku.db /tmp/startprobe.db 2>/dev/null &&
-      PORT=3999 DB_PATH=/tmp/startprobe.db VAPID_PUBLIC= VAPID_PRIVATE= VAPID_SUBJECT= \
-        nohup node server.js >/tmp/startprobe.log 2>&1 &
+      set -e
+      cd $DEPLOY_STANDBY_PATH
+      cp data/arbeitsdoku.db /tmp/startprobe.db
+      set +e
+      PORT=3999 DB_PATH=/tmp/startprobe.db VAPID_PUBLIC= VAPID_PRIVATE= VAPID_SUBJECT= nohup node server.js >/tmp/startprobe.log 2>&1 &
       probe_pid=\$!
       sleep 6
       erg=\$(curl -sf -m 5 http://localhost:3999/health || echo FEHLER)
-      # Gezielt ueber die PID beenden. 'pkill -f startprobe' faende das Suchmuster auch in der
-      # eigenen SSH-Befehlszeile und schoesse die Sitzung mit ab — genau so ist es passiert.
       kill \$probe_pid 2>/dev/null
+      sleep 2
+      # Sicherheitsnetz: falls doch etwas auf dem Port haengt, gezielt ueber den Port beenden.
+      rest=\$(ss -lntp 2>/dev/null | grep ':3999' | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
+      [ -n \"\$rest\" ] && kill \$rest 2>/dev/null
       sleep 1
       rm -f /tmp/startprobe.db
+      offen=\$(ss -lnt 2>/dev/null | grep -c ':3999')
+      [ \"\$offen\" = 0 ] || echo '  WARNUNG: Probelauf haengt noch auf Port 3999'
       [ \"\$erg\" != FEHLER ] && echo \"  Probestart ok: \$erg\" || { echo '  Probestart FEHLGESCHLAGEN'; tail -5 /tmp/startprobe.log; exit 1; }"; then
     echo "Zweitanlage steht auf demselben Stand und startet (Dienst bleibt bewusst aus)."
   else
