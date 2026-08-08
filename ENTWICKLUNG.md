@@ -14,6 +14,32 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-08 · Gratulation für das Geburtstagskind — und eine Zeitfalle im eigenen Test
+Bis dahin sahen nur Chef/Admin/Buchhalter, WER Geburtstag hat; die betroffene Person selbst bekam
+nichts. Neu ist eine dezente Karte auf der eigenen Willkommensseite, ohne Alter und ohne Absender
+(„das ganze Team wünscht dir“ wäre unwahr — das Team sieht fremde Geburtstage gar nicht).
+
+Datenschutzrechtlich ist das der einfache Fall: eigene Angabe, kein Dritter. Deshalb sieht sie
+**jede** Person, auch Mitarbeiter. Technisch fällt dabei **kein** neues Datum an:
+`S.user.birth_date` liegt ohnehin im Browser, weil die Pausen-Vorbelegung es für das
+Jugendarbeitsschutzgesetz braucht. Der geschützte Endpunkt `/api/users/geburtstage` bleibt
+unverändert gesperrt (Test weist 403 für Mitarbeiter nach).
+
+**Die eigentliche Lehre steckt im Test daneben.** `willkommen-unveraendert-ui.js` fiel beim nächsten
+Suite-Lauf um — aber nicht wegen der Gratulation: Der Abschnitt „Tagesansicht ohne Sprung“ ruft
+`#/planning` auf, und das öffnet immer den **heutigen** Tag. Die Termine des Tests liegen auf
+Dienstag und Donnerstag. Am **Freitag** war der Test grün, weil auf den Freitag zufällig die
+Urlaubs-Abwesenheit fiel und diese eine Zeitleiste erzeugte; am **Samstag** gab es gar nichts und
+der Test lief in eine Zeitüberschreitung. Grün aus dem falschen Grund — einen Tag lang.
+
+Nachgewiesen, dass es keine Regression war: mit stillgelegter Gratulation fällt derselbe Test
+genauso um. Behoben durch einen zusätzlichen Termin für **heute** plus eine Zeile, die
+ausdrücklich prüft, dass überhaupt eine Zeitleiste da ist — sonst sagt der ganze Abschnitt nichts
+aus, egal was er danach misst.
+
+**Regel:** Wer in einem Test `#/planning` (oder `#/` ) direkt aufruft, braucht Daten für **heute**.
+Daten auf festen Wochentagen machen den Test vom Kalender abhängig.
+
 ### 2026-08-07 · Scrollflächen messen ihren Platz, statt ihn zu schätzen
 Im CSS standen seit dem allerersten Commit feste Schätzungen: Zeitleiste `100vh - 260px`,
 Auftrags-Board `100vh - 160px`. Die Zahl unterstellt, dass über der Fläche immer gleich viel steht.

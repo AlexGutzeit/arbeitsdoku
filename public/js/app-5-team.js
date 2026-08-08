@@ -444,6 +444,31 @@ function openSummaryForm(sched) {
   });
 }
 
+// Gratulation für die angemeldete Person selbst — ohne Alter und ohne Absender: Das Team bekommt
+// den Geburtstag gar nicht angezeigt, „das ganze Team wünscht dir" wäre also schlicht nicht wahr.
+// Die Schalttags-Regel ist dieselbe wie serverseitig in routes/users.js: Wer am 29. Februar geboren
+// ist, wird in Nicht-Schaltjahren am 28. gefeiert — sonst hätte er in drei von vier Jahren keinen.
+function eigeneGratulationHtml(geburtsdatum) {
+  if (!geburtsdatum) return '';
+  const [, gMonat, gTag] = String(geburtsdatum).split('-').map(Number);
+  if (!gMonat || !gTag) return '';
+  const heute = new Date();
+  const jahr = heute.getFullYear(), monat = heute.getMonth() + 1, tag = heute.getDate();
+  const schaltjahr = (jahr % 4 === 0 && jahr % 100 !== 0) || jahr % 400 === 0;
+  const echterTag = gMonat === monat && gTag === tag;
+  const vorgezogen = !schaltjahr && monat === 2 && tag === 28 && gMonat === 2 && gTag === 29;
+  if (!echterTag && !vorgezogen) return '';
+  return `<div class="welcome-section" id="welcome-eigener-geburtstag">
+    <h3>&#127874; Alles Gute zum Geburtstag!</h3>
+    <div class="welcome-bulletin">
+      <div class="welcome-bulletin-text">Schön, dass du da bist.</div>
+      ${vorgezogen
+        ? '<div class="welcome-bulletin-text">Geboren am 29. Februar — den gibt es dieses Jahr nicht, deshalb heute.</div>'
+        : ''}
+    </div>
+  </div>`;
+}
+
 async function renderWelcome() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'welcome');
   bindLayout();
@@ -515,6 +540,14 @@ async function renderWelcome() {
     </div>`;
   }
 
+  // Gratulation für das Geburtstagskind selbst (Alex, 08.08.2026). Sieht NUR die betroffene Person,
+  // und zwar jede — auch Mitarbeiter, die von den Geburtstagen der anderen nichts angezeigt bekommen.
+  // Datenschutzrechtlich unbedenklich, weil es die eigene Angabe ist und kein Dritter vorkommt;
+  // heikel wäre nur die Anzeige für die ganze Belegschaft (siehe oben).
+  // Es wird KEIN neues Datum vom Server geholt: `S.user.birth_date` liegt ohnehin im Browser,
+  // die Pausen-Vorbelegung braucht es für das Jugendarbeitsschutzgesetz.
+  const eigenerGeburtstagHtml = eigeneGratulationHtml(S.user && S.user.birth_date);
+
   let eventBulletinHtml = '';
   if (eventBulletins.length > 0) {
     eventBulletinHtml = `<div class="welcome-section">
@@ -530,6 +563,7 @@ async function renderWelcome() {
         <div class="welcome-clock" id="welcome-clock"></div>
         <h1>Willkommen, ${esc(S.user.name)}!</h1>
       </div>
+      ${eigenerGeburtstagHtml}
       ${geburtstagHtml}
       <div class="welcome-section" id="welcome-week-container">
         <div class="loading"><div class="spinner"></div></div>

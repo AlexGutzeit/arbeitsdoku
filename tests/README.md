@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**150 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**151 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -88,6 +88,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `entwurf-sicherung-ui.js` | Puppeteer-Test (B4): Entwurfs-Sicherung fuer Formulare. |
 | `form-hardening-ui.js` | Puppeteer-UI-Test (B3 + B4): |
 | `geburtsdatum-feld-ui.js` | Das Geburtsdatums-FELD in Mitarbeiter → bearbeiten — über die echte Oberfläche bedient. |
+| `geburtstag-eigener-ui.js` | Gratulation für das Geburtstagskind selbst (Alex, 08.08.2026). |
 | `geburtstag-ui.js` | Geburtstags-Einblendung auf der Willkommensseite. |
 | `hardening-b5b6.js` | API-Test (B5 + B6): |
 | `hoechstarbeitszeit-ui.js` | Hinweis bei Überschreitung der gesetzlichen Höchstarbeitszeit. |

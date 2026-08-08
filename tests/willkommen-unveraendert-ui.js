@@ -56,6 +56,12 @@ function tagDerWoche(n) {
         assigned_user_ids: [max.user.id] })).body.entry.id;
     const t1 = await plan(tag1, '07:00', '11:00', 'Musterstr. 1, 96199 Zapfendorf');
     const t2 = await plan(tag2, '13:00', '16:00', 'Hauptstr. 12, 96052 Bamberg');
+    // Ein Termin fuer HEUTE. Ohne ihn haengt der Abschnitt „Tagesansicht ohne Sprung" davon ab,
+    // welcher Wochentag gerade ist: `#/planning` oeffnet immer den heutigen Tag, und an einem Tag
+    // ohne Eintraege gibt es gar keine Zeitleiste. Am 07.08. (Freitag) war der Test nur deshalb
+    // gruen, weil auf den Freitag zufaellig die Urlaubs-Abwesenheit fiel und diese eine Leiste
+    // erzeugte; am Samstag darauf lief er in eine Zeitueberschreitung. Gruen aus dem falschen Grund.
+    await plan(new Date().toLocaleDateString('sv-SE'), '09:00', '12:00', 'Heutiger Einsatz');
     // Eine genehmigte Abwesenheit an einem dritten Tag — sie darf NICHT anklickbar sein.
     const abw = await req('POST', '/api/absences', admin.token,
       { type: 'urlaub', date_from: tagDerWoche(4), date_to: tagDerWoche(4), target_user_id: max.user.id });
@@ -189,6 +195,8 @@ function tagDerWoche(n) {
     console.log('\n── Tagesansicht ohne Sprung ──');
     await page.goto(BASIS + '/#/planning', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.tl-plan-entry, .timeline-scroll'); await sleep(1800);
+    ok('die Tagesansicht zeigt überhaupt eine Zeitleiste', await page.$('.timeline-scroll') !== null,
+      'ohne Leiste sagt der Abschnitt nichts aus');
     const ohneSprung = await page.evaluate(() => {
       const sc = document.querySelector('.timeline-scroll');
       return {
