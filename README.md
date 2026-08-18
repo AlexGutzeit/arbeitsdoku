@@ -163,11 +163,11 @@ Material-/Bestellanforderungen der Mitarbeiter; Chef sieht offene Bestellungen (
 
 #### 📌 Schwarzes Brett
 
-Aushänge/Ankündigungen fürs ganze Team, mit Benachrichtigungs-Badge. Aushänge lassen sich **bearbeiten und löschen** (Bleistift und ×, rechts neben dem Titel — Chef/Admin und wer das Einzelrecht hat). Wird ein Aushang auf der **Willkommensseite** eingeblendet, führt ein Antippen zum Schwarzen Brett und **direkt zu diesem Eintrag**, der dort kurz hervorgehoben wird; per Tastatur mit Enter oder Leertaste. Dasselbe gilt für die **Termine** der eigenen Woche: Antippen führt in die **Tagesansicht der Planung** zum richtigen Tag, der angetippte Termin wird dort hervorgehoben. Die Knöpfe *Navigieren* und *Übernehmen* in der Karte behalten ihre eigene Wirkung.
+Aushänge/Ankündigungen fürs ganze Team, mit Benachrichtigungs-Badge. Ein **neuer** Aushang meldet sich bei allen außer dem Autor; beim **Bearbeiten** nur dann, wenn sich inhaltlich etwas geändert hat – wer einen Aushang nur aufmacht und speichert, löst weder Meldung noch Zähler aus. Aushänge lassen sich **bearbeiten und löschen** (Bleistift und ×, rechts neben dem Titel — Chef/Admin und wer das Einzelrecht hat). Wird ein Aushang auf der **Willkommensseite** eingeblendet, führt ein Antippen zum Schwarzen Brett und **direkt zu diesem Eintrag**, der dort kurz hervorgehoben wird; per Tastatur mit Enter oder Leertaste. Dasselbe gilt für die **Termine** der eigenen Woche: Antippen führt in die **Tagesansicht der Planung** zum richtigen Tag, der angetippte Termin wird dort hervorgehoben. Die Knöpfe *Navigieren* und *Übernehmen* in der Karte behalten ihre eigene Wirkung.
 
 #### 📝 Notizen
 
-Persönliche und **geteilte** Notizen (Lese-/Schreibrechte pro Benutzer), mit Bearbeitungs-Sperre gegen gleichzeitiges Editieren. Empfänger können eine geteilte Notiz per **„Freigabe verlassen"** selbst aus ihrer Liste entfernen; beim Eigentümer verschwindet der Haken, er kann sie durch erneutes Anhaken wieder freigeben. Filterbar nach **eigenen / freigegebenen** Notizen (sowie gezielt **nach jedem einzelnen Freigeber**), Projekt und Suchtext.
+Persönliche und **geteilte** Notizen (Lese-/Schreibrechte pro Benutzer), mit Bearbeitungs-Sperre gegen gleichzeitiges Editieren. Empfänger können eine geteilte Notiz per **„Freigabe verlassen"** selbst aus ihrer Liste entfernen; beim Eigentümer verschwindet der Haken, er kann sie durch erneutes Anhaken wieder freigeben. Filterbar nach **eigenen / freigegebenen** Notizen (sowie gezielt **nach jedem einzelnen Freigeber**), Projekt und Suchtext. **Bearbeitet jemand eine geteilte Notiz, bekommen Eigentümer und Mitleser eine Push-Meldung** („Notiz bearbeitet – Bastian Budau hat ‚Oberhohenried‘ bearbeitet“) – der Bearbeiter selbst natürlich nicht, und nur wer den Kategorie-Schalter „Notizen“ an hat. **Nur bei einer echten Änderung:** Wer eine Notiz nur aufmacht, hineinschaut und speichert, löst weder eine Meldung noch den Zähler aus – der Zeitstempel der Notiz bleibt dann unangetastet (reine Leerzeichen am Rand zählen ebenfalls nicht als Änderung). Die Bearbeitungs-Sperre wird trotzdem gelöst.
 
 #### 🗂️ Dokumente
 
@@ -253,8 +253,9 @@ an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweilig
 | Ereignis | Benachrichtigt wird |
 |---|---|
 | Neue Bestellung | Chef + Admin |
-| Neuer/aktualisierter Aushang | alle außer dem Autor |
+| Neuer Aushang bzw. **inhaltlich geänderter** Aushang | alle außer dem Autor |
 | Notiz geteilt/angeboten | die betroffenen Empfänger |
+| Geteilte Notiz **inhaltlich geändert** | Eigentümer + Mitleser, außer dem Bearbeiter |
 | Neuer Abwesenheitsantrag bzw. Krank-/Schule-/Innung-Meldung | alle Manager (Chef/Admin/Buchhalter) |
 | Urlaub genehmigt/abgelehnt bzw. Abwesenheit vom Chef bearbeitet | der betroffene Mitarbeiter |
 

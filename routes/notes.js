@@ -249,6 +249,28 @@ router.put('/:id', authenticate, (req, res) => {
   }
 
   const proj = resolveProject(db, project_id, project_text);
+
+  // Hat sich ueberhaupt etwas geaendert? Wer eine Notiz nur aufmacht, hineinschaut und speichert,
+  // soll WEDER eine Meldung ausloesen NOCH den Zaehler hochsetzen (Alex, 18.08.2026).
+  // Der Zaehler haengt an `updated_at`/`updated_by` (siehe computeBadgeCounts) — es reicht also
+  // nicht, den Push zu unterdruecken: Bei einem Leer-Speichern darf der Zeitstempel gar nicht
+  // erst angefasst werden. Verglichen wird gegen den Stand VOR dem Schreiben (`note`), und zwar
+  // in derselben Form, in der gespeichert wird (getrimmt, NULL und "" gleichwertig).
+  const gleich = (a, b) => (a == null ? '' : String(a)) === (b == null ? '' : String(b));
+  const unveraendert = gleich(note.title, title.trim())
+    && gleich(note.body, (body || '').trim())
+    && gleich(note.project_id, proj.project_id)
+    && gleich(note.project_text, proj.project_text);
+
+  if (unveraendert) {
+    // Nur die Bearbeitungs-Sperre loesen, sonst bleibt die Notiz fuer alle anderen gesperrt.
+    db.prepare('UPDATE notes SET editing_by = NULL, editing_since = NULL WHERE id = ?').run(req.params.id);
+    const unbewegt = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
+      .get(req.params.id);
+    broadcast('notes', req.headers['x-tab-id']);   // damit das „wird bearbeitet" bei anderen verschwindet
+    return res.json({ note: unbewegt, unchanged: true });
+  }
+
   db.prepare(
     "UPDATE notes SET title = ?, body = ?, project_id = ?, project_text = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by = ?, editing_by = NULL, editing_since = NULL WHERE id = ?"
   ).run(title.trim(), (body || '').trim(), proj.project_id, proj.project_text, req.user.id, req.params.id);
@@ -257,6 +279,25 @@ router.put('/:id', authenticate, (req, res) => {
     .get(req.params.id);
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ note: updated });
+
+  // Push an alle, die mit der Notiz zu tun haben: Eigentuemer UND Mitleser — nur der Bearbeiter
+  // selbst nicht (das erledigt notifyUsers ueber excludeUserId).
+  //
+  // Bis 18.08.2026 verschickte diese Route GAR KEINEN Push (Alex gemeldet: Kollege bearbeitet die
+  // geteilte Notiz, der Eigentuemer erfaehrt nichts, obwohl der Kategorie-Schalter an ist). Das
+  // `broadcast` daneben ist KEIN Ersatz: Es aktualisiert nur Fenster, die die Seite gerade offen
+  // haben. Der Zaehler (computeBadgeCounts) zaehlte die Aenderung dagegen laengst mit — genau
+  // deshalb sah es nach einem kaputten Schalter aus statt nach einer fehlenden Meldung.
+  const empfaenger = [
+    note.user_id,
+    ...db.prepare('SELECT user_id FROM note_shares WHERE note_id = ?').all(req.params.id).map(r => r.user_id),
+  ];
+  const bearbeiter = db.prepare('SELECT name FROM users WHERE id = ?').get(req.user.id);
+  push.notifyUsers(db, empfaenger, 'notes', {
+    title: 'Notiz bearbeitet',
+    body: `${bearbeiter ? bearbeiter.name : 'Jemand'} hat \u201e${updated.title}" bearbeitet`,
+    url: '/#/notes',
+  }, req.user.id);
 });
 
 // Notiz loeschen (nur Owner)

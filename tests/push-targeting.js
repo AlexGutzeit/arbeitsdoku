@@ -25,6 +25,7 @@ try { fs.unlinkSync(process.env.DB_PATH); } catch (_) {}
 
 const express = require('express');
 const { initDatabase, getDb } = require('../database/init');
+const { computeBadgeCounts } = require('../routes/badges');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
@@ -171,6 +172,102 @@ function req(server, method, p, token, body) {
     // 9b. Erneutes Speichern derselben Freigabe → kein neuer Empfänger → kein Push
     await act('PUT', `/api/notes/${noteId}/shares`, 'max', { shares: [{ user_id: ids.lisa, permission: 'write' }] });
     expectTargets('Notiz-Freigabe unverändert → kein Push', []);
+
+    // 9c. Notiz BEARBEITEN (Alex, 18.08.2026): Der Eigentuemer bekam bisher gar nichts, obwohl der
+    // Kategorie-Schalter an war — die Speichern-Route verschickte schlicht keinen Push. Jetzt geht
+    // die Meldung an Eigentuemer UND Mitleser, nur nicht an den Bearbeiter selbst.
+    // lisa hat aus Schritt 9b Schreibrecht; sie bearbeitet, max ist Eigentuemer.
+    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: 'Übergabe', body: 'Zaehler abgelesen' });
+    expectTargets('Notiz bearbeitet → Eigentümer', ['max']);
+
+    // Und die Gegenprobe, die den eigentlichen Zweck absichert: Bearbeitet der EIGENTUEMER selbst,
+    // darf er sich nicht selbst benachrichtigen — die Mitleser aber schon.
+    await act('PUT', `/api/notes/${noteId}`, 'max', { title: 'Übergabe', body: 'Nachtrag' });
+    expectTargets('Eigentümer bearbeitet → Mitleser, nicht er selbst', ['lisa']);
+
+    // Text der Meldung: Name des Bearbeiters und Titel der Notiz muessen drinstehen, sonst weiss
+    // der Empfaenger nicht, worum es geht.
+    const meldung = SENT[0] && SENT[0].payload;
+    const textOk = meldung && /Max/i.test(meldung.body) && /Übergabe/.test(meldung.body) && meldung.title === 'Notiz bearbeitet';
+    if (textOk) { pass++; console.log(`  ✓ Meldungstext nennt Bearbeiter und Notiz  → „${meldung.body}"`); }
+    else { fail++; console.log('  ✗ Meldungstext: ' + JSON.stringify(meldung)); }
+
+    // 9d. LEER-Speichern (Alex, 18.08.2026): aufmachen, nichts aendern, speichern.
+    // Weder Meldung noch Zaehler duerfen anspringen. Der Zaehler haengt an `updated_at`, deshalb
+    // wird hier BEIDES geprueft — ein unterdrueckter Push allein wuerde den Coin nicht verhindern.
+    const dbNow = getDb();
+    const vorher = dbNow.prepare('SELECT updated_at, updated_by FROM notes WHERE id = ?').get(noteId);
+    const zaehlerVorher = computeBadgeCounts(dbNow, { id: ids.max, role: 'mitarbeiter' }).notes;
+    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: 'Übergabe', body: 'Nachtrag' });  // exakt der Stand von eben
+    expectTargets('Leer-Speichern → kein Push', []);
+    const nachher = dbNow.prepare('SELECT updated_at, updated_by FROM notes WHERE id = ?').get(noteId);
+    const zaehlerNachher = computeBadgeCounts(dbNow, { id: ids.max, role: 'mitarbeiter' }).notes;
+    if (nachher.updated_at === vorher.updated_at && nachher.updated_by === vorher.updated_by) {
+      pass++; console.log('  ✓ Leer-Speichern lässt den Zeitstempel unangetastet');
+    } else { fail++; console.log(`  ✗ Zeitstempel bewegt: ${vorher.updated_at}/${vorher.updated_by} → ${nachher.updated_at}/${nachher.updated_by}`); }
+    if (zaehlerNachher === zaehlerVorher) {
+      pass++; console.log(`  ✓ Leer-Speichern erhöht den Zähler nicht  → ${zaehlerVorher}`);
+    } else { fail++; console.log(`  ✗ Zähler gesprungen: ${zaehlerVorher} → ${zaehlerNachher}`); }
+
+    // Und die Sperre muss trotzdem geloest sein, sonst haengt die Notiz fuer alle anderen fest.
+    const sperre = dbNow.prepare('SELECT editing_by FROM notes WHERE id = ?').get(noteId).editing_by;
+    if (!sperre) { pass++; console.log('  ✓ … die Bearbeitungs-Sperre ist trotzdem gelöst'); }
+    else { fail++; console.log('  ✗ Notiz bleibt gesperrt (editing_by=' + sperre + ')'); }
+
+    // Gegenprobe: EINE echte Aenderung — jetzt muss beides anspringen.
+    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: 'Übergabe', body: 'Wirklich geändert' });
+    expectTargets('Echte Änderung → Push an Eigentümer', ['max']);
+    const zaehlerEcht = computeBadgeCounts(dbNow, { id: ids.max, role: 'mitarbeiter' }).notes;
+    if (zaehlerEcht > zaehlerVorher) { pass++; console.log(`  ✓ … und der Zähler zählt sie  → ${zaehlerVorher} → ${zaehlerEcht}`); }
+    else { fail++; console.log(`  ✗ Zähler blieb bei ${zaehlerEcht}`); }
+
+    // Nur Leerzeichen drumherum ist KEINE Aenderung (gespeichert wird ohnehin getrimmt).
+    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: '  Übergabe  ', body: 'Wirklich geändert\n' });
+    expectTargets('Nur Leerzeichen geändert → kein Push', []);
+
+    // Kategorie-Schalter greift auch hier: max schaltet Notizen ab → keine Meldung mehr an ihn.
+    await req(server, 'PUT', '/api/push/prefs', tokens.max, { notes: false });
+    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: 'Übergabe', body: 'Noch ein Nachtrag' });
+    expectTargets('Notiz bearbeitet, Schalter aus → kein Push', []);
+    await req(server, 'PUT', '/api/push/prefs', tokens.max, { notes: true });
+
+    // 9e. Schwarzes Brett, gleiche Regel (Alex, 18.08.2026): Anlegen meldet, Bearbeiten nur bei
+    // echter Aenderung. Der Zaehler haengt auch hier an `updated_at`, also wird beides geprueft.
+    const aushang = await act('POST', '/api/bulletin', 'chef', { title: 'Betriebsversammlung', text: 'Freitag 15 Uhr' });
+    expectTargets('Neuer Aushang → alle außer Autor', ['admin', 'buchhalter', 'lisa', 'max']);
+    const aushangId = (aushang.body.entry || aushang.body).id;
+
+    // max hat alles gelesen — erst dadurch sagt der Zaehler ueberhaupt etwas aus. (Der Zaehler zaehlt
+    // EINTRAEGE seit dem letzten Hinsehen, nicht Aenderungen: Ohne dieses Zuruecksetzen war der
+    // frisch angelegte Aushang schon mitgezaehlt und konnte durch eine Bearbeitung gar nicht mehr
+    // steigen — meine erste Erwartung war deshalb falsch, nicht der Code.)
+    const gelesen = (uid, topic) => dbNow.prepare(
+      "INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, ?, strftime('%Y-%m-%d %H:%M:%f','now')) " +
+      "ON CONFLICT(user_id, topic) DO UPDATE SET seen_at = strftime('%Y-%m-%d %H:%M:%f','now')").run(uid, topic);
+    gelesen(ids.max, 'bulletin');
+    const bZaehlerVor = computeBadgeCounts(dbNow, { id: ids.max, role: 'mitarbeiter' }).bulletin;
+    if (bZaehlerVor === 0) { pass++; console.log('  ✓ … nach dem Lesen steht der Zähler auf 0'); }
+    else { fail++; console.log(`  ✗ Zähler nach dem Lesen: ${bZaehlerVor}`); }
+
+    const bVor = dbNow.prepare('SELECT updated_at, updated_by FROM bulletin_entries WHERE id = ?').get(aushangId);
+    await act('PUT', `/api/bulletin/${aushangId}`, 'chef', { title: 'Betriebsversammlung', text: 'Freitag 15 Uhr' });
+    expectTargets('Aushang leer gespeichert → kein Push', []);
+    const bNach = dbNow.prepare('SELECT updated_at, updated_by FROM bulletin_entries WHERE id = ?').get(aushangId);
+    const bZaehlerNach = computeBadgeCounts(dbNow, { id: ids.max, role: 'mitarbeiter' }).bulletin;
+    if (bNach.updated_at === bVor.updated_at) { pass++; console.log('  ✓ … Zeitstempel des Aushangs unangetastet'); }
+    else { fail++; console.log(`  ✗ Zeitstempel bewegt: ${bVor.updated_at} → ${bNach.updated_at}`); }
+    if (bZaehlerNach === 0) { pass++; console.log('  ✓ … und der Coin springt nicht an  → 0'); }
+    else { fail++; console.log(`  ✗ Coin gesprungen: 0 → ${bZaehlerNach}`); }
+
+    await act('PUT', `/api/bulletin/${aushangId}`, 'chef', { title: 'Betriebsversammlung', text: 'Freitag 16 Uhr' });
+    expectTargets('Aushang wirklich geändert → alle außer Autor', ['admin', 'buchhalter', 'lisa', 'max']);
+    const bZaehlerEcht = computeBadgeCounts(dbNow, { id: ids.max, role: 'mitarbeiter' }).bulletin;
+    if (bZaehlerEcht === 1) { pass++; console.log('  ✓ … und DANN springt der Coin an  → 0 → 1'); }
+    else { fail++; console.log(`  ✗ Coin blieb bei ${bZaehlerEcht}`); }
+
+    // Ein NICHT mitgeschicktes Feld heisst „unveraendert lassen" — und darf deshalb auch nichts ausloesen.
+    await act('PUT', `/api/bulletin/${aushangId}`, 'chef', { title: 'Betriebsversammlung' });
+    expectTargets('Aushang ohne Textfeld gespeichert → kein Push', []);
 
     // 10. Kategorie-Schalter: chef schaltet Bestellungen ab → Bestellung geht nur noch an admin
     await req(server, 'PUT', '/api/push/prefs', tokens.chef, { orders: false });

@@ -86,17 +86,35 @@ router.put('/:id', authenticate, canBulletin, (req, res) => {
 
   const { title, text, event_date, auto_delete_date } = req.body;
 
+  // Die tatsaechlich zu speichernden Werte EINMAL bestimmen — nicht zweimal, sonst laufen Vergleich
+  // und Schreiben irgendwann auseinander. Ein fehlendes Feld heisst „unveraendert lassen".
+  const neuTitel = title !== undefined ? title.trim() : entry.title;
+  const neuText  = text !== undefined ? text : entry.text;
+  const neuEvent = event_date !== undefined ? (event_date || null) : entry.event_date;
+  const neuAuto  = auto_delete_date !== undefined ? (auto_delete_date || null) : entry.auto_delete_date;
+
+  // Wer einen Aushang nur aufmacht, hineinschaut und speichert, soll WEDER eine Meldung ausloesen
+  // NOCH den Zaehler hochsetzen (Alex, 18.08.2026 — gleiche Regel wie bei den Notizen).
+  // Der Zaehler haengt an `updated_at`/`updated_by`, deshalb darf bei einem Leer-Speichern gar
+  // nicht erst geschrieben werden; einen Push zu unterdruecken allein wuerde den Coin nicht
+  // verhindern. NULL und "" gelten dabei als dasselbe.
+  const gleich = (a, b) => (a == null ? '' : String(a)) === (b == null ? '' : String(b));
+  const unveraendert = gleich(entry.title, neuTitel) && gleich(entry.text, neuText)
+    && gleich(entry.event_date, neuEvent) && gleich(entry.auto_delete_date, neuAuto);
+
+  if (unveraendert) {
+    const unbewegt = db.prepare(`
+      SELECT b.*, u.name as author_name
+      FROM bulletin_entries b JOIN users u ON b.created_by = u.id
+      WHERE b.id = ?
+    `).get(req.params.id);
+    return res.json({ entry: unbewegt, unchanged: true });
+  }
+
   db.prepare(`
     UPDATE bulletin_entries SET title=?, text=?, event_date=?, auto_delete_date=?, updated_at=strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by=?
     WHERE id=?
-  `).run(
-    title !== undefined ? title.trim() : entry.title,
-    text !== undefined ? text : entry.text,
-    event_date !== undefined ? (event_date || null) : entry.event_date,
-    auto_delete_date !== undefined ? (auto_delete_date || null) : entry.auto_delete_date,
-    req.user.id,
-    req.params.id
-  );
+  `).run(neuTitel, neuText, neuEvent, neuAuto, req.user.id, req.params.id);
 
   const updated = db.prepare(`
     SELECT b.*, u.name as author_name
