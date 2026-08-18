@@ -14,6 +14,42 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-18 · Meldung bei geänderter Notiz — und warum der Coin nicht am Push hängt
+Alex meldete: Kollege bearbeitet eine mit Schreibrecht geteilte Notiz, der Eigentümer bekommt nichts,
+obwohl der Kategorie-Schalter „Notizen" an ist. Am Produktivstand nachgesehen (nur lesend, über eine
+Kopie): Freigabe `write`, Schalter an, Push-Abo aktiv — an der Einstellung lag es nicht. Die
+Speichern-Route verschickte schlicht **nie** einen Push; den gab es nur beim Teilen und beim Anbieten.
+
+**Zwei Irrtümer, die hier leicht passieren:**
+
+1. Das `broadcast('notes')` in der Route sieht aus wie eine Benachrichtigung, ist aber nur SSE — es
+   aktualisiert Fenster, die die Seite **gerade offen** haben. Wer nichts offen hat, erfährt nichts.
+2. Der **Coin hängt nicht am Push**, sondern an `updated_at`/`updated_by` (siehe `computeBadgeCounts`).
+   Deshalb reichte es für den zweiten Wunsch („Leer-Speichern soll nichts auslösen") NICHT, den Push
+   zu unterdrücken: Bei Gleichstand darf gar nicht erst geschrieben werden. Die Bearbeitungs-Sperre
+   wird trotzdem gelöst, sonst hängt die Notiz für alle anderen fest.
+
+Gleiches Verhalten am Schwarzen Brett ergänzt: Anlegen meldet wie bisher, Bearbeiten nur bei
+inhaltlicher Änderung. Ein **nicht mitgeschicktes Feld** heißt dort „unverändert lassen" und darf
+folglich auch nichts auslösen — eigener Testfall.
+
+**Beim Testen zweimal selbst danebengelegen, beide Male nachgemessen statt geraten:**
+Der Zähler zählt **Einträge seit dem letzten Hinsehen**, nicht Änderungen — ein frisch angelegter
+Aushang ist schon mitgezählt und kann durch eine Bearbeitung gar nicht mehr steigen. Der Test setzt
+deshalb erst „gelesen" und prüft 0 → bleibt 0 → 1. Und beim Zurücknehmen einer Sabotage habe ich die
+eigene Korrektur mitgelöscht, weil die Sicherungskopie von **vor** dem Einbau stammte; aufgefallen
+beim Nachzählen mit `grep`.
+
+**Suite-Falle:** Drei Tests (`browser-smoke`, `browser-absences`, `complex-saldo-versioning`)
+brauchen einen **von Hand gestarteten** Server auf `:3000` und fallen sonst um — sie gehören zur
+Prod-Klon-Gruppe. Mit Server: 29/29, 24/24, 13/14 (die letzte Prüfung meldet sich als Konto „Daniel"
+an, das es nur im anonymisierten Klon gibt). Wer die Suite bewertet, muss das wissen, sonst sieht es
+nach drei Regressionen aus.
+
+**Und ein Eigentor:** Ich hatte versehentlich drei Suiten parallel laufen, die sich um die festen
+Testports stritten und in dasselbe Protokoll schrieben („248 von 151 durchgelaufen"). Der Läufer im
+Notizordner hat jetzt eine `flock`-Sperre.
+
 ### 2026-08-08 · Gratulation für das Geburtstagskind — und eine Zeitfalle im eigenen Test
 Bis dahin sahen nur Chef/Admin/Buchhalter, WER Geburtstag hat; die betroffene Person selbst bekam
 nichts. Neu ist eine dezente Karte auf der eigenen Willkommensseite, ohne Alter und ohne Absender
