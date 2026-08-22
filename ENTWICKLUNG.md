@@ -14,6 +14,44 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-23 (nachts) · Die Zeitfalle um Mitternacht
+
+Beim Abschluss-Lauf der Suite um kurz nach Mitternacht fielen auf einmal zehn Tests um, die
+tagsüber grün waren. Kein Zufall und keine Flakiness: **SQLite schreibt `strftime('now')` in UTC**,
+im Sommer zwei Stunden hinter unserer Uhr. Zwischen 00:00 und 02:00 Uhr sind „UTC-heute" und
+„hier-heute" zwei verschiedene Tage.
+
+**Ein echter Fehler in der App war dabei.** Die Willkommensseite filterte die Aushänge mit
+`b.created_at.slice(0, 10) === today` — roher UTC-Zeitstempel gegen lokales Datum. Ein Aushang, der
+um 00:30 Uhr geschrieben wurde, war damit zwei Stunden lang unsichtbar und tauchte um 02:00 Uhr
+von selbst auf. Im Tagesbetrieb bemerkt das niemand; nachts glaubt man es nicht.
+
+Behoben mit `datumAusZeitstempel()` (`app-1-core.js`), die einen DB-Zeitstempel in den hiesigen
+Kalendertag umrechnet. **Bewusst im Frontend, nicht im Server:** Die Marke `created_at` wird auch
+gegen `user_seen` verglichen, um den Zähler am Menüpunkt zu setzen. Verschöbe man sie im Server,
+liefen Anzeige und Zähler auseinander.
+
+Ebenfalls angeglichen: Das Geburtsdatums-Feld begrenzte per `toISOString()` auf das UTC-Datum,
+während der Server gegen das Berliner Datum prüft. Feld und Server waren nachts eine Tagesgrenze
+auseinander.
+
+**Der Rest waren Testfehler** — 43 Datumsrechnungen in 24 Testdateien, die den *aktuellen*
+Zeitpunkt über `toISOString()` in ein Datum verwandelten. Alle auf `toLocaleDateString('sv-SE')`
+umgestellt (liefert dasselbe Format, aber lokal). **Nicht angefasst** wurden Rechnungen, die auf
+einem festen Anker stehen (`new Date(iso + 'T12:00:00Z')`, `setUTCDate`) — dort ist UTC richtig,
+und lokal zu rechnen hätte sie kaputt gemacht.
+
+**Die Lehre für neue Tests:** Ein Datum aus „jetzt" gehört über die lokale Uhr gebildet, ein Datum
+aus einem ISO-String über einen UTC-Anker. Wer das mischt, baut einen Test, der zwischen 00:00 und
+02:00 Uhr aus dem falschen Grund rot wird — oder, schlimmer, aus dem falschen Grund grün bleibt.
+
+`tests/aushang-mitternacht-ui.js` stellt die Falle deshalb **absichtlich**, zu jeder Uhrzeit: Die
+Antwort auf `/api/bulletin` wird im Browser abgefangen und der Zeitstempel auf „heute, 00:30 Uhr
+bei uns" gesetzt — was in UTC zwangsläufig der Vortag ist. Der Test prüft ausdrücklich vorher nach,
+dass die Falle wirklich steht, sonst prüfte er nichts.
+
+---
+
 ### 2026-08-22 (nachts) · Profilbilder, Geburtstags-Freigabe, „Mein Konto" komplett
 Aufbauend auf der Konto-Seite: Profilbild, eigenes Geburtsdatum samt Freigabe, eigene Stammdaten,
 die Benachrichtigungen von ihrer eigenen Seite hierher, „überall abmelden" und die Datenauskunft.
