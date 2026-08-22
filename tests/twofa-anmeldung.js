@@ -88,7 +88,9 @@ async function frischerCode(geheim) {
     ok('vor der Bestätigung gilt es NICHT als eingerichtet',
       (await req('GET', '/api/auth/2fa/status', maToken)).body.zwei_faktor.eingerichtet === false);
     const falsch = await req('POST', '/api/auth/2fa/verify', maToken, { code: '000000' });
-    ok('ein falscher Code wird abgelehnt', falsch.status === 401, `${falsch.status}`);
+    // 400, nicht 401 — der Aufrufer ist angemeldet. Ein 401 wuerde ihn im Browser abmelden.
+    ok('ein falscher Code wird abgelehnt', falsch.status === 400, `${falsch.status}`);
+    ok('… und zwar NICHT mit 401', falsch.status !== 401);
     const richtig = await req('POST', '/api/auth/2fa/verify', maToken, { code: totp.code(geheim) });
     ok('der richtige Code macht es scharf', richtig.status === 200, `${richtig.status} ${richtig.text.slice(0, 80)}`);
     ok('… und der Zustand sagt das auch',

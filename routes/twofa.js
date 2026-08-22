@@ -82,10 +82,13 @@ router.post('/verify', authenticate, codeLimiter, (req, res) => {
     const schritt = totp.pruefe(geheim, (req.body || {}).code);
     if (schritt === null) {
       logAudit(db, { userId: req.user.id, username: req.user.username, action: 'twofa_verify_failed', ip: req.ip });
-      return res.status(401).json({ error: 'Der Code stimmt nicht. Prüfe auch die Uhrzeit deines Handys.' });
+      // 400, NICHT 401: Der Aufrufer ist angemeldet, nur der Code stimmt nicht. Ein 401 loeste
+      // im Browser den automatischen Abmelde-Weg aus (app-1-core.js) — der Nutzer flaege bei
+      // einem Tippfehler aus der App. Genau das ist im Oberflaechen-Test aufgefallen.
+      return res.status(400).json({ error: 'Der Code stimmt nicht. Prüfe auch die Uhrzeit deines Handys.' });
     }
     if (!zf.schrittVerbrauchen(db, req.user.id, schritt)) {
-      return res.status(401).json({ error: 'Dieser Code wurde bereits verwendet. Warte auf den nächsten.' });
+      return res.status(400).json({ error: 'Dieser Code wurde bereits verwendet. Warte auf den nächsten.' });
     }
 
     zf.bestaetigen(db, req.user.id);
@@ -110,7 +113,7 @@ router.post('/aus', authenticate, codeLimiter, (req, res) => {
     }
     const geheim = zf.geheimnisLesen(db, req.user.id);
     const schritt = geheim ? totp.pruefe(geheim, (req.body || {}).code) : null;
-    if (schritt === null) return res.status(401).json({ error: 'Der Code stimmt nicht' });
+    if (schritt === null) return res.status(400).json({ error: 'Der Code stimmt nicht' });
 
     zf.zuruecksetzen(db, req.user.id);
     logAudit(db, { userId: req.user.id, username: req.user.username, action: 'twofa_deaktiviert', ip: req.ip });

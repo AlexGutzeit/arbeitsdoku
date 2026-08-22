@@ -48,7 +48,11 @@ const anmelden = (u, p) => req('POST', '/api/auth/login', null, { username: u, p
     ok('ohne aktuelles Passwort → 400',
       (await req('PUT', '/api/auth/password', maToken, { neu: 'Neues1234!' })).status === 400);
     const falsch = await req('PUT', '/api/auth/password', maToken, { aktuell: 'Falsch1234!', neu: 'Neues1234!' });
-    ok('mit falschem aktuellem Passwort → 401', falsch.status === 401, `${falsch.status} ${falsch.text.slice(0, 60)}`);
+    // 400 und ausdruecklich NICHT 401: Der Nutzer ist ja angemeldet, er hat sich nur vertippt.
+    // Bei 401 meldet die App im Browser automatisch ab (app-1-core.js) — man flaege bei einem
+    // Tippfehler aus der Anwendung. Aufgefallen erst im Oberflaechen-Test.
+    ok('mit falschem aktuellem Passwort → 400', falsch.status === 400, `${falsch.status} ${falsch.text.slice(0, 60)}`);
+    ok('… und ausdrücklich NICHT 401 (das würde den Nutzer abmelden)', falsch.status !== 401);
     ok('… und das alte Passwort gilt weiterhin', (await anmelden('monteur', 'Start1234!')).status === 200);
 
     console.log('\n── Die Passwort-Regeln gelten hier genauso ──');

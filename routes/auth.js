@@ -209,7 +209,9 @@ router.put('/password', authenticate, async (req, res) => {
     if (!(await bcrypt.compare(aktuell, reihe.password_hash))) {
       logAudit(db, { userId: req.user.id, username: reihe.username, action: 'password_self_change_failed',
         details: 'Aktuelles Passwort falsch', ip: req.ip });
-      return res.status(401).json({ error: 'Das aktuelle Passwort stimmt nicht' });
+      // 400, NICHT 401 — siehe routes/twofa.js: ein 401 wuerde den Angemeldeten hinauswerfen,
+      // statt ihm zu sagen, dass er sich vertippt hat.
+      return res.status(400).json({ error: 'Das aktuelle Passwort stimmt nicht' });
     }
 
     // Dieselbe Regel wie beim Anlegen und beim Zuruecksetzen — eine Quelle der Wahrheit.

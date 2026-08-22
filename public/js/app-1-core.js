@@ -14,9 +14,17 @@ function _readStoredUser() {
   }
 }
 
+function _readStoredZweiFaktor() {
+  try { return JSON.parse(localStorage.getItem('zwei_faktor') || 'null'); } catch (_) { return null; }
+}
+
 const S = {
   token: localStorage.getItem('token'),
   user: _readStoredUser(),
+  // Zwei-Faktor-Zustand: absichtlich NEBEN dem Nutzer, nicht darin — `user` wird eins zu eins
+  // weitergereicht und im Speicher abgelegt. Aus dem Speicher gelesen, damit nach F5 nicht kurz
+  // die normale App aufblitzt, bevor refreshUser() antwortet.
+  zweiFaktor: _readStoredZweiFaktor(),
   tabId: Math.random().toString(36).slice(2),
   sse: null,
   entries: [],
@@ -67,6 +75,19 @@ async function api(method, url, body, isFormData) {
     }
     const res = await fetch(url, opts);
     if (res.status === 401 && !url.includes('/auth/login')) { logout(); return null; }
+    // Der Einrichtungs-Zwang meldet sich mit 403 und einer eigenen Kennung. Kein Abmelden — der
+    // Nutzer soll ja gerade zur Einrichtung. Netz gegen einen veralteten Oberflaechen-Zustand.
+    if (res.status === 403) {
+      try {
+        const d = await res.clone().json();
+        if (d && d.code === 'ZWEI_FAKTOR_EINRICHTUNG') {
+          S.zweiFaktor = { ...(S.zweiFaktor || {}), einrichtung_noetig: true, eingerichtet: false };
+          try { localStorage.setItem('zwei_faktor', JSON.stringify(S.zweiFaktor)); } catch (_) {}
+          if (getRoute() !== '/konto') navigate('/konto');
+          throw new Error(d.error || 'Zwei-Faktor-Anmeldung einrichten');
+        }
+      } catch (e) { if (e && /Zwei-Faktor/.test(e.message || '')) throw e; }
+    }
     if (res.headers.get('content-type')?.includes('json')) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Fehler');
@@ -1367,6 +1388,10 @@ function render() {
   S._lastRoute = r0; // letzte „echte" Seite merken → „Zurück" aus Impressum/Datenschutz kehrt dorthin zurück
   if (!S.token || !S.user) { renderLogin(); return; }
   const route = getRoute();
+  // Einrichtungs-Zwang: Ist er faellig, geht nur „Mein Konto". Das ist Bequemlichkeit, keine
+  // Sicherheit — die verlaesslich sperrende Pruefung sitzt serverseitig in middleware/auth.js.
+  if (S.zweiFaktor && S.zweiFaktor.einrichtung_noetig && route !== '/konto') { renderKonto(); return; }
+  if (route === '/konto') { renderKonto(); return; }
   if (route.startsWith('/entry/new')) renderEntryForm();
   else if (route.startsWith('/entry/continue/')) renderEntryForm(null, route.split('/').pop());
   else if (route.startsWith('/entry/from-project/')) renderEntryForm(null, null, null, route.split('/').pop());

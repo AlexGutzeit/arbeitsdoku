@@ -1,4 +1,19 @@
 // --- Settings ---
+// Muss zur Liste in zweifaktor.js passen (MODI) — dort steht die Quelle der Wahrheit, hier nur
+// die Beschriftung.
+const TWOFA_MODI = ['aus', 'immer', 'geraet', 'taeglich', 'woechentlich', 'monatlich'];
+const TWOFA_TEXT = {
+  aus: 'aus — kein zweiter Faktor',
+  immer: 'bei jeder Anmeldung',
+  geraet: 'einmal pro Gerät',
+  taeglich: 'täglich',
+  woechentlich: 'wöchentlich',
+  monatlich: 'monatlich',
+};
+const TWOFA_ROLLE_TEXT = {
+  admin: 'Administrator', chef: 'Chef', buchhalter: 'Buchhalter', mitarbeiter: 'Mitarbeiter',
+};
+
 async function renderSettings() {
   if (!canSeeSettings()) { navigate('/'); return; }
 
@@ -101,6 +116,25 @@ async function renderSettings() {
           <input type="file" class="form-control" id="s-logo" accept=".png,.jpg,.jpeg">
           <button type="button" class="btn btn-outline btn-sm" id="upload-logo" style="margin-top:0.5rem;">Logo hochladen</button>
         </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-bottom:1rem;">Zwei-Faktor-Anmeldung</h2>
+        <div class="warning-box" style="margin-bottom:1rem;">
+          Wer noch keinen Authenticator eingerichtet hat, wird beim nächsten Aufruf auf
+          <strong>Mein Konto</strong> geführt und kommt vorher nicht weiter — auch mitten in der
+          Arbeit. Sag den Betroffenen also vorher Bescheid.
+        </div>
+        <form id="twofa-form">
+          ${['admin', 'chef', 'buchhalter', 'mitarbeiter'].map(rolle => `
+          <div class="form-group">
+            <label>${TWOFA_ROLLE_TEXT[rolle]}${rolle === 'admin' && !isAdmin() ? ' (nur ein Administrator kann das ändern)' : ''}</label>
+            <select class="form-control" id="s-twofa-${rolle}"${rolle === 'admin' && !isAdmin() ? ' disabled' : ''}>
+              ${TWOFA_MODI.map(w => `<option value="${w}"${(S.settings['twofa_' + rolle] || 'aus') === w ? ' selected' : ''}>${esc(TWOFA_TEXT[w])}</option>`).join('')}
+            </select>
+          </div>`).join('')}
+          <button type="submit" class="btn btn-primary">Zwei-Faktor-Einstellungen speichern</button>
+        </form>
       </div>
 
       <div class="card">
@@ -272,6 +306,33 @@ async function renderSettings() {
       S.arbeitszeit = null;   // gemerkte Vorgaben verwerfen, sonst gilt in dieser Sitzung der alte Stand
       zeitVorschau();
       toast('Einstellungen gespeichert', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  // Zwei-Faktor-Pflicht je Rolle
+  document.getElementById('twofa-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const werte = {};
+    for (const rolle of ['admin', 'chef', 'buchhalter', 'mitarbeiter']) {
+      const feld = document.getElementById('s-twofa-' + rolle);
+      // Ein deaktiviertes Feld gar nicht erst mitschicken — sonst antwortet der Server mit 403,
+      // obwohl der Chef den Wert nur nicht anfassen wollte.
+      if (feld && !feld.disabled) werte['twofa_' + rolle] = feld.value;
+    }
+    // Wer gerade eine Rolle scharf schaltet, soll wissen, was das ausloest.
+    const scharf = Object.entries(werte).filter(([k, v]) => v !== 'aus' && (S.settings[k] || 'aus') === 'aus');
+    if (scharf.length) {
+      const namen = scharf.map(([k]) => TWOFA_ROLLE_TEXT[k.replace('twofa_', '')]).join(', ');
+      const weiter = await confirmModal(
+        `Für ${namen} wird die Zwei-Faktor-Anmeldung ab sofort verlangt. Wer noch keinen `
+        + 'Authenticator eingerichtet hat, landet beim nächsten Aufruf auf „Mein Konto" und kommt '
+        + 'vorher nicht weiter. Fortfahren?');
+      if (!weiter) return;
+    }
+    try {
+      const d = await api('PUT', '/api/settings', werte);
+      if (d && d.settings) S.settings = d.settings;
+      toast('Zwei-Faktor-Einstellungen gespeichert', 'success');
     } catch (err) { toast(err.message, 'error'); }
   });
 

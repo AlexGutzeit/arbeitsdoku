@@ -1096,6 +1096,13 @@ async function showUserModal(user) {
               <button type="button" class="btn btn-outline btn-sm" id="um-pw-cancel">Abbrechen</button>
             </div>
           </div>
+        </div>
+        <div class="form-group">
+          <button type="button" class="btn btn-outline btn-sm" id="um-2fa-reset-btn">&#128241; Zwei-Faktor zurücksetzen</button>
+          <div style="font-size:.78rem;color:var(--text-light);margin-top:.25rem">
+            Bei verlorenem oder neuem Handy. Löscht den Authenticator und alle gemerkten Geräte —
+            die Person richtet ihn danach neu ein.
+          </div>
         </div>` : `
         <div class="form-group">
           <label>Passwort</label>
@@ -1234,6 +1241,21 @@ async function showUserModal(user) {
   };
   roleSel.addEventListener('change', syncRightsVisibility);
   syncRightsVisibility();
+
+  // Zwei-Faktor zuruecksetzen (nur bei Bearbeitung) — der Weg zurueck bei verlorenem Handy.
+  if (isEdit) {
+    document.getElementById('um-2fa-reset-btn')?.addEventListener('click', async () => {
+      const weiter = await confirmModal(
+        `Zwei-Faktor-Anmeldung von ${user.name} zurücksetzen? Der Authenticator und alle gemerkten `
+        + 'Geräte werden gelöscht. Ist die Rolle zur Zwei-Faktor-Anmeldung verpflichtet, muss die '
+        + 'Person sie beim nächsten Aufruf neu einrichten.');
+      if (!weiter) return;
+      try {
+        await api('POST', `/api/users/${user.id}/twofa-reset`);
+        toast('Zwei-Faktor zurückgesetzt', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  }
 
   // Passwort zurücksetzen (nur bei Bearbeitung)
   if (isEdit) {
@@ -1977,3 +1999,214 @@ async function renderProjectForm(project) {
   });
 }
 
+
+// ── „Mein Konto" ───────────────────────────────────────────────────────────────────────────────
+// Die erste persönliche Seite der App. Bis hierher konnte ein Mitarbeiter weder sein Passwort
+// ändern noch irgendetwas an seinem Konto einstellen — beides ging nur über Chef oder Admin.
+//
+// Ist die Zwei-Faktor-Einrichtung fällig, ist das hier die EINZIGE erreichbare Seite (Router in
+// app-1-core.js, serverseitig abgesichert in middleware/auth.js).
+async function renderKonto() {
+  const faellig = !!(S.zweiFaktor && S.zweiFaktor.einrichtung_noetig);
+  $app().innerHTML = layout(`
+    <div class="welcome-page">
+      <div class="welcome-header"><h1>&#128100; Mein Konto</h1></div>
+      ${faellig ? `<div class="warning-box" style="margin-bottom:1rem">
+        <strong>Zwei-Faktor-Anmeldung einrichten</strong><br>
+        Für deine Rolle ist ein zweiter Faktor vorgeschrieben. Bis du ihn eingerichtet hast, kommst
+        du nicht in die App.
+      </div>` : ''}
+      <div class="welcome-section" id="konto-2fa"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="welcome-section" id="konto-passwort"></div>
+      <div class="welcome-section" id="konto-geraete" style="display:none"></div>
+    </div>`, 'konto');
+  bindLayout();
+  const fab = document.getElementById('fab-new');
+  if (fab) fab.style.display = 'none';
+  kontoPasswortKarte();
+  await kontoZweiFaktorKarte();
+}
+
+function kontoPasswortKarte() {
+  const k = document.getElementById('konto-passwort');
+  if (!k) return;
+  k.innerHTML = `
+    <h3>&#128273; Passwort ändern</h3>
+    <div class="error-msg" id="pw-fehler"></div>
+    <form id="konto-pw-form">
+      <div class="form-group">
+        <label>Aktuelles Passwort</label>
+        <input type="password" class="form-control" id="pw-alt" autocomplete="current-password" required>
+      </div>
+      <div class="form-group">
+        <label>Neues Passwort</label>
+        <input type="password" class="form-control" id="pw-neu" autocomplete="new-password" required>
+        <ul class="pw-reqs" id="pw-neu-reqs"></ul>
+      </div>
+      <div class="form-group">
+        <label>Neues Passwort wiederholen</label>
+        <input type="password" class="form-control" id="pw-neu2" autocomplete="new-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Passwort ändern</button>
+    </form>`;
+  // Dieselbe Live-Prüfliste wie im Mitarbeiter-Dialog — eine Darstellung der Regeln, nicht zwei.
+  // Erwartet ELEMENTE, nicht Kennungen (app-1-core.js:915) — hier hatte ich zuerst Kennungen
+  // uebergeben, dann waere die Liste stumm geblieben.
+  wirePwField(document.getElementById('pw-neu'), document.getElementById('pw-neu-reqs'));
+  document.getElementById('konto-pw-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fehler = document.getElementById('pw-fehler');
+    fehler.style.display = 'none';
+    const alt = document.getElementById('pw-alt').value;
+    const neu = document.getElementById('pw-neu').value;
+    const neu2 = document.getElementById('pw-neu2').value;
+    if (neu !== neu2) {
+      fehler.textContent = 'Die beiden neuen Passwörter stimmen nicht überein';
+      fehler.style.display = 'block';
+      return;
+    }
+    try {
+      await api('PUT', '/api/auth/password', { aktuell: alt, neu });
+      toast('Passwort geändert', 'success');
+      document.getElementById('konto-pw-form').reset();
+      const reqs = document.getElementById('pw-neu-reqs'); if (reqs) reqs.innerHTML = '';
+    } catch (err) {
+      fehler.textContent = err.message;
+      fehler.style.display = 'block';
+    }
+  });
+}
+
+// Anmerkung zu den Kennungen: Sie heissen `zfa-…` und nicht `2fa-…`. Eine CSS-Kennung darf nicht
+// mit einer Ziffer beginnen — `getElementById` verzeiht das zwar, aber `querySelector('#2fa-start')`
+// wirft einen Syntaxfehler, und eine CSS-Regel griffe nie. Im Oberflaechen-Test ist genau das
+// aufgeschlagen.
+async function kontoZweiFaktorKarte() {
+  const k = document.getElementById('konto-2fa');
+  if (!k) return;
+  let z;
+  try { z = (await api('GET', '/api/auth/2fa/status')).zwei_faktor; }
+  catch (_) { k.innerHTML = '<h3>&#128274; Zwei-Faktor-Anmeldung</h3><p>Zustand nicht abrufbar.</p>'; return; }
+  S.zweiFaktor = z;
+
+  if (z.notabschaltung) {
+    k.innerHTML = `<h3>&#128274; Zwei-Faktor-Anmeldung</h3>
+      <div class="warning-box">Die Zwei-Faktor-Anmeldung ist serverweit per Notfall-Schalter
+      abgeschaltet. Es wird derzeit kein Code verlangt.</div>`;
+    return;
+  }
+
+  if (z.eingerichtet) {
+    k.innerHTML = `
+      <h3>&#128274; Zwei-Faktor-Anmeldung</h3>
+      <p><strong style="color:var(--success)">Aktiv.</strong>
+         Abfrage: <strong>${esc(z.modus_text)}</strong>${z.pflicht ? ' (von der Verwaltung vorgegeben)' : ''}.</p>
+      ${z.abschaltbar
+        ? `<div class="error-msg" id="aus-fehler"></div>
+           <form id="konto-2fa-aus" style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-end">
+             <div class="form-group" style="margin:0">
+               <label>Zum Abschalten: aktueller Code</label>
+               <input type="text" class="form-control" id="aus-code" inputmode="numeric" maxlength="7" placeholder="123456" required style="width:9rem">
+             </div>
+             <button type="submit" class="btn del-btn">Abschalten</button>
+           </form>`
+        : '<p style="color:var(--text-light)">Abschalten kann nur ein Administrator.</p>'}`;
+    const form = document.getElementById('konto-2fa-aus');
+    if (form) form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fehler = document.getElementById('aus-fehler'); fehler.style.display = 'none';
+      try {
+        await api('POST', '/api/auth/2fa/aus', { code: document.getElementById('aus-code').value.replace(/\s/g, '') });
+        toast('Zwei-Faktor-Anmeldung abgeschaltet', 'success');
+        await kontoZweiFaktorKarte();
+        await kontoGeraeteKarte();
+      } catch (err) { fehler.textContent = err.message; fehler.style.display = 'block'; }
+    });
+    await kontoGeraeteKarte();
+    return;
+  }
+
+  // Noch nicht eingerichtet
+  k.innerHTML = `
+    <h3>&#128274; Zwei-Faktor-Anmeldung</h3>
+    <p>Zusätzlich zum Passwort ein 6-stelliger Code aus einer Authenticator-App
+       (Google Authenticator, Aegis, 2FAS …).${z.pflicht ? ` Für deine Rolle <strong>vorgeschrieben</strong> (${esc(z.modus_text)}).` : ''}</p>
+    <button class="btn btn-primary" id="zfa-start">Einrichten</button>
+    <div id="zfa-einrichtung" style="display:none; margin-top:1rem"></div>`;
+  document.getElementById('zfa-start').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    const bereich = document.getElementById('zfa-einrichtung');
+    try {
+      const d = await api('POST', '/api/auth/2fa/setup');
+      bereich.style.display = 'block';
+      e.target.style.display = 'none';
+      // Der QR-Code kommt als fertiges SVG vom Server und wird EINGEBETTET — die
+      // Sicherheitsrichtlinie der App erlaubt Bilder nur von der eigenen Herkunft, ein
+      // data:-Bild würde der Browser stumm verwerfen.
+      bereich.innerHTML = `
+        <p>1. In der Authenticator-App diesen Code scannen:</p>
+        <div id="zfa-qr" style="background:#fff; padding:.5rem; display:inline-block; border-radius:8px">${d.qr_svg}</div>
+        <p style="margin-top:.75rem">Kein Scannen möglich (z. B. weil die App auf demselben Handy läuft)?
+           Dann diesen Schlüssel eintippen:</p>
+        <code style="display:block; word-break:break-all; background:var(--bg); padding:.5rem; border-radius:6px">${esc(d.geheim)}</code>
+        <p style="margin-top:.75rem">2. Den angezeigten 6-stelligen Code hier eingeben:</p>
+        <div class="error-msg" id="zfa-fehler"></div>
+        <form id="zfa-verify" style="display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap">
+          <div class="form-group" style="margin:0">
+            <input type="text" class="form-control" id="zfa-code" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="7" placeholder="123456" required style="width:9rem; font-size:1.2rem; letter-spacing:.2em; text-align:center">
+          </div>
+          <button type="submit" class="btn btn-primary">Bestätigen</button>
+        </form>`;
+      document.getElementById('zfa-verify').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const fehler = document.getElementById('zfa-fehler'); fehler.style.display = 'none';
+        try {
+          const r = await api('POST', '/api/auth/2fa/verify', { code: document.getElementById('zfa-code').value.replace(/\s/g, '') });
+          S.zweiFaktor = r.zwei_faktor;
+          try { localStorage.setItem('zwei_faktor', JSON.stringify(r.zwei_faktor)); } catch (_) {}
+          toast('Zwei-Faktor-Anmeldung ist aktiv', 'success');
+          await kontoZweiFaktorKarte();
+          // War die Einrichtung erzwungen, ist der Weg jetzt frei.
+          if (!r.zwei_faktor.einrichtung_noetig) render();
+        } catch (err) { fehler.textContent = err.message; fehler.style.display = 'block'; }
+      });
+    } catch (err) {
+      e.target.disabled = false;
+      toast(err.message || 'Einrichtung nicht möglich', 'error');
+    }
+  });
+}
+
+// Liste der Geräte, die ohne Code hineinkommen. Ohne sie wäre ein verlorenes Handy bei
+// „einmal pro Gerät" dauerhaft berechtigt.
+async function kontoGeraeteKarte() {
+  const k = document.getElementById('konto-geraete');
+  if (!k) return;
+  let geraete = [];
+  try { geraete = (await api('GET', '/api/auth/2fa/geraete')).geraete || []; } catch (_) { }
+  if (!geraete.length) { k.style.display = 'none'; return; }
+  k.style.display = '';
+  const datum = (t) => t ? new Date(String(t).replace(' ', 'T') + 'Z').toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  k.innerHTML = `
+    <h3>&#128241; Geräte ohne Code-Abfrage</h3>
+    <div class="tool-list">
+      ${geraete.map(g => `
+        <div class="tool-item">
+          <div>
+            <strong>${esc(g.bezeichnung)}</strong>${g.dieses_geraet ? ' <span style="color:var(--success)">(dieses Gerät)</span>' : ''}
+            <div style="font-size:.8rem; color:var(--text-light)">zuletzt ${datum(g.zuletzt_benutzt)}</div>
+          </div>
+          <button class="del-btn" data-geraet="${g.id}" title="Vertrauen entziehen">&times;</button>
+        </div>`).join('')}
+    </div>
+    <button class="btn" id="geraete-alle" style="margin-top:.5rem">Allen Geräten das Vertrauen entziehen</button>`;
+  k.querySelectorAll('[data-geraet]').forEach(b => b.addEventListener('click', async () => {
+    try { await api('DELETE', '/api/auth/2fa/geraete/' + b.dataset.geraet); toast('Gerät entzogen', 'success'); await kontoGeraeteKarte(); }
+    catch (err) { toast(err.message, 'error'); }
+  }));
+  document.getElementById('geraete-alle').addEventListener('click', async () => {
+    try { await api('POST', '/api/auth/2fa/geraete/alle-entziehen'); toast('Alle Geräte entzogen', 'success'); await kontoGeraeteKarte(); }
+    catch (err) { toast(err.message, 'error'); }
+  });
+}

@@ -5,6 +5,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { pruefeSperre, pruefeSperreGlobal, protokolliereEingriff, abgerechnetBis } = require('../abschluss');
 const { istUhrzeit } = require('../zeit');
+const zweiFaktor = require('../zweifaktor');
 
 const router = express.Router();
 
@@ -389,6 +390,26 @@ router.post('/:id/reset-password', authenticate, authorize('chef'), async (req, 
   db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(hash, req.params.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_password_reset',
     details: `Passwort zurueckgesetzt fuer: ${user.username} (id=${req.params.id})`, ip: req.ip });
+  res.json({ success: true });
+});
+
+// Zwei-Faktor-Anmeldung eines Mitarbeiters zuruecksetzen — der Weg zurueck bei verlorenem Handy.
+// Es gibt bewusst keine Wiederherstellungs-Codes (Entscheidung Alex, 19.08.2026): Bei elf Leuten im
+// selben Betrieb ist der Admin der praktischere Weg, und ein Zettel, den man verlegt, hilft nicht.
+//
+// Loescht Geheimnis UND alle vertrauten Geraete. Sonst koennte sich jemand mit einem alten,
+// gemerkten Geraet weiterhin ohne Code anmelden.
+router.post('/:id/twofa-reset', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+  // Gleiche Sonderregel wie beim Passwort: An einen Admin darf nur ein Admin heran.
+  if (user.role === 'admin' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Die Zwei-Faktor-Anmeldung eines Admins kann nur ein Admin zurücksetzen' });
+  }
+  zweiFaktor.zuruecksetzen(db, user.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_2fa_reset',
+    details: `Zwei-Faktor zurueckgesetzt fuer: ${user.username} (id=${req.params.id})`, ip: req.ip });
   res.json({ success: true });
 });
 

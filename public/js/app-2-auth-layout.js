@@ -23,6 +23,67 @@ function renderLogin() {
   document.getElementById('login-form').addEventListener('submit', handleLogin);
 }
 
+// Zweiter Schritt: Code aus der Authenticator-App. Eigene Maske statt eines zusätzlichen Feldes in
+// der ersten — vorher weiss ja niemand, ob überhaupt ein Code verlangt wird.
+function renderLoginCode(zwischenToken, geraetMerkbar) {
+  $app().innerHTML = `
+    <div class="login-container">
+      <div class="login-card">
+        <h1>Arbeitsdoku</h1>
+        <p class="subtitle">Code aus deiner Authenticator-App</p>
+        <div class="error-msg" id="login-error"></div>
+        <form id="code-form">
+          <div class="form-group">
+            <label>6-stelliger Code</label>
+            <input type="text" class="form-control" id="login-code" inputmode="numeric" autocomplete="one-time-code"
+                   pattern="[0-9 ]*" maxlength="7" placeholder="123456" required autofocus
+                   style="font-size:1.5rem; letter-spacing:.3em; text-align:center">
+          </div>
+          ${geraetMerkbar ? `
+          <div class="form-group" style="display:flex; align-items:center; gap:.5rem">
+            <input type="checkbox" id="login-geraet-merken" checked style="width:auto">
+            <label for="login-geraet-merken" style="margin:0">Diesem Gerät vertrauen</label>
+          </div>` : ''}
+          <button type="submit" class="btn btn-primary btn-block">Anmelden</button>
+          <button type="button" class="btn btn-block" id="code-abbrechen" style="margin-top:.5rem">Abbrechen</button>
+        </form>
+      </div>
+      ${legalLinksHtml()}
+    </div>`;
+  document.getElementById('code-abbrechen').addEventListener('click', () => renderLogin());
+  document.getElementById('code-form').addEventListener('submit', (e) => handleLoginCode(e, zwischenToken));
+}
+
+async function handleLoginCode(e, zwischenToken) {
+  e.preventDefault();
+  const code = document.getElementById('login-code').value.replace(/\s/g, '');
+  const merken = !!(document.getElementById('login-geraet-merken') || {}).checked;
+  try {
+    const data = await api('POST', '/api/auth/login/2fa', { zwischen_token: zwischenToken, code, geraet_merken: merken });
+    if (!data) return;
+    anmeldungAbschliessen(data);
+  } catch (err) {
+    const el = document.getElementById('login-error');
+    el.textContent = err.message;
+    el.style.display = 'block';
+    const feld = document.getElementById('login-code');
+    if (feld) { feld.value = ''; feld.focus(); }
+  }
+}
+
+// Gemeinsamer Abschluss beider Wege (mit und ohne Code).
+function anmeldungAbschliessen(data) {
+  S.token = data.token;
+  S.user = data.user;
+  localStorage.setItem('token', data.token);
+  localStorage.setItem('user', JSON.stringify(data.user));
+  navigate('/welcome');
+  initSSE();
+  loadBadges();
+  syncPushSubscription();
+  refreshUser();   // holt auch den Zwei-Faktor-Zustand
+}
+
 // Dezente Impressum/Datenschutz-Links — nur zeigen, was hinterlegt ist (white-label: frischer Deploy bleibt sauber).
 function legalLinksHtml() {
   const parts = [];
@@ -70,14 +131,12 @@ async function handleLogin(e) {
   try {
     const data = await api('POST', '/api/auth/login', { username, password });
     if (!data) return;
-    S.token = data.token;
-    S.user = data.user;
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    navigate('/welcome');
-    initSSE();
-    loadBadges();
-    syncPushSubscription();
+    // Verlangt der Server einen Code, kommt hier noch KEIN Token — nur der Zwischen-Token.
+    if (data.zwei_faktor_erforderlich) {
+      renderLoginCode(data.zwischen_token, data.geraet_merkbar);
+      return;
+    }
+    anmeldungAbschliessen(data);
   } catch (err) {
     const el = document.getElementById('login-error');
     el.textContent = err.message;
@@ -100,6 +159,8 @@ async function logout(manual) {
   S.user = null;
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  localStorage.removeItem('zwei_faktor');
+  S.zweiFaktor = null;
   if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
   navigate('/login');
 }
@@ -113,9 +174,16 @@ async function refreshUser() {
     const d = await api('GET', '/api/auth/me');
     if (!d || !d.user) return;
     const norm = u => u ? [u.role, !!u.can_plan, !!u.can_plan_all, !!u.can_bulletin, !!u.can_upload].join('|') : '';
-    const changed = norm(S.user) !== norm(d.user);
+    // Der Zwei-Faktor-Zustand gehoert mit in den Vergleich: Schaltet der Chef die Pflicht scharf,
+    // soll die Oberflaeche ohne F5 auf „Mein Konto" umlenken.
+    const zfNorm = z => z ? [!!z.einrichtung_noetig, !!z.eingerichtet, z.modus].join('|') : '';
+    const changed = norm(S.user) !== norm(d.user) || zfNorm(S.zweiFaktor) !== zfNorm(d.zwei_faktor);
     S.user = d.user;
+    S.zweiFaktor = d.zwei_faktor || null;
     localStorage.setItem('user', JSON.stringify(d.user));
+    // Getrennt vom Nutzer abgelegt: `user` wird eins zu eins weitergereicht, der 2FA-Zustand hat
+    // dort nichts verloren. Im Speicher, damit nach F5 nicht kurz die normale App aufblitzt.
+    try { localStorage.setItem('zwei_faktor', JSON.stringify(d.zwei_faktor || null)); } catch (_) {}
     if (changed) render();
   } catch (_) { /* offline o.ä.: alter Stand bleibt bestehen */ }
 }
@@ -285,6 +353,9 @@ function layout(content, activeNav) {
           <span class="icon">&#128200;</span> Statistik
         </a>
         <div class="sidebar-divider"></div>
+        <a href="#/konto" class="${activeNav === 'konto' ? 'active' : ''}">
+          <span class="icon">&#128100;</span> Mein Konto
+        </a>
         <a href="#/notifications" class="${activeNav === 'notifications' ? 'active' : ''}">
           <span class="icon">&#128276;</span> Benachrichtigungen
         </a>
