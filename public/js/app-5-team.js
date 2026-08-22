@@ -2043,12 +2043,15 @@ async function kontoAvatarKarte() {
       <span id="avatar-vorschau">${avatarHtml(S.user, 96, 'initialen')}</span>
       <div style="flex:1; min-width:200px">
         <p style="margin:0 0 .5rem">Erscheint neben deinem Namen und in den Spalten von Planung,
-           Zeitnachweis und Auftrags-Board. Ohne Bild stehen dort deine Initialen.</p>
+           Zeitnachweis und Auftrags-Board. <strong>Ohne Bild bleibt dort alles wie bisher</strong> —
+           du musst also keines hochladen.</p>
         <input type="file" id="avatar-datei" accept="image/*" style="display:none">
         <button class="btn btn-primary btn-sm" id="avatar-waehlen">${hatBild ? 'Anderes Bild wählen' : 'Bild hochladen'}</button>
         ${hatBild ? '<button class="btn btn-outline btn-sm" id="avatar-weg" style="margin-left:.5rem">Entfernen</button>' : ''}
         <div style="font-size:.78rem;color:var(--text-light);margin-top:.4rem">
-          Wird auf 256 × 256 zugeschnitten. Nur angemeldete Kolleginnen und Kollegen sehen es.
+          Wird quadratisch zugeschnitten und verkleinert (auch ein großes Handyfoto ist danach nur
+          wenige Kilobyte). Nur angemeldete Kolleginnen und Kollegen sehen es — jederzeit wieder
+          entfernbar.
         </div>
       </div>
     </div>`;
