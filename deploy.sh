@@ -99,7 +99,7 @@ rsync -az middleware/ "$DEPLOY_HOST:$DEPLOY_PATH/middleware/"
 # ACHTUNG: Dies ist eine FESTE Liste — eine neue Datei im Projektstamm landet sonst NICHT auf dem
 # Server, und der Dienst startet nach dem Neustart gar nicht mehr (require schlaegt fehl).
 # Beim Anlegen einer neuen Datei hier eintragen. Die Probe unten (--pruefen) faengt es ab.
-STAMMDATEIEN="server.js audit.js push.js sse.js scheduler.js planning-recurrence.js csv.js zeit.js abschluss.js totp.js geheimnis.js .puppeteerrc.cjs package.json package-lock.json"
+STAMMDATEIEN="server.js audit.js push.js sse.js scheduler.js planning-recurrence.js csv.js zeit.js abschluss.js totp.js geheimnis.js zweifaktor.js .puppeteerrc.cjs package.json package-lock.json"
 rsync -az $STAMMDATEIEN "$DEPLOY_HOST:$DEPLOY_PATH/"
 # Produktions-Dependencies abgleichen (z. B. neu hinzugekommenes web-push). --omit=dev laesst
 # Puppeteer & Co. aussen vor; ist nichts zu tun, ist der Schritt praktisch ein No-op.

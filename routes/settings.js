@@ -7,6 +7,7 @@ const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { istUhrzeit } = require('../zeit');
+const { MODI, cacheVergessen } = require('../zweifaktor');
 
 const router = express.Router();
 
@@ -147,6 +148,7 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
     app_name, app_short_name, theme_color, background_color,
     legal_impressum, legal_datenschutz,
     work_start_default, work_hours_per_day, break_minutes_default,
+    twofa_admin, twofa_chef, twofa_buchhalter, twofa_mitarbeiter,
   } = req.body;
 
   // Validierung Branding-Felder
@@ -184,11 +186,27 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
     if (!Number.isInteger(m) || m < 0 || m > 480) return res.status(400).json({ error: 'Pause pro Tag: erwartet ganze Minuten zwischen 0 und 480' });
   }
 
+  // Zwei-Faktor-Pflicht je Rolle
+  const zweiFaktorFelder = { twofa_admin, twofa_chef, twofa_buchhalter, twofa_mitarbeiter };
+  for (const [key, wert] of Object.entries(zweiFaktorFelder)) {
+    if (wert === undefined) continue;
+    if (!MODI.includes(wert)) {
+      return res.status(400).json({ error: `Zwei-Faktor-Einstellung „${key}": erwartet eines von ${MODI.join(', ')}` });
+    }
+  }
+  // Die Pflicht fuer die ADMIN-Rolle darf nur ein Admin aendern. Sonst koennte ein Chef —
+  // PUT /api/settings steht auf authorize('chef') — ausgerechnet die Absicherung des staerksten
+  // Kontos abschalten. Gleiche Ueberlegung wie beim Passwort-Zuruecksetzen in routes/users.js.
+  if (twofa_admin !== undefined && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Die Zwei-Faktor-Pflicht für Administratoren kann nur ein Administrator ändern.' });
+  }
+
   const fields = {
     company_name, company_street, company_zip, company_city,
     app_name, app_short_name, theme_color, background_color,
     legal_impressum, legal_datenschutz,
     work_start_default, work_hours_per_day, break_minutes_default,
+    ...zweiFaktorFelder,
   };
   const changes = [];
   for (const [key, value] of Object.entries(fields)) {
@@ -205,6 +223,9 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
 
   // Wetter-Cache leeren, damit neuer Ort sofort wirkt
   weatherCache = { data: null, ts: 0 };
+  // Zwei-Faktor-Modi werden bei jeder Anfrage gebraucht und deshalb kurz zwischengespeichert —
+  // nach einer Umstellung muss dieser Speicher weg, sonst greift sie erst Sekunden spaeter.
+  cacheVergessen();
 
   const rows = db.prepare('SELECT key, value FROM settings').all();
   const settings = {};

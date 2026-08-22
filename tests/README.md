@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**156 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**157 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -182,6 +182,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `trash-access.js` | Papierkorb-Zugriff: „Chef voll, Mitarbeiter Eigenes". |
 | `trash-matrix-ui.js` | KOMPLEXER Papierkorb-/Lösch-Matrix-Test (Puppeteer) — Abwesenheits- UND Eintrags-Logik über alle Rollen. |
 | `trash-nav-ui.js` | UI-Smoke (Puppeteer): Papierkorb-Navigation je Rolle. |
+| `twofa-regeln.js` | Die Regeln der Zwei-Faktor-Anmeldung: Wer muss wie oft einen Code eingeben? |
 | `twofa-schema.js` | Die 2FA-Tabellen müssen auf JEDEM Altstand crashfrei nachwachsen — und zwar auf BEIDEN Wegen. |
 | `uebernahme-zurueck-ui.js` | Puppeteer-Test: „Zurück" nach dem Übernehmen einer Planung führt dorthin zurück, wo das |
 | `ueberschneidung-kette-ui.js` | Drei sich überschneidende Aufträge — Pausenvorschlag UND Arbeitszeit-Warnung, Schritt für Schritt. |
