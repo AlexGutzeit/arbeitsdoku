@@ -14,6 +14,48 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-22 (nachts) · Profilbilder, Geburtstags-Freigabe, „Mein Konto" komplett
+Aufbauend auf der Konto-Seite: Profilbild, eigenes Geburtsdatum samt Freigabe, eigene Stammdaten,
+die Benachrichtigungen von ihrer eigenen Seite hierher, „überall abmelden" und die Datenauskunft.
+
+**Profilbilder liegen hinter der Anmeldung** — anders als das Firmenlogo, das öffentlich unter
+`uploads/` liegt. Ein Gesichtsfoto ist ein personenbezogenes Datum; wer die Firma verlässt, soll
+nicht weiter an die Bilder der Kollegen kommen. Folge: Ein `<img src>` kann keinen Anmelde-Token
+mitschicken, die Bilder werden per `fetch` geholt und als `blob:` angezeigt. Dafür steht `blob:`
+jetzt in der Sicherheitsrichtlinie — `data:` bleibt verboten, das wäre die viel breitere Erlaubnis.
+
+**Zwei Größen** (96 und 512 px), aus demselben Original gerechnet. Die große ist zugleich der
+Bestand: Braucht man später eine dritte, lässt sie sich daraus ableiten, ohne dass jemand neu
+hochlädt.
+
+**Ohne Bild ändert sich nichts** (Alex' Vorgabe): Der Platzhalter bleibt unsichtbar im Baum — er
+muss dort stehen, weil die Seite gebaut wird, BEVOR die Übersicht der Bilder eintrifft; ohne
+Platzhalter wäre er später nicht mehr auffindbar. Genau daran ist der erste Versuch gescheitert
+(leere Kopfzeile nach jedem Neuladen).
+
+**Die Sicherung musste mit.** `routes/backup.js` kannte nur `uploads/` und `storage/documents/`.
+Ohne Ergänzung wären nach einem Restore alle Gesichter weg gewesen — die Datenbank hätte von den
+Bildern gewusst, die Dateien nicht mehr existiert. Gilt auch für `make-backup.js` auf dem Server;
+das ist noch offen und gehört in die Deploy-Vorbereitung.
+
+**Geburtstags-Freigabe schließt eine alte Lücke.** Beim Bau der Geburtstags-Einblendung stand hier,
+eine Anzeige für die ganze Belegschaft wäre einwilligungspflichtig. Genau die Einwilligung gibt es
+jetzt — durch die betroffene Person selbst, zweistufig. Der Endpunkt ist damit nicht mehr
+GESPERRT, sondern GEFILTERT; zwei ältere Tests erwarteten noch 403 und sind nachgezogen.
+
+**„Überall abmelden" ohne Sitzungsverwaltung:** ein Zähler je Nutzer, der im Token mitfährt. Passt
+er nicht mehr, ist das Token wertlos. Der Klickende bekommt sofort ein frisches — sonst würfe er
+sich selbst hinaus. Abwärtskompatibel, weil ein fehlender Anspruch als 0 gilt: Token aus der Zeit
+davor bleiben gültig, solange niemand den Knopf gedrückt hat.
+
+**Zwei Testfallen, beide nicht in der App:**
+* Puppeteer scrollt ein Element nur so weit in den Sichtbereich, dass es gerade hineinragt — bei
+  dieser App landet es damit **unter der klebenden Kopfzeile**, und der Klick trifft den Kopf.
+  Symptom: kein Absende-Ereignis, keine Anfrage, keine Fehlermeldung, die Karte bleibt einfach
+  stehen. Die Suche danach kostete vier Anläufe. Wer hier klickt, scrollt vorher mittig.
+* Ein Abschnitt fand keine Avatare in Planung und Zeitnachweis — nicht wegen der Bilder, sondern
+  weil die frische Datenbank keine Einträge hatte und es deshalb gar keine Spalten gab.
+
 ### 2026-08-22 · Zwei-Faktor-Anmeldung — was dabei zweimal fast schiefging
 Die App stand mit Benutzername und Passwort allein im Netz. Neu ist ein zweiter Faktor (TOTP), je
 Rolle unterschiedlich oft verlangt, plus die erste persönliche Seite der App („Mein Konto") — die

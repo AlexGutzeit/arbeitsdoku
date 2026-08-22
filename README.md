@@ -48,7 +48,7 @@ es geht; die Abschnitte darunter beschreiben es im Einzelnen.
 
 **Einstieg**
 
-- [👤 Mein Konto](#-mein-konto) — Eigenes Passwort ändern und die Zwei-Faktor-Anmeldung einrichten. Für **jede** Rolle.
+- [👤 Mein Konto](#-mein-konto) — Profilbild, eigenes Passwort, Zwei-Faktor-Anmeldung, Geburtstags-Freigabe, Benachrichtigungen und die eigenen Stammdaten. Für **jede** Rolle.
 - [🏠 Willkommen](#-willkommen) — Persönliches Dashboard: anstehende Planung, eigene Abwesenheiten, Wetter, Geburtstage.
 
 **Zeit erfassen und abrechnen**
@@ -91,6 +91,38 @@ Persönliches Dashboard: anstehende Planung, eigene Abwesenheiten, Schnellüberb
 #### 👤 Mein Konto
 
 Die persönliche Seite — für **alle** Rollen sichtbar, auch für Mitarbeiter.
+
+**Profilbild:** Jeder kann ein Bild hochladen; es erscheint neben dem eigenen Namen in der
+Kopfzeile und in den Spalten von Planung, Zeitnachweis und Auftrags-Board sowie in der
+Mitarbeiterliste. **Wer kein Bild hochlädt, ändert für die anderen nichts** — die Ansicht bleibt
+genau wie vorher. Jedes Bild lässt sich jederzeit wieder **entfernen**.
+
+Technisch: Beim Hochladen wird das Foto auf zwei quadratische WebP-Größen gerechnet — **96 px** für
+den Alltag (Kopfzeile, Spalten, Listen; rund 3 kB) und **512 px** für die Vorschau und eine
+spätere Kollegen-Profilansicht. Ein 12-MB-Handyfoto landet damit als wenige Kilobyte auf der
+Platte. Die Ausrichtung wird aus dem Foto übernommen, zugeschnitten wird mittig auf den
+interessantesten Ausschnitt. **Die Bilder liegen hinter der Anmeldung** (nicht im öffentlichen
+`uploads/` wie das Firmenlogo) — ohne Login kommt niemand heran.
+
+**Geburtstag:** Die Seite zeigt das Geburtsdatum, das die Verwaltung hinterlegt hat — damit ein
+Zahlendreher demjenigen auffällt, den er betrifft (das Datum steuert auch die gesetzlichen
+Pausenzeiten). Dazu zwei Schalter: **„Meinen Geburtstag im Team zeigen"** und darunter
+**„… und auch mein Alter"**. Ohne Freigabe sehen weiterhin nur Chef, Admin und Buchhaltung den
+Geburtstag. Die zweite Stufe gibt es, weil „das Team darf gratulieren" nicht dasselbe ist wie
+„das Team darf mein Alter kennen"; sie lässt sich jederzeit zurücknehmen.
+
+**Benachrichtigungen:** Die Push-Kategorien und die geplanten Zusammenfassungen sind seit dem
+22.08.2026 hier zu finden statt auf einer eigenen Seite. An den Einstellungen selbst hat sich
+nichts geändert.
+
+**Meine Daten:** Soll-Stunden, Urlaubsanspruch, Eintritt, Personalnummer, Arbeitsbeginn und
+zusätzliche Rechte — nur lesend, „so hat die Verwaltung dich hinterlegt".
+
+**Sitzungen und Daten:** **„Auf allen Geräten abmelden"** macht jede andere Anmeldung sofort
+ungültig (auf dem aktuellen Gerät bleibt man angemeldet) und setzt zugleich die gemerkten Geräte
+der Zwei-Faktor-Anmeldung zurück — der Weg für ein verlorenes Handy, ohne auf jemanden warten zu
+müssen. **„Meine Daten herunterladen"** gibt alles Gespeicherte als Datei aus (Auskunft nach
+Art. 15 DSGVO), ohne Passwort und ohne den Zwei-Faktor-Schlüssel.
 
 **Passwort ändern:** Jeder ändert sein eigenes Passwort selbst; das aktuelle Passwort ist dabei
 Pflicht (sonst könnte an einem unbeaufsichtigten, noch angemeldeten Gerät jemand den Zugang
@@ -304,7 +336,7 @@ Rückkehr zum Tab** nachgeholt.
 ## 🔔 Push-Benachrichtigungen (Web Push)
 
 Zusätzlich zu den Live-Zählern (die nur bei geöffneter App hochzählen) kann jeder Nutzer über den
-Seitenleisten-Punkt **„🔔 Benachrichtigungen"** echte Geräte-Benachrichtigungen aktivieren – sie kommen auch
+Menüpunkt **„👤 Mein Konto"** echte Geräte-Benachrichtigungen aktivieren – sie kommen auch
 an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweiligen Zähler erhöhen würde,
 **außer für den Auslöser selbst**:
 
@@ -487,7 +519,7 @@ Damit die App produktiv nutzbar ist, als **Admin** der Reihe nach:
    anpassen oder löschen.
 7. (Optional) **Push-Benachrichtigungen:** Sind die `VAPID_*`-Schlüssel in der `.env` gesetzt (siehe
    [Installation](#installation)), kann jeder Nutzer sie selbst über den Seitenleisten-Punkt
-   **🔔 Benachrichtigungen** aktivieren (am Handy am besten als installierte PWA). Details im Abschnitt
+   unter **👤 Mein Konto** die Benachrichtigungen aktivieren (am Handy am besten als installierte PWA). Details im Abschnitt
    [Push-Benachrichtigungen](#-push-benachrichtigungen-web-push).
 
 ---
