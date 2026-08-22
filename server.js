@@ -76,6 +76,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // API-Routes
+app.use('/api/auth/2fa', require('./routes/twofa'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/entries', require('./routes/entries'));
 app.use('/api/users', require('./routes/users'));

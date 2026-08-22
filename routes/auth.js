@@ -6,6 +6,9 @@ const { getDb } = require('../database/init');
 const { authenticate, JWT_SECRET } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { passwordPolicyError } = require('./users');
+const zf = require('../zweifaktor');
+const totp = require('../totp');
+const { zustand: zweiFaktorZustand } = require('./twofa');
 
 const router = express.Router();
 
@@ -51,11 +54,43 @@ router.post('/login', loginLimiter, async (req, res) => {
     return res.status(403).json({ error: 'Dieser Account ist ausgestellt. Bitte wende dich an die Verwaltung.' });
   }
 
-  logAudit(db, { userId: user.id, username: user.username, action: 'login_success', ip: req.ip });
-  const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
+  // Zweiter Faktor noetig? Entschieden wird nach Rolle, eingerichtetem Authenticator und dem
+  // Geraet, von dem die Anmeldung kommt. Steht die Rolle auf „aus" und ist nichts eingerichtet,
+  // laeuft alles wie vor der Zwei-Faktor-Arbeit — das ist der Normalfall nach dem Update.
+  const modus = zf.modusFuerRolle(db, user.role);
+  const hatAuthenticator = zf.eingerichtet(db, user.id);
+  const geraetKennung = (req.cookies || {}).ad_geraet || null;
+  const geraet = zf.geraetFinden(db, user.id, geraetKennung);
 
-  res.json({
-    token,
+  if (zf.codeNoetig({ modus, eingerichtet: hatAuthenticator, geraetBestaetigtAm: geraet ? geraet.confirmed_at : null })) {
+    // Bewusst 200 und nicht 401: Das Passwort war ja richtig. Ein 401 wuerde im Browser ausserdem
+    // den automatischen Abmelde-Weg ausloesen (app-1-core.js).
+    //
+    // Der Zwischen-Token traegt `pending2fa` und wird von authenticate() und /api/events
+    // ausdruecklich abgelehnt — er oeffnet also nichts ausser dem zweiten Schritt.
+    const zwischenToken = jwt.sign({ userId: user.id, pending2fa: true }, JWT_SECRET, { expiresIn: '5m' });
+    logAudit(db, { userId: user.id, username: user.username, action: 'login_2fa_noetig', ip: req.ip });
+    return res.json({
+      zwei_faktor_erforderlich: true,
+      zwischen_token: zwischenToken,
+      geraet_merkbar: modus !== 'immer',
+    });
+  }
+
+  if (geraet) zf.geraetBenutzt(db, geraet.id, req.ip);
+  logAudit(db, { userId: user.id, username: user.username, action: 'login_success',
+    details: geraet ? 'bekanntes Gerät' : undefined, ip: req.ip });
+  res.json(anmeldeAntwort(db, user));
+ } catch (e) {
+  console.error('Login-Fehler:', e.message);
+  return res.status(500).json({ error: 'Interner Serverfehler' });
+ }
+});
+
+// Die Antwort einer geglueckten Anmeldung — an zwei Stellen gebraucht (mit und ohne Code).
+function anmeldeAntwort(db, user) {
+  return {
+    token: jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' }),
     user: {
       id: user.id,
       username: user.username,
@@ -69,17 +104,91 @@ router.post('/login', loginLimiter, async (req, res) => {
       can_upload: !!user.can_upload,
       work_start: user.work_start || null,  // leer = Firmenwert aus den Einstellungen
       birth_date: user.birth_date || null   // leer = Alter unbekannt -> strengerer Jugendschutz
+    },
+  };
+}
+
+// Eigener Zaehler fuer den Code-Schritt: Der Anmelde-Zaehler oben laesst erfolgreiche
+// Passwortpruefungen aus (skipSuccessfulRequests) — der sechsstellige Code waere sonst der
+// ungebremste Weg. Gezaehlt wird pro Nutzer, nicht pro IP, damit viele Adressen nichts nuetzen.
+const zweiFaktorLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Zu viele Code-Versuche. Bitte in 15 Minuten erneut versuchen.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    try {
+      const d = jwt.verify(String((req.body || {}).zwischen_token || ''), JWT_SECRET);
+      if (d && d.userId) return 'u' + d.userId;
+    } catch (_) {}
+    return rateLimit.ipKeyGenerator(req.ip);
+  },
+});
+
+// Zweiter Schritt der Anmeldung: Code aus der Authenticator-App.
+//
+// Der Pfad enthaelt bewusst „/login" — die Ausnahme in app-1-core.js, die bei 401 NICHT automatisch
+// abmeldet, prueft auf genau diese Zeichenfolge. Ein falscher Code darf den Nutzer nicht aus der
+// Anmeldemaske werfen.
+router.post('/login/2fa', zweiFaktorLimiter, (req, res) => {
+  try {
+    const { zwischen_token, code, geraet_merken } = req.body || {};
+    if (!zwischen_token || !code) return res.status(400).json({ error: 'Zwischen-Token und Code erforderlich' });
+
+    let entschluesselt;
+    try { entschluesselt = jwt.verify(zwischen_token, JWT_SECRET); }
+    catch (_) { return res.status(401).json({ error: 'Die Anmeldung ist abgelaufen. Bitte erneut anmelden.' }); }
+    // Nur der Zwischen-Token darf hier hinein — ein vollwertiger Login-Token nicht, sonst koennte
+    // man sich damit ein Geraet als vertrauenswuerdig eintragen lassen.
+    if (!entschluesselt || entschluesselt.pending2fa !== true) {
+      return res.status(401).json({ error: 'Ungültiger Token' });
     }
-  });
- } catch (e) {
-  console.error('Login-Fehler:', e.message);
-  return res.status(500).json({ error: 'Interner Serverfehler' });
- }
+
+    const db = getDb();
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(entschluesselt.userId);
+    if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
+    if (user.active === 0) return res.status(403).json({ error: 'Dieser Account ist ausgestellt. Bitte wende dich an die Verwaltung.' });
+
+    const geheim = zf.geheimnisLesen(db, user.id);
+    const schritt = geheim ? totp.pruefe(geheim, code) : null;
+    if (schritt === null) {
+      logAudit(db, { userId: user.id, username: user.username, action: 'login_2fa_fehlgeschlagen', ip: req.ip });
+      return res.status(401).json({ error: 'Der Code stimmt nicht. Prüfe auch die Uhrzeit deines Handys.' });
+    }
+    if (!zf.schrittVerbrauchen(db, user.id, schritt)) {
+      // Eigene Meldung: „Falscher Code" waere hier irrefuehrend, der Nutzer sucht den Fehler sonst
+      // bei sich. Tritt auf, wenn man sich binnen 30 Sekunden zweimal anmeldet.
+      return res.status(401).json({ error: 'Dieser Code wurde bereits verwendet. Warte auf den nächsten.' });
+    }
+
+    // Geraet merken — nur wenn gewuenscht UND die Rolle es zulaesst.
+    const modus = zf.modusFuerRolle(db, user.role);
+    if (geraet_merken && modus !== 'immer') {
+      const kennung = (req.cookies || {}).ad_geraet || zf.geraetKennungErzeugen();
+      zf.geraetMerken(db, user.id, kennung, req.headers['user-agent'], req.ip);
+      // httpOnly: fuer JavaScript unlesbar. Laege die Kennung im localStorage, koennte eine
+      // XSS-Luecke Anmelde-Token UND Geraetevertrauen in einem Zug abgreifen.
+      // Secure nur bei echtem HTTPS, sonst nimmt der Browser das Cookie in Tests nicht an.
+      res.cookie('ad_geraet', kennung, {
+        httpOnly: true, sameSite: 'lax', path: '/api/auth',
+        maxAge: 400 * 24 * 60 * 60 * 1000, secure: !!req.secure,
+      });
+    }
+
+    logAudit(db, { userId: user.id, username: user.username, action: 'login_2fa_erfolg', ip: req.ip });
+    res.json(anmeldeAntwort(db, user));
+  } catch (e) {
+    console.error('2FA-Anmeldung fehlgeschlagen:', e.message);
+    res.status(500).json({ error: 'Interner Serverfehler' });
+  }
 });
 
 // Aktueller Benutzer
 router.get('/me', authenticate, (req, res) => {
-  res.json({ user: req.user });
+  // `zwei_faktor` steht bewusst NEBEN `user` und nicht darin: refreshUser() legt `user` eins zu eins
+  // in den localStorage — der 2FA-Zustand hat dort nichts verloren und soll auch nicht veralten.
+  res.json({ user: req.user, zwei_faktor: zweiFaktorZustand(getDb(), req.user) });
 });
 
 // Eigenes Passwort aendern. Bis hierher konnte das NIEMAND selbst — nur Chef/Admin konnten es

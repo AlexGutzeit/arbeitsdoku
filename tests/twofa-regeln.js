@@ -8,6 +8,7 @@
 //
 //   node tests/twofa-regeln.js
 const { spawn } = require('child_process');
+const totp = require('../totp');
 const http = require('http'); const fs = require('fs'); const path = require('path');
 
 process.env.JWT_SECRET = 'test-secret-mindestens-32-zeichen-lang';
@@ -97,6 +98,24 @@ const vorTagen = t => vorStunden(t * 24);
     ok('keine der vier Einstellungen ist gesetzt',
       !start.twofa_admin && !start.twofa_chef && !start.twofa_buchhalter && !start.twofa_mitarbeiter,
       JSON.stringify({ a: start.twofa_admin, c: start.twofa_chef }));
+
+    // Der Admin richtet sich zuerst selbst einen Authenticator ein.
+    //
+    // Ohne das sperrt sich dieser Test bei der naechsten Zeile selbst aus — und zwar voellig zu
+    // Recht: Sobald twofa_admin scharf steht und der Admin keinen Authenticator hat, greift der
+    // Einrichtungs-Zwang sofort und jede weitere Anfrage bekommt 403. Genau so soll es sein; hier
+    // ist es nur laestig. (Beim ersten Lauf ist mir dieser Test deshalb umgefallen.)
+    // Dasselbe gilt fuer den Chef, sobald weiter unten twofa_chef scharf gestellt wird.
+    const einrichten = async (token, wer) => {
+      const setup = await req('POST', '/api/auth/2fa/setup', token);
+      // Nacheinander im selben 30-Sekunden-Fenster geht nicht (Replay-Riegel je Nutzer) — es sind
+      // aber verschiedene Nutzer mit eigenen Geheimnissen, also unproblematisch.
+      const v = await req('POST', '/api/auth/2fa/verify', token, { code: totp.code(setup.body.geheim) });
+      ok(`${wer} hat für diesen Test einen Authenticator eingerichtet`, v.status === 200,
+        `${v.status} ${v.text.slice(0, 60)}`);
+    };
+    await einrichten(admin, 'Admin');
+    await einrichten(chef, 'Chef');
 
     console.log('\n── B) Speichern und Prüfen der Werte ──');
     const gut = await req('PUT', '/api/settings', admin,

@@ -3,7 +3,7 @@
 // Bewusst getrennt von der Rechnerei (totp.js) und der Verschlüsselung (geheimnis.js): Hier steht
 // nur Politik, keine Kryptografie. Die Kernfunktionen sind rein (Uhrzeit wird hereingereicht),
 // damit sich jedes Intervall ohne Warten und ohne echte Zeit prüfen lässt.
-const { notabschaltung } = require('./geheimnis');
+const { notabschaltung, verschluesseln, entschluesseln } = require('./geheimnis');
 
 // Die Auswahl, die der Admin je Rolle trifft.
 const MODI = ['aus', 'immer', 'geraet', 'taeglich', 'woechentlich', 'monatlich'];
@@ -90,8 +90,95 @@ function codeNoetig({ modus, eingerichtet, geraetBestaetigtAm = null, jetztMs = 
   return !geraetGueltig(geraetBestaetigtAm, wirksam, jetztMs);
 }
 
+// ── Datenbank-Seite ────────────────────────────────────────────────────────────────────────────
+// Alles hier ist in try/catch gekapselt und antwortet im Zweifel so, dass NIEMAND ausgesperrt wird
+// (kein Geheimnis, kein Geraet, keine Pflicht). Fehlt die Tabelle auf einem sehr alten Stand, ist
+// 2FA schlicht nicht verfuegbar — die Anmeldung funktioniert weiter.
+
+// Ist der Authenticator dieses Nutzers fertig eingerichtet (also einmal per Code bestaetigt)?
+// Ein angelegtes, aber nie bestaetigtes Geheimnis zaehlt bewusst NICHT: Sonst sperrte sich jemand
+// aus, der die Einrichtung auf halbem Weg abbricht.
+function eingerichtet(db, userId) {
+  try {
+    const r = db.prepare('SELECT confirmed_at FROM twofa_secrets WHERE user_id = ?').get(userId);
+    return !!(r && r.confirmed_at);
+  } catch (_) { return false; }
+}
+
+function geheimnisLesen(db, userId) {
+  try {
+    const r = db.prepare('SELECT secret_enc FROM twofa_secrets WHERE user_id = ?').get(userId);
+    if (!r || !r.secret_enc) return null;
+    return entschluesseln(r.secret_enc, userId);
+  } catch (_) { return null; }   // falscher Schluessel o. ae. → wie „nicht eingerichtet"
+}
+
+function geheimnisAnlegen(db, userId, base32) {
+  db.prepare(`INSERT INTO twofa_secrets (user_id, secret_enc, confirmed_at, last_step)
+              VALUES (?, ?, NULL, 0)
+              ON CONFLICT(user_id) DO UPDATE SET secret_enc = excluded.secret_enc,
+                                                 confirmed_at = NULL, last_step = 0`)
+    .run(userId, verschluesseln(base32, userId));
+}
+
+// Der Replay-Riegel: Ein Code gilt bis zu 90 Sekunden. Wer ihn abfaengt, koennte ihn erneut
+// einloesen. Deshalb wird der zuletzt benutzte Zeitschritt gemerkt; alles, was nicht NEUER ist,
+// wird abgelehnt. Gibt false zurueck, wenn der Code schon verbraucht war.
+function schrittVerbrauchen(db, userId, schritt) {
+  try {
+    const r = db.prepare('SELECT last_step FROM twofa_secrets WHERE user_id = ?').get(userId);
+    if (r && Number(r.last_step) >= Number(schritt)) return false;
+    db.prepare('UPDATE twofa_secrets SET last_step = ? WHERE user_id = ?').run(schritt, userId);
+    return true;
+  } catch (_) { return true; }
+}
+
+function bestaetigen(db, userId) {
+  db.prepare("UPDATE twofa_secrets SET confirmed_at = strftime('%Y-%m-%d %H:%M:%f','now') WHERE user_id = ?").run(userId);
+}
+
+function zuruecksetzen(db, userId) {
+  try { db.prepare('DELETE FROM twofa_secrets WHERE user_id = ?').run(userId); } catch (_) {}
+  try { db.prepare('DELETE FROM twofa_devices WHERE user_id = ?').run(userId); } catch (_) {}
+}
+
+// ── Geraete ────────────────────────────────────────────────────────────────────────────────────
+// Die Kennung liegt beim Nutzer im Cookie, hier NUR als Hash. Wer die Datenbank liest, kann daraus
+// kein Geraet nachbauen. SHA-256 genuegt: Der Wert ist 256 Bit Zufall, kein zu erratendes Passwort.
+const geraetKennungErzeugen = () => require('crypto').randomBytes(32).toString('base64url');
+const geraetHash = (kennung) => require('crypto').createHash('sha256').update(String(kennung)).digest('hex');
+
+function geraetFinden(db, userId, kennung) {
+  if (!kennung) return null;
+  try {
+    return db.prepare('SELECT * FROM twofa_devices WHERE user_id = ? AND token_hash = ?')
+      .get(userId, geraetHash(kennung)) || null;
+  } catch (_) { return null; }
+}
+
+function geraetMerken(db, userId, kennung, userAgent, ip) {
+  try {
+    db.prepare(`INSERT INTO twofa_devices (user_id, token_hash, user_agent, last_ip, confirmed_at, last_used_at)
+                VALUES (?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f','now'), strftime('%Y-%m-%d %H:%M:%f','now'))
+                ON CONFLICT(token_hash) DO UPDATE SET
+                  confirmed_at = strftime('%Y-%m-%d %H:%M:%f','now'),
+                  last_used_at = strftime('%Y-%m-%d %H:%M:%f','now'),
+                  user_agent = excluded.user_agent, last_ip = excluded.last_ip`)
+      .run(userId, geraetHash(kennung), String(userAgent || '').slice(0, 200), String(ip || '').slice(0, 60));
+  } catch (_) { /* ohne Tabelle gibt es eben kein Geraetevertrauen */ }
+}
+
+function geraetBenutzt(db, id, ip) {
+  try {
+    db.prepare("UPDATE twofa_devices SET last_used_at = strftime('%Y-%m-%d %H:%M:%f','now'), last_ip = ? WHERE id = ?")
+      .run(String(ip || '').slice(0, 60), id);
+  } catch (_) {}
+}
+
 module.exports = {
   MODI, MODUS_TEXT, FENSTER_TAGE, ROLLEN, schluesselFuer,
   modusFuerRolle, alleModi, cacheVergessen,
   einrichtungNoetig, geraetGueltig, codeNoetig,
+  eingerichtet, geheimnisLesen, geheimnisAnlegen, schrittVerbrauchen, bestaetigen, zuruecksetzen,
+  geraetKennungErzeugen, geraetHash, geraetFinden, geraetMerken, geraetBenutzt,
 };

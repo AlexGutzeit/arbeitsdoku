@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../database/init');
+const zweiFaktor = require('../zweifaktor');
 const { logAudit } = require('../audit');
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -24,6 +25,19 @@ function logSessionExpired(token, ip) {
     const u = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
     logAudit(db, { userId, username: u ? u.username : '', action: 'session_expired', details: 'Token abgelaufen (24h-Timeout)', ip });
   } catch (_) { /* Audit darf den Request nie stoeren */ }
+}
+
+// Was auch ohne eingerichteten zweiten Faktor erreichbar bleiben MUSS — sonst kaeme der Nutzer
+// gar nicht erst zur Einrichtung. Bewusst kurz gehalten: keine Datenrouten, kein SSE.
+const GATE_FREI = [
+  '/api/auth/me',
+  '/api/auth/logout',
+  '/api/auth/password',
+  '/api/auth/2fa',        // alles darunter
+];
+function gateFrei(url) {
+  const pfad = String(url || '').split('?')[0];
+  return GATE_FREI.some(p => pfad === p || pfad.startsWith(p + '/'));
 }
 
 function authenticate(req, res, next) {
@@ -57,6 +71,26 @@ function authenticate(req, res, next) {
     // COALESCE(active,1): alte DBs ohne gesetztes Flag gelten als aktiv ([[feedback_abwaertskompatibilitaet]]).
     if (user.active === 0) return res.status(401).json({ error: 'Account ausgestellt' });
     req.user = user;
+
+    // Einrichtungs-Zwang: Verlangt die Rolle einen zweiten Faktor und ist noch keiner eingerichtet,
+    // geht ausser den Konto-Endpunkten nichts mehr. Das Frontend leitet zwar auch um, aber das ist
+    // Bequemlichkeit — verlassen kann man sich nur auf die Pruefung hier.
+    //
+    // 403 und NICHT 401: Ein 401 wuerde im Browser den automatischen Abmelde-Weg ausloesen
+    // (app-1-core.js) — der Nutzer flaege raus, statt zur Einrichtung geleitet zu werden.
+    //
+    // Komplett in try/catch, und die Abfrage laeuft nur, wenn die Rolle ueberhaupt betroffen ist.
+    // Ein Fehler hier darf niemals den Zugang kosten: im Zweifel durchlassen.
+    try {
+      const modus = zweiFaktor.modusFuerRolle(db, user.role);
+      if (modus !== 'aus' && !gateFrei(req.originalUrl || req.url) && !zweiFaktor.eingerichtet(db, user.id)) {
+        return res.status(403).json({
+          error: 'Bitte richte zuerst die Zwei-Faktor-Anmeldung ein.',
+          code: 'ZWEI_FAKTOR_EINRICHTUNG',
+        });
+      }
+    } catch (_) { /* 2FA ausgefallen → normal weiterarbeiten */ }
+
     next();
   } catch (err) {
     if (err && err.name === 'TokenExpiredError') logSessionExpired(token, req.ip);
@@ -74,4 +108,4 @@ function authorize(...roles) {
   };
 }
 
-module.exports = { authenticate, authorize, JWT_SECRET };
+module.exports = { authenticate, authorize, JWT_SECRET, GATE_FREI, gateFrei };
