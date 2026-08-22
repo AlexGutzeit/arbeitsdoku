@@ -105,8 +105,15 @@ const MA = { role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hour
     ok('Buchhalter darf es sehen', alsBuch.status === 200 &&
       (alsBuch.body.geburtstage || []).some(g => g.name === 'Tina Torte'), alsBuch.status + ' ' + alsBuch.text);
 
+    // GEAENDERT am 22.08.2026: Der Endpunkt ist nicht mehr gesperrt, sondern GEFILTERT. Ein
+    // Mitarbeiter darf ihn abfragen, bekommt aber nur Kollegen zu sehen, die sich SELBST
+    // freigegeben haben (tests/geburtstag-freigabe.js). Ohne Freigabe ist die Liste leer — das
+    // Ergebnis ist fuer ihn also dasselbe wie vorher, nur ohne Fehlermeldung.
     const alsMa = await req('GET', '/api/users/geburtstage', max.token);
-    ok('Mitarbeiter wird abgewiesen (403)', alsMa.status === 403, alsMa.status + ' ' + alsMa.text);
+    ok('Mitarbeiter darf fragen, sieht aber nichts Fremdes',
+      alsMa.status === 200 && (alsMa.body.geburtstage || []).length === 0, alsMa.status + ' ' + alsMa.text);
+    ok('… insbesondere nicht Tina Torte, die nichts freigegeben hat',
+      !(alsMa.body.geburtstage || []).some(g => g.name === 'Tina Torte'), alsMa.text.slice(0, 90));
 
     console.log('\n── Willkommensseite ────────────────────────────────────');
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });

@@ -88,9 +88,13 @@ const morgenMD = iso(morgen).slice(5);
     ok('… ohne Alter', !/\b3[0-9]\b|\bwird heute\b/.test(z.eigenText), JSON.stringify(z.eigenText));
     ok('… und ohne Geburtsdatum', !/\d{4}-\d{2}-\d{2}|\d{1,2}\.\d{1,2}\.\d{4}/.test(z.eigenText), JSON.stringify(z.eigenText));
     ok('… sieht aber KEINE fremden Geburtstage', !/Geburtstag heute/.test(z.seite), 'Abschnitt „Geburtstag heute" darf für Mitarbeiter nicht da sein');
-    const verboten = await req('GET', '/api/users/geburtstage',
+    // GEAENDERT am 22.08.2026: Der Endpunkt ist nicht mehr gesperrt, sondern gefiltert — ein
+    // Mitarbeiter sieht nur Kollegen, die sich selbst freigegeben haben. Ohne Freigabe ist die
+    // Liste leer, das Ergebnis fuer ihn also unveraendert.
+    const offen = await req('GET', '/api/users/geburtstage',
       (await req('POST', '/api/auth/login', null, { username: 'gebheute', password: 'Test1234!' })).body.token);
-    ok('… und der Endpunkt bleibt für ihn gesperrt (403)', verboten.status === 403, String(verboten.status));
+    ok('… und über den Endpunkt sieht er keine fremden Geburtstage',
+      offen.status === 200 && (offen.body.geburtstage || []).length === 0, `${offen.status} ${offen.text.slice(0, 80)}`);
     await page.close();
 
     console.log('\n── Mitarbeiter ohne Geburtstag heute ──');

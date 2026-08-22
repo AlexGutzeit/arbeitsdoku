@@ -518,21 +518,20 @@ async function renderWelcome() {
     </div>`;
   }
 
-  // Geburtstags-Einblendung — nur Chef/Admin/Buchhalter. Fuer die ganze Belegschaft waere sie
-  // einwilligungspflichtig; der Endpunkt gibt sie deshalb auch niemandem sonst heraus.
+  // Geburtstags-Einblendung. Fuer JEDE Rolle abgefragt — der Server entscheidet, was man sieht:
+  // Chef/Admin/Buchhalter wie bisher alle mit Alter, alle uebrigen nur die Kollegen, die sich
+  // selbst freigegeben haben (und deren Alter nur bei ausdruecklicher Freigabe).
   let geburtstage = [];
-  if (isChefOrAdmin() || (S.user && S.user.role === 'buchhalter')) {
-    try {
-      const g = await api('GET', '/api/users/geburtstage');
-      if (g) geburtstage = g.geburtstage || [];
-    } catch (e) {}
-  }
+  try {
+    const g = await api('GET', '/api/users/geburtstage');
+    if (g) geburtstage = g.geburtstage || [];
+  } catch (e) {}
   let geburtstagHtml = '';
   if (geburtstage.length > 0) {
     geburtstagHtml = `<div class="welcome-section">
       <h3>&#127874; Geburtstag heute</h3>
       ${geburtstage.map(g => `<div class="welcome-bulletin">
-        <div class="welcome-bulletin-header"><strong>${esc(g.name)} wird heute ${g.alter} &#127881;</strong></div>
+        <div class="welcome-bulletin-header">${avatarHtml(g, 24)} <strong>${esc(g.name)} ${g.alter === undefined ? 'hat heute Geburtstag' : `wird heute ${g.alter}`} &#127881;</strong></div>
         ${g.am_29_februar
           ? '<div class="welcome-bulletin-text">Geboren am 29. Februar — den gibt es dieses Jahr nicht, deshalb heute.</div>'
           : ''}
@@ -2017,6 +2016,7 @@ async function renderKonto() {
         du nicht in die App.
       </div>` : ''}
       <div class="welcome-section" id="konto-avatar"></div>
+      <div class="welcome-section" id="konto-geburtstag"></div>
       <div class="welcome-section" id="konto-2fa"><div class="loading"><div class="spinner"></div></div></div>
       <div class="welcome-section" id="konto-passwort"></div>
       <div class="welcome-section" id="konto-geraete" style="display:none"></div>
@@ -2025,6 +2025,7 @@ async function renderKonto() {
   const fab = document.getElementById('fab-new');
   if (fab) fab.style.display = 'none';
   await kontoAvatarKarte();
+  await kontoGeburtstagKarte();
   kontoPasswortKarte();
   await kontoZweiFaktorKarte();
 }
@@ -2074,6 +2075,61 @@ async function kontoAvatarKarte() {
       kopfzeileAvatarAktualisieren();
     } catch (err) { toast(err.message, 'error'); }
   });
+}
+
+// Eigenes Geburtsdatum anzeigen — damit ein Zahlendreher demjenigen auffaellt, der ihn am besten
+// erkennt. Dazu die Freigabe fuers Team, zweistufig.
+async function kontoGeburtstagKarte() {
+  const k = document.getElementById('konto-geburtstag');
+  if (!k) return;
+  let d;
+  try { d = await api('GET', '/api/users/geburtstag-freigabe'); }
+  catch (_) { k.style.display = 'none'; return; }
+
+  const datum = d.geburtsdatum
+    ? new Date(d.geburtsdatum + 'T12:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
+    : null;
+
+  k.innerHTML = `
+    <h3>&#127874; Geburtstag</h3>
+    ${datum
+      ? `<p>Die Verwaltung hat hinterlegt: <strong>${esc(datum)}</strong>.<br>
+           <span style="color:var(--text-light);font-size:.85rem">Stimmt das nicht? Dann sag bitte
+           im Büro Bescheid — das Datum steuert auch die gesetzlichen Pausenzeiten.</span></p>`
+      : `<p>Es ist <strong>kein Geburtsdatum</strong> hinterlegt.
+           <span style="color:var(--text-light);font-size:.85rem">Solange das so ist, rechnet die App
+           bei den Pausen vorsichtshalber mit den strengeren Regeln für Jugendliche.</span></p>`}
+    <hr style="margin:.85rem 0; border:none; border-top:1px solid var(--border)">
+    <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer">
+      <input type="checkbox" id="geb-zeigen" style="width:auto"${d.zeigen ? ' checked' : ''}${datum ? '' : ' disabled'}>
+      <span>Meinen Geburtstag im Team zeigen</span>
+    </label>
+    <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; margin-top:.4rem; margin-left:1.5rem">
+      <input type="checkbox" id="geb-alter" style="width:auto"${d.alter_auch ? ' checked' : ''}${d.zeigen && datum ? '' : ' disabled'}>
+      <span>… und auch mein Alter</span>
+    </label>
+    <div style="font-size:.78rem;color:var(--text-light);margin-top:.5rem">
+      Ohne Freigabe sehen nur Chef, Admin und Buchhaltung deinen Geburtstag — die haben das Datum
+      ohnehin in der Mitarbeiterverwaltung. Du kannst das jederzeit wieder zurücknehmen.
+    </div>`;
+
+  const zeigen = document.getElementById('geb-zeigen');
+  const alter = document.getElementById('geb-alter');
+  const speichern = async () => {
+    // „Alter" ergibt ohne „Geburtstag" keinen Sinn — die Oberflaeche sperrt es, der Server raeumt
+    // es zusaetzlich gerade (doppelt, damit kein widerspruechlicher Zustand entstehen kann).
+    alter.disabled = !zeigen.checked;
+    if (!zeigen.checked) alter.checked = false;
+    try {
+      await api('PUT', '/api/users/geburtstag-freigabe', { zeigen: zeigen.checked, alter_auch: alter.checked });
+      toast('Gespeichert', 'success');
+    } catch (err) {
+      toast(err.message || 'Konnte nicht gespeichert werden', 'error');
+      zeigen.checked = !zeigen.checked;   // zuruecknehmen, damit die Anzeige nicht luegt
+    }
+  };
+  if (zeigen && !zeigen.disabled) zeigen.addEventListener('change', speichern);
+  if (alter) alter.addEventListener('change', speichern);
 }
 
 function kontoPasswortKarte() {

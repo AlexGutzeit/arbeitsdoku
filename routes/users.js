@@ -137,8 +137,50 @@ router.get('/list', authenticate, (req, res) => {
 // wird also nichts Neues offengelegt. Fuer die BELEGSCHAFT waere eine Anzeige einwilligungspflichtig
 // (§ 26 BDSG traegt sie nicht), deshalb gibt es diesen Endpunkt bewusst nur fuer diese drei Rollen.
 // Trotzdem verlaesst das Geburtsdatum selbst den Server nicht — nur Name und Alter.
+// Eigene Geburtstags-Freigabe lesen und setzen. Immer gegen req.user.id — es gibt keinen Weg,
+// darueber die Freigabe eines anderen zu aendern. MUSS vor "/:id" stehen.
+router.get('/geburtstag-freigabe', authenticate, (req, res) => {
+  const db = getDb();
+  let zeile = null;
+  try { zeile = db.prepare('SELECT zeigen, alter_auch FROM geburtstag_freigabe WHERE user_id = ?').get(req.user.id); } catch (_) {}
+  res.json({
+    // Das eigene Geburtsdatum wird bewusst mitgeliefert: Der Mitarbeiter soll sehen, was die
+    // Verwaltung hinterlegt hat, und einen Zahlendreher melden koennen.
+    geburtsdatum: req.user.birth_date || null,
+    zeigen: !!(zeile && zeile.zeigen),
+    alter_auch: !!(zeile && zeile.alter_auch),
+  });
+});
+
+router.put('/geburtstag-freigabe', authenticate, (req, res) => {
+  const db = getDb();
+  const zeigen = !!(req.body || {}).zeigen;
+  // „Alter zeigen" ohne „Geburtstag zeigen" ergibt keinen Sinn — der Server raeumt das gerade,
+  // damit kein widerspruechlicher Zustand entstehen kann.
+  const alterAuch = zeigen && !!(req.body || {}).alter_auch;
+  try {
+    db.prepare(`INSERT INTO geburtstag_freigabe (user_id, zeigen, alter_auch, geaendert)
+                VALUES (?, ?, ?, strftime('%Y-%m-%d %H:%M:%f','now'))
+                ON CONFLICT(user_id) DO UPDATE SET zeigen = excluded.zeigen,
+                  alter_auch = excluded.alter_auch, geaendert = excluded.geaendert`)
+      .run(req.user.id, zeigen ? 1 : 0, alterAuch ? 1 : 0);
+    logAudit(db, { userId: req.user.id, username: req.user.username, action: 'geburtstag_freigabe',
+      details: zeigen ? (alterAuch ? 'Geburtstag + Alter sichtbar' : 'Geburtstag sichtbar') : 'nicht sichtbar', ip: req.ip });
+    res.json({ zeigen, alter_auch: alterAuch });
+  } catch (e) {
+    console.error('Geburtstags-Freigabe fehlgeschlagen:', e.message);
+    res.status(500).json({ error: 'Interner Serverfehler' });
+  }
+});
+
 // MUSS vor "/:id" stehen, sonst schluckt die Id-Route das Wort "geburtstage".
-router.get('/geburtstage', authenticate, authorize('chef', 'buchhalter'), (req, res) => {
+// Wer heute Geburtstag hat. Frueher nur fuer Chef/Admin/Buchhalter — jetzt fuer ALLE, aber mit
+// zwei verschiedenen Sichten:
+//   Manager (Chef/Admin/Buchhalter): wie bisher alle, mit Alter. Sie haben das Geburtsdatum
+//                                    ohnehin in der Mitarbeiterliste.
+//   Alle uebrigen:                   nur, wer sich selbst freigegeben hat — und das Alter nur,
+//                                    wenn ausdruecklich auch dafuer freigegeben.
+router.get('/geburtstage', authenticate, (req, res) => {
   const db = getDb();
   // Ortszeit, nicht UTC: Um 01:00 Berliner Zeit ist es in UTC noch gestern — der Geburtstag ginge
   // sonst eine Stunde zu spaet an und eine Stunde zu frueh aus.
@@ -149,7 +191,18 @@ router.get('/geburtstage', authenticate, authorize('chef', 'buchhalter'), (req, 
   // Nicht-Schaltjahren am 28. angezeigt — mit Vermerk, damit niemand denkt, das Datum sei falsch.
   const ersatzFuer29 = !schaltjahr && monat === 2 && tag === 28;
 
-  const rollenFilter = req.user.role === 'admin' ? '' : "AND role != 'admin'";
+  const istManager = ['admin', 'chef', 'buchhalter'].includes(req.user.role);
+  // Ein Buchhalter sieht keine Admin-Konten (wie bisher); wer gar kein Manager ist, sieht ohnehin
+  // nur Freigegebene, und die duerfen dann auch Admins sein.
+  const rollenFilter = (req.user.role === 'admin' || !istManager) ? '' : "AND role != 'admin'";
+
+  // Freigaben einmal einlesen. Fehlt die Tabelle (sehr alter Stand), gilt „nichts freigegeben".
+  const freigabe = {};
+  try {
+    for (const f of db.prepare('SELECT user_id, zeigen, alter_auch FROM geburtstag_freigabe').all()) {
+      freigabe[f.user_id] = { zeigen: !!f.zeigen, alterAuch: !!f.alter_auch };
+    }
+  } catch (_) {}
   const rows = db.prepare(
     `SELECT id, name, birth_date FROM users
       WHERE active = 1 AND birth_date IS NOT NULL AND birth_date != '' AND id != ? ${rollenFilter}
@@ -162,8 +215,17 @@ router.get('/geburtstage', authenticate, authorize('chef', 'buchhalter'), (req, 
     const echterTag = gMonat === monat && gTag === tag;
     const vorgezogen = ersatzFuer29 && gMonat === 2 && gTag === 29;
     if (!echterTag && !vorgezogen) continue;
+    const frei = freigabe[r.id] || { zeigen: false, alterAuch: false };
+    if (!istManager && !frei.zeigen) continue;   // ohne Freigabe sehen Kollegen nichts
+
     // Alter: das begonnene Lebensjahr. Wer am 29.02. geboren ist, wird am 28.02. mitgezaehlt.
-    geburtstage.push({ id: r.id, name: r.name, alter: jahr - gJahr, am_29_februar: vorgezogen });
+    // Manager sehen es immer, alle anderen nur bei ausdruecklicher Freigabe — „das Team darf
+    // gratulieren" ist nicht dasselbe wie „das Team darf mein Alter kennen".
+    const alterZeigen = istManager || frei.alterAuch;
+    geburtstage.push({
+      id: r.id, name: r.name, am_29_februar: vorgezogen,
+      ...(alterZeigen ? { alter: jahr - gJahr } : {}),
+    });
   }
   res.json({ geburtstage });
 });

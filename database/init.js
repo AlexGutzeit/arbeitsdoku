@@ -425,6 +425,8 @@ async function initDatabase() {
   ensureTwoFactorSchema(db);
   // Profilbilder (idempotent, hier UND im Restore-Pfad)
   ensureAvatarSchema(db);
+  // Geburtstags-Freigabe (idempotent, hier UND im Restore-Pfad)
+  ensureGeburtstagSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -945,6 +947,7 @@ function ensureAuditSchema(targetDb) {
   ensureClosureSchema(targetDb);
   ensureTwoFactorSchema(targetDb);
   ensureAvatarSchema(targetDb);
+  ensureGeburtstagSchema(targetDb);
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
@@ -1000,6 +1003,30 @@ function normalizeManagerRights(targetDb) {
 // Eigene Tabelle statt einer Spalte in `users` — aus demselben Grund wie bei der
 // Zwei-Faktor-Anmeldung: middleware/auth.js liest bei jeder Anfrage eine feste Spaltenliste aus
 // `users`, eine misslungene Migration dort sperrt alle aus.
+// Freigabe des eigenen Geburtstags fuers Team. Bis hierher sahen nur Chef/Admin/Buchhalter, wer
+// Geburtstag hat — eine Anzeige fuer die ganze Belegschaft waere einwilligungspflichtig gewesen
+// (§ 26 BDSG traegt sie nicht). Mit einem Schalter, den die betroffene Person SELBST umlegt, ist
+// genau diese Einwilligung da. Zwei Stufen, weil „das Team darf gratulieren" nicht dasselbe ist
+// wie „das Team darf mein Alter kennen".
+//
+// Eigene Tabelle statt Spalten in `users` — gleiche Begruendung wie bei 2FA und Profilbildern.
+// Fehlende Zeile heisst: nicht freigegeben. Nach dem Update aendert sich also fuer niemanden etwas.
+function ensureGeburtstagSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS geburtstag_freigabe (
+        user_id     INTEGER PRIMARY KEY,
+        zeigen      INTEGER DEFAULT 0,
+        alter_auch  INTEGER DEFAULT 0,
+        geaendert   TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (e) {
+    console.error('ensureGeburtstagSchema fehlgeschlagen:', e.message);
+  }
+}
+
 function ensureAvatarSchema(targetDb) {
   try {
     targetDb.exec(`
