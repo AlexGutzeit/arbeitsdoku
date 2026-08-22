@@ -61,16 +61,16 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `arbeitsbeginn-prodklon.js` | Abwaertskompatibilitaet des Arbeitsbeginns — der Aussperr-Fall. |
 | `arbeitsbeginn-ui.js` | Arbeitsbeginn je Mitarbeiter + Zeit-Vorbelegung, die nie unmöglich ist. |
 | `audit-events.js` | Audit-Events-Test: prüft, dass login_success, logout (manuell), session_expired (abgelaufenes |
-| `aushang-mitternacht-ui.js` | Ein Aushang von 00:30 Uhr war zwei Stunden lang unsichtbar (UTC gegen Ortszeit). |
+| `aushang-mitternacht-ui.js` | Ein Aushang, der kurz nach Mitternacht geschrieben wurde, muss auf der Willkommensseite stehen. |
 | `aushang-sprung-ui.js` | Aushänge auf der Willkommensseite sind anklickbar (Alex, 07.08.2026). |
 | `auth-active-guard.js` | API-Test (B1): Ein bereits ausgestelltes JWT wird sofort abgelehnt (401), sobald der Nutzer ausgestellt ist — |
 | `avatar-api.js` | Profilbilder: Hochladen, Ausliefern, Entfernen — und vor allem, wer sie NICHT sehen darf. |
 | `avatar-ui.js` | Profilbilder in der Oberfläche: hochladen, in der Kopfzeile sehen, wieder entfernen. |
 | `backup-restore.js` | Backup-Round-Trip + dynamisches Restore-Limit: Backup herunterladen → wieder einspielen (200), |
 | `badge-nachziehen-ui.js` | Der Coin zeigte eine offene Bestellung an, obwohl die Liste leer war (Alex, 29.07.2026, Handy). |
-| `benachrichtigungen-umzug.js` | Die Benachrichtigungen sind nach „Mein Konto“ umgezogen — die Einstellungen jedes Nutzers bleiben unberührt. |
 | `barrierefrei-prodklon.js` | Prod-Klon-Pruefung fuer B8b (Tastatur/Screenreader). |
 | `barrierefrei-ui.js` | Puppeteer-Test (B8b): Bedienung per Tastatur und mit Screenreader. |
+| `benachrichtigungen-umzug.js` | Die Benachrichtigungen sind von ihrer eigenen Seite nach „Mein Konto" umgezogen (Alex, |
 | `board-archive-ampel-ui.js` | Archiv/Reopen + Dringlichkeitsampel (Chef/Admin). MA hat weder Ampel noch Archiv-Zugriff. |
 | `board-assign-all-ui.js` | Zuteilbarkeit: ALLE Nutzer außer Admin (Chef, Buchhalter, Mitarbeiter) sind im Projekt-Formular auswählbar |
 | `board-live-buffer-ui.js` | Live-Test (3 Browser): ändert Client A einen Zielstatus, müssen Client B und C OHNE Reload |

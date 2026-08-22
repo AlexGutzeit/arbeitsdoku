@@ -13,10 +13,36 @@
 //   * die Tagesansicht scrollt ohne Sprung wie gehabt zur Kernarbeitszeit und hebt nichts hervor
 //   * nach einem Sprung bleibt keine Markierung an einem anderen Tag hängen
 //
+// Die Browser-Uhr wird dabei fest auf 12:00 gestellt. Ohne das prueft die Zeile „mit der geplanten
+// Startzeit" die Uhrzeit des Laufs statt die Vorbelegung: Liegt „jetzt" VOR dem geplanten Beginn,
+// schlaegt das Formular korrekt „jetzt" vor (app-3-dashboard.js, zeitenAbgleichen — eine Annahme
+// von 07:00 waere um 01:24 Uhr schlicht falsch). Der Test war deshalb nachts rot, obwohl an der
+// App nichts fehlte. Dasselbe Vorgehen wie in entry-start-and-note-ui.js.
+//
 //   node tests/willkommen-unveraendert-ui.js
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
 const puppeteer = require('puppeteer');
+
+// Feste Tageszeit fuer den Browser. Feste Zeitstempel bleiben unberuehrt, nur „jetzt" wandert.
+const TEST_STUNDE = 12, TEST_MINUTE = 0;
+async function uhrStellen(page) {
+  await page.evaluateOnNewDocument((h, m) => {
+    const Echt = Date;
+    const basis = new Echt();
+    basis.setHours(h, m, 0, 0);
+    const versatz = basis.getTime() - Echt.now();
+    function Gestellt(...args) {
+      if (args.length === 0) return new Echt(Echt.now() + versatz);
+      return new Echt(...args);
+    }
+    Gestellt.prototype = Echt.prototype;
+    Gestellt.now = () => Echt.now() + versatz;
+    Gestellt.parse = Echt.parse;
+    Gestellt.UTC = Echt.UTC;
+    window.Date = Gestellt;
+  }, TEST_STUNDE, TEST_MINUTE);
+}
 
 const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
   '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
@@ -54,7 +80,11 @@ function tagDerWoche(n) {
     const plan = async (datum, von, bis, adr) => (await req('POST', '/api/planning', admin.token,
       { date: datum, time_from: von, time_to: bis, description: 'Einsatz', address: adr,
         assigned_user_ids: [max.user.id] })).body.entry.id;
-    const t1 = await plan(tag1, '07:00', '11:00', 'Musterstr. 1, 96199 Zapfendorf');
+    // 09:15 und NICHT 07:00: Der Firmen-Arbeitsbeginn ist 07:00, und das Formular greift darauf
+    // zurueck, wenn keine Planung vorliegt. Mit 07:00 im Plan waere die Zusicherung „mit der
+    // geplanten Startzeit" nicht von „mit dem Firmenwert" zu unterscheiden gewesen — sie haette
+    // also nichts geprueft.
+    const t1 = await plan(tag1, '09:15', '11:00', 'Musterstr. 1, 96199 Zapfendorf');
     const t2 = await plan(tag2, '13:00', '16:00', 'Hauptstr. 12, 96052 Bamberg');
     // Ein Termin fuer HEUTE. Ohne ihn haengt der Abschnitt „Tagesansicht ohne Sprung" davon ab,
     // welcher Wochentag gerade ist: `#/planning` oeffnet immer den heutigen Tag, und an einem Tag
@@ -72,6 +102,7 @@ function tagDerWoche(n) {
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const page = await browser.newPage(); await page.setViewport({ width: 520, height: 900 });
     page.setDefaultTimeout(45000);
+    await uhrStellen(page);
     await page.goto(BASIS + '/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(() => localStorage.clear());
     await page.goto(BASIS + '/', { waitUntil: 'networkidle0' });
@@ -116,7 +147,8 @@ function tagDerWoche(n) {
       adresse: (document.getElementById('ef-address') || {}).value,
     }));
     ok('… und landet im Zeiteintrags-Formular', formular.da, JSON.stringify(formular));
-    ok('… mit der geplanten Startzeit', formular.von === '07:00', JSON.stringify(formular));
+    ok('… mit der geplanten Startzeit (09:15, nicht dem Firmenwert 07:00)',
+      formular.von === '09:15', JSON.stringify(formular));
     ok('… und der Adresse aus der Planung', /Musterstr/.test(formular.adresse || ''), JSON.stringify(formular));
     // „Bis" ist bewusst die AKTUELLE Uhrzeit, nicht das geplante Ende — das ist die dokumentierte
     // Regel der Zeiterfassung („Realität schlägt Planung"). Erwartet wird also nur eine gueltige
