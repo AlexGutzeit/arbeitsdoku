@@ -21,7 +21,15 @@ const router = express.Router();
 
 const bilderDir = path.join(__dirname, '..', 'storage', 'avatare');
 function verzeichnisSichern() { if (!fs.existsSync(bilderDir)) fs.mkdirSync(bilderDir, { recursive: true }); }
-const dateiFuer = (userId) => path.join(bilderDir, `${Number(userId)}.webp`);
+// ZWEI Groessen je Person, aus demselben Original gerechnet — wie beim App-Symbol:
+//   klein (96 px)  fuer Kopfzeile, Spaltenkoepfe, Listen. Das ist der Alltagsfall; bei 24-32 px
+//                  Anzeige reicht 96 auch auf hochaufloesenden Handys dreifach.
+//   gross (512 px) fuer die Vorschau auf „Mein Konto" und eine spaetere Kollegen-Profilansicht.
+// Das grosse Bild ist zugleich das Original im Bestand: Braucht man spaeter eine dritte Groesse,
+// laesst sie sich daraus rechnen, ohne dass jemand neu hochladen muss.
+const GROESSEN = { klein: 96, gross: 512 };
+const dateiFuer = (userId, groesse = 'klein') =>
+  path.join(bilderDir, `${Number(userId)}${groesse === 'gross' ? '-gross' : ''}.webp`);
 
 // Grosszuegig beim Hochladen (Handyfotos sind gross), streng beim Ablegen: sharp rechnet alles auf
 // dieselbe kleine Kantenlaenge herunter.
@@ -52,7 +60,11 @@ router.get('/', authenticate, (req, res) => {
 router.get('/:id', authenticate, (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).end();
-  const datei = dateiFuer(id);
+  // ?g=gross liefert die hohe Aufloesung; ohne Angabe die kleine (der Alltagsfall).
+  const groesse = req.query.g === 'gross' ? 'gross' : 'klein';
+  let datei = dateiFuer(id, groesse);
+  // Rueckfall auf die andere Groesse, falls ein Bild aus einer aelteren Fassung nur einmal vorliegt.
+  if (!fs.existsSync(datei)) datei = dateiFuer(id, groesse === 'gross' ? 'klein' : 'gross');
   if (!fs.existsSync(datei)) return res.status(404).json({ error: 'Kein Bild' });
   res.setHeader('Content-Type', 'image/webp');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -80,12 +92,16 @@ router.post('/', authenticate, (req, res) => {
       // `cover` schneidet mittig zu — ein Hochformat-Foto wird also zum Quadrat, ohne zu verzerren.
       // `rotate()` ohne Argument wertet die Ausrichtung aus dem Foto aus; ohne das lägen
       // Handyfotos quer.
-      const bild = await sharp(req.file.buffer)
-        .rotate()
-        .resize(256, 256, { fit: 'cover', position: 'attention' })
-        .webp({ quality: 82 })
-        .toBuffer();
-      fs.writeFileSync(dateiFuer(req.user.id), bild);
+      // `cover` schneidet mittig zu, `position: attention` sucht dabei den interessantesten
+      // Bildausschnitt — bei Portraits landet damit das Gesicht im Kreis und nicht die Schulter.
+      for (const [name, kante] of Object.entries(GROESSEN)) {
+        const bild = await sharp(req.file.buffer)
+          .rotate()
+          .resize(kante, kante, { fit: 'cover', position: 'attention' })
+          .webp({ quality: name === 'gross' ? 86 : 80 })
+          .toBuffer();
+        fs.writeFileSync(dateiFuer(req.user.id, name), bild);
+      }
 
       const db = getDb();
       const jetzt = new Date().toISOString();
@@ -104,7 +120,9 @@ router.post('/', authenticate, (req, res) => {
 
 router.delete('/', authenticate, (req, res) => {
   try {
-    try { fs.unlinkSync(dateiFuer(req.user.id)); } catch (_) { /* schon weg */ }
+    for (const name of Object.keys(GROESSEN)) {
+      try { fs.unlinkSync(dateiFuer(req.user.id, name)); } catch (_) { /* schon weg */ }
+    }
     const db = getDb();
     db.prepare('DELETE FROM user_avatars WHERE user_id = ?').run(req.user.id);
     logAudit(db, { userId: req.user.id, username: req.user.username, action: 'avatar_entfernt', ip: req.ip });
@@ -115,3 +133,4 @@ router.delete('/', authenticate, (req, res) => {
 module.exports = router;
 module.exports.standFuer = standFuer;
 module.exports.dateiFuer = dateiFuer;
+module.exports.GROESSEN = GROESSEN;

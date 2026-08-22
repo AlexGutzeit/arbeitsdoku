@@ -277,6 +277,10 @@ function initViewStateKeeper() {
       // Erst die Höhe setzen, dann die Scroll-Position wiederherstellen: andersherum würde die
       // frisch gesetzte Höhe die eben zurückgestellte Position wieder abschneiden.
       try { passeScrollflaechenAn(); } catch (_) {}
+      // Profilbilder nachladen. Hier und nicht nur in bindLayout(): Zeitleisten, Board und Listen
+      // bauen ihren Inhalt NACH dem Rahmen auf — deren Platzhalter gaebe es zum Zeitpunkt von
+      // bindLayout noch gar nicht.
+      try { avatareLaden(document); } catch (_) {}
       try { viewStateRestore(); } catch (_) {}
       // Kurzer Nachlauf: das vom Umbau ausgeloeste Scroll-Ereignis trifft teils erst danach ein.
       setTimeout(() => { _imNeuaufbau = false; }, 80);
@@ -824,12 +828,14 @@ function initialenVon(name) {
 // Platzhalter waere dann ohne Kennung und wuerde spaeter nie gefunden. Genau daran ist der
 // Oberflaechen-Test beim ersten Lauf umgefallen.
 function avatarHtml(user, groesse = 28) {
+  // Ab etwa 64 px lohnt die hohe Aufloesung — darunter waere sie nur unnoetiger Datenverkehr.
+  const stufe = groesse >= 64 ? 'gross' : 'klein';
   const id = user && (user.id || user.user_id);
   const name = (user && (user.name || user.username)) || '';
   const stand = id ? (S.avatarStand || {})[id] : null;
   const farbe = colorFor(id);
   return `<span class="avatar" style="width:${groesse}px;height:${groesse}px;font-size:${Math.round(groesse * 0.4)}px;background:${farbe}"`
-    + (id ? ` data-avatar="${id}"${stand ? ` data-stand="${esc(stand)}"` : ''}` : '')
+    + (id ? ` data-avatar="${id}" data-stufe="${stufe}"${stand ? ` data-stand="${esc(stand)}"` : ''}` : '')
     + ` title="${esc(name)}">${esc(initialenVon(name))}</span>`;
 }
 
@@ -844,11 +850,12 @@ async function avatareLaden(wurzel) {
     el.setAttribute('data-avatar-fertig', '1');
     const stand = (S.avatarStand || {})[el.dataset.avatar];
     if (!stand) continue;                      // diese Person hat sicher kein Bild → Initialen
-    const schluessel = el.dataset.avatar + ':' + stand;
+    const stufe = el.dataset.stufe === 'gross' ? 'gross' : 'klein';
+    const schluessel = el.dataset.avatar + ':' + stufe + ':' + stand;
     try {
       let url = _avatarBlobs.get(schluessel);
       if (!url) {
-        const antwort = await fetch('/api/avatare/' + el.dataset.avatar, {
+        const antwort = await fetch('/api/avatare/' + el.dataset.avatar + (stufe === 'gross' ? '?g=gross' : ''), {
           headers: { Authorization: 'Bearer ' + S.token },
         });
         if (!antwort.ok) continue;                 // kein Bild → Initialen bleiben stehen

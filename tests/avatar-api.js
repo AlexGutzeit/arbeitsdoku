@@ -69,9 +69,18 @@ function hochladen(token, buf, dateiname, feld = 'bild', typ = 'image/png') {
     ok('das Bild kommt zurück', abruf.status === 200, String(abruf.status));
     ok('… als WebP', /image\/webp/.test(abruf.typ || ''), String(abruf.typ));
     const daten = await sharp(abruf.buf).metadata();
-    ok('… quadratisch 256 × 256, egal was hochgeladen wurde',
-      daten.width === 256 && daten.height === 256, `${daten.width}×${daten.height}`);
-    ok('… und klein (unter 100 kB, obwohl 900×300 hochgeladen)', abruf.buf.length < 100 * 1024, `${abruf.buf.length} Byte`);
+    ok('… quadratisch 96 × 96 (die Alltagsgröße), egal was hochgeladen wurde',
+      daten.width === 96 && daten.height === 96, `${daten.width}×${daten.height}`);
+    ok('… und winzig (unter 20 kB, obwohl 900×300 hochgeladen)', abruf.buf.length < 20 * 1024, `${abruf.buf.length} Byte`);
+
+    // Zweite Groesse fuer die Vorschau und eine spaetere Profilansicht
+    const grossAbruf = await req('GET', '/api/avatare/' + max.user.id + '?g=gross', max.token);
+    const grossDaten = await sharp(grossAbruf.buf).metadata();
+    ok('es gibt zusätzlich eine hohe Auflösung',
+      grossAbruf.status === 200 && grossDaten.width === 512 && grossDaten.height === 512,
+      `${grossDaten.width}×${grossDaten.height}`);
+    ok('… und sie ist ein anderes, größeres Bild', grossAbruf.buf.length > abruf.buf.length,
+      `${abruf.buf.length} vs ${grossAbruf.buf.length} Byte`);
     // Der Zwischenspeicher-Hinweis muss „private" sagen — das Bild gehoert zu einer Person und
     // hat in einem gemeinsamen Zwischenspeicher (Proxy) nichts verloren.
     const kopf = await new Promise((res) => {

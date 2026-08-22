@@ -121,6 +121,54 @@ function req(m, p, t, b) {
     ok('der Knopf heißt wieder „Bild hochladen"',
       /Bild hochladen/.test(await page.$eval('#avatar-waehlen', el => el.textContent)));
 
+    console.log('\n── Avatare an den Stellen, wo man Personen unterscheidet ──');
+    // Noch einmal hochladen, damit es etwas zu sehen gibt.
+    await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#avatar-datei'); await sleep(600);
+    await (await page.$('#avatar-datei')).uploadFile(bildDatei);
+    await sleep(2500);
+
+    // Ohne Daten gibt es gar keine Spalten — die Zeitleiste zeigt dann „Keine Planungen fuer
+    // diesen Tag". Daran ist dieser Abschnitt beim ersten Lauf umgefallen: nicht am Avatar,
+    // sondern am leeren Tag.
+    const adminT = (await req('POST', '/api/auth/login', null, { username: 'admin', password: pw('admin') })).body.token;
+    const alle = (await req('GET', '/api/users', adminT)).body.users || [];
+    const heute = new Date().toLocaleDateString('sv-SE');
+    for (const u of alle.filter(x => x.role === 'mitarbeiter').slice(0, 2)) {
+      await req('POST', '/api/planning', adminT,
+        { date: heute, time_from: '07:00', time_to: '15:30', description: 'Baustelle', assigned_user_ids: [u.id] });
+      await req('POST', '/api/entries', adminT,
+        { user_id: u.id, date: heute, time_from: '07:00', time_to: '15:30', break_minutes: 30, description: 'Arbeit' });
+    }
+
+    // Als Chef anmelden, der sieht alle Spalten.
+    await page.goto(BASIS + '/', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => localStorage.clear());
+    await page.goto(BASIS + '/', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#login-user');
+    await page.type('#login-user', 'chef'); await page.type('#login-pass', pw('chef'));
+    await page.click('#login-form button[type="submit"]');
+    await sleep(2200);
+
+    for (const [name, route, wo] of [
+      ['Planung', '#/planning', '.tl-col-header-name .avatar'],
+      ['Zeitnachweis', '#/', '.tl-col-header-name .avatar'],
+      ['Mitarbeiter-Liste', '#/users', '.data-table .avatar'],
+    ]) {
+      await page.goto(BASIS + '/' + route, { waitUntil: 'domcontentloaded' });
+      await sleep(2500);
+      const gefunden = await page.evaluate((sel) => {
+        const els = [...document.querySelectorAll(sel)];
+        const mitBild = els.filter(e => /blob:/.test(getComputedStyle(e).backgroundImage));
+        const mitInitialen = els.filter(e => e.textContent.trim().length > 0);
+        return { anzahl: els.length, mitBild: mitBild.length, mitInitialen: mitInitialen.length };
+      }, wo);
+      ok(`${name}: Avatare sind da`, gefunden.anzahl > 0, JSON.stringify(gefunden));
+      ok(`${name}: … mindestens einer zeigt das Bild`, gefunden.mitBild >= 1, JSON.stringify(gefunden));
+      ok(`${name}: … die übrigen zeigen Initialen (nie leer)`,
+        gefunden.mitBild + gefunden.mitInitialen === gefunden.anzahl, JSON.stringify(gefunden));
+    }
+
   } finally {
     if (browser) await browser.close();
     srv.kill('SIGTERM'); await sleep(800);

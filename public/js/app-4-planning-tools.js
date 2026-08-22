@@ -527,7 +527,7 @@ function renderPlanningTimeline(entries, absences, canEdit) {
 
     colsHtml += `<div class="timeline-column">
       <div class="tl-col-header" style="color:${colColor}">
-        <div class="tl-col-header-name">${esc(col.name)}</div>
+        <div class="tl-col-header-name">${avatarHtml({ id: col.id, name: col.name }, 22)} ${esc(col.name)}</div>
         ${planColBannerWrap}
       </div>
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>

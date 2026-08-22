@@ -1002,7 +1002,7 @@ async function renderUsers() {
           <tbody id="users-tbody">
             ${S.users.filter(u => u.active !== 0).map(u => `
               <tr data-suchtext="${esc([u.name, u.username, roleName(u.role)].join(' '))}">
-                <td>${esc(u.name)}</td>
+                <td style="display:flex; align-items:center; gap:.5rem">${avatarHtml(u, 26)}<span>${esc(u.name)}</span></td>
                 <td>${esc(u.username)}</td>
                 <td><span class="badge badge-${u.role}">${roleName(u.role)}</span></td>
                 <td>${u.target_hours_per_week}</td>
@@ -1795,7 +1795,7 @@ async function renderProjects() {
 
   const colsHtml = columns.map(c => `
     <div class="board-col">
-      <div class="board-col-head">${esc(c.name)}${c.list.length ? ` <span class="board-count">${c.list.length}</span>` : ''}</div>
+      <div class="board-col-head">${c.id ? avatarHtml({ id: c.id, name: c.name }, 20) + ' ' : ''}${esc(c.name)}${c.list.length ? ` <span class="board-count">${c.list.length}</span>` : ''}</div>
       <div class="board-col-body">${c.list.map(tileHtml).join('') || '<div class="board-empty">–</div>'}</div>
     </div>`).join('');
 

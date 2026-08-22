@@ -460,7 +460,7 @@ function renderTimelineHtml(entries, absences) {
     const colBannerWrap = colBannerHtml ? `<div class="tl-col-banner">${colBannerHtml}</div>` : '';
     colsHtml += `<div class="timeline-column">
       <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">
-        <div class="tl-col-header-name">${headerLabel}</div>
+        <div class="tl-col-header-name">${isSingle ? '' : avatarHtml({ id: col.id, name: col.name }, 22) + ' '}${headerLabel}</div>
         ${colBannerWrap}
       </div>
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
