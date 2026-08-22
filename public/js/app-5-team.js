@@ -2081,6 +2081,11 @@ function kontoPasswortKarte() {
 // mit einer Ziffer beginnen — `getElementById` verzeiht das zwar, aber `querySelector('#2fa-start')`
 // wirft einen Syntaxfehler, und eine CSS-Regel griffe nie. Im Oberflaechen-Test ist genau das
 // aufgeschlagen.
+//
+// Drei Zustaende, die man auseinanderhalten muss:
+//   nichts eingerichtet → „Einrichten"
+//   stillgelegt         → „Wieder aktivieren" (die App kennt den Schluessel noch!)
+//   aktiv               → ggf. „Abschalten" + „Neuen Schluessel erzeugen"
 async function kontoZweiFaktorKarte() {
   const k = document.getElementById('konto-2fa');
   if (!k) return;
@@ -2096,84 +2101,158 @@ async function kontoZweiFaktorKarte() {
     return;
   }
 
+  const kopf = '<h3>&#128274; Zwei-Faktor-Anmeldung</h3>';
+  const neuerSchluesselKnopf = `
+    <hr style="margin:1rem 0; border:none; border-top:1px solid var(--border)">
+    <button class="btn btn-outline btn-sm" id="zfa-neu">&#127922; Neuen Schlüssel erzeugen</button>
+    <div style="font-size:.78rem;color:var(--text-light);margin-top:.25rem">
+      Für ein neues Handy. Der bisherige Schlüssel gilt so lange weiter, bis der neue bestätigt ist.
+    </div>`;
+
   if (z.eingerichtet) {
-    k.innerHTML = `
-      <h3>&#128274; Zwei-Faktor-Anmeldung</h3>
+    k.innerHTML = `${kopf}
       <p><strong style="color:var(--success)">Aktiv.</strong>
          Abfrage: <strong>${esc(z.modus_text)}</strong>${z.pflicht ? ' (von der Verwaltung vorgegeben)' : ''}.</p>
       ${z.abschaltbar
-        ? `<div class="error-msg" id="aus-fehler"></div>
+        ? `<div class="error-msg" id="zfa-aus-fehler"></div>
            <form id="konto-2fa-aus" style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-end">
              <div class="form-group" style="margin:0">
                <label>Zum Abschalten: aktueller Code</label>
-               <input type="text" class="form-control" id="aus-code" inputmode="numeric" maxlength="7" placeholder="123456" required style="width:9rem">
+               <input type="text" class="form-control" id="zfa-aus-code" inputmode="numeric" maxlength="7" placeholder="123456" required style="width:9rem">
              </div>
              <button type="submit" class="btn del-btn">Abschalten</button>
-           </form>`
-        : '<p style="color:var(--text-light)">Abschalten kann nur ein Administrator.</p>'}`;
+           </form>
+           <div style="font-size:.78rem;color:var(--text-light);margin-top:.25rem">
+             Der Schlüssel bleibt erhalten — schaltest du später wieder ein, funktioniert dieselbe
+             App weiter. Nur die Geräte, die ohne Code hineinkommen, werden dabei zurückgesetzt.
+           </div>`
+        : '<p style="color:var(--text-light)">Abschalten kann nur ein Administrator.</p>'}
+      ${neuerSchluesselKnopf}
+      <div id="zfa-einrichtung" style="display:none; margin-top:1rem"></div>`;
     const form = document.getElementById('konto-2fa-aus');
     if (form) form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const fehler = document.getElementById('aus-fehler'); fehler.style.display = 'none';
+      const fehler = document.getElementById('zfa-aus-fehler'); fehler.style.display = 'none';
       try {
-        await api('POST', '/api/auth/2fa/aus', { code: document.getElementById('aus-code').value.replace(/\s/g, '') });
+        await api('POST', '/api/auth/2fa/aus', { code: document.getElementById('zfa-aus-code').value.replace(/\s/g, '') });
         toast('Zwei-Faktor-Anmeldung abgeschaltet', 'success');
         await kontoZweiFaktorKarte();
         await kontoGeraeteKarte();
       } catch (err) { fehler.textContent = err.message; fehler.style.display = 'block'; }
     });
+    zfaNeuKnopfVerdrahten(true);
     await kontoGeraeteKarte();
     return;
   }
 
-  // Noch nicht eingerichtet
-  k.innerHTML = `
-    <h3>&#128274; Zwei-Faktor-Anmeldung</h3>
+  if (z.stillgelegt) {
+    // Der Schluessel ist noch da — nur nicht in Benutzung. Hier waere „Einrichten" mit neuem
+    // QR-Code der falsche Weg: Die App der Person kennt den alten ja noch.
+    k.innerHTML = `${kopf}
+      <p>Du hast bereits einen Authenticator eingerichtet, er ist zurzeit nur <strong>nicht in
+         Benutzung</strong>.${z.pflicht ? ` Für deine Rolle ist er jetzt <strong>vorgeschrieben</strong> (${esc(z.modus_text)}) — bitte wieder aktivieren.` : ''}</p>
+      <div class="error-msg" id="zfa-fehler"></div>
+      <form id="zfa-verify" style="display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap">
+        <div class="form-group" style="margin:0">
+          <label>Code aus deiner Authenticator-App</label>
+          <input type="text" class="form-control" id="zfa-code" inputmode="numeric" autocomplete="one-time-code"
+                 maxlength="7" placeholder="123456" required style="width:9rem; font-size:1.2rem; letter-spacing:.2em; text-align:center">
+        </div>
+        <button type="submit" class="btn btn-primary">Wieder aktivieren</button>
+      </form>
+      ${neuerSchluesselKnopf}
+      <div id="zfa-einrichtung" style="display:none; margin-top:1rem"></div>`;
+    zfaCodeFormularVerdrahten();
+    zfaNeuKnopfVerdrahten(true);
+    return;
+  }
+
+  // Noch gar nichts eingerichtet
+  k.innerHTML = `${kopf}
     <p>Zusätzlich zum Passwort ein 6-stelliger Code aus einer Authenticator-App
        (Google Authenticator, Aegis, 2FAS …).${z.pflicht ? ` Für deine Rolle <strong>vorgeschrieben</strong> (${esc(z.modus_text)}).` : ''}</p>
     <button class="btn btn-primary" id="zfa-start">Einrichten</button>
     <div id="zfa-einrichtung" style="display:none; margin-top:1rem"></div>`;
-  document.getElementById('zfa-start').addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    const bereich = document.getElementById('zfa-einrichtung');
+  document.getElementById('zfa-start').addEventListener('click', (e) => {
+    e.target.style.display = 'none';
+    zfaEinrichtungStarten(false);
+  });
+}
+
+// „Neuen Schlüssel erzeugen" — mit deutlicher Warnung, denn der alte wird dabei ungültig.
+function zfaNeuKnopfVerdrahten(warnen) {
+  const knopf = document.getElementById('zfa-neu');
+  if (!knopf) return;
+  knopf.addEventListener('click', async () => {
+    if (warnen) {
+      const weiter = await confirmModal(
+        'Neuen Schlüssel erzeugen?\n\n'
+        + 'Du bekommst einen neuen QR-Code und musst deine Authenticator-App NEU einlernen. '
+        + 'Der bisherige Eintrag in der App wird damit wertlos — lösche ihn danach dort.\n\n'
+        + 'Bis du den neuen Code bestätigt hast, gilt weiterhin der alte. Du sperrst dich also '
+        + 'nicht aus, wenn du hier abbrichst.');
+      if (!weiter) return;
+    }
+    knopf.disabled = true;
+    zfaEinrichtungStarten(true);
+  });
+}
+
+// Holt einen (neuen) Schlüssel und zeigt QR + Eingabefeld.
+async function zfaEinrichtungStarten(istNeu) {
+  const bereich = document.getElementById('zfa-einrichtung');
+  if (!bereich) return;
+  try {
+    const d = await api('POST', '/api/auth/2fa/setup', istNeu ? { neu: true } : {});
+    bereich.style.display = 'block';
+    // Der QR-Code kommt als fertiges SVG vom Server und wird EINGEBETTET — die
+    // Sicherheitsrichtlinie der App erlaubt Bilder nur von der eigenen Herkunft, ein
+    // data:-Bild würde der Browser stumm verwerfen.
+    bereich.innerHTML = `
+      ${istNeu ? `<div class="warning-box" style="margin-bottom:.75rem">
+        <strong>Neuer Schlüssel.</strong> Erst wenn du unten einen Code aus dem NEUEN Eintrag
+        bestätigst, wird er gültig. Bis dahin funktioniert dein bisheriger weiter.
+      </div>` : ''}
+      <p>1. In der Authenticator-App diesen Code scannen:</p>
+      <div id="zfa-qr" style="background:#fff; padding:.5rem; display:inline-block; border-radius:8px">${d.qr_svg}</div>
+      <p style="margin-top:.75rem">Kein Scannen möglich (z. B. weil die App auf demselben Handy läuft)?
+         Dann diesen Schlüssel eintippen:</p>
+      <code style="display:block; word-break:break-all; background:var(--bg); padding:.5rem; border-radius:6px">${esc(d.geheim)}</code>
+      <p style="margin-top:.75rem">2. Den angezeigten 6-stelligen Code hier eingeben:</p>
+      <div class="error-msg" id="zfa-fehler"></div>
+      <form id="zfa-verify" style="display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap">
+        <div class="form-group" style="margin:0">
+          <input type="text" class="form-control" id="zfa-code" inputmode="numeric" autocomplete="one-time-code"
+                 maxlength="7" placeholder="123456" required style="width:9rem; font-size:1.2rem; letter-spacing:.2em; text-align:center">
+        </div>
+        <button type="submit" class="btn btn-primary">Bestätigen</button>
+      </form>`;
+    zfaCodeFormularVerdrahten();
+  } catch (err) {
+    toast(err.message || 'Einrichtung nicht möglich', 'error');
+    const knopf = document.getElementById('zfa-neu'); if (knopf) knopf.disabled = false;
+    const start = document.getElementById('zfa-start'); if (start) start.style.display = '';
+  }
+}
+
+function zfaCodeFormularVerdrahten() {
+  const form = document.getElementById('zfa-verify');
+  if (!form) return;
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const fehler = document.getElementById('zfa-fehler');
+    if (fehler) fehler.style.display = 'none';
     try {
-      const d = await api('POST', '/api/auth/2fa/setup');
-      bereich.style.display = 'block';
-      e.target.style.display = 'none';
-      // Der QR-Code kommt als fertiges SVG vom Server und wird EINGEBETTET — die
-      // Sicherheitsrichtlinie der App erlaubt Bilder nur von der eigenen Herkunft, ein
-      // data:-Bild würde der Browser stumm verwerfen.
-      bereich.innerHTML = `
-        <p>1. In der Authenticator-App diesen Code scannen:</p>
-        <div id="zfa-qr" style="background:#fff; padding:.5rem; display:inline-block; border-radius:8px">${d.qr_svg}</div>
-        <p style="margin-top:.75rem">Kein Scannen möglich (z. B. weil die App auf demselben Handy läuft)?
-           Dann diesen Schlüssel eintippen:</p>
-        <code style="display:block; word-break:break-all; background:var(--bg); padding:.5rem; border-radius:6px">${esc(d.geheim)}</code>
-        <p style="margin-top:.75rem">2. Den angezeigten 6-stelligen Code hier eingeben:</p>
-        <div class="error-msg" id="zfa-fehler"></div>
-        <form id="zfa-verify" style="display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap">
-          <div class="form-group" style="margin:0">
-            <input type="text" class="form-control" id="zfa-code" inputmode="numeric" autocomplete="one-time-code"
-                   maxlength="7" placeholder="123456" required style="width:9rem; font-size:1.2rem; letter-spacing:.2em; text-align:center">
-          </div>
-          <button type="submit" class="btn btn-primary">Bestätigen</button>
-        </form>`;
-      document.getElementById('zfa-verify').addEventListener('submit', async (ev) => {
-        ev.preventDefault();
-        const fehler = document.getElementById('zfa-fehler'); fehler.style.display = 'none';
-        try {
-          const r = await api('POST', '/api/auth/2fa/verify', { code: document.getElementById('zfa-code').value.replace(/\s/g, '') });
-          S.zweiFaktor = r.zwei_faktor;
-          try { localStorage.setItem('zwei_faktor', JSON.stringify(r.zwei_faktor)); } catch (_) {}
-          toast('Zwei-Faktor-Anmeldung ist aktiv', 'success');
-          await kontoZweiFaktorKarte();
-          // War die Einrichtung erzwungen, ist der Weg jetzt frei.
-          if (!r.zwei_faktor.einrichtung_noetig) render();
-        } catch (err) { fehler.textContent = err.message; fehler.style.display = 'block'; }
-      });
+      const r = await api('POST', '/api/auth/2fa/verify', { code: document.getElementById('zfa-code').value.replace(/\s/g, '') });
+      S.zweiFaktor = r.zwei_faktor;
+      try { localStorage.setItem('zwei_faktor', JSON.stringify(r.zwei_faktor)); } catch (_) {}
+      toast('Zwei-Faktor-Anmeldung ist aktiv', 'success');
+      await kontoZweiFaktorKarte();
+      // War die Einrichtung erzwungen, ist der Weg jetzt frei.
+      if (!r.zwei_faktor.einrichtung_noetig) render();
     } catch (err) {
-      e.target.disabled = false;
-      toast(err.message || 'Einrichtung nicht möglich', 'error');
+      if (fehler) { fehler.textContent = err.message; fehler.style.display = 'block'; }
+      else toast(err.message, 'error');
     }
   });
 }

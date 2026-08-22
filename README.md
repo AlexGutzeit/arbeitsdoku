@@ -114,6 +114,17 @@ nicht eingerichtet, führt die App die betroffene Person auf diese Seite und lä
 wenn ein Code bestätigt wurde. Abschalten kann man den zweiten Faktor nur, wenn die eigene Rolle
 ihn nicht verlangt — und nur mit gültigem Code.
 
+**Der Schlüssel bleibt erhalten.** Wird die Zwei-Faktor-Anmeldung abgeschaltet — vom Nutzer selbst
+oder weil die Verwaltung die Pflicht zurücknimmt —, wird der Schlüssel nur **stillgelegt**, nicht
+gelöscht. Schaltet man später wieder ein, funktioniert **dieselbe Authenticator-App weiter**; es
+genügt ein Code, ein neuer QR-Code ist nicht nötig. Nur die vertrauten Geräte werden dabei
+zurückgesetzt.
+
+**Neuen Schlüssel erzeugen** (z. B. beim Wechsel aufs neue Handy): Der Knopf würfelt einen neuen
+Schlüssel und zeigt einen neuen QR-Code. **Der bisherige gilt so lange weiter, bis der neue mit
+einem Code bestätigt ist** — man kann sich dabei also nicht aussperren, auch nicht, wenn man
+mittendrin abbricht. Vorher fragt ein Dialog ausdrücklich nach.
+
 **Handy verloren?** Chef oder Admin setzen die Zwei-Faktor-Anmeldung im Mitarbeiter-Dialog zurück
 (neben „Passwort zurücksetzen"). Das löscht den Authenticator **und alle gemerkten Geräte**; die
 Person richtet ihn danach neu ein. An ein **Admin-Konto** kommt nur ein Admin — wie beim Passwort.

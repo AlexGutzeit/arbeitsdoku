@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**159 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**160 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -186,6 +186,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `twofa-konto-ui.js` | Die Oberfläche: Seite „Mein Konto", Code-Abfrage beim Anmelden, Einrichtungs-Zwang. |
 | `twofa-regeln.js` | Die Regeln der Zwei-Faktor-Anmeldung: Wer muss wie oft einen Code eingeben? |
 | `twofa-schema.js` | Die 2FA-Tabellen müssen auf JEDEM Altstand crashfrei nachwachsen — und zwar auf BEIDEN Wegen. |
+| `twofa-schluessel-bestand.js` | Der Schlüssel muss alle Umschaltungen überleben (Alex, 22.08.2026). |
 | `uebernahme-zurueck-ui.js` | Puppeteer-Test: „Zurück" nach dem Übernehmen einer Planung führt dorthin zurück, wo das |
 | `ueberschneidung-kette-ui.js` | Drei sich überschneidende Aufträge — Pausenvorschlag UND Arbeitszeit-Warnung, Schritt für Schritt. |
 | `user-hours-gleichheit.js` | Gleichheitsbeweis fuer die Zusammenlegung der Stunden-Rechnung (C1). |

@@ -995,6 +995,8 @@ function ensureTwoFactorSchema(targetDb) {
       CREATE TABLE IF NOT EXISTS twofa_secrets (
         user_id      INTEGER PRIMARY KEY,
         secret_enc   TEXT NOT NULL,
+        pending_enc  TEXT,
+        aktiv        INTEGER DEFAULT 1,
         confirmed_at TEXT,
         last_step    INTEGER DEFAULT 0,
         created_at   TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now')),
@@ -1013,11 +1015,21 @@ function ensureTwoFactorSchema(targetDb) {
       );
       CREATE INDEX IF NOT EXISTS idx_twofa_devices_user ON twofa_devices(user_id);
     `);
-    // last_step kam spaeter dazu (Replay-Riegel): Altstaende nachziehen.
+    // Spalten, die spaeter dazukamen — Altstaende nachziehen, jede fuer sich.
+    //   last_step   : Replay-Riegel
+    //   pending_enc : ein neu erzeugter, noch NICHT bestaetigter Schluessel. Er liegt neben dem
+    //                 gueltigen, damit man einen neuen Schluessel wuerfeln kann, ohne sich
+    //                 auszusperren — der alte gilt weiter, bis der neue bestaetigt ist.
+    //   aktiv       : Abschalten LOESCHT den Schluessel nicht mehr, es legt ihn still. So muss
+    //                 niemand die Authenticator-App neu einlernen, wenn 2FA spaeter wieder
+    //                 eingeschaltet wird (Alex, 22.08.2026).
     const spalten = targetDb.prepare("PRAGMA table_info(twofa_secrets)").all().map(c => c.name);
-    if (!spalten.includes('last_step')) {
-      targetDb.exec("ALTER TABLE twofa_secrets ADD COLUMN last_step INTEGER DEFAULT 0");
-    }
+    const ergaenze = (name, ddl) => {
+      if (!spalten.includes(name)) targetDb.exec(`ALTER TABLE twofa_secrets ADD COLUMN ${name} ${ddl}`);
+    };
+    ergaenze('last_step', 'INTEGER DEFAULT 0');
+    ergaenze('pending_enc', 'TEXT');
+    ergaenze('aktiv', 'INTEGER DEFAULT 1');
   } catch (e) {
     console.error('ensureTwoFactorSchema fehlgeschlagen:', e.message);
   }

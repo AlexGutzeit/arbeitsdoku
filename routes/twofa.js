@@ -33,9 +33,13 @@ function firmenname(db) {
 
 function zustand(db, user) {
   const modus = zf.modusFuerRolle(db, user.role);
-  const fertig = zf.eingerichtet(db, user.id);
+  const z = zf.zustandLesen(db, user.id);
+  const fertig = z.aktiv;
   return {
     eingerichtet: fertig,
+    // Ein bestaetigter, aber stillgelegter Schluessel: Die Oberflaeche bietet dann
+    // „wieder aktivieren" an statt „einrichten" — die Authenticator-App kennt ihn ja noch.
+    stillgelegt: z.bestaetigt && !z.aktiv,
     modus,
     modus_text: zf.MODUS_TEXT[modus] || modus,
     pflicht: modus !== 'aus',
@@ -53,14 +57,22 @@ router.get('/status', authenticate, (req, res) => {
 
 // Einrichtung beginnen: neues Geheimnis + QR-Code. Noch NICHT bestätigt — erst der richtige Code
 // im nächsten Schritt macht es scharf. Wer hier abbricht, hat sich nichts verbaut.
+// `neu: true` würfelt bewusst einen NEUEN Schlüssel, obwohl schon einer gilt (Wechsel aufs neue
+// Handy). Der bisherige bleibt gültig, bis der neue bestätigt ist — sonst könnte man sich zwischen
+// den beiden Schritten aussperren.
 router.post('/setup', authenticate, (req, res) => {
   try {
     const db = getDb();
-    if (zf.eingerichtet(db, req.user.id)) {
-      return res.status(409).json({ error: 'Es ist bereits ein Authenticator eingerichtet. Zum Wechseln zuerst abschalten oder vom Admin zurücksetzen lassen.' });
+    const vorhanden = zf.zustandLesen(db, req.user.id);
+    const willNeu = !!(req.body || {}).neu;
+    if (vorhanden.bestaetigt && !willNeu) {
+      return res.status(409).json({ error: 'Es ist bereits ein Authenticator eingerichtet. Für einen Wechsel bitte „Neuen Schlüssel erzeugen" verwenden.' });
     }
     const geheim = totp.geheimnisErzeugen();
-    zf.geheimnisAnlegen(db, req.user.id, geheim);
+    zf.wartendesGeheimnisAnlegen(db, req.user.id, geheim);
+    if (willNeu) {
+      logAudit(db, { userId: req.user.id, username: req.user.username, action: 'twofa_neuer_schluessel_begonnen', ip: req.ip });
+    }
     const uri = totp.otpauthUri(geheim, req.user.username, firmenname(db));
     // Als eingebettetes SVG, nicht als Bild-Datei: Die Sicherheitsrichtlinie der App erlaubt Bilder
     // nur von der eigenen Herkunft (img-src 'self'), ein data:-Bild würde stumm verworfen.
@@ -73,10 +85,16 @@ router.post('/setup', authenticate, (req, res) => {
 });
 
 // Ersten Code bestätigen → ab jetzt gilt der Authenticator.
+// Bestätigt einen Code. Deckt drei Fälle mit derselben Route ab:
+//   1. erste Einrichtung          → wartender Schlüssel wird der gültige
+//   2. neuer Schlüssel (Wechsel)  → dito, der alte wird dabei ersetzt
+//   3. stillgelegten wieder scharf → es gilt der bereits bekannte Schlüssel
 router.post('/verify', authenticate, codeLimiter, (req, res) => {
   try {
     const db = getDb();
-    const geheim = zf.geheimnisLesen(db, req.user.id);
+    const wartend = zf.wartendesGeheimnisLesen(db, req.user.id);
+    const gueltig = zf.geheimnisLesen(db, req.user.id);
+    const geheim = wartend || gueltig;
     if (!geheim) return res.status(400).json({ error: 'Keine Einrichtung begonnen' });
 
     const schritt = totp.pruefe(geheim, (req.body || {}).code);
@@ -91,8 +109,14 @@ router.post('/verify', authenticate, codeLimiter, (req, res) => {
       return res.status(400).json({ error: 'Dieser Code wurde bereits verwendet. Warte auf den nächsten.' });
     }
 
-    zf.bestaetigen(db, req.user.id);
-    logAudit(db, { userId: req.user.id, username: req.user.username, action: 'twofa_aktiviert', ip: req.ip });
+    if (wartend) {
+      zf.wartendesUebernehmen(db, req.user.id);
+      logAudit(db, { userId: req.user.id, username: req.user.username,
+        action: gueltig && gueltig !== wartend ? 'twofa_schluessel_gewechselt' : 'twofa_aktiviert', ip: req.ip });
+    } else {
+      zf.wiederAktivieren(db, req.user.id);
+      logAudit(db, { userId: req.user.id, username: req.user.username, action: 'twofa_wieder_aktiviert', ip: req.ip });
+    }
     res.json({ success: true, zwei_faktor: zustand(db, req.user) });
   } catch (e) {
     console.error('2FA-Bestätigung fehlgeschlagen:', e.message);
@@ -115,7 +139,9 @@ router.post('/aus', authenticate, codeLimiter, (req, res) => {
     const schritt = geheim ? totp.pruefe(geheim, (req.body || {}).code) : null;
     if (schritt === null) return res.status(400).json({ error: 'Der Code stimmt nicht' });
 
-    zf.zuruecksetzen(db, req.user.id);
+    // NICHT loeschen, nur stilllegen: Wer spaeter wieder einschaltet, soll dieselbe
+    // Authenticator-App weiterbenutzen koennen, ohne neu einzulernen.
+    zf.stilllegen(db, req.user.id);
     logAudit(db, { userId: req.user.id, username: req.user.username, action: 'twofa_deaktiviert', ip: req.ip });
     res.json({ success: true, zwei_faktor: zustand(db, req.user) });
   } catch (e) {

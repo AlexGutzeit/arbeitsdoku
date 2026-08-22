@@ -215,6 +215,64 @@ async function frischesFenster() {
       !(await page.$eval('#s-twofa-mitarbeiter', el => el.disabled)));
     await page.close();
 
+    console.log('\n── Der Schlüssel überlebt das Abschalten (Buchhalter, Rolle „aus") ──');
+    page = await seiteMachen();
+    await anmelden(page, 'buchhalter', pw('buchhalter'));
+    await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#zfa-start'); await sleep(600);
+    await page.click('#zfa-start');
+    await page.waitForSelector('#zfa-qr'); await sleep(700);
+    const buGeheim = await page.$eval('#zfa-einrichtung code', el => el.textContent.trim());
+    await page.type('#zfa-code', totp.code(buGeheim));
+    await page.click('#zfa-verify button[type="submit"]');
+    await sleep(2000);
+    ok('nach der Einrichtung steht „Aktiv"', /Aktiv/.test(await page.$eval('#konto-2fa', el => el.innerText)));
+    ok('… und es gibt den Knopf „Neuen Schlüssel erzeugen"', !!(await page.$('#zfa-neu')));
+
+    // Abschalten
+    await frischesFenster();
+    await page.type('#zfa-aus-code', totp.code(buGeheim));
+    await page.click('#konto-2fa-aus button[type="submit"]');
+    await sleep(2000);
+    const nachAus = await page.$eval('#konto-2fa', el => el.innerText);
+    ok('nach dem Abschalten steht dort NICHT „Einrichten", sondern „Wieder aktivieren"',
+      /Wieder aktivieren/.test(nachAus) && !/^\s*Einrichten\s*$/m.test(nachAus), nachAus.slice(0, 140));
+    ok('… mit dem Hinweis, dass der Authenticator noch bekannt ist',
+      /bereits einen Authenticator/i.test(nachAus), nachAus.slice(0, 140));
+    ok('… und einem Code-Feld statt eines QR-Codes',
+      !!(await page.$('#zfa-code')) && !(await page.$('#zfa-qr')));
+
+    // Mit dem ALTEN Code reaktivieren
+    await frischesFenster();
+    await page.type('#zfa-code', totp.code(buGeheim));
+    await page.click('#zfa-verify button[type="submit"]');
+    await sleep(2000);
+    ok('der alte Code reaktiviert — kein neues Einlernen nötig',
+      /Aktiv/.test(await page.$eval('#konto-2fa', el => el.innerText)));
+
+    console.log('\n── „Neuen Schlüssel erzeugen" warnt deutlich ──');
+    await page.click('#zfa-neu');
+    await page.waitForSelector('.modal-overlay'); await sleep(400);
+    const warnung = await page.$eval('.modal-overlay .modal-body', el => el.innerText);
+    ok('ein Dialog erscheint', warnung.length > 0);
+    ok('… er sagt, dass die App NEU eingelernt werden muss', /neu einlernen/i.test(warnung), warnung.slice(0, 120));
+    ok('… und beruhigt, dass man sich nicht aussperrt', /nicht aus/i.test(warnung), warnung.slice(0, 200));
+    // Abbrechen ändert nichts
+    await page.click('.modal-overlay [data-act="cancel"]'); await sleep(700);
+    ok('Abbrechen lässt alles, wie es war',
+      /Aktiv/.test(await page.$eval('#konto-2fa', el => el.innerText)) && !(await page.$('#zfa-qr')));
+    // Bestätigen liefert einen neuen QR
+    await page.click('#zfa-neu');
+    await page.waitForSelector('.modal-overlay'); await sleep(300);
+    await page.click('.modal-overlay [data-act="ok"]');
+    await page.waitForSelector('#zfa-qr', { timeout: 20000 }); await sleep(700);
+    const neuGeheim = await page.$eval('#zfa-einrichtung code', el => el.textContent.trim());
+    ok('ein neuer QR-Code erscheint', !!(await page.$('#zfa-qr svg')));
+    ok('… mit einem anderen Schlüssel', neuGeheim !== buGeheim, `${buGeheim.slice(0, 8)}… → ${neuGeheim.slice(0, 8)}…`);
+    ok('… und einem Hinweis, dass bis zur Bestätigung der alte gilt',
+      /bisheriger/i.test(await page.$eval('#zfa-einrichtung', el => el.innerText)));
+    await page.close();
+
   } finally {
     if (browser) await browser.close();
     srv.kill('SIGTERM'); await sleep(800);

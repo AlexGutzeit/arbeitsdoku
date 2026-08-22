@@ -95,16 +95,42 @@ function codeNoetig({ modus, eingerichtet, geraetBestaetigtAm = null, jetztMs = 
 // (kein Geheimnis, kein Geraet, keine Pflicht). Fehlt die Tabelle auf einem sehr alten Stand, ist
 // 2FA schlicht nicht verfuegbar — die Anmeldung funktioniert weiter.
 
-// Ist der Authenticator dieses Nutzers fertig eingerichtet (also einmal per Code bestaetigt)?
-// Ein angelegtes, aber nie bestaetigtes Geheimnis zaehlt bewusst NICHT: Sonst sperrte sich jemand
-// aus, der die Einrichtung auf halbem Weg abbricht.
-function eingerichtet(db, userId) {
+// Der Zustand eines Nutzers in einem Rutsch. Drei Stufen, die man auseinanderhalten muss:
+//
+//   nichts        — es gibt keinen Schluessel
+//   stillgelegt   — es gibt einen bestaetigten Schluessel, aber er wird gerade nicht verlangt
+//   aktiv         — Schluessel bestaetigt und in Benutzung
+//
+// „Stillgelegt" gibt es, weil Abschalten den Schluessel NICHT loeschen darf: Wer 2FA freiwillig
+// abschaltet und spaeter (oder per Anordnung) wieder einschaltet, soll dieselbe Authenticator-App
+// weiterbenutzen koennen, ohne neu einzulernen (Alex, 22.08.2026). Geloescht wird nur beim
+// Zuruecksetzen durch Chef/Admin (verlorenes Handy) und wenn jemand bewusst einen neuen
+// Schluessel wuerfelt.
+function zustandLesen(db, userId) {
   try {
-    const r = db.prepare('SELECT confirmed_at FROM twofa_secrets WHERE user_id = ?').get(userId);
-    return !!(r && r.confirmed_at);
-  } catch (_) { return false; }
+    const r = db.prepare('SELECT secret_enc, pending_enc, aktiv, confirmed_at, last_step FROM twofa_secrets WHERE user_id = ?').get(userId);
+    if (!r) return { vorhanden: false, bestaetigt: false, aktiv: false, wartend: false };
+    return {
+      vorhanden: true,
+      bestaetigt: !!r.confirmed_at,
+      aktiv: !!r.confirmed_at && (r.aktiv === null || r.aktiv === undefined || Number(r.aktiv) === 1),
+      wartend: !!r.pending_enc,
+      last_step: Number(r.last_step || 0),
+    };
+  } catch (_) { return { vorhanden: false, bestaetigt: false, aktiv: false, wartend: false }; }
 }
 
+// „Eingerichtet" im Sinne der Anmeldung heisst: bestaetigt UND aktiv.
+function eingerichtet(db, userId) { return zustandLesen(db, userId).aktiv; }
+
+// Ein bestaetigter, aber stillgelegter Schluessel — dann bietet die Oberflaeche
+// „wieder aktivieren" statt „einrichten" an.
+function stillgelegt(db, userId) {
+  const z = zustandLesen(db, userId);
+  return z.bestaetigt && !z.aktiv;
+}
+
+// Liest den GUELTIGEN Schluessel (nicht den wartenden).
 function geheimnisLesen(db, userId) {
   try {
     const r = db.prepare('SELECT secret_enc FROM twofa_secrets WHERE user_id = ?').get(userId);
@@ -113,12 +139,46 @@ function geheimnisLesen(db, userId) {
   } catch (_) { return null; }   // falscher Schluessel o. ae. → wie „nicht eingerichtet"
 }
 
-function geheimnisAnlegen(db, userId, base32) {
-  db.prepare(`INSERT INTO twofa_secrets (user_id, secret_enc, confirmed_at, last_step)
-              VALUES (?, ?, NULL, 0)
-              ON CONFLICT(user_id) DO UPDATE SET secret_enc = excluded.secret_enc,
-                                                 confirmed_at = NULL, last_step = 0`)
-    .run(userId, verschluesseln(base32, userId));
+// Liest den WARTENDEN Schluessel (frisch gewuerfelt, noch nicht bestaetigt).
+function wartendesGeheimnisLesen(db, userId) {
+  try {
+    const r = db.prepare('SELECT pending_enc FROM twofa_secrets WHERE user_id = ?').get(userId);
+    if (!r || !r.pending_enc) return null;
+    return entschluesseln(r.pending_enc, userId);
+  } catch (_) { return null; }
+}
+
+// Einen neuen Schluessel als WARTEND ablegen. Der bisherige bleibt unangetastet und gilt weiter,
+// bis der neue bestaetigt ist — sonst koennte man sich beim Wechsel aufs neue Handy aussperren.
+function wartendesGeheimnisAnlegen(db, userId, base32) {
+  const verschluesselt = verschluesseln(base32, userId);
+  const da = db.prepare('SELECT user_id FROM twofa_secrets WHERE user_id = ?').get(userId);
+  if (da) {
+    db.prepare('UPDATE twofa_secrets SET pending_enc = ? WHERE user_id = ?').run(verschluesselt, userId);
+  } else {
+    // Noch gar nichts vorhanden: secret_enc darf nicht NULL sein (Spalte ist NOT NULL), deshalb
+    // steht der wartende Schluessel zunaechst in beiden Feldern. Ohne confirmed_at gilt er nicht.
+    db.prepare(`INSERT INTO twofa_secrets (user_id, secret_enc, pending_enc, aktiv, confirmed_at, last_step)
+                VALUES (?, ?, ?, 1, NULL, 0)`).run(userId, verschluesselt, verschluesselt);
+  }
+}
+
+// Der wartende Schluessel wurde bestaetigt → er wird der gueltige.
+function wartendesUebernehmen(db, userId) {
+  db.prepare(`UPDATE twofa_secrets
+              SET secret_enc = pending_enc, pending_enc = NULL, aktiv = 1,
+                  confirmed_at = strftime('%Y-%m-%d %H:%M:%f','now')
+              WHERE user_id = ? AND pending_enc IS NOT NULL`).run(userId);
+}
+
+// Stilllegen: Schluessel bleibt liegen, Geraete-Vertrauen faellt weg.
+function stilllegen(db, userId) {
+  try { db.prepare('UPDATE twofa_secrets SET aktiv = 0 WHERE user_id = ?').run(userId); } catch (_) {}
+  try { db.prepare('DELETE FROM twofa_devices WHERE user_id = ?').run(userId); } catch (_) {}
+}
+
+function wiederAktivieren(db, userId) {
+  db.prepare("UPDATE twofa_secrets SET aktiv = 1, confirmed_at = COALESCE(confirmed_at, strftime('%Y-%m-%d %H:%M:%f','now')) WHERE user_id = ?").run(userId);
 }
 
 // Der Replay-Riegel: Ein Code gilt bis zu 90 Sekunden. Wer ihn abfaengt, koennte ihn erneut
@@ -133,10 +193,7 @@ function schrittVerbrauchen(db, userId, schritt) {
   } catch (_) { return true; }
 }
 
-function bestaetigen(db, userId) {
-  db.prepare("UPDATE twofa_secrets SET confirmed_at = strftime('%Y-%m-%d %H:%M:%f','now') WHERE user_id = ?").run(userId);
-}
-
+// Vollstaendig entfernen — nur beim Zuruecksetzen durch Chef/Admin (verlorenes Handy).
 function zuruecksetzen(db, userId) {
   try { db.prepare('DELETE FROM twofa_secrets WHERE user_id = ?').run(userId); } catch (_) {}
   try { db.prepare('DELETE FROM twofa_devices WHERE user_id = ?').run(userId); } catch (_) {}
@@ -179,6 +236,8 @@ module.exports = {
   MODI, MODUS_TEXT, FENSTER_TAGE, ROLLEN, schluesselFuer,
   modusFuerRolle, alleModi, cacheVergessen,
   einrichtungNoetig, geraetGueltig, codeNoetig,
-  eingerichtet, geheimnisLesen, geheimnisAnlegen, schrittVerbrauchen, bestaetigen, zuruecksetzen,
+  zustandLesen, eingerichtet, stillgelegt,
+  geheimnisLesen, wartendesGeheimnisLesen, wartendesGeheimnisAnlegen, wartendesUebernehmen,
+  stilllegen, wiederAktivieren, schrittVerbrauchen, zuruecksetzen,
   geraetKennungErzeugen, geraetHash, geraetFinden, geraetMerken, geraetBenutzt,
 };
