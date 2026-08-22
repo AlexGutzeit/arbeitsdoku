@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**164 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**166 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -61,12 +61,14 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `arbeitsbeginn-prodklon.js` | Abwaertskompatibilitaet des Arbeitsbeginns — der Aussperr-Fall. |
 | `arbeitsbeginn-ui.js` | Arbeitsbeginn je Mitarbeiter + Zeit-Vorbelegung, die nie unmöglich ist. |
 | `audit-events.js` | Audit-Events-Test: prüft, dass login_success, logout (manuell), session_expired (abgelaufenes |
+| `aushang-mitternacht-ui.js` | Ein Aushang von 00:30 Uhr war zwei Stunden lang unsichtbar (UTC gegen Ortszeit). |
 | `aushang-sprung-ui.js` | Aushänge auf der Willkommensseite sind anklickbar (Alex, 07.08.2026). |
 | `auth-active-guard.js` | API-Test (B1): Ein bereits ausgestelltes JWT wird sofort abgelehnt (401), sobald der Nutzer ausgestellt ist — |
 | `avatar-api.js` | Profilbilder: Hochladen, Ausliefern, Entfernen — und vor allem, wer sie NICHT sehen darf. |
 | `avatar-ui.js` | Profilbilder in der Oberfläche: hochladen, in der Kopfzeile sehen, wieder entfernen. |
 | `backup-restore.js` | Backup-Round-Trip + dynamisches Restore-Limit: Backup herunterladen → wieder einspielen (200), |
 | `badge-nachziehen-ui.js` | Der Coin zeigte eine offene Bestellung an, obwohl die Liste leer war (Alex, 29.07.2026, Handy). |
+| `benachrichtigungen-umzug.js` | Die Benachrichtigungen sind nach „Mein Konto“ umgezogen — die Einstellungen jedes Nutzers bleiben unberührt. |
 | `barrierefrei-prodklon.js` | Prod-Klon-Pruefung fuer B8b (Tastatur/Screenreader). |
 | `barrierefrei-ui.js` | Puppeteer-Test (B8b): Bedienung per Tastatur und mit Screenreader. |
 | `board-archive-ampel-ui.js` | Archiv/Reopen + Dringlichkeitsampel (Chef/Admin). MA hat weder Ampel noch Archiv-Zugriff. |
