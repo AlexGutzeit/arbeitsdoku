@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**151 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**152 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -174,6 +174,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `targets-date-guard.js` | API-Test: Soll-Stunden-Routen validieren valid_from (Nachzug zu B4, gleiche Lösung wie beim Urlaubsanspruch). |
 | `testliste-vollstaendigkeit.js` | Wächter über die Testliste in tests/README.md. |
 | `tooltip-escape-ui.js` | Puppeteer-UI-Test (B2): Ein bösartiger Regie-Mitarbeitername darf im Eintrags-Tooltip NICHT als HTML landen. |
+| `totp-rfc.js` | TOTP-Kern gegen die NORM prüfen, nicht gegen sich selbst (RFC 6238 / RFC 4226 / RFC 4648). |
 | `touch-ux-ui.js` | Puppeteer-Test (UX-Runde 1: B3 + B2 + B8a) |
 | `trash-access.js` | Papierkorb-Zugriff: „Chef voll, Mitarbeiter Eigenes". |
 | `trash-matrix-ui.js` | KOMPLEXER Papierkorb-/Lösch-Matrix-Test (Puppeteer) — Abwesenheits- UND Eintrags-Logik über alle Rollen. |
