@@ -25,6 +25,7 @@ const S = {
   // weitergereicht und im Speicher abgelegt. Aus dem Speicher gelesen, damit nach F5 nicht kurz
   // die normale App aufblitzt, bevor refreshUser() antwortet.
   zweiFaktor: _readStoredZweiFaktor(),
+  avatarStand: {},          // { userId: Zeitstempel } — Frischemarke je Profilbild
   tabId: Math.random().toString(36).slice(2),
   sse: null,
   entries: [],
@@ -796,6 +797,76 @@ function countWeekdays(from, to) {
 function roleName(role) {
   const map = { admin: 'Administrator', chef: 'Chef', buchhalter: 'Buchhalter', mitarbeiter: 'Mitarbeiter' };
   return map[role] || role;
+}
+
+// ── Profilbilder ───────────────────────────────────────────────────────────────────────────────
+// Die Bilder liegen hinter der Anmeldung (siehe routes/avatare.js), ein einfaches <img src="…">
+// bekaeme sie also nicht — ein Bild-Tag schickt keinen Anmelde-Token mit. Sie werden deshalb per
+// fetch geholt und als blob:-Adresse angezeigt; dafuer steht `blob:` in der Sicherheitsrichtlinie
+// (server.js). `data:` bleibt bewusst verboten, das waere die deutlich breitere Erlaubnis.
+//
+// Wer kein Bild hat, bekommt einen Kreis mit seinen Initialen — in der Farbe, die die App der
+// Person ohnehin zuweist (colorFor). So sieht es einheitlich aus, auch wenn niemand ein Bild
+// hochlaedt, und niemand muss eines hochladen, damit die Oberflaeche vollstaendig wirkt.
+const _avatarBlobs = new Map();   // "id:stand" → blob:-Adresse
+
+function initialenVon(name) {
+  const teile = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!teile.length) return '?';
+  if (teile.length === 1) return teile[0].slice(0, 2).toUpperCase();
+  return (teile[0][0] + teile[teile.length - 1][0]).toUpperCase();
+}
+
+// Liefert das Grundgeruest: sofort sichtbar (Initialen), das Bild wird danach nachgeladen.
+//
+// Die Kennung steht IMMER dran, auch wenn (noch) nicht bekannt ist, ob es ein Bild gibt. Sonst
+// baute die App die Kopfzeile beim Start, bevor die Uebersicht der Bilder eintrifft — der
+// Platzhalter waere dann ohne Kennung und wuerde spaeter nie gefunden. Genau daran ist der
+// Oberflaechen-Test beim ersten Lauf umgefallen.
+function avatarHtml(user, groesse = 28) {
+  const id = user && (user.id || user.user_id);
+  const name = (user && (user.name || user.username)) || '';
+  const stand = id ? (S.avatarStand || {})[id] : null;
+  const farbe = colorFor(id);
+  return `<span class="avatar" style="width:${groesse}px;height:${groesse}px;font-size:${Math.round(groesse * 0.4)}px;background:${farbe}"`
+    + (id ? ` data-avatar="${id}"${stand ? ` data-stand="${esc(stand)}"` : ''}` : '')
+    + ` title="${esc(name)}">${esc(initialenVon(name))}</span>`;
+}
+
+// Holt die Bilder fuer alle Platzhalter unterhalb von `wurzel` nach. Mehrfach aufrufbar; bereits
+// geholte Bilder kommen aus dem Speicher.
+async function avatareLaden(wurzel) {
+  // Solange die Uebersicht nicht da ist, wird NICHTS als erledigt markiert — sonst waeren die
+  // Platzhalter verbraucht, bevor man weiss, wer ueberhaupt ein Bild hat.
+  if (!S._avatarStandDa) return;
+  const stellen = (wurzel || document).querySelectorAll('[data-avatar]:not([data-avatar-fertig])');
+  for (const el of stellen) {
+    el.setAttribute('data-avatar-fertig', '1');
+    const stand = (S.avatarStand || {})[el.dataset.avatar];
+    if (!stand) continue;                      // diese Person hat sicher kein Bild → Initialen
+    const schluessel = el.dataset.avatar + ':' + stand;
+    try {
+      let url = _avatarBlobs.get(schluessel);
+      if (!url) {
+        const antwort = await fetch('/api/avatare/' + el.dataset.avatar, {
+          headers: { Authorization: 'Bearer ' + S.token },
+        });
+        if (!antwort.ok) continue;                 // kein Bild → Initialen bleiben stehen
+        url = URL.createObjectURL(await antwort.blob());
+        _avatarBlobs.set(schluessel, url);
+      }
+      el.style.backgroundImage = `url("${url}")`;
+      el.classList.add('avatar--bild');
+      el.textContent = '';
+    } catch (_) { /* offline o. ae. → Initialen bleiben */ }
+  }
+}
+
+// Wer hat ueberhaupt ein Bild? Einmal je Sitzung, damit nicht jede Liste einzeln nachfragt.
+async function avatarStandLaden() {
+  try { S.avatarStand = (await api('GET', '/api/avatare')).stand || {}; }
+  catch (_) { S.avatarStand = {}; }
+  S._avatarStandDa = true;
 }
 
 // Farbpalette für Projekte/Mitarbeiter

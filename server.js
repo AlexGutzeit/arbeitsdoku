@@ -37,7 +37,10 @@ const CSP_POLICY = [
   "form-action 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self'",
+  // blob: fuer Profilbilder. Sie liegen hinter der Anmeldung und werden per fetch geholt;
+  // das Ergebnis kann der Browser nur als blob:-Adresse anzeigen. data: bleibt bewusst
+  // verboten — das waere die deutlich breitere Erlaubnis.
+  "img-src 'self' blob:",
   "font-src 'self'",
   "connect-src 'self'",
   "manifest-src 'self'",
@@ -76,6 +79,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // API-Routes
+app.use('/api/avatare', require('./routes/avatare'));
 app.use('/api/auth/2fa', require('./routes/twofa'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/entries', require('./routes/entries'));

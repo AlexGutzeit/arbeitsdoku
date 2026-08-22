@@ -506,6 +506,8 @@ const AUDIT_LABELS = {
   backup_restore: 'Backup eingespielt',
   user_create: 'Benutzer angelegt',
   user_update: 'Benutzer geändert',
+  avatar_gesetzt: 'Profilbild gesetzt',
+  avatar_entfernt: 'Profilbild entfernt',
   twofa_aktiviert: 'Zwei-Faktor aktiviert',
   twofa_wieder_aktiviert: 'Zwei-Faktor wieder aktiviert',
   twofa_schluessel_gewechselt: 'Zwei-Faktor: neuer Schlüssel',

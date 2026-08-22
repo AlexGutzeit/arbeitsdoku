@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**160 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**162 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -63,6 +63,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `audit-events.js` | Audit-Events-Test: prüft, dass login_success, logout (manuell), session_expired (abgelaufenes |
 | `aushang-sprung-ui.js` | Aushänge auf der Willkommensseite sind anklickbar (Alex, 07.08.2026). |
 | `auth-active-guard.js` | API-Test (B1): Ein bereits ausgestelltes JWT wird sofort abgelehnt (401), sobald der Nutzer ausgestellt ist — |
+| `avatar-api.js` | Profilbilder: Hochladen, Ausliefern, Entfernen — und vor allem, wer sie NICHT sehen darf. |
+| `avatar-ui.js` | Profilbilder in der Oberfläche: hochladen, in der Kopfzeile sehen, wieder entfernen. |
 | `backup-restore.js` | Backup-Round-Trip + dynamisches Restore-Limit: Backup herunterladen → wieder einspielen (200), |
 | `badge-nachziehen-ui.js` | Der Coin zeigte eine offene Bestellung an, obwohl die Liste leer war (Alex, 29.07.2026, Handy). |
 | `barrierefrei-prodklon.js` | Prod-Klon-Pruefung fuer B8b (Tastatur/Screenreader). |

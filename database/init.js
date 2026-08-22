@@ -423,6 +423,8 @@ async function initDatabase() {
   ensureClosureSchema(db);
   // Zwei-Faktor-Anmeldung (idempotent, hier UND im Restore-Pfad)
   ensureTwoFactorSchema(db);
+  // Profilbilder (idempotent, hier UND im Restore-Pfad)
+  ensureAvatarSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -942,6 +944,7 @@ function ensureAuditSchema(targetDb) {
   ensureVacationSchema(targetDb);
   ensureClosureSchema(targetDb);
   ensureTwoFactorSchema(targetDb);
+  ensureAvatarSchema(targetDb);
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
@@ -989,6 +992,28 @@ function normalizeManagerRights(targetDb) {
 // nicht verfuegbar; niemand verliert den Zugang.
 //
 // Idempotent, wird im Init-Pfad UND im Restore-Pfad aufgerufen (wie ensurePushSchema).
+// Profilbilder. Das Bild selbst liegt als Datei unter storage/avatare/<user_id>.webp — in der
+// Datenbank steht nur, DASS es eines gibt und wann es zuletzt geaendert wurde. Der Zeitstempel
+// dient als Frischemarke: Ohne ihn wuerde der Browser nach einem Wechsel das alte Bild weiter
+// anzeigen.
+//
+// Eigene Tabelle statt einer Spalte in `users` — aus demselben Grund wie bei der
+// Zwei-Faktor-Anmeldung: middleware/auth.js liest bei jeder Anfrage eine feste Spaltenliste aus
+// `users`, eine misslungene Migration dort sperrt alle aus.
+function ensureAvatarSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS user_avatars (
+        user_id    INTEGER PRIMARY KEY,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (e) {
+    console.error('ensureAvatarSchema fehlgeschlagen:', e.message);
+  }
+}
+
 function ensureTwoFactorSchema(targetDb) {
   try {
     targetDb.exec(`

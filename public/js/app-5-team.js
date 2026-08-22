@@ -2016,6 +2016,7 @@ async function renderKonto() {
         Für deine Rolle ist ein zweiter Faktor vorgeschrieben. Bis du ihn eingerichtet hast, kommst
         du nicht in die App.
       </div>` : ''}
+      <div class="welcome-section" id="konto-avatar"></div>
       <div class="welcome-section" id="konto-2fa"><div class="loading"><div class="spinner"></div></div></div>
       <div class="welcome-section" id="konto-passwort"></div>
       <div class="welcome-section" id="konto-geraete" style="display:none"></div>
@@ -2023,8 +2024,56 @@ async function renderKonto() {
   bindLayout();
   const fab = document.getElementById('fab-new');
   if (fab) fab.style.display = 'none';
+  await kontoAvatarKarte();
   kontoPasswortKarte();
   await kontoZweiFaktorKarte();
+}
+
+async function kontoAvatarKarte() {
+  const k = document.getElementById('konto-avatar');
+  if (!k) return;
+  await avatarStandLaden();
+  const hatBild = !!(S.avatarStand || {})[S.user.id];
+  k.innerHTML = `
+    <h3>&#128100; Profilbild</h3>
+    <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap">
+      <span id="avatar-vorschau">${avatarHtml(S.user, 96)}</span>
+      <div style="flex:1; min-width:200px">
+        <p style="margin:0 0 .5rem">Erscheint neben deinem Namen und in den Spalten von Planung,
+           Zeitnachweis und Auftrags-Board. Ohne Bild stehen dort deine Initialen.</p>
+        <input type="file" id="avatar-datei" accept="image/*" style="display:none">
+        <button class="btn btn-primary btn-sm" id="avatar-waehlen">${hatBild ? 'Anderes Bild wählen' : 'Bild hochladen'}</button>
+        ${hatBild ? '<button class="btn btn-outline btn-sm" id="avatar-weg" style="margin-left:.5rem">Entfernen</button>' : ''}
+        <div style="font-size:.78rem;color:var(--text-light);margin-top:.4rem">
+          Wird auf 256 × 256 zugeschnitten. Nur angemeldete Kolleginnen und Kollegen sehen es.
+        </div>
+      </div>
+    </div>`;
+  // Das Bild in der Vorschau nachladen (falls schon eines da ist).
+  avatareLaden(k);
+
+  const datei = document.getElementById('avatar-datei');
+  document.getElementById('avatar-waehlen').addEventListener('click', () => datei.click());
+  datei.addEventListener('change', async () => {
+    if (!datei.files || !datei.files[0]) return;
+    const fd = new FormData();
+    fd.append('bild', datei.files[0]);
+    try {
+      await api('POST', '/api/avatare', fd, true);
+      toast('Profilbild gespeichert', 'success');
+      await kontoAvatarKarte();
+      kopfzeileAvatarAktualisieren();
+    } catch (err) { toast(err.message || 'Hochladen fehlgeschlagen', 'error'); }
+  });
+  const weg = document.getElementById('avatar-weg');
+  if (weg) weg.addEventListener('click', async () => {
+    try {
+      await api('DELETE', '/api/avatare');
+      toast('Profilbild entfernt', 'success');
+      await kontoAvatarKarte();
+      kopfzeileAvatarAktualisieren();
+    } catch (err) { toast(err.message, 'error'); }
+  });
 }
 
 function kontoPasswortKarte() {

@@ -82,6 +82,7 @@ function anmeldungAbschliessen(data) {
   loadBadges();
   syncPushSubscription();
   refreshUser();   // holt auch den Zwei-Faktor-Zustand
+  avatarStandLaden().then(() => avatareLaden(document));
 }
 
 // Dezente Impressum/Datenschutz-Links — nur zeigen, was hinterlegt ist (white-label: frischer Deploy bleibt sauber).
@@ -168,6 +169,14 @@ async function logout(manual) {
 // Holt den aktuellen Nutzer (inkl. Rechte wie can_plan) frisch vom Server und aktualisiert S.user.
 // Nötig, weil S.user aus der Login-Antwort gecacht ist — ändert ein Admin z.B. das Planungsrecht,
 // soll das ohne erneutes Login (nach F5 / Tab-Rückkehr) greifen. Re-Render nur bei echter Rechte-Änderung.
+// Das Profilbild in der Kopfzeile neu holen — nach dem Hochladen oder Entfernen.
+function kopfzeileAvatarAktualisieren() {
+  const platz = document.getElementById('kopf-avatar');
+  if (!platz) return;
+  platz.innerHTML = avatarHtml(S.user, 28);
+  avatareLaden(platz);
+}
+
 async function refreshUser() {
   if (!S.token) return;
   try {
@@ -391,6 +400,7 @@ function layout(content, activeNav) {
       <button class="menu-btn" id="menu-btn" aria-label="Menü öffnen" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
       <span class="title">Arbeitsdoku</span>
       <div class="user-info">
+        <span id="kopf-avatar">${avatarHtml(S.user, 28)}</span>
         <span class="user-name">${esc(S.user.name)}</span>
         <button class="logout-btn" id="logout-btn">Abmelden</button>
       </div>
@@ -407,6 +417,9 @@ function layout(content, activeNav) {
 }
 
 function bindLayout() {
+  // Profilbilder nachladen — bindLayout laeuft nach JEDEM Seitenaufbau, damit erwischt es die
+  // Kopfzeile und alle Platzhalter der jeweiligen Seite in einem Aufwasch.
+  try { avatareLaden(document); } catch (_) {}
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebar-overlay');
   const menuBtn = document.getElementById('menu-btn');

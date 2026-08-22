@@ -17,6 +17,7 @@ if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 const documentsDir = path.join(__dirname, '..', 'storage', 'documents');
+const avatarDir = path.join(__dirname, '..', 'storage', 'avatare');
 
 // Das Restore-Upload-Limit muss zum möglichen Backup-Volumen passen: ein Backup-Zip bündelt DB + uploads
 // (Logo/Icons) + die KOMPLETTE Dokumenten-Ablage. Darum dynamisch = konfiguriertes Dokumenten-Speicherlimit
@@ -94,6 +95,10 @@ router.get('/download', authenticate, authorize('chef'), (req, res) => {
 
   // Dokumenten-Ablage zusaetzlich sichern (Prefix 'documents/'); uploads bleibt unveraendert
   walkUploads(documentsDir, 'documents');
+  // Profilbilder (Prefix 'avatare/'). Ohne diese Zeile faenden sich nach einem Restore alle
+  // Gesichter durch Initialen ersetzt — die Datenbank wuesste noch von den Bildern, die Dateien
+  // waeren aber weg.
+  walkUploads(avatarDir, 'avatare');
 
   archive.finalize();
 });
@@ -111,6 +116,7 @@ router.post('/restore', authenticate, authorize('chef'), restoreUpload, (req, re
     let dbBuffer;
     let uploadFiles = []; // [{name, data}]
     let documentFiles = []; // [{name, data}] — Dokumenten-Ablage (storage/documents/)
+    let avatarFiles = [];   // [{name, data}] — Profilbilder (storage/avatare/)
 
     if (isZip) {
       const zip = new AdmZip(req.file.path);
@@ -174,6 +180,25 @@ router.post('/restore', authenticate, authorize('chef'), restoreUpload, (req, re
           return;
         }
         documentFiles.push({ name: safeName, data: e.getData() });
+      });
+
+      // Profilbilder sammeln — gleiches Muster, gleicher Schutz gegen Pfad-Tricks.
+      // Fehlt der Ordner im Zip (Sicherung von vor diesem Feature), passiert hier schlicht nichts.
+      const avatarResolved = path.resolve(avatarDir);
+      entries.forEach(e => {
+        if (!e.entryName.startsWith('avatare/') || e.isDirectory) return;
+        const rel = e.entryName.slice('avatare/'.length);
+        if (!rel || rel.includes('/') || rel.includes('..') || rel.startsWith('.')) {
+          console.warn('Backup-Restore: Profilbild uebersprungen (verdaechtiger Name):', e.entryName);
+          return;
+        }
+        const safeName = path.basename(rel);
+        const finalPath = path.resolve(avatarDir, safeName);
+        if (!finalPath.startsWith(avatarResolved + path.sep)) {
+          console.warn('Backup-Restore: Profilbild uebersprungen (Pfad ausserhalb storage):', e.entryName);
+          return;
+        }
+        avatarFiles.push({ name: safeName, data: e.getData() });
       });
     } else {
       // Reine SQLite-Datei (Abwärtskompatibilität)
@@ -242,6 +267,14 @@ router.post('/restore', authenticate, authorize('chef'), restoreUpload, (req, re
       });
     }
 
+    // Profilbilder wiederherstellen
+    if (avatarFiles.length > 0) {
+      if (!fs.existsSync(avatarDir)) fs.mkdirSync(avatarDir, { recursive: true });
+      avatarFiles.forEach(f => {
+        fs.writeFileSync(path.join(avatarDir, f.name), f.data);
+      });
+    }
+
     fs.unlinkSync(req.file.path);
 
     // DB neu laden
@@ -252,7 +285,7 @@ router.post('/restore', authenticate, authorize('chef'), restoreUpload, (req, re
       userId: req.user.id, username: req.user.username, action: 'backup_restore',
       // Ersetzt die komplette Datenbank — ein Abrechnungs-Stichtag kann das nicht abfangen.
       // Deshalb hier wenigstens festhalten, ob abgerechnete Zeitraeume betroffen waren.
-      details: `Safety-Backup: ${path.basename(safetyZipPath)}, ${uploadFiles.length} Upload-Datei(en), ${documentFiles.length} Dokument(e)`
+      details: `Safety-Backup: ${path.basename(safetyZipPath)}, ${uploadFiles.length} Upload-Datei(en), ${documentFiles.length} Dokument(e), ${avatarFiles.length} Profilbild(er)`
         + (abgerechnetBis(getDb()) ? ` — BETRIFFT ABGERECHNETE ZEITRÄUME (bis ${abgerechnetBis(getDb())})` : ''),
       ip: req.ip,
     });

@@ -2084,3 +2084,18 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .load-error { text-align: center; padding: 2rem 1rem; color: var(--text); }
 .load-error p { margin: 0 0 0.5rem; }
 .load-error .load-error-msg { color: var(--text-light); font-size: 0.9rem; margin-bottom: 1rem; }
+
+/* === Profilbilder ===
+   Kreis mit Initialen; liegt ein Bild vor, wird es als Hintergrund eingesetzt (die Initialen
+   werden dann entfernt). Feste Groesse ueber inline-style je Einsatzort, damit derselbe Baustein
+   in der Kopfzeile (32 px) und in Spaltenkoepfen (24 px) passt. */
+.avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; border-radius: 50%; color: #fff; font-weight: 700;
+  line-height: 1; letter-spacing: .02em; overflow: hidden; vertical-align: middle;
+  background-size: cover; background-position: center;
+  user-select: none;
+}
+.avatar--bild { background-color: transparent !important; }
+/* Vorschau auf „Mein Konto" */
+.avatar-gross { width: 96px; height: 96px; font-size: 34px; }
