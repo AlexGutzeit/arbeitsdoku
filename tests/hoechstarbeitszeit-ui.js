@@ -30,14 +30,14 @@ function req(m, p, t, b) {
       x => { let s = ''; x.on('data', c => s += c); x.on('end', () => { let j = null; try { j = JSON.parse(s); } catch (_) {} res({ status: x.statusCode, body: j, text: s }); }); });
     r.on('error', rej); if (d) r.write(d); r.end(); });
 }
-const jahre = n => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return d.toISOString().slice(0, 10); };
+const jahre = n => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return d.toLocaleDateString('sv-SE'); };
 const MA = { role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8, target_hours_per_week: 40 };
 // Montag der vorletzten Woche — sicher vergangen, und die ganze Woche liegt frei.
 function montagVorletzteWoche() {
   const d = new Date(); d.setDate(d.getDate() - 14);
   const wt = d.getDay();
   d.setDate(d.getDate() + (wt === 0 ? -6 : 1 - wt));
-  return d.toISOString().slice(0, 10);
+  return d.toLocaleDateString('sv-SE');
 }
 const plusTage = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 

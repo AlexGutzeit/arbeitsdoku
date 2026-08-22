@@ -23,7 +23,7 @@ function req(method, p, token, body) {
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
 const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
-const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
 // Wochentage (Mo–Fr) NACH heute bis einschließlich due — dieselbe Semantik wie workdaysUntil (ohne Feiertage).
 function weekdaysExcl(toISO) {
   const a = new Date(); a.setHours(0,0,0,0);
@@ -33,7 +33,7 @@ function weekdaysExcl(toISO) {
   return c;
 }
 // Ein Wochentag ~offset Tage voraus (Wochenende überspringen)
-function nextWeekday(offset) { const d = new Date(); d.setDate(d.getDate() + offset); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); }
+function nextWeekday(offset) { const d = new Date(); d.setDate(d.getDate() + offset); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); return d.toLocaleDateString('sv-SE'); }
 const badgeText = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .proj-due`); return e ? e.textContent : null; }, id);
 const badgeNum = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .proj-due`); if (!e) return null; const m = e.textContent.match(/(\d+)/); return m ? parseInt(m[1], 10) : null; }, id);
 

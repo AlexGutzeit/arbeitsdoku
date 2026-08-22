@@ -13,8 +13,8 @@ function req(method, p, token, body) {
     r.on('error', rej); if (d) r.write(d); r.end(); });
 }
 const tok = async (u, pw) => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
-const nextMon = () => { const d = new Date(); while (d.getDay() !== 1) d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
-const addCal = (isoStr, n) => { const d = new Date(isoStr + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const nextMon = () => { const d = new Date(); while (d.getDay() !== 1) d.setDate(d.getDate() + 1); return d.toLocaleDateString('sv-SE'); };
+const addCal = (isoStr, n) => { const d = new Date(isoStr + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
 // Vorkommen einer Serie als [{od, gid}] sortiert.
 async function seriesOccs(t, sid) {
   const es = ((await req('GET','/api/planning', t)).body.entries || []).filter(e => e.series_id === sid);

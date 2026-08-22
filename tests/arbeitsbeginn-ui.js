@@ -75,7 +75,7 @@ async function tabMitUhr(browser, ctx, hhmm, hash) {
     // birth_date gesetzt: Ohne Geburtsdatum nimmt die App vorsichtshalber „unter 18" an und
     // schlaegt nach Jugendarbeitsschutzgesetz laengere Pausen vor. Hier geht es um den
     // Arbeitsbeginn, nicht um die Alterstabellen (die stehen in pause-jugendschutz-ui.js).
-    const VOLLJAEHRIG = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 35); return d.toISOString().slice(0, 10); })();
+    const VOLLJAEHRIG = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 35); return d.toLocaleDateString('sv-SE'); })();
     const frueh = (await req('POST', '/api/users', admin, { username: 'frueh', password: 'Test1234!', name: 'Frieda Früh', role: 'mitarbeiter', work_start: '06:00', birth_date: VOLLJAEHRIG })).body.user;
     ok('angelegt mit 06:00', frueh && frueh.work_start === '06:00', JSON.stringify(frueh && frueh.work_start));
     const normal = (await req('POST', '/api/users', admin, { username: 'normal', password: 'Test1234!', name: 'Norbert Normal', role: 'mitarbeiter', birth_date: VOLLJAEHRIG })).body.user;

@@ -37,7 +37,7 @@ async function replanAndSave(p, admin, id) {
     const apw = (fs.readFileSync('/tmp/planning-replan-default-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
     const anna = (await req('POST','/api/users', admin, { username:'anna', password:'Test1234!', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('sv-SE');
     const normal = (await req('POST','/api/planning', admin, { date:today, time_from:'09:00', time_to:'12:00', client:'Schmidt KG', assigned_user_ids:[anna.id] })).body.entry;
     const series = (await req('POST','/api/planning', admin, { date:today, time_from:'07:00', time_to:'15:30', client:'Müller GmbH', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:2 } })).body;
     const seriesEntryId = ((await req('GET','/api/planning', admin)).body.entries.find(e => e.series_id).id);

@@ -22,10 +22,10 @@ function req(method, p, token, body) {
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
 const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
-const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
 // Datum, das exakt k Arbeitstage (Mo–Fr) nach heute liegt — Wochenenden werden übersprungen.
 // So ist `available` (Arbeitstage) im Test deterministisch = k, unabhängig vom Wochentag des Laufs.
-const dueInWorkdays = k => { const d = new Date(); let c = 0; while (c < k) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) c++; } return d.toISOString().slice(0, 10); };
+const dueInWorkdays = k => { const d = new Date(); let c = 0; while (c < k) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) c++; } return d.toLocaleDateString('sv-SE'); };
 const RED='#dc2626', ORANGE='#ea580c', GREEN='#16a34a';
 const dueStyle = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .proj-due`); return e ? e.getAttribute('style') : null; }, id);
 const goalLeft = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .ms-bar-slim .ms-goal`); return e ? parseFloat(e.style.left) : null; }, id);

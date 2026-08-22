@@ -32,9 +32,9 @@ function req(m, p, t, b) {
       x => { let s = ''; x.on('data', c => s += c); x.on('end', () => { let j = null; try { j = JSON.parse(s); } catch (_) {} res({ status: x.statusCode, body: j, text: s }); }); });
     r.on('error', rej); if (d) r.write(d); r.end(); });
 }
-const jahre = n => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return d.toISOString().slice(0, 10); };
+const jahre = n => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return d.toLocaleDateString('sv-SE'); };
 const MA = { role: 'mitarbeiter', hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8, target_hours_per_week: 40 };
-const tagNr = n => new Date(Date.now() - (n + 2) * 864e5).toISOString().slice(0, 10);
+const tagNr = n => new Date(Date.now() - (n + 2) * 864e5).toLocaleDateString('sv-SE');
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}

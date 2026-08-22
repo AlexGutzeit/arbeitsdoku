@@ -16,7 +16,7 @@ function req(method, p, token, body) {
     r.on('error', rej); if (d) r.write(d); r.end(); });
 }
 const tok = async (u, pw) => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
-const nextMon = () => { const d = new Date(); while (d.getDay() !== 1) d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
+const nextMon = () => { const d = new Date(); while (d.getDay() !== 1) d.setDate(d.getDate() + 1); return d.toLocaleDateString('sv-SE'); };
 async function loginBrowser(p, user, pw) {
   await p.goto(BASE, { waitUntil:'networkidle2' });
   await p.evaluate(() => { try { localStorage.clear(); } catch (_) {} }); // evtl. Session beenden

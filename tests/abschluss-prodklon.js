@@ -132,7 +132,7 @@ const sha = (f) => require('crypto').createHash('sha256').update(fs.readFileSync
     // Gegenprobe: Die Messung MUSS auf eine echte Änderung reagieren — sonst sagt sie nichts aus.
     const mitarbeiter = nutzer.find(u => u.id !== adminId);
     const neu = await req('POST', '/api/entries', admin, {
-      date: new Date().toISOString().slice(0, 10), time_from: '20:00', time_to: '22:00',
+      date: new Date().toLocaleDateString('sv-SE'), time_from: '20:00', time_to: '22:00',
       break_minutes: 0, user_id: mitarbeiter.id,
     });
     if (neu.status === 201) {

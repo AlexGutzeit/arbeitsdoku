@@ -34,7 +34,7 @@ const seriesCount = async (t, sid) => ((await req('GET','/api/planning', t)).bod
     const apw = (fs.readFileSync('/tmp/planning-series-ui-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
     const anna = (await req('POST','/api/users', admin, { username:'anna', password:'Test1234!', name:'Anna', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('sv-SE');
     // Wöchentliche Serie, Anker heute → erstes Vorkommen ist heute (Tagesansicht zeigt heute).
     const s = (await req('POST','/api/planning', admin, { date:today, time_from:'07:00', time_to:'15:30', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'count', end_count:4 } })).body;
     ok('Serie (4 Vorkommen) angelegt', s.count === 4);

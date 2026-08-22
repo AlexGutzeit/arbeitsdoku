@@ -481,7 +481,7 @@ async function renderWelcome() {
   try {
     const data = await api('GET', '/api/bulletin');
     if (data) {
-      newBulletins = data.entries.filter(b => b.created_at && b.created_at.slice(0, 10) === today);
+      newBulletins = data.entries.filter(b => b.created_at && datumAusZeitstempel(b.created_at) === today);
       const in3 = new Date(now); in3.setDate(in3.getDate() + 3);
       const day3 = formatDateISO(in3);
       eventBulletins = data.entries.filter(b => b.event_date && b.event_date >= today && b.event_date <= day3);
@@ -1068,7 +1068,7 @@ async function showUserModal(user) {
         </div>
         <div class="form-group">
           <label>Geburtsdatum</label>
-          <input type="date" class="form-control" id="um-birth-date" value="${esc(user?.birth_date || '')}" max="${new Date().toISOString().slice(0, 10)}">
+          <input type="date" class="form-control" id="um-birth-date" value="${esc(user?.birth_date || '')}" max="${new Date().toLocaleDateString("sv-SE")}">
           <small class="push-hint">Nur für die Pausenregeln: Unter 18 gilt das
             Jugendarbeitsschutzgesetz mit längeren Pausen. <strong>Bleibt das Feld leer, rechnet die
             App vorsichtshalber mit „unter 18"</strong> — lieber eine zu lange Pause vorschlagen als

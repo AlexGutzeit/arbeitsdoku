@@ -35,7 +35,7 @@ async function weekStat(uid, monday) {
   return u || (r.data.combined ? r.data.combined : r.data);
 }
 
-function fmt(d) { return d.toISOString().slice(0, 10); }
+function fmt(d) { return d.toLocaleDateString('sv-SE'); }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 
 (async () => {

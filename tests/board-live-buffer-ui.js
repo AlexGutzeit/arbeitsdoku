@@ -22,9 +22,9 @@ function req(method, p, token, body) {
     r.on('error', rej); if (data) r.write(data); r.end(); });
 }
 const tok = async (u, pw='Test1234!') => (await req('POST','/api/auth/login', null, { username:u, password:pw })).body.token;
-const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const iso = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
 // Datum exakt k Arbeitstage (Mo–Fr) nach heute — Wochenenden überspringen (available = k, laufunabhängig).
-const dueInWorkdays = k => { const d = new Date(); let c = 0; while (c < k) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) c++; } return d.toISOString().slice(0, 10); };
+const dueInWorkdays = k => { const d = new Date(); let c = 0; while (c < k) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) c++; } return d.toLocaleDateString('sv-SE'); };
 // Breite des hellblauen Luft-Segments am schlanken (eingeklappten) Balken
 const bufSlim = (p, id) => p.evaluate(id => { const e = document.querySelector(`.proj-tile[data-id="${id}"] .ms-bar-slim .ms-buffer`); return e ? parseFloat(e.style.width) : 0; }, id);
 // Breite des grünen (erledigt) Segments = 1. Span am schlanken Balken

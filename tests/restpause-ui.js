@@ -62,8 +62,8 @@ async function neuesFormular(page) {
   await sleep(900);
 }
 
-const HEUTE = new Date().toISOString().slice(0, 10);
-const GESTERN = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+const HEUTE = new Date().toLocaleDateString('sv-SE');
+const GESTERN = new Date(Date.now() - 864e5).toLocaleDateString('sv-SE');
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
@@ -88,7 +88,7 @@ const GESTERN = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
     // vorsichtshalber „unter 18" an — das muss hier also ausdrücklich gesetzt werden, sonst prüfte
     // der Test unbemerkt die Jugendschutz-Werte. (§ 11 JArbSchG: tests/pause-jugendschutz-ui.js)
     const volljaehrig = new Date(); volljaehrig.setFullYear(volljaehrig.getFullYear() - 35);
-    await req('PUT', `/api/users/${uid}`, adminA.token, { birth_date: volljaehrig.toISOString().slice(0, 10) });
+    await req('PUT', `/api/users/${uid}`, adminA.token, { birth_date: volljaehrig.toLocaleDateString('sv-SE') });
 
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });

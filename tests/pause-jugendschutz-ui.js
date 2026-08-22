@@ -57,11 +57,11 @@ async function formular(page, datum, von, bis) {
   }, von, bis);
   await sleep(1500);
 }
-const T = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+const T = (n) => new Date(Date.now() - n * 864e5).toLocaleDateString('sv-SE');
 const vorJahren = (j, versatzTage = 0) => {
   const d = new Date(Date.now() - versatzTage * 864e5);
   d.setFullYear(d.getFullYear() - j);
-  return d.toISOString().slice(0, 10);
+  return d.toLocaleDateString('sv-SE');
 };
 
 (async () => {

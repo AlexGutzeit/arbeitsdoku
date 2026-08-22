@@ -1,6 +1,13 @@
 // Backup-Round-Trip + dynamisches Restore-Limit: Backup herunterladen → wieder einspielen (200),
 // Daten bleiben erhalten. Stellt sicher, dass das dynamische Restore-Upload-Limit (Speicherlimit +
-// Reserve) den normalen Restore nicht bricht. Start: node tests/backup-restore.js
+// Reserve) den normalen Restore nicht bricht.
+//
+// Mitgeprüft werden die PROFILBILDER. Sie liegen nicht in der Datenbank, sondern als Dateien unter
+// `storage/avatare/` — sie müssen also ausdrücklich mit ins Zip gepackt und beim Einspielen wieder
+// herausgeschrieben werden. Damit das nicht bloß behauptet ist, löscht der Test die Bilder nach
+// dem Herunterladen von der Platte: Kämen sie nicht aus dem Zip zurück, wären sie weg.
+//
+// Start: node tests/backup-restore.js
 const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -38,6 +45,19 @@ function uploadZip(token, buf) {
     r.on('error', reject); r.write(body); r.end();
   });
 }
+function uploadAvatar(token, buf) {
+  return new Promise((resolve, reject) => {
+    const boundary = '----nodeavatar' + Date.now();
+    const head = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="bild"; filename="ich.png"\r\nContent-Type: image/png\r\n\r\n`);
+    const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const body = Buffer.concat([head, buf, tail]);
+    const r = http.request({ host:'localhost', port:PORT, path:'/api/avatare', method:'POST', headers:{
+      'Content-Type':'multipart/form-data; boundary='+boundary, 'Content-Length': body.length, Authorization:'Bearer '+token,
+    }}, (res) => { let s=''; res.on('data',d=>s+=d); res.on('end',()=>{ let j=null; try{j=JSON.parse(s)}catch(_){}; resolve({status:res.statusCode, body:j}); }); });
+    r.on('error', reject); r.write(body); r.end();
+  });
+}
+const sha = b => require('crypto').createHash('sha256').update(b).digest('hex').slice(0, 16);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console.log('  ✗ '+n+(e?'  → '+e:'')));
@@ -57,10 +77,28 @@ const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console
     const u = (await reqJSON('POST','/api/users', admin, { username:'backuptarget', password:'Test1234!', name:'BACKUP-TARGET', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     ok('Testnutzer angelegt', !!(u && u.id));
 
+    // Profilbild fuer diesen Nutzer setzen — es landet als Datei, nicht in der Datenbank.
+    const sharp = require('sharp');
+    const rohbild = await sharp({ create: { width: 300, height: 300, channels: 3, background: { r: 12, g: 140, b: 90 } } }).png().toBuffer();
+    const eigen = (await reqJSON('POST','/api/auth/login', null, { username:'backuptarget', password:'Test1234!' })).body.token;
+    const hoch = await uploadAvatar(eigen, rohbild);
+    ok('Profilbild hochgeladen', hoch.status===200 && hoch.body && hoch.body.success, JSON.stringify(hoch.body));
+    const avatarDir = path.join(__dirname, '..', 'storage', 'avatare');
+    const bilder = [path.join(avatarDir, `${u.id}.webp`), path.join(avatarDir, `${u.id}-gross.webp`)];
+    ok('… liegt in zwei Groessen auf der Platte', bilder.every(f => fs.existsSync(f)), bilder.join(', '));
+    const vorher = bilder.map(f => sha(fs.readFileSync(f)));
+
     // Backup herunterladen (Zip)
     const dl = await getBinary('/api/backup/download', admin);
     const isZip = dl.buf[0] === 0x50 && dl.buf[1] === 0x4B;
     ok('Backup-Download liefert ein Zip', dl.status===200 && isZip, `status=${dl.status}, bytes=${dl.buf.length}`);
+
+    // Die Bilder von der Platte nehmen. Ab hier existieren sie NUR noch im Zip — genau das ist
+    // der Punkt, an dem eine vergessene Zeile im Backup-Code auffliegen wuerde.
+    bilder.forEach(f => fs.unlinkSync(f));
+    ok('Profilbilder von der Platte entfernt', bilder.every(f => !fs.existsSync(f)));
+    const wegAntwort = await getBinary(`/api/avatare/${u.id}`, admin);
+    ok('… und werden nicht mehr ausgeliefert', wegAntwort.status === 404, String(wegAntwort.status));
 
     // Backup wieder einspielen (dynamisches Limit, normales Backup → muss durchgehen)
     const rs = await uploadZip(admin, dl.buf);
@@ -70,6 +108,20 @@ const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console
     await sleep(300);
     const list = await reqJSON('GET','/api/users', admin);
     ok('Nach Restore: Testnutzer noch vorhanden', (list.body.users||[]).some(x => x.username==='backuptarget'), '');
+
+    ok('Nach Restore: beide Profilbilder wieder auf der Platte', bilder.every(f => fs.existsSync(f)),
+      bilder.filter(f => !fs.existsSync(f)).join(', ') || '—');
+    const nachher = bilder.filter(f => fs.existsSync(f)).map(f => sha(fs.readFileSync(f)));
+    ok('… und Byte fuer Byte dieselben Dateien', JSON.stringify(vorher) === JSON.stringify(nachher),
+      `${vorher.join('/')} → ${nachher.join('/')}`);
+    const wieder = await getBinary(`/api/avatare/${u.id}`, admin);
+    ok('… und werden wieder ausgeliefert', wieder.status === 200 && wieder.buf.length > 0, String(wieder.status));
+    ok('Der Eintrag in der Datenbank kam mit zurueck',
+      !!(await reqJSON('GET','/api/avatare', admin)).body.stand[String(u.id)],
+      JSON.stringify((await reqJSON('GET','/api/avatare', admin)).body.stand));
+
+    // Aufraeumen: Der Testnutzer ist erfunden, seine Bilder haben im Arbeitsstand nichts verloren.
+    bilder.forEach(f => { try { fs.unlinkSync(f); } catch (_) {} });
 
   } finally { srv.kill('SIGTERM'); }
   console.log(`\nBackup-Restore: ${pass} ok, ${fail} fehlgeschlagen`);

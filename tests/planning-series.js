@@ -65,7 +65,7 @@ const uniq = arr => [...new Set(arr)];
     ok('overlap=false bei Einzeltag', r.body.overlap === false);
 
     // 5) never → viele Vorkommen (~24 Monate) + planning_series-Regel
-    const todayISO = new Date().toISOString().slice(0,10);
+    const todayISO = new Date().toLocaleDateString('sv-SE');
     r = await req('POST','/api/planning', admin, { date:todayISO, time_from:'07:00', time_to:'15:30', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'never' } });
     ok('never: > 90 Vorkommen materialisiert (24 Monate)', r.body.count > 90, 'count=' + r.body.count);
 
@@ -94,8 +94,8 @@ const uniq = arr => [...new Set(arr)];
     ok('scope=series: alles entfernt', (await occs()).length === 0);
 
     // 9) „Serie beenden": Anker in der Vergangenheit → Vergangenes bleibt, Zukunft weg
-    const past14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
-    const today2 = new Date().toISOString().slice(0, 10);
+    const past14 = new Date(Date.now() - 14 * 86400000).toLocaleDateString('sv-SE');
+    const today2 = new Date().toLocaleDateString('sv-SE');
     r = await req('POST','/api/planning', admin, { date:past14, time_from:'07:00', time_to:'15:30', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'never' } });
     const sd2 = r.body.series_id;
     const before = (await entriesOf(admin, sd2)).length;

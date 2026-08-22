@@ -627,6 +627,18 @@ function formatDateTimeDE(dt) {
   return `${pad(berlin.getDate())}.${pad(berlin.getMonth() + 1)}.${berlin.getFullYear()}, ${pad(berlin.getHours())}:${pad(berlin.getMinutes())}`;
 }
 
+// Welcher KALENDERTAG (bei uns) steckt in einem Zeitstempel aus der Datenbank?
+// SQLite schreibt `strftime('now')` in UTC — im Sommer zwei Stunden hinter unserer Uhr. Ein
+// naiver Vergleich `zeitstempel.slice(0, 10) === heute` liegt deshalb zwischen Mitternacht und
+// 02:00 Uhr um einen Tag daneben: Ein Aushang, der um 00:30 Uhr geschrieben wurde, traegt
+// UTC noch das Datum von gestern und faellt aus jedem „von heute"-Filter heraus.
+function datumAusZeitstempel(dt) {
+  if (!dt) return '';
+  const d = new Date(String(dt).replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return String(dt).slice(0, 10);
+  return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });   // sv-SE liefert JJJJ-MM-TT
+}
+
 // --- Farb-Hilfen fuer den eigenen Farbwaehler (HSV <-> Hex) ---
 // Normalisiert eine Hex-Eingabe auf '#RRGGBB' (Grossschreibung) oder gibt null zurueck.
 // Akzeptiert mit/ohne '#' und die 3-stellige Kurzform (#abc -> #AABBCC).

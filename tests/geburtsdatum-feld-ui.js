@@ -23,7 +23,11 @@ function req(m, p, t, b) {
       x => { let s = ''; x.on('data', c => s += c); x.on('end', () => { let j = null; try { j = JSON.parse(s); } catch (_) {} res({ status: x.statusCode, body: j, text: s }); }); });
     r.on('error', rej); if (d) r.write(d); r.end(); });
 }
-const jahre = n => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return d.toISOString().slice(0, 10); };
+// Alle Datumsrechnungen hier laufen ueber die LOKALE Uhr, nicht ueber UTC. Der Server prueft
+// Geburtsdaten gegen das Berliner Datum; zwischen Mitternacht und 02:00 Uhr sind das zwei
+// verschiedene Tage, und der Test wuerde aus dem falschen Grund umfallen.
+const lokal = d => d.toLocaleDateString('sv-SE');
+const jahre = n => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return lokal(d); };
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
@@ -96,11 +100,11 @@ const jahre = n => { const d = new Date(); d.setFullYear(d.getFullYear() - n); r
     await formularOeffnen();
     ok('Beim erneuten Öffnen steht der Wert im Feld', (await page.$eval('#um-birth-date', e => e.value)) === erwachsen);
 
-    const heute = new Date().toISOString().slice(0, 10);
+    const heute = lokal(new Date());
     ok('Zukünftige Daten sind schon im Feld gesperrt (max)', (await page.$eval('#um-birth-date', e => e.max)) === heute,
       await page.$eval('#um-birth-date', e => e.max));
     // Gegenprobe am Server: Die Sperre im Feld ist nur Komfort, entschieden wird hinten.
-    const morgen = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+    const morgen = lokal(new Date(Date.now() + 864e5));
     const abgelehnt = await req('PUT', `/api/users/${maxId}`, adminA.token, { birth_date: morgen });
     ok('Der Server weist ein Datum in der Zukunft ab', abgelehnt.status === 400, abgelehnt.status + ' ' + abgelehnt.text);
 
@@ -109,7 +113,7 @@ const jahre = n => { const d = new Date(); d.setFullYear(d.getFullYear() - n); r
       await page.goto(BASIS + '/#/', { waitUntil: 'networkidle0' }); await sleep(600);
       await page.goto(BASIS + '/#/entry/new', { waitUntil: 'networkidle0' });
       await page.waitForSelector('#ef-break'); await sleep(800);
-      const tag = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+      const tag = lokal(new Date(Date.now() - 864e5));
       await page.evaluate(d => { const e = document.getElementById('ef-date'); e.value = d; e.dispatchEvent(new Event('change', { bubbles: true })); }, tag);
       await sleep(1200);
       await page.evaluate(() => {
