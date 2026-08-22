@@ -445,6 +445,8 @@ const AUDIT_LABELS = {
   backup_restore: 'Backup eingespielt',
   user_create: 'Benutzer angelegt',
   user_update: 'Benutzer geändert',
+  password_self_change: 'Passwort selbst geändert',
+  password_self_change_failed: 'Passwort ändern fehlgeschlagen',
   user_password_reset: 'Passwort zurückgesetzt',
   user_deactivate: 'Mitarbeiter ausgestellt',
   user_reactivate: 'Mitarbeiter wiedereingestellt',

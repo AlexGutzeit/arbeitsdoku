@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const { getDb } = require('../database/init');
 const { authenticate, JWT_SECRET } = require('../middleware/auth');
 const { logAudit } = require('../audit');
+const { passwordPolicyError } = require('./users');
 
 const router = express.Router();
 
@@ -79,6 +80,41 @@ router.post('/login', loginLimiter, async (req, res) => {
 // Aktueller Benutzer
 router.get('/me', authenticate, (req, res) => {
   res.json({ user: req.user });
+});
+
+// Eigenes Passwort aendern. Bis hierher konnte das NIEMAND selbst — nur Chef/Admin konnten es
+// fuer andere zuruecksetzen (routes/users.js). Ein Mitarbeiter, dessen Passwort jemand mitgelesen
+// hat, war darauf angewiesen, dass ein Vorgesetzter Zeit hat.
+//
+// Das aktuelle Passwort ist Pflicht: Sonst koennte jemand an einem unbeaufsichtigten, noch
+// angemeldeten Geraet das Passwort aendern und sich den Zugang dauerhaft sichern.
+router.put('/password', authenticate, async (req, res) => {
+  try {
+    const { aktuell, neu } = req.body || {};
+    if (!aktuell || !neu) return res.status(400).json({ error: 'Aktuelles und neues Passwort erforderlich' });
+
+    const db = getDb();
+    const reihe = db.prepare('SELECT password_hash, username FROM users WHERE id = ?').get(req.user.id);
+    if (!reihe) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+
+    if (!(await bcrypt.compare(aktuell, reihe.password_hash))) {
+      logAudit(db, { userId: req.user.id, username: reihe.username, action: 'password_self_change_failed',
+        details: 'Aktuelles Passwort falsch', ip: req.ip });
+      return res.status(401).json({ error: 'Das aktuelle Passwort stimmt nicht' });
+    }
+
+    // Dieselbe Regel wie beim Anlegen und beim Zuruecksetzen — eine Quelle der Wahrheit.
+    const verstoss = passwordPolicyError(neu, reihe.username);
+    if (verstoss) return res.status(400).json({ error: verstoss });
+    if (neu === aktuell) return res.status(400).json({ error: 'Das neue Passwort muss sich vom bisherigen unterscheiden' });
+
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await bcrypt.hash(neu, 10), req.user.id);
+    logAudit(db, { userId: req.user.id, username: reihe.username, action: 'password_self_change', ip: req.ip });
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Passwort aendern fehlgeschlagen:', e.message);
+    res.status(500).json({ error: 'Interner Serverfehler' });
+  }
 });
 
 // Abmelden. Bei stateless JWT gibt es serverseitig nichts „abzumelden" — dieser Endpunkt dient

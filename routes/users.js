@@ -503,3 +503,7 @@ router.delete('/:id', authenticate, authorize('admin'), (req, res) => {
 });
 
 module.exports = router;
+// Die Passwort-Regeln sind die Quelle der Wahrheit — auch fuer „eigenes Passwort aendern"
+// (routes/auth.js). Als Eigenschaft am Router mitgegeben, wie es server.js mit
+// brandingRouter.renderIndex vormacht; ein zweiter Export wuerde das Mount-Muster brechen.
+module.exports.passwordPolicyError = passwordPolicyError;

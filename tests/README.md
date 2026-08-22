@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**155 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**156 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -116,6 +116,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `note-leave.js` | API-Test „Freigabe verlassen": Empfänger entfernt sich selbst aus einer geteilten Notiz; beim |
 | `password-policy-ui.js` | UI-Test (Puppeteer): Passwort-Policy im Anlege-Formular — Live-Checkliste (✓/✗), Feld-Einfärbung (rot/grün), |
 | `password-policy.js` | API-Test (B3): Passwort-Policy beim Anlegen + Zurücksetzen. |
+| `passwort-selbst-aendern.js` | Jeder darf sein eigenes Passwort ändern (PUT /api/auth/password). |
 | `pause-beispiele.js` | Beispiel-Tabelle zur Pausenlogik — gemessen an der echten Oberfläche, nicht ausgerechnet. |
 | `pause-gesetz-ui.js` | Gesetzliche Mindestpause (§ 4 ArbZG) in der Vorbelegung. |
 | `pause-jugendschutz-ui.js` | Zwei Alterstabellen: § 4 ArbZG ab 18, § 11 JArbSchG darunter. |
