@@ -88,9 +88,19 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // Die Antwort einer geglueckten Anmeldung — an zwei Stellen gebraucht (mit und ohne Code).
+function sitzungsStand(db, userId) {
+  try {
+    const r = db.prepare('SELECT stand FROM user_sitzung WHERE user_id = ?').get(userId);
+    return r ? Number(r.stand) : 0;
+  } catch (_) { return 0; }
+}
+
 function anmeldeAntwort(db, user) {
   return {
-    token: jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' }),
+    // `sitzung` ist der Stand aus user_sitzung. Wer „ueberall abmelden" drueckt, erhoeht ihn —
+    // alle Token mit kleinerem Stand sind damit in derselben Sekunde wertlos.
+    token: jwt.sign({ userId: user.id, role: user.role, sitzung: sitzungsStand(db, user.id) },
+      JWT_SECRET, { expiresIn: '24h' }),
     user: {
       id: user.id,
       username: user.username,
@@ -224,6 +234,30 @@ router.put('/password', authenticate, async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error('Passwort aendern fehlgeschlagen:', e.message);
+    res.status(500).json({ error: 'Interner Serverfehler' });
+  }
+});
+
+// Auf ALLEN Geräten abmelden. Der Fall dahinter: Handy verloren, Rechner beim Kunden stehen
+// gelassen, oder das ungute Gefühl nach einem Passwortwechsel.
+//
+// Der Aufrufer bekommt sofort ein frisches Token — sonst wuerde er sich mit dem Klick auch selbst
+// hinauswerfen, was niemand erwartet.
+router.post('/alle-abmelden', authenticate, (req, res) => {
+  try {
+    const db = getDb();
+    db.prepare(`INSERT INTO user_sitzung (user_id, stand, geaendert)
+                VALUES (?, 1, strftime('%Y-%m-%d %H:%M:%f','now'))
+                ON CONFLICT(user_id) DO UPDATE SET stand = stand + 1,
+                  geaendert = strftime('%Y-%m-%d %H:%M:%f','now')`).run(req.user.id);
+    // Geraete-Vertrauen der Zwei-Faktor-Anmeldung faellt mit weg — sonst kaeme ein verlorenes
+    // Handy weiterhin ohne Code hinein, und der Knopf waere nur die halbe Wahrheit.
+    try { require('../zweifaktor').geraeteAlleLoeschen(db, req.user.id); } catch (_) {}
+    logAudit(db, { userId: req.user.id, username: req.user.username, action: 'alle_abgemeldet', ip: req.ip });
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    res.json({ success: true, ...anmeldeAntwort(db, user) });
+  } catch (e) {
+    console.error('Alle abmelden fehlgeschlagen:', e.message);
     res.status(500).json({ error: 'Interner Serverfehler' });
   }
 });

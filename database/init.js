@@ -427,6 +427,8 @@ async function initDatabase() {
   ensureAvatarSchema(db);
   // Geburtstags-Freigabe (idempotent, hier UND im Restore-Pfad)
   ensureGeburtstagSchema(db);
+  // Sitzungs-Zaehler fuer „ueberall abmelden" (idempotent, hier UND im Restore-Pfad)
+  ensureSitzungSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -948,6 +950,7 @@ function ensureAuditSchema(targetDb) {
   ensureTwoFactorSchema(targetDb);
   ensureAvatarSchema(targetDb);
   ensureGeburtstagSchema(targetDb);
+  ensureSitzungSchema(targetDb);
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
@@ -1011,6 +1014,30 @@ function normalizeManagerRights(targetDb) {
 //
 // Eigene Tabelle statt Spalten in `users` — gleiche Begruendung wie bei 2FA und Profilbildern.
 // Fehlende Zeile heisst: nicht freigegeben. Nach dem Update aendert sich also fuer niemanden etwas.
+// „Ueberall abmelden": Anmelde-Token sind zustandslos und laufen einfach nach 24 Stunden ab —
+// widerrufen konnte man sie bisher gar nicht. Das ist genau dann schlecht, wenn ein Handy weg ist.
+//
+// Loesung ohne Sitzungsverwaltung: ein Zaehler je Nutzer. Er wandert als Anspruch ins Token; passt
+// er beim naechsten Zugriff nicht mehr zum gespeicherten Wert, ist das Token wertlos. Ein Klick
+// erhoeht den Zaehler — und alle alten Token sind in derselben Sekunde tot.
+//
+// Fehlender Eintrag heisst 0. Token OHNE den Anspruch (aus der Zeit vor dieser Aenderung) gelten
+// weiter, solange der Zaehler bei 0 steht — niemand wird durch das Update abgemeldet.
+function ensureSitzungSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS user_sitzung (
+        user_id  INTEGER PRIMARY KEY,
+        stand    INTEGER NOT NULL DEFAULT 0,
+        geaendert TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (e) {
+    console.error('ensureSitzungSchema fehlgeschlagen:', e.message);
+  }
+}
+
 function ensureGeburtstagSchema(targetDb) {
   try {
     targetDb.exec(`

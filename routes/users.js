@@ -173,6 +173,104 @@ router.put('/geburtstag-freigabe', authenticate, (req, res) => {
   }
 });
 
+// Die eigenen Stammdaten, nur lesend. Dieselbe Ueberlegung wie beim Geburtsdatum: Ein falscher
+// Wert faellt demjenigen auf, den er betrifft — vorausgesetzt, er bekommt ihn ueberhaupt zu sehen.
+// Bis hierher standen Soll-Stunden, Urlaubsanspruch und Personalnummer nur in der
+// Mitarbeiterverwaltung, die ein Mitarbeiter gar nicht oeffnen kann.
+//
+// Bewusst OHNE Nutzer-Kennung im Pfad: Man liest immer nur die eigenen.
+// MUSS vor "/:id" stehen.
+router.get('/meine-stammdaten', authenticate, (req, res) => {
+  const db = getDb();
+  const lies = (sql, ...a) => { try { return db.prepare(sql).get(...a); } catch (_) { return null; } };
+  const u = lies('SELECT * FROM users WHERE id = ?', req.user.id) || {};
+
+  // Anstellungszeitraeume (Ein- und Austritt). Fehlt die Tabelle auf einem Altstand, bleibt es leer.
+  let zeitraeume = [];
+  try {
+    zeitraeume = db.prepare('SELECT start_date, end_date FROM employment_periods WHERE user_id = ? ORDER BY start_date')
+      .all(req.user.id);
+  } catch (_) {}
+
+  // Urlaubsanspruch: die derzeit gueltige Zeile aus der versionierten Historie, sonst der Wert
+  // am Nutzer.
+  let anspruch = u.vacation_days_per_year;
+  try {
+    const heute = new Date().toLocaleDateString('sv-SE');
+    const zeile = db.prepare(`SELECT days FROM vacation_entitlements WHERE user_id = ? AND valid_from <= ?
+                              ORDER BY valid_from DESC LIMIT 1`).get(req.user.id, heute);
+    if (zeile && zeile.days != null) anspruch = zeile.days;
+  } catch (_) {}
+
+  res.json({
+    stammdaten: {
+      name: u.name,
+      benutzername: u.username,
+      rolle: u.role,
+      personalnummer: u.personnel_no || null,
+      geburtsdatum: u.birth_date || null,
+      soll_stunden_woche: u.target_hours_per_week,
+      arbeitsbeginn: u.work_start || null,     // leer = Firmenwert
+      urlaubstage_jahr: anspruch != null ? anspruch : null,
+      start_ueberstunden: u.start_overtime || 0,
+      anstellung: zeitraeume,
+      rechte: {
+        planen: !!u.can_plan, planen_alle: !!u.can_plan_all,
+        schwarzes_brett: !!u.can_bulletin, dateien_hochladen: !!u.can_upload,
+      },
+    },
+  });
+});
+
+// Auskunft ueber die eigenen Daten (Art. 15 DSGVO) als JSON-Datei.
+//
+// Fuer einen Betrieb mit elf Leuten selten gebraucht — aber es ist ein Recht, und diese App wird
+// auch von Fremdfirmen betrieben. Ausgegeben wird alles, was mit der Person verknuepft ist; die
+// Abfragen sind einzeln gekapselt, damit eine fehlende Tabelle (Altstand) die Auskunft nicht
+// scheitern laesst, sondern nur diesen einen Abschnitt leer laesst.
+// MUSS vor "/:id" stehen.
+router.get('/meine-daten', authenticate, (req, res) => {
+  const db = getDb();
+  const id = req.user.id;
+  const hole = (sql) => { try { return db.prepare(sql).all(id); } catch (_) { return []; } };
+  const holeEins = (sql) => { try { return db.prepare(sql).get(id) || null; } catch (_) { return null; } };
+
+  const nutzer = holeEins('SELECT * FROM users WHERE id = ?') || {};
+  delete nutzer.password_hash;   // niemals herausgeben, auch nicht an den Eigentuemer
+
+  const daten = {
+    erstellt_am: new Date().toISOString(),
+    hinweis: 'Auskunft nach Art. 15 DSGVO über alle zu dieser Person gespeicherten Daten.',
+    stammdaten: nutzer,
+    anstellungszeitraeume: hole('SELECT * FROM employment_periods WHERE user_id = ?'),
+    soll_stunden_historie: hole('SELECT * FROM user_target_hours WHERE user_id = ?'),
+    urlaubsanspruch: hole('SELECT * FROM vacation_entitlements WHERE user_id = ?'),
+    zeiteintraege: hole('SELECT * FROM entries WHERE user_id = ?'),
+    abwesenheiten: hole('SELECT * FROM absences WHERE user_id = ?'),
+    planung: hole('SELECT p.* FROM planning_entries p JOIN planning_assignments a ON a.planning_id = p.id WHERE a.user_id = ?'),
+    notizen: hole('SELECT * FROM notes WHERE user_id = ?'),
+    mit_mir_geteilte_notizen: hole('SELECT note_id, permission FROM note_shares WHERE user_id = ?'),
+    aushaenge_von_mir: hole('SELECT * FROM bulletin_entries WHERE created_by = ?'),
+    bestellungen: hole('SELECT * FROM orders WHERE user_id = ?'),
+    push_einstellungen: holeEins('SELECT * FROM push_prefs WHERE user_id = ?'),
+    push_geraete: hole('SELECT id, user_agent, created_at FROM push_subscriptions WHERE user_id = ?'),
+    geburtstags_freigabe: holeEins('SELECT * FROM geburtstag_freigabe WHERE user_id = ?'),
+    profilbild: holeEins('SELECT * FROM user_avatars WHERE user_id = ?'),
+    // Beim zweiten Faktor NUR die Tatsache, nicht das Geheimnis — das waere ein Schluessel, kein Datum.
+    zwei_faktor: (() => {
+      const z = holeEins('SELECT confirmed_at, aktiv FROM twofa_secrets WHERE user_id = ?');
+      return z ? { eingerichtet_am: z.confirmed_at, aktiv: !!z.aktiv } : null;
+    })(),
+    protokoll_eintraege: hole('SELECT ts, action, details, ip FROM audit_logs WHERE user_id = ?'),
+  };
+
+  logAudit(db, { userId: id, username: req.user.username, action: 'datenauskunft', ip: req.ip });
+  const name = String(req.user.username || 'daten').replace(/[^a-zA-Z0-9_-]/g, '');
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="arbeitsdoku-meine-daten-${name}.json"`);
+  res.send(JSON.stringify(daten, null, 2));
+});
+
 // MUSS vor "/:id" stehen, sonst schluckt die Id-Route das Wort "geburtstage".
 // Wer heute Geburtstag hat. Frueher nur fuer Chef/Admin/Buchhalter — jetzt fuer ALLE, aber mit
 // zwei verschiedenen Sichten:

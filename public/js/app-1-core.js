@@ -827,16 +827,27 @@ function initialenVon(name) {
 // baute die App die Kopfzeile beim Start, bevor die Uebersicht der Bilder eintrifft — der
 // Platzhalter waere dann ohne Kennung und wuerde spaeter nie gefunden. Genau daran ist der
 // Oberflaechen-Test beim ersten Lauf umgefallen.
-function avatarHtml(user, groesse = 28) {
+// `ohneBild` steuert, was passiert, wenn jemand KEIN Profilbild hat (Alex, 22.08.2026):
+//   'weg'       — der Platz bleibt leer, die Ansicht sieht aus wie vor den Profilbildern.
+//                 Das ist die Vorgabe an allen Stellen im Betrieb: Wer kein Bild hochlaedt, aendert
+//                 fuer die anderen nichts, und es entsteht kein halb bebildertes Mischbild.
+//   'initialen' — Kreis mit Initialen in der Personenfarbe. Nur dort, wo eine Flaeche gebraucht
+//                 wird, damit sie nicht leer wirkt: die Vorschau auf „Mein Konto".
+//
+// Der Platzhalter steht auch bei 'weg' im Baum (nur unsichtbar) — sonst waere er beim Aufbau der
+// Seite noch nicht bekannt und koennte spaeter nicht mehr gefuellt werden, wenn die Uebersicht
+// der Bilder eintrifft.
+function avatarHtml(user, groesse = 28, ohneBild = 'weg') {
   // Ab etwa 64 px lohnt die hohe Aufloesung — darunter waere sie nur unnoetiger Datenverkehr.
   const stufe = groesse >= 64 ? 'gross' : 'klein';
   const id = user && (user.id || user.user_id);
   const name = (user && (user.name || user.username)) || '';
   const stand = id ? (S.avatarStand || {})[id] : null;
   const farbe = colorFor(id);
-  return `<span class="avatar" style="width:${groesse}px;height:${groesse}px;font-size:${Math.round(groesse * 0.4)}px;background:${farbe}"`
+  const zeigen = ohneBild === 'initialen' || !!stand;
+  return `<span class="avatar${zeigen ? '' : ' avatar--leer'}" style="width:${groesse}px;height:${groesse}px;font-size:${Math.round(groesse * 0.4)}px;background:${farbe}"`
     + (id ? ` data-avatar="${id}" data-stufe="${stufe}"${stand ? ` data-stand="${esc(stand)}"` : ''}` : '')
-    + ` title="${esc(name)}">${esc(initialenVon(name))}</span>`;
+    + ` title="${esc(name)}">${ohneBild === 'initialen' ? esc(initialenVon(name)) : ''}</span>`;
 }
 
 // Holt die Bilder fuer alle Platzhalter unterhalb von `wurzel` nach. Mehrfach aufrufbar; bereits
@@ -864,6 +875,7 @@ async function avatareLaden(wurzel) {
       }
       el.style.backgroundImage = `url("${url}")`;
       el.classList.add('avatar--bild');
+      el.classList.remove('avatar--leer');   // jetzt gibt es etwas zu sehen
       el.textContent = '';
     } catch (_) { /* offline o. ae. → Initialen bleiben */ }
   }
@@ -1470,6 +1482,9 @@ function render() {
   // Sicherheit — die verlaesslich sperrende Pruefung sitzt serverseitig in middleware/auth.js.
   if (S.zweiFaktor && S.zweiFaktor.einrichtung_noetig && route !== '/konto') { renderKonto(); return; }
   if (route === '/konto') { renderKonto(); return; }
+  // Alte Adresse der Benachrichtigungen: Die Karte ist nach „Mein Konto" gewandert. Wer sie noch
+  // als Lesezeichen hat oder aus einer alten Meldung kommt, landet dort — statt im Nichts.
+  if (route === '/notifications') { navigate('/konto'); return; }
   if (route.startsWith('/entry/new')) renderEntryForm();
   else if (route.startsWith('/entry/continue/')) renderEntryForm(null, route.split('/').pop());
   else if (route.startsWith('/entry/from-project/')) renderEntryForm(null, null, null, route.split('/').pop());
@@ -1500,7 +1515,6 @@ function render() {
   else if (route === '/bulletin/new') renderBulletinForm();
   else if (route.startsWith('/bulletin/edit/')) renderBulletinForm(route.split('/').pop());
   else if (route === '/welcome') renderWelcome();
-  else if (route === '/notifications') renderNotifications();
   else if (route === '/deleted-projects') renderDeletedProjects();
   else if (route === '/deleted-users') renderDeletedUsers();
   else if (route === '/' || route === '/dashboard') renderDashboard();

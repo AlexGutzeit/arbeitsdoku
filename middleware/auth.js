@@ -70,6 +70,18 @@ function authenticate(req, res, next) {
     // Prüfung läuft live gegen die DB: Wiedereinstellen (active=1) lässt dasselbe Token wieder greifen.
     // COALESCE(active,1): alte DBs ohne gesetztes Flag gelten als aktiv ([[feedback_abwaertskompatibilitaet]]).
     if (user.active === 0) return res.status(401).json({ error: 'Account ausgestellt' });
+
+    // „Ueberall abmelden": Passt der Sitzungs-Stand im Token nicht mehr zum gespeicherten, ist das
+    // Token widerrufen. Fehlender Anspruch gilt als 0 — Token aus der Zeit vor dieser Aenderung
+    // bleiben also gueltig, solange niemand den Knopf gedrueckt hat.
+    // Komplett in try/catch: Faellt die Pruefung aus, wird NICHT ausgesperrt.
+    try {
+      const stand = db.prepare('SELECT stand FROM user_sitzung WHERE user_id = ?').get(user.id);
+      if (stand && Number(stand.stand) > Number(decoded.sitzung || 0)) {
+        return res.status(401).json({ error: 'Diese Anmeldung wurde beendet. Bitte neu anmelden.' });
+      }
+    } catch (_) { /* Tabelle fehlt (Altstand) → nichts widerrufen */ }
+
     req.user = user;
 
     // Einrichtungs-Zwang: Verlangt die Rolle einen zweiten Faktor und ist noch keiner eingerichtet,

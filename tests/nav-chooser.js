@@ -44,7 +44,10 @@ function httpGet(p) {
     await page.type('#login-user', 'admin');
     await page.type('#login-pass', pw);
     await page.click('#login-form button[type="submit"]');
-    await page.waitForSelector('a[href="#/notifications"]', { timeout: 8000 });
+    // Wartet nur darauf, dass die Anmeldung durch ist. Frueher stand hier der Menuepunkt
+    // „Benachrichtigungen" — den gibt es seit dem 22.08.2026 nicht mehr, die Karte sitzt auf
+    // „Mein Konto". Jetzt wird auf einen Menuepunkt gewartet, den es sicher gibt.
+    await page.waitForSelector('a[href="#/statistics"]', { timeout: 8000 });
 
     // window.open stubben + localStorage leeren
     await page.evaluate(() => { window.__opened = []; window.open = (u) => { window.__opened.push(u); return null; }; localStorage.removeItem('navApp'); });

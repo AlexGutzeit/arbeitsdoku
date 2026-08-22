@@ -2097,5 +2097,8 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
   user-select: none;
 }
 .avatar--bild { background-color: transparent !important; }
+/* Kein Bild hinterlegt: Der Platzhalter bleibt im Baum (damit er spaeter gefuellt werden
+   kann), nimmt aber keinen Platz ein — die Ansicht sieht aus wie vor den Profilbildern. */
+.avatar--leer { display: none; }
 /* Vorschau auf „Mein Konto" */
 .avatar-gross { width: 96px; height: 96px; font-size: 34px; }

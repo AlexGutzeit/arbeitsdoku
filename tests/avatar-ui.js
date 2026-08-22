@@ -61,23 +61,31 @@ function req(m, p, t, b) {
     await page.click('#login-form button[type="submit"]');
     await sleep(2200);
 
-    console.log('── Ohne Bild: Initialen in der Personenfarbe ──');
+    console.log('── Ohne Bild bleibt die Ansicht wie bisher (Alex, 22.08.2026) ──');
     const anfang = await page.evaluate(() => {
       const a = document.querySelector('#kopf-avatar .avatar');
       if (!a) return null;
       const st = getComputedStyle(a);
-      return { text: a.textContent.trim(), farbe: st.backgroundColor, bild: st.backgroundImage,
-               rund: st.borderRadius, breite: Math.round(a.getBoundingClientRect().width) };
+      return { text: a.textContent.trim(), anzeige: st.display, bild: st.backgroundImage,
+               breite: Math.round(a.getBoundingClientRect().width) };
     });
-    ok('in der Kopfzeile steht ein Avatar', !!anfang, JSON.stringify(anfang));
-    ok('… mit den Initialen', anfang.text === 'MM', JSON.stringify(anfang));   // Max Mustermann
-    ok('… farbig hinterlegt (nicht durchsichtig)', !/rgba\(0, 0, 0, 0\)/.test(anfang.farbe), anfang.farbe);
-    ok('… rund', /50%|\d+px/.test(anfang.rund) && anfang.breite > 10, JSON.stringify(anfang));
-    ok('… und ohne Bild', anfang.bild === 'none', anfang.bild);
+    ok('der Platzhalter steht im Baum (damit er später gefüllt werden kann)', !!anfang, JSON.stringify(anfang));
+    ok('… ist aber unsichtbar', anfang.anzeige === 'none', JSON.stringify(anfang));
+    ok('… nimmt keinen Platz ein', anfang.breite === 0, JSON.stringify(anfang));
+    ok('… und zeigt keine Initialen', anfang.text === '', JSON.stringify(anfang));
+
+    console.log('\n── Auf „Mein Konto" gibt es dagegen eine Vorschau-Fläche ──');
+    await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#avatar-vorschau'); await sleep(900);
+    const vorschauLeer = await page.evaluate(() => {
+      const a = document.querySelector('#avatar-vorschau .avatar');
+      return a ? { text: a.textContent.trim(), breite: Math.round(a.getBoundingClientRect().width) } : null;
+    });
+    ok('dort stehen die Initialen', (vorschauLeer || {}).text === 'MM', JSON.stringify(vorschauLeer));
+    ok('… und sie hat eine Fläche', (vorschauLeer || {}).breite > 50, JSON.stringify(vorschauLeer));
 
     console.log('\n── Bild hochladen ──');
-    await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('#avatar-waehlen'); await sleep(800);
+    await page.waitForSelector('#avatar-waehlen'); await sleep(300);
     const eingabe = await page.$('#avatar-datei');
     await eingabe.uploadFile(bildDatei);
     await sleep(3000);
@@ -117,7 +125,8 @@ function req(m, p, t, b) {
     });
     ok('die Vorschau zeigt wieder Initialen', (weg.vorschau || {}).text === 'MM' && (weg.vorschau || {}).bild === 'none',
       JSON.stringify(weg.vorschau));
-    ok('… und die Kopfzeile ebenfalls', weg.kopf === 'MM', String(weg.kopf));
+    ok('… und die Kopfzeile ist wieder leer, wie vor den Profilbildern',
+      weg.kopf === '' , JSON.stringify(weg));
     ok('der Knopf heißt wieder „Bild hochladen"',
       /Bild hochladen/.test(await page.$eval('#avatar-waehlen', el => el.textContent)));
 
@@ -160,13 +169,13 @@ function req(m, p, t, b) {
       const gefunden = await page.evaluate((sel) => {
         const els = [...document.querySelectorAll(sel)];
         const mitBild = els.filter(e => /blob:/.test(getComputedStyle(e).backgroundImage));
-        const mitInitialen = els.filter(e => e.textContent.trim().length > 0);
-        return { anzahl: els.length, mitBild: mitBild.length, mitInitialen: mitInitialen.length };
+        const ohneBildUnsichtbar = els.filter(e => getComputedStyle(e).display === 'none');
+        return { anzahl: els.length, mitBild: mitBild.length, ohneBildUnsichtbar: ohneBildUnsichtbar.length };
       }, wo);
       ok(`${name}: Avatare sind da`, gefunden.anzahl > 0, JSON.stringify(gefunden));
       ok(`${name}: … mindestens einer zeigt das Bild`, gefunden.mitBild >= 1, JSON.stringify(gefunden));
-      ok(`${name}: … die übrigen zeigen Initialen (nie leer)`,
-        gefunden.mitBild + gefunden.mitInitialen === gefunden.anzahl, JSON.stringify(gefunden));
+      ok(`${name}: … wer kein Bild hat, belegt keinen Platz`,
+        gefunden.ohneBildUnsichtbar === gefunden.anzahl - gefunden.mitBild, JSON.stringify(gefunden));
     }
 
   } finally {

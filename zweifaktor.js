@@ -225,6 +225,10 @@ function geraetMerken(db, userId, kennung, userAgent, ip) {
   } catch (_) { /* ohne Tabelle gibt es eben kein Geraetevertrauen */ }
 }
 
+function geraeteAlleLoeschen(db, userId) {
+  try { db.prepare('DELETE FROM twofa_devices WHERE user_id = ?').run(userId); } catch (_) {}
+}
+
 function geraetBenutzt(db, id, ip) {
   try {
     db.prepare("UPDATE twofa_devices SET last_used_at = strftime('%Y-%m-%d %H:%M:%f','now'), last_ip = ? WHERE id = ?")
@@ -239,5 +243,5 @@ module.exports = {
   zustandLesen, eingerichtet, stillgelegt,
   geheimnisLesen, wartendesGeheimnisLesen, wartendesGeheimnisAnlegen, wartendesUebernehmen,
   stilllegen, wiederAktivieren, schrittVerbrauchen, zuruecksetzen,
-  geraetKennungErzeugen, geraetHash, geraetFinden, geraetMerken, geraetBenutzt,
+  geraetKennungErzeugen, geraetHash, geraetFinden, geraetMerken, geraetBenutzt, geraeteAlleLoeschen,
 };

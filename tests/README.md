@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**163 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**164 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -99,6 +99,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `hoechstzeit-komplex-ui.js` | Die unangenehmen Fälle rund um Anwesenheit, Warnung und Pausenvorschlag. |
 | `hoechstzeit-prodklon.js` | Die Höchstarbeitszeit-Warnung an ECHTEN Daten: warnt sie nur — oder verändert sie etwas? |
 | `jugendschutz-uebergang-prodklon.js` | Der 18. Geburtstag am ECHTEN Datenstand: Kippt die Pausenregel am richtigen Tag? |
+| `konto-sitzung-daten.js` | „Auf allen Geräten abmelden" und die Datenauskunft (Art. 15 DSGVO). |
 | `legal-pages-ui.js` | Puppeteer-UI-Test: Impressum/Datenschutz — Admin füllt in Einstellungen, Links auf Login-Seite (pre-login) |
 | `legal-pages.js` | API-Test: Impressum/Datenschutz als admin/chef-konfigurierbare Settings + öffentlicher Endpunkt. |
 | `limits-ui.js` | UI-Test (Puppeteer) der Admin-Karte „Speicher- & Größenlimits": |

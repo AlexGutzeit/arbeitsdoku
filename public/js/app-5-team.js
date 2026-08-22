@@ -218,21 +218,12 @@ async function syncPushSubscription() {
 }
 
 // Eigene Seite „Benachrichtigungen" (Seitenleisten-Punkt, alle Rollen).
-async function renderNotifications() {
-  $app().innerHTML = layout(`
-    <div class="welcome-page">
-      <div class="welcome-header"><h1>&#128276; Benachrichtigungen</h1></div>
-      <div class="welcome-section" id="push-card">
-        <div class="loading"><div class="spinner"></div></div>
-      </div>
-    </div>`, 'notifications');
-  bindLayout();
-  const fab = document.getElementById('fab-new');
-  if (fab) fab.style.display = 'none';
-  initPushCard();
-}
+// Die eigene Seite „Benachrichtigungen" gibt es nicht mehr — die Karte steht seit dem 22.08.2026
+// auf „Mein Konto" (public/js/app-1-core.js lenkt die alte Adresse dorthin um). An den
+// Einstellungen selbst hat sich dabei NICHTS geaendert: Es sind dieselben Schalter, dieselbe
+// Tabelle, dieselben Werte je Nutzer.
 
-// Baut die Benachrichtigungs-Karte (auf der Benachrichtigungen-Seite).
+// Baut die Benachrichtigungs-Karte (jetzt auf „Mein Konto").
 async function initPushCard() {
   const card = document.getElementById('push-card');
   if (!card) return;
@@ -2020,6 +2011,9 @@ async function renderKonto() {
       <div class="welcome-section" id="konto-2fa"><div class="loading"><div class="spinner"></div></div></div>
       <div class="welcome-section" id="konto-passwort"></div>
       <div class="welcome-section" id="konto-geraete" style="display:none"></div>
+      <div class="welcome-section" id="push-card"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="welcome-section" id="konto-stammdaten"></div>
+      <div class="welcome-section" id="konto-sicherheit"></div>
     </div>`, 'konto');
   bindLayout();
   const fab = document.getElementById('fab-new');
@@ -2028,6 +2022,14 @@ async function renderKonto() {
   await kontoGeburtstagKarte();
   kontoPasswortKarte();
   await kontoZweiFaktorKarte();
+  // Benachrichtigungen: dieselbe Karte wie bisher, nur an einem anderen Ort. initPushCard() baut
+  // sie in #push-card — die Einstellungen jedes Nutzers bleiben unberuehrt, es wird nichts
+  // zurueckgesetzt und nichts neu gefragt.
+  // initPushCard() baut den Digest-Abschnitt selbst mit auf (nur wenn ein Abo aktiv ist) —
+  // ein zusaetzlicher Aufruf waere doppelt und kaeme zu frueh.
+  initPushCard();
+  await kontoStammdatenKarte();
+  kontoSicherheitKarte();
 }
 
 async function kontoAvatarKarte() {
@@ -2038,7 +2040,7 @@ async function kontoAvatarKarte() {
   k.innerHTML = `
     <h3>&#128100; Profilbild</h3>
     <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap">
-      <span id="avatar-vorschau">${avatarHtml(S.user, 96)}</span>
+      <span id="avatar-vorschau">${avatarHtml(S.user, 96, 'initialen')}</span>
       <div style="flex:1; min-width:200px">
         <p style="margin:0 0 .5rem">Erscheint neben deinem Namen und in den Spalten von Planung,
            Zeitnachweis und Auftrags-Board. Ohne Bild stehen dort deine Initialen.</p>
@@ -2130,6 +2132,98 @@ async function kontoGeburtstagKarte() {
   };
   if (zeigen && !zeigen.disabled) zeigen.addEventListener('change', speichern);
   if (alter) alter.addEventListener('change', speichern);
+}
+
+// Eigene Stammdaten, nur lesend. „So hat die Verwaltung dich hinterlegt."
+async function kontoStammdatenKarte() {
+  const k = document.getElementById('konto-stammdaten');
+  if (!k) return;
+  let d;
+  try { d = (await api('GET', '/api/users/meine-stammdaten')).stammdaten; }
+  catch (_) { k.style.display = 'none'; return; }
+
+  const datum = (t) => t ? new Date(t + 'T12:00:00').toLocaleDateString('de-DE') : null;
+  const zeile = (bez, wert, hinweis) => wert === null || wert === undefined || wert === ''
+    ? ''
+    : `<tr><td style="padding:.3rem .75rem .3rem 0; color:var(--text-light); white-space:nowrap">${esc(bez)}</td>
+           <td style="padding:.3rem 0"><strong>${esc(String(wert))}</strong>${hinweis ? ` <span style="color:var(--text-light);font-size:.8rem">${esc(hinweis)}</span>` : ''}</td></tr>`;
+
+  const anstellung = (d.anstellung || []).map(a =>
+    datum(a.start_date) + (a.end_date ? ' – ' + datum(a.end_date) : ' – heute')).join('<br>');
+
+  const rechte = [
+    d.rechte.planen_alle ? 'Planung für alle' : (d.rechte.planen ? 'eigene Planung' : null),
+    d.rechte.schwarzes_brett ? 'Schwarzes Brett' : null,
+    d.rechte.dateien_hochladen ? 'Dateien hochladen' : null,
+  ].filter(Boolean).join(', ');
+
+  k.innerHTML = `
+    <h3>&#128203; Meine Daten</h3>
+    <p style="color:var(--text-light); font-size:.85rem; margin-top:0">
+      So hat die Verwaltung dich hinterlegt. Stimmt etwas nicht, sag im Büro Bescheid —
+      ändern kann es nur Chef oder Admin.</p>
+    <table style="border-collapse:collapse">
+      ${zeile('Name', d.name)}
+      ${zeile('Benutzername', d.benutzername)}
+      ${zeile('Rolle', roleName(d.rolle))}
+      ${zeile('Personalnummer', d.personalnummer)}
+      ${zeile('Geburtsdatum', datum(d.geburtsdatum))}
+      ${zeile('Soll-Stunden', d.soll_stunden_woche != null ? d.soll_stunden_woche + ' h/Woche' : null)}
+      ${zeile('Arbeitsbeginn', d.arbeitsbeginn, '(sonst gilt der Firmenwert)')}
+      ${zeile('Urlaubsanspruch', d.urlaubstage_jahr != null ? d.urlaubstage_jahr + ' Tage/Jahr' : null)}
+      ${zeile('Startsaldo Überstunden', d.start_ueberstunden ? d.start_ueberstunden + ' h' : null)}
+      ${anstellung ? `<tr><td style="padding:.3rem .75rem .3rem 0; color:var(--text-light); vertical-align:top">Anstellung</td>
+                          <td style="padding:.3rem 0"><strong>${anstellung}</strong></td></tr>` : ''}
+      ${zeile('Zusätzliche Rechte', rechte || 'keine')}
+    </table>`;
+}
+
+// „Überall abmelden" und die Datenauskunft — zwei Dinge, die man selten braucht und dann sofort.
+function kontoSicherheitKarte() {
+  const k = document.getElementById('konto-sicherheit');
+  if (!k) return;
+  k.innerHTML = `
+    <h3>&#128272; Sitzungen und Daten</h3>
+    <button class="btn btn-outline btn-sm" id="alle-abmelden">Auf allen Geräten abmelden</button>
+    <div style="font-size:.78rem;color:var(--text-light);margin-top:.25rem;margin-bottom:.9rem">
+      Beendet jede Anmeldung — auch auf einem verlorenen Handy. Hier bleibst du angemeldet.
+      Gemerkte Geräte der Zwei-Faktor-Anmeldung werden dabei ebenfalls zurückgesetzt.
+    </div>
+    <button class="btn btn-outline btn-sm" id="daten-auskunft">Meine Daten herunterladen</button>
+    <div style="font-size:.78rem;color:var(--text-light);margin-top:.25rem">
+      Alles, was über dich gespeichert ist, als Datei (Auskunft nach Art. 15 DSGVO).
+    </div>`;
+
+  document.getElementById('alle-abmelden').addEventListener('click', async () => {
+    const weiter = await confirmModal(
+      'Auf allen Geräten abmelden?\n\n'
+      + 'Jede andere Anmeldung wird sofort ungültig — Handy, Tablet, Rechner beim Kunden. '
+      + 'Auf DIESEM Gerät bleibst du angemeldet.');
+    if (!weiter) return;
+    try {
+      const d = await api('POST', '/api/auth/alle-abmelden');
+      // Frisches Token uebernehmen, sonst wuerde man sich mit dem eigenen Klick hinauswerfen.
+      if (d && d.token) { S.token = d.token; localStorage.setItem('token', d.token); }
+      toast('Alle anderen Anmeldungen wurden beendet', 'success');
+      await kontoZweiFaktorKarte();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  document.getElementById('daten-auskunft').addEventListener('click', async () => {
+    try {
+      // Mit Anmelde-Token holen und als Datei anbieten — ein einfacher Link koennte den Token
+      // nicht mitschicken.
+      const antwort = await fetch('/api/users/meine-daten', { headers: { Authorization: 'Bearer ' + S.token } });
+      if (!antwort.ok) throw new Error('Auskunft nicht möglich');
+      const url = URL.createObjectURL(await antwort.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `arbeitsdoku-meine-daten-${(S.user.username || 'daten')}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast('Datei wird heruntergeladen', 'success');
+    } catch (err) { toast(err.message || 'Auskunft nicht möglich', 'error'); }
+  });
 }
 
 function kontoPasswortKarte() {

@@ -365,9 +365,6 @@ function layout(content, activeNav) {
         <a href="#/konto" class="${activeNav === 'konto' ? 'active' : ''}">
           <span class="icon">&#128100;</span> Mein Konto
         </a>
-        <a href="#/notifications" class="${activeNav === 'notifications' ? 'active' : ''}">
-          <span class="icon">&#128276;</span> Benachrichtigungen
-        </a>
         <a href="#/pdf" class="${activeNav === 'pdf' ? 'active' : ''}">
           <span class="icon">${abrechnungsSicht ? '&#129534;' : '&#128196;'}</span> ${abrechnungsSicht ? 'Abrechnung' : 'PDF-Nachweis'}
         </a>

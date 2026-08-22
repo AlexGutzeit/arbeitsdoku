@@ -51,6 +51,17 @@ async function frischesFenster() {
       page.on('pageerror', e => page.__meldungen.push('Seitenfehler: ' + String(e)));
       return page;
     };
+    // Klicken, aber vorher mittig scrollen.
+    //
+    // Puppeteer scrollt ein Element von sich aus nur so weit in den Sichtbereich, dass es gerade
+    // hineinragt — bei dieser App landet es damit UNTER der klebenden Kopfzeile, und der Klick
+    // trifft den Kopf statt den Knopf. Genau daran ist dieser Abschnitt beim ersten Lauf
+    // gescheitert: kein Absende-Ereignis, keine Anfrage, keine Fehlermeldung.
+    const klick = async (page, sel) => {
+      await page.evaluate((s) => document.querySelector(s).scrollIntoView({ block: 'center' }), sel);
+      await sleep(250);
+      await page.click(sel);
+    };
     const anmelden = async (page, user, passwort) => {
       await page.goto(BASIS + '/', { waitUntil: 'domcontentloaded' });
       await page.evaluate(() => localStorage.clear());
@@ -86,14 +97,14 @@ async function frischesFenster() {
     await page.type('#pw-alt', 'Falsch1234!');
     await page.type('#pw-neu', 'Frisch2026!');
     await page.type('#pw-neu2', 'Frisch2026!');
-    await page.click('#konto-pw-form button[type="submit"]');
+    await klick(page, '#konto-pw-form button[type="submit"]');
     await sleep(1200);
     const fehlerText = await page.$eval('#pw-fehler', el => el.textContent);
     ok('falsches aktuelles Passwort → Meldung', /stimmt nicht/i.test(fehlerText), fehlerText);
     // Richtig
     await page.$eval('#pw-alt', el => { el.value = ''; });
     await page.type('#pw-alt', pw('max'));
-    await page.click('#konto-pw-form button[type="submit"]');
+    await klick(page, '#konto-pw-form button[type="submit"]');
     await sleep(1500);
     ok('mit richtigem alten Passwort klappt es',
       (await req('POST', '/api/auth/login', null, { username: 'max', password: 'Frisch2026!' })).status === 200);
@@ -113,7 +124,7 @@ async function frischesFenster() {
       ok('Einrichten-Knopf ist da', false, JSON.stringify(lage) + ' | Konsole: ' + page.__meldungen.slice(0, 2).join(' | '));
       throw new Error('Abbruch: ' + JSON.stringify(lage));
     }
-    await page.click('#zfa-start');
+    await klick(page, '#zfa-start');
     await page.waitForSelector('#zfa-qr', { timeout: 20000 }); await sleep(600);
     const qr = await page.evaluate(() => {
       const b = document.querySelector('#zfa-qr');
@@ -133,14 +144,14 @@ async function frischesFenster() {
 
     // Falscher Code
     await page.type('#zfa-code', '000000');
-    await page.click('#zfa-verify button[type="submit"]');
+    await klick(page, '#zfa-verify button[type="submit"]');
     await sleep(1200);
     ok('falscher Code → Meldung, noch nicht aktiv',
       /stimmt nicht/i.test(await page.$eval('#zfa-fehler', el => el.textContent)));
     // Richtiger Code
     await page.$eval('#zfa-code', el => { el.value = ''; });
     await page.type('#zfa-code', totp.code(geheimText));
-    await page.click('#zfa-verify button[type="submit"]');
+    await klick(page, '#zfa-verify button[type="submit"]');
     await sleep(1800);
     const nachher = await page.$eval('#konto-2fa', el => el.innerText);
     ok('nach dem richtigen Code steht die Karte auf „Aktiv"', /Aktiv/.test(nachher), nachher.slice(0, 90));
@@ -220,11 +231,11 @@ async function frischesFenster() {
     await anmelden(page, 'buchhalter', pw('buchhalter'));
     await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#zfa-start'); await sleep(600);
-    await page.click('#zfa-start');
+    await klick(page, '#zfa-start');
     await page.waitForSelector('#zfa-qr'); await sleep(700);
     const buGeheim = await page.$eval('#zfa-einrichtung code', el => el.textContent.trim());
     await page.type('#zfa-code', totp.code(buGeheim));
-    await page.click('#zfa-verify button[type="submit"]');
+    await klick(page, '#zfa-verify button[type="submit"]');
     await sleep(2000);
     ok('nach der Einrichtung steht „Aktiv"', /Aktiv/.test(await page.$eval('#konto-2fa', el => el.innerText)));
     ok('… und es gibt den Knopf „Neuen Schlüssel erzeugen"', !!(await page.$('#zfa-neu')));
@@ -232,7 +243,7 @@ async function frischesFenster() {
     // Abschalten
     await frischesFenster();
     await page.type('#zfa-aus-code', totp.code(buGeheim));
-    await page.click('#konto-2fa-aus button[type="submit"]');
+    await klick(page, '#konto-2fa-aus button[type="submit"]');
     await sleep(2000);
     const nachAus = await page.$eval('#konto-2fa', el => el.innerText);
     ok('nach dem Abschalten steht dort NICHT „Einrichten", sondern „Wieder aktivieren"',
@@ -245,13 +256,13 @@ async function frischesFenster() {
     // Mit dem ALTEN Code reaktivieren
     await frischesFenster();
     await page.type('#zfa-code', totp.code(buGeheim));
-    await page.click('#zfa-verify button[type="submit"]');
+    await klick(page, '#zfa-verify button[type="submit"]');
     await sleep(2000);
     ok('der alte Code reaktiviert — kein neues Einlernen nötig',
       /Aktiv/.test(await page.$eval('#konto-2fa', el => el.innerText)));
 
     console.log('\n── „Neuen Schlüssel erzeugen" warnt deutlich ──');
-    await page.click('#zfa-neu');
+    await klick(page, '#zfa-neu');
     await page.waitForSelector('.modal-overlay'); await sleep(400);
     const warnung = await page.$eval('.modal-overlay .modal-body', el => el.innerText);
     ok('ein Dialog erscheint', warnung.length > 0);
@@ -262,7 +273,7 @@ async function frischesFenster() {
     ok('Abbrechen lässt alles, wie es war',
       /Aktiv/.test(await page.$eval('#konto-2fa', el => el.innerText)) && !(await page.$('#zfa-qr')));
     // Bestätigen liefert einen neuen QR
-    await page.click('#zfa-neu');
+    await klick(page, '#zfa-neu');
     await page.waitForSelector('.modal-overlay'); await sleep(300);
     await page.click('.modal-overlay [data-act="ok"]');
     await page.waitForSelector('#zfa-qr', { timeout: 20000 }); await sleep(700);
@@ -271,6 +282,42 @@ async function frischesFenster() {
     ok('… mit einem anderen Schlüssel', neuGeheim !== buGeheim, `${buGeheim.slice(0, 8)}… → ${neuGeheim.slice(0, 8)}…`);
     ok('… und einem Hinweis, dass bis zur Bestätigung der alte gilt',
       /bisheriger/i.test(await page.$eval('#zfa-einrichtung', el => el.innerText)));
+    await page.close();
+
+    console.log('\n── „Mein Konto" versammelt alles Persönliche ──');
+    // Bewusst der Chef: „max" hat inzwischen einen aktiven Authenticator und wuerde nach einem
+    // Code gefragt (auch bei Rolle „aus" — wer freiwillig einrichtet, wird gefragt). Beim Chef ist
+    // er weiter oben abgeschaltet worden, er kommt also direkt hinein.
+    page = await seiteMachen();
+    await anmelden(page, 'chef', pw('chef'));
+    await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#konto-stammdaten'); await sleep(2500);
+    const karten = await page.evaluate(() => ({
+      avatar: !!document.querySelector('#konto-avatar h3'),
+      geburtstag: !!document.querySelector('#konto-geburtstag h3'),
+      passwort: !!document.querySelector('#konto-passwort h3'),
+      zweiFaktor: !!document.querySelector('#konto-2fa h3'),
+      benachrichtigungen: !!document.querySelector('#push-card h3'),
+      stammdaten: !!document.querySelector('#konto-stammdaten h3'),
+      sicherheit: !!document.querySelector('#konto-sicherheit h3'),
+    }));
+    for (const [name, da] of Object.entries(karten)) ok(`Karte „${name}" ist da`, da, JSON.stringify(karten));
+
+    ok('das eigene Geburtsdatum steht dort',
+      /hinterlegt|kein Geburtsdatum/.test(await page.$eval('#konto-geburtstag', el => el.innerText)));
+    ok('die Stammdaten zeigen die Soll-Stunden',
+      /Soll-Stunden/.test(await page.$eval('#konto-stammdaten', el => el.innerText)));
+    ok('„Auf allen Geräten abmelden" ist da', !!(await page.$('#alle-abmelden')));
+    ok('„Meine Daten herunterladen" ist da', !!(await page.$('#daten-auskunft')));
+
+    console.log('\n── Der Menüpunkt „Benachrichtigungen" ist verschwunden … ──');
+    ok('… aus dem Menü', !(await page.$('a[href="#/notifications"]')));
+    ok('… aber die alte Adresse führt nach „Mein Konto" (Lesezeichen bleiben heil)',
+      await page.evaluate(async () => {
+        location.hash = '#/notifications';
+        await new Promise(r => setTimeout(r, 1200));
+        return location.hash === '#/konto';
+      }));
     await page.close();
 
   } finally {
