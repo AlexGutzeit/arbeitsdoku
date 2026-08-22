@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**152 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**154 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -90,6 +90,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `geburtsdatum-feld-ui.js` | Das Geburtsdatums-FELD in Mitarbeiter → bearbeiten — über die echte Oberfläche bedient. |
 | `geburtstag-eigener-ui.js` | Gratulation für das Geburtstagskind selbst (Alex, 08.08.2026). |
 | `geburtstag-ui.js` | Geburtstags-Einblendung auf der Willkommensseite. |
+| `geheimnis-krypto.js` | Verschlüsselung der TOTP-Geheimnisse und der Notfall-Schalter (geheimnis.js). |
 | `hardening-b5b6.js` | API-Test (B5 + B6): |
 | `hoechstarbeitszeit-ui.js` | Hinweis bei Überschreitung der gesetzlichen Höchstarbeitszeit. |
 | `hoechstzeit-komplex-ui.js` | Die unangenehmen Fälle rund um Anwesenheit, Warnung und Pausenvorschlag. |
@@ -179,6 +180,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `trash-access.js` | Papierkorb-Zugriff: „Chef voll, Mitarbeiter Eigenes". |
 | `trash-matrix-ui.js` | KOMPLEXER Papierkorb-/Lösch-Matrix-Test (Puppeteer) — Abwesenheits- UND Eintrags-Logik über alle Rollen. |
 | `trash-nav-ui.js` | UI-Smoke (Puppeteer): Papierkorb-Navigation je Rolle. |
+| `twofa-schema.js` | Die 2FA-Tabellen müssen auf JEDEM Altstand crashfrei nachwachsen — und zwar auf BEIDEN Wegen. |
 | `uebernahme-zurueck-ui.js` | Puppeteer-Test: „Zurück" nach dem Übernehmen einer Planung führt dorthin zurück, wo das |
 | `ueberschneidung-kette-ui.js` | Drei sich überschneidende Aufträge — Pausenvorschlag UND Arbeitszeit-Warnung, Schritt für Schritt. |
 | `user-hours-gleichheit.js` | Gleichheitsbeweis fuer die Zusammenlegung der Stunden-Rechnung (C1). |

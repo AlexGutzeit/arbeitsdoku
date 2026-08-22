@@ -421,6 +421,8 @@ async function initDatabase() {
   ensureVacationSchema(db);
   // Abrechnungs-Abschluss (idempotent, hier UND im Restore-Pfad)
   ensureClosureSchema(db);
+  // Zwei-Faktor-Anmeldung (idempotent, hier UND im Restore-Pfad)
+  ensureTwoFactorSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -939,6 +941,7 @@ function ensureAuditSchema(targetDb) {
   ensureProjectSchema(targetDb);
   ensureVacationSchema(targetDb);
   ensureClosureSchema(targetDb);
+  ensureTwoFactorSchema(targetDb);
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
@@ -979,6 +982,47 @@ function normalizeManagerRights(targetDb) {
 // Web-Push: Geraete-Abos (ein Eintrag pro Geraet, ein Nutzer kann mehrere haben) +
 // Kategorie-Schalter pro Nutzer. Beide idempotent — laufen bei Init UND nach Backup-Restore,
 // damit alte DB-Staende crashfrei hochgezogen werden ([[feedback_abwaertskompatibilitaet]]).
+// Zwei-Faktor-Anmeldung (TOTP). Bewusst EIGENE Tabellen statt neuer Spalten in `users`:
+// middleware/auth.js liest bei JEDER Anfrage eine feste Spaltenliste aus `users` — eine
+// fehlgeschlagene Migration dort sperrt die ganze Firma aus (ist hier schon einmal passiert,
+// siehe den addCol-Helfer weiter unten). Schlaegt DIESE Migration fehl, ist schlimmstenfalls 2FA
+// nicht verfuegbar; niemand verliert den Zugang.
+//
+// Idempotent, wird im Init-Pfad UND im Restore-Pfad aufgerufen (wie ensurePushSchema).
+function ensureTwoFactorSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS twofa_secrets (
+        user_id      INTEGER PRIMARY KEY,
+        secret_enc   TEXT NOT NULL,
+        confirmed_at TEXT,
+        last_step    INTEGER DEFAULT 0,
+        created_at   TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE TABLE IF NOT EXISTS twofa_devices (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id      INTEGER NOT NULL,
+        token_hash   TEXT NOT NULL UNIQUE,
+        user_agent   TEXT DEFAULT '',
+        last_ip      TEXT DEFAULT '',
+        confirmed_at TEXT NOT NULL,
+        last_used_at TEXT,
+        created_at   TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f','now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_twofa_devices_user ON twofa_devices(user_id);
+    `);
+    // last_step kam spaeter dazu (Replay-Riegel): Altstaende nachziehen.
+    const spalten = targetDb.prepare("PRAGMA table_info(twofa_secrets)").all().map(c => c.name);
+    if (!spalten.includes('last_step')) {
+      targetDb.exec("ALTER TABLE twofa_secrets ADD COLUMN last_step INTEGER DEFAULT 0");
+    }
+  } catch (e) {
+    console.error('ensureTwoFactorSchema fehlgeschlagen:', e.message);
+  }
+}
+
 function ensurePushSchema(targetDb) {
   try {
     targetDb.exec(`
