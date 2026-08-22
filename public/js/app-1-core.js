@@ -1488,6 +1488,11 @@ window.addEventListener('hashchange', () => {
 });
 
 function render() {
+  // Die Sprechblase haengt an document.body, nicht an .main — ein Seitenwechsel raeumt sie also
+  // NICHT mit weg. Sichtbar geworden auf einem Bildschirmfoto: Der Tooltip eines Planungseintrags
+  // stand noch auf der Willkommensseite. Normalerweise nimmt ihn `mouseleave`, aber nach dem
+  // Wechsel gibt es das Element, an dem der Zeiger haengt, gar nicht mehr — es feuert nie.
+  hideTooltip();
   const r0 = getRoute();
   // Rechtsseiten sind bewusst OHNE Login erreichbar (Impressumspflicht) → vor dem Auth-Guard behandeln.
   if (r0 === '/impressum' || r0 === '/datenschutz') { renderLegal(r0.slice(1)); return; }
