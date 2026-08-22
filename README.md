@@ -48,6 +48,7 @@ es geht; die Abschnitte darunter beschreiben es im Einzelnen.
 
 **Einstieg**
 
+- [👤 Mein Konto](#-mein-konto) — Eigenes Passwort ändern und die Zwei-Faktor-Anmeldung einrichten. Für **jede** Rolle.
 - [🏠 Willkommen](#-willkommen) — Persönliches Dashboard: anstehende Planung, eigene Abwesenheiten, Wetter, Geburtstage.
 
 **Zeit erfassen und abrechnen**
@@ -74,7 +75,7 @@ es geht; die Abschnitte darunter beschreiben es im Einzelnen.
 **Verwaltung**
 
 - [👥 Mitarbeiter](#-mitarbeiter) — Konten, Soll-Stunden, Urlaubsanspruch, Ein- und Austritt.
-- [⚙️ Einstellungen](#-einstellungen) — Arbeitszeit-Vorgaben, Branding, Rechtstexte, Backup.
+- [⚙️ Einstellungen](#-einstellungen) — Arbeitszeit-Vorgaben, Zwei-Faktor-Pflicht je Rolle, Branding, Rechtstexte, Backup.
 - [📜 Audit-Log](#-audit-log) — Wer hat wann was geändert.
 - [🗑️ Papierkorb](#-papierkorb) — Gelöschtes bleibt erhalten und ist wiederherstellbar (GoBD).
 
@@ -86,6 +87,38 @@ Persönliches Dashboard: anstehende Planung, eigene Abwesenheiten, Schnellüberb
 **morgen**. Jeder Tag der Liste lässt sich **antippen** und zeigt dann seinen **stündlichen** Verlauf – so weit reichen die hochauflösenden Modelle, darüber hinaus gibt es keine belastbaren Vorhersagedaten. Ohne hinterlegten Ort erscheint statt des Wetters ein Hinweis. **🎂 Eigener Geburtstag:** Wer selbst Geburtstag hat, sieht ganz oben *„Alles Gute zum Geburtstag! — Schön, dass du da bist."* — **jede** Person, auch Mitarbeiter, und **nur sie selbst**. Ohne Alter und ohne Absender, denn fremde Geburtstage bekommt das Team gar nicht angezeigt. Dafür wird nichts vom Server geholt: Das eigene Geburtsdatum liegt für die Pausen-Vorbelegung ohnehin im Browser. Wer am **29. Februar** geboren ist, wird in Nicht-Schaltjahren am 28. gefeiert, mit Vermerk. **🎂 Geburtstag heute:** Hat jemand Geburtstag, steht ganz oben *„Tina Torte wird heute 36 🎉"* — wie die Schwarzes-Brett-Einblendungen einfach da, nichts zum Wegklicken, am nächsten Tag von selbst weg. **Nur Chef/Admin/Buchhalter** sehen das: Diese drei bekommen das Geburtsdatum über die Mitarbeiterliste ohnehin, eine Anzeige für die **ganze Belegschaft** wäre dagegen einwilligungspflichtig (§ 26 BDSG trägt sie nicht). Der eigene Geburtstag wird ausgelassen, ausgestellte Mitarbeiter erscheinen nicht, und das Geburtsdatum selbst verlässt den Server nicht — übertragen werden nur Name und Alter. Wer am **29. Februar** geboren ist, erscheint in Nicht-Schaltjahren am 28. mit dem Vermerk „Geboren am 29. Februar — den gibt es dieses Jahr nicht, deshalb heute."
 
 ### Zeit erfassen und abrechnen
+
+#### 👤 Mein Konto
+
+Die persönliche Seite — für **alle** Rollen sichtbar, auch für Mitarbeiter.
+
+**Passwort ändern:** Jeder ändert sein eigenes Passwort selbst; das aktuelle Passwort ist dabei
+Pflicht (sonst könnte an einem unbeaufsichtigten, noch angemeldeten Gerät jemand den Zugang
+übernehmen). Es gelten dieselben Regeln wie beim Anlegen, mit derselben Live-Prüfliste.
+**Der Weg über Chef/Admin bleibt daneben bestehen** — für vergessene Passwörter.
+
+**Zwei-Faktor-Anmeldung (TOTP):** Zusätzlich zum Passwort ein 6-stelliger Code aus einer
+Authenticator-App (Google Authenticator, Aegis, 2FAS, Microsoft Authenticator …). Einrichtung per
+QR-Code; wer nicht scannen kann — etwa weil die App auf demselben Handy läuft — tippt den
+darunter angezeigten Schlüssel ab. Erst ein gültiger Code macht die Einrichtung scharf; ein
+Abbruch dazwischen verbaut nichts.
+
+**Geräte ohne Code-Abfrage:** Wer beim Anmelden „Diesem Gerät vertrauen" wählt, sieht das Gerät
+hier aufgelistet und kann ihm das Vertrauen einzeln oder in einem Rutsch wieder entziehen. Ohne
+diese Liste wäre ein verlorenes Handy bei „einmal pro Gerät" dauerhaft berechtigt.
+
+**Wie oft ein Code verlangt wird, entscheidet die Rolle** — einstellbar in
+[⚙ Einstellungen](#-einstellungen): *aus · bei jeder Anmeldung · einmal pro Gerät · täglich ·
+wöchentlich · monatlich*. Ist die Zwei-Faktor-Anmeldung für eine Rolle vorgeschrieben und noch
+nicht eingerichtet, führt die App die betroffene Person auf diese Seite und lässt sie erst weiter,
+wenn ein Code bestätigt wurde. Abschalten kann man den zweiten Faktor nur, wenn die eigene Rolle
+ihn nicht verlangt — und nur mit gültigem Code.
+
+**Handy verloren?** Chef oder Admin setzen die Zwei-Faktor-Anmeldung im Mitarbeiter-Dialog zurück
+(neben „Passwort zurücksetzen"). Das löscht den Authenticator **und alle gemerkten Geräte**; die
+Person richtet ihn danach neu ein. An ein **Admin-Konto** kommt nur ein Admin — wie beim Passwort.
+Verliert der einzige Admin sein Handy, hilft der Notfall-Schalter
+(siehe [Konfiguration](#konfiguration-env-variablen)).
 
 #### 📊 Zeitnachweis
 
@@ -180,6 +213,20 @@ Dateiablage mit Ordnern/Unterordnern. Upload (PDF, MS-Office `docx/xlsx/pptx`, O
 Benutzerverwaltung (anlegen/bearbeiten/Rolle setzen), **Soll-Stunden pro Woche** (mit Historie), Start-Überstunden, Passwort zurücksetzen, Einzelrechte vergeben. **Arbeitsbeginn** je Mitarbeiter (optional, leer = Firmenwert aus den Einstellungen) — nur für Ausnahmen, die früher oder später anfangen. **Geburtsdatum** (optional): einziger Zweck ist die Pausen-Vorbelegung — daraus entscheidet die App, ob das Arbeitszeitgesetz oder das Jugendarbeitsschutzgesetz gilt. **Leer heißt „unter 18"**, nicht „unbekannt, also Erwachsener"; ein Hinweis am Feld sagt das. Zukünftige und unmögliche Daten werden abgewiesen, jede Änderung steht im Protokoll. Bei allen Stunden-/Tage-Feldern sind „**,**" und „**.**" als Dezimaltrenner erlaubt (z. B. `7,5`); eine unlesbare Eingabe wird **gemeldet** statt still als 0 gespeichert. **Passwort-Anforderungen** (beim Anlegen & Zurücksetzen, serverseitig erzwungen): mind. 8 Zeichen, je 1× Groß-/Kleinbuchstabe, Ziffer und Sonderzeichen, und ≠ Benutzername – die Bedingungen werden beim Tippen **live** angezeigt (grüner Haken/rotes ✗, Feld färbt sich rot/grün). Bestehende Anmeldungen bleiben davon unberührt. **Urlaubsanspruch (versioniert):** je Mitarbeiter lassen sich – analog zu den Soll-Stunden – **mehrere Anspruchszeilen** „X Tage, **gültig ab** Datum" per „+" anlegen und rückwirkend ändern/löschen (z. B. Start-Anspruch bei Eintritt, Erhöhung im 2. Jahr). **Ohne Eintrag zählt 0** (kein Default), und solange keine Zeile existiert, bleibt überall die **alte Ansicht** (nur genommene Tage) – die Resturlaub-Anzeigen erscheinen erst mit hinterlegtem Anspruch. Jede Zeile trägt ihre **eigene Verfall-Regel** – Resturlaub verfällt **nie / zum Jahreswechsel / an einem Datum im Folgejahr** –, sodass sich der Modus über die Zeit **umstellen lässt, ohne die Vergangenheit zu verändern** (ein Moduswechsel wirkt nur ab dem jeweiligen „gültig ab" vorwärts). Der Anspruch ist **jahresbezogen**: pro Jahr gilt die Zeile mit dem **jüngsten „gültig ab" bis Jahresende** (mehrere Zeilen im selben Jahr → die späteste gewinnt); die Rechnung beginnt am **frühesten** „gültig ab"-Jahr, nicht bei der Mitarbeiter-Anlage. Ein Feld **„Start-Resturlaub (Übertrag)"** trägt den Stand **vor** Einführung der App als einmaligen Übertrag ins erste erfasste Jahr (analog Start-Überstunden) – so lassen sich Bestands-Mitarbeiter ohne Nachtragen aller Vorjahre übernehmen. Eine Stand-Anzeige mit Jahr-Auswahl zeigt sofort genommen/geplant/verbleibend. **Ausstellen statt Löschen:** ausgeschiedene Mitarbeiter werden mit Austrittsdatum ausgestellt (kein Login mehr), ihre Zeiten/Abwesenheiten/Planungen bleiben aber vollständig erhalten und für ihren Anstellungszeitraum in Statistik und PDF berücksichtigt. Wiedereinstellen ist jederzeit möglich (auch mehrfach) – die Lücke zählt 0 Soll-Stunden. *(Chef/Admin)*
 
 #### ⚙️ Einstellungen
+
+**Zwei-Faktor-Anmeldung je Rolle** *(Chef/Admin; die Zeile für Administratoren nur Admin)*: Für jede
+der vier Rollen lässt sich einstellen, wie oft ein Code aus der Authenticator-App verlangt wird —
+*aus · bei jeder Anmeldung · einmal pro Gerät · täglich · wöchentlich · monatlich*. Vorgabe ist
+**aus**; nach einem Update ändert sich also für niemanden etwas, bis jemand bewusst umstellt.
+
+Beim Scharfschalten fragt die App nach und nennt die betroffenen Rollen — denn ab diesem Moment
+landet **jeder** in dieser Rolle, der noch keinen Authenticator hat, beim nächsten Aufruf auf
+[👤 Mein Konto](#-mein-konto) und kommt vorher nicht weiter, auch mitten in der Arbeit.
+Die Pflicht für **Administratoren** kann nur ein Administrator ändern — sonst könnte ein Chef
+ausgerechnet die Absicherung des stärksten Kontos abschalten.
+
+Zur Häufigkeit: Eine Anmeldung gilt 24 Stunden. „Bei jeder Anmeldung" heißt deshalb in der Praxis
+höchstens einmal täglich — und sofort wieder, wenn sich jemand abmeldet.
 
 **Arbeitszeiten** (Arbeitsbeginn, Arbeitszeit pro Tag, Pause pro Tag — Vorgabe 07:00 / 8 h / 30 min): dienen als **Vorbelegung** für die Planung (von/bis/Pause) und für den ersten Zeiteintrag eines Tages. Eine Vorschauzeile zeigt beim Tippen, was die drei Werte zusammen ergeben. **Erfasste Zeiten und Soll-Stunden bleiben davon unberührt.** White-Label-Branding (Logo + App-Icon; **max. Bild-Dateigröße admin-einstellbar, Default 5 MB**), **Impressum & Datenschutz** (konfigurierbare Rechtstexte, erscheinen als Links auf Login-Seite + Menü), Dokumenten-Speicherlimit (Gesamt + pro Datei), Datenbank-Backup/Restore. *(Chef/Admin; Größenlimits nur Admin)*
 
@@ -445,7 +492,20 @@ Konfiguration über die Datei `.env` (Vorlage: `.env.example`).
 | `DB_PATH` | nein | `./data/arbeitsdoku.db` | Pfad der SQLite-Datenbankdatei. |
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` | nein | – | Schlüsselpaar für **Push-Benachrichtigungen** (Web Push). Einmalig erzeugen mit `node -e "console.log(require('web-push').generateVAPIDKeys())"`. Fehlen sie, ist Push inaktiv. |
 | `VAPID_SUBJECT` | nein | `mailto:admin@example.com` | Kontaktangabe (`mailto:` oder `https:`) für den Push-Dienst. |
+| `TWOFA_KEY` | nein, **empfohlen** | aus `JWT_SECRET` abgeleitet | Schlüssel, mit dem die Authenticator-Geheimnisse in der Datenbank verschlüsselt werden. 32 Byte als hex oder base64 (`openssl rand -base64 32`). Ohne diesen Wert wird einer aus `JWT_SECRET` abgeleitet — dann gilt: **Wer `JWT_SECRET` austauscht, macht alle Authenticator-Einrichtungen ungültig.** Der Wert gehört auf **jede** Anlage (auch die Zweitanlage) und liegt **nicht** im Backup. |
+| `TWOFA_AUS` | nein | – | **Notfall-Schalter.** Auf `1` gesetzt wird kein zweiter Faktor mehr verlangt: kein Code beim Anmelden, keine erzwungene Einrichtung. Es wird nichts gelöscht — Variable entfernen, Dienst neu starten, alles greift wie zuvor. |
 | `CHROME_BIN` | nein | – | Nur für die Browser-Tests (Puppeteer), nicht für den Betrieb. |
+
+> **Ausgesperrt? So kommt man zurück.**
+> Verliert der **einzige Administrator** sein Handy, kann ihn niemand zurücksetzen — er kommt ja
+> nicht hinein, um es selbst zu tun. Der Weg zurück:
+> 1. Auf dem Server in die `.env` die Zeile `TWOFA_AUS=1` eintragen
+> 2. Dienst neu starten (`sudo systemctl restart arbeitsdoku`)
+> 3. Normal anmelden, unter **Mein Konto** den Authenticator neu einrichten
+> 4. `TWOFA_AUS` wieder entfernen und erneut neu starten
+>
+> Es geht dabei nichts verloren. Wer keinen Serverzugriff haben möchte, führt schlicht **zwei
+> Administrator-Konten** — dann setzt einer den anderen zurück.
 
 ---
 

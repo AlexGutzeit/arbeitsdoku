@@ -14,6 +14,63 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-22 · Zwei-Faktor-Anmeldung — was dabei zweimal fast schiefging
+Die App stand mit Benutzername und Passwort allein im Netz. Neu ist ein zweiter Faktor (TOTP), je
+Rolle unterschiedlich oft verlangt, plus die erste persönliche Seite der App („Mein Konto") — die
+es ohnehin brauchte, denn ein Mitarbeiter konnte bis dahin nicht einmal sein eigenes Passwort
+ändern.
+
+**TOTP selbst gebaut statt Paket.** Nicht aus Prinzip: RFC 6238 liefert **offizielle Testvektoren**
+mit. Eigener Code lässt sich damit gegen die Norm beweisen, eine Fremdbibliothek müsste man
+glauben — und wäre eine Lieferkette mehr in einem öffentlichen Repo. Nur für den QR-Code kam eine
+Abhängigkeit dazu (`qrcode-svg`, MIT, **null** Unter-Abhängigkeiten); einen QR-Encoder selbst zu
+schreiben hieße Reed-Solomon nachzubauen.
+
+**Zwei Funde, die den Entwurf geprägt haben — beide älter als dieses Feature:**
+
+1. `authenticate` prüfte nur die Unterschrift und las `userId`. Jedes mit demselben Geheimnis
+   signierte Token kam damit überall durch — das **60-Sekunden-SSE-Ticket war eine Minute lang ein
+   vollwertiger Zugangs-Token für die gesamte API**. Der Wächter ist eine Verbotsliste
+   (`sse`, `pending2fa`): Wer künftig einen weiteren Sonder-Token einführt und ihn nicht einträgt,
+   reißt die Lücke wieder auf.
+2. `ensureAuditSchema` läuft **nur im Restore-Pfad**, nie beim normalen Start. Wer eine Migration
+   dort einhängt, baut etwas, das auf dem laufenden Produktivserver nie greift. Vorbild ist
+   `ensurePushSchema` mit seinen **zwei** Aufrufstellen.
+
+**Die 2FA-Felder liegen in eigenen Tabellen, nicht in `users`.** `authenticate` liest bei jeder
+Anfrage eine feste Spaltenliste aus `users`; eine fehlgeschlagene Migration dort sperrt die ganze
+Firma aus (ist hier schon einmal passiert). Scheitert die 2FA-Migration, ist schlimmstenfalls 2FA
+nicht verfügbar. Dieselbe Leitlinie zieht sich durch: **jeder 2FA-Fehler wird geschluckt und
+bedeutet „kein zweiter Faktor", nie „kein Zugang".**
+
+**Was der Browser-Test fand und kein API-Test finden konnte:**
+Falsches Passwort und falscher Code antworteten mit **401** — und die App meldet bei jedem 401
+automatisch ab (`app-1-core.js`). Ein Tippfehler hätte den Nutzer aus der Anwendung geworfen. Seither
+gilt: **400 für Fehleingaben eines angemeldeten Nutzers, 401 nur für ein ungültiges Sitzungs-Token.**
+Die API-Tests hatten brav „401 ✓" geprüft und die Folge nicht gesehen.
+Ebenfalls dort aufgeschlagen: Element-Kennungen wie `2fa-start` sind **ungültiges CSS** — eine
+Kennung darf nicht mit einer Ziffer beginnen. `getElementById` verzeiht es, `querySelector` wirft,
+und eine CSS-Regel hätte nie gegriffen.
+
+**Eine Gegenprobe, die nichts bewies.** Die Prüfung „ein voller Token taugt nicht als
+Zwischen-Token" schickte einen *falschen* Code mit — sie scheiterte am Code, nicht an der
+Token-Art. Der Riegel liess sich entfernen, ohne dass der Test es merkte. Erst mit **gültigem** Code
+beißt sie. Merke: Eine Verneinung muss so gebaut sein, dass **nur** die geprüfte Eigenschaft den
+Unterschied macht.
+
+**Und einer, der aus dem falschen Grund grün war:** „die Änderung greift sofort trotz
+Zwischenspeicher" ging über `GET /api/settings` — das liest direkt aus der Datenbank und am
+Zwischenspeicher vorbei. Ersetzt durch die kleinere, ehrliche Aussage; belegt wird es jetzt vom
+Anmelde-Test, der `modusFuerRolle` wirklich benutzt.
+
+**Test sperrte sich selbst aus:** `twofa-regeln.js` stellte `twofa_admin` scharf und bekam ab da
+403 auf alles. Richtiges Verhalten — der Zwang greift sofort. Der Test richtet jetzt vorher einen
+Authenticator ein. Wer 2FA im Test scharf schaltet, muss das mitbedenken.
+
+**Notfall:** `TWOFA_AUS=1` setzt den zweiten Faktor firmenweit aus, ohne etwas zu löschen. Das ist
+der einzige Weg zurück, wenn der einzige Admin sein Handy verliert — steht deshalb im README, nicht
+in einer Fußnote.
+
 ### 2026-08-18 · Meldung bei geänderter Notiz — und warum der Coin nicht am Push hängt
 Alex meldete: Kollege bearbeitet eine mit Schreibrecht geteilte Notiz, der Eigentümer bekommt nichts,
 obwohl der Kategorie-Schalter „Notizen" an ist. Am Produktivstand nachgesehen (nur lesend, über eine
