@@ -195,7 +195,14 @@ async function frischerCode(geheim) {
       ok(`erreichbar bleibt: ${name}`, (await req('GET', pfad, chef.body.token)).status === 200);
     }
     ok('erreichbar bleibt: Einrichtung starten', (await req('POST', '/api/auth/2fa/setup', chef.body.token)).status === 200);
+    // Die uebrigen Karten der Konto-Seite muessen ebenfalls laden — sonst steht derjenige, den wir
+    // gerade zur Einrichtung zwingen, vor einer halb kaputten Seite.
+    for (const [name, pfad] of [['Profilbilder', '/api/avatare'], ['eigene Stammdaten', '/api/users/meine-stammdaten'],
+                                ['Geburtstags-Freigabe', '/api/users/geburtstag-freigabe'], ['Push-Einstellungen', '/api/push/prefs']]) {
+      ok(`erreichbar bleibt: ${name}`, (await req('GET', pfad, chef.body.token)).status === 200, pfad);
+    }
     ok('gesperrt bleibt: der Live-Draht', (await req('GET', '/api/events/ticket', chef.body.token)).status === 403);
+    ok('gesperrt bleibt: fremde Nutzerliste', (await req('GET', '/api/users', chef.body.token)).status === 403);
     // Einrichten → Sperre weg
     const chefSetup = await req('POST', '/api/auth/2fa/setup', chef.body.token);
     const chefVerify = await req('POST', '/api/auth/2fa/verify', chef.body.token,

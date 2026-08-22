@@ -34,6 +34,15 @@ const GATE_FREI = [
   '/api/auth/logout',
   '/api/auth/password',
   '/api/auth/2fa',        // alles darunter
+  // Die uebrigen Karten der Seite „Mein Konto". Ohne sie stuende der Nutzer, den wir gerade zur
+  // Einrichtung zwingen, vor einer halb kaputten Seite: Profilbild, Geburtstag, Stammdaten und
+  // Benachrichtigungen wuerden mit 403 abgewiesen.
+  // Alles hier sind EIGENE Daten und aendert nichts an der Absicherung — die Datenrouten
+  // (Zeiten, Planung, Auftraege, SSE) bleiben gesperrt.
+  '/api/avatare',
+  '/api/users/meine-stammdaten',
+  '/api/users/geburtstag-freigabe',
+  '/api/push',
 ];
 function gateFrei(url) {
   const pfad = String(url || '').split('?')[0];
