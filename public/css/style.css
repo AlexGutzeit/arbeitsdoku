@@ -2100,5 +2100,19 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 /* Kein Bild hinterlegt: Der Platzhalter bleibt im Baum (damit er spaeter gefuellt werden
    kann), nimmt aber keinen Platz ein — die Ansicht sieht aus wie vor den Profilbildern. */
 .avatar--leer { display: none; }
+/* Bild und Name in einer Tabellenzelle.
+   Das display:flex gehoert AUF DEN INHALT, nicht auf die Zelle: Ein <td> mit display:flex ist
+   keine Tabellenzelle mehr und verhandelt seine Breite nicht mehr mit der Kopfzeile. */
+.zelle-mit-bild { display: inline-flex; align-items: center; gap: .5rem; }
+
+/* Die Namensspalte der Mitarbeiter-Liste behaelt ein Mindestmass. Ohne das quetscht
+   `table { width: 100% }` die Spalte auf jedem schmalen Bildschirm so weit zusammen, dass
+   „Annelie Baumgartner" auf zwei und laengere Namen auf drei Zeilen umbrechen — das Bild
+   davor kostet zusaetzlich rund 34 px. Reicht der Platz nicht, schiebt .table-wrap die
+   Tabelle stattdessen seitlich; ein Name in einer Zeile liest sich besser als eine Tabelle
+   ohne Seitwaertsbewegung. */
+.mitarbeiter-tabelle th:first-child,
+.mitarbeiter-tabelle td:first-child { min-width: 11rem; }
+
 /* Vorschau auf „Mein Konto" */
 .avatar-gross { width: 96px; height: 96px; font-size: 34px; }

@@ -178,6 +178,50 @@ function req(m, p, t, b) {
         gefunden.ohneBildUnsichtbar === gefunden.anzahl - gefunden.mitBild, JSON.stringify(gefunden));
     }
 
+    console.log('\n── Das Bild darf den Namen nicht in die naechste Zeile druecken ──');
+    // Ein Profilbild kostet in der Namensspalte rund 34 px. Ohne Mindestbreite quetscht
+    // `table { width: 100% }` die Spalte auf schmalen Bildschirmen so weit zusammen, dass
+    // Namen umbrechen. Gemessen wird ueber die HOEHE, nicht ueber getClientRects(): Der Name
+    // ist ein Flex-Kind und damit ein Block — er liefert immer genau EIN Rechteck, auch bei
+    // drei Zeilen Text. (Genau daran war die erste Fassung dieser Messung blind.)
+    await page.goto(BASIS + '/#/users', { waitUntil: 'domcontentloaded' }); await sleep(2000);
+    for (const [marke, breite] of [['Rechner', 1100], ['Tablet', 700], ['Handy', 380]]) {
+      await page.setViewport({ width: breite, height: 800 });
+      await sleep(900);
+      const mess = await page.evaluate(() => {
+        const zeilen = [...document.querySelectorAll('#users-tbody tr')].map(tr => {
+          const spans = [...tr.querySelector('td').querySelectorAll('span')];
+          const name = spans[spans.length - 1];
+          const zh = parseFloat(getComputedStyle(name).lineHeight) || 16;
+          return { text: name.textContent.trim(), zeilen: Math.max(1, Math.round(name.getBoundingClientRect().height / zh)) };
+        });
+        const wrap = document.querySelector('.table-wrap');
+        return { zeilen,
+          seitlich: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          schiebbar: wrap ? wrap.scrollWidth - wrap.clientWidth : -1 };
+      });
+      const umgebrochen = mess.zeilen.filter(z => z.zeilen > 1);
+      ok(`${marke} (${breite} px): kein Name bricht um`, umgebrochen.length === 0,
+        JSON.stringify(umgebrochen));
+      ok(`${marke}: die Seite laeuft dabei nicht seitlich weg`, mess.seitlich <= 1,
+        `${mess.seitlich} px Ueberhang`);
+    }
+    // Gegenprobe zur Messung selbst: Ein absurd langer Name MUSS umbrechen — sonst misst der
+    // Test nur leere Luft und waere gruen, egal was das Layout tut.
+    await page.setViewport({ width: 380, height: 800 });
+    const bricht = await page.evaluate(() => {
+      const spans = [...document.querySelector('#users-tbody tr td').querySelectorAll('span')];
+      const name = spans[spans.length - 1];
+      const alt = name.textContent;
+      name.textContent = 'Maximiliane Charlotte von Hohenberg-Lichtenstein';
+      const zh = parseFloat(getComputedStyle(name).lineHeight) || 16;
+      const z = Math.round(name.getBoundingClientRect().height / zh);
+      name.textContent = alt;
+      return z;
+    });
+    ok('Gegenprobe: ein absurd langer Name bricht sehr wohl um (die Messung ist nicht blind)',
+      bricht > 1, `${bricht} Zeile(n)`);
+
   } finally {
     if (browser) await browser.close();
     srv.kill('SIGTERM'); await sleep(800);

@@ -979,7 +979,7 @@ async function renderUsers() {
       </div>
       ${listenSucheHtml('mitarbeiter', 'Name, Benutzername oder Rolle suchen …')}
       <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table mitarbeiter-tabelle">
           <thead>
             <tr>
               <th>Name</th>
@@ -992,7 +992,7 @@ async function renderUsers() {
           <tbody id="users-tbody">
             ${S.users.filter(u => u.active !== 0).map(u => `
               <tr data-suchtext="${esc([u.name, u.username, roleName(u.role)].join(' '))}">
-                <td style="display:flex; align-items:center; gap:.5rem">${avatarHtml(u, 26)}<span>${esc(u.name)}</span></td>
+                <td><span class="zelle-mit-bild">${avatarHtml(u, 26)}<span>${esc(u.name)}</span></span></td>
                 <td>${esc(u.username)}</td>
                 <td><span class="badge badge-${u.role}">${roleName(u.role)}</span></td>
                 <td>${u.target_hours_per_week}</td>
