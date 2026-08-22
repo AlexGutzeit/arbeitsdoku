@@ -35,6 +35,20 @@ function authenticate(req, res, next) {
   const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Sonder-Token sind KEINE Zugangs-Token. Bis hierher wurde nur die Unterschrift geprueft und
+    // `userId` gelesen — jedes mit demselben Geheimnis signierte Token kam damit ueberall durch.
+    // Betroffen war schon bisher das 60-Sekunden-SSE-Ticket (`sse: true`, server.js): Es taugte
+    // eine Minute lang als vollwertiger Bearer-Token. Dazu kommt der Zwischen-Token der
+    // Zwei-Faktor-Anmeldung (`pending2fa`), der sonst genau die Huerde umgehen wuerde, die er
+    // aufstellt.
+    //
+    // ACHTUNG bei Erweiterungen: Das ist eine Verbotsliste. Wer kuenftig einen weiteren
+    // Sonder-Token einfuehrt und ihn hier NICHT eintraegt, reisst die Luecke wieder auf.
+    if (decoded.sse || decoded.pending2fa) {
+      return res.status(401).json({ error: 'Ungültiger Token' });
+    }
+
     const db = getDb();
     const user = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, work_start, birth_date, COALESCE(active,1) AS active FROM users WHERE id = ?").get(decoded.userId);
     if (!user) return res.status(401).json({ error: 'Benutzer nicht gefunden' });

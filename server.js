@@ -111,7 +111,17 @@ app.get('/api/events', (req, res) => {
   // einen alten, noch offenen Tab vor dem Reload) — die Verifikation ist fuer beide identisch.
   const token = req.query.ticket || req.query.token;
   if (!token) return res.status(401).end();
-  try { jwt.verify(token, JWT_SECRET); } catch (_) { return res.status(401).end(); }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    // Der Zwischen-Token der Zwei-Faktor-Anmeldung ist hier ausdruecklich NICHT gueltig — sonst
+    // haette man mit halber Anmeldung einen Live-Draht in die App.
+    //
+    // Der lange Login-Token bleibt dagegen bewusst weiter erlaubt. Ihn hier zu sperren waere
+    // sauberer, wuerde aber jeden alten, noch offenen Tab und jede PWA mit aeltererm Zwischenspeicher
+    // von den Live-Aktualisierungen abschneiden, bis jemand neu laedt. Er ist kein Loch: Es IST
+    // ein gueltiger Zugangs-Token derselben Person.
+    if (decoded.pending2fa) return res.status(401).end();
+  } catch (_) { return res.status(401).end(); }
   res.set({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',

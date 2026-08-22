@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**154 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**155 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -174,6 +174,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `stunden-vorher-nachher.js` | BEWEIS: Die ausgewiesenen Stunden und Überstunden ändern sich durch die Zusammenlegung der |
 | `targets-date-guard.js` | API-Test: Soll-Stunden-Routen validieren valid_from (Nachzug zu B4, gleiche Lösung wie beim Urlaubsanspruch). |
 | `testliste-vollstaendigkeit.js` | Wächter über die Testliste in tests/README.md. |
+| `token-haertung.js` | Sonder-Token dürfen keine Zugangs-Token sein — und was heute funktioniert, muss weiter gehen. |
 | `tooltip-escape-ui.js` | Puppeteer-UI-Test (B2): Ein bösartiger Regie-Mitarbeitername darf im Eintrags-Tooltip NICHT als HTML landen. |
 | `totp-rfc.js` | TOTP-Kern gegen die NORM prüfen, nicht gegen sich selbst (RFC 6238 / RFC 4226 / RFC 4648). |
 | `touch-ux-ui.js` | Puppeteer-Test (UX-Runde 1: B3 + B2 + B8a) |
