@@ -176,6 +176,22 @@ function req(m, p, t, b) {
       ok(`${name}: … mindestens einer zeigt das Bild`, gefunden.mitBild >= 1, JSON.stringify(gefunden));
       ok(`${name}: … wer kein Bild hat, belegt keinen Platz`,
         gefunden.ohneBildUnsichtbar === gefunden.anzahl - gefunden.mitBild, JSON.stringify(gefunden));
+
+      // „Ein Bild ist da" ist nicht dasselbe wie „das Bild ist zu sehen". Genau daran hing ein
+      // Fehler, den kein bisheriger Test bemerkt hat: Die Kurzform `background:` im inline-style
+      // setzt background-size/-position auf ihre Ausgangswerte zurueck und schlaegt dabei das
+      // Stylesheet. Das Bild wurde dann in Originalgroesse oben links angesetzt — im 26-px-Kreis
+      // sah man nur eine Ecke, meist einfarbiger Hintergrund. Deshalb wird hier gemessen, WIE
+      // gemalt wird, nicht nur DASS etwas gemalt wird.
+      const gemalt = await page.evaluate((sel) => [...document.querySelectorAll(sel)]
+        .filter(e => /blob:/.test(getComputedStyle(e).backgroundImage))
+        .map(e => ({ kante: Math.round(e.getBoundingClientRect().width),
+                     groesse: getComputedStyle(e).backgroundSize,
+                     pos: getComputedStyle(e).backgroundPosition })), wo);
+      ok(`${name}: … das Bild fuellt den Kreis (background-size: cover)`,
+        gemalt.length > 0 && gemalt.every(g => g.groesse === 'cover'), JSON.stringify(gemalt));
+      ok(`${name}: … und ist mittig ausgerichtet`,
+        gemalt.every(g => /50%\s+50%|center/.test(g.pos)), JSON.stringify(gemalt));
     }
 
     console.log('\n── Das Bild darf den Namen nicht in die naechste Zeile druecken ──');

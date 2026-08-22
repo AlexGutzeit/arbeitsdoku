@@ -849,6 +849,10 @@ function initialenVon(name) {
 // Der Platzhalter steht auch bei 'weg' im Baum (nur unsichtbar) — sonst waere er beim Aufbau der
 // Seite noch nicht bekannt und koennte spaeter nicht mehr gefuellt werden, wenn die Uebersicht
 // der Bilder eintrifft.
+// WICHTIG bei Aenderungen: `background-color` und NICHT die Kurzform `background`. Die Kurzform
+// setzt `background-size` und `background-position` auf ihre Ausgangswerte zurueck, und weil sie
+// hier inline steht, schlaegt sie das Stylesheet. Das Bild wuerde dann in seiner Originalgroesse
+// oben links angesetzt — in einem 26-px-Kreis sieht man von einem 96-px-Bild nur eine Ecke.
 function avatarHtml(user, groesse = 28, ohneBild = 'weg') {
   // Ab etwa 64 px lohnt die hohe Aufloesung — darunter waere sie nur unnoetiger Datenverkehr.
   const stufe = groesse >= 64 ? 'gross' : 'klein';
@@ -857,7 +861,7 @@ function avatarHtml(user, groesse = 28, ohneBild = 'weg') {
   const stand = id ? (S.avatarStand || {})[id] : null;
   const farbe = colorFor(id);
   const zeigen = ohneBild === 'initialen' || !!stand;
-  return `<span class="avatar${zeigen ? '' : ' avatar--leer'}" style="width:${groesse}px;height:${groesse}px;font-size:${Math.round(groesse * 0.4)}px;background:${farbe}"`
+  return `<span class="avatar${zeigen ? '' : ' avatar--leer'}" style="width:${groesse}px;height:${groesse}px;font-size:${Math.round(groesse * 0.4)}px;background-color:${farbe}"`
     + (id ? ` data-avatar="${id}" data-stufe="${stufe}"${stand ? ` data-stand="${esc(stand)}"` : ''}` : '')
     + ` title="${esc(name)}">${ohneBild === 'initialen' ? esc(initialenVon(name)) : ''}</span>`;
 }
