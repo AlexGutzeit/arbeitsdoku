@@ -83,6 +83,21 @@ async function farbeInDerMitte(buf) {
     const page = await browser.newPage();
     await page.setViewport({ width: 460, height: 950, hasTouch: true });
     page.setDefaultTimeout(30000);
+    // Mitschneiden, was die Oberflaeche wirklich absendet. Im abgefangenen Rumpf einer
+    // mehrteiligen Sendung steht es nicht zuverlaessig, im Browser schon.
+    await page.evaluateOnNewDocument(() => {
+      window.__zuschnitt = null;
+      const echt = window.fetch;
+      window.fetch = function (...args) {
+        try {
+          const o = args[1];
+          if (o && o.body instanceof FormData && o.body.get('zuschnitt')) {
+            window.__zuschnitt = JSON.parse(o.body.get('zuschnitt'));
+          }
+        } catch (_) {}
+        return echt.apply(this, args);
+      };
+    });
     await page.goto(BASIS + '/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(() => localStorage.clear());
     await page.goto(BASIS + '/', { waitUntil: 'domcontentloaded' });
@@ -130,6 +145,31 @@ async function farbeInDerMitte(buf) {
       (await page.evaluate(() => getComputedStyle(document.getElementById('zs-buehne')).touchAction)) === 'none');
     ok('bis hierher wurde NICHTS gespeichert',
       Object.keys((await req('GET', '/api/avatare', max.token)).body.stand).length === 0);
+
+    console.log('\n── Der Startausschnitt ist gerechnet, nicht geraten (Alex, 23.08.2026) ──');
+    // „Größtmögliches Quadrat, mittig" — Seitenlänge gleich der KURZEN Bildseite, auf der langen
+    // Achse zentriert. Das ist eine Rechnung mit genau einem Ergebnis; geprüft in allen drei
+    // Seitenverhältnissen, weil sich quer, hoch und quadratisch gerade darin unterscheiden.
+    for (const [name, w, h] of [['quer', 1800, 1000], ['hoch', 900, 1600], ['quadratisch', 1200, 1200]]) {
+      const pfad = `/tmp/avatar-zuschnitt-ui-${name}.jpg`;
+      await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#4a90d9"/></svg>`)).jpeg().toFile(pfad);
+      await konto();
+      await page.evaluate(() => { window.__zuschnitt = null; });
+      await (await page.$('#avatar-datei')).uploadFile(pfad);
+      await page.waitForSelector('.zuschnitt-modal [data-act="ok"]:not([disabled])', { timeout: 20000 });
+      await sleep(400);
+      await page.click('.zuschnitt-modal [data-act="ok"]');
+      await sleep(2400);
+      const g = await page.evaluate(() => window.__zuschnitt);
+      const kurz = Math.min(w, h);
+      const soll = { links: Math.round((w - kurz) / 2), oben: Math.round((h - kurz) / 2), breite: kurz, hoehe: kurz };
+      ok(`${name} (${w}x${h}): größtmögliches Quadrat, mittig`,
+        !!g && g.breite === soll.breite && g.hoehe === soll.hoehe
+          && Math.abs(g.links - soll.links) <= 1 && Math.abs(g.oben - soll.oben) <= 1,
+        `${JSON.stringify(g)} statt ${JSON.stringify(soll)}`);
+      try { fs.unlinkSync(pfad); } catch (_) {}
+    }
+    await req('DELETE', '/api/avatare', max.token);
 
     console.log('\n── Abbrechen lädt nichts hoch ──');
     await page.click('.zuschnitt-modal [data-act="cancel"]');
