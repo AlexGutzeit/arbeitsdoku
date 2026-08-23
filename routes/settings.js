@@ -7,6 +7,8 @@ const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { istUhrzeit } = require('../zeit');
+const zf = require('../zweifaktor');
+const totp = require('../totp');
 const { MODI, cacheVergessen } = require('../zweifaktor');
 
 const router = express.Router();
@@ -199,6 +201,58 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
   // Kontos abschalten. Gleiche Ueberlegung wie beim Passwort-Zuruecksetzen in routes/users.js.
   if (twofa_admin !== undefined && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Die Zwei-Faktor-Pflicht für Administratoren kann nur ein Administrator ändern.' });
+  }
+
+  // SCHARFSCHALTEN NUR MIT GUELTIGEM CODE (Alex, 23.08.2026).
+  //
+  // Wer eine Rolle von „aus" auf eine Pflicht stellt, sperrt damit potenziell Menschen aus — sich
+  // selbst zuerst. Deshalb muss er vorher beweisen, dass sein eigener Generator wirklich laeuft:
+  // eingerichteter Authenticator UND ein frischer, gueltiger Code. Ein QR-Code, den jemand
+  // eingescannt zu haben glaubt, oder eine falsch gestellte Handy-Uhr fallen damit VOR dem
+  // Scharfschalten auf, nicht danach.
+  //
+  // Bewusst nur in DIESE Richtung. Das Abschalten und der Wechsel zwischen zwei Pflicht-Stufen
+  // bleiben ohne Code — sonst baute man eine Falle: Ein Admin ohne eigenen Authenticator koennte
+  // die Pflicht fuer die Mitarbeiter nicht mehr zuruecknehmen, und ein verlorenes Handy waere
+  // nicht mehr durch Abschalten zu heilen. Der gefaehrliche Weg ist das Anziehen, nicht das Loesen.
+  const scharfGeschaltet = [];
+  for (const [key, wert] of Object.entries(zweiFaktorFelder)) {
+    if (wert === undefined || wert === 'aus') continue;
+    const bisher = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    const alt = (bisher && bisher.value) || 'aus';
+    if (alt === 'aus') scharfGeschaltet.push(key);
+  }
+  if (scharfGeschaltet.length) {
+    if (!zf.eingerichtet(db, req.user.id)) {
+      return res.status(400).json({
+        code: 'ZWEI_FAKTOR_SELBST_NOETIG',
+        error: 'Bevor du die Zwei-Faktor-Anmeldung vorschreibst, richte sie bitte für dich selbst ein '
+             + '(Mein Konto). Sonst schreibst du etwas vor, von dem niemand weiß, ob es funktioniert.',
+      });
+    }
+    const code = String((req.body || {}).twofa_code || '').trim();
+    if (!code) {
+      return res.status(400).json({
+        code: 'ZWEI_FAKTOR_CODE_NOETIG',
+        error: 'Zum Scharfschalten bitte einen aktuellen Code aus deiner Authenticator-App eingeben.',
+      });
+    }
+    const geheim = zf.geheimnisLesen(db, req.user.id);
+    const schritt = geheim ? totp.pruefe(geheim, code) : null;
+    if (schritt === null) {
+      logAudit(db, { userId: req.user.id, username: req.user.username,
+        action: 'twofa_scharf_code_falsch', details: scharfGeschaltet.join(', '), ip: req.ip });
+      return res.status(400).json({
+        code: 'ZWEI_FAKTOR_CODE_FALSCH',
+        error: 'Der Code stimmt nicht. Prüfe auch die Uhrzeit deines Handys.',
+      });
+    }
+    if (!zf.schrittVerbrauchen(db, req.user.id, schritt)) {
+      return res.status(400).json({
+        code: 'ZWEI_FAKTOR_CODE_VERBRAUCHT',
+        error: 'Dieser Code wurde bereits verwendet. Warte auf den nächsten.',
+      });
+    }
   }
 
   const fields = {

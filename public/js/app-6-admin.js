@@ -328,12 +328,42 @@ async function renderSettings() {
         + 'Authenticator eingerichtet hat, landet beim nächsten Aufruf auf „Mein Konto" und kommt '
         + 'vorher nicht weiter. Fortfahren?');
       if (!weiter) return;
+
+      // Ohne eigenen Authenticator geht es gar nicht — das gleich sagen, statt den Nutzer erst
+      // nach einem Code zu fragen, den er nicht haben kann.
+      if (!(S.zweiFaktor && S.zweiFaktor.eingerichtet)) {
+        toast('Richte die Zwei-Faktor-Anmeldung zuerst für dich selbst ein (Mein Konto). '
+            + 'Sonst schreibst du etwas vor, von dem niemand weiß, ob es funktioniert.', 'error');
+        renderSettings();
+        return;
+      }
+
+      // Scharfschalten nur mit einem frischen Code aus der EIGENEN App. Das ist kein Formalismus:
+      // Ein QR-Code, den man eingescannt zu haben glaubt, oder eine falsch gestellte Handy-Uhr
+      // fallen damit VOR dem Scharfschalten auf — nicht danach, wenn niemand mehr hineinkommt.
+      // Der Server prueft es ohnehin; hier wird nur gefragt, statt den Nutzer in einen Fehler
+      // laufen zu lassen.
+      const code = await promptModal(
+        'Gib zur Sicherheit einen aktuellen 6-stelligen Code aus deiner Authenticator-App ein.\n\n'
+        + 'Damit ist bewiesen, dass dein Generator wirklich läuft, bevor die Anmeldung für andere '
+        + 'Pflicht wird.',
+        { title: 'Scharfschalten bestätigen', multiline: false, inputType: 'text',
+          placeholder: '123456', required: true, requiredMsg: 'Bitte den Code eingeben.',
+          okLabel: 'Scharf schalten' });
+      if (code === null) return;
+      werte.twofa_code = String(code).trim();
     }
     try {
       const d = await api('PUT', '/api/settings', werte);
       if (d && d.settings) S.settings = d.settings;
       toast('Zwei-Faktor-Einstellungen gespeichert', 'success');
-    } catch (err) { toast(err.message, 'error'); }
+      renderSettings();          // Auswahlfelder auf den gespeicherten Stand zurueckstellen
+    } catch (err) {
+      toast(err.message, 'error');
+      // Nichts wurde gespeichert — die Felder duerfen nicht so stehen bleiben, als waere es
+      // gelungen. Sonst glaubt der naechste Blick, die Pflicht sei aktiv.
+      renderSettings();
+    }
   });
 
   // Rechtstexte (Chef + Admin) speichern
