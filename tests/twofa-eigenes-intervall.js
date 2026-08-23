@@ -56,7 +56,35 @@ const zustand = async (t) => (await req('GET', '/api/auth/2fa/status', t)).body.
     const maPw = pw('max');
     let maT = (await req('POST', '/api/auth/login', null, { username: 'max', password: maPw })).body.token;
 
-    console.log('── Freiwillig einrichten, Rolle steht auf „aus" ──');
+    // ── Zuerst die REGEL selbst, ohne Server drumherum ────────────────────────────────────────
+    // Warum das hier steht: Die Prüfungen weiter unten laufen über die Anmeldung — und die
+    // erzwingt einen Code schon deshalb, weil das Umstellen die gemerkten Geräte löscht. Sie
+    // blieben deshalb auch dann grün, wenn die Intervall-Regel gar nichts täte. (Genau das hat
+    // die erste Gegenprobe gezeigt.) Diese Tabelle prüft die Rechnung direkt.
+    console.log('── Die Regel selbst ──');
+    const zf = require('../zweifaktor');
+    const vorTagen = (t) => new Date(Date.now() - t * 864e5).toISOString();
+    const noetig = (eigenModus, tage, modus = 'aus') =>
+      zf.codeNoetig({ modus, eingerichtet: true, eigenModus, geraetBestaetigtAm: vorTagen(tage) });
+    ok('ohne eigenen Wunsch gilt weiter „einmal pro Gerät" (auch nach 400 Tagen kein Code)',
+      noetig(null, 400) === false);
+    ok('„einmal pro Gerät" ausdrücklich gewählt: ebenso', noetig('geraet', 400) === false);
+    ok('„täglich": ein 2 Tage altes Gerät reicht NICHT mehr', noetig('taeglich', 2) === true);
+    ok('„täglich": ein 5 Stunden altes genügt', noetig('taeglich', 5 / 24) === false);
+    ok('„wöchentlich": nach 3 Tagen kein Code', noetig('woechentlich', 3) === false);
+    ok('„wöchentlich": nach 8 Tagen schon', noetig('woechentlich', 8) === true);
+    ok('„monatlich": nach 10 Tagen kein Code', noetig('monatlich', 10) === false);
+    ok('„monatlich": nach 40 Tagen schon', noetig('monatlich', 40) === true);
+    ok('„bei jeder Anmeldung": auch ein frisch bestätigtes Gerät hilft nicht',
+      noetig('immer', 0.001) === true);
+    ok('die Rolle gewinnt: Pflicht „immer" schlägt den eigenen Wunsch „monatlich"',
+      noetig('monatlich', 0.001, 'immer') === true);
+    ok('… und umgekehrt: Pflicht „monatlich" schlägt den eigenen Wunsch „immer"',
+      noetig('immer', 10, 'monatlich') === false);
+    ok('ein unsinniger gespeicherter Wert fällt auf „einmal pro Gerät" zurück',
+      noetig('jaehrlich', 400) === false);
+
+    console.log('\n── Freiwillig einrichten, Rolle steht auf „aus" ──');
     const setup = (await req('POST', '/api/auth/2fa/setup', maT, {})).body;
     ok('Schlüssel erhalten', /^[A-Z2-7]{32}$/.test(setup.geheim || ''));
     ok('bestätigt', (await req('POST', '/api/auth/2fa/verify', maT, { code: await frisch(setup.geheim) })).status === 200);
@@ -133,6 +161,49 @@ const zustand = async (t) => (await req('GET', '/api/auth/2fa/status', t)).body.
     ok('abgelehnt', r.status === 400, `${r.status} ${r.text.slice(0, 70)}`);
     ok('ohne Anmeldung erst recht',
       (await req('POST', '/api/auth/2fa/eigener-modus', null, { modus: 'taeglich', code: '123456' })).status === 401);
+
+    console.log('\n── Alex\' Ablauf, Schritt fuer Schritt (23.08.2026) ──');
+    // Sein Wortlaut: „freiwillig einschalten und 1x pro Monat sagen, gilt das. Wenn dann die
+    // Pflicht kommt mit einmal die Woche, gilt das. Wenn die Pflicht heraus genommen wird, gilt
+    // wieder 1x pro Monat. Dann kann ich auch wieder abschalten. Wenn Pflicht, kann ich auch
+    // nicht abschalten." — genau so nachgespielt, mit einem frischen Nutzer.
+    await req('POST', '/api/users', admin, { username: 'ablauf', password: 'Test1234!', name: 'Ablauf Probe', role: 'mitarbeiter' });
+    let bT = (await req('POST', '/api/auth/login', null, { username: 'ablauf', password: 'Test1234!' })).body.token;
+    const bSetup = (await req('POST', '/api/auth/2fa/setup', bT, {})).body;
+    await req('POST', '/api/auth/2fa/verify', bT, { code: await frisch(bSetup.geheim) });
+
+    ok('1) freiwillig eingeschaltet und auf „monatlich" gestellt',
+      (await req('POST', '/api/auth/2fa/eigener-modus', bT, { modus: 'monatlich', code: await frisch(bSetup.geheim) })).status === 200);
+    let zb = await zustand(bT);
+    ok('   → es gilt „monatlich"', zb.eigen_modus === 'monatlich' && zb.pflicht === false, JSON.stringify({ e: zb.eigen_modus, p: zb.pflicht }));
+
+    await req('PUT', '/api/settings', admin, { twofa_mitarbeiter: 'woechentlich', twofa_code: await frisch(aSetup.geheim) });
+    zb = await zustand(bT);
+    ok('2) Pflicht „woechentlich" kommt → sie gilt', zb.modus === 'woechentlich' && zb.pflicht === true, JSON.stringify({ m: zb.modus }));
+    ok('   → und abschalten geht jetzt NICHT',
+      (await req('POST', '/api/auth/2fa/aus', bT, { code: await frisch(bSetup.geheim) })).status === 403);
+    ok('   → das Intervall umstellen ebenso wenig',
+      (await req('POST', '/api/auth/2fa/eigener-modus', bT, { modus: 'taeglich', code: await frisch(bSetup.geheim) })).status === 403);
+    ok('   → aber sein Authenticator ist unveraendert aktiv', (await zustand(bT)).eingerichtet === true);
+
+    await req('PUT', '/api/settings', admin, { twofa_mitarbeiter: 'aus' });
+    zb = await zustand(bT);
+    ok('3) Pflicht faellt weg → wieder „monatlich"',
+      zb.pflicht === false && zb.eigen_modus === 'monatlich', JSON.stringify({ p: zb.pflicht, e: zb.eigen_modus }));
+
+    ok('4) jetzt kann er abschalten',
+      (await req('POST', '/api/auth/2fa/aus', bT, { code: await frisch(bSetup.geheim) })).status === 200);
+    zb = await zustand(bT);
+    ok('   → gilt als nicht mehr eingerichtet', zb.eingerichtet === false);
+    ok('   → der Schluessel liegt aber noch da (stillgelegt)', zb.stillgelegt === true, JSON.stringify(zb));
+    ok('   → und die Anmeldung verlangt keinen Code mehr',
+      !(await req('POST', '/api/auth/login', null, { username: 'ablauf', password: 'Test1234!' })).body.zwei_faktor_erforderlich);
+
+    ok('5) schaltet er wieder ein, gilt weiterhin sein „monatlich"',
+      (await req('POST', '/api/auth/2fa/verify', bT, { code: await frisch(bSetup.geheim) })).status === 200);
+    zb = await zustand(bT);
+    ok('   → derselbe Schluessel, derselbe Wunsch',
+      zb.eingerichtet === true && zb.eigen_modus === 'monatlich', JSON.stringify({ e: zb.eingerichtet, m: zb.eigen_modus }));
 
     console.log('\n── Im Protokoll ──');
     ok('die Umstellung ist vermerkt',
