@@ -106,8 +106,10 @@ const vorTagen = t => vorStunden(t * 24);
     // Einrichtungs-Zwang sofort und jede weitere Anfrage bekommt 403. Genau so soll es sein; hier
     // ist es nur laestig. (Beim ersten Lauf ist mir dieser Test deshalb umgefallen.)
     // Dasselbe gilt fuer den Chef, sobald weiter unten twofa_chef scharf gestellt wird.
+    const geheimnisse = {};
     const einrichten = async (token, wer) => {
       const setup = await req('POST', '/api/auth/2fa/setup', token);
+      geheimnisse[wer] = setup.body.geheim;   // fuers Scharfschalten weiter unten gebraucht
       // Nacheinander im selben 30-Sekunden-Fenster geht nicht (Replay-Riegel je Nutzer) — es sind
       // aber verschiedene Nutzer mit eigenen Geheimnissen, also unproblematisch.
       const v = await req('POST', '/api/auth/2fa/verify', token, { code: totp.code(setup.body.geheim) });
@@ -116,10 +118,16 @@ const vorTagen = t => vorStunden(t * 24);
     };
     await einrichten(admin, 'Admin');
     await einrichten(chef, 'Chef');
+    // Ein Code aus dem NAECHSTEN Fenster: Der Server nimmt ihn (Toleranz +/-1), und sein
+    // Zeitschritt liegt ueber dem, den die Bestaetigung eben verbraucht hat.
+    const codeFuerScharf = (wer) => totp.code(geheimnisse[wer], Date.now() + 30000);
 
     console.log('\n── B) Speichern und Prüfen der Werte ──');
+    // Alle vier Rollen in EINEM Aufruf von „aus" auf Pflicht — dafuer verlangt der Server seit
+    // dem 23.08.2026 einen gueltigen Code des Aufrufers (tests/twofa-scharfschalten.js).
     const gut = await req('PUT', '/api/settings', admin,
-      { twofa_admin: 'immer', twofa_chef: 'woechentlich', twofa_buchhalter: 'monatlich', twofa_mitarbeiter: 'geraet' });
+      { twofa_admin: 'immer', twofa_chef: 'woechentlich', twofa_buchhalter: 'monatlich', twofa_mitarbeiter: 'geraet',
+        twofa_code: codeFuerScharf('Admin') });
     ok('gültige Werte werden gespeichert', gut.status === 200, `${gut.status} ${gut.text.slice(0, 90)}`);
     const jetzt = (await req('GET', '/api/settings', admin)).body.settings;
     ok('… und stehen danach drin',

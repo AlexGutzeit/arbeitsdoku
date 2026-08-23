@@ -54,6 +54,28 @@ async function frischerCode(geheim) {
   return totp.code(geheim);
 }
 
+// Seit dem 23.08.2026 verlangt das Scharfschalten einer Rolle (von „aus" auf eine Pflicht) einen
+// gueltigen Code des Aufrufers — siehe tests/twofa-scharfschalten.js. Das erledigt hier ein
+// EIGENER Admin: Ein eingerichteter Authenticator aendert das Anmeldeverhalten seines Besitzers,
+// und genau darum geht es in diesem Test beim Haupt-Admin nicht.
+//
+// Der Wiederverwendungs-Riegel nimmt nur STEIGENDE Zeitschritte. Deshalb wartet der Helfer
+// notfalls auf ein frisches Fenster (hoechstens 30 Sekunden) — genau wie ein Mensch es muesste.
+let _sTok = null, _sGeheim = null, _sSchritt = -1;
+async function scharfSchalten(adminToken, werte) {
+  if (!_sTok) {
+    await req('POST', '/api/users', adminToken,
+      { username: 'scharfschalter', password: 'Test1234!', name: 'Scharf Schalter', role: 'admin' });
+    _sTok = (await req('POST', '/api/auth/login', null, { username: 'scharfschalter', password: 'Test1234!' })).body.token;
+    _sGeheim = (await req('POST', '/api/auth/2fa/setup', _sTok, {})).body.geheim;
+    await req('POST', '/api/auth/2fa/verify', _sTok, { code: totp.code(_sGeheim) });
+    _sSchritt = Math.floor(Date.now() / 30000);
+  }
+  while (Math.floor(Date.now() / 30000) + 1 <= _sSchritt) await sleep(1000);
+  _sSchritt = Math.floor(Date.now() / 30000) + 1;
+  return req('PUT', '/api/settings', _sTok, { ...werte, twofa_code: totp.code(_sGeheim, Date.now() + 30000) });
+}
+
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
   try {
@@ -100,7 +122,7 @@ async function frischerCode(geheim) {
 
     console.log('\n── 3. Anmelden in zwei Schritten ──');
     // Rolle „mitarbeiter" auf „jedes Mal" stellen.
-    await req('PUT', '/api/settings', adminToken, { twofa_mitarbeiter: 'immer' });
+    await scharfSchalten(adminToken, { twofa_mitarbeiter: 'immer' });
     const stufe1 = await anmelden('max', maPw);
     ok('Schritt 1 liefert KEINEN Token', stufe1.status === 200 && !stufe1.body.token, JSON.stringify(stufe1.body).slice(0, 90));
     ok('… sondern die Aufforderung zum Code', stufe1.body.zwei_faktor_erforderlich === true);
@@ -183,7 +205,7 @@ async function frischerCode(geheim) {
     ok('… die Umstellung wirkte also sofort, ohne Neustart', true);
 
     console.log('\n── 5. Einrichtungs-Zwang (Nutzer ohne Authenticator) ──');
-    await req('PUT', '/api/settings', adminToken, { twofa_chef: 'woechentlich' });
+    await scharfSchalten(adminToken, { twofa_chef: 'woechentlich' });
     const chef = await anmelden('chef', pw('chef'));
     ok('Anmeldung klappt (Passwort reicht, es gibt ja noch keinen Authenticator)', !!chef.body.token);
     const gesperrt = await req('GET', '/api/entries', chef.body.token);

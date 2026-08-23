@@ -38,6 +38,28 @@ async function frischerCode(geheim) {
   return totp.code(geheim);
 }
 
+// Seit dem 23.08.2026 verlangt das Scharfschalten einer Rolle (von „aus" auf eine Pflicht) einen
+// gueltigen Code des Aufrufers — siehe tests/twofa-scharfschalten.js. Das erledigt hier ein
+// EIGENER Admin: In diesem Test geht es um den Schluessel VON MAX, und ein Authenticator beim
+// Haupt-Admin wuerde dessen Anmeldeverhalten nebenbei mitaendern.
+//
+// Der Wiederverwendungs-Riegel nimmt nur STEIGENDE Zeitschritte; der Helfer wartet notfalls auf
+// ein frisches Fenster (hoechstens 30 Sekunden).
+let _sTok = null, _sGeheim = null, _sSchritt = -1;
+async function scharfSchalten(adminToken, werte) {
+  if (!_sTok) {
+    await req('POST', '/api/users', adminToken,
+      { username: 'scharfschalter', password: 'Test1234!', name: 'Scharf Schalter', role: 'admin' });
+    _sTok = (await req('POST', '/api/auth/login', null, { username: 'scharfschalter', password: 'Test1234!' })).body.token;
+    _sGeheim = (await req('POST', '/api/auth/2fa/setup', _sTok, {})).body.geheim;
+    await req('POST', '/api/auth/2fa/verify', _sTok, { code: totp.code(_sGeheim) });
+    _sSchritt = Math.floor(Date.now() / 30000);
+  }
+  while (Math.floor(Date.now() / 30000) + 1 <= _sSchritt) await sleep(1000);
+  _sSchritt = Math.floor(Date.now() / 30000) + 1;
+  return req('PUT', '/api/settings', _sTok, { ...werte, twofa_code: totp.code(_sGeheim, Date.now() + 30000) });
+}
+
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
   const lg = fs.openSync('/tmp/twofa-bestand-srv.log', 'w');
@@ -51,7 +73,11 @@ async function frischerCode(geheim) {
     const admin = (await anmelden('admin', pw('admin'))).body.token;
     const maPw = pw('max');
     let maToken = (await anmelden('max', maPw)).body.token;
-    const stellen = (wert) => req('PUT', '/api/settings', admin, { twofa_mitarbeiter: wert });
+    // Abschalten geht ohne Code, Scharfschalten nicht — der Helfer nimmt dafuer seinen eigenen
+    // Admin mit eigenem Authenticator.
+    const stellen = (wert) => (wert === 'aus')
+      ? req('PUT', '/api/settings', admin, { twofa_mitarbeiter: 'aus' })
+      : scharfSchalten(admin, { twofa_mitarbeiter: wert });
     const status = async (t) => (await req('GET', '/api/auth/2fa/status', t)).body.zwei_faktor;
 
     console.log('── 1. Freiwillig einrichten, Rolle steht auf „aus" ──');

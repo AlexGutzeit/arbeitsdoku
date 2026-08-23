@@ -30,6 +30,28 @@ async function frischesFenster() {
   while (totp.schrittFuer(Date.now()) === start) await sleep(500);
 }
 
+// Seit dem 23.08.2026 verlangt das Scharfschalten einer Rolle (von „aus" auf eine Pflicht) einen
+// gueltigen Code des Aufrufers — siehe tests/twofa-scharfschalten.js. Das erledigt hier ein
+// EIGENER Admin: Ein eingerichteter Authenticator aendert das Anmeldeverhalten seines Besitzers,
+// und genau darum geht es in diesem Test beim Haupt-Admin nicht.
+//
+// Der Wiederverwendungs-Riegel nimmt nur STEIGENDE Zeitschritte. Deshalb wartet der Helfer
+// notfalls auf ein frisches Fenster (hoechstens 30 Sekunden) — genau wie ein Mensch es muesste.
+let _sTok = null, _sGeheim = null, _sSchritt = -1;
+async function scharfSchalten(adminToken, werte) {
+  if (!_sTok) {
+    await req('POST', '/api/users', adminToken,
+      { username: 'scharfschalter', password: 'Test1234!', name: 'Scharf Schalter', role: 'admin' });
+    _sTok = (await req('POST', '/api/auth/login', null, { username: 'scharfschalter', password: 'Test1234!' })).body.token;
+    _sGeheim = (await req('POST', '/api/auth/2fa/setup', _sTok, {})).body.geheim;
+    await req('POST', '/api/auth/2fa/verify', _sTok, { code: totp.code(_sGeheim) });
+    _sSchritt = Math.floor(Date.now() / 30000);
+  }
+  while (Math.floor(Date.now() / 30000) + 1 <= _sSchritt) await sleep(1000);
+  _sSchritt = Math.floor(Date.now() / 30000) + 1;
+  return req('PUT', '/api/settings', _sTok, { ...werte, twofa_code: totp.code(_sGeheim, Date.now() + 30000) });
+}
+
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
   const lg = fs.openSync('/tmp/twofa-konto-ui-srv.log', 'w');
@@ -159,7 +181,7 @@ async function frischesFenster() {
 
     console.log('\n── Anmelden mit Code ──');
     const adminToken = (await req('POST', '/api/auth/login', null, { username: 'admin', password: pw('admin') })).body.token;
-    await req('PUT', '/api/settings', adminToken, { twofa_mitarbeiter: 'immer' });
+    await scharfSchalten(adminToken, { twofa_mitarbeiter: 'immer' });
     await frischesFenster();
     page = await seiteMachen();
     await anmelden(page, 'max', 'Frisch2026!');
@@ -180,7 +202,7 @@ async function frischesFenster() {
     await page.close();
 
     console.log('\n── Einrichtungs-Zwang: der Chef kommt nur noch auf „Mein Konto" ──');
-    await req('PUT', '/api/settings', adminToken, { twofa_chef: 'woechentlich' });
+    await scharfSchalten(adminToken, { twofa_chef: 'woechentlich' });
     page = await seiteMachen();
     await anmelden(page, 'chef', pw('chef'));
     await sleep(1200);
