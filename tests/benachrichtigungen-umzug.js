@@ -34,8 +34,13 @@ function req(m, p, t, b) {
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
   const lg = fs.openSync('/tmp/benachrichtigungen-umzug-srv.log', 'w');
+  // Mit VAPID-Schluesseln starten: Ohne sie meldet die Karte „auf diesem Server nicht
+  // eingerichtet" und zeigt ihre Schalter gar nicht erst — der interessante Teil bliebe ungeprueft.
+  const vapid = require('web-push').generateVAPIDKeys();
   const srv = spawn('node', ['server.js'], { cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT: String(PORT), DB_PATH: DB, JWT_SECRET: 'test-secret-mindestens-32-zeichen-lang' }, stdio: ['ignore', lg, lg] });
+    env: { ...process.env, PORT: String(PORT), DB_PATH: DB, JWT_SECRET: 'test-secret-mindestens-32-zeichen-lang',
+      VAPID_PUBLIC: vapid.publicKey, VAPID_PRIVATE: vapid.privateKey, VAPID_SUBJECT: 'mailto:test@example.org' },
+    stdio: ['ignore', lg, lg] });
   let browser;
   try {
     for (let i = 0; i < 150; i++) { try { if ((await req('GET', '/health')).status === 200) break; } catch (_) {} await sleep(200); }
@@ -106,6 +111,50 @@ function req(m, p, t, b) {
     ok('die geplante Zusammenfassung ebenso',
       JSON.stringify(nachher.summaries) === JSON.stringify(vorher.summaries),
       `${JSON.stringify(vorher.summaries)} → ${JSON.stringify(nachher.summaries)}`);
+
+    console.log('\n── Die Karte mit ihren Schaltern — endlich einmal wirklich gesehen ──');
+    // Die Kategorie-Schalter erscheinen NUR bei aktivem Push-Abo. Ein Testbrowser hat keines,
+    // deshalb war dieser Teil der Karte bisher in keinem Test zu sehen — obwohl genau er in
+    // dieser Runde umgezogen ist. Erlaubnis erteilen und das Abo vortaeuschen, dann zeigt sie
+    // sich; der Rest ist echte App.
+    await browser.defaultBrowserContext().overridePermissions(BASIS, ['notifications']);
+    await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#push-card'); await sleep(2000);
+    await page.evaluate(async () => {
+      // Zwei Dinge werden gestellt, mehr nicht: die Browser-Erlaubnis (headless gibt sie nicht
+      // her, auch nicht ueber overridePermissions) und das Vorhandensein eines Abos. Alles
+      // Weitere — Laden der Einstellungen, Aufbau der Karte, Speichern — ist echte App.
+      Object.defineProperty(Notification, 'permission', { get: () => 'granted', configurable: true });
+      window.getPushSubscription = async () => ({ endpoint: 'https://push.invalid/abo-fuer-den-test' });
+      await initPushCard();
+    });
+    await sleep(1200);
+    const schalter = await page.$$eval('#push-card input[data-cat]',
+      els => els.map(e => ({ cat: e.dataset.cat, an: e.checked })));
+    ok('die Kategorie-Schalter sind da', schalter.length >= 4, JSON.stringify(schalter));
+    // Und zwar mit NINAS Werten, nicht mit den Vorgabewerten — sonst zeigte die Karte etwas
+    // anderes an, als gespeichert ist, und der erste Klick wuerde es festschreiben.
+    const erwartet = { orders: false, bulletin: true, notes: false, absences: true, planning: true };
+    const abweichung = schalter.filter(s => s.an !== erwartet[s.cat]);
+    ok('… und zeigen den GESPEICHERTEN Stand, nicht die Vorgabe',
+      schalter.length >= 4 && abweichung.length === 0,
+      JSON.stringify({ gezeigt: schalter, erwartet }));
+    ok('„Test-Benachrichtigung" und „Ausschalten" sind da',
+      !!(await page.$('#push-test')) && !!(await page.$('#push-disable')));
+
+    console.log('\n── Ein Klick auf einen Schalter speichert wirklich ──');
+    await page.evaluate(() => {
+      const cb = document.querySelector('#push-card input[data-cat="notes"]');
+      cb.click();
+    });
+    await sleep(1600);
+    const nachKlick = (await req('GET', '/api/push/prefs', nina)).body;
+    ok('„Notizen" steht jetzt auf an', nachKlick.notes === true, JSON.stringify(nachKlick));
+    ok('… und sonst hat sich nichts bewegt',
+      nachKlick.orders === false && nachKlick.bulletin === true && nachKlick.absences === true && nachKlick.planning === true,
+      JSON.stringify(nachKlick));
+    // Zuruecksetzen, damit der naechste Abschnitt wieder vom Ausgangsstand ausgeht.
+    await req('PUT', '/api/push/prefs', nina, { notes: false });
 
     console.log('\n── Auch waehrend des Zwei-Faktor-Zwangs erreichbar ──');
     // Wer zur Einrichtung festgehalten wird, sieht dieselbe Seite. Waere /api/push gesperrt,
