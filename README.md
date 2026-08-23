@@ -180,6 +180,15 @@ nicht eingerichtet, führt die App die betroffene Person auf diese Seite und lä
 wenn ein Code bestätigt wurde. Abschalten kann man den zweiten Faktor nur, wenn die eigene Rolle
 ihn nicht verlangt — und nur mit gültigem Code.
 
+**Pflicht und Freiwilligkeit sind ein ODER.** Gefragt wird, wer einen Authenticator eingerichtet
+hat — egal ob die Rolle es verlangt oder er sich freiwillig abgesichert hat. Ohne Vorgabe gilt
+dann die mildeste Stufe „einmal pro Gerät". Daraus folgt eine Einbahnstraße, die man kennen
+sollte: **Solange die Rolle die Anmeldung verlangt, kann man eine einmal freiwillig eingerichtete
+Zwei-Faktor-Anmeldung nicht mehr zurücknehmen** — auch ein Administrator kann sie nicht
+abschalten, er kann den Schlüssel nur *zurücksetzen* (verlorenes Handy), woraufhin sofort ein
+neuer einzurichten ist. Abschalten geht erst wieder, wenn die Pflicht für diese Rolle aufgehoben
+wird. Der Moment, es sich anders zu überlegen, liegt also **vor** dem Scharfschalten.
+
 **Der Schlüssel bleibt erhalten.** Wird die Zwei-Faktor-Anmeldung abgeschaltet — vom Nutzer selbst
 oder weil die Verwaltung die Pflicht zurücknimmt —, wird der Schlüssel nur **stillgelegt**, nicht
 gelöscht. Schaltet man später wieder ein, funktioniert **dieselbe Authenticator-App weiter**; es

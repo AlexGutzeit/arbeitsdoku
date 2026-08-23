@@ -2554,7 +2554,11 @@ async function kontoZweiFaktorKarte() {
              Der Schlüssel bleibt erhalten — schaltest du später wieder ein, funktioniert dieselbe
              App weiter. Nur die Geräte, die ohne Code hineinkommen, werden dabei zurückgesetzt.
            </div>`
-        : '<p style="color:var(--text-light)">Abschalten kann nur ein Administrator.</p>'}
+        : `<p style="color:var(--text-light)">Solange deine Rolle die Zwei-Faktor-Anmeldung
+             verlangt, lässt sie sich <strong>nicht abschalten</strong> — auch nicht von einem
+             Administrator. Der kann den Schlüssel nur <em>zurücksetzen</em>, etwa bei einem
+             verlorenen Handy; du müsstest dann sofort einen neuen einrichten. Wirklich abschalten
+             kannst du erst, wenn die Verwaltung die Pflicht für deine Rolle wieder aufhebt.</p>`}
       ${neuerSchluesselKnopf}
       <div id="zfa-einrichtung" style="display:none; margin-top:1rem"></div>`;
     const form = document.getElementById('konto-2fa-aus');

@@ -214,6 +214,38 @@ async function scharfSchalten(adminToken, werte) {
     ok('… und der Versuch, woandershin zu gehen, führt zurück',
       /#\/konto/.test(await page.evaluate(() => location.hash)), await page.evaluate(() => location.hash));
     ok('… er wird dabei NICHT abgemeldet', await page.evaluate(() => !!localStorage.getItem('token')));
+
+    // Und wenn er eingerichtet hat, waehrend die Pflicht steht: Was sagt ihm die Karte ueber das
+    // Abschalten? Frueher stand dort „Abschalten kann nur ein Administrator." — das stimmt so
+    // nicht. Ein Admin kann nur ZURUECKSETZEN; danach steht der Nutzer sofort wieder vor der
+    // Einrichtung. Der Satz versprach einen Ausweg, den es nicht gibt (Alex, 23.08.2026).
+    const cTok = (await req('POST', '/api/auth/login', null, { username: 'chef', password: pw('chef') })).body.token;
+    const cSetupR = await req('POST', '/api/auth/2fa/setup', cTok, {});
+    ok('der Chef bekommt einen Schlüssel', !!(cSetupR.body && cSetupR.body.geheim),
+      `${cSetupR.status} ${cSetupR.text.slice(0, 90)}`);
+    const cVerify = await req('POST', '/api/auth/2fa/verify', cTok, { code: totp.code(cSetupR.body.geheim) });
+    ok('… und bestätigt ihn', cVerify.status === 200, `${cVerify.status} ${cVerify.text.slice(0, 90)}`);
+    // Neu LADEN, nicht nur den Anker setzen: Die Seite steht bereits auf #/konto, und ein goto
+    // auf denselben Anker feuert kein hashchange — die Karte bliebe der alte Stand von vor der
+    // Einrichtung. (Genau daran ist diese Pruefung beim ersten Versuch gescheitert.)
+    await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#konto-2fa'); await sleep(2500);
+    const karte = await page.$eval('#konto-2fa', el => el.innerText.replace(/\s+/g, ' '));
+    ok('die Karte zeigt den Authenticator als aktiv', /Aktiv/i.test(karte), karte.slice(0, 120));
+    ok('bei bestehender Pflicht gibt es KEIN Abschalten-Formular', !(await page.$('#konto-2fa-aus')),
+      karte.slice(0, 120));
+    ok('… die Karte sagt, dass es nicht abschaltbar ist', /nicht abschalten/i.test(karte), karte.slice(0, 160));
+    ok('… und verspricht NICHT, ein Administrator koenne es abschalten',
+      !/Abschalten kann nur ein Administrator/i.test(karte), karte.slice(0, 160));
+    ok('… nennt aber das Zuruecksetzen als das, was ein Admin wirklich kann',
+      /zurücksetzen/i.test(karte), karte.slice(0, 200));
+    // Ausgangszustand wiederherstellen: Der Chef hat jetzt einen Authenticator, und der wuerde
+    // im naechsten Abschnitt die Anmeldung um eine Code-Abfrage erweitern — der Test liefe dort
+    // in eine Zeitueberschreitung, ohne dass an der App etwas waere.
+    const chefId = (await req('GET', '/api/users', adminToken)).body.users.find(u => u.username === 'chef').id;
+    ok('der Admin setzt den Chef wieder zurueck',
+      (await req('POST', `/api/users/${chefId}/twofa-reset`, adminToken, {})).status === 200);
     await page.close();
 
     console.log('\n── Einstellungs-Karte beim Admin ──');
