@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**172 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**174 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -64,6 +64,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `audit-events.js` | Audit-Events-Test: prüft, dass login_success, logout (manuell), session_expired (abgelaufenes |
 | `aushang-mitternacht-ui.js` | Ein Aushang, der kurz nach Mitternacht geschrieben wurde, muss auf der Willkommensseite stehen. |
 | `aushang-sprung-ui.js` | Aushänge auf der Willkommensseite sind anklickbar (Alex, 07.08.2026). |
+| `aussperren-prodklon.js` | Kann sich jemand aussperren? Gegen eine KOPIE der echten Produktivdaten (Alex, 23.08.2026). |
 | `auth-active-guard.js` | API-Test (B1): Ein bereits ausgestelltes JWT wird sofort abgelehnt (401), sobald der Nutzer ausgestellt ist — |
 | `avatar-api.js` | Profilbilder: Hochladen, Ausliefern, Entfernen — und vor allem, wer sie NICHT sehen darf. |
 | `avatar-ui.js` | Profilbilder in der Oberfläche: hochladen, in der Kopfzeile sehen, wieder entfernen. |
@@ -154,6 +155,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `planning-series.js` | API-Test: Serientermine anlegen (Materialisierung, Vorkommen, Overlap-Flag, never-Horizont, Rechte). |
 | `planung-sprung-ui.js` | Termine auf der Willkommensseite sind anklickbar (Alex, 07.08.2026) — wie zuvor die Aushänge. |
 | `platznutzung-ui.js` | Scrollflächen nutzen den Platz, der wirklich da ist (Alex, 07.08.2026). |
+| `prodklon-daten-vollstaendig.js` | Übersteht der echte Datenbestand das Update unverändert? (Alex, 23.08.2026) |
 | `project-csv.js` | API-Test CSV-Export der Projekt-Einträge: nach Datum sortiert, Netto (ohne Pause), Summe, Admin |
 | `project-due-ui.js` | UI-Test „Fällig bis" + Frist-Marker: Countdown-Badge (farbcodiert), Goal-Marker im Balken (Position), |
 | `project-due.js` | API-Test „Fällig bis": gültiges/ungültiges/leeres Datum, GET liefert es, PUT ohne Feld unverändert. |
