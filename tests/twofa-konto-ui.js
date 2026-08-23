@@ -357,6 +357,22 @@ async function scharfSchalten(adminToken, werte) {
     }));
     for (const [name, da] of Object.entries(karten)) ok(`Karte „${name}" ist da`, da, JSON.stringify(karten));
 
+    console.log('\n── Die Karte nennt das Intervall, das WIRKLICH gilt ──');
+    // Erst auf dem Bildschirmfoto aufgefallen: Dort stand „Abfrage: aus (von dir gewaehlt)" —
+    // angezeigt wurde der Rollen-Modus (der steht ja auf „aus"), nicht der tatsaechlich geltende.
+    // Ohne Pflicht gilt der eigene Wunsch, und genau der gehoert dort hin.
+    {
+      const t = (await req('POST', '/api/auth/login', null, { username: 'max', password: pw('max') })).body.token;
+      const st = (await req('GET', '/api/auth/2fa/status', t)).body.zwei_faktor;
+      if (st && st.eingerichtet && !st.pflicht) {
+        await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('#konto-2fa'); await sleep(2000);
+        const text = (await page.$eval('#konto-2fa', el => el.innerText)).replace(/\s+/g, ' ');
+        ok('… und nennt NICHT „aus"', !/Abfrage: aus/i.test(text), text.slice(0, 110));
+      } else { ok('… (Zustand passt hier nicht, uebersprungen)', true); }
+    }
+
     console.log('\n── Zwei Wege nach „Mein Konto" (Alex, 23.08.2026) ──');
     // Beides ist gewollt: der Menuepunkt UND die Kopfzeile. Wer oben auf seinen Namen tippt,
     // erwartet dort sein Konto — das ist die Gewohnheit aus jeder anderen App.

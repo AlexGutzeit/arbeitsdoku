@@ -2565,7 +2565,7 @@ async function kontoZweiFaktorKarte() {
 
     k.innerHTML = `${kopf}
       <p><strong style="color:var(--success)">Aktiv.</strong>
-         Abfrage: <strong>${esc(z.modus_text)}</strong>${z.pflicht ? ' (von der Verwaltung vorgegeben)' : ' (von dir gewählt)'}.</p>
+         Abfrage: <strong>${esc(z.pflicht ? z.modus_text : z.eigen_modus_text)}</strong>${z.pflicht ? ' (von der Verwaltung vorgegeben)' : ' (von dir gewählt)'}.</p>
       ${intervallHtml}
       ${z.abschaltbar
         ? `<div class="error-msg" id="zfa-aus-fehler"></div>
