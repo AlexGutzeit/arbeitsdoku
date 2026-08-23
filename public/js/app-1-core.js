@@ -52,6 +52,20 @@ const S = {
   arbeitszeit: null,
 };
 
+// Ein zweiter Tab desselben Geraets haelt sein Anmelde-Token im Speicher DIESER Seite. Wird es
+// woanders erneuert — „Auf allen Geraeten abmelden" gibt sofort ein frisches aus, weil der Server
+// alle aelteren entwertet —, wuesste er nichts davon und flaege beim naechsten Klick heraus,
+// obwohl es dasselbe Geraet ist. Das `storage`-Ereignis feuert genau in den ANDEREN Tabs.
+//
+// Nur ein NEUES Token wird uebernommen. Verschwindet das Token (Abmelden in einem anderen Tab),
+// passiert hier bewusst nichts: Bei einem JWT ist das reine Aufraeumen im Browser, das hiesige
+// Token bleibt gueltig — und ungefragt aus einer laufenden Eingabe geworfen zu werden waere
+// schlimmer als ein Tab, der noch offen ist.
+window.addEventListener('storage', (e) => {
+  if (e.key !== 'token' || !e.newValue || e.newValue === S.token) return;
+  S.token = e.newValue;
+});
+
 // --- API Helper ---
 // Doppel-Submit-Schutz (app-weit): identische, GLEICHZEITIG laufende Schreib-Anfragen werden zu EINER
 // zusammengefasst. Klickt jemand bei wackeligem Netz 5× auf „Speichern", startet nur der erste Klick einen

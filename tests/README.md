@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**167 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**168 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -57,6 +57,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `absence-conflict.js` | Test: Doppelbuchung innerhalb derselben Stufe wird verhindert, stufenübergreifend bleibt erlaubt. |
 | `absence-overlap.js` | Regressionstest: prioritätsbewusste Abwesenheits-Zählung (gemeinsame Quelle für |
 | `absence-reapply-ui.js` | UI-Smoke (Puppeteer): Abwesenheits-Papierkorb bietet „Neu beantragen" (kein „Wiederherstellen"), |
+| `alle-abmelden-ui.js` | „Auf allen Geräten abmelden" — der Knopf darf einen NICHT selbst hinauswerfen (Alex, 23.08.2026). |
 | `ansicht-erhalten-ui.js` | Puppeteer-Test (B10): Ansicht bleibt über Neuaufbauten hinweg erhalten. |
 | `arbeitsbeginn-prodklon.js` | Abwaertskompatibilitaet des Arbeitsbeginns — der Aussperr-Fall. |
 | `arbeitsbeginn-ui.js` | Arbeitsbeginn je Mitarbeiter + Zeit-Vorbelegung, die nie unmöglich ist. |
