@@ -14,6 +14,49 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-23 · Der Nutzer schneidet sein Profilbild selbst zu
+
+Alex' Frage: „Woher weiß die App, welchen Ausschnitt ich haben möchte?" Antwort: gar nicht. Sie
+riet mit `sharp`s `position: 'attention'` — laut Dokumentation die Region mit der höchsten
+Luminanzfrequenz, Farbsättigung und Hautton-Präsenz. **Keine Gesichtserkennung.** Ein Vergleich an
+vier Fällen zeigte: deutlich besser als ein Mittelschnitt (bei einer Person am Bildrand oder einem
+Kopf am oberen Rand rettet sie das Bild), aber bei zwei Personen wählt sie eine aus, ohne zu
+fragen. Schlimmer noch: Gespeichert wurden nur die fertigen Quadrate — ein schiefer Ausschnitt war
+damit **endgültig**.
+
+**Der Ausschnitt reist in Bildpunkten des Originals, nicht in Bildschirmpunkten.** Was der Browser
+anzeigt, muss nicht dem entsprechen, was `sharp` sieht: Der Browser dreht ein Handyfoto anhand der
+EXIF-Angabe selbst, und beim späteren Nachschneiden liegt auf der Platte ein auf 1600 px
+heruntergerechnetes Original. Deshalb schickt die Oberfläche die Maße des Bildes MIT, das sie
+angezeigt hat, und der Server rechnet verhältnismäßig um. Ein Test schickt bewusst halbierte Maße
+und prüft, dass trotzdem das richtige Viertel im Kreis landet.
+
+**Bedient wird das Bild, nicht der Rahmen.** Der Kreis steht fest, das Foto wird darunter
+geschoben. Am Handy ist das die vertraute Geste, und der Rahmen kann nie aus dem Bild laufen —
+das Begrenzen passiert an einer einzigen Stelle (`begrenzen()`), nicht an jedem Ereignis einzeln.
+
+**Zwei Fallen, beide beim Bauen zugeschnappt:**
+
+* `router.get('/original')` stand hinter `router.get('/:id')`. Express nimmt die erste passende
+  Route — `/api/avatare/original` wäre also als Nutzer-Kennung „original" gelesen worden. Steht
+  jetzt davor, mit einem Kommentar, der erklärt warum.
+* `touch-action: none` auf der Bühne ist kein Feinschliff, sondern die Bedingung dafür, dass der
+  Finger das Bild verschiebt statt die Seite zu scrollen. Ohne die Zeile wäre der Dialog am Handy
+  unbedienbar — sie steht deshalb als eigene Zusicherung im Test und nicht nur im Stylesheet.
+
+**Gemessen statt behauptet:** Beide Tests arbeiten mit einem Bild aus vier verschiedenfarbigen
+Vierteln. Welches im Kreis landet, ist an der Farbe ablesbar. Die Richtungsprobe zielt bewusst auf
+ein Viertel, das die Bildmitte NICHT trifft — die erste Fassung zielte auf „rechts unten", was
+zufällig auch ohne jedes Schieben herauskam, und hätte damit nichts geprüft.
+
+**Und ein Eigentor beim Gegenprüfen:** Nach der Sabotage habe ich `git checkout -- routes/avatare.js`
+gerufen, um sie zurückzunehmen — die Datei war aber noch nicht committet, und damit war die
+gesamte Serverarbeit weg. Regel für die Zukunft: **erst committen, dann sabotieren.** Eine Kopie
+neben der Datei hilft nur, wenn man sie nicht im selben Befehl wieder löscht (auch das ist in
+dieser Nacht passiert).
+
+---
+
 ### 2026-08-23 · PDF-Nachweis zieht auf „Mein Konto"; zweiter Tab flog beim Abmelden mit raus
 
 **„Auf allen Geräten abmelden".** Alex fragte, ob man sich damit aussperren kann. Gemessen im

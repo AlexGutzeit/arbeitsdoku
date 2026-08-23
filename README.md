@@ -97,12 +97,30 @@ Kopfzeile und in den Spalten von Planung, Zeitnachweis und Auftrags-Board sowie 
 Mitarbeiterliste. **Wer kein Bild hochlädt, ändert für die anderen nichts** — die Ansicht bleibt
 genau wie vorher. Jedes Bild lässt sich jederzeit wieder **entfernen**.
 
+**Du wählst den Ausschnitt selbst.** Nach der Dateiwahl geht ein Fenster auf: Der Kreis steht
+fest, das Foto wird darunter verschoben und gezoomt — am Rechner mit Maus, Mausrad oder Regler,
+am Handy mit einem Finger zum Schieben und zwei zum Zoomen. Daneben stehen zwei Vorschauen, groß
+wie auf dieser Seite und klein wie in Listen und Spalten, damit man gleich sieht, ob das Gesicht
+auch als 26-px-Punkt noch erkennbar ist. Gespeichert wird erst mit **„Übernehmen"**; wer abbricht,
+lädt nichts hoch.
+
+**Später ändern geht ohne neues Foto.** Das Original bleibt auf dem Server liegen, deshalb gibt es
+neben „Anderes Bild wählen" den Knopf **„Ausschnitt ändern"**. Ohne das wäre ein schiefer
+Ausschnitt endgültig gewesen — man hätte das Foto von Hand zurechtschneiden und neu hochladen
+müssen.
+
 Technisch: Beim Hochladen wird das Foto auf zwei quadratische WebP-Größen gerechnet — **96 px** für
 den Alltag (Kopfzeile, Spalten, Listen; rund 3 kB) und **512 px** für die Vorschau und eine
-spätere Kollegen-Profilansicht. Ein 12-MB-Handyfoto landet damit als wenige Kilobyte auf der
-Platte. Die Ausrichtung wird aus dem Foto übernommen, zugeschnitten wird mittig auf den
-interessantesten Ausschnitt. **Die Bilder liegen hinter der Anmeldung** (nicht im öffentlichen
-`uploads/` wie das Firmenlogo) — ohne Login kommt niemand heran.
+spätere Kollegen-Profilansicht. Dazu das **Original**, auf 1600 px längste Kante gerechnet
+(typisch ein paar hundert kB; bei extrem unruhigen Fotos bis ~760 kB) — es ist die Grundlage für
+jeden späteren Ausschnitt und wird bei „Entfernen" mitgelöscht. Ein 12-MB-Handyfoto landet damit
+insgesamt als Bruchteil davon auf der Platte; über 12 MB lehnt der Server mit einer klaren Meldung
+ab. Die Ausrichtung wird aus dem Foto übernommen (sonst lägen Handyfotos quer). Kommt kein
+Ausschnitt mit — etwa bei einem direkten Aufruf der Schnittstelle —, rät die App wie früher auf
+den „interessantesten" Bildbereich. **Die Bilder liegen hinter der Anmeldung** (nicht im
+öffentlichen `uploads/` wie das Firmenlogo) — ohne Login kommt niemand heran, und das **Original
+bekommt nur der Besitzer selbst**, nie ein Kollege: Es zeigt mehr als der Kreis, den man
+freigegeben hat.
 
 **Geburtstag:** Die Seite zeigt das Geburtsdatum, das die Verwaltung hinterlegt hat — damit ein
 Zahlendreher demjenigen auffällt, den er betrifft (das Datum steuert auch die gesetzlichen
