@@ -92,6 +92,10 @@ Persönliches Dashboard: anstehende Planung, eigene Abwesenheiten, Schnellüberb
 
 Die persönliche Seite — für **alle** Rollen sichtbar, auch für Mitarbeiter.
 
+**Zwei Wege dorthin:** der Menüpunkt **👤 Mein Konto** im Seitenmenü, oder ein Klick auf das
+eigene **Profilbild bzw. den Namen oben rechts** in der Kopfzeile. Beides führt an dieselbe
+Stelle.
+
 **Profilbild:** Jeder kann ein Bild hochladen; es erscheint neben dem eigenen Namen in der
 Kopfzeile und in den Spalten von Planung, Zeitnachweis und Auftrags-Board sowie in der
 Mitarbeiterliste. **Wer kein Bild hochlädt, ändert für die anderen nichts** — die Ansicht bleibt
