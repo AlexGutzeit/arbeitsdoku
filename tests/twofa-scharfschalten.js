@@ -14,8 +14,12 @@
 //
 //   node tests/twofa-scharfschalten.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path');
+const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const puppeteer = require('puppeteer');
 const totp = require('../totp');
+
+const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
+  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
 
 const PORT = 3278, DB = '/tmp/twofa-scharf.db';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -126,6 +130,76 @@ const naechsterCode = (geheim) => totp.code(geheim, Date.now() + 30000);
     r = await req('PUT', '/api/settings', admin, { twofa_mitarbeiter: 'taeglich' });
     ok('Wechsel geraet → taeglich ohne Code', r.status === 200, `${r.status} ${r.text.slice(0, 80)}`);
     ok('… und wirkt', (await stand(admin)).twofa_mitarbeiter === 'taeglich');
+
+    console.log('\n── Und derselbe Riegel in der Oberfläche ──');
+    // Der Server allein genuegt fuer die Sicherheit — aber wenn die Oberflaeche den Code nicht
+    // abfragt, laeuft der Nutzer in eine Fehlermeldung statt durch einen Dialog.
+    //
+    // Eigener Admin dafuer, und ein Wort zum Zeitfenster: Der Wiederverwendungs-Riegel nimmt je
+    // Nutzer nur STEIGENDE Zeitschritte, und gueltig sind nur die drei Fenster um „jetzt". Dieser
+    // Ablauf braucht drei Codes (bestaetigen, anmelden, scharf schalten) — also genau jetzt-1,
+    // jetzt und jetzt+1, in dieser Reihenfolge. Damit die Fenstergrenze nicht mitten hineinfaellt,
+    // wird vorher auf den Anfang eines frischen Fensters gewartet (hoechstens 30 Sekunden).
+    await req('POST', '/api/users', admin, { username: 'admin2', password: 'Test1234!', name: 'Zweiter Admin', role: 'admin' });
+    const a2 = (await req('POST', '/api/auth/login', null, { username: 'admin2', password: 'Test1234!' })).body.token;
+    const a2Setup = (await req('POST', '/api/auth/2fa/setup', a2, {})).body;
+    await sleep(30000 - (Date.now() % 30000) + 600);
+    const jetzt = Date.now();
+    ok('zweiter Admin bestätigt seinen Authenticator (Fenster jetzt-1)',
+      (await req('POST', '/api/auth/2fa/verify', a2, { code: totp.code(a2Setup.geheim, jetzt - 30000) })).status === 200);
+    await req('PUT', '/api/settings', admin, { twofa_buchhalter: 'aus' });   // sauberer Ausgangspunkt
+
+    const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    try {
+      const page = await browser.newPage();
+      await page.setViewport({ width: 900, height: 950 });
+      page.setDefaultTimeout(30000);
+      await page.evaluateOnNewDocument(() => {
+        window.__put = null;
+        const echt = window.fetch;
+        window.fetch = function (...args) {
+          try {
+            const o = args[1];
+            if (o && o.method === 'PUT' && String(args[0]).includes('/api/settings') && typeof o.body === 'string') {
+              window.__put = JSON.parse(o.body);
+            }
+          } catch (_) {}
+          return echt.apply(this, args);
+        };
+      });
+      await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' });
+      await page.evaluate(() => localStorage.clear());
+      await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#login-user');
+      await page.type('#login-user', 'admin2'); await page.type('#login-pass', 'Test1234!');
+      await page.click('#login-form button[type="submit"]');
+      await sleep(1800);
+      // Freiwillig eingerichtete 2FA gilt nach der Regel „geraet" — die Anmeldung fragt also.
+      ok('die Anmeldung verlangt einen Code', !!(await page.$('#login-code')));
+      await page.type('#login-code', totp.code(a2Setup.geheim, jetzt));
+      await page.click('#code-form button[type="submit"]');
+      await sleep(2600);
+      ok('… und danach ist er drin', !(await page.$('#login-user')) && !(await page.$('#login-code')));
+
+      await page.goto(`http://localhost:${PORT}/#/settings`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#s-twofa-buchhalter'); await sleep(1800);
+      await page.select('#s-twofa-buchhalter', 'woechentlich');
+      await page.evaluate(() => document.getElementById('twofa-form').requestSubmit());
+      await sleep(900);
+      ok('es kommt eine Rückfrage, bevor etwas passiert', !!(await page.$('.dialog-modal [data-act="ok"]')));
+      await page.click('.dialog-modal [data-act="ok"]');
+      await sleep(900);
+      ok('… und danach die Abfrage des Codes', !!(await page.$('#pm-input')),
+        'ohne sie liefe der Nutzer in eine Fehlermeldung');
+      ok('bis hierher wurde NICHTS gesendet', (await page.evaluate(() => window.__put)) === null);
+      await page.type('#pm-input', totp.code(a2Setup.geheim, jetzt + 30000));
+      await page.click('.dialog-modal [data-act="ok"]');
+      await sleep(2400);
+      const gesendet = await page.evaluate(() => window.__put);
+      ok('der Code geht mit', !!(gesendet && /^\d{6}$/.test(String(gesendet.twofa_code || ''))), JSON.stringify(gesendet));
+      ok('… und die Pflicht steht danach', (await stand(admin)).twofa_buchhalter === 'woechentlich',
+        String((await stand(admin)).twofa_buchhalter));
+    } finally { await browser.close(); }
 
     console.log('\n── Im Protokoll ──');
     const eintraege = JSON.stringify((await req('GET', '/api/audit?limit=200', admin)).body);
