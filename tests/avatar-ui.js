@@ -85,10 +85,18 @@ function req(m, p, t, b) {
     ok('… und sie hat eine Fläche', (vorschauLeer || {}).breite > 50, JSON.stringify(vorschauLeer));
 
     console.log('\n── Bild hochladen ──');
+    // Seit dem 23.08.2026 geht nach der Dateiwahl erst das Zuschnitt-Fenster auf; hochgeladen
+    // wird erst mit „Übernehmen". Was DORT passiert, prueft avatar-zuschnitt-ui.js — hier wird
+    // nur durchgeklickt, damit dieser Test weiter das Ergebnis prueft.
+    const waehlenUndUebernehmen = async () => {
+      await (await page.$('#avatar-datei')).uploadFile(bildDatei);
+      await page.waitForSelector('.zuschnitt-modal [data-act="ok"]:not([disabled])', { timeout: 20000 });
+      await sleep(400);
+      await page.click('.zuschnitt-modal [data-act="ok"]');
+      await sleep(3000);
+    };
     await page.waitForSelector('#avatar-waehlen'); await sleep(300);
-    const eingabe = await page.$('#avatar-datei');
-    await eingabe.uploadFile(bildDatei);
-    await sleep(3000);
+    await waehlenUndUebernehmen();
     const nachher = await page.evaluate(() => {
       const v = document.querySelector('#avatar-vorschau .avatar');
       const k = document.querySelector('#kopf-avatar .avatar');
@@ -134,8 +142,7 @@ function req(m, p, t, b) {
     // Noch einmal hochladen, damit es etwas zu sehen gibt.
     await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#avatar-datei'); await sleep(600);
-    await (await page.$('#avatar-datei')).uploadFile(bildDatei);
-    await sleep(2500);
+    await waehlenUndUebernehmen();
 
     // Ohne Daten gibt es gar keine Spalten — die Zeitleiste zeigt dann „Keine Planungen fuer
     // diesen Tag". Daran ist dieser Abschnitt beim ersten Lauf umgefallen: nicht am Avatar,

@@ -2050,6 +2050,185 @@ async function kontoPdfKarte() {
   pdfFormularBinden();
 }
 
+// ================================================================
+// Zuschnitt-Fenster fuers Profilbild
+// ================================================================
+// Vorher hat die App geraten (`sharp` mit `position: attention` — Luminanz, Saettigung,
+// Hauttoene; KEINE Gesichtserkennung). Das trifft ein Portrait meistens, aber bei einem
+// Gruppenfoto oder jemandem am Bildrand eben nicht, und der Nutzer konnte nichts dagegen tun.
+//
+// Bedient wird nicht der Rahmen, sondern das BILD: Der Kreis steht fest, das Foto wird darunter
+// geschoben und gezoomt. Am Handy ist das die vertraute Geste (schieben, mit zwei Fingern
+// aufziehen), und der Rahmen kann nie aus dem Bild laufen.
+//
+// Gerechnet wird in Bildpunkten des ORIGINALS, nicht in Bildschirmpunkten: `mx`/`my` ist der
+// Punkt des Fotos, der in der Mitte des Kreises steht. Damit ist das Ergebnis unabhaengig davon,
+// wie gross das Fenster gerade ist — und genau diese Zahlen gehen an den Server.
+//
+// @param {{datei?: File, url?: string}} quelle
+// @returns {Promise<null | {links:number, oben:number, breite:number, hoehe:number, bildBreite:number, bildHoehe:number}>}
+function avatarZuschnittDialog(quelle) {
+  return new Promise((resolve) => {
+    const objektUrl = quelle.datei ? URL.createObjectURL(quelle.datei) : null;
+    const quellUrl = objektUrl || quelle.url;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay dialog-modal';
+    overlay.innerHTML = `
+      <div class="modal zuschnitt-modal">
+        <div class="modal-header"><h3>Ausschnitt wählen</h3></div>
+        <div class="modal-body">
+          <p class="zuschnitt-hinweis">Bild verschieben, mit zwei Fingern oder dem Regler zoomen.
+             Was im Kreis steht, wird dein Profilbild.</p>
+          <div class="zuschnitt-buehne" id="zs-buehne">
+            <img id="zs-bild" alt="" draggable="false">
+            <div class="zuschnitt-maske"></div>
+          </div>
+          <div class="zuschnitt-regler">
+            <span aria-hidden="true">&#128269;</span>
+            <input type="range" id="zs-zoom" min="100" max="400" value="100" step="1"
+                   aria-label="Vergrößerung">
+          </div>
+          <div class="zuschnitt-vorschau-zeile">
+            <span class="zuschnitt-vorschau" id="zs-vorschau-gross" aria-hidden="true"></span>
+            <span class="zuschnitt-vorschau klein" id="zs-vorschau-klein" aria-hidden="true"></span>
+            <span class="zuschnitt-vorschau-text">So sieht es aus — groß auf dieser Seite,
+              klein in Listen und Spalten.</span>
+          </div>
+        </div>
+        <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem">
+          <button class="btn btn-outline" data-act="cancel">Abbrechen</button>
+          <button class="btn btn-primary" data-act="ok" id="zs-ok" disabled>Übernehmen</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const aufraeumen = dialogBarrierefrei(overlay);
+
+    const buehne = overlay.querySelector('#zs-buehne');
+    const bild = overlay.querySelector('#zs-bild');
+    const regler = overlay.querySelector('#zs-zoom');
+    const vorschauGross = overlay.querySelector('#zs-vorschau-gross');
+    const vorschauKlein = overlay.querySelector('#zs-vorschau-klein');
+
+    let natB = 0, natH = 0;      // Masse des Fotos, wie der Browser es sieht (EXIF beruecksichtigt)
+    let mx = 0, my = 0;          // Punkt des Fotos in der Mitte des Kreises
+    let zoom = 1;
+    const kante = () => buehne.clientWidth || 1;
+    const basis = () => kante() / Math.min(natB, natH);   // Zoom 1 = kuerzere Seite fuellt den Kreis
+    const seite = () => kante() / (basis() * zoom);       // Fenstergroesse in Bildpunkten
+
+    function begrenzen() {
+      const h = seite() / 2;
+      mx = Math.max(h, Math.min(mx, natB - h));
+      my = Math.max(h, Math.min(my, natH - h));
+    }
+    function zeichnen() {
+      if (!natB) return;
+      begrenzen();
+      const s = basis() * zoom;
+      bild.style.width = (natB * s) + 'px';
+      bild.style.height = (natH * s) + 'px';
+      bild.style.left = (kante() / 2 - mx * s) + 'px';
+      bild.style.top = (kante() / 2 - my * s) + 'px';
+      // Die Vorschauen zeigen denselben Ausschnitt — als Hintergrundbild, damit sie unabhaengig
+      // von der Buehnengroesse stimmen.
+      for (const [el, px] of [[vorschauGross, 84], [vorschauKlein, 30]]) {
+        const f = px / seite();
+        el.style.backgroundImage = `url("${quellUrl}")`;
+        el.style.backgroundSize = `${natB * f}px ${natH * f}px`;
+        el.style.backgroundPosition = `${-(mx - seite() / 2) * f}px ${-(my - seite() / 2) * f}px`;
+      }
+    }
+
+    bild.onload = () => {
+      natB = bild.naturalWidth; natH = bild.naturalHeight;
+      mx = natB / 2; my = natH / 2; zoom = 1;
+      regler.value = '100';
+      overlay.querySelector('#zs-ok').disabled = false;
+      zeichnen();
+    };
+    bild.onerror = () => { fertig(null); toast('Das Bild konnte nicht geladen werden.', 'error'); };
+    bild.src = quellUrl;
+
+    // --- Schieben und Zoomen -------------------------------------------------
+    const zeiger = new Map();
+    let letzteMitte = null, letzterAbstand = 0;
+    buehne.addEventListener('pointerdown', (e) => {
+      // In try/catch: Bei einem synthetischen Zeiger (Test, Hilfstechnik) kennt der Browser die
+      // Kennung nicht und wirft — das darf das Schieben nicht verhindern.
+      try { buehne.setPointerCapture(e.pointerId); } catch (_) {}
+      zeiger.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      letzteMitte = null; letzterAbstand = 0;
+      e.preventDefault();
+    });
+    buehne.addEventListener('pointermove', (e) => {
+      if (!zeiger.has(e.pointerId) || !natB) return;
+      zeiger.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const punkte = [...zeiger.values()];
+      const s = basis() * zoom;
+      if (punkte.length === 1) {
+        const p = punkte[0];
+        if (letzteMitte) { mx -= (p.x - letzteMitte.x) / s; my -= (p.y - letzteMitte.y) / s; }
+        letzteMitte = { x: p.x, y: p.y };
+      } else {
+        // Zwei Finger: Abstand steuert den Zoom, die Mitte zwischen ihnen das Schieben.
+        const [a, b] = punkte;
+        const abstand = Math.hypot(a.x - b.x, a.y - b.y);
+        const mitte = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        if (letzterAbstand > 0 && abstand > 0) zoomSetzen(zoom * (abstand / letzterAbstand));
+        if (letzteMitte) { const s2 = basis() * zoom; mx -= (mitte.x - letzteMitte.x) / s2; my -= (mitte.y - letzteMitte.y) / s2; }
+        letzterAbstand = abstand; letzteMitte = mitte;
+      }
+      zeichnen();
+      e.preventDefault();
+    });
+    const loslassen = (e) => {
+      zeiger.delete(e.pointerId);
+      if (zeiger.size < 2) letzterAbstand = 0;
+      if (zeiger.size === 0) letzteMitte = null;
+      else letzteMitte = null;   // beim Wechsel der Fingerzahl neu ansetzen, sonst springt es
+    };
+    buehne.addEventListener('pointerup', loslassen);
+    buehne.addEventListener('pointercancel', loslassen);
+    buehne.addEventListener('wheel', (e) => {
+      if (!natB) return;
+      zoomSetzen(zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
+      zeichnen();
+      e.preventDefault();
+    }, { passive: false });
+
+    function zoomSetzen(z) {
+      zoom = Math.max(1, Math.min(4, z));
+      regler.value = String(Math.round(zoom * 100));
+    }
+    regler.addEventListener('input', () => { zoomSetzen(Number(regler.value) / 100); zeichnen(); });
+    window.addEventListener('resize', zeichnen);
+
+    // --- Schliessen ----------------------------------------------------------
+    function fertig(wert) {
+      window.removeEventListener('resize', zeichnen);
+      document.removeEventListener('keydown', beiTaste);
+      overlay.remove(); aufraeumen();
+      if (objektUrl) URL.revokeObjectURL(objektUrl);
+      resolve(wert);
+    }
+    const beiTaste = (e) => { if (e.key === 'Escape') fertig(null); };
+    document.addEventListener('keydown', beiTaste);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) fertig(null); });
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => fertig(null));
+    overlay.querySelector('[data-act="ok"]').addEventListener('click', () => {
+      if (!natB) return fertig(null);
+      begrenzen();
+      const sw = seite();
+      fertig({
+        links: Math.round(mx - sw / 2), oben: Math.round(my - sw / 2),
+        breite: Math.round(sw), hoehe: Math.round(sw),
+        bildBreite: natB, bildHoehe: natH,
+      });
+    });
+  });
+}
+
 async function kontoAvatarKarte() {
   const k = document.getElementById('konto-avatar');
   if (!k) return;
@@ -2064,12 +2243,15 @@ async function kontoAvatarKarte() {
            Zeitnachweis und Auftrags-Board. <strong>Ohne Bild bleibt dort alles wie bisher</strong> —
            du musst also keines hochladen.</p>
         <input type="file" id="avatar-datei" accept="image/*" style="display:none">
-        <button class="btn btn-primary btn-sm" id="avatar-waehlen">${hatBild ? 'Anderes Bild wählen' : 'Bild hochladen'}</button>
-        ${hatBild ? '<button class="btn btn-outline btn-sm" id="avatar-weg" style="margin-left:.5rem">Entfernen</button>' : ''}
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" id="avatar-waehlen">${hatBild ? 'Anderes Bild wählen' : 'Bild hochladen'}</button>
+          ${hatBild ? '<button class="btn btn-outline btn-sm" id="avatar-ausschnitt">Ausschnitt ändern</button>' : ''}
+          ${hatBild ? '<button class="btn btn-outline btn-sm" id="avatar-weg">Entfernen</button>' : ''}
+        </div>
         <div style="font-size:.78rem;color:var(--text-light);margin-top:.4rem">
-          Wird quadratisch zugeschnitten und verkleinert (auch ein großes Handyfoto ist danach nur
-          wenige Kilobyte). Nur angemeldete Kolleginnen und Kollegen sehen es — jederzeit wieder
-          entfernbar.
+          Du wählst selbst, welcher Ausschnitt in den Kreis kommt — und kannst das später jederzeit
+          ändern, ohne das Foto noch einmal herauszusuchen. Nur angemeldete Kolleginnen und Kollegen
+          sehen es, entfernen kannst du es immer.
         </div>
       </div>
     </div>`;
@@ -2080,14 +2262,40 @@ async function kontoAvatarKarte() {
   document.getElementById('avatar-waehlen').addEventListener('click', () => datei.click());
   datei.addEventListener('change', async () => {
     if (!datei.files || !datei.files[0]) return;
+    const gewaehlt = datei.files[0];
+    // Das Feld leeren, sonst loest dieselbe Datei beim naechsten Mal kein `change` aus.
+    datei.value = '';
+    const rechteck = await avatarZuschnittDialog({ datei: gewaehlt });
+    if (!rechteck) return;                    // abgebrochen — nichts hochladen
     const fd = new FormData();
-    fd.append('bild', datei.files[0]);
+    fd.append('bild', gewaehlt);
+    fd.append('zuschnitt', JSON.stringify(rechteck));
     try {
       await api('POST', '/api/avatare', fd, true);
       toast('Profilbild gespeichert', 'success');
       await kontoAvatarKarte();
       kopfzeileAvatarAktualisieren();
     } catch (err) { toast(err.message || 'Hochladen fehlgeschlagen', 'error'); }
+  });
+
+  // Ausschnitt aendern, ohne neues Foto: Das Original liegt auf dem Server.
+  const ausschnitt = document.getElementById('avatar-ausschnitt');
+  if (ausschnitt) ausschnitt.addEventListener('click', async () => {
+    let url = null;
+    try {
+      // Mit Anmelde-Token holen — das Original liegt hinter der Anmeldung, ein blosses <img src>
+      // koennte den Token nicht mitschicken.
+      const antwort = await fetch('/api/avatare/original', { headers: { Authorization: 'Bearer ' + S.token } });
+      if (!antwort.ok) throw new Error('Zu diesem Bild ist kein Original gespeichert. Bitte lade es einmal neu hoch.');
+      url = URL.createObjectURL(await antwort.blob());
+      const rechteck = await avatarZuschnittDialog({ url });
+      if (!rechteck) return;
+      await api('POST', '/api/avatare/zuschnitt', { zuschnitt: rechteck });
+      toast('Ausschnitt gespeichert', 'success');
+      await kontoAvatarKarte();
+      kopfzeileAvatarAktualisieren();
+    } catch (err) { toast(err.message || 'Ausschnitt konnte nicht geändert werden', 'error'); }
+    finally { if (url) URL.revokeObjectURL(url); }
   });
   const weg = document.getElementById('avatar-weg');
   if (weg) weg.addEventListener('click', async () => {

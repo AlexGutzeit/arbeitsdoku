@@ -84,8 +84,16 @@ const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console
     const hoch = await uploadAvatar(eigen, rohbild);
     ok('Profilbild hochgeladen', hoch.status===200 && hoch.body && hoch.body.success, JSON.stringify(hoch.body));
     const avatarDir = path.join(__dirname, '..', 'storage', 'avatare');
-    const bilder = [path.join(avatarDir, `${u.id}.webp`), path.join(avatarDir, `${u.id}-gross.webp`)];
-    ok('… liegt in zwei Groessen auf der Platte', bilder.every(f => fs.existsSync(f)), bilder.join(', '));
+    // DREI Dateien: die beiden Anzeigegroessen und das Original. Letzteres ist die Grundlage
+    // dafuer, dass der Ausschnitt spaeter ohne neues Foto aenderbar bleibt — faellt es beim
+    // Ruecksichern unter den Tisch, waere das ein stiller Verlust, den niemand sofort bemerkt.
+    const bilder = [
+      path.join(avatarDir, `${u.id}.webp`),
+      path.join(avatarDir, `${u.id}-gross.webp`),
+      path.join(avatarDir, `${u.id}-original.webp`),
+    ];
+    ok('… liegt in zwei Groessen plus Original auf der Platte', bilder.every(f => fs.existsSync(f)),
+      bilder.filter(f => !fs.existsSync(f)).join(', ') || '—');
     const vorher = bilder.map(f => sha(fs.readFileSync(f)));
 
     // Backup herunterladen (Zip)
@@ -109,13 +117,18 @@ const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console
     const list = await reqJSON('GET','/api/users', admin);
     ok('Nach Restore: Testnutzer noch vorhanden', (list.body.users||[]).some(x => x.username==='backuptarget'), '');
 
-    ok('Nach Restore: beide Profilbilder wieder auf der Platte', bilder.every(f => fs.existsSync(f)),
+    ok('Nach Restore: alle drei Profilbild-Dateien wieder auf der Platte', bilder.every(f => fs.existsSync(f)),
       bilder.filter(f => !fs.existsSync(f)).join(', ') || '—');
     const nachher = bilder.filter(f => fs.existsSync(f)).map(f => sha(fs.readFileSync(f)));
     ok('… und Byte fuer Byte dieselben Dateien', JSON.stringify(vorher) === JSON.stringify(nachher),
       `${vorher.join('/')} → ${nachher.join('/')}`);
     const wieder = await getBinary(`/api/avatare/${u.id}`, admin);
     ok('… und werden wieder ausgeliefert', wieder.status === 200 && wieder.buf.length > 0, String(wieder.status));
+    // Und der Ausschnitt laesst sich danach immer noch aendern — genau dafuer ist das Original da.
+    const nochmalSchneiden = await reqJSON('POST', '/api/avatare/zuschnitt', eigen,
+      { zuschnitt: { links: 0, oben: 0, breite: 200, hoehe: 200, bildBreite: 300, bildHoehe: 300 } });
+    ok('… und der Ausschnitt ist weiterhin aenderbar', nochmalSchneiden.status === 200,
+      `${nochmalSchneiden.status} ${JSON.stringify(nochmalSchneiden.body)}`);
     ok('Der Eintrag in der Datenbank kam mit zurueck',
       !!(await reqJSON('GET','/api/avatare', admin)).body.stand[String(u.id)],
       JSON.stringify((await reqJSON('GET','/api/avatare', admin)).body.stand));

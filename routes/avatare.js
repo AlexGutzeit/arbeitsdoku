@@ -28,8 +28,60 @@ function verzeichnisSichern() { if (!fs.existsSync(bilderDir)) fs.mkdirSync(bild
 // Das grosse Bild ist zugleich das Original im Bestand: Braucht man spaeter eine dritte Groesse,
 // laesst sie sich daraus rechnen, ohne dass jemand neu hochladen muss.
 const GROESSEN = { klein: 96, gross: 512 };
-const dateiFuer = (userId, groesse = 'klein') =>
-  path.join(bilderDir, `${Number(userId)}${groesse === 'gross' ? '-gross' : ''}.webp`);
+// Dazu das ORIGINAL. Ohne es waere ein misslungener Ausschnitt endgueltig: Gespeichert werden
+// sonst nur die fertigen Quadrate, und wer den Kopf zu weit rechts erwischt hat, muesste das Foto
+// von Hand zurechtschneiden und neu hochladen. Mit dem Original laesst sich der Ausschnitt
+// jederzeit neu waehlen. Es wird auf 1600 px laengste Kante gerechnet (WebP, Qualitaet 82) —
+// genug fuer jeden spaeteren Zuschnitt, aber ein 12-MB-Handyfoto landet als wenige hundert
+// Kilobyte auf der Platte statt in voller Groesse.
+const ORIGINAL_KANTE = 1600;
+const dateiFuer = (userId, groesse = 'klein') => {
+  const zusatz = groesse === 'gross' ? '-gross' : (groesse === 'original' ? '-original' : '');
+  return path.join(bilderDir, `${Number(userId)}${zusatz}.webp`);
+};
+
+// Der Ausschnitt kommt aus dem Browser in Bildpunkten des Bildes, das der Nutzer gesehen hat.
+// Mitgeschickt werden dessen Masse — denn was der Browser anzeigt, muss nicht Punkt fuer Punkt
+// dem entsprechen, was sharp hier sieht: Der Browser dreht ein Handyfoto anhand der EXIF-Angabe
+// selbst, und das Original auf der Platte ist auf 1600 px heruntergerechnet. Deshalb wird der
+// Ausschnitt VERHAELTNISMAESSIG umgerechnet statt roh uebernommen.
+function zuschnittUmrechnen(wunsch, breite, hoehe) {
+  if (!wunsch) return null;
+  const z = (typeof wunsch === 'string') ? JSON.parse(wunsch) : wunsch;
+  const zahl = (v) => (Number.isFinite(Number(v)) ? Number(v) : NaN);
+  const bB = zahl(z.bildBreite), bH = zahl(z.bildHoehe);
+  if (!(bB > 0) || !(bH > 0)) return null;
+  const fx = breite / bB, fy = hoehe / bH;
+
+  let links = Math.round(zahl(z.links) * fx);
+  let oben = Math.round(zahl(z.oben) * fy);
+  let br = Math.round(zahl(z.breite) * fx);
+  let ho = Math.round(zahl(z.hoehe) * fy);
+  if ([links, oben, br, ho].some(n => !Number.isFinite(n))) return null;
+
+  // Zurechtruecken statt ablehnen: Ein um einen Bildpunkt ueberstehendes Rechteck ist kein
+  // Angriff, sondern Rundung. Was danach immer noch unsinnig ist, faellt unten durch.
+  links = Math.max(0, Math.min(links, breite - 1));
+  oben = Math.max(0, Math.min(oben, hoehe - 1));
+  br = Math.max(1, Math.min(br, breite - links));
+  ho = Math.max(1, Math.min(ho, hoehe - oben));
+  if (br < 32 || ho < 32) return null;          // zu klein waere nur noch Brei
+  return { left: links, top: oben, width: br, height: ho };
+}
+
+// Aus einem (bereits EXIF-gedrehten) Bild die beiden Anzeigegroessen rechnen und ablegen.
+// Mit Ausschnitt wird genau dieser genommen; ohne raet `attention` wie bisher.
+async function groessenSchreiben(userId, gedreht, ausschnitt) {
+  for (const [name, kante] of Object.entries(GROESSEN)) {
+    let bild = sharp(gedreht);
+    if (ausschnitt) bild = bild.extract(ausschnitt);
+    const daten = await bild
+      .resize(kante, kante, ausschnitt ? { fit: 'cover' } : { fit: 'cover', position: 'attention' })
+      .webp({ quality: name === 'gross' ? 86 : 80 })
+      .toBuffer();
+    fs.writeFileSync(dateiFuer(userId, name), daten);
+  }
+}
 
 // Grosszuegig beim Hochladen (Handyfotos sind gross), streng beim Ablegen: sharp rechnet alles auf
 // dieselbe kleine Kantenlaenge herunter.
@@ -54,6 +106,20 @@ router.get('/', authenticate, (req, res) => {
     for (const r of reihen) stand[r.user_id] = r.updated_at;
     res.json({ stand });
   } catch (_) { res.json({ stand: {} }); }
+});
+
+// Das eigene Original — nur fuer einen selbst. Die Oberflaeche braucht es, um den Ausschnitt
+// neu zu waehlen, ohne dass man das Foto noch einmal heraussuchen muss. Bewusst NICHT fuer
+// Kollegen: Das Original zeigt mehr als der Kreis, den man freigegeben hat.
+//
+// Diese Route MUSS vor '/:id' stehen — sonst liest Express „original" als Nutzer-Kennung.
+router.get('/original', authenticate, (req, res) => {
+  const datei = dateiFuer(req.user.id, 'original');
+  if (!fs.existsSync(datei)) return res.status(404).json({ error: 'Kein Original vorhanden' });
+  res.setHeader('Content-Type', 'image/webp');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'private, max-age=60');
+  fs.createReadStream(datei).pipe(res);
 });
 
 // Bild ausliefern. Nur für Angemeldete — deshalb hier und nicht als statische Datei.
@@ -89,19 +155,25 @@ router.post('/', authenticate, (req, res) => {
     }
     try {
       verzeichnisSichern();
-      // `cover` schneidet mittig zu — ein Hochformat-Foto wird also zum Quadrat, ohne zu verzerren.
-      // `rotate()` ohne Argument wertet die Ausrichtung aus dem Foto aus; ohne das lägen
-      // Handyfotos quer.
-      // `cover` schneidet mittig zu, `position: attention` sucht dabei den interessantesten
-      // Bildausschnitt — bei Portraits landet damit das Gesicht im Kreis und nicht die Schulter.
-      for (const [name, kante] of Object.entries(GROESSEN)) {
-        const bild = await sharp(req.file.buffer)
-          .rotate()
-          .resize(kante, kante, { fit: 'cover', position: 'attention' })
-          .webp({ quality: name === 'gross' ? 86 : 80 })
-          .toBuffer();
-        fs.writeFileSync(dateiFuer(req.user.id, name), bild);
-      }
+      // `rotate()` ohne Argument wertet die Ausrichtung aus dem Foto aus; ohne das laegen
+      // Handyfotos quer. Das passiert EINMAL vorweg, damit alles Weitere — Ausschnitt, Original,
+      // Anzeigegroessen — auf demselben, aufrecht stehenden Bild rechnet.
+      const gedreht = await sharp(req.file.buffer).rotate().toBuffer();
+      const masse = await sharp(gedreht).metadata();
+
+      // Der Nutzer hat den Ausschnitt gewaehlt. Fehlt er (aeltere Oberflaeche, direkter
+      // API-Aufruf), raet `attention` wie bisher weiter — das bleibt abwaertskompatibel.
+      let ausschnitt = null;
+      try { ausschnitt = zuschnittUmrechnen(req.body && req.body.zuschnitt, masse.width, masse.height); }
+      catch (_) { ausschnitt = null; }
+
+      await groessenSchreiben(req.user.id, gedreht, ausschnitt);
+
+      // Original sichern, damit der Ausschnitt spaeter ohne erneutes Hochladen aenderbar ist.
+      await sharp(gedreht)
+        .resize(ORIGINAL_KANTE, ORIGINAL_KANTE, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toFile(dateiFuer(req.user.id, 'original'));
 
       const db = getDb();
       const jetzt = new Date().toISOString();
@@ -120,7 +192,7 @@ router.post('/', authenticate, (req, res) => {
 
 router.delete('/', authenticate, (req, res) => {
   try {
-    for (const name of Object.keys(GROESSEN)) {
+    for (const name of [...Object.keys(GROESSEN), 'original']) {
       try { fs.unlinkSync(dateiFuer(req.user.id, name)); } catch (_) { /* schon weg */ }
     }
     const db = getDb();
@@ -128,6 +200,31 @@ router.delete('/', authenticate, (req, res) => {
     logAudit(db, { userId: req.user.id, username: req.user.username, action: 'avatar_entfernt', ip: req.ip });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: 'Interner Serverfehler' }); }
+});
+
+// Ausschnitt neu waehlen, ohne neues Foto. Rechnet die beiden Anzeigegroessen aus dem Original.
+router.post('/zuschnitt', authenticate, async (req, res) => {
+  try {
+    const datei = dateiFuer(req.user.id, 'original');
+    if (!fs.existsSync(datei)) {
+      return res.status(404).json({ error: 'Zu diesem Bild ist kein Original gespeichert. Bitte neu hochladen.' });
+    }
+    const masse = await sharp(datei).metadata();
+    const ausschnitt = zuschnittUmrechnen(req.body && req.body.zuschnitt, masse.width, masse.height);
+    if (!ausschnitt) return res.status(400).json({ error: 'Ungültiger Ausschnitt' });
+
+    await groessenSchreiben(req.user.id, fs.readFileSync(datei), ausschnitt);
+    const db = getDb();
+    const jetzt = new Date().toISOString();
+    db.prepare(`INSERT INTO user_avatars (user_id, updated_at) VALUES (?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET updated_at = excluded.updated_at`)
+      .run(req.user.id, jetzt);
+    logAudit(db, { userId: req.user.id, username: req.user.username, action: 'avatar_ausschnitt', ip: req.ip });
+    res.json({ success: true, stand: jetzt });
+  } catch (e) {
+    console.error('Avatar-Ausschnitt fehlgeschlagen:', e.message);
+    res.status(400).json({ error: 'Der Ausschnitt konnte nicht angewendet werden.' });
+  }
 });
 
 module.exports = router;

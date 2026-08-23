@@ -2114,5 +2114,36 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .mitarbeiter-tabelle th:first-child,
 .mitarbeiter-tabelle td:first-child { min-width: 11rem; }
 
+/* === Zuschnitt-Fenster fuers Profilbild ===
+   Der Kreis steht fest, das Bild wird darunter geschoben. `touch-action: none` ist Pflicht:
+   Ohne das scrollt der Browser die Seite, statt das Bild zu verschieben — auf dem Handy waere
+   der Dialog damit unbedienbar. */
+.zuschnitt-modal { max-width: 420px; }
+.zuschnitt-hinweis { margin: 0 0 .8rem; font-size: .85rem; color: var(--text-light); }
+.zuschnitt-buehne {
+  position: relative; width: min(320px, 72vw); aspect-ratio: 1 / 1; margin: 0 auto;
+  overflow: hidden; border-radius: 10px; background: #1f2733;
+  touch-action: none; cursor: grab; user-select: none;
+}
+.zuschnitt-buehne:active { cursor: grabbing; }
+.zuschnitt-buehne img { position: absolute; max-width: none; pointer-events: none; }
+/* Alles ausserhalb des Kreises abdunkeln — der grosse Schatten faerbt die Flaeche um den Kreis. */
+.zuschnitt-maske {
+  position: absolute; inset: 0; border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, .55);
+  outline: 2px solid rgba(255, 255, 255, .85); outline-offset: -2px;
+  pointer-events: none;
+}
+.zuschnitt-regler { display: flex; align-items: center; gap: .6rem; margin: .9rem auto 0; width: min(320px, 72vw); }
+.zuschnitt-regler input[type="range"] { flex: 1; }
+.zuschnitt-vorschau-zeile { display: flex; align-items: center; gap: .7rem; margin-top: .9rem; }
+.zuschnitt-vorschau {
+  flex: 0 0 auto; width: 84px; height: 84px; border-radius: 50%;
+  background-repeat: no-repeat; background-color: var(--bg, #eef2f7);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .12);
+}
+.zuschnitt-vorschau.klein { width: 30px; height: 30px; }
+.zuschnitt-vorschau-text { font-size: .78rem; color: var(--text-light); }
+
 /* Vorschau auf „Mein Konto" */
 .avatar-gross { width: 96px; height: 96px; font-size: 34px; }
