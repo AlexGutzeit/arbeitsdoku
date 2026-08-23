@@ -120,6 +120,17 @@ body {
   align-items: center;
   gap: 0.5rem;
 }
+/* Bild + Name fuehren nach „Mein Konto". Mindestens 44 px hoch und breit: Am Handy blendet die
+   Regel weiter unten den Namen aus, dann bliebe sonst nur das 28-px-Bild als Tippziel. */
+.header .konto-link {
+  display: flex; align-items: center; gap: 0.5rem;
+  color: inherit; text-decoration: none;
+  min-height: 44px; min-width: 44px; justify-content: center;
+  padding: 0 0.35rem; border-radius: 8px;
+}
+.header .konto-link:hover { background: rgba(255,255,255,0.15); }
+.header .konto-link:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+
 .header .logout-btn {
   background: rgba(255,255,255,0.15);
   border: none;

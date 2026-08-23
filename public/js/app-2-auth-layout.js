@@ -397,8 +397,13 @@ function layout(content, activeNav) {
       <button class="menu-btn" id="menu-btn" aria-label="Menü öffnen" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
       <span class="title">Arbeitsdoku</span>
       <div class="user-info">
-        <span id="kopf-avatar">${avatarHtml(S.user, 28)}</span>
-        <span class="user-name">${esc(S.user.name)}</span>
+        <!-- Bild und Name fuehren nach „Mein Konto" — dort erwartet man sie (Alex, 23.08.2026).
+             Der Menuepunkt bleibt daneben bestehen; beide Wege sind gewollt. Als <a>, damit
+             Tastatur und Screenreader ihn ohne Zutun finden. -->
+        <a href="#/konto" class="konto-link" title="Mein Konto" aria-label="Mein Konto öffnen">
+          <span id="kopf-avatar">${avatarHtml(S.user, 28)}</span>
+          <span class="user-name">${esc(S.user.name)}</span>
+        </a>
         <button class="logout-btn" id="logout-btn">Abmelden</button>
       </div>
     </div>

@@ -357,6 +357,42 @@ async function scharfSchalten(adminToken, werte) {
     }));
     for (const [name, da] of Object.entries(karten)) ok(`Karte „${name}" ist da`, da, JSON.stringify(karten));
 
+    console.log('\n── Zwei Wege nach „Mein Konto" (Alex, 23.08.2026) ──');
+    // Beides ist gewollt: der Menuepunkt UND die Kopfzeile. Wer oben auf seinen Namen tippt,
+    // erwartet dort sein Konto — das ist die Gewohnheit aus jeder anderen App.
+    await page.goto(BASIS + '/#/planning', { waitUntil: 'domcontentloaded' }); await sleep(1800);
+    ok('der Menuepunkt fuehrt hin', !!(await page.$('.sidebar a[href="#/konto"]')));
+    const kopf = await page.$('.header .konto-link');
+    ok('Bild und Name in der Kopfzeile sind ein Link', !!kopf);
+    ok('… mit einer Beschriftung fuer Screenreader',
+      /Mein Konto/i.test(await page.$eval('.header .konto-link', el => el.getAttribute('aria-label') || '')));
+    const masse = await page.$eval('.header .konto-link', el => {
+      const r = el.getBoundingClientRect(); return { b: Math.round(r.width), h: Math.round(r.height) };
+    });
+    ok('… und gross genug zum Antippen (mind. 44 px)', masse.b >= 44 && masse.h >= 44, JSON.stringify(masse));
+    await page.click('.header .konto-link');
+    await sleep(1800);
+    ok('… ein Klick darauf fuehrt nach „Mein Konto"',
+      (await page.evaluate(() => location.hash)) === '#/konto', await page.evaluate(() => location.hash));
+
+    // Am Handy blendet die Oberflaeche den Namen aus — dann darf das Ziel nicht auf 28 px
+    // zusammenschrumpfen. Genau deshalb steht die Mindestgroesse im Stylesheet.
+    await page.setViewport({ width: 380, height: 800 }); await sleep(900);
+    await page.goto(BASIS + '/#/planning', { waitUntil: 'domcontentloaded' }); await sleep(1800);
+    const klein = await page.$eval('.header .konto-link', el => {
+      const r = el.getBoundingClientRect();
+      const name = el.querySelector('.user-name');
+      return { b: Math.round(r.width), h: Math.round(r.height),
+               nameSichtbar: name ? getComputedStyle(name).display !== 'none' : false };
+    });
+    ok('am Handy ist der Name ausgeblendet', klein.nameSichtbar === false, JSON.stringify(klein));
+    ok('… das Tippziel bleibt trotzdem mindestens 44 px', klein.b >= 44 && klein.h >= 44, JSON.stringify(klein));
+    await page.click('.header .konto-link'); await sleep(1800);
+    ok('… und der Weg funktioniert auch dort',
+      (await page.evaluate(() => location.hash)) === '#/konto', await page.evaluate(() => location.hash));
+    await page.setViewport({ width: 900, height: 950 });
+    await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' }); await sleep(1800);
+
     ok('das eigene Geburtsdatum steht dort',
       /hinterlegt|kein Geburtsdatum/.test(await page.$eval('#konto-geburtstag', el => el.innerText)));
     ok('die Stammdaten zeigen die Soll-Stunden',
