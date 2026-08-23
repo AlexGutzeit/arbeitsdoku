@@ -29,7 +29,17 @@ const today = new Date().toLocaleDateString('sv-SE');
   let browser;
   try {
     for (let i = 0; i < 50; i++) { try { const h = await req('GET', '/health'); if (h.status === 200) break; } catch (_) {} await sleep(150); }
-    const apw = (fs.readFileSync('/tmp/form-hardening-srv.log', 'utf8').match(/admin\s+->\s+(\S+)/) || [])[1];
+    // Auf die Passwortzeile WARTEN, nicht bloss einmal nachsehen: /health antwortet, bevor die
+    // Startpasswoerter im Protokoll stehen. Wurde hier zu frueh gelesen, war `apw` undefiniert —
+    // der Test lief dann bis in die Anmeldemaske und starb dort an `type(undefined)`, was wie ein
+    // Oberflaechenfehler aussieht und keiner ist. Genau so ist er am 23.08.2026 umgefallen.
+    let apw;
+    for (let i = 0; i < 150; i++) {
+      apw = (fs.readFileSync('/tmp/form-hardening-srv.log', 'utf8').match(/admin\s+->\s+(\S+)/) || [])[1];
+      if (apw) break;
+      await sleep(200);
+    }
+    if (!apw) throw new Error('Startpasswort des Admins nicht im Serverprotokoll gefunden');
     const admin = await tok('admin', apw);
     const target = (await req('POST', '/api/users', admin, { username: 'b4target', password: 'Test1234!', name: 'B4 Target', role: 'mitarbeiter' })).body.user;
 
