@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**175 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**176 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -196,6 +196,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `trash-matrix-ui.js` | KOMPLEXER Papierkorb-/Lösch-Matrix-Test (Puppeteer) — Abwesenheits- UND Eintrags-Logik über alle Rollen. |
 | `trash-nav-ui.js` | UI-Smoke (Puppeteer): Papierkorb-Navigation je Rolle. |
 | `twofa-anmeldung.js` | Der ganze Weg: Authenticator einrichten, damit anmelden, Gerät merken, Einrichtung erzwingen. |
+| `twofa-eigenes-intervall.js` | Wer sich FREIWILLIG absichert, bestimmt selbst, wie oft ein Code verlangt wird |
 | `twofa-konto-ui.js` | Die Oberfläche: Seite „Mein Konto", Code-Abfrage beim Anmelden, Einrichtungs-Zwang. |
 | `twofa-regeln.js` | Die Regeln der Zwei-Faktor-Anmeldung: Wer muss wie oft einen Code eingeben? |
 | `twofa-scharfschalten.js` | Scharfschalten nur mit gültigem Code (Alex, 23.08.2026). |

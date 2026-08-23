@@ -58,11 +58,13 @@ router.post('/login', loginLimiter, async (req, res) => {
   // Geraet, von dem die Anmeldung kommt. Steht die Rolle auf „aus" und ist nichts eingerichtet,
   // laeuft alles wie vor der Zwei-Faktor-Arbeit — das ist der Normalfall nach dem Update.
   const modus = zf.modusFuerRolle(db, user.role);
-  const hatAuthenticator = zf.eingerichtet(db, user.id);
+  const zustand2fa = zf.zustandLesen(db, user.id);
+  const hatAuthenticator = zustand2fa.aktiv;
   const geraetKennung = (req.cookies || {}).ad_geraet || null;
   const geraet = zf.geraetFinden(db, user.id, geraetKennung);
 
-  if (zf.codeNoetig({ modus, eingerichtet: hatAuthenticator, geraetBestaetigtAm: geraet ? geraet.confirmed_at : null })) {
+  if (zf.codeNoetig({ modus, eingerichtet: hatAuthenticator, eigenModus: zustand2fa.eigen_modus,
+    geraetBestaetigtAm: geraet ? geraet.confirmed_at : null })) {
     // Bewusst 200 und nicht 401: Das Passwort war ja richtig. Ein 401 wuerde im Browser ausserdem
     // den automatischen Abmelde-Weg ausloesen (app-1-core.js).
     //
@@ -70,10 +72,13 @@ router.post('/login', loginLimiter, async (req, res) => {
     // ausdruecklich abgelehnt — er oeffnet also nichts ausser dem zweiten Schritt.
     const zwischenToken = jwt.sign({ userId: user.id, pending2fa: true }, JWT_SECRET, { expiresIn: '5m' });
     logAudit(db, { userId: user.id, username: user.username, action: 'login_2fa_noetig', ip: req.ip });
+    // „Geraet merken" ergibt bei „bei jeder Anmeldung" keinen Sinn — egal ob die Rolle das
+    // vorgibt oder der Nutzer es sich selbst so gewaehlt hat.
+    const wirksam = modus === 'aus' ? (zustand2fa.eigen_modus || 'geraet') : modus;
     return res.json({
       zwei_faktor_erforderlich: true,
       zwischen_token: zwischenToken,
-      geraet_merkbar: modus !== 'immer',
+      geraet_merkbar: wirksam !== 'immer',
     });
   }
 
@@ -174,7 +179,9 @@ router.post('/login/2fa', zweiFaktorLimiter, (req, res) => {
 
     // Geraet merken — nur wenn gewuenscht UND die Rolle es zulaesst.
     const modus = zf.modusFuerRolle(db, user.role);
-    if (geraet_merken && modus !== 'immer') {
+    const eigen = zf.zustandLesen(db, user.id).eigen_modus;
+    const wirksam = modus === 'aus' ? (eigen || 'geraet') : modus;
+    if (geraet_merken && wirksam !== 'immer') {
       const kennung = (req.cookies || {}).ad_geraet || zf.geraetKennungErzeugen();
       zf.geraetMerken(db, user.id, kennung, req.headers['user-agent'], req.ip);
       // httpOnly: fuer JavaScript unlesbar. Laege die Kennung im localStorage, koennte eine

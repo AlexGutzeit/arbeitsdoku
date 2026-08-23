@@ -83,10 +83,12 @@ function geraetGueltig(bestaetigtAm, modus, jetztMs = Date.now()) {
 // `modus === 'aus'` und trotzdem eingerichtet: Wer sich freiwillig abgesichert hat, soll das auch
 // spüren — sonst wäre die freiwillige Einrichtung wirkungslos. Es gilt dann „einmal pro Gerät",
 // die mildeste Stufe.
-function codeNoetig({ modus, eingerichtet, geraetBestaetigtAm = null, jetztMs = Date.now() }) {
+function codeNoetig({ modus, eingerichtet, eigenModus = null, geraetBestaetigtAm = null, jetztMs = Date.now() }) {
   if (notabschaltung()) return false;
   if (!eingerichtet) return false;                       // ohne Authenticator kann man nichts abfragen
-  const wirksam = (modus === 'aus') ? 'geraet' : modus;
+  // Schreibt die Rolle etwas vor, gewinnt sie. Sonst gilt der eigene Wunsch — und ohne den
+  // weiterhin „einmal pro Geraet", die mildeste Stufe.
+  const wirksam = (modus === 'aus') ? (EIGENE_MODI.includes(eigenModus) ? eigenModus : 'geraet') : modus;
   return !geraetGueltig(geraetBestaetigtAm, wirksam, jetztMs);
 }
 
@@ -108,16 +110,32 @@ function codeNoetig({ modus, eingerichtet, geraetBestaetigtAm = null, jetztMs = 
 // Schluessel wuerfelt.
 function zustandLesen(db, userId) {
   try {
-    const r = db.prepare('SELECT secret_enc, pending_enc, aktiv, confirmed_at, last_step FROM twofa_secrets WHERE user_id = ?').get(userId);
-    if (!r) return { vorhanden: false, bestaetigt: false, aktiv: false, wartend: false };
+    const r = db.prepare('SELECT secret_enc, pending_enc, aktiv, confirmed_at, last_step, eigen_modus FROM twofa_secrets WHERE user_id = ?').get(userId);
+    if (!r) return { vorhanden: false, bestaetigt: false, aktiv: false, wartend: false, eigen_modus: null };
     return {
       vorhanden: true,
       bestaetigt: !!r.confirmed_at,
       aktiv: !!r.confirmed_at && (r.aktiv === null || r.aktiv === undefined || Number(r.aktiv) === 1),
       wartend: !!r.pending_enc,
       last_step: Number(r.last_step || 0),
+      // Eigener Wunsch, nur gueltig solange die Rolle nichts vorschreibt. Unbekannte Werte
+      // werden verworfen — dann gilt wieder die mildeste Stufe.
+      eigen_modus: EIGENE_MODI.includes(r.eigen_modus) ? r.eigen_modus : null,
     };
-  } catch (_) { return { vorhanden: false, bestaetigt: false, aktiv: false, wartend: false }; }
+  } catch (_) { return { vorhanden: false, bestaetigt: false, aktiv: false, wartend: false, eigen_modus: null }; }
+}
+
+// Was ein freiwillig abgesicherter Nutzer fuer sich waehlen darf. „aus" steht bewusst NICHT
+// darin: Ganz abschalten ist etwas anderes und hat seinen eigenen Weg (POST /2fa/aus), samt
+// Sperre, wenn die Rolle es verlangt.
+const EIGENE_MODI = MODI.filter(m => m !== 'aus');
+
+function eigenenModusSetzen(db, userId, modus) {
+  if (!EIGENE_MODI.includes(modus)) return false;
+  try {
+    const r = db.prepare('UPDATE twofa_secrets SET eigen_modus = ? WHERE user_id = ?').run(modus, userId);
+    return !!(r && (r.changes === undefined || r.changes > 0));
+  } catch (_) { return false; }
 }
 
 // „Eingerichtet" im Sinne der Anmeldung heisst: bestaetigt UND aktiv.
@@ -240,7 +258,7 @@ module.exports = {
   MODI, MODUS_TEXT, FENSTER_TAGE, ROLLEN, schluesselFuer,
   modusFuerRolle, alleModi, cacheVergessen,
   einrichtungNoetig, geraetGueltig, codeNoetig,
-  zustandLesen, eingerichtet, stillgelegt,
+  zustandLesen, eingerichtet, stillgelegt, EIGENE_MODI, eigenenModusSetzen,
   geheimnisLesen, wartendesGeheimnisLesen, wartendesGeheimnisAnlegen, wartendesUebernehmen,
   stilllegen, wiederAktivieren, schrittVerbrauchen, zuruecksetzen,
   geraetKennungErzeugen, geraetHash, geraetFinden, geraetMerken, geraetBenutzt, geraeteAlleLoeschen,

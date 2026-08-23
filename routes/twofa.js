@@ -43,6 +43,12 @@ function zustand(db, user) {
     modus,
     modus_text: zf.MODUS_TEXT[modus] || modus,
     pflicht: modus !== 'aus',
+    // Der eigene Wunsch — nur waehlbar, solange die Rolle nichts vorschreibt. Er bleibt auch
+    // gespeichert, wenn zwischenzeitlich eine Pflicht gilt, und greift danach wieder.
+    eigen_modus: z.eigen_modus || 'geraet',
+    eigen_modus_text: zf.MODUS_TEXT[z.eigen_modus || 'geraet'],
+    eigen_modus_waehlbar: fertig && modus === 'aus',
+    modi_auswahl: zf.EIGENE_MODI.map(m => ({ wert: m, text: zf.MODUS_TEXT[m] })),
     einrichtung_noetig: zf.einrichtungNoetig(modus, fertig),
     notabschaltung: notabschaltung(),
     // Abschalten darf nur, wen die Rolle nicht dazu verpflichtet.
@@ -146,6 +152,50 @@ router.post('/aus', authenticate, codeLimiter, (req, res) => {
     res.json({ success: true, zwei_faktor: zustand(db, req.user) });
   } catch (e) {
     console.error('2FA-Abschalten fehlgeschlagen:', e.message);
+    res.status(500).json({ error: 'Interner Serverfehler' });
+  }
+});
+
+// Wie oft will ich meinen Code eingeben? Nur fuer FREIWILLIG abgesicherte Nutzer — schreibt die
+// Rolle etwas vor, gewinnt sie, und diese Route lehnt ab.
+//
+// Mit Code, aus demselben Grund wie beim Abschalten: An einem unbeaufsichtigten, noch angemeldeten
+// Geraet soll niemand die eigene Absicherung lockern koennen. Wer die App gerade in der Hand hat,
+// tippt sechs Ziffern; wer sie nicht hat, kommt nicht heran.
+router.post('/eigener-modus', authenticate, codeLimiter, (req, res) => {
+  try {
+    const db = getDb();
+    const z = zustand(db, req.user);
+    if (!z.eingerichtet) return res.status(400).json({ error: 'Es ist nichts eingerichtet' });
+    if (z.pflicht) {
+      return res.status(403).json({
+        error: `Für deine Rolle gibt die Verwaltung vor, wie oft ein Code nötig ist (${z.modus_text}).`,
+      });
+    }
+    const modus = String((req.body || {}).modus || '');
+    if (!zf.EIGENE_MODI.includes(modus)) {
+      return res.status(400).json({ error: `Erwartet eines von: ${zf.EIGENE_MODI.join(', ')}` });
+    }
+
+    const geheim = zf.geheimnisLesen(db, req.user.id);
+    const schritt = geheim ? totp.pruefe(geheim, (req.body || {}).code) : null;
+    if (schritt === null) return res.status(400).json({ error: 'Der Code stimmt nicht. Prüfe auch die Uhrzeit deines Handys.' });
+    if (!zf.schrittVerbrauchen(db, req.user.id, schritt)) {
+      return res.status(400).json({ error: 'Dieser Code wurde bereits verwendet. Warte auf den nächsten.' });
+    }
+
+    if (!zf.eigenenModusSetzen(db, req.user.id, modus)) {
+      return res.status(500).json({ error: 'Konnte nicht gespeichert werden' });
+    }
+    // Strenger werden heisst auch: die gemerkten Geraete sollen das sofort spueren. Sonst kaeme
+    // jemand, der eben auf „bei jeder Anmeldung" gestellt hat, auf seinem alten Geraet weiter
+    // ohne Code hinein — und wunderte sich zu Recht.
+    zf.geraeteAlleLoeschen(db, req.user.id);
+    logAudit(db, { userId: req.user.id, username: req.user.username,
+      action: 'twofa_eigener_modus', details: modus, ip: req.ip });
+    res.json({ success: true, zwei_faktor: zustand(db, req.user) });
+  } catch (e) {
+    console.error('2FA-Intervall setzen fehlgeschlagen:', e.message);
     res.status(500).json({ error: 'Interner Serverfehler' });
   }
 });

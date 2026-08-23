@@ -1109,6 +1109,11 @@ function ensureTwoFactorSchema(targetDb) {
     ergaenze('last_step', 'INTEGER DEFAULT 0');
     ergaenze('pending_enc', 'TEXT');
     ergaenze('aktiv', 'INTEGER DEFAULT 1');
+    //   eigen_modus : Wie oft ein FREIWILLIG abgesicherter Nutzer seinen Code eingeben will
+    //                 (Alex, 23.08.2026). Greift nur, solange die Rolle nichts vorschreibt —
+    //                 sonst gewinnt die Vorgabe der Verwaltung. NULL = wie bisher „einmal pro
+    //                 Geraet", die mildeste Stufe.
+    ergaenze('eigen_modus', 'TEXT');
   } catch (e) {
     console.error('ensureTwoFactorSchema fehlgeschlagen:', e.message);
   }

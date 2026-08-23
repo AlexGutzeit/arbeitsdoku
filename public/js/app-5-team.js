@@ -2538,9 +2538,35 @@ async function kontoZweiFaktorKarte() {
     </div>`;
 
   if (z.eingerichtet) {
+    // Wie oft ein Code verlangt wird, darf jeder selbst bestimmen — solange die Rolle nichts
+    // vorschreibt (Alex, 23.08.2026). Gibt die Verwaltung etwas vor, gewinnt sie; der eigene
+    // Wunsch bleibt gespeichert und greift wieder, sobald die Pflicht aufgehoben wird.
+    const intervallHtml = z.eigen_modus_waehlbar ? `
+      <hr style="margin:1rem 0; border:none; border-top:1px solid var(--border)">
+      <div class="error-msg" id="zfa-intervall-fehler"></div>
+      <form id="zfa-intervall" style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-end">
+        <div class="form-group" style="margin:0">
+          <label for="zfa-modus">Wie oft soll ein Code verlangt werden?</label>
+          <select class="form-control" id="zfa-modus" style="min-width:12rem">
+            ${(z.modi_auswahl || []).map(m => `<option value="${esc(m.wert)}"${m.wert === z.eigen_modus ? ' selected' : ''}>${esc(m.text)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label for="zfa-modus-code">Aktueller Code</label>
+          <input type="text" class="form-control" id="zfa-modus-code" inputmode="numeric" maxlength="7" placeholder="123456" required style="width:9rem">
+        </div>
+        <button type="submit" class="btn btn-primary">Übernehmen</button>
+      </form>
+      <div style="font-size:.78rem;color:var(--text-light);margin-top:.25rem">
+        Der Code ist nötig, damit an einem unbeaufsichtigten Gerät niemand deine Absicherung
+        lockern kann. Beim Umstellen werden die gemerkten Geräte zurückgesetzt — sonst würde eine
+        strengere Einstellung dort nicht greifen.
+      </div>` : '';
+
     k.innerHTML = `${kopf}
       <p><strong style="color:var(--success)">Aktiv.</strong>
-         Abfrage: <strong>${esc(z.modus_text)}</strong>${z.pflicht ? ' (von der Verwaltung vorgegeben)' : ''}.</p>
+         Abfrage: <strong>${esc(z.modus_text)}</strong>${z.pflicht ? ' (von der Verwaltung vorgegeben)' : ' (von dir gewählt)'}.</p>
+      ${intervallHtml}
       ${z.abschaltbar
         ? `<div class="error-msg" id="zfa-aus-fehler"></div>
            <form id="konto-2fa-aus" style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-end">
@@ -2561,6 +2587,24 @@ async function kontoZweiFaktorKarte() {
              kannst du erst, wenn die Verwaltung die Pflicht für deine Rolle wieder aufhebt.</p>`}
       ${neuerSchluesselKnopf}
       <div id="zfa-einrichtung" style="display:none; margin-top:1rem"></div>`;
+    const intervall = document.getElementById('zfa-intervall');
+    if (intervall) intervall.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fehler = document.getElementById('zfa-intervall-fehler');
+      fehler.style.display = 'none';
+      try {
+        await api('POST', '/api/auth/2fa/eigener-modus', {
+          modus: document.getElementById('zfa-modus').value,
+          code: document.getElementById('zfa-modus-code').value.replace(/\s/g, ''),
+        });
+        toast('Gespeichert', 'success');
+        await kontoZweiFaktorKarte();
+      } catch (err) {
+        fehler.textContent = err.message || 'Konnte nicht gespeichert werden';
+        fehler.style.display = 'block';
+      }
+    });
+
     const form = document.getElementById('konto-2fa-aus');
     if (form) form.addEventListener('submit', async (e) => {
       e.preventDefault();
