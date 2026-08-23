@@ -48,7 +48,7 @@ es geht; die Abschnitte darunter beschreiben es im Einzelnen.
 
 **Einstieg**
 
-- [👤 Mein Konto](#-mein-konto) — Profilbild, eigenes Passwort, Zwei-Faktor-Anmeldung, Geburtstags-Freigabe, Benachrichtigungen und die eigenen Stammdaten. Für **jede** Rolle.
+- [👤 Mein Konto](#-mein-konto) — Profilbild, eigenes Passwort, Zwei-Faktor-Anmeldung, Geburtstags-Freigabe, Benachrichtigungen, die eigenen Stammdaten und (für Mitarbeiter) der eigene PDF-Nachweis. Für **jede** Rolle.
 - [🏠 Willkommen](#-willkommen) — Persönliches Dashboard: anstehende Planung, eigene Abwesenheiten, Wetter, Geburtstage.
 
 **Zeit erfassen und abrechnen**
@@ -125,10 +125,20 @@ die Abrechnung hat, findet es weiterhin dort: Neben Lohn-Export und Monatsabschl
 einer persönlichen Seite nichts zu suchen.
 
 **Sitzungen und Daten:** **„Auf allen Geräten abmelden"** macht jede andere Anmeldung sofort
-ungültig (auf dem aktuellen Gerät bleibt man angemeldet) und setzt zugleich die gemerkten Geräte
-der Zwei-Faktor-Anmeldung zurück — der Weg für ein verlorenes Handy, ohne auf jemanden warten zu
-müssen. **„Meine Daten herunterladen"** gibt alles Gespeicherte als Datei aus (Auskunft nach
-Art. 15 DSGVO), ohne Passwort und ohne den Zwei-Faktor-Schlüssel.
+ungültig — der Weg für ein verlorenes Handy, ohne auf jemanden warten zu müssen.
+
+*Auf dem Gerät, von dem aus du klickst, bleibst du angemeldet.* Technisch wird auch dein eigenes
+Anmelde-Zeichen entwertet; die Antwort liefert deshalb sofort ein frisches, das die App übernimmt —
+auch in **weiteren offenen Tabs desselben Geräts**, die davon über den Browser-Speicher erfahren.
+Sollte die Antwort einmal unterwegs verloren gehen (Funkloch im dümmsten Moment), bist du lediglich
+abgemeldet, nicht ausgesperrt: einmal neu anmelden genügt.
+
+Mit zurückgesetzt werden die **gemerkten Geräte** der Zwei-Faktor-Anmeldung — das ist der Sinn der
+Sache, denn sonst käme das verlorene Handy weiterhin ohne Code hinein. Folge: Bei der nächsten
+Anmeldung fragt die App auch auf **diesem** Gerät wieder nach einem Code.
+
+**„Meine Daten herunterladen"** gibt alles Gespeicherte als Datei aus (Auskunft nach Art. 15 DSGVO),
+ohne Passwort und ohne den Zwei-Faktor-Schlüssel.
 
 **Passwort ändern:** Jeder ändert sein eigenes Passwort selbst; das aktuelle Passwort ist dabei
 Pflicht (sonst könnte an einem unbeaufsichtigten, noch angemeldeten Gerät jemand den Zugang
