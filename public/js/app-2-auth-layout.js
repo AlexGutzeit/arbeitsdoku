@@ -306,11 +306,11 @@ function layout(content, activeNav) {
   const showSettings = canSeeSettings();
   const showAudit = isAdmin();
   const showNewEntry = canCreateEntries();
-  // Der Punkt hinter #/pdf ist je nach Rolle etwas anderes: Der Mitarbeiter findet dort nur den
-  // PDF-Download seiner eigenen Zeiten, Chef/Admin/Buchhalter zusaetzlich Lohn-CSV und den
-  // Abrechnungs-Abschluss. „Export" beschrieb die Technik, nicht den Zweck — und war fuer das
-  // Einfrieren abgerechneter Monate deutlich zu harmlos. Dieselbe Bedingung wie die Bloecke auf
-  // der Seite (canViewAll), damit Beschriftung und Inhalt nicht auseinanderlaufen.
+  // #/pdf heisst „Abrechnung" und gibt es nur noch fuer Chef/Admin/Buchhalter — dort steht neben
+  // dem PDF auch Lohn-CSV und der Abrechnungs-Abschluss. Fuer den Mitarbeiter war die Seite nur
+  // der Download SEINER eigenen Zeiten; das ist eine persoenliche Sache und sitzt seit dem
+  // 23.08.2026 als Karte auf „Mein Konto" (Alex). Der alte Menuepunkt „PDF-Nachweis" entfaellt
+  // damit, die Adresse #/pdf leitet fuer Mitarbeiter auf #/konto um (Lesezeichen bleiben heil).
   const abrechnungsSicht = canViewAll();
 
   return `
@@ -365,9 +365,9 @@ function layout(content, activeNav) {
         <a href="#/konto" class="${activeNav === 'konto' ? 'active' : ''}">
           <span class="icon">&#128100;</span> Mein Konto
         </a>
-        <a href="#/pdf" class="${activeNav === 'pdf' ? 'active' : ''}">
-          <span class="icon">${abrechnungsSicht ? '&#129534;' : '&#128196;'}</span> ${abrechnungsSicht ? 'Abrechnung' : 'PDF-Nachweis'}
-        </a>
+        ${abrechnungsSicht ? `<a href="#/pdf" class="${activeNav === 'pdf' ? 'active' : ''}">
+          <span class="icon">&#129534;</span> Abrechnung
+        </a>` : ''}
         ${showSettings ? `<a href="#/settings" class="${activeNav === 'settings' ? 'active' : ''}">
           <span class="icon">&#9881;</span> Einstellungen
         </a>` : ''}

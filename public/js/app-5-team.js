@@ -2013,6 +2013,7 @@ async function renderKonto() {
       <div class="welcome-section" id="konto-geraete" style="display:none"></div>
       <div class="welcome-section" id="push-card"><div class="loading"><div class="spinner"></div></div></div>
       <div class="welcome-section" id="konto-stammdaten"></div>
+      ${canViewAll() ? '' : '<div class="welcome-section" id="konto-pdf"></div>'}
       <div class="welcome-section" id="konto-sicherheit"></div>
     </div>`, 'konto');
   bindLayout();
@@ -2029,7 +2030,24 @@ async function renderKonto() {
   // ein zusaetzlicher Aufruf waere doppelt und kaeme zu frueh.
   initPushCard();
   await kontoStammdatenKarte();
+  await kontoPdfKarte();
   kontoSicherheitKarte();
+}
+
+// Der Zeitnachweis als PDF — NUR fuer Mitarbeiter. Fuer sie ist das eine rein persoenliche Sache
+// (die eigenen Zeiten, kein fremder Datensatz), deshalb steht sie hier statt in einem eigenen
+// Menuepunkt. Chef, Admin und Buchhaltung finden dasselbe Formular unter „Abrechnung" — dort
+// zusammen mit Lohn-CSV und Abschluss, was auf einer persoenlichen Seite nichts zu suchen haette.
+async function kontoPdfKarte() {
+  const k = document.getElementById('konto-pdf');
+  if (!k) return;                      // Rolle mit Abrechnungs-Zugriff: Karte gibt es hier nicht
+  // Das Formular filtert nach Projekt — ohne diese Liste stuende dort nur „Alle Projekte".
+  try { const d = await api('GET', '/api/projects'); if (d) S.projects = d.projects; } catch (_) {}
+  k.innerHTML = `
+    <h3>&#128196; Zeitnachweis als PDF</h3>
+    <p style="margin:0 0 .8rem">Deine erfassten Zeiten als PDF — für die Ablage oder zum Ausdrucken.</p>
+    ${pdfFormularHtml({ mitMitarbeiterwahl: false })}`;
+  pdfFormularBinden();
 }
 
 async function kontoAvatarKarte() {

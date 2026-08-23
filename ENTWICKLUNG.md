@@ -14,6 +14,42 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-23 · PDF-Nachweis zieht auf „Mein Konto"; zweiter Tab flog beim Abmelden mit raus
+
+**„Auf allen Geräten abmelden".** Alex fragte, ob man sich damit aussperren kann. Gemessen im
+Browser — nicht gelesen: Das klickende Gerät bleibt drin, weil die Antwort sofort ein frisches
+Token liefert und die Oberfläche es übernimmt (es überlebt auch ein Neuladen). Ein zweiter Tab
+**auf demselben Gerät** flog aber heraus: Er hält sein Token im Speicher seiner Seite und erfuhr
+von der Erneuerung nichts. Behoben über das `storage`-Ereignis, das genau in den *anderen* Tabs
+feuert. Bewusst nur ein NEUES Token wird übernommen — verschwindet das Token (Abmelden anderswo),
+passiert nichts: Bei einem JWT ist das reines Aufräumen im Browser, und jemanden ungefragt aus
+einer laufenden Eingabe zu werfen wäre schlimmer als ein Tab, der noch offen ist.
+
+Auf API-Ebene war das längst geprüft (`konto-sitzung-daten.js`). Was fehlte: **Den Knopf hatte im
+Browser nie jemand gedrückt** — geprüft war nur, DASS er existiert. Genau in dieser Lücke saß der
+Fehler. Beim Bauen des neuen Tests dann ein lehrreicher Fehlschlag: Der erste Wurf suchte den
+Dialog-Knopf über die Beschriftung und traf „Abmelden" in der Kopfzeile. Der Test meldete sich
+selbst ab und behauptete dann, der Knopf sperre einen aus. Seither über
+`.dialog-modal [data-act="ok"]`, mit einer Zeile davor, die belegt, dass der Dialog aufgeht.
+
+**PDF-Nachweis.** Für einen Mitarbeiter war `#/pdf` nur der Download seiner eigenen Zeiten — eine
+persönliche Sache. Sie sitzt jetzt als Karte auf „Mein Konto"; der Menüpunkt entfällt für ihn, die
+Adresse leitet um (Lesezeichen), und Chef/Admin/Buchhalter behalten „Abrechnung" unverändert, weil
+Lohn-CSV und Monatsabschluss auf einer persönlichen Seite nichts zu suchen hätten.
+
+Das Formular steht damit an zwei Orten und darf trotzdem nur EINMAL im Code existieren, sonst
+laufen die beiden mit der Zeit auseinander: `pdfFormularHtml()` und `pdfFormularBinden()` in
+`app-7-stats-pdf.js`. Die Mitarbeiter-Auswahl ist ein Schalter — auf der Konto-Karte fehlt sie, dort
+gibt es ausschließlich die eigenen Zeiten (serverseitig ohnehin, aber die Oberfläche soll es gar
+nicht erst anbieten).
+
+**Die Falle beim Umbenennen von Menüpunkten hat wieder zugeschlagen** — diesmal beim Entfernen:
+`lohn-export-ui.js` wartete beim Anmelden auf `a[href="#/pdf"]` und lief für den Mitarbeiter in
+eine Zeitüberschreitung. Wer einen Menüpunkt anfasst, muss mit `grep` durch `tests/`; ein Warten
+auf einen Menüpunkt gehört an einen, den JEDE Rolle hat.
+
+---
+
 ### 2026-08-23 (nachts) · Die Zeitfalle um Mitternacht
 
 Beim Abschluss-Lauf der Suite um kurz nach Mitternacht fielen auf einmal zehn Tests um, die

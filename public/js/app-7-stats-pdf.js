@@ -1,4 +1,108 @@
 // --- PDF Export ---
+// Das PDF-Formular steht an ZWEI Stellen: auf der Abrechnungs-Seite (Chef/Admin/Buchhalter) und
+// als Karte auf „Mein Konto" (fuer den Mitarbeiter ist es rein persoenlich, deshalb ist es dort zu
+// Hause statt in einem eigenen Menuepunkt). Damit beide dasselbe tun und nicht mit der Zeit
+// auseinanderlaufen, steht es hier EINMAL. Markup und Verdrahtung sind getrennt, weil die
+// Konto-Seite ihre Karten selbst zusammensetzt.
+function pdfZeitraeume() {
+  const now = new Date();
+  const vorWoche = new Date(now); vorWoche.setDate(vorWoche.getDate() - 7);
+  const vorMonat = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+  return {
+    week: getWeekRange(now),
+    lastWeek: getWeekRange(vorWoche),
+    month: getMonthRange(now),
+    lastMonth: getMonthRange(vorMonat),
+  };
+}
+
+function pdfFormularHtml({ mitMitarbeiterwahl }) {
+  const r = pdfZeitraeume();
+  return `
+      <form id="pdf-form">
+        ${mitMitarbeiterwahl ? `
+        <div class="form-group">
+          <label for="pdf-user">Mitarbeiter</label>
+          <select class="form-control" id="pdf-user">
+            <option value="">Alle Mitarbeiter</option>
+            ${getWorkerUsers().map(u => `<option value="${u.id}">${workerLabel(u)}</option>`).join('')}
+          </select>
+        </div>
+        ` : ''}
+        <div class="form-group">
+          <label for="pdf-project">Projekt</label>
+          <select class="form-control" id="pdf-project">
+            <option value="">Alle Projekte</option>
+            ${S.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="pdf-period">Zeitraum</label>
+          <select class="form-control" id="pdf-period">
+            <option value="week">Aktuelle Woche</option>
+            <option value="lastWeek">Vergangene Woche</option>
+            <option value="month" selected>Aktueller Monat</option>
+            <option value="lastMonth">Vergangener Monat</option>
+            <option value="custom">Benutzerdefiniert</option>
+          </select>
+        </div>
+        <div class="form-row" id="pdf-custom-dates" style="display:none;">
+          <div class="form-group">
+            <label for="pdf-from">Von</label>
+            <input type="date" class="form-control" id="pdf-from" value="${r.month.from}">
+          </div>
+          <div class="form-group">
+            <label for="pdf-to">Bis</label>
+            <input type="date" class="form-control" id="pdf-to" value="${r.month.to}">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">PDF herunterladen</button>
+      </form>`;
+}
+
+function pdfFormularBinden() {
+  const RANGES = pdfZeitraeume();
+  const feld = (id) => document.getElementById(id);
+  if (!feld('pdf-form')) return;
+
+  feld('pdf-period').addEventListener('change', (e) => {
+    feld('pdf-custom-dates').style.display = e.target.value === 'custom' ? 'grid' : 'none';
+    const r = RANGES[e.target.value];
+    if (r) { feld('pdf-from').value = r.from; feld('pdf-to').value = r.to; }
+  });
+
+  feld('pdf-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const period = feld('pdf-period').value;
+    let dateFrom, dateTo;
+    if (RANGES[period]) { dateFrom = RANGES[period].from; dateTo = RANGES[period].to; }
+    else { dateFrom = feld('pdf-from').value; dateTo = feld('pdf-to').value; }
+
+    const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+    const userId = feld('pdf-user')?.value;
+    if (userId) params.set('user_id', userId);
+    const projectId = feld('pdf-project').value;
+    if (projectId) params.set('project_id', projectId);
+
+    try {
+      const res = await fetch('/api/pdf/export?' + params.toString(), {
+        headers: { 'Authorization': 'Bearer ' + S.token }
+      });
+      if (!res.ok) throw new Error('PDF-Export fehlgeschlagen');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `arbeitsdoku_${dateFrom}_${dateTo}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast('PDF heruntergeladen', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  });
+}
+
 async function renderPdfExport() {
   try {
     const pData = await api('GET', '/api/projects');
@@ -11,58 +115,14 @@ async function renderPdfExport() {
 
   await ladeAbschluss(true);   // frisch: der Stand aendert sich genau auf dieser Seite
 
-  const now = new Date();
-  const weekRange = getWeekRange(now);
-  const monthRange = getMonthRange(now);
-  const lastWeekDate = new Date(now); lastWeekDate.setDate(lastWeekDate.getDate() - 7);
-  const lastWeekRange = getWeekRange(lastWeekDate);
-  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 15);
-  const lastMonthRange = getMonthRange(lastMonthDate);
   // Lohn-Export: der Vormonat ist der Regelfall — der laufende Monat ist noch nicht abgeschlossen.
+  const lastMonthDate = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 15);
   const vormonat = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
   const content = `
     <div class="card" style="max-width:600px;margin:0 auto;">
       <h2 style="margin-bottom:1rem;">PDF-Export</h2>
-      <form id="pdf-form">
-        ${canViewAll() ? `
-        <div class="form-group">
-          <label>Mitarbeiter</label>
-          <select class="form-control" id="pdf-user">
-            <option value="">Alle Mitarbeiter</option>
-            ${getWorkerUsers().map(u => `<option value="${u.id}">${workerLabel(u)}</option>`).join('')}
-          </select>
-        </div>
-        ` : ''}
-        <div class="form-group">
-          <label>Projekt</label>
-          <select class="form-control" id="pdf-project">
-            <option value="">Alle Projekte</option>
-            ${S.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Zeitraum</label>
-          <select class="form-control" id="pdf-period">
-            <option value="week">Aktuelle Woche</option>
-            <option value="lastWeek">Vergangene Woche</option>
-            <option value="month" selected>Aktueller Monat</option>
-            <option value="lastMonth">Vergangener Monat</option>
-            <option value="custom">Benutzerdefiniert</option>
-          </select>
-        </div>
-        <div class="form-row" id="pdf-custom-dates" style="display:none;">
-          <div class="form-group">
-            <label>Von</label>
-            <input type="date" class="form-control" id="pdf-from" value="${monthRange.from}">
-          </div>
-          <div class="form-group">
-            <label>Bis</label>
-            <input type="date" class="form-control" id="pdf-to" value="${monthRange.to}">
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary btn-block">PDF herunterladen</button>
-      </form>
+      ${pdfFormularHtml({ mitMitarbeiterwahl: canViewAll() })}
     </div>
     ${canViewAll() ? `
     <div class="card" style="max-width:600px;margin:1rem auto 0;">
@@ -112,47 +172,7 @@ async function renderPdfExport() {
     } catch (err) { toast(err.message, 'error'); }
   });
 
-  const RANGES = { week: weekRange, lastWeek: lastWeekRange, month: monthRange, lastMonth: lastMonthRange };
-
-  document.getElementById('pdf-period').addEventListener('change', (e) => {
-    document.getElementById('pdf-custom-dates').style.display = e.target.value === 'custom' ? 'grid' : 'none';
-    const r = RANGES[e.target.value];
-    if (r) {
-      document.getElementById('pdf-from').value = r.from;
-      document.getElementById('pdf-to').value = r.to;
-    }
-  });
-
-  document.getElementById('pdf-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const period = document.getElementById('pdf-period').value;
-    let dateFrom, dateTo;
-    if (RANGES[period]) { dateFrom = RANGES[period].from; dateTo = RANGES[period].to; }
-    else { dateFrom = document.getElementById('pdf-from').value; dateTo = document.getElementById('pdf-to').value; }
-
-    const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
-    const userId = document.getElementById('pdf-user')?.value;
-    if (userId) params.set('user_id', userId);
-    const projectId = document.getElementById('pdf-project').value;
-    if (projectId) params.set('project_id', projectId);
-
-    try {
-      const res = await fetch('/api/pdf/export?' + params.toString(), {
-        headers: { 'Authorization': 'Bearer ' + S.token }
-      });
-      if (!res.ok) throw new Error('PDF-Export fehlgeschlagen');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `arbeitsdoku_${dateFrom}_${dateTo}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast('PDF heruntergeladen', 'success');
-    } catch (err) { toast(err.message, 'error'); }
-  });
+  pdfFormularBinden();
 }
 
 // --- Statistik ---

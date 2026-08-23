@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**168 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**169 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -102,6 +102,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `hoechstzeit-komplex-ui.js` | Die unangenehmen Fälle rund um Anwesenheit, Warnung und Pausenvorschlag. |
 | `hoechstzeit-prodklon.js` | Die Höchstarbeitszeit-Warnung an ECHTEN Daten: warnt sie nur — oder verändert sie etwas? |
 | `jugendschutz-uebergang-prodklon.js` | Der 18. Geburtstag am ECHTEN Datenstand: Kippt die Pausenregel am richtigen Tag? |
+| `konto-pdf-ui.js` | Der PDF-Nachweis ist für Mitarbeiter nach „Mein Konto" gezogen (Alex, 23.08.2026). |
 | `konto-sitzung-daten.js` | „Auf allen Geräten abmelden" und die Datenauskunft (Art. 15 DSGVO). |
 | `legal-pages-ui.js` | Puppeteer-UI-Test: Impressum/Datenschutz — Admin füllt in Einstellungen, Links auf Login-Seite (pre-login) |
 | `legal-pages.js` | API-Test: Impressum/Datenschutz als admin/chef-konfigurierbare Settings + öffentlicher Endpunkt. |
@@ -116,7 +117,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `longpress-prodklon.js` | Prod-Klon-Pruefung fuer B7 (langer Druck zeigt Details). |
 | `manager-rights-api.js` | API-Test (#9): Beim Anlegen/Bearbeiten werden die Einzelrecht-Flags (can_plan/can_plan_all/ |
 | `manager-rights-normalize.js` | Unit-Test (#9): normalizeManagerRights() nullt die redundanten Einzelrecht-Flags von Chef/Admin |
-| `menue-abrechnung-ui.js` | Der Menüpunkt hinter #/pdf heißt je nach Rolle anders. |
+| `menue-abrechnung-ui.js` | Der Menüpunkt hinter #/pdf gehört Chef, Admin und Buchhaltung — und heißt „Abrechnung". |
 | `milestone-days-input.js` | Test: Zwischenziel-Dauer akzeptiert Komma UND Punkt (1,5 === 1.5), ungültige Werte werden abgefangen |
 | `nav-chooser.js` | Navigations-Auswahl-Test (Puppeteer, headless). Prüft Plattform-Optionen, URL-Builder, Auswahl-Dialog, |
 | `note-leave-ui.js` | UI-Test (Puppeteer): Empfänger sieht bei einer geteilten Notiz den „Freigabe verlassen"-Button und |

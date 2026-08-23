@@ -1,7 +1,9 @@
-// Der Menüpunkt hinter #/pdf heißt je nach Rolle anders.
+// Der Menüpunkt hinter #/pdf gehört Chef, Admin und Buchhaltung — und heißt „Abrechnung".
 //
-// Mitarbeiter finden dort nur den PDF-Download ihrer eigenen Zeiten → „PDF-Nachweis".
-// Chef/Admin/Buchhalter zusätzlich Lohn-Export und Abrechnungs-Abschluss → „Abrechnung".
+// Bis zum 23.08.2026 hatte ihn auch der Mitarbeiter, dort als „PDF-Nachweis". Für ihn war die
+// Seite aber nur der Download SEINER eigenen Zeiten; das ist eine persönliche Sache und sitzt
+// seither als Karte auf „Mein Konto" (Alex). Was dort geprüft wird, steht in konto-pdf-ui.js;
+// hier geht es um die Rollen, die den Menüpunkt behalten.
 //
 // Der heikle Fall ist der **Buchhalter**: Er ist weder Chef noch Admin, sieht aber beide
 // Zusatzblöcke. Wird die Beschriftung versehentlich an die Einstellungen-Rolle gehängt, bekäme
@@ -63,22 +65,38 @@ function req(m, p, t, b) {
       return { beschriftung, seite };
     }
 
-    for (const [nutzer, passwort, erwartet, mitAbrechnung] of [
+    const anmelden = async (nutzer, passwort) => {
+      await page.goto(BASIS + '/', { waitUntil: 'domcontentloaded' });
+      await page.evaluate(() => localStorage.clear());
+      await page.goto(BASIS + '/', { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#login-user');
+      await page.type('#login-user', nutzer); await page.type('#login-pass', passwort);
+      await page.click('#login-form button[type="submit"]');
+      await page.waitForSelector('a[href="#/statistics"]'); await sleep(600);
+      return page.evaluate(() => {
+        const a = document.querySelector('a[href="#/pdf"]');
+        return a ? a.textContent.replace(/\s+/g, ' ').trim() : '(kein Menüpunkt)';
+      });
+    };
+
+    for (const [nutzer, passwort, erwartet] of [
       // Erwartet wird der volle Text INKLUSIVE Symbol — so ist gleich mitgeprüft, dass auch das
-      // Symbol wechselt (Blatt fuer den Nachweis, Beleg fuer die Abrechnung).
-      ['max',   pw('max'),     '📄 PDF-Nachweis', false],
-      ['chef',  pw('chef'),    '🧾 Abrechnung',   true],
-      ['admin', pw('admin'),   '🧾 Abrechnung',   true],
-      ['buchi', 'Start!2345',  '🧾 Abrechnung',   true],
+      // Symbol stimmt (Beleg fuer die Abrechnung).
+      ['chef',  pw('chef'),    '🧾 Abrechnung'],
+      ['admin', pw('admin'),   '🧾 Abrechnung'],
+      ['buchi', 'Start!2345',  '🧾 Abrechnung'],
     ]) {
       const r = await alsRolle(nutzer, passwort);
       ok(`${nutzer.padEnd(6)} sieht „${erwartet}"`, r.beschriftung === erwartet, `steht da: „${r.beschriftung}"`);
       ok(`   … und der PDF-Block ist da`, /PDF-Export/.test(r.seite));
-      ok(`   … Lohn-Export ${mitAbrechnung ? 'sichtbar' : 'NICHT sichtbar'}`,
-        /Lohn-Export/.test(r.seite) === mitAbrechnung);
-      ok(`   … Abrechnungs-Abschluss ${mitAbrechnung ? 'sichtbar' : 'NICHT sichtbar'}`,
-        /Abrechnungs-Abschluss/.test(r.seite) === mitAbrechnung);
+      ok(`   … Lohn-Export sichtbar`, /Lohn-Export/.test(r.seite));
+      ok(`   … Abrechnungs-Abschluss sichtbar`, /Abrechnungs-Abschluss/.test(r.seite));
     }
+
+    // Und der Mitarbeiter hat den Punkt NICHT mehr. Ohne diese Zeile bliebe der Test gruen, wenn
+    // ihm versehentlich wieder ein „Abrechnung"-Eintrag ins Menue rutschte.
+    const alsMa = await anmelden('max', pw('max'));
+    ok('max    hat gar keinen Menuepunkt mehr', alsMa === '(kein Menüpunkt)', `steht da: „${alsMa}"`);
 
     ok('Das alte Wort „Export" steht nirgends mehr im Menü',
       !(await page.evaluate(() => {

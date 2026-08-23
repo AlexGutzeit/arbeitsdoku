@@ -56,7 +56,7 @@ es geht; die Abschnitte darunter beschreiben es im Einzelnen.
 - [📊 Zeitnachweis](#-zeitnachweis) — Die Kern-Zeiterfassung samt Vorbelegung von Zeiten und Pausen.
 - [🏖️ Abwesenheit](#-abwesenheit) — Krank, Urlaub, Freizeitausgleich und Co. — mit Genehmigungs-Ablauf.
 - [📈 Statistik](#-statistik) — Ist/Soll/Überstunden je Zeitraum, als Diagramm und Zahl.
-- [🧾 Abrechnung](#-abrechnung) — PDF-Nachweis für alle, Lohn-Export und Monatsabschluss für die Verwaltung.
+- [🧾 Abrechnung](#-abrechnung) *(Chef/Admin/Buchhalter)* — PDF-Nachweis, Lohn-Export und Monatsabschluss. Mitarbeiter finden ihren eigenen PDF-Nachweis unter [👤 Mein Konto](#-mein-konto).
 - [🔒 Abrechnungs-Abschluss](#-abrechnungs-abschluss) — Abgerechnete Monate festschreiben, damit bezahlte Stunden sich nicht mehr verschieben.
 
 **Arbeit organisieren**
@@ -117,6 +117,12 @@ nichts geändert.
 
 **Meine Daten:** Soll-Stunden, Urlaubsanspruch, Eintritt, Personalnummer, Arbeitsbeginn und
 zusätzliche Rechte — nur lesend, „so hat die Verwaltung dich hinterlegt".
+
+**Zeitnachweis als PDF** *(nur Mitarbeiter)*: Die eigenen erfassten Zeiten als druckfertiges PDF,
+gefiltert nach Zeitraum und Projekt. Es ist dasselbe Formular wie unter [🧾 Abrechnung](#-abrechnung),
+nur ohne die Mitarbeiter-Auswahl — hier gibt es ausschließlich die eigenen Zeiten. Wer Zugriff auf
+die Abrechnung hat, findet es weiterhin dort: Neben Lohn-Export und Monatsabschluss hätte es auf
+einer persönlichen Seite nichts zu suchen.
 
 **Sitzungen und Daten:** **„Auf allen Geräten abmelden"** macht jede andere Anmeldung sofort
 ungültig (auf dem aktuellen Gerät bleibt man angemeldet) und setzt zugleich die gemerkten Geräte
@@ -198,7 +204,7 @@ Soll-/Ist-Stunden und Überstunden je Zeitraum und Mitarbeiter, mit Diagrammen.
 
 #### 🧾 Abrechnung
 
-Der Menüpunkt heißt **je nach Rolle anders**, weil die Seite je nach Rolle etwas anderes ist: Ein Mitarbeiter findet dort ausschließlich den PDF-Download seiner eigenen Zeiten, Chef/Admin/Buchhalter zusätzlich Lohn-Export und Abrechnungs-Abschluss. Sammelt beide Ausgabewege. **PDF:** druckfertiger Arbeitsnachweis (Einträge + Abwesenheiten + Stunden-Zusammenfassung), gefiltert nach Zeitraum/Mitarbeiter/Projekt. **Lohn-Export (CSV)** *(Chef/Admin/Buchhalter)*: Monat wählen (voreingestellt der Vormonat) → eine Tabelle mit **einer Zeile je Mitarbeiter** — Personalnummer, Soll-/Ist-Stunden, Saldo, Überstunden gesamt sowie Urlaubs-, Krank-, FZA-, Sonderurlaubs-, Berufsschul-, Innungs- und Feiertage, dazu eine Summenzeile. Semikolon-getrennt mit UTF-8-BOM, öffnet sich direkt in Excel. Enthalten sind alle Rollen außer Admin, die im Monat angestellt waren — **auch bereits ausgeschiedene**, mit Austrittsdatum in der Spalte „Beschäftigt bis" (sonst fehlte der letzte Monat in der Abrechnung). Der Export wird im Audit-Log vermerkt. Spart das monatliche Abtippen aus dem PDF — dort erscheinen Urlaubs-/Krank-/FZA-Tage nämlich nur, wenn man **einen einzelnen** Mitarbeiter auswählt. Die **Personalnummer** wird je Mitarbeiter unter *👥 Mitarbeiter* gepflegt (optional).
+Der Menüpunkt ist **Chef, Admin und Buchhaltung vorbehalten**. Für einen Mitarbeiter war die Seite nur der PDF-Download seiner eigenen Zeiten — das ist eine persönliche Sache und sitzt deshalb seit dem 23.08.2026 als Karte **„Zeitnachweis als PDF" auf [👤 Mein Konto](#-mein-konto)**; die Adresse `#/pdf` führt ihn dorthin, alte Lesezeichen bleiben also heil. Sammelt beide Ausgabewege. **PDF:** druckfertiger Arbeitsnachweis (Einträge + Abwesenheiten + Stunden-Zusammenfassung), gefiltert nach Zeitraum/Mitarbeiter/Projekt. **Lohn-Export (CSV)** *(Chef/Admin/Buchhalter)*: Monat wählen (voreingestellt der Vormonat) → eine Tabelle mit **einer Zeile je Mitarbeiter** — Personalnummer, Soll-/Ist-Stunden, Saldo, Überstunden gesamt sowie Urlaubs-, Krank-, FZA-, Sonderurlaubs-, Berufsschul-, Innungs- und Feiertage, dazu eine Summenzeile. Semikolon-getrennt mit UTF-8-BOM, öffnet sich direkt in Excel. Enthalten sind alle Rollen außer Admin, die im Monat angestellt waren — **auch bereits ausgeschiedene**, mit Austrittsdatum in der Spalte „Beschäftigt bis" (sonst fehlte der letzte Monat in der Abrechnung). Der Export wird im Audit-Log vermerkt. Spart das monatliche Abtippen aus dem PDF — dort erscheinen Urlaubs-/Krank-/FZA-Tage nämlich nur, wenn man **einen einzelnen** Mitarbeiter auswählt. Die **Personalnummer** wird je Mitarbeiter unter *👥 Mitarbeiter* gepflegt (optional).
 
 #### 🔒 Abrechnungs-Abschluss
 

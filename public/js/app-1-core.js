@@ -1531,6 +1531,9 @@ function render() {
   else if (route === '/deleted-entries') renderDeletedEntries();
   else if (route === '/deleted-absences') renderDeletedAbsences();
   else if (route === '/documents' || route.startsWith('/documents/')) renderDocuments();
+  // Fuer Mitarbeiter ist der PDF-Download nach „Mein Konto" gezogen. Alte Lesezeichen und
+  // Verweise landen dort statt im Nichts — wie bei #/notifications.
+  else if (route === '/pdf' && !canViewAll()) { navigate('/konto'); return; }
   else if (route === '/pdf') renderPdfExport();
   else if (route === '/statistics') renderStatistics();
   else if (route === '/planning') renderPlanning();

@@ -33,7 +33,10 @@ const anmelden = async (browser, user, pw) => {
   await p.waitForSelector('#login-user');
   await p.type('#login-user', user); await p.type('#login-pass', pw);
   await p.click('#login-form button[type="submit"]');
-  await p.waitForSelector('a[href="#/pdf"]', { timeout: 10000 });
+  // Auf einen Menuepunkt warten, den JEDE Rolle hat. Frueher stand hier a[href="#/pdf"] — seit
+  // dem 23.08.2026 hat der Mitarbeiter den Punkt nicht mehr (sein PDF sitzt auf „Mein Konto"),
+  // und die Anmeldung lief in eine Zeitueberschreitung.
+  await p.waitForSelector('a[href="#/konto"]', { timeout: 10000 });
   await sleep(500);
   return p;
 };
