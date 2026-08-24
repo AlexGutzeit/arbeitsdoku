@@ -594,6 +594,8 @@ Konfiguration über die Datei `.env` (Vorlage: `.env.example`).
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` | nein | – | Schlüsselpaar für **Push-Benachrichtigungen** (Web Push). Einmalig erzeugen mit `node -e "console.log(require('web-push').generateVAPIDKeys())"`. Fehlen sie, ist Push inaktiv. |
 | `VAPID_SUBJECT` | nein | `mailto:admin@example.com` | Kontaktangabe (`mailto:` oder `https:`) für den Push-Dienst. |
 | `TWOFA_KEY` | nein, **empfohlen** | aus `JWT_SECRET` abgeleitet | Schlüssel, mit dem die Authenticator-Geheimnisse in der Datenbank verschlüsselt werden. 32 Byte als hex oder base64 (`openssl rand -base64 32`). Ohne diesen Wert wird einer aus `JWT_SECRET` abgeleitet — dann gilt: **Wer `JWT_SECRET` austauscht, macht alle Authenticator-Einrichtungen ungültig.** Der Wert gehört auf **jede** Anlage (auch die Zweitanlage) und liegt **nicht** im Backup. |
+| `BACKUP_EMPFAENGER` | nein | leer → Klartext-ZIP | Öffentliche Schlüssel der Sicherungs-Empfänger, mit Komma getrennt (`minipc:MFkw…,offline:MFkw…`). Gesetzt ⇒ Downloads sind verschlüsselte `.adbk`-Dateien, die der Server selbst **nicht** lesen kann. Paar erzeugen: `node scripts/backup-schluessel.js <name>`. |
+| `BACKUP_SCHLUESSEL` | nein | leer | **Privater** Schlüssel dieser Maschine. Gehört **nicht** auf den Hauptserver (der soll nur verschlüsseln können), wohl aber auf die Zweitanlage, damit `notfall-umschalten.sh` ohne Menschen entschlüsselt. |
 | `TWOFA_AUS` | nein | – | **Notfall-Schalter.** Auf `1` gesetzt wird kein zweiter Faktor mehr verlangt: kein Code beim Anmelden, keine erzwungene Einrichtung. Es wird nichts gelöscht — Variable entfernen, Dienst neu starten, alles greift wie zuvor. |
 | `CHROME_BIN` | nein | – | Nur für die Browser-Tests (Puppeteer), nicht für den Betrieb. |
 
@@ -708,6 +710,51 @@ wieder her und **lädt live neu** (kein Neustart nötig). Wichtig: Das Backup en
 Passwörter zum Sicherungszeitpunkt** – nach dem Einspielen gelten wieder genau diese Anmeldedaten. Bei
 Totalverlust genügen die drei Ordner `data/`, `uploads/`, `storage/` aus einer Dateisicherung bzw. das
 ZIP über die UI.
+
+### Verschlüsselte Sicherungen
+
+Ein Backup ist eine vollständige Kopie aller Kundendaten — Namen, Adressen, Geburtsdaten,
+Abwesenheits-Kommentare. Solche Kopien liegen auf mehreren Rechnern und werden Jahre alt. Deshalb
+lassen sie sich verschlüsseln, und zwar **asymmetrisch**: Der Server bekommt nur die *öffentlichen*
+Schlüssel. Er kann Sicherungen erzeugen, aber keine mehr lesen. Wer den Server übernimmt, kommt an
+den laufenden Datenbestand — nicht an die Historie.
+
+Eingeschaltet wird das über `BACKUP_EMPFAENGER` in der `.env`. Ist der Wert leer, bleibt alles wie
+bisher (Klartext-ZIP) — Bestandsinstallationen müssen nichts ändern.
+
+```bash
+node scripts/backup-schluessel.js minipc     # Paar erzeugen, öffentlichen Teil in die .env
+```
+
+Zwei Empfänger sind der Regelfall: die Zweitanlage (damit `notfall-umschalten.sh` ohne Menschen
+läuft) und ein Offline-Schlüssel in der Passwortverwaltung. Die Datei heißt dann `.adbk` statt
+`.zip`; sie beginnt mit `ADBK1` und enthält AES-256-GCM über dem ZIP, dessen Schlüssel für jeden
+Empfänger einzeln per ECDH P-256 + HKDF-SHA256 verpackt ist.
+
+**Entschlüsselt wird nie auf dem Server** — das wäre der Widerspruch zum Zweck. Es gibt drei Wege:
+
+| Lage | Weg |
+|---|---|
+| Normalfall | *Einstellungen → Backup einspielen*: Datei wählen, es erscheint ein Feld für den Schlüssel, einfügen, einspielen. Der **Browser** entschlüsselt; der Schlüssel verlässt das Gerät nicht, der Server bekommt nur das fertige ZIP. |
+| Hauptanlage ausgefallen | Die Zweitanlage hält einen eigenen privaten Schlüssel (`BACKUP_SCHLUESSEL`) und entschlüsselt selbst — niemand muss etwas eingeben. |
+| Beide Anlagen weg | `werkzeuge/sicherung-entschluesseln.html` — eine einzelne Datei, Doppelklick, ohne Installation und ohne Internet. In der App unter *Einstellungen → Backup* als **„Notfall-Entschlüsseler herunterladen"** erhältlich, **zusammen mit dem Schlüssel aufbewahren** (nicht auf dem Server, dort nützt sie im Ernstfall nichts). |
+
+Landet ein `.adbk` doch einmal direkt beim Server, antwortet er mit dieser Erklärung statt mit
+einem Fehler.
+
+**Vorhandene Klartext-Sicherungen** stellt ein eigenes Skript um. Es verschlüsselt, entschlüsselt
+sofort wieder, vergleicht Byte für Byte — und löscht das Klartext-ZIP **erst danach**. Scheitert
+die Rückprobe, bleibt das ZIP unangetastet liegen. Ohne privaten Schlüssel (also auf dem Server)
+wird verschlüsselt, aber nichts gelöscht.
+
+```bash
+node scripts/backup-altbestand-verschluesseln.js ~/arbeitsdoku-backups --trocken
+node scripts/backup-altbestand-verschluesseln.js ~/arbeitsdoku-backups
+```
+
+> **Der eine wirklich gefährliche Punkt:** Wer *alle* privaten Schlüssel verliert, verliert die
+> gesamte Sicherungs-Historie — endgültig, ohne Hintertür. Der zweite Schlüssel gehört deshalb an
+> zwei getrennte Orte, bevor die erste verschlüsselte Sicherung entsteht.
 
 ---
 

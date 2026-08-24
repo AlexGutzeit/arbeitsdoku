@@ -14,6 +14,51 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-24 · Sicherungen verschlüsseln — der Schlüssel liegt nicht auf dem Server
+
+Alex' Frage war präzise: „Bringt eine verschlüsselte Datenbank etwas, wenn der Schlüssel in der
+`.env` daneben liegt?" Nein. Die App muss ständig entschlüsseln, also kann es jeder auch, der auf
+dem Server ist. Geschützt werden können nur **ruhende** Kopien — und genau die waren das Problem:
+167 vollständige Klartext-Kopien mit Kundennamen, Adressen, Geburtsdaten und
+Abwesenheits-Kommentaren, verteilt auf VPS, Mini-PC und einen Laptop mit **unverschlüsselter
+Platte**.
+
+Deshalb **asymmetrisch**: Der Server bekommt nur öffentliche Schlüssel. Er kann sichern, aber nicht
+lesen. Zwei Empfänger — die Zweitanlage (damit die Notfall-Umschaltung ohne Menschen läuft) und ein
+Offline-Schlüssel.
+
+**Warum ECDH P-256 und nicht X25519.** X25519 wäre die modernere Wahl. Aber die Entschlüsselung
+muss im Browser laufen — auch in einer Seite, die per Doppelklick von einem USB-Stick geöffnet
+wird. Nachgemessen statt angenommen: Eine `file://`-Seite ist ein sicherer Kontext, `crypto.subtle`
+ist dort verfügbar, und WebCrypto beherrscht ECDH P-256, HKDF-SHA256 und AES-256-GCM überall.
+X25519 nicht. Ein Format für Node und Browser ist mehr wert als die schönere Kurve.
+
+**Warum die Entschlüsselung im Browser liegt.** Ein Feld „Schlüssel" auf einer Serverseite wäre
+bequemer gewesen — und hätte den Zweck aufgehoben: Der Schlüssel wäre über die Leitung gegangen.
+Also entschlüsselt der Browser und schickt dem Server das fertige ZIP, das dieser wie bisher
+behandelt. Der Test schneidet **alle** Anfragen mit und belegt, dass der Schlüssel in keiner
+einzigen vorkommt; er vermutet es nicht.
+
+**Eine Datei, zwei Einbindungen.** `public/js/sicherung-krypto.js` nutzen sowohl die
+Einstellungsseite als auch das Notfall-Werkzeug. Zwei Fassungen wären auseinandergedriftet, und
+ausgerechnet die, die man im Ernstfall braucht, ist die nie benutzte.
+
+**Die Reihenfolge beim Altbestand ist der ganze Punkt.** Verschlüsseln, sofort wieder
+entschlüsseln, Byte für Byte vergleichen — und **erst danach** das Klartext-ZIP löschen. Ein
+Formatfehler wäre sonst der stille Totalverlust der Historie, bemerkt erst, wenn jemand sie
+braucht. Ohne privaten Schlüssel wird verschlüsselt, aber nichts gelöscht; auf einem Server, der
+absichtlich nicht lesen kann, ist das der richtige Ausgang. Drei Gegenproben belegen es: vor dem
+Beweis löschen, die Prüfung überspringen, der Fehlerweg räumt zu viel weg — jede lässt den Test
+umfallen.
+
+**Was das ausdrücklich nicht löst:** Wer den laufenden Server übernimmt, sieht die Daten weiterhin.
+Dagegen hilft der zweite Faktor, die Rechteverwaltung und ein aktuelles System — keine
+Verschlüsselung.
+
+**Der teuerste Fehler wäre kein Programmfehler.** Wer alle privaten Schlüssel verliert, verliert
+die gesamte Historie, endgültig. Deshalb zwei Empfänger, und der Offline-Schlüssel gehört an zwei
+getrennte Orte, bevor die erste verschlüsselte Sicherung entsteht.
+
 ### 2026-08-23 · Der Nutzer schneidet sein Profilbild selbst zu
 
 Alex' Frage: „Woher weiß die App, welchen Ausschnitt ich haben möchte?" Antwort: gar nicht. Sie
@@ -609,3 +654,14 @@ Bedienung auf dem Handy: `node tests/touch-ux-ui.js` misst die tatsächlichen Tr
 (per `elementFromPoint`, nicht nur die CSS-Angabe) und rechnet die Textkontraste aus den echten
 Browser-Farben nach. `node tests/ux-runde1-prodklon.js` wiederholt das gegen eine **Kopie** der
 Produktivdaten unter `/tmp/prodklon.db` (fehlt die Kopie, überspringt sich der Test).
+
+Verschlüsselte Sicherungen: `node tests/backup-krypto.js` (hin und zurück mit **jedem** Empfänger,
+Byte-Gleichheit, verändertes Byte in Chiffrat/Kopf/Tag scheitert, abgeschnittene Datei stürzt nicht
+ab), `node tests/backup-verschluesselt.js` (Download ist ein Container, ein echter Kundenname aus
+der Datenbank steht **nicht** roh darin, `POST /restore` erklärt statt abzustürzen),
+`node tests/backup-altbestand.js` (die Umstellung löscht Klartext erst nach bewiesener
+Rückrichtung — geprüft wird vor allem der schlechte Ausgang),
+`node tests/backup-einspielen-ui.js` (der geklickte Hauptweg; **alle** Anfragen mitgeschnitten, der
+Schlüssel kommt in keiner vor) und `node tests/backup-entschluesseln-ui.js` (das Notfall-Werkzeug
+über `file://` geöffnet wie beim Doppelklick, heruntergeladene Datei eingefangen und mit dem
+Original verglichen).
