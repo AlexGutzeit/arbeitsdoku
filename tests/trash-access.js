@@ -103,8 +103,13 @@ const has = (resp, id) => ((resp.body && (resp.body.entries || resp.body.absence
     ok('Chef stellt tmp aus → 200', r.status === 200, r.status+'');
     r = await req('GET','/api/users/inactive', cTok);
     ok('Chef sieht Ausgestellten-Liste (inkl. tmp)', r.status===200 && (r.body.users||[]).some(u=>u.id===tmp.id), JSON.stringify(r.status));
-    r = await req('POST','/api/users/'+tmp.id+'/reactivate', cTok, { start_date:'2026-08-25' });
-    ok('Chef stellt tmp wieder ein → 200', r.status === 200, r.status+'');
+    // Wiedereintritt MUSS nach dem Austritt liegen, und ausgestellt wurde gerade eben, also heute.
+    // Hier stand ein festes '2026-08-25' — am 25.08.2026 um 00:39 war das plötzlich „heute" und der
+    // Test fiel um. Ein Datum, das nur bis zu einem bestimmten Tag stimmt, gehört nicht in einen Test.
+    const morgen = new Date(Date.now() + 24 * 3600 * 1000)
+      .toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+    r = await req('POST','/api/users/'+tmp.id+'/reactivate', cTok, { start_date: morgen });
+    ok('Chef stellt tmp wieder ein → 200', r.status === 200, r.status + ' ' + JSON.stringify(r.body));
 
     // --- Admin unverändert ---
     r = await req('GET','/api/entries/deleted', admin);
