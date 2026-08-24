@@ -260,9 +260,29 @@ async function renderSettings() {
             <strong>Achtung!</strong> Beim Einspielen eines Backups werden alle aktuellen Daten überschrieben.
             Ein Sicherungs-Backup der aktuellen Datenbank wird automatisch erstellt.
           </div>
-          <input type="file" class="form-control" id="backup-file" accept=".zip,.sqlite,.db">
+          <input type="file" class="form-control" id="backup-file" accept=".adbk,.zip,.sqlite,.db">
+          <!-- Erscheint nur, wenn die gewaehlte Datei verschluesselt ist. Entschluesselt wird
+               dann HIER im Browser — der Schluessel erreicht den Server nie, das ist der Zweck. -->
+          <div id="restore-schluessel" style="display:none;margin-top:.7rem">
+            <label for="backup-schluessel"><strong>Diese Sicherung ist verschlüsselt.</strong>
+              Bitte den Schlüssel einfügen:</label>
+            <textarea class="form-control" id="backup-schluessel" rows="3" spellcheck="false"
+                      autocomplete="off" style="font-family:ui-monospace,monospace;font-size:.82rem"
+                      placeholder="Privaten Schlüssel hier einfügen (eine lange Zeile)"></textarea>
+            <div style="font-size:.78rem;color:var(--text-light);margin-top:.25rem" id="backup-schluessel-info">
+              Er wird nur in deinem Browser benutzt und nicht an den Server geschickt.
+            </div>
+          </div>
           <button class="btn btn-danger" id="restore-confirm" style="margin-top:0.5rem;">Backup jetzt einspielen</button>
         </div>
+        <hr style="margin:1.25rem 0;border:none;border-top:1px solid var(--border)">
+        <button class="btn btn-outline btn-sm" id="backup-werkzeug">&#128190; Notfall-Entschlüsseler herunterladen</button>
+        <p class="push-hint" style="margin-top:.4rem">
+          Eine einzelne Datei, die per Doppelklick läuft — ohne Installation und ohne Internet.
+          Damit lässt sich eine verschlüsselte Sicherung auch dann öffnen, wenn diese App gerade
+          nicht erreichbar ist. <strong>Zusammen mit dem Schlüssel aufbewahren</strong>, nicht auf
+          dem Server.
+        </p>
       </div>
     </div>`;
 
@@ -487,12 +507,21 @@ async function renderSettings() {
     a.href = '/api/backup/download';
     a.style.display = 'none';
     // Add auth header via fetch
+    // Der Name kommt vom Server: verschluesselt heisst die Datei .adbk, sonst .zip. Fest
+    // „.zip" hiesse, dass eine verschluesselte Sicherung unter falschem Namen auf der Platte
+    // landet und spaeter niemand weiss, was sie ist.
+    let name = 'arbeitsdoku_backup.zip';
     fetch('/api/backup/download', { headers: { 'Authorization': 'Bearer ' + S.token } })
-      .then(r => r.blob())
+      .then(r => {
+        const cd = r.headers.get('content-disposition') || '';
+        const m = /filename="([^"]+)"/.exec(cd);
+        if (m) name = m[1];
+        return r.blob();
+      })
       .then(blob => {
         const url = URL.createObjectURL(blob);
         a.href = url;
-        a.download = 'arbeitsdoku_backup.zip';
+        a.download = name;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -507,13 +536,61 @@ async function renderSettings() {
     document.getElementById('restore-area').style.display = 'block';
   });
 
+  // Verschluesselte Datei gewaehlt? Dann das Schluesselfeld zeigen und sagen, wer sie oeffnen kann.
+  document.getElementById('backup-file').addEventListener('change', async (e) => {
+    const bereich = document.getElementById('restore-schluessel');
+    const datei = e.target.files[0];
+    if (!datei) { bereich.style.display = 'none'; return; }
+    const kopf = new Uint8Array(await datei.slice(0, 4096).arrayBuffer());
+    if (!window.SicherungKrypto || !window.SicherungKrypto.istContainer(kopf)) {
+      bereich.style.display = 'none';
+      return;
+    }
+    bereich.style.display = 'block';
+    const namen = window.SicherungKrypto.empfaengerNamen(kopf);
+    document.getElementById('backup-schluessel-info').textContent = namen.length
+      ? `Öffnen können sie: ${namen.join(', ')}. Der Schlüssel wird nur in deinem Browser benutzt und nicht an den Server geschickt.`
+      : 'Er wird nur in deinem Browser benutzt und nicht an den Server geschickt.';
+  });
+
+  // Das Hilfsprogramm fuer den Ernstfall herunterladen.
+  document.getElementById('backup-werkzeug').addEventListener('click', async () => {
+    try {
+      const antwort = await fetch('/api/backup/entschluesseler', { headers: { Authorization: 'Bearer ' + S.token } });
+      if (!antwort.ok) throw new Error('Konnte nicht erzeugt werden');
+      const url = URL.createObjectURL(await antwort.blob());
+      const a = document.createElement('a');
+      a.href = url; a.download = 'sicherung-entschluesseln.html';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast('Heruntergeladen — leg die Datei zum Schlüssel', 'success');
+    } catch (err) { toast(err.message || 'Download fehlgeschlagen', 'error'); }
+  });
+
   document.getElementById('restore-confirm').addEventListener('click', async () => {
     const fileInput = document.getElementById('backup-file');
     if (!fileInput.files.length) { toast('Bitte eine Backup-Datei auswählen', 'error'); return; }
+
+    // Verschluesselt? Dann JETZT im Browser oeffnen — der Server bekommt nur das fertige Zip.
+    let inhalt = fileInput.files[0];
+    const rohkopf = new Uint8Array(await inhalt.slice(0, 4096).arrayBuffer());
+    if (window.SicherungKrypto && window.SicherungKrypto.istContainer(rohkopf)) {
+      const schluessel = (document.getElementById('backup-schluessel').value || '').trim();
+      if (!schluessel) { toast('Diese Sicherung ist verschlüsselt — bitte den Schlüssel einfügen', 'error'); return; }
+      try {
+        const zip = await window.SicherungKrypto.entschluesseln(
+          new Uint8Array(await inhalt.arrayBuffer()), schluessel);
+        inhalt = new Blob([zip], { type: 'application/zip' });
+      } catch (err) {
+        toast(err.message || 'Die Sicherung liess sich nicht öffnen', 'error');
+        return;
+      }
+    }
+
     if (!(await confirmModal('ACHTUNG: Alle aktuellen Daten werden durch das Backup ersetzt!\n\nEin Sicherungs-Backup wird automatisch erstellt.\n\nFortfahren?', { title: 'Backup einspielen', okLabel: 'Fortfahren' }))) return;
 
     const fd = new FormData();
-    fd.append('backup', fileInput.files[0]);
+    fd.append('backup', inhalt, 'sicherung.zip');
     try {
       const result = await api('POST', '/api/backup/restore', fd, true);
       toast('Backup erfolgreich wiederhergestellt! Seite wird neu geladen...', 'success');
