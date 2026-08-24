@@ -5,6 +5,10 @@
 // dieser App laufen sie bei JEDEM Start. Ein Fehler dort fällt niemandem auf, bis jemand einen
 // alten Monat sucht.
 //
+// Der Test muss mit dem Bestand mitaltern: Sobald die Runde produktiv ist, stehen in ihren
+// Tabellen echte Zeilen. Deshalb wird nicht „leer" verlangt, sondern das, worum es geht — die
+// Migration darf nichts erfinden und nichts anfassen, was schon da war.
+//
 // Deshalb wird hier nicht die Anzahl der Zeilen geglaubt, sondern der INHALT verglichen: Für jede
 // Tabelle die Spaltenliste plus alle Zeilen, sortiert und gehasht. Vorher/nachher muss jede
 // bestehende Tabelle Zeichen für Zeichen dieselbe sein; dazukommen dürfen nur die neuen.
@@ -103,18 +107,30 @@ async function aufnehmen(datei) {
     Object.keys(vorher).every(t => nachher[t] && nachher[t].summe === vorher[t].summe),
     `${Object.keys(vorher).filter(t => !nachher[t] || nachher[t].summe !== vorher[t].summe).join(', ')}`);
 
-  console.log('\n── Die neuen Tabellen sind entstanden ──');
-  for (const t of ['twofa_secrets', 'twofa_devices', 'user_avatars', 'user_sitzung', 'geburtstag_freigabe']) {
-    ok(`${t} angelegt`, !!nachher[t], 'fehlt');
+  console.log('\n── Die Tabellen dieser Runde ──');
+  const RUNDE = ['twofa_secrets', 'twofa_devices', 'user_avatars', 'user_sitzung', 'geburtstag_freigabe'];
+  for (const t of RUNDE) ok(`${t} vorhanden`, !!nachher[t], 'fehlt');
+
+  // Ab dem Tag, an dem die Runde produktiv ist, stehen in diesen Tabellen echte Zeilen — am
+  // 24.08.2026 zum ersten Mal (ein Profilbild, eine Geburtstags-Freigabe). „Muss leer sein" waere
+  // dann schlicht falsch. Geprueft gehoert, was wirklich zaehlt: Die MIGRATION darf nichts
+  // erfinden. Also leer nur, was sie gerade erst angelegt hat; alles, was schon im Bestand war,
+  // muss Zeichen fuer Zeichen so bleiben.
+  const neuAngelegt = RUNDE.filter(t => !vorher[t]);
+  const schonDa = RUNDE.filter(t => vorher[t]);
+  console.log(`     (neu angelegt: ${neuAngelegt.join(', ') || 'keine'} · schon im Bestand: ${schonDa.join(', ') || 'keine'})`);
+
+  if (neuAngelegt.length) {
+    ok('die NEU angelegten sind leer (niemand ist ploetzlich eingerichtet)',
+      neuAngelegt.every(t => !nachher[t] || nachher[t].anzahl === 0),
+      JSON.stringify(neuAngelegt.map(t => t + '=' + (nachher[t] ? nachher[t].anzahl : '?'))));
   }
-  ok('… und sie sind leer (niemand ist ploetzlich eingerichtet)',
-    ['twofa_secrets', 'twofa_devices', 'user_avatars', 'user_sitzung', 'geburtstag_freigabe']
-      .every(t => !nachher[t] || nachher[t].anzahl === 0),
-    JSON.stringify(['twofa_secrets', 'twofa_devices', 'user_avatars', 'user_sitzung', 'geburtstag_freigabe']
-      .map(t => t + '=' + (nachher[t] ? nachher[t].anzahl : '?'))));
-  ok('sonst ist nichts dazugekommen',
-    neu.every(t => ['twofa_secrets', 'twofa_devices', 'user_avatars', 'user_sitzung', 'geburtstag_freigabe'].includes(t)),
-    neu.join(', '));
+  if (schonDa.length) {
+    ok('die schon vorhandenen sind unveraendert (das Update fasst sie nicht an)',
+      schonDa.every(t => nachher[t] && nachher[t].summe === vorher[t].summe),
+      JSON.stringify(schonDa.map(t => t + ': ' + (vorher[t] ? vorher[t].anzahl : '?') + ' → ' + (nachher[t] ? nachher[t].anzahl : '?'))));
+  }
+  ok('sonst ist nichts dazugekommen', neu.every(t => RUNDE.includes(t)), neu.join(', '));
 
   // Gegenprobe zur Messung selbst: Waere sie blind, meldete sie auch bei echtem Verlust nichts.
   console.log('\n── Gegenprobe: erkennt die Messung ueberhaupt einen Verlust? ──');
