@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**177 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**178 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -72,6 +72,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `avatar-zuschnitt.js` | Der Nutzer bestimmt den Ausschnitt seines Profilbilds (Alex, 23.08.2026). |
 | `backup-krypto.js` | Der Container für verschlüsselte Sicherungen (Alex, 24.08.2026). |
 | `backup-restore.js` | Backup-Round-Trip + dynamisches Restore-Limit: Backup herunterladen → wieder einspielen (200), |
+| `backup-verschluesselt.js` | Die Sicherung verlässt den Server verschlüsselt — und der Server kann sie nicht öffnen. |
 | `badge-nachziehen-ui.js` | Der Coin zeigte eine offene Bestellung an, obwohl die Liste leer war (Alex, 29.07.2026, Handy). |
 | `barrierefrei-prodklon.js` | Prod-Klon-Pruefung fuer B8b (Tastatur/Screenreader). |
 | `barrierefrei-ui.js` | Puppeteer-Test (B8b): Bedienung per Tastatur und mit Screenreader. |

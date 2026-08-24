@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbeitsdoku — Sicherung entschlüsseln</title>
+<!--
+  Der Rettungsweg, wenn die App nicht läuft.
+
+  Diese Datei ist absichtlich EINE Datei ohne Netz und ohne Bibliotheken: Sie funktioniert per
+  Doppelklick, auch von einem USB-Stick, auch ohne Internet. Bewahre sie zusammen mit dem
+  Schlüssel auf — auf dem Server nützt sie im Ernstfall nichts.
+
+  Nichts, was du hier eingibst, verlässt diesen Rechner. Es gibt keine Verbindung nach draußen.
+-->
+<style>
+  :root {
+    --grund: #f5f7f4; --flaeche: #fff; --kante: #d8ded4; --tinte: #1b211c;
+    --gedaempft: #5e6a60; --gruen: #3f8f2c; --rot: #b3261e; --rot-grund: #fdf0ee;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --grund:#12160f; --flaeche:#1a2016; --kante:#2c3527; --tinte:#e9eee4;
+            --gedaempft:#9ba795; --gruen:#7fcc58; --rot:#f2b8b5; --rot-grund:#2b1c1a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--grund); color:var(--tinte); line-height:1.6;
+         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .blatt { max-width: 40rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 .3rem; }
+  .unter { color: var(--gedaempft); margin: 0 0 1.8rem; }
+  .karte { background:var(--flaeche); border:1px solid var(--kante); border-radius:10px;
+           padding:1.2rem; margin-bottom:1rem; }
+  .schritt { font-size:.75rem; letter-spacing:.1em; text-transform:uppercase;
+             color:var(--gruen); font-weight:700; margin-bottom:.5rem; }
+  .ablage { border:2px dashed var(--kante); border-radius:8px; padding:1.6rem 1rem;
+            text-align:center; color:var(--gedaempft); cursor:pointer; }
+  .ablage:hover, .ablage.drueber { border-color:var(--gruen); color:var(--tinte); }
+  .ablage input { display:none; }
+  textarea { width:100%; min-height:5rem; padding:.6rem; border:1px solid var(--kante);
+             border-radius:6px; background:var(--grund); color:var(--tinte);
+             font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.85rem;
+             resize:vertical; }
+  button { font: inherit; font-weight:600; padding:.7rem 1.2rem; border:none; border-radius:8px;
+           background:var(--gruen); color:#fff; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  button:focus-visible, .ablage:focus-visible, textarea:focus-visible { outline:2px solid var(--gruen); outline-offset:2px; }
+  .meldung { margin-top:1rem; padding:.8rem 1rem; border-radius:8px; display:none; }
+  .meldung.gut { display:block; background:rgba(63,143,44,.12); border-left:3px solid var(--gruen); }
+  .meldung.schlecht { display:block; background:var(--rot-grund); border-left:3px solid var(--rot); }
+  .meldung.schlecht strong { color: var(--rot); }
+  .hinweis { font-size:.85rem; color:var(--gedaempft); margin-top:.5rem; }
+  code { font-family: ui-monospace, monospace; font-size:.9em; }
+  .fuss { margin-top:2rem; font-size:.82rem; color:var(--gedaempft); border-top:1px solid var(--kante); padding-top:1rem; }
+</style>
+</head>
+<body>
+<div class="blatt">
+  <h1>Sicherung entschlüsseln</h1>
+  <p class="unter">Aus der verschlüsselten Sicherungsdatei wird wieder die gewohnte
+     <code>.zip</code>. Alles passiert auf diesem Rechner — nichts wird irgendwohin gesendet.</p>
+
+  <div class="karte">
+    <div class="schritt">Schritt 1 — Datei</div>
+    <label class="ablage" id="ablage" tabindex="0">
+      <input type="file" id="datei" accept=".adbk,application/octet-stream">
+      <span id="ablage-text">Sicherungsdatei hierher ziehen oder anklicken</span>
+    </label>
+    <div class="hinweis" id="datei-info"></div>
+  </div>
+
+  <div class="karte">
+    <div class="schritt">Schritt 2 — Schlüssel</div>
+    <textarea id="schluessel" spellcheck="false" autocomplete="off"
+              placeholder="Den privaten Schlüssel hier einfügen (eine lange Zeile)"></textarea>
+    <div class="hinweis">Er steht in der Passwortverwaltung. Einfügen, nicht abtippen.</div>
+  </div>
+
+  <button id="los" disabled>Entschlüsseln und speichern</button>
+  <div class="meldung" id="meldung"></div>
+
+  <div class="fuss">
+    Diese Seite hat keine Verbindung nach außen. Der Schlüssel bleibt auf diesem Rechner.<br>
+    Klappt es nicht, prüfe zuerst, ob der Schlüssel vollständig eingefügt wurde — er ist lang.
+  </div>
+</div>
+
+<script src="../public/js/sicherung-krypto.js"></script><!--KRYPTO-EINBETTEN-->
+<script>
+(function () {
+  'use strict';
+  const el = (id) => document.getElementById(id);
+  let bytes = null, dateiname = 'sicherung';
+
+  function melde(text, gut) {
+    const m = el('meldung');
+    m.className = 'meldung ' + (gut ? 'gut' : 'schlecht');
+    m.innerHTML = gut ? text : '<strong>Das hat nicht geklappt.</strong><br>' + text;
+  }
+  function pruefeBereit() {
+    el('los').disabled = !(bytes && el('schluessel').value.trim());
+  }
+
+  async function dateiNehmen(f) {
+    if (!f) return;
+    dateiname = f.name.replace(/\.adbk$/i, '') || 'sicherung';
+    bytes = new Uint8Array(await f.arrayBuffer());
+    el('ablage-text').textContent = f.name;
+    const K = window.SicherungKrypto;
+    if (!K.istContainer(bytes)) {
+      el('datei-info').textContent =
+        'Diese Datei ist nicht verschlüsselt. Wenn es schon eine .zip ist, kannst du sie direkt einspielen.';
+    } else {
+      const namen = K.empfaengerNamen(bytes);
+      el('datei-info').textContent = namen.length
+        ? 'Verschlüsselt. Öffnen können sie: ' + namen.join(', ') + '.'
+        : 'Verschlüsselte Sicherung.';
+    }
+    el('meldung').className = 'meldung';
+    pruefeBereit();
+  }
+
+  el('datei').addEventListener('change', (e) => dateiNehmen(e.target.files[0]));
+  el('schluessel').addEventListener('input', pruefeBereit);
+  el('ablage').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el('datei').click(); }
+  });
+  for (const art of ['dragenter', 'dragover']) {
+    el('ablage').addEventListener(art, (e) => { e.preventDefault(); el('ablage').classList.add('drueber'); });
+  }
+  for (const art of ['dragleave', 'drop']) {
+    el('ablage').addEventListener(art, (e) => { e.preventDefault(); el('ablage').classList.remove('drueber'); });
+  }
+  el('ablage').addEventListener('drop', (e) => dateiNehmen(e.dataTransfer.files[0]));
+
+  el('los').addEventListener('click', async () => {
+    el('los').disabled = true;
+    try {
+      const zip = await window.SicherungKrypto.entschluesseln(bytes, el('schluessel').value);
+      const url = URL.createObjectURL(new Blob([zip], { type: 'application/zip' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = dateiname + '.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      melde('Die Datei <strong>' + dateiname + '.zip</strong> wurde gespeichert — meist im Ordner '
+          + '„Downloads". Sie lässt sich in der Arbeitsdoku unter <em>Einstellungen → Backup</em> '
+          + 'einspielen.', true);
+    } catch (e) {
+      melde(e && e.message ? e.message : 'Unbekannter Fehler.', false);
+    }
+    pruefeBereit();
+  });
+})();
+</script>
+</body>
+</html>

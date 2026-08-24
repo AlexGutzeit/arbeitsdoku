@@ -9,6 +9,7 @@ const { getDb, saveToFile, reloadFromFile, writeFileAtomic, DB_PATH } = dbModule
 const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { abgerechnetBis } = require('../abschluss');
+const krypto = require('../backup-krypto');
 
 const router = express.Router();
 
@@ -58,10 +59,21 @@ router.get('/download', authenticate, authorize('chef'), (req, res) => {
 
   logAudit(getDb(), { userId: req.user.id, username: req.user.username, action: 'backup_download', ip: req.ip });
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `arbeitsdoku_backup_${timestamp}.zip`;
+  // Sind Empfaenger hinterlegt, geht die Sicherung verschluesselt hinaus. Sonst wie bisher als
+  // Zip — dieses Repo wird auch von Fremdfirmen betrieben, die nichts konfiguriert haben, und
+  // deren Sicherung darf durch ein Update nicht stillschweigend aufhoeren zu funktionieren.
+  let empfaenger = [];
+  try { empfaenger = krypto.empfaengerAusUmgebung(); }
+  catch (e) {
+    // Lieber gar keine Sicherung als eine, von der niemand weiss, ob sie lesbar ist.
+    console.error('BACKUP_EMPFAENGER unbrauchbar:', e.message);
+    return res.status(500).json({ error: 'Die Empfänger für verschlüsselte Sicherungen sind falsch hinterlegt: ' + e.message });
+  }
 
-  res.setHeader('Content-Type', 'application/zip');
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `arbeitsdoku_backup_${timestamp}` + (empfaenger.length ? '.adbk' : '.zip');
+
+  res.setHeader('Content-Type', empfaenger.length ? 'application/octet-stream' : 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
   const archive = archiver('zip', { zlib: { level: 9 } });
@@ -69,7 +81,16 @@ router.get('/download', authenticate, authorize('chef'), (req, res) => {
     console.error('Backup-Archiv Fehler:', err);
     if (!res.headersSent) res.status(500).json({ error: 'Backup fehlgeschlagen' });
   });
-  archive.pipe(res);
+  if (empfaenger.length) {
+    const schloss = krypto.verschluesselnStream(empfaenger);
+    schloss.on('error', (err) => {
+      console.error('Backup-Verschlüsselung fehlgeschlagen:', err);
+      if (!res.headersSent) res.status(500).json({ error: 'Backup fehlgeschlagen' });
+    });
+    archive.pipe(schloss).pipe(res);
+  } else {
+    archive.pipe(res);
+  }
 
   // Datenbank hinzufügen
   archive.file(DB_PATH, { name: 'arbeitsdoku.db' });
@@ -103,6 +124,32 @@ router.get('/download', authenticate, authorize('chef'), (req, res) => {
   archive.finalize();
 });
 
+// Das Hilfsprogramm fuer den Ernstfall herausgeben — eine einzelne, in sich geschlossene Datei.
+//
+// Sie wird hier zusammengesetzt statt fertig im Repo zu liegen: Die Entschluesselung steht in
+// public/js/sicherung-krypto.js und wird von der Einstellungsseite GENAUSO benutzt. Gaebe es zwei
+// Fassungen, waere die selten benutzte irgendwann die kaputte — und genau die braucht man dann.
+router.get('/entschluesseler', authenticate, authorize('chef'), (req, res) => {
+  try {
+    const huelle = path.join(__dirname, '..', 'werkzeuge', 'sicherung-entschluesseln.html');
+    const kryptoJs = path.join(__dirname, '..', 'public', 'js', 'sicherung-krypto.js');
+    let html = fs.readFileSync(huelle, 'utf8');
+    const marke = '<script src="../public/js/sicherung-krypto.js"></script><!--KRYPTO-EINBETTEN-->';
+    if (!html.includes(marke)) {
+      // Lieber laut scheitern als eine Datei ausliefern, die im Ernstfall nichts tut.
+      throw new Error('Einbettungsstelle im Hilfsprogramm nicht gefunden');
+    }
+    html = html.replace(marke, '<script>\n' + fs.readFileSync(kryptoJs, 'utf8') + '\n</script>');
+    logAudit(getDb(), { userId: req.user.id, username: req.user.username, action: 'backup_werkzeug', ip: req.ip });
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="sicherung-entschluesseln.html"');
+    res.send(html);
+  } catch (e) {
+    console.error('Entschlüsseler ausliefern fehlgeschlagen:', e.message);
+    res.status(500).json({ error: 'Das Hilfsprogramm konnte nicht erzeugt werden.' });
+  }
+});
+
 // Backup wiederherstellen (ZIP oder SQLite)
 router.post('/restore', authenticate, authorize('chef'), restoreUpload, (req, res) => {
   if (!req.file) {
@@ -111,6 +158,23 @@ router.post('/restore', authenticate, authorize('chef'), restoreUpload, (req, re
 
   try {
     const buffer = fs.readFileSync(req.file.path);
+
+    // Eine verschluesselte Sicherung kann der Server NICHT oeffnen — das ist der Zweck der
+    // Uebung, nicht ein Mangel. Normalerweise entschluesselt die Oberflaeche vorher im Browser;
+    // landet die Datei trotzdem hier (aelterer Browser, Skript), erklaert die Meldung den Weg,
+    // statt einen unverstaendlichen Fehler zu werfen.
+    if (krypto.istContainer(buffer)) {
+      const namen = krypto.empfaengerNamen(buffer);
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({
+        code: 'SICHERUNG_VERSCHLUESSELT',
+        empfaenger: namen,
+        error: 'Diese Sicherung ist verschlüsselt. Der Server kann sie absichtlich nicht öffnen — '
+             + 'bitte oben den Schlüssel eingeben, dann entschlüsselt dein Browser sie selbst. '
+             + (namen.length ? `Hinterlegte Schlüssel: ${namen.join(', ')}.` : ''),
+      });
+    }
+
     const isZip = buffer[0] === 0x50 && buffer[1] === 0x4B;
 
     let dbBuffer;
