@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**180 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**181 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -70,6 +70,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `avatar-ui.js` | Profilbilder in der Oberfläche: hochladen, in der Kopfzeile sehen, wieder entfernen. |
 | `avatar-zuschnitt-ui.js` | Das Zuschnitt-Fenster im Browser: schieben, zoomen, mit dem Finger bedienen (Alex, 23.08.2026). |
 | `avatar-zuschnitt.js` | Der Nutzer bestimmt den Ausschnitt seines Profilbilds (Alex, 23.08.2026). |
+| `backup-altbestand.js` | Die einmalige Umstellung der vorhandenen Klartext-Sicherungen (Alex, 24.08.2026). |
 | `backup-einspielen-ui.js` | Eine verschlüsselte Sicherung über die Oberfläche einspielen (Alex, 24.08.2026). |
 | `backup-entschluesseln-ui.js` | Das Hilfsprogramm für den Ernstfall — geöffnet wie durch einen Doppelklick. |
 | `backup-krypto.js` | Der Container für verschlüsselte Sicherungen (Alex, 24.08.2026). |
