@@ -2743,8 +2743,23 @@ async function kontoGeraeteKarte() {
   if (!geraete.length) { k.style.display = 'none'; return; }
   k.style.display = '';
   const datum = (t) => t ? new Date(String(t).replace(' ', 'T') + 'Z').toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+  // Die Ueberschrift hiess frueher „Geraete ohne Code-Abfrage" — das stimmte nur bei „einmal pro
+  // Geraet". Bei „woechentlich" wird sehr wohl gefragt, nur seltener (Alex, 24.08.2026). Also
+  // neutral benennen und darunter sagen, was auf diesen Geraeten wirklich gilt.
+  const zf = S.zweiFaktor || {};
+  const wirksam = zf.pflicht ? zf.modus : (zf.eigen_modus || 'geraet');
+  const ERKLAERUNG = {
+    geraet: 'Auf diesen Geräten wird kein Code mehr verlangt.',
+    taeglich: 'Auf diesen Geräten wird höchstens einmal am Tag ein Code verlangt.',
+    woechentlich: 'Auf diesen Geräten wird höchstens einmal pro Woche ein Code verlangt.',
+    monatlich: 'Auf diesen Geräten wird höchstens einmal im Monat ein Code verlangt.',
+    immer: 'Weil bei jeder Anmeldung ein Code verlangt wird, hilft ein gemerktes Gerät hier nicht.',
+  };
   k.innerHTML = `
-    <h3>&#128241; Geräte ohne Code-Abfrage</h3>
+    <h3>&#128241; Gemerkte Geräte</h3>
+    <p style="margin:0 0 .7rem; font-size:.88rem; color:var(--text-light)">
+      ${esc(ERKLAERUNG[wirksam] || 'Auf diesen Geräten wird seltener ein Code verlangt.')}
+    </p>
     <div class="tool-list">
       ${geraete.map(g => `
         <div class="tool-item">

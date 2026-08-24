@@ -357,21 +357,62 @@ async function scharfSchalten(adminToken, werte) {
     }));
     for (const [name, da] of Object.entries(karten)) ok(`Karte „${name}" ist da`, da, JSON.stringify(karten));
 
-    console.log('\n── Die Karte nennt das Intervall, das WIRKLICH gilt ──');
-    // Erst auf dem Bildschirmfoto aufgefallen: Dort stand „Abfrage: aus (von dir gewaehlt)" —
-    // angezeigt wurde der Rollen-Modus (der steht ja auf „aus"), nicht der tatsaechlich geltende.
-    // Ohne Pflicht gilt der eigene Wunsch, und genau der gehoert dort hin.
-    {
-      const t = (await req('POST', '/api/auth/login', null, { username: 'max', password: pw('max') })).body.token;
-      const st = (await req('GET', '/api/auth/2fa/status', t)).body.zwei_faktor;
-      if (st && st.eingerichtet && !st.pflicht) {
-        await page.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
-        await page.reload({ waitUntil: 'domcontentloaded' });
-        await page.waitForSelector('#konto-2fa'); await sleep(2000);
-        const text = (await page.$eval('#konto-2fa', el => el.innerText)).replace(/\s+/g, ' ');
-        ok('… und nennt NICHT „aus"', !/Abfrage: aus/i.test(text), text.slice(0, 110));
-      } else { ok('… (Zustand passt hier nicht, uebersprungen)', true); }
-    }
+    console.log('\n── Was die Karten ueber das Intervall sagen ──');
+    // Der Zustand wird hier SELBST hergestellt. Beim ersten Versuch haben sich beide Pruefungen
+    // uebersprungen, weil sie darauf hofften, dass zufaellig ein passendes Konto vorliegt — und
+    // ein uebersprungener Test prueft nichts.
+    //
+    // Gebraucht wird: ein Nutzer mit eigenem Authenticator, eigenem Intervall „woechentlich" und
+    // einem gemerkten Geraet. Das sind mehrere Codes hintereinander; der Wiederverwendungs-Riegel
+    // nimmt nur steigende Zeitschritte, deshalb vor jedem ein frisches Fenster.
+    // Zuerst die Pflicht herausnehmen: Weiter oben wurde die Mitarbeiter-Rolle scharf geschaltet,
+    // und solange sie das ist, GEWINNT sie — der eigene Wunsch waere hier gar nicht einstellbar.
+    // (Genau daran ist dieser Abschnitt beim ersten Versuch gescheitert.) Abschalten geht ohne Code.
+    await req('PUT', '/api/settings', adminToken, { twofa_mitarbeiter: 'aus' });
+    const uNutzer = 'kartenprobe';
+    await req('POST', '/api/users', adminToken,
+      { username: uNutzer, password: 'Test1234!', name: 'Karten Probe', role: 'mitarbeiter' });
+    const uTok = (await req('POST', '/api/auth/login', null, { username: uNutzer, password: 'Test1234!' })).body.token;
+    const uSetup = (await req('POST', '/api/auth/2fa/setup', uTok, {})).body;
+    await frischesFenster();
+    ok('Authenticator bestaetigt',
+      (await req('POST', '/api/auth/2fa/verify', uTok, { code: totp.code(uSetup.geheim) })).status === 200);
+    await frischesFenster();
+    ok('eigenes Intervall auf „wöchentlich" gestellt',
+      (await req('POST', '/api/auth/2fa/eigener-modus', uTok, { modus: 'woechentlich', code: totp.code(uSetup.geheim) })).status === 200);
+
+    // Anmelden und dabei das Geraet merken lassen — im Browser, damit das Cookie dort landet.
+    const kp = await seiteMachen();
+    await kp.goto(BASIS + '/', { waitUntil: 'domcontentloaded' });
+    await kp.evaluate(() => localStorage.clear());
+    await kp.goto(BASIS + '/', { waitUntil: 'domcontentloaded' });
+    await kp.waitForSelector('#login-user');
+    await kp.type('#login-user', uNutzer); await kp.type('#login-pass', 'Test1234!');
+    await kp.click('#login-form button[type="submit"]');
+    await sleep(1800);
+    ok('die Anmeldung verlangt einen Code', !!(await kp.$('#login-code')));
+    await frischesFenster();
+    await kp.type('#login-code', totp.code(uSetup.geheim));
+    await kp.click('#code-form button[type="submit"]');
+    await sleep(2600);
+    ok('… und danach ist er drin', !(await kp.$('#login-code')) && !(await kp.$('#login-user')));
+
+    await kp.goto(BASIS + '/#/konto', { waitUntil: 'domcontentloaded' });
+    await kp.waitForSelector('#konto-2fa'); await sleep(2600);
+    const zweiTxt = (await kp.$eval('#konto-2fa', el => el.innerText)).replace(/\s+/g, ' ');
+    ok('die 2FA-Karte nennt „wöchentlich" — den geltenden Wert, nicht den Rollen-Modus „aus"',
+      /Abfrage: wöchentlich/i.test(zweiTxt), zweiTxt.slice(0, 120));
+    ok('… und schreibt es dem Nutzer zu', /von dir gewählt/i.test(zweiTxt), zweiTxt.slice(0, 140));
+
+    const gTxt = (await kp.$eval('#konto-geraete', el => el.innerText)).replace(/\s+/g, ' ');
+    // Ohne diese Zeile ist alles darunter wertlos: Eine leere Karte enthaelt auch kein
+    // „ohne Code-Abfrage" und bestuende die Pruefung, ohne dass je ein Geraet gemerkt wurde.
+    ok('die Geräte-Karte ist gefüllt (das Gerät wurde wirklich gemerkt)', gTxt.length > 20, `„${gTxt}"`);
+    ok('sie verspricht KEIN „ohne Code-Abfrage" mehr', !/ohne Code-Abfrage/i.test(gTxt), gTxt.slice(0, 100));
+    ok('… sondern heißt neutral „Gemerkte Geräte"', /Gemerkte Geräte/.test(gTxt), gTxt.slice(0, 100));
+    ok('… und sagt, was dort wirklich gilt: höchstens einmal pro Woche',
+      /höchstens einmal pro Woche/i.test(gTxt), gTxt.slice(0, 200));
+    await kp.close();
 
     console.log('\n── Zwei Wege nach „Mein Konto" (Alex, 23.08.2026) ──');
     // Beides ist gewollt: der Menuepunkt UND die Kopfzeile. Wer oben auf seinen Namen tippt,

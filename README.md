@@ -173,9 +173,12 @@ QR-Code; wer nicht scannen kann — etwa weil die App auf demselben Handy läuft
 darunter angezeigten Schlüssel ab. Erst ein gültiger Code macht die Einrichtung scharf; ein
 Abbruch dazwischen verbaut nichts.
 
-**Geräte ohne Code-Abfrage:** Wer beim Anmelden „Diesem Gerät vertrauen" wählt, sieht das Gerät
-hier aufgelistet und kann ihm das Vertrauen einzeln oder in einem Rutsch wieder entziehen. Ohne
-diese Liste wäre ein verlorenes Handy bei „einmal pro Gerät" dauerhaft berechtigt.
+**Gemerkte Geräte:** Wer beim Anmelden „Diesem Gerät vertrauen" wählt, sieht das Gerät hier
+aufgelistet und kann ihm das Vertrauen einzeln oder in einem Rutsch wieder entziehen. Ohne diese
+Liste wäre ein verlorenes Handy bei „einmal pro Gerät" dauerhaft berechtigt. Die Karte sagt
+darunter, was auf diesen Geräten **tatsächlich** gilt — bei „einmal pro Gerät" wird gar kein Code
+mehr verlangt, bei „wöchentlich" eben höchstens einmal pro Woche. (Die Überschrift hieß bis zum
+24.08.2026 „Geräte ohne Code-Abfrage" und war damit nur für eine der Stufen richtig.)
 
 **Wie oft ein Code verlangt wird, entscheidet die Rolle** — einstellbar in
 [⚙ Einstellungen](#-einstellungen): *aus · bei jeder Anmeldung · einmal pro Gerät · täglich ·
