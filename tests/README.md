@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**176 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**177 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -70,6 +70,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `avatar-ui.js` | Profilbilder in der Oberfläche: hochladen, in der Kopfzeile sehen, wieder entfernen. |
 | `avatar-zuschnitt-ui.js` | Das Zuschnitt-Fenster im Browser: schieben, zoomen, mit dem Finger bedienen (Alex, 23.08.2026). |
 | `avatar-zuschnitt.js` | Der Nutzer bestimmt den Ausschnitt seines Profilbilds (Alex, 23.08.2026). |
+| `backup-krypto.js` | Der Container für verschlüsselte Sicherungen (Alex, 24.08.2026). |
 | `backup-restore.js` | Backup-Round-Trip + dynamisches Restore-Limit: Backup herunterladen → wieder einspielen (200), |
 | `badge-nachziehen-ui.js` | Der Coin zeigte eine offene Bestellung an, obwohl die Liste leer war (Alex, 29.07.2026, Handy). |
 | `barrierefrei-prodklon.js` | Prod-Klon-Pruefung fuer B8b (Tastatur/Screenreader). |
