@@ -32,7 +32,9 @@
            padding:1.2rem; margin-bottom:1rem; }
   .schritt { font-size:.75rem; letter-spacing:.1em; text-transform:uppercase;
              color:var(--gruen); font-weight:700; margin-bottom:.5rem; }
-  .ablage { border:2px dashed var(--kante); border-radius:8px; padding:1.6rem 1rem;
+  /* display:block ist noetig — ein <label> ist sonst inline, sein Innenabstand schiebt die
+     Nachbarn nicht weg, und der gestrichelte Kasten legt sich ueber Ueberschrift und Hinweis. */
+  .ablage { display:block; border:2px dashed var(--kante); border-radius:8px; padding:1.6rem 1rem;
             text-align:center; color:var(--gedaempft); cursor:pointer; }
   .ablage:hover, .ablage.drueber { border-color:var(--gruen); color:var(--tinte); }
   .ablage input { display:none; }
