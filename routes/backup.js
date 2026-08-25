@@ -71,8 +71,15 @@ function aktuelleEmpfaenger(db) {
   return krypto.empfaengerZusammen(krypto.empfaengerAusUmgebung(), empfaengerAusDb(db));
 }
 
-// Liste für die Oberfläche — öffentliche Schlüssel sind nicht geheim, trotzdem nur für die, die
-// ohnehin Sicherungen herunterladen dürfen.
+// Wer darf was (Entscheidung Alex, 25.08.2026):
+//   sehen   — Chef und Admin, wie die ganze Backup-Karte
+//   ändern  — NUR Admin. Wer diese Liste ändert, entscheidet, wer den gesamten Datenbestand lesen
+//             kann — und könnte im Vorbeigehen die Notfall-Umschaltung stilllegen, indem er den
+//             Schlüssel der Zweitanlage herausnimmt. Das soll nicht nebenbei passieren.
+//   prüfen  — Chef und Admin: Der Beweis, den eigenen Schlüssel zu besitzen, ändert nichts daran,
+//             wer lesen darf, und ist genau das Verhalten, das man fördern will.
+//
+// Öffentliche Schlüssel sind nicht geheim, die Liste bleibt trotzdem hinter der Anmeldung.
 router.get('/empfaenger', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   let ausUmgebung = [];
@@ -99,7 +106,7 @@ router.get('/empfaenger', authenticate, authorize('chef'), (req, res) => {
   res.json({ empfaenger: liste, umgebungsFehler, verschluesselt: liste.some(e => !e.fehler) });
 });
 
-router.post('/empfaenger', authenticate, authorize('chef'), (req, res) => {
+router.post('/empfaenger', authenticate, authorize('admin'), (req, res) => {
   const db = getDb();
   let name, geprueft;
   try {
@@ -135,7 +142,7 @@ router.post('/empfaenger', authenticate, authorize('chef'), (req, res) => {
 
 // Umbenennen. Den Schlüssel einer bestehenden Zeile zu tauschen ist bewusst nicht vorgesehen:
 // Das ist löschen und neu anlegen — nur unübersichtlicher, und die Prüfung müsste ohnehin neu.
-router.put('/empfaenger/:id', authenticate, authorize('chef'), (req, res) => {
+router.put('/empfaenger/:id', authenticate, authorize('admin'), (req, res) => {
   const db = getDb();
   const zeile = db.prepare('SELECT * FROM backup_empfaenger WHERE id = ?').get(req.params.id);
   if (!zeile) return res.status(404).json({ error: 'Empfänger nicht gefunden' });
@@ -158,7 +165,7 @@ router.put('/empfaenger/:id', authenticate, authorize('chef'), (req, res) => {
   res.json({ empfaenger: { id: zeile.id, name } });
 });
 
-router.delete('/empfaenger/:id', authenticate, authorize('chef'), (req, res) => {
+router.delete('/empfaenger/:id', authenticate, authorize('admin'), (req, res) => {
   const db = getDb();
   const zeile = db.prepare('SELECT * FROM backup_empfaenger WHERE id = ?').get(req.params.id);
   if (!zeile) return res.status(404).json({ error: 'Empfänger nicht gefunden' });

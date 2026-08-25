@@ -20,7 +20,7 @@ const crypto = require('crypto');
 const initSqlJs = require('sql.js');
 const krypto = require('../backup-krypto');
 
-const PORT = 3285, DB = '/tmp/backup-empf.db', LOG = '/tmp/backup-empf-srv.log';
+const PORT = 3287, DB = '/tmp/backup-empf.db', LOG = '/tmp/backup-empf-srv.log';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, fails.push(n), console.log('  ✗ ' + n + (e ? '  → ' + e : '')));
@@ -187,6 +187,29 @@ async function probeDurchlaufen(token, id, privatB64) {
     }
     r = await req('GET', '/api/backup/empfaenger', admin);
     ok('… und die Liste ist unveraendert', r.body.empfaenger.length === 2, JSON.stringify(r.body.empfaenger.map(e => e.name)));
+
+    // Entscheidung Alex (25.08.2026): Sehen ja, aendern nein. Wer die Liste aendert, entscheidet
+    // ueber den Zugriff auf den gesamten Datenbestand — und koennte nebenbei den Schluessel der
+    // Zweitanlage herausnehmen und damit die Notfall-Umschaltung stilllegen.
+    const chefAnlegen = await req('POST', '/api/users', admin, { username: 'daniel', password: 'Str3ng!Geheim', name: 'Daniel', role: 'chef', target_hours_per_week: 40 });
+    ok('Chef angelegt', chefAnlegen.status === 201 || chefAnlegen.status === 200, chefAnlegen.status + '');
+    const chefToken = await anmelden('daniel', 'Str3ng!Geheim');
+    r = await req('GET', '/api/backup/empfaenger', chefToken);
+    ok('Chef DARF die Liste sehen', r.status === 200 && r.body.empfaenger.length === 2, r.status + '');
+    for (const [m, pfad, koerper] of [
+      ['POST', '/api/backup/empfaenger', { name: 'Heimlich', pubkey: fremd.oeffentlich }],
+      ['PUT', '/api/backup/empfaenger/' + idZweit, { name: 'Umbenannt' }],
+      ['DELETE', '/api/backup/empfaenger/' + idZweit, null],
+    ]) {
+      const a2 = await req(m, pfad, chefToken, koerper);
+      ok(`Chef ${m} → 403 (nur Admin darf aendern)`, a2.status === 403, a2.status + '');
+    }
+    r = await req('POST', `/api/backup/empfaenger/${idZweit}/probe`, chefToken);
+    ok('Chef darf aber PRUEFEN (das aendert nichts am Zugriff)', r.status === 200, r.status + '');
+    r = await req('GET', '/api/backup/empfaenger', admin);
+    ok('… und nach alledem steht die Liste unveraendert da',
+      JSON.stringify(r.body.empfaenger.map(e => e.name).sort()) === '["Chefin","Mini-PC"]',
+      JSON.stringify(r.body.empfaenger.map(e => e.name)));
 
     console.log('\n── Entfernen ──');
     r = await req('DELETE', '/api/backup/empfaenger/' + idZweit, admin);

@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**181 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**183 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -72,6 +72,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `avatar-zuschnitt.js` | Der Nutzer bestimmt den Ausschnitt seines Profilbilds (Alex, 23.08.2026). |
 | `backup-altbestand.js` | Die einmalige Umstellung der vorhandenen Klartext-Sicherungen (Alex, 24.08.2026). |
 | `backup-einspielen-ui.js` | Eine verschlüsselte Sicherung über die Oberfläche einspielen (Alex, 24.08.2026). |
+| `backup-empfaenger-ui.js` | Die Empfängerliste, geklickt statt aufgerufen (Alex, 25.08.2026). |
+| `backup-empfaenger.js` | Wer darf Sicherungen öffnen? — die Liste in der Backup-Karte (Alex, 25.08.2026) |
 | `backup-entschluesseln-ui.js` | Das Hilfsprogramm für den Ernstfall — geöffnet wie durch einen Doppelklick. |
 | `backup-krypto.js` | Der Container für verschlüsselte Sicherungen (Alex, 24.08.2026). |
 | `backup-restore.js` | Backup-Round-Trip + dynamisches Restore-Limit: Backup herunterladen → wieder einspielen (200), |

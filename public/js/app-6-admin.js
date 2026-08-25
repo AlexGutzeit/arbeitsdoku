@@ -25,6 +25,9 @@ async function renderSettings() {
     if (data) S.settings = data.settings;
   } catch (e) {}
 
+  // Empfaengerliste der Sicherungen: sehen duerfen Chef und Admin, aendern nur Admin.
+  const istAdmin = S.user && S.user.role === 'admin';
+
   // Dokumenten-Speicher (nur Admin)
   let docStorage = null;
   if (isAdmin()) {
@@ -284,7 +287,8 @@ async function renderSettings() {
           heran: Die liegen längst woanders und lassen sich nicht nachträglich ändern.
         </p>
         <div id="empf-liste"></div>
-        <button class="btn btn-outline btn-sm" id="empf-add" style="margin-top:.6rem">+ Schlüssel hinzufügen</button>
+        ${istAdmin ? `<button class="btn btn-outline btn-sm" id="empf-add" style="margin-top:.6rem">+ Schlüssel hinzufügen</button>`
+                   : `<p class="push-hint">Ändern darf diese Liste nur ein Administrator — wer sie ändert, entscheidet, wer den gesamten Datenbestand lesen kann.</p>`}
 
         <div id="empf-form" style="display:none;margin-top:.8rem;padding:.9rem;border:1px solid var(--border);border-radius:8px">
           <div class="form-group" style="margin-bottom:.6rem">
@@ -665,10 +669,12 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
           : e.fest
             ? 'aus der Server-Konfiguration — hier nicht änderbar'
             : (e.geprueft_am ? `geprüft am ${esc(e.geprueft_am)}` : 'noch nicht geprüft');
+        // „prüfen" darf auch der Chef: Es beweist nur, dass jemand seinen eigenen Schlüssel hat,
+        // und ändert nichts daran, wer lesen darf. Hinzufügen, Umbenennen und Entfernen nicht.
         const knoepfe = e.fest ? '' : `
           <button class="btn btn-outline btn-sm empf-pruefen" data-id="${e.id}" data-name="${esc(e.name)}">prüfen</button>
-          <button class="btn btn-outline btn-sm empf-rename" data-id="${e.id}" data-name="${esc(e.name)}" title="Umbenennen">&#9998;</button>
-          <button class="btn btn-danger btn-sm empf-del" data-id="${e.id}" data-name="${esc(e.name)}" title="Entfernen">&times;</button>`;
+          ${istAdmin ? `<button class="btn btn-outline btn-sm empf-rename" data-id="${e.id}" data-name="${esc(e.name)}" title="Umbenennen">&#9998;</button>
+          <button class="btn btn-danger btn-sm empf-del" data-id="${e.id}" data-name="${esc(e.name)}" title="Entfernen">&times;</button>` : ''}`;
         return `<div class="empf-zeile" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;padding:.5rem 0;border-bottom:1px solid var(--border)">
           <div style="flex:1;min-width:12rem">
             <strong>${esc(e.name)}</strong>
@@ -697,11 +703,13 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
     empfNeuerPrivater = null;
   }
 
-  document.getElementById('empf-add').addEventListener('click', () => {
-    document.getElementById('empf-form').style.display = '';
-    document.getElementById('empf-name').focus();
-  });
-  document.getElementById('empf-cancel').addEventListener('click', empfFormZuruecksetzen);
+  // Der Hinzufuegen-Knopf steht nur fuer Admins in der Seite — die Handler entsprechend auch.
+  if (document.getElementById('empf-add')) {
+    document.getElementById('empf-add').addEventListener('click', () => {
+      document.getElementById('empf-form').style.display = '';
+      document.getElementById('empf-name').focus();
+    });
+    document.getElementById('empf-cancel').addEventListener('click', empfFormZuruecksetzen);
 
   document.getElementById('empf-gen').addEventListener('click', async () => {
     try {
@@ -756,7 +764,8 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
       empfFormZuruecksetzen();
       ladeEmpfaenger();
     } catch (err) { toast(err.message, 'error'); }
-  });
+    });
+  }
 
   document.getElementById('empf-liste').addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return;
