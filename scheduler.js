@@ -168,7 +168,9 @@ async function tick(db, now = new Date()) {
   try { schedules = db.prepare('SELECT * FROM summary_schedules').all(); } catch (_) { return fired; }
   for (const s of schedules) {
     if (!isDue(s, weekday, hhmm, dateStamp)) continue;
-    const user = db.prepare('SELECT id, role, active FROM users WHERE id = ?').get(s.user_id);
+    // can_order MUSS mit: computeBadgeCounts entscheidet daran, ob Bestellungen mitzaehlen.
+    // Ohne die Spalte stuende in der Zusammenfassung eines Rechteinhabers dauerhaft „0".
+    const user = db.prepare('SELECT id, role, active, can_order FROM users WHERE id = ?').get(s.user_id);
     if (!user || user.active === 0) continue;
     const pref = db.prepare('SELECT summaries_paused FROM push_prefs WHERE user_id = ?').get(s.user_id);
     if (pref && pref.summaries_paused === 1) continue; // Global-Pause (Urlaub)

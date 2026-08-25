@@ -270,8 +270,9 @@ async function initPushCard() {
     controlsHtml = `<p class="push-hint">Benachrichtigungen sind für diese Seite im Browser blockiert. Bitte in den Browser-/Seiteneinstellungen erlauben.</p>`;
   } else if (active) {
     statusHtml = `<span class="push-status push-on">Aktiv</span>`;
-    // Bestell-Push gehen nur an Chef + Admin — fuer alle anderen den Schalter ausblenden.
-    const cats = PUSH_CATS.filter(c => c.key !== 'orders' || S.user.role === 'chef' || S.user.role === 'admin');
+    // Bestell-Push gehen an Chef, Admin und Rechteinhaber — fuer alle anderen den Schalter
+    // ausblenden. Wird das Recht entzogen, raeumt der Server die Einstellung mit auf.
+    const cats = PUSH_CATS.filter(c => c.key !== 'orders' || darfBestellen());
     const toggles = cats.map(c => `
       <label class="push-cat">
         <input type="checkbox" data-cat="${c.key}" ${prefs[c.key] ? 'checked' : ''}>
@@ -341,7 +342,7 @@ const SUMMARY_WD = [{ n: 1, l: 'Mo' }, { n: 2, l: 'Di' }, { n: 3, l: 'Mi' }, { n
 function summaryCatOptions() {
   // 'planning' ist ereignisbasiert (Planungs-Erinnerungen) und keine zaehlerbasierte Digest-Kategorie.
   return PUSH_CATS.filter(c => c.key !== 'planning')
-    .filter(c => c.key !== 'orders' || S.user.role === 'chef' || S.user.role === 'admin');
+    .filter(c => c.key !== 'orders' || darfBestellen());
 }
 const summaryCatLabel = (key) => (PUSH_CATS.find(c => c.key === key) || {}).label || key;
 const summaryDaysLabel = (arr) => SUMMARY_WD.filter(w => arr.includes(w.n)).map(w => w.l).join(', ');
@@ -1137,6 +1138,24 @@ async function showUserModal(user) {
             Datei-Upload-Recht (darf Dokumente hochladen &amp; verwalten)
           </label>
         </div>
+        <!-- Bewusst eine EIGENE Gruppe: Beim Bestellen hat auch der Buchhalter das Recht per
+             Rolle, bei Planung/Brett/Upload nicht. Die beiden Bloecke werden deshalb nach
+             unterschiedlichen Regeln aus- und eingeblendet. -->
+        <div class="form-group" id="um-order-group">
+          <label style="display:block;margin-bottom:0.3rem;">Bestellungen</label>
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+            <input type="checkbox" id="um-can-order" ${user?.can_order ? 'checked' : ''}>
+            Bestellungen abschließen
+          </label>
+          <p class="push-hint" style="margin:0.25rem 0 0;">
+            Darf offene Bestellungen auf „Bestellt" setzen und fremde Einträge korrigieren –
+            z. B. Vorarbeiter, oder als Vertretung während des Urlaubs. Bestellte Einträge löschen
+            bleibt beim Admin.
+          </p>
+        </div>
+        <div class="form-group" id="um-order-role-hint" style="display:none;">
+          <p class="push-hint" style="margin:0;">Chef, Admin und Buchhalter dürfen Bestellungen ohnehin abschließen (per Rolle).</p>
+        </div>
         ${isEdit ? `
         <div class="form-section">
           <label class="form-section-title">Soll-Stunden pro Tag</label>
@@ -1229,8 +1248,17 @@ async function showUserModal(user) {
     if (rightsGroup) rightsGroup.style.display = isMgr ? 'none' : '';
     if (rightsHint) rightsHint.style.display = isMgr ? '' : 'none';
   };
-  roleSel.addEventListener('change', syncRightsVisibility);
+  // Bestellrecht: drei Rollen haben es per Rolle (inkl. Buchhalter) — eigene Sichtbarkeit.
+  const orderGroup = document.getElementById('um-order-group');
+  const orderHint = document.getElementById('um-order-role-hint');
+  const syncOrderVisibility = () => {
+    const perRolle = ['chef', 'admin', 'buchhalter'].includes(roleSel.value);
+    if (orderGroup) orderGroup.style.display = perRolle ? 'none' : '';
+    if (orderHint) orderHint.style.display = perRolle ? '' : 'none';
+  };
+  roleSel.addEventListener('change', () => { syncRightsVisibility(); syncOrderVisibility(); });
   syncRightsVisibility();
+  syncOrderVisibility();
 
   // Zwei-Faktor zuruecksetzen (nur bei Bearbeitung) — der Weg zurueck bei verlorenem Handy.
   if (isEdit) {
@@ -1355,6 +1383,7 @@ async function showUserModal(user) {
       can_plan: document.getElementById('um-can-plan').checked,
       can_plan_all: document.getElementById('um-can-plan-all').checked,
       can_bulletin: document.getElementById('um-can-bulletin').checked,
+      can_order: document.getElementById('um-can-order').checked,
       can_upload: document.getElementById('um-can-upload').checked,
     };
     // Bei neuem User Tages-Stunden setzen

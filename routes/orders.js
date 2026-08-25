@@ -3,12 +3,13 @@ const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const push = require('../push');
+const { darfBestellen } = require('../bestellrecht');
 
 const router = express.Router();
 
-function canManage(role) {
-  return ['admin', 'chef', 'buchhalter'].includes(role);
-}
+// Rolle ODER Einzelrecht — damit waehrend des Urlaubs von Chef und Chefin nicht alles steht.
+// Die Regel selbst liegt in bestellrecht.js, weil badges.js und users.js dieselbe Frage stellen.
+const canManage = (user) => darfBestellen(user);
 
 // Alte bestellte Einträge aufräumen (> 1 Monat)
 function cleanup(db) {
@@ -79,8 +80,12 @@ router.post('/', authenticate, (req, res) => {
   broadcast('orders', req.headers['x-tab-id']);
   res.status(201).json({ order });
 
-  // Push an Chef + Admin (deren Bestell-Zaehler steigt; analog badges.js), nicht an den Auslöser.
-  const chefIds = db.prepare("SELECT id FROM users WHERE role IN ('chef','admin') AND COALESCE(active,1) = 1").all().map(r => r.id);
+  // Push an alle, deren Bestell-Zaehler steigt (analog badges.js) — also Chef/Admin UND
+  // Rechteinhaber. Ohne Letztere haette ein Vorarbeiter zwar den Knopf, erfuehre aber nie, dass
+  // es etwas zu bestellen gibt. Der Buchhalter bleibt wie bisher aussen vor (Alex, 25.08.2026).
+  const chefIds = db.prepare(
+    "SELECT id FROM users WHERE (role IN ('chef','admin') OR can_order = 1) AND COALESCE(active,1) = 1"
+  ).all().map(r => r.id);
   push.notifyUsers(db, chefIds, 'orders', {
     title: 'Neue Bestellung',
     body: `${qty ? qty + '× ' : ''}${order.product} — von ${order.user_name}`,
@@ -94,7 +99,7 @@ router.put('/:id', authenticate, (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
 
-  if (!canManage(req.user.role) && order.user_id !== req.user.id) {
+  if (!canManage(req.user) && order.user_id !== req.user.id) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
 
@@ -135,7 +140,7 @@ router.delete('/:id', authenticate, (req, res) => {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
   } else {
-    if (!canManage(req.user.role) && order.user_id !== req.user.id) {
+    if (!canManage(req.user) && order.user_id !== req.user.id) {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
   }
@@ -147,7 +152,7 @@ router.delete('/:id', authenticate, (req, res) => {
 
 // Als bestellt markieren
 router.post('/:id/order', authenticate, (req, res) => {
-  if (!canManage(req.user.role)) {
+  if (!canManage(req.user)) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
 

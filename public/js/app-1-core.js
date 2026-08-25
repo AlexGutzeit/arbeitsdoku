@@ -937,6 +937,14 @@ function isChefOrAdmin() {
   return S.user && (S.user.role === 'admin' || S.user.role === 'chef');
 }
 
+// Darf offene Bestellungen abschliessen: per Rolle (Admin/Chef/Buchhalter) oder per Einzelrecht.
+// Gegenstueck zu bestellrecht.js auf dem Server — die Oberflaeche entscheidet damit nur, was sie
+// ZEIGT; verboten wird serverseitig.
+function darfBestellen() {
+  if (!S.user) return false;
+  return ['admin', 'chef', 'buchhalter'].includes(S.user.role) || !!S.user.can_order;
+}
+
 function canManageProjects() {
   return S.user && (S.user.role === 'admin' || S.user.role === 'chef');
 }

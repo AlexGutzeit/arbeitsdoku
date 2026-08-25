@@ -3,7 +3,7 @@ async function renderOrders() {
   $app().innerHTML = layout('<div class="loading">Laden…</div>', 'orders');
   bindLayout();
 
-  const manage = isChefOrAdmin() || S.user.role === 'buchhalter';
+  const manage = darfBestellen();   // Rolle ODER Einzelrecht (s. app-1-core.js)
   let orders = [];
   try {
     const [oData, pData] = await Promise.all([

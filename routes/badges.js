@@ -37,8 +37,10 @@ function computeBadgeCounts(db, user) {
     "SELECT COUNT(*) as n FROM note_offers WHERE to_user_id = ? AND status = 'pending'"
   ).get(uid).n;
 
+  // Der Zaehler folgt dem Recht, nicht nur der Rolle: Wer bestellen darf, muss auch sehen,
+  // dass etwas offen ist. Buchhalter bleibt wie bisher aussen vor.
   let orders = 0;
-  if (role === 'chef' || role === 'admin') {
+  if (role === 'chef' || role === 'admin' || Number(user.can_order) === 1) {
     orders = db.prepare("SELECT COUNT(*) as n FROM orders WHERE ordered_at IS NULL").get().n;
   }
 

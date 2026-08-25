@@ -482,6 +482,15 @@ async function initDatabase() {
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
+  // Migration: can_order Spalte (Recht, offene Bestellungen abzuschliessen)
+  try {
+    const colsOrd = db.prepare("PRAGMA table_info(users)").all();
+    if (!colsOrd.some(c => c.name === 'can_order')) {
+      db.exec("ALTER TABLE users ADD COLUMN can_order INTEGER DEFAULT 0");
+      console.log('Migration: can_order Spalte hinzugefügt.');
+    }
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
+
   // Migration: can_plan_all Spalte (Planungsrecht-Stufe „alle" — can_plan allein = nur „sich")
   // Backfill: Bestandsplaner (can_plan=1) behalten das Recht, ALLE zu planen.
   ensurePlanAll(db);
@@ -926,6 +935,7 @@ function ensureAuditSchema(targetDb) {
     addCol('users', 'can_plan', 'INTEGER DEFAULT 0');
     addCol('users', 'can_bulletin', 'INTEGER DEFAULT 0');
     addCol('users', 'can_upload', 'INTEGER DEFAULT 0');
+    addCol('users', 'can_order', 'INTEGER DEFAULT 0');
     addCol('users', 'start_overtime', 'REAL DEFAULT 0');
     addCol('users', 'target_hours_per_week', 'REAL DEFAULT 40');
     addCol('users', 'active', 'INTEGER DEFAULT 1');
@@ -985,6 +995,16 @@ function normalizeManagerRights(targetDb) {
     if (n > 0) {
       targetDb.exec("UPDATE users SET can_plan=0, can_plan_all=0, can_bulletin=0, can_upload=0 WHERE role IN ('chef','admin')");
       console.log(`Normalisierung: ${n} Chef/Admin-Konto/-Konten von redundanten Einzelrechten bereinigt (#9).`);
+    }
+    // can_order EXTRA, weil hier auch der Buchhalter das Recht per Rolle hat. Die Zeile oben darf
+    // NICHT um ihn erweitert werden — ihm wuerde man sonst Planung, Brett und Upload wegnehmen,
+    // die er nicht implizit besitzt.
+    const nOrd = targetDb.prepare(
+      "SELECT COUNT(*) AS c FROM users WHERE role IN ('chef','admin','buchhalter') AND can_order=1"
+    ).get().c;
+    if (nOrd > 0) {
+      targetDb.exec("UPDATE users SET can_order=0 WHERE role IN ('chef','admin','buchhalter')");
+      console.log(`Normalisierung: ${nOrd} Konto/Konten vom redundanten Bestellrecht bereinigt.`);
     }
   } catch (e) {
     console.error('normalizeManagerRights fehlgeschlagen:', e.message);
