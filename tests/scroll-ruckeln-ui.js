@@ -73,6 +73,23 @@ async function scrollProbe(p, label) {
 }
 const morgen = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE');
 
+// Warten, bis die Seite lang genug ist — statt einmal nach festem Schlaf zu messen.
+//
+// Die Willkommensseite laedt ihre Karten (Wetter, Aushaenge, Termine) nach. Unter Suite-Last
+// braucht das laenger als der feste Schlaf, die Seite ist dann noch kurz, und der Test faellt um,
+// ohne dass irgendetwas kaputt waere — genau so geschehen am 25.08.2026. Die Zusicherung selbst
+// bleibt scharf: Wird die Seite NIE lang genug, schlaegt sie weiterhin fehl.
+async function warteAufHoehe(p, mindestens, maxMs = 20000) {
+  const bis = Date.now() + maxMs;
+  let hoehe = 0;
+  while (Date.now() < bis) {
+    hoehe = await p.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+    if (hoehe > mindestens) return hoehe;
+    await new Promise(r => setTimeout(r, 400));
+  }
+  return hoehe;
+}
+
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
   const lg = fs.openSync('/tmp/scrollruckeln-srv.log', 'w');
@@ -125,7 +142,7 @@ const morgen = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE');
     console.log('Willkommensseite:');
     await p.evaluate(() => { location.hash = '#/welcome'; });
     await sleep(3000);
-    const hoehe = await p.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+    const hoehe = await warteAufHoehe(p, 400);
     ok('Seite ist lang genug zum Scrollen', hoehe > 400, 'scrollbar um ' + hoehe + ' px');
     ok('die Uhr tickt (Auslöser des Problems)', await p.evaluate(() => !!document.getElementById('welcome-clock')));
 
