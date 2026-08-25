@@ -78,6 +78,23 @@ async function scrollProbe(p, label) {
   return { ende: r.ende, art: traeger.art };
 }
 
+// Warten, bis die Seite lang genug ist — statt einmal nach festem Schlaf zu messen.
+//
+// Die Willkommensseite laedt ihre Karten (Wetter, Aushaenge, Termine) nach. Unter Suite-Last
+// braucht das laenger als der feste Schlaf, die Seite ist dann noch kurz, und der Test faellt um,
+// ohne dass irgendetwas kaputt waere — genau so geschehen am 25.08.2026. Die Zusicherung selbst
+// bleibt scharf: Wird die Seite NIE lang genug, schlaegt sie weiterhin fehl.
+async function warteAufHoehe(p, mindestens, maxMs = 20000) {
+  const bis = Date.now() + maxMs;
+  let hoehe = 0;
+  while (Date.now() < bis) {
+    hoehe = await p.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+    if (hoehe > mindestens) return hoehe;
+    await new Promise(r => setTimeout(r, 400));
+  }
+  return hoehe;
+}
+
 (async () => {
   if (!fs.existsSync(DB)) { console.log('Prod-Klon ' + DB + ' fehlt — Test uebersprungen.'); process.exit(0); }
   const lg = fs.openSync('/tmp/scroll-prod-srv.log', 'w');
@@ -105,7 +122,7 @@ async function scrollProbe(p, label) {
     await p.goto(BASE, { waitUntil: 'networkidle2' }); await sleep(2500);
     await p.evaluate(() => { location.hash = '#/welcome'; }); await sleep(4000);
     ok('Willkommensseite mit echten Daten geladen', await p.evaluate(() => !!document.getElementById('welcome-clock')));
-    const hoehe = await p.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+    const hoehe = await warteAufHoehe(p, 200);
     ok('Seite ist scrollbar', hoehe > 200, hoehe + ' px');
 
     const w = await scrollProbe(p, 'Willkommen');
