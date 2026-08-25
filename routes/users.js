@@ -436,7 +436,7 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   // Offener Anstellungszeitraum ab heute (Basis fuer die Soll-Stunden-Anrechnung)
   db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, NULL)').run(userId, today);
 
-  const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(userId);
+  const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(userId);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_create',
     details: `id=${userId} · ${userAuditCreate(user)}`, ip: req.ip });
   res.status(201).json({ user });
