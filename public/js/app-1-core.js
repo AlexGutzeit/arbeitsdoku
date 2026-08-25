@@ -114,7 +114,12 @@ async function api(method, url, body, isFormData) {
 
   if (dedupKey) {
     _inflightApi.set(dedupKey, run);
-    run.finally(() => _inflightApi.delete(dedupKey));
+    // .finally() erzeugt eine EIGENE Zusage. Schlaegt `run` fehl, lehnt auch diese ab — und um die
+    // kuemmert sich niemand, weil der Aufrufer nur `run` bekommt. Ergebnis war bei jedem
+    // fehlgeschlagenen POST/PUT/DELETE eine unbehandelte Ablehnung in der Konsole (gefunden am
+    // 25.08.2026 ueber einen Test, der Konsolenfehler wirklich mitliest). Der Aufrufer sieht den
+    // Fehler weiterhin — hier wird nur die Nebenkette stillgelegt.
+    run.finally(() => _inflightApi.delete(dedupKey)).catch(() => {});
   }
   return run;
 }
