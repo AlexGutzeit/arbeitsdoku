@@ -55,6 +55,29 @@ async function aufnehmen(datei) {
   return raus;
 }
 
+// Eine Tabelle nur ueber die ALTEN Spalten hashen. Wird eine Spalte ergaenzt, aendert sich die
+// Gesamtsumme zwangslaeufig — und ohne diesen Blick waere danach ueberhaupt nicht mehr geprueft,
+// ob die bestehenden Werte die Migration heil ueberstanden haben. Genau darum geht es aber.
+async function summeUeberSpalten(datei, tabelle, spalten) {
+  const SQL = await initSqlJs();
+  const db = new SQL.Database(fs.readFileSync(datei));
+  const liste = spalten.map(c => `"${c}"`).join(', ');
+  const r = db.exec(`SELECT ${liste} FROM "${tabelle}"`);
+  const zeilen = r.length ? r[0].values.map(z => JSON.stringify(z)).sort().join('\n') : '';
+  db.close();
+  return crypto.createHash('sha256').update(zeilen).digest('hex').slice(0, 16);
+}
+
+// Was diese Runde ABSICHTLICH mitbringt. Waechst mit jeder Runde — steht hier, damit „nichts ist
+// dazugekommen" eine echte Aussage bleibt und nicht mit der Zeit aufgeweicht wird.
+const ERLAUBT_NEUE_TABELLEN = [
+  'twofa_secrets', 'twofa_devices', 'user_avatars', 'user_sitzung', 'geburtstag_freigabe',  // 23.08.2026
+  'backup_empfaenger',                                                                      // 25.08.2026
+];
+const ERLAUBT_NEUE_SPALTEN = {
+  users: ['can_order'],   // 25.08.2026, Bestellrecht
+};
+
 (async () => {
   if (!fs.existsSync(QUELLE)) {
     console.log(`Prod-Klon ${QUELLE} fehlt — Test uebersprungen.`);
@@ -88,14 +111,23 @@ async function aufnehmen(datei) {
 
   console.log('\n── Und jetzt Zeile fuer Zeile vergleichen ──');
   const nachher = await aufnehmen(DB);
-  const weg = [], veraendert = [], spalten = [], neu = [];
+  const weg = [], veraendert = [], spalten = [], neu = [], ergaenzt = [];
   for (const [t, a] of Object.entries(vorher)) {
     const b = nachher[t];
     if (!b) { weg.push(`${t} (hatte ${a.anzahl} Zeilen)`); continue; }
     if (a.summe === b.summe) continue;
     if (a.spalten !== b.spalten) {
       const alt = a.spalten.split(','), jetzt = b.spalten.split(',');
-      spalten.push(`${t} [+${jetzt.filter(x => !alt.includes(x)).join('/')}] [-${alt.filter(x => !jetzt.includes(x)).join('/')}]`);
+      const dazu = jetzt.filter(x => !alt.includes(x));
+      const fort = alt.filter(x => !jetzt.includes(x));
+      const erlaubt = ERLAUBT_NEUE_SPALTEN[t] || [];
+      // Nur erwartete Ergaenzungen und nichts verschwunden? Dann NICHT durchwinken, sondern
+      // nachmessen: Die alten Spalten muessen Wert fuer Wert dieselben geblieben sein.
+      if (!fort.length && dazu.every(c => erlaubt.includes(c))) {
+        ergaenzt.push({ tabelle: t, dazu, alteSpalten: alt });
+      } else {
+        spalten.push(`${t} [+${dazu.join('/')}] [-${fort.join('/')}]`);
+      }
     } else veraendert.push(`${t} (${a.anzahl} → ${b.anzahl})`);
   }
   for (const t of Object.keys(nachher)) if (!(t in vorher)) neu.push(t);
@@ -103,9 +135,18 @@ async function aufnehmen(datei) {
   ok('KEINE Tabelle ist verschwunden', weg.length === 0, weg.join(', '));
   ok('KEINE Spalte ist verschwunden oder dazugekommen', spalten.length === 0, spalten.join(' | '));
   ok('KEINE Zeile hat sich veraendert', veraendert.length === 0, veraendert.join(', '));
-  ok('alle bestehenden Tabellen sind Zeichen fuer Zeichen dieselben',
-    Object.keys(vorher).every(t => nachher[t] && nachher[t].summe === vorher[t].summe),
-    `${Object.keys(vorher).filter(t => !nachher[t] || nachher[t].summe !== vorher[t].summe).join(', ')}`);
+  const unveraendert = Object.keys(vorher).filter(t => !ergaenzt.some(e => e.tabelle === t));
+  ok('alle unveraenderten Tabellen sind Zeichen fuer Zeichen dieselben',
+    unveraendert.every(t => nachher[t] && nachher[t].summe === vorher[t].summe),
+    `${unveraendert.filter(t => !nachher[t] || nachher[t].summe !== vorher[t].summe).join(', ')}`);
+
+  // Die Tabellen, die eine erwartete Spalte bekommen haben: alte Werte nachmessen.
+  for (const e of ergaenzt) {
+    const vorSumme = await summeUeberSpalten(QUELLE, e.tabelle, e.alteSpalten);
+    const nachSumme = await summeUeberSpalten(DB, e.tabelle, e.alteSpalten);
+    ok(`${e.tabelle}: Spalte +${e.dazu.join('/')} kam dazu, die alten Werte sind unveraendert`,
+      vorSumme === nachSumme, `${vorSumme} → ${nachSumme}`);
+  }
 
   console.log('\n── Die Tabellen dieser Runde ──');
   const RUNDE = ['twofa_secrets', 'twofa_devices', 'user_avatars', 'user_sitzung', 'geburtstag_freigabe'];
@@ -130,7 +171,7 @@ async function aufnehmen(datei) {
       schonDa.every(t => nachher[t] && nachher[t].summe === vorher[t].summe),
       JSON.stringify(schonDa.map(t => t + ': ' + (vorher[t] ? vorher[t].anzahl : '?') + ' → ' + (nachher[t] ? nachher[t].anzahl : '?'))));
   }
-  ok('sonst ist nichts dazugekommen', neu.every(t => RUNDE.includes(t)), neu.join(', '));
+  ok('sonst ist nichts dazugekommen', neu.every(t => ERLAUBT_NEUE_TABELLEN.includes(t)), neu.join(', '));
 
   // Gegenprobe zur Messung selbst: Waere sie blind, meldete sie auch bei echtem Verlust nichts.
   console.log('\n── Gegenprobe: erkennt die Messung ueberhaupt einen Verlust? ──');
