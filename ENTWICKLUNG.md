@@ -14,6 +14,55 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-25 · Bestellen, wenn Chef und Chefin im Urlaub sind
+
+Alex' Beobachtung: Nur Admin, Chef und Buchhalter dürfen eine offene Bestellung abschliessen. Sind
+die ersten beiden weg, steht der Einkauf. Also ein Einzelrecht `can_order`, gedanklich parallel zum
+Planungsrecht.
+
+**Zwei stille Fallen.** `middleware/auth.js` liest bei JEDER Anfrage eine **feste Spaltenliste** aus
+`users` — fehlt `can_order` dort, ist das Recht serverseitig schlicht nicht vorhanden und alles
+wäre wirkungslos, ohne dass irgendwo ein Fehler erschiene. Dieselbe Falle eine Ebene tiefer in
+`scheduler.js`, der für die Zusammenfassung `SELECT id, role, active` lädt.
+
+**Der Buchhalter ist der Sonderfall.** Beim Bestellen hat er das Recht per Rolle — bei Planung,
+Schwarzem Brett und Upload **nicht**; in `planning.js`, `bulletin.js` und `documents.js` kommt die
+Rolle gar nicht vor. Die vorhandene Normalisierungszeile (chef/admin) einfach um ihn zu erweitern
+hätte ihm also drei echte Rechte weggenommen. Deshalb eine eigene Zeile mit drei Rollen — und in
+der Oberfläche eine eigene Gruppe mit eigener Sichtbarkeitsregel. Die Gegenprobe (beides
+zusammengelegt) lässt den Test genau an dieser Stelle umfallen.
+
+**Das Recht allein hätte nichts genützt.** Zähler und Push gingen an `role IN ('chef','admin')`. Ein
+Vorarbeiter hätte den Knopf gehabt und nie erfahren, dass etwas zu bestellen ist — ausgerechnet
+während des Urlaubs. Beides folgt jetzt dem Recht.
+
+**Alex' eigentlicher Punkt war der Entzug.** Ein Recht wegzunehmen ist nicht das Gegenteil vom
+Geben: Es bleibt etwas liegen. `bestellmeldungenAufraeumen()` schaltet den Push-Schalter ab und
+streicht `orders` aus geplanten Zusammenfassungen; aus „notes,orders" wird „notes". Bleibt keine
+Kategorie übrig, wird die Zusammenfassung gelöscht — eine Meldung, die nichts mehr melden kann, ist
+Ballast. Alles im Audit-Log. Und sie läuft nach **jeder** Änderung an Rolle oder Recht, nicht nur
+beim Häkchen-Wegnehmen: Ein Chef, der zum Mitarbeiter zurückgestuft wird, verliert das Recht
+ebenfalls, nur implizit. Dieser Weg wäre sonst offen geblieben.
+
+### 2026-08-25 · Ausstellen löscht den zweiten Faktor
+
+Ausstellen ist ein Soft-Delete — alle Daten bleiben, damit die Historie stimmt. Beim zweiten Faktor
+ist genau das gefährlich: Der Authenticator auf dem privaten Handy überlebte das Ausstellen, samt
+der gemerkten Geräte, die je nach Intervall wochenlang gar keinen Code verlangen. Käme der Account
+je versehentlich wieder auf `active = 1`, wäre das alte Handy sofort wieder ein gültiger zweiter
+Faktor. Kein Schutz mehr, sondern eine offene Tür, die niemand sieht.
+
+Profilbild und Einzelrechte bleiben dagegen **absichtlich** stehen: Das Bild hängt an alten
+Ansichten, die Rechte wirken ohne aktiven Account nicht — beide können nicht zur stillen Hintertür
+werden, und nach einer Wiedereinstellung ist alles wie zuvor.
+
+**Der Test misst beide Richtungen** — was weg sein muss und was unangetastet bleibt. Beim ersten
+Wurf war er trotzdem wertlos: Er las die Datenbankdatei, während der Server sie nur alle fünf
+Sekunden speichert, und der Auslöser dafür hatte die falsche HTTP-Methode. Die Tabellen waren
+deshalb **leer**, und „der Zwei-Faktor ist weg" stand grün da, ohne irgendetwas zu belegen.
+Aufgefallen ist es nur, weil zwei Nachbarzeilen („vorher ist er hinterlegt") aus demselben Grund
+rot wurden.
+
 ### 2026-08-25 · Verschlüsselung ohne SSH — und ein Fund in `api()`
 
 Alex' Einwand traf eine echte Lücke: Empfänger standen nur in der `.env`. Wer keinen SSH-Zugang
@@ -718,3 +767,14 @@ falschem Schlüssel, die Einmaligkeit der Probe — und eine kaputte Zeile in de
 übersprungen wird, statt die ganze Sicherung anzuhalten) sowie
 `node tests/backup-empfaenger-ui.js` (der geklickte Weg samt Mitschnitt aller Anfragen: der private
 Schlüssel kommt in keiner vor, auch nicht in Teilen; die Sicht des Chefs ohne Änderungsknöpfe).
+
+Bestellrecht: `node tests/bestellrecht.js` (in-process mit gemocktem web-push, damit die Empfänger
+EXAKT geprüft werden: ohne Recht admin+chef, mit Recht admin+Rechteinhaber, Buchhalter nie; dazu
+der Entzug samt Zusammenfassungen und der Weg über die Rolle) und `node tests/bestellrecht-ui.js`
+(geklickt, mit dem Kern: beim Buchhalter verschwindet NUR das Bestell-Kästchen, sein Planungsrecht
+bleibt stehen).
+
+Ausstellen: `node tests/ausstellen-zweifaktor.js` (der zweite Faktor und die gemerkten Geräte sind
+weg, Profilbild, Rechte, Soll-Stunden, Start-Überstunden, Personalnummer, Arbeitsbeginn und
+Geburtsdatum bleiben; Login 403, laufende Sitzung 401; nach dem Wiedereinstellen muss der zweite
+Faktor neu eingerichtet werden).
