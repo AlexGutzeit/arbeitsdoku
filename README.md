@@ -719,12 +719,47 @@ lassen sie sich verschlüsseln, und zwar **asymmetrisch**: Der Server bekommt nu
 Schlüssel. Er kann Sicherungen erzeugen, aber keine mehr lesen. Wer den Server übernimmt, kommt an
 den laufenden Datenbestand — nicht an die Historie.
 
-Eingeschaltet wird das über `BACKUP_EMPFAENGER` in der `.env`. Ist der Wert leer, bleibt alles wie
-bisher (Klartext-ZIP) — Bestandsinstallationen müssen nichts ändern.
+Eingeschaltet wird das über die Liste **„Wer kann Sicherungen öffnen?"** in *Einstellungen →
+Backup* — oder über `BACKUP_EMPFAENGER` in der `.env`. Ist beides leer, bleibt alles wie bisher
+(Klartext-ZIP); Bestandsinstallationen müssen nichts ändern.
+
+**Beide Quellen gelten gleichzeitig.** Der `.env`-Eintrag ist der feste Anker: Er hängt an der
+Maschine, kein Restore verschiebt ihn, und über die Oberfläche kann ihn niemand entfernen oder
+überschreiben. Die Liste in der Datenbank ist der bequeme Weg für alle, die keinen SSH-Zugang
+haben.
+
+**Rechte:** Sehen dürfen die Liste Chef und Admin (wie die ganze Backup-Karte). **Ändern darf sie
+nur ein Admin** — wer sie ändert, entscheidet, wer den gesamten Datenbestand lesen kann, und
+könnte im Vorbeigehen den Schlüssel der Zweitanlage entfernen und damit die Notfall-Umschaltung
+stilllegen. Jede Änderung steht im Audit-Log. „Prüfen" darf auch der Chef, weil der Besitznachweis
+am Zugriff nichts ändert.
+
+Ein Schlüsselpaar entsteht auf drei Wegen:
 
 ```bash
-node scripts/backup-schluessel.js minipc     # Paar erzeugen, öffentlichen Teil in die .env
+node scripts/backup-schluessel.js minipc     # 1. mitgeliefertes Skript
 ```
+
+2. **Im Browser**, direkt in der Backup-Karte („Schlüssel hier erzeugen"). Der private Teil wird
+   einmal angezeigt — in die Zwischenablage oder als Datei — und danach vergessen; er geht an
+   keinen Server. Zur Zwischenablage: Windows führt mit Win+V einen Verlauf, der auf Wunsch
+   zwischen Geräten synchronisiert, und manche Programme lesen mit — also sofort in die
+   Passwortverwaltung und danach etwas anderes kopieren.
+3. **Mit `openssl`** (Linux, macOS, Windows über Git Bash oder WSL) — nachgemessen, nicht
+   abgeschrieben:
+
+```bash
+openssl ecparam -name prime256v1 -genkey -noout -out privat.pem
+openssl pkcs8 -topk8 -nocrypt -in privat.pem -outform der | base64 | tr -d '\n' > privat.txt
+openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' > oeffentlich.txt
+```
+
+Ein hinterlegter Schlüssel lässt sich **prüfen**: Der Server verschlüsselt ein paar Zufallsbytes
+an genau diesen Empfänger, der Browser entschlüsselt sie mit dem privaten Teil und schickt sie
+zurück. Damit weiss der *Server*, dass der Schlüssel wirklich passt — ein Browser, der nur „hat
+geklappt" meldet, würde nichts beweisen. So fällt ein Schlüssel auf, dessen privaten Teil niemand
+mehr hat: die gefährlichste Störung dieses Verfahrens, weil die Sicherungen dann weiterlaufen und
+unlesbar sind.
 
 Zwei Empfänger sind der Regelfall: die Zweitanlage (damit `notfall-umschalten.sh` ohne Menschen
 läuft) und ein Offline-Schlüssel in der Passwortverwaltung. Die Datei heißt dann `.adbk` statt
@@ -751,6 +786,12 @@ wird verschlüsselt, aber nichts gelöscht.
 node scripts/backup-altbestand-verschluesseln.js ~/arbeitsdoku-backups --trocken
 node scripts/backup-altbestand-verschluesseln.js ~/arbeitsdoku-backups
 ```
+
+**Die `.env` liegt nicht im Backup** — und das ist Absicht: Auf der Zweitanlage steht dort der
+*private* Sicherungsschlüssel, der sonst in der abgeschlossenen Kiste läge. Ein Restore bringt also
+die Daten zurück, nicht die Geheimnisse. Drei Werte gehören deshalb neben den Sicherungsschlüssel
+in die Passwortverwaltung: `JWT_SECRET`, `TWOFA_KEY` (ohne ihn ist jede Zwei-Faktor-Einrichtung
+wertlos) und auf der Zweitanlage `BACKUP_SCHLUESSEL`.
 
 > **Der eine wirklich gefährliche Punkt:** Wer *alle* privaten Schlüssel verliert, verliert die
 > gesamte Sicherungs-Historie — endgültig, ohne Hintertür. Der zweite Schlüssel gehört deshalb an

@@ -14,6 +14,51 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-25 · Verschlüsselung ohne SSH — und ein Fund in `api()`
+
+Alex' Einwand traf eine echte Lücke: Empfänger standen nur in der `.env`. Wer keinen SSH-Zugang
+hat — also so gut wie jeder Betreiber ausser dem Entwickler — konnte die Verschlüsselung gar nicht
+einschalten. Sie war damit theoretisch vorhanden und praktisch nicht benutzbar.
+
+Jetzt stehen Empfänger auch in der Datenbank und werden in der Backup-Karte gepflegt: hinzufügen,
+umbenennen, entfernen, prüfen. Dazu ein Generator im Browser und eine `openssl`-Anleitung für die,
+die nichts anklicken wollen.
+
+**Beide Quellen gleichzeitig, und warum.** Der `.env`-Eintrag bleibt der feste Anker: Er hängt an
+der Maschine, kein Restore verschiebt ihn, und über die Oberfläche kommt niemand an ihn heran. Die
+Datenbank-Liste ist der bequeme Weg. In der Oberfläche stehen `.env`-Einträge sichtbar, aber
+unveränderlich.
+
+**Das nächtliche Skript musste mit.** `make-backup.js` läuft im Cron, nicht in der App. Hätte es
+weiter nur die `.env` gelesen, wäre der schlechteste aller Zustände entstanden: Die Karte sagt
+„verschlüsselt", und um Mitternacht schreibt der Server eine offene Kopie. Es liest die Liste
+deshalb aus der Datenbankdatei, die es ohnehin gerade sichert — nur lesend, per sql.js.
+
+**„Geprüft" ist ein Beweis, kein Häkchen.** Der *Server* würfelt Zufallsbytes, verschlüsselt sie an
+den Empfänger, der Browser entschlüsselt und schickt sie zurück. Ein Browser, der bloss „hat
+geklappt" meldet, würde nichts belegen. Die Probe gilt genau einmal. Das schützt vor der
+gefährlichsten Störung des Verfahrens: einem Schlüssel, dessen privaten Teil niemand mehr hat —
+die Sicherungen laufen dann weiter und sind unlesbar.
+
+**Ändern darf nur der Admin** (Entscheidung Alex). Sehen dürfen Chef und Chefin, wie die ganze
+Backup-Karte — sie dürfen ohnehin eine vollständige Sicherung herunterladen. Aber wer die Liste
+ändert, könnte im Vorbeigehen den Schlüssel der Zweitanlage entfernen und damit die
+Notfall-Umschaltung stilllegen, ohne dass das irgendwo aufschlägt.
+
+**Validierung gehört an die Tür.** Ein unbrauchbarer Schlüssel wird beim Speichern abgelehnt — mit
+Namen: PEM statt Base64, RSA statt EC, P-384 statt P-256, und vor allem der *private* Schlüssel im
+Feld für den öffentlichen. Letzteres fängt schon der Browser ab, damit das Geheimnis den Rechner
+nicht verlässt; der Server lehnt es zusätzlich ab. Die Gegenprobe zeigte, wie viel daran hängt: Mit
+abgeschalteter Kurvenprüfung wird ein P-384-Schlüssel angenommen — und danach schlägt der Download
+komplett fehl. Es gäbe dann gar keine Sicherungen mehr.
+
+**Nebenfund, app-weit.** Der Oberflächen-Test liest Konsolenfehler wirklich mit, statt es zu
+behaupten — und stiess sofort auf einen: `api()` legte laufende Schreibanfragen in eine Map und
+räumte sie per `run.finally(…)` wieder heraus. `.finally()` erzeugt aber eine EIGENE Zusage; lehnt
+`run` ab, lehnt auch sie ab, und um die kümmert sich niemand. Jeder fehlgeschlagene POST/PUT/DELETE
+der gesamten App hinterliess damit eine unbehandelte Ablehnung. Sichtbar war nichts — der Aufrufer
+bekam seinen Fehler immer korrekt —, aber in der Konsole stand er als unbehandelt. Eine Zeile.
+
 ### 2026-08-24 · Sicherungen verschlüsseln — der Schlüssel liegt nicht auf dem Server
 
 Alex' Frage war präzise: „Bringt eine verschlüsselte Datenbank etwas, wenn der Schlüssel in der
@@ -665,3 +710,11 @@ Rückrichtung — geprüft wird vor allem der schlechte Ausgang),
 Schlüssel kommt in keiner vor) und `node tests/backup-entschluesseln-ui.js` (das Notfall-Werkzeug
 über `file://` geöffnet wie beim Doppelklick, heruntergeladene Datei eingefangen und mit dem
 Original verglichen).
+
+Empfängerliste der Sicherungen: `node tests/backup-empfaenger.js` (Rechte je Rolle, Ablehnung
+unbrauchbarer Schlüssel samt der Verwechslung privat/öffentlich, doppelte Namen und doppelte
+Schlüssel, der `.env`-Anker als unveränderlicher Eintrag, der Beweis-Durchgang mit richtigem und
+falschem Schlüssel, die Einmaligkeit der Probe — und eine kaputte Zeile in der Datenbank, die
+übersprungen wird, statt die ganze Sicherung anzuhalten) sowie
+`node tests/backup-empfaenger-ui.js` (der geklickte Weg samt Mitschnitt aller Anfragen: der private
+Schlüssel kommt in keiner vor, auch nicht in Teilen; die Sicht des Chefs ohne Änderungsknöpfe).
