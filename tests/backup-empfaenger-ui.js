@@ -72,7 +72,12 @@ const listenText = (page) => page.evaluate(() => document.getElementById('empf-l
     // sonst nirgends auf — die Liste bliebe einfach leer und alles andere waere trotzdem gruen.
     const jsFehler = [];
     page.on('pageerror', e => jsFehler.push('pageerror: ' + e.message));
-    page.on('console', m => { if (m.type() === 'error') jsFehler.push('console: ' + m.text()); });
+    page.on('console', m => {
+      // „Failed to load resource" ist Chromes Notiz zu einer Antwort ausserhalb 2xx — kein
+      // JavaScript-Fehler. Ein abgelehnter Doppel-Eintrag (409) ist ein normaler Bedienweg und
+      // soll den Test nicht rot faerben; alles andere schon.
+      if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) jsFehler.push('console: ' + m.text());
+    });
 
     // Mitschnitt JEDER Anfrage samt Rumpf — hier wird nachher nach dem privaten Schlüssel gesucht.
     await page.evaluateOnNewDocument(() => {
@@ -191,6 +196,24 @@ const listenText = (page) => page.evaluate(() => document.getElementById('empf-l
       await page.evaluate(() => getComputedStyle(document.getElementById('empf-werkzeug')).display === 'none'));
     const d2 = await holen('/api/backup/download', admin);
     ok('… die Sicherung ist wieder ein Zip', d2.buf[0] === 0x50 && d2.buf[1] === 0x4b);
+
+    console.log('\n── Ein abgelehnter Versuch meldet sich sauber ──');
+    // „Name schon vergeben" ist ein ganz normaler Bedienweg. Er muss als Meldung ankommen — und
+    // nicht als unbehandelte Ablehnung in der Konsole.
+    const zweitPaar = krypto.paarErzeugen();
+    await req('POST', '/api/backup/empfaenger', admin, { name: 'Belegt', pubkey: zweitPaar.oeffentlich });
+    await page.reload({ waitUntil: 'domcontentloaded' }); await sleep(2000);
+    await page.click('#empf-add'); await sleep(400);
+    await page.evaluate(() => { document.getElementById('empf-name').value = 'Belegt'; });
+    await page.evaluate(k => { document.getElementById('empf-key').value = k; }, krypto.paarErzeugen().oeffentlich);
+    const fehlerVorher = jsFehler.length;
+    await page.click('#empf-save'); await sleep(1500);
+    ok('der Server lehnt ab und die Seite sagt es',
+      /bereits|vergeben/i.test(await page.evaluate(() => (document.querySelector('.toast, #toast') || {}).innerText || '')),
+      await page.evaluate(() => (document.querySelector('.toast, #toast') || {}).innerText || '(kein Toast)'));
+    ok('… ohne unbehandelte Ablehnung in der Konsole', jsFehler.length === fehlerVorher,
+      jsFehler.slice(fehlerVorher).join(' | '));
+    await page.click('#empf-cancel'); await sleep(400);
 
     console.log('\n── Der Chef sieht die Liste, kann sie aber nicht ändern ──');
     // Vorher wieder einen Empfaenger anlegen, sonst gaebe es nichts zu sehen und der Test waere
