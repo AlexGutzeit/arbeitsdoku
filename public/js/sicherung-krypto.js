@@ -140,5 +140,34 @@
     }
   }
 
-  window.SicherungKrypto = { istContainer, empfaengerNamen, entschluesseln };
+  const bytesZuB64 = (bytes) => {
+    let s = '';
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s);
+  };
+
+  // Schlüsselpaar im Browser erzeugen.
+  //
+  // Der Zufall kommt von derselben Quelle, aus der jede TLS-Verbindung ihre Schlüssel zieht. Der
+  // private Teil wird hier einmal herausgegeben und danach vergessen — er wird NIRGENDS
+  // gespeichert und geht an keinen Server. Das ist der ganze Sinn: Ein Server, der Sicherungen
+  // nicht lesen können soll, darf den Schlüssel nie zu sehen bekommen.
+  async function paarErzeugen() {
+    const paar = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+    const oeff = new Uint8Array(await crypto.subtle.exportKey('spki', paar.publicKey));
+    const priv = new Uint8Array(await crypto.subtle.exportKey('pkcs8', paar.privateKey));
+    return { oeffentlich: bytesZuB64(oeff), privat: bytesZuB64(priv) };
+  }
+
+  // Erkennt einen privaten Schlüssel, der versehentlich ins Feld für den öffentlichen geraten ist.
+  // Das ist die wahrscheinlichste Verwechslung — und die einzige, bei der ein Geheimnis an den
+  // Server ginge. Deshalb wird sie schon hier abgefangen, nicht erst dort.
+  async function istPrivaterSchluessel(b64) {
+    try {
+      await crypto.subtle.importKey('pkcs8', b64zuBytes(b64), { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
+      return true;
+    } catch (_) { return false; }
+  }
+
+  window.SicherungKrypto = { istContainer, empfaengerNamen, entschluesseln, paarErzeugen, istPrivaterSchluessel, bytesZuB64 };
 })();

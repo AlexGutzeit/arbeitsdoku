@@ -276,13 +276,94 @@ async function renderSettings() {
           <button class="btn btn-danger" id="restore-confirm" style="margin-top:0.5rem;">Backup jetzt einspielen</button>
         </div>
         <hr style="margin:1.25rem 0;border:none;border-top:1px solid var(--border)">
-        <button class="btn btn-outline btn-sm" id="backup-werkzeug">&#128190; Notfall-Entschlüsseler herunterladen</button>
-        <p class="push-hint" style="margin-top:.4rem">
-          Eine einzelne Datei, die per Doppelklick läuft — ohne Installation und ohne Internet.
-          Damit lässt sich eine verschlüsselte Sicherung auch dann öffnen, wenn diese App gerade
-          nicht erreichbar ist. <strong>Zusammen mit dem Schlüssel aufbewahren</strong>, nicht auf
-          dem Server.
+        <h4 style="margin:0 0 .3rem">Wer kann Sicherungen öffnen?</h4>
+        <p class="push-hint" style="margin-top:0">
+          Steht hier ein Schlüssel, verlässt jede Sicherung den Server verschlüsselt — der Server
+          selbst kann sie dann nicht mehr lesen. <strong>Jeder Eintrag öffnet jede künftige
+          Sicherung</strong>, und wer entfernt wird, kommt an bereits erzeugte Dateien weiterhin
+          heran: Die liegen längst woanders und lassen sich nicht nachträglich ändern.
         </p>
+        <div id="empf-liste"></div>
+        <button class="btn btn-outline btn-sm" id="empf-add" style="margin-top:.6rem">+ Schlüssel hinzufügen</button>
+
+        <div id="empf-form" style="display:none;margin-top:.8rem;padding:.9rem;border:1px solid var(--border);border-radius:8px">
+          <div class="form-group" style="margin-bottom:.6rem">
+            <label for="empf-name">Name</label>
+            <input type="text" class="form-control" id="empf-name" maxlength="40" placeholder="z. B. Chefin, Zweitrechner, Steuerbüro">
+          </div>
+          <div class="form-group" style="margin-bottom:.6rem">
+            <label for="empf-key">Öffentlicher Schlüssel</label>
+            <textarea class="form-control" id="empf-key" rows="3" spellcheck="false" autocomplete="off"
+                      style="font-family:ui-monospace,monospace;font-size:.8rem"
+                      placeholder="Eine lange Zeile, beginnt meist mit MFkwEw…"></textarea>
+          </div>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" id="empf-save">Hinzufügen</button>
+            <button class="btn btn-outline btn-sm" id="empf-gen">Schlüssel hier erzeugen</button>
+            <button class="btn btn-outline btn-sm" id="empf-cancel">Abbrechen</button>
+          </div>
+
+          <div id="empf-privat" style="display:none;margin-top:.9rem;padding:.8rem;border-radius:8px;background:var(--warning-bg,#fff8e1);border:1px solid #e6c200">
+            <strong>Das ist dein privater Schlüssel. Du siehst ihn genau einmal.</strong>
+            <p style="margin:.4rem 0;font-size:.85rem">
+              Ohne ihn ist jede damit verschlüsselte Sicherung für immer verloren — es gibt keine
+              Hintertür. Jetzt in die Passwortverwaltung, und an einen zweiten Ort.
+            </p>
+            <textarea class="form-control" id="empf-privat-wert" rows="3" readonly spellcheck="false"
+                      style="font-family:ui-monospace,monospace;font-size:.8rem"></textarea>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem">
+              <button class="btn btn-outline btn-sm" id="empf-privat-copy">In die Zwischenablage</button>
+              <button class="btn btn-outline btn-sm" id="empf-privat-file">Als Datei speichern</button>
+            </div>
+            <p style="margin:.5rem 0 0;font-size:.8rem;color:var(--text-light)">
+              Zur Zwischenablage: Windows führt mit Win+V einen Verlauf, der auf Wunsch sogar
+              zwischen Geräten synchronisiert; manche Programme lesen mit. Deshalb sofort in die
+              Passwortverwaltung einfügen und danach etwas anderes kopieren — und niemals an einem
+              fremden Rechner erzeugen.
+            </p>
+            <label style="display:flex;gap:.5rem;align-items:flex-start;margin-top:.6rem;font-size:.87rem">
+              <input type="checkbox" id="empf-privat-ok" style="margin-top:.2rem">
+              <span>Ich habe den privaten Schlüssel gesichert.</span>
+            </label>
+          </div>
+        </div>
+
+        <details style="margin-top:.8rem">
+          <summary style="cursor:pointer;font-size:.88rem">Schlüsselpaar lieber selbst erzeugen (openssl)</summary>
+          <p style="font-size:.85rem;margin:.5rem 0">
+            Läuft auf Linux und macOS im Terminal, auf Windows in „Git Bash" oder im WSL. Es
+            entstehen zwei Dateien mit je einer einzigen Zeile.
+          </p>
+          <pre style="overflow-x:auto;background:var(--code-bg,#f4f4f4);padding:.7rem;border-radius:6px;font-size:.78rem"><code>openssl ecparam -name prime256v1 -genkey -noout -out privat.pem
+openssl pkcs8 -topk8 -nocrypt -in privat.pem -outform der | base64 | tr -d '\n' &gt; privat.txt
+openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffentlich.txt</code></pre>
+          <p style="font-size:.85rem;margin:.4rem 0 0">
+            Der Inhalt von <code>oeffentlich.txt</code> kommt oben ins Feld. <code>privat.txt</code>
+            und <code>privat.pem</code> gehören in die Passwortverwaltung und danach vom Rechner
+            gelöscht — sie sind der Schlüssel zu allen Daten.
+          </p>
+        </details>
+
+        <div class="warning-box" style="margin-top:.9rem">
+          <strong>Nicht im Backup:</strong> Die Datei <code>.env</code> wird bewusst
+          <em>nicht</em> mitgesichert — sonst läge der Schlüssel zum Schloss in der abgeschlossenen
+          Kiste. Nach einem Totalverlust bringt ein Restore also die Daten zurück, nicht die
+          Geheimnisse. Drei Werte gehören deshalb neben den Sicherungsschlüssel in die
+          Passwortverwaltung: <code>JWT_SECRET</code>, <code>TWOFA_KEY</code> (ohne ihn ist jede
+          Zwei-Faktor-Einrichtung wertlos) und auf der Zweitanlage
+          <code>BACKUP_SCHLUESSEL</code>.
+        </div>
+
+        <div id="empf-werkzeug" style="display:none">
+          <hr style="margin:1.25rem 0;border:none;border-top:1px solid var(--border)">
+          <button class="btn btn-outline btn-sm" id="backup-werkzeug">&#128190; Notfall-Entschlüsseler herunterladen</button>
+          <p class="push-hint" style="margin-top:.4rem">
+            Eine einzelne Datei, die per Doppelklick läuft — ohne Installation und ohne Internet.
+            Damit lässt sich eine verschlüsselte Sicherung auch dann öffnen, wenn diese App gerade
+            nicht erreichbar ist. <strong>Zusammen mit dem Schlüssel aufbewahren</strong>, nicht auf
+            dem Server.
+          </p>
+        </div>
       </div>
     </div>`;
 
@@ -554,6 +635,179 @@ async function renderSettings() {
   });
 
   // Das Hilfsprogramm fuer den Ernstfall herunterladen.
+  // ── Empfänger verschlüsselter Sicherungen ────────────────────────────────────────────────────
+  //
+  // Der private Schlüssel taucht in dieser Datei an genau EINER Stelle auf: beim Erzeugen, im
+  // Textfeld, aus dem der Mensch ihn wegkopiert. Er wird nirgends gespeichert und an keine Route
+  // geschickt. Für die Probe („prüfen") gilt dasselbe — dorthin geht nur der entschlüsselte
+  // Zufall, nicht der Schlüssel.
+  let empfNeuerPrivater = null;
+
+  async function ladeEmpfaenger() {
+    const liste = document.getElementById('empf-liste');
+    if (!liste) return;
+    let daten;
+    try { daten = await api('GET', '/api/backup/empfaenger'); }
+    catch (err) { liste.innerHTML = `<p class="push-hint">Liste nicht abrufbar: ${esc(err.message)}</p>`; return; }
+
+    const eintraege = daten.empfaenger || [];
+    document.getElementById('empf-werkzeug').style.display = eintraege.length ? '' : 'none';
+
+    if (!eintraege.length) {
+      liste.innerHTML = `<div class="warning-box" style="margin:.4rem 0">
+        <strong>Sicherungen sind derzeit unverschlüsselt.</strong> Wer eine heruntergeladene Datei
+        in die Hand bekommt, liest alle Kundendaten im Klartext. Ein Schlüssel genügt, um das zu
+        ändern.</div>`;
+    } else {
+      liste.innerHTML = eintraege.map(e => {
+        const stand = e.fehler
+          ? `<span style="color:var(--danger,#b3261e)">unbrauchbar: ${esc(e.fehler)}</span>`
+          : e.fest
+            ? 'aus der Server-Konfiguration — hier nicht änderbar'
+            : (e.geprueft_am ? `geprüft am ${esc(e.geprueft_am)}` : 'noch nicht geprüft');
+        const knoepfe = e.fest ? '' : `
+          <button class="btn btn-outline btn-sm empf-pruefen" data-id="${e.id}" data-name="${esc(e.name)}">prüfen</button>
+          <button class="btn btn-outline btn-sm empf-rename" data-id="${e.id}" data-name="${esc(e.name)}" title="Umbenennen">&#9998;</button>
+          <button class="btn btn-danger btn-sm empf-del" data-id="${e.id}" data-name="${esc(e.name)}" title="Entfernen">&times;</button>`;
+        return `<div class="empf-zeile" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;padding:.5rem 0;border-bottom:1px solid var(--border)">
+          <div style="flex:1;min-width:12rem">
+            <strong>${esc(e.name)}</strong>
+            ${e.fingerabdruck ? `<code style="font-size:.78rem;color:var(--text-light);margin-left:.4rem">${esc(e.fingerabdruck)}</code>` : ''}
+            <div style="font-size:.78rem;color:var(--text-light)">${stand}</div>
+          </div>
+          <div style="display:flex;gap:.35rem;flex-wrap:wrap">${knoepfe}</div>
+        </div>`;
+      }).join('');
+    }
+    if (daten.umgebungsFehler) {
+      liste.insertAdjacentHTML('afterbegin', `<div class="warning-box" style="margin:.4rem 0">
+        <strong>Server-Konfiguration fehlerhaft:</strong> ${esc(daten.umgebungsFehler)}<br>
+        Solange das so ist, entsteht <strong>gar keine</strong> Sicherung — das ist Absicht,
+        damit nicht ersatzweise eine offene Kopie geschrieben wird.</div>`);
+    }
+  }
+
+  function empfFormZuruecksetzen() {
+    document.getElementById('empf-form').style.display = 'none';
+    document.getElementById('empf-name').value = '';
+    document.getElementById('empf-key').value = '';
+    document.getElementById('empf-privat').style.display = 'none';
+    document.getElementById('empf-privat-wert').value = '';
+    document.getElementById('empf-privat-ok').checked = false;
+    empfNeuerPrivater = null;
+  }
+
+  document.getElementById('empf-add').addEventListener('click', () => {
+    document.getElementById('empf-form').style.display = '';
+    document.getElementById('empf-name').focus();
+  });
+  document.getElementById('empf-cancel').addEventListener('click', empfFormZuruecksetzen);
+
+  document.getElementById('empf-gen').addEventListener('click', async () => {
+    try {
+      const paar = await window.SicherungKrypto.paarErzeugen();
+      empfNeuerPrivater = paar.privat;
+      document.getElementById('empf-key').value = paar.oeffentlich;
+      document.getElementById('empf-privat-wert').value = paar.privat;
+      document.getElementById('empf-privat-ok').checked = false;
+      document.getElementById('empf-privat').style.display = '';
+    } catch (err) { toast('Der Browser konnte kein Schlüsselpaar erzeugen: ' + err.message, 'error'); }
+  });
+
+  document.getElementById('empf-privat-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(document.getElementById('empf-privat-wert').value);
+      toast('Kopiert — jetzt in die Passwortverwaltung einfügen', 'success');
+    } catch (_) {
+      // Ohne Berechtigung (oder ohne https) geht es nicht — dann von Hand markieren.
+      document.getElementById('empf-privat-wert').select();
+      toast('Bitte von Hand kopieren (der Browser erlaubt es hier nicht automatisch)', 'error');
+    }
+  });
+  document.getElementById('empf-privat-file').addEventListener('click', () => {
+    const wert = document.getElementById('empf-privat-wert').value;
+    const name = (document.getElementById('empf-name').value.trim() || 'sicherung').replace(/[^A-Za-z0-9._-]/g, '_');
+    const url = URL.createObjectURL(new Blob([wert], { type: 'text/plain' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `privater-schluessel-${name}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast('Gespeichert — in die Passwortverwaltung legen und die Datei danach löschen', 'success');
+  });
+
+  document.getElementById('empf-save').addEventListener('click', async () => {
+    const name = document.getElementById('empf-name').value.trim();
+    const pubkey = document.getElementById('empf-key').value.trim();
+    if (!name) { toast('Bitte einen Namen vergeben', 'error'); return; }
+    if (!pubkey) { toast('Bitte den öffentlichen Schlüssel einfügen', 'error'); return; }
+    // Selbst erzeugt? Dann erst weiter, wenn der private Teil nachweislich weg ist.
+    if (empfNeuerPrivater && !document.getElementById('empf-privat-ok').checked) {
+      toast('Bitte erst den privaten Schlüssel sichern und den Haken setzen', 'error'); return;
+    }
+    // Der wahrscheinlichste Fehlgriff — und der einzige, bei dem ein Geheimnis den Rechner
+    // verliesse. Deshalb hier abfangen, nicht erst auf dem Server.
+    if (window.SicherungKrypto && await window.SicherungKrypto.istPrivaterSchluessel(pubkey)) {
+      toast('Das ist der PRIVATE Schlüssel — hierher gehört der öffentliche. Er darf diesen Rechner nie verlassen.', 'error');
+      return;
+    }
+    try {
+      await api('POST', '/api/backup/empfaenger', { name, pubkey });
+      toast('Schlüssel hinterlegt — künftige Sicherungen sind verschlüsselt', 'success');
+      empfFormZuruecksetzen();
+      ladeEmpfaenger();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  document.getElementById('empf-liste').addEventListener('click', async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const id = b.dataset.id, name = b.dataset.name;
+
+    if (b.classList.contains('empf-rename')) {
+      const neu = await promptModal('Neuer Name für diesen Empfänger:', { title: 'Umbenennen', defaultValue: name, multiline: false });
+      if (neu === null || !neu.trim() || neu.trim() === name) return;
+      try { await api('PUT', '/api/backup/empfaenger/' + id, { name: neu.trim() }); ladeEmpfaenger(); }
+      catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+
+    if (b.classList.contains('empf-del')) {
+      const weiter = await confirmModal(
+        `„${name}" aus der Liste entfernen?\n\nKünftige Sicherungen kann dieser Schlüssel dann nicht mehr öffnen. `
+        + `An bereits erzeugte Sicherungen kommt er weiterhin heran — die liegen längst woanders und `
+        + `lassen sich nicht nachträglich ändern.`,
+        { title: 'Empfänger entfernen', okLabel: 'Entfernen' });
+      if (!weiter) return;
+      try {
+        const r = await api('DELETE', '/api/backup/empfaenger/' + id);
+        if (!r.verbleibend) {
+          toast('Entfernt. Achtung: Es ist kein Schlüssel mehr hinterlegt — Sicherungen sind ab jetzt wieder unverschlüsselt.', 'error');
+        } else { toast('Entfernt', 'success'); }
+        ladeEmpfaenger();
+      } catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+
+    if (b.classList.contains('empf-pruefen')) {
+      const schluessel = await promptModal(
+        `Zum Prüfen einmal den PRIVATEN Schlüssel von „${name}" einfügen.\n\n`
+        + `Er bleibt in diesem Browser. Zum Server geht nur eine Handvoll Zufallszahlen, die der `
+        + `Server selbst gewürfelt hat — daran erkennt er, dass der Schlüssel wirklich passt.`,
+        { title: 'Schlüssel prüfen', okLabel: 'Prüfen', placeholder: 'Privaten Schlüssel einfügen' });
+      if (schluessel === null || !schluessel.trim()) return;
+      try {
+        const { probe } = await api('POST', '/api/backup/empfaenger/' + id + '/probe');
+        const roh = Uint8Array.from(atob(probe), c => c.charCodeAt(0));
+        const klar = await window.SicherungKrypto.entschluesseln(roh, schluessel.trim());
+        await api('POST', '/api/backup/empfaenger/' + id + '/probe/bestaetigen',
+          { klartext: window.SicherungKrypto.bytesZuB64(klar) });
+        toast('Passt — der Schlüssel öffnet die Sicherungen dieses Empfängers', 'success');
+        ladeEmpfaenger();
+      } catch (err) { toast(err.message || 'Die Probe liess sich nicht öffnen', 'error'); }
+    }
+  });
+
+  ladeEmpfaenger();
+
   document.getElementById('backup-werkzeug').addEventListener('click', async () => {
     try {
       const antwort = await fetch('/api/backup/entschluesseler', { headers: { Authorization: 'Bearer ' + S.token } });

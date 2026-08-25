@@ -429,6 +429,8 @@ async function initDatabase() {
   ensureGeburtstagSchema(db);
   // Sitzungs-Zaehler fuer „ueberall abmelden" (idempotent, hier UND im Restore-Pfad)
   ensureSitzungSchema(db);
+  // Empfaenger fuer verschluesselte Sicherungen (idempotent, hier UND im Restore-Pfad)
+  ensureBackupEmpfaengerSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -951,6 +953,7 @@ function ensureAuditSchema(targetDb) {
   ensureAvatarSchema(targetDb);
   ensureGeburtstagSchema(targetDb);
   ensureSitzungSchema(targetDb);
+  ensureBackupEmpfaengerSchema(targetDb);
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
@@ -1253,6 +1256,38 @@ function ensureProjectSchema(targetDb) {
     `);
   } catch (e) {
     console.error('ensureProjectSchema fehlgeschlagen:', e.message);
+  }
+}
+
+// Empfaenger fuer verschluesselte Sicherungen: wer eine Sicherung oeffnen darf.
+//
+// Hier stehen nur OEFFENTLICHE Schluessel — nichts Geheimes. Wer in dieser Liste steht, kann jede
+// kuenftige Sicherung lesen; wer daraus entfernt wird, kommt an bereits erzeugte Dateien weiterhin
+// heran (die liegen laengst woanders und lassen sich nicht nachtraeglich aendern).
+//
+// Zusaetzlich kann in der Umgebung BACKUP_EMPFAENGER stehen. Beide Quellen gelten gleichzeitig;
+// der Umgebungs-Eintrag haengt an der Maschine und ist ueber die Oberflaeche nicht erreichbar.
+//
+// geprueft_am haelt fest, dass jemand den passenden privaten Schluessel wirklich besitzt — der
+// Beweis laeuft ueber eine Zufallsprobe des Servers, nicht ueber eine Behauptung des Browsers.
+// Idempotent — laeuft bei Init UND nach Backup-Restore ([[feedback_abwaertskompatibilitaet]]).
+function ensureBackupEmpfaengerSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS backup_empfaenger (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT NOT NULL,
+        pubkey       TEXT NOT NULL,
+        created_at   TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        created_by   INTEGER,
+        geprueft_am  TEXT,
+        geprueft_von INTEGER
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_backup_empfaenger_name ON backup_empfaenger(LOWER(name));
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_backup_empfaenger_key  ON backup_empfaenger(pubkey);
+    `);
+  } catch (e) {
+    console.error('ensureBackupEmpfaengerSchema fehlgeschlagen:', e.message);
   }
 }
 

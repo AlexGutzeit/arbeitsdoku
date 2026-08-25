@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
@@ -49,6 +50,185 @@ function restoreUpload(req, res, next) {
   });
 }
 
+// ── Empfänger verschlüsselter Sicherungen ──────────────────────────────────────────────────────
+//
+// Zwei Quellen, die gleichzeitig gelten: BACKUP_EMPFAENGER aus der Umgebung (fest, hängt an der
+// Maschine, über die Oberfläche nicht erreichbar) und die Tabelle backup_empfaenger, die hier
+// gepflegt wird. Ohne diese Tabelle konnte die Verschlüsselung nur einschalten, wer SSH-Zugang
+// zur .env hat — für die meisten Betreiber hiess das: gar nicht.
+
+function empfaengerAusDb(db) {
+  const zeilen = db.prepare(krypto.EMPFAENGER_SQL).all();
+  return krypto.empfaengerAusZeilen(zeilen, (name, grund) => {
+    console.error(`backup_empfaenger: „${name}" wird übersprungen — ${grund}`);
+  });
+}
+
+// Die Liste, die wirklich zum Verschlüsseln benutzt wird. Wirft, wenn die UMGEBUNG kaputt ist —
+// dort kann niemand über die Oberfläche gegensteuern, also darf das nicht stillschweigend
+// durchlaufen. Eine kaputte Zeile in der Datenbank wird dagegen übersprungen und protokolliert.
+function aktuelleEmpfaenger(db) {
+  return krypto.empfaengerZusammen(krypto.empfaengerAusUmgebung(), empfaengerAusDb(db));
+}
+
+// Liste für die Oberfläche — öffentliche Schlüssel sind nicht geheim, trotzdem nur für die, die
+// ohnehin Sicherungen herunterladen dürfen.
+router.get('/empfaenger', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  let ausUmgebung = [];
+  let umgebungsFehler = null;
+  try { ausUmgebung = krypto.empfaengerAusUmgebung(); }
+  catch (e) { umgebungsFehler = e.message; }
+
+  const zeilen = db.prepare('SELECT id, name, pubkey, created_at, geprueft_am FROM backup_empfaenger ORDER BY LOWER(name)').all();
+  const liste = [
+    ...ausUmgebung.map(e => ({
+      id: null, name: e.name, fest: true,
+      fingerabdruck: krypto.fingerabdruck(e.b64), geprueft_am: null,
+    })),
+    ...zeilen.map(z => {
+      let fingerabdruck = null, fehler = null;
+      try { fingerabdruck = krypto.schluesselPruefen(z.pubkey).fingerabdruck; }
+      catch (e) { fehler = e.message; }
+      return {
+        id: z.id, name: z.name, fest: false, fingerabdruck, fehler,
+        angelegt_am: z.created_at, geprueft_am: z.geprueft_am,
+      };
+    }),
+  ];
+  res.json({ empfaenger: liste, umgebungsFehler, verschluesselt: liste.some(e => !e.fehler) });
+});
+
+router.post('/empfaenger', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  let name, geprueft;
+  try {
+    name = krypto.namePruefen((req.body || {}).name);
+    geprueft = krypto.schluesselPruefen((req.body || {}).pubkey);
+  } catch (e) { return res.status(400).json({ error: e.message }); }
+
+  // Namen aus der Umgebung sind belegt — zwei gleichnamige Einträge im Kopf der Datei wären
+  // beim Entschlüsseln nicht auseinanderzuhalten.
+  try {
+    for (const e of krypto.empfaengerAusUmgebung()) {
+      if (e.name.toLowerCase() === name.toLowerCase()) {
+        return res.status(409).json({ error: `Der Name „${name}" ist bereits in der Server-Konfiguration vergeben.` });
+      }
+      if (e.b64 === geprueft.b64) {
+        return res.status(409).json({ error: `Dieser Schlüssel ist bereits als „${e.name}" in der Server-Konfiguration hinterlegt.` });
+      }
+    }
+  } catch (_) { /* kaputte Umgebung meldet schon GET /empfaenger */ }
+
+  const nameDa = db.prepare('SELECT name FROM backup_empfaenger WHERE LOWER(name) = LOWER(?)').get(name);
+  if (nameDa) return res.status(409).json({ error: `Es gibt bereits einen Empfänger namens „${nameDa.name}".` });
+  const keyDa = db.prepare('SELECT name FROM backup_empfaenger WHERE pubkey = ?').get(geprueft.b64);
+  if (keyDa) return res.status(409).json({ error: `Dieser Schlüssel ist bereits als „${keyDa.name}" hinterlegt.` });
+
+  const r = db.prepare('INSERT INTO backup_empfaenger (name, pubkey, created_by) VALUES (?, ?, ?)')
+    .run(name, geprueft.b64, req.user.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'backup_empfaenger_add',
+    details: `${name} (${geprueft.fingerabdruck})`, ip: req.ip });
+  saveToFile();
+  res.status(201).json({ empfaenger: { id: r.lastInsertRowid, name, fingerabdruck: geprueft.fingerabdruck } });
+});
+
+// Umbenennen. Den Schlüssel einer bestehenden Zeile zu tauschen ist bewusst nicht vorgesehen:
+// Das ist löschen und neu anlegen — nur unübersichtlicher, und die Prüfung müsste ohnehin neu.
+router.put('/empfaenger/:id', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const zeile = db.prepare('SELECT * FROM backup_empfaenger WHERE id = ?').get(req.params.id);
+  if (!zeile) return res.status(404).json({ error: 'Empfänger nicht gefunden' });
+  let name;
+  try { name = krypto.namePruefen((req.body || {}).name); }
+  catch (e) { return res.status(400).json({ error: e.message }); }
+
+  const clash = db.prepare('SELECT id FROM backup_empfaenger WHERE LOWER(name) = LOWER(?) AND id != ?').get(name, zeile.id);
+  if (clash) return res.status(409).json({ error: `Es gibt bereits einen Empfänger namens „${name}".` });
+  try {
+    if (krypto.empfaengerAusUmgebung().some(e => e.name.toLowerCase() === name.toLowerCase())) {
+      return res.status(409).json({ error: `Der Name „${name}" ist bereits in der Server-Konfiguration vergeben.` });
+    }
+  } catch (_) {}
+
+  db.prepare('UPDATE backup_empfaenger SET name = ? WHERE id = ?').run(name, zeile.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'backup_empfaenger_rename',
+    details: `${zeile.name} → ${name}`, ip: req.ip });
+  saveToFile();
+  res.json({ empfaenger: { id: zeile.id, name } });
+});
+
+router.delete('/empfaenger/:id', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const zeile = db.prepare('SELECT * FROM backup_empfaenger WHERE id = ?').get(req.params.id);
+  if (!zeile) return res.status(404).json({ error: 'Empfänger nicht gefunden' });
+  db.prepare('DELETE FROM backup_empfaenger WHERE id = ?').run(zeile.id);
+  let fingerabdruck = '?';
+  try { fingerabdruck = krypto.fingerabdruck(zeile.pubkey); } catch (_) {}
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'backup_empfaenger_remove',
+    details: `${zeile.name} (${fingerabdruck})`, ip: req.ip });
+  saveToFile();
+  // Wie viele bleiben? Bei 0 laufen kuenftige Sicherungen wieder im Klartext — das muss die
+  // Oberflaeche sagen koennen, ohne es zu raten.
+  let verbleibend = 0;
+  try { verbleibend = aktuelleEmpfaenger(db).length; } catch (_) {}
+  res.json({ ok: true, verbleibend });
+});
+
+// ── Beweis, dass jemand den passenden privaten Schlüssel wirklich hat ──────────────────────────
+//
+// Ein Schlüssel in der Liste, dessen privaten Teil niemand mehr besitzt, ist die gefährlichste
+// Störung dieses Verfahrens: Die Sicherungen laufen weiter und sind unlesbar — das merkt man
+// erst, wenn man sie braucht.
+//
+// Deshalb würfelt der SERVER die Probe und vergleicht selbst. Ein Browser, der bloss „hat
+// geklappt" meldet, würde nichts beweisen. Herausgereicht werden dabei nur Zufallszahlen.
+const proben = new Map();   // id -> { erwartet, bis }
+const PROBE_GUELTIG_MS = 10 * 60 * 1000;
+
+function probenAufraeumen() {
+  const jetzt = Date.now();
+  for (const [k, v] of proben) if (v.bis < jetzt) proben.delete(k);
+}
+
+router.post('/empfaenger/:id/probe', authenticate, authorize('chef'), async (req, res) => {
+  probenAufraeumen();
+  const db = getDb();
+  const zeile = db.prepare('SELECT * FROM backup_empfaenger WHERE id = ?').get(req.params.id);
+  if (!zeile) return res.status(404).json({ error: 'Empfänger nicht gefunden' });
+  let geprueft;
+  try { geprueft = krypto.schluesselPruefen(zeile.pubkey); }
+  catch (e) { return res.status(400).json({ error: 'Der hinterlegte Schlüssel ist unbrauchbar: ' + e.message }); }
+
+  const erwartet = crypto.randomBytes(32);
+  const container = await krypto.verschluesselnPuffer(erwartet, [{ name: zeile.name, schluessel: geprueft.schluessel }]);
+  proben.set(String(zeile.id), { erwartet: erwartet.toString('base64'), bis: Date.now() + PROBE_GUELTIG_MS });
+  res.json({ probe: container.toString('base64') });
+});
+
+router.post('/empfaenger/:id/probe/bestaetigen', authenticate, authorize('chef'), (req, res) => {
+  probenAufraeumen();
+  const db = getDb();
+  const zeile = db.prepare('SELECT * FROM backup_empfaenger WHERE id = ?').get(req.params.id);
+  if (!zeile) return res.status(404).json({ error: 'Empfänger nicht gefunden' });
+  const offen = proben.get(String(zeile.id));
+  if (!offen) return res.status(410).json({ error: 'Die Probe ist abgelaufen. Bitte noch einmal auf „prüfen" gehen.' });
+
+  const gegeben = String((req.body || {}).klartext || '');
+  // Zeitgleicher Vergleich ist hier nicht noetig (Zufallszahlen ohne Bedeutung), aber die Probe
+  // ist einmalig: Sie wird IMMER verbraucht, damit niemand raten kann.
+  proben.delete(String(zeile.id));
+  if (gegeben !== offen.erwartet) {
+    return res.status(400).json({ error: 'Mit diesem Schlüssel liess sich die Probe nicht öffnen — er gehört nicht zu diesem Eintrag.' });
+  }
+  const jetzt = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 16);
+  db.prepare('UPDATE backup_empfaenger SET geprueft_am = ?, geprueft_von = ? WHERE id = ?').run(jetzt, req.user.id, zeile.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'backup_empfaenger_geprueft',
+    details: zeile.name, ip: req.ip });
+  saveToFile();
+  res.json({ ok: true, geprueft_am: jetzt });
+});
+
 // Backup herunterladen (ZIP mit DB + Uploads)
 router.get('/download', authenticate, authorize('chef'), (req, res) => {
   saveToFile();
@@ -63,7 +243,7 @@ router.get('/download', authenticate, authorize('chef'), (req, res) => {
   // Zip — dieses Repo wird auch von Fremdfirmen betrieben, die nichts konfiguriert haben, und
   // deren Sicherung darf durch ein Update nicht stillschweigend aufhoeren zu funktionieren.
   let empfaenger = [];
-  try { empfaenger = krypto.empfaengerAusUmgebung(); }
+  try { empfaenger = aktuelleEmpfaenger(getDb()); }
   catch (e) {
     // Lieber gar keine Sicherung als eine, von der niemand weiss, ob sie lesbar ist.
     console.error('BACKUP_EMPFAENGER unbrauchbar:', e.message);

@@ -83,6 +83,103 @@ function empfaengerAusUmgebung(wert = process.env.BACKUP_EMPFAENGER) {
   return raus;
 }
 
+// ── Empfänger aus der Oberfläche ───────────────────────────────────────────────────────────────
+//
+// Bis hierher standen Empfänger nur in der Umgebung — wer keinen SSH-Zugang hat, konnte die
+// Verschlüsselung also gar nicht einschalten. Deshalb dürfen sie jetzt auch in der Datenbank
+// stehen und über die Backup-Karte gepflegt werden.
+//
+// Beide Quellen gelten gleichzeitig. Der Eintrag aus der Umgebung ist der feste Anker: Er hängt
+// an der Maschine, kein Restore verschiebt ihn, und über die Oberfläche kommt niemand an ihn
+// heran.
+
+const NAME_MUSTER = /^[A-Za-z0-9 ._-]{1,40}$/;
+
+// Kurzer Fingerabdruck, damit sich zwei Schlüssel in einer Liste unterscheiden lassen, ohne dass
+// jemand 124 Zeichen Base64 vergleichen muss.
+function fingerabdruck(b64) {
+  const roh = crypto.createHash('sha256').update(Buffer.from(String(b64).trim(), 'base64')).digest('hex');
+  return roh.slice(0, 4) + ' ' + roh.slice(4, 8);
+}
+
+// Nimmt einen öffentlichen Schlüssel entgegen und sagt klar, was daran nicht stimmt.
+// Ein Tippfehler darf NICHT erst um Mitternacht auffallen, wenn die Sicherung deswegen ausbleibt.
+function schluesselPruefen(b64) {
+  const sauber = String(b64 || '').replace(/\s+/g, '');
+  if (!sauber) throw new Error('Es wurde kein Schlüssel eingegeben.');
+  if (/-----BEGIN/.test(String(b64))) {
+    throw new Error('Das ist eine PEM-Datei. Bitte nur den Teil ZWISCHEN den beiden -----BEGIN/-----END-Zeilen einfügen, ohne Zeilenumbrüche.');
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(sauber)) {
+    throw new Error('Der Schlüssel enthält Zeichen, die dort nicht hingehören. Erwartet wird eine einzige Zeile Base64.');
+  }
+  let schluessel;
+  try { schluessel = oeffentlichLesen(sauber); }
+  catch (e) {
+    // Die wahrscheinlichste Verwechslung von allen — und die gefährlichste, weil dieser Wert an
+    // den Server geschickt würde. Deshalb wird sie beim Namen genannt, nicht als „unlesbar".
+    let istPrivat = false;
+    try { privatLesen(sauber); istPrivat = true; } catch (_) {}
+    if (istPrivat) {
+      throw new Error('Das ist der PRIVATE Schlüssel. Hierher gehört der öffentliche — der private '
+                    + 'bleibt bei dir und darf diesen Rechner nie verlassen. Erzeuge ihn im Zweifel neu.');
+    }
+    throw new Error('Der Schlüssel ist unlesbar (' + e.message + ').');
+  }
+  if (schluessel.asymmetricKeyType !== 'ec') {
+    throw new Error(`Dieser Schlüssel ist vom Typ „${schluessel.asymmetricKeyType}". Gebraucht wird ein EC-Schlüssel der Kurve P-256.`);
+  }
+  const kurve = (schluessel.asymmetricKeyDetails || {}).namedCurve;
+  if (kurve !== 'prime256v1') {
+    throw new Error(`Dieser Schlüssel liegt auf der Kurve „${kurve}". Gebraucht wird P-256 (prime256v1).`);
+  }
+  // Ein privater Schlüssel laesst sich nicht als SPKI lesen und scheitert oben schon — trotzdem
+  // hier ausdruecklich benannt, weil das die wahrscheinlichste Verwechslung ist.
+  return { b64: sauber, fingerabdruck: fingerabdruck(sauber), schluessel };
+}
+
+function namePruefen(name) {
+  const sauber = String(name || '').trim();
+  if (!NAME_MUSTER.test(sauber)) {
+    throw new Error('Der Name darf 1 bis 40 Zeichen lang sein und nur Buchstaben, Ziffern, Leerzeichen, Punkt, Bindestrich und Unterstrich enthalten.');
+  }
+  return sauber;
+}
+
+// Die eine Abfrage, mit der die Liste gelesen wird — als Konstante, damit App und Cron-Skript
+// nicht mit der Zeit zwei verschiedene Listen benutzen.
+const EMPFAENGER_SQL = 'SELECT name, pubkey FROM backup_empfaenger ORDER BY LOWER(name)';
+
+// Zeilen aus der Datenbank in Empfänger übersetzen. Eine kaputte Zeile wird ÜBERSPRUNGEN und
+// gemeldet, statt alles anzuhalten: Sonst legt ein einziger verkorkster Eintrag die gesamte
+// Sicherung still, und das ist der schlechtere Ausgang.
+function empfaengerAusZeilen(zeilen, aufFehler) {
+  const raus = [];
+  for (const z of zeilen || []) {
+    try {
+      const { b64 } = schluesselPruefen(z.pubkey);
+      raus.push({ name: String(z.name), schluessel: oeffentlichLesen(b64), b64, quelle: 'db' });
+    } catch (e) {
+      if (typeof aufFehler === 'function') aufFehler(z && z.name, e.message);
+    }
+  }
+  return raus;
+}
+
+// Beide Quellen zu einer Liste. Bei gleichem Namen ODER gleichem Schlüssel gewinnt die Umgebung —
+// zweimal derselbe Empfänger im Kopf der Datei wäre nur verwirrend.
+function empfaengerZusammen(ausUmgebung, ausDatenbank) {
+  const raus = (ausUmgebung || []).map(e => ({ ...e, quelle: 'env' }));
+  const namen = new Set(raus.map(e => e.name.toLowerCase()));
+  const schluessel = new Set(raus.map(e => e.b64));
+  for (const e of ausDatenbank || []) {
+    if (namen.has(e.name.toLowerCase()) || schluessel.has(e.b64)) continue;
+    namen.add(e.name.toLowerCase()); schluessel.add(e.b64);
+    raus.push(e);
+  }
+  return raus;
+}
+
 // ── Inhaltsschlüssel verpacken / auspacken ─────────────────────────────────────────────────────
 
 // Das Salz bindet die Ableitung an BEIDE Seiten. Ohne das liesse sich ein Eintrag von einem
@@ -179,6 +276,19 @@ function verschluesselnStream(empfaenger) {
   });
 }
 
+// Bequemer Weg für kleine Datenmengen: Puffer rein, fertiger Container raus. Für die Probe beim
+// Prüfen eines Empfängers — dort geht es um 32 Bytes, nicht um eine ganze Datenbank.
+function verschluesselnPuffer(daten, empfaenger) {
+  return new Promise((erfuellen, ablehnen) => {
+    const teile = [];
+    const strom = verschluesselnStream(empfaenger);
+    strom.on('data', d => teile.push(d));
+    strom.on('end', () => erfuellen(Buffer.concat(teile)));
+    strom.on('error', ablehnen);
+    strom.end(daten);
+  });
+}
+
 // ── Entschlüsseln ──────────────────────────────────────────────────────────────────────────────
 
 function istContainer(buffer) {
@@ -232,5 +342,7 @@ function empfaengerNamen(buffer) {
 module.exports = {
   MAGIC, VERSION, TAG_BYTES,
   paarErzeugen, empfaengerAusUmgebung, oeffentlichLesen, privatLesen,
-  verschluesselnStream, entschluesseln, istContainer, kopfLesen, empfaengerNamen,
+  fingerabdruck, schluesselPruefen, namePruefen,
+  EMPFAENGER_SQL, empfaengerAusZeilen, empfaengerZusammen,
+  verschluesselnStream, verschluesselnPuffer, entschluesseln, istContainer, kopfLesen, empfaengerNamen,
 };
