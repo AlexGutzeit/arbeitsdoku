@@ -1024,7 +1024,9 @@ async function renderUsers() {
       const user = S.users.find(u => u.id === Number(btn.dataset.id));
       const today = new Date().toLocaleDateString('sv-SE');
       const employedUntil = await promptModal(
-        `"${user?.name}" ausstellen. Der Account kann sich dann nicht mehr anmelden, aber alle Daten bleiben erhalten und werden weiter angezeigt.\n\nLetzter Arbeitstag (Austrittsdatum):`,
+        `"${user?.name}" ausstellen. Der Account kann sich dann nicht mehr anmelden, aber alle Daten bleiben erhalten und werden weiter angezeigt.\n\n`
+        + `Die Zwei-Faktor-Anmeldung wird dabei gelöscht — bei einer Wiedereinstellung muss sie neu eingerichtet werden.\n\n`
+        + `Letzter Arbeitstag (Austrittsdatum):`,
         { title: 'Mitarbeiter ausstellen', okLabel: 'Ausstellen', multiline: false, inputType: 'date', defaultValue: today, required: true, requiredMsg: 'Bitte ein Austrittsdatum wählen.' }
       );
       if (employedUntil === null) return; // Abbrechen

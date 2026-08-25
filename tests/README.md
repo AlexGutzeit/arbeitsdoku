@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**185 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**186 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -65,6 +65,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `aushang-mitternacht-ui.js` | Ein Aushang, der kurz nach Mitternacht geschrieben wurde, muss auf der Willkommensseite stehen. |
 | `aushang-sprung-ui.js` | Aushänge auf der Willkommensseite sind anklickbar (Alex, 07.08.2026). |
 | `aussperren-prodklon.js` | Kann sich jemand aussperren? Gegen eine KOPIE der echten Produktivdaten (Alex, 23.08.2026). |
+| `ausstellen-zweifaktor.js` | Was bleibt liegen, wenn jemand ausgestellt wird? (Alex, 25.08.2026) |
 | `auth-active-guard.js` | API-Test (B1): Ein bereits ausgestelltes JWT wird sofort abgelehnt (401), sobald der Nutzer ausgestellt ist — |
 | `avatar-api.js` | Profilbilder: Hochladen, Ausliefern, Entfernen — und vor allem, wer sie NICHT sehen darf. |
 | `avatar-ui.js` | Profilbilder in der Oberfläche: hochladen, in der Kopfzeile sehen, wieder entfernen. |

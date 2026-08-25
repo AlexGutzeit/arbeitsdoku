@@ -638,8 +638,22 @@ router.post('/:id/deactivate', authenticate, authorize('chef'), (req, res) => {
   // Push-Abos des ausgestellten Nutzers entfernen (er soll keine Benachrichtigungen mehr bekommen;
   // notifyUsers sperrt zusaetzlich serverseitig). Bei Wiedereinstellung re-abonniert das Geraet beim Login.
   db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(req.params.id);
+
+  // Zweiten Faktor loeschen (Alex, 25.08.2026). Ohne das ueberlebt der Authenticator auf dem
+  // privaten Handy das Ausstellen — samt der gemerkten Geraete, die je nach Intervall wochenlang
+  // gar keinen Code verlangen. Kaeme der Account je versehentlich wieder auf active=1, waere sein
+  // altes Handy sofort wieder ein gueltiger zweiter Faktor: kein Schutz mehr, sondern eine offene
+  // Tuer, die niemand sieht. Bei Wiedereinstellung richtet er neu ein — derselbe Weg wie beim
+  // Handywechsel, den es als Knopf ohnehin gibt.
+  //
+  // Profilbild und Rechte bleiben ABSICHTLICH stehen: Das Bild haengt an alten Ansichten, und die
+  // Rechte wirken ohne aktiven Account nicht — beide koennen nicht zur stillen Hintertuer werden.
+  const hatteZweiFaktor = !!db.prepare('SELECT user_id FROM twofa_secrets WHERE user_id = ?').get(req.params.id);
+  zweiFaktor.zuruecksetzen(db, req.params.id);
+
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_deactivate',
-    details: `Ausgestellt: ${user.username} (${user.role}, id=${req.params.id}), letzter Arbeitstag ${employedUntil}`, ip: req.ip });
+    details: `Ausgestellt: ${user.username} (${user.role}, id=${req.params.id}), letzter Arbeitstag ${employedUntil}`
+      + (hatteZweiFaktor ? ' · Zwei-Faktor geloescht (Neueinrichtung noetig)' : ''), ip: req.ip });
   protokolliereEingriff(db, req, sperre, `Austrittsdatum ${employedUntil} gesetzt`);
   res.json({ success: true });
 });
