@@ -895,6 +895,7 @@ const AUDIT_LABELS = {
   backup_empfaenger_geprueft: 'Sicherungs-Schlüssel geprüft',
   backup_werkzeug: 'Notfall-Entschlüsseler heruntergeladen',
   bestellrecht_aufgeraeumt: 'Bestellrecht entzogen: Meldungen aufgeräumt',
+  warnungen_geaendert: 'Gesetzliche Warnungen ein-/ausgeblendet',
   twofa_deaktiviert: 'Zwei-Faktor abgeschaltet',
   twofa_verify_failed: 'Zwei-Faktor: Code falsch',
   twofa_geraet_entzogen: 'Zwei-Faktor: Gerät entzogen',
