@@ -459,6 +459,17 @@ function renderTimelineHtml(entries, absences) {
     });
 
     const headerLabel = isSingle ? 'Meine Einträge' : esc(col.name);
+    // Tagessumme je Mitarbeiter (Alex, 26.08.2026). Bis hierher stand oben nur die Gesamtsumme
+    // ALLER — wer wissen wollte, wie viel einer an diesem Tag hat, musste selbst zusammenzaehlen.
+    //
+    // calcActualHours fasst ueberlappende Auftraege zusammen: Wer zwei Eintraege zur selben Zeit
+    // hat, arbeitet trotzdem nur einmal. Die Pause wird passend dazu SUMMIERT, genau wie es die
+    // Nettorechnung tut — so geht brutto minus Pause auch sichtbar auf.
+    const spaltenNetto = calcActualHours(col.entries);
+    const spaltenPause = col.entries.reduce((sum, e) => sum + (Number(e.break_minutes) || 0), 0);
+    const summeHtml = col.entries.length
+      ? `<div class="tl-col-header-sum">${fmtH(spaltenNetto)}${spaltenPause > 0 ? ` · ${spaltenPause} min Pause` : ''}</div>`
+      : '';
     const dayAbsences = getAbsencesForDay(col.id, currentDay, absences);
     const colBannerHtml = dayAbsences.map(a => {
       const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
@@ -470,6 +481,7 @@ function renderTimelineHtml(entries, absences) {
     colsHtml += `<div class="timeline-column">
       <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">
         <div class="tl-col-header-name">${isSingle ? '' : avatarHtml({ id: col.id, name: col.name }, 22) + ' '}${headerLabel}</div>
+        ${summeHtml}
         ${colBannerWrap}
       </div>
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>

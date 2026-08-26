@@ -1,7 +1,9 @@
 // Nettostunden und gebuchte Pause je Auftrag im Zeitnachweis (Alex, 26.08.2026)
 //
 // Bis hierher stand am einzelnen Eintrag nur die Uhrzeit von–bis. Die Nettostunden fehlten in der
-// Tagesansicht ganz, die Pause fehlte in der Wochenansicht und auf kurzen Bloecken.
+// Tagesansicht ganz, die Pause fehlte in der Wochenansicht und auf kurzen Bloecken. Und im
+// Spaltenkopf stand nur der Name — wer wissen wollte, wie viel EINER an diesem Tag hat, musste
+// selbst zusammenzaehlen.
 //
 // Die Regel fuer KURZE Bloecke ist bewusst: Netto und Pause erscheinen dort NUR, wenn eine Pause
 // gebucht ist. Ohne Pause sagt „0:45" dasselbe wie „08:00-08:45" — die Zahl waere eine
@@ -97,8 +99,34 @@ const textVon = (seite, wahl, id) => seite.evaluate((w, i) => {
       !/0:45/.test(tKurzOhne) && !/P\d/.test(tKurzOhne), tKurzOhne);
     ok('… er zeigt weiterhin Uhrzeit und Beschreibung', /09:00-09:45/.test(tKurzOhne) && /Kurz ohne Pause/.test(tKurzOhne), tKurzOhne);
 
+    console.log('\n── Tagessumme je Mitarbeiter ──');
+    const kopf = await p.evaluate(() => {
+      const sp = [...document.querySelectorAll('.timeline-column')];
+      const t = sp.find(c => /Monteur/.test(c.querySelector('.tl-col-header-name').innerText));
+      const s = t && t.querySelector('.tl-col-header-sum');
+      return s ? s.innerText.replace(/\s+/g, ' ').trim() : '(keine Summe)';
+    });
+    // 0:30 + 0:45 + 3:30 = 4:45 netto, Pausen 15 + 0 + 30 = 45 min.
+    ok('der Spaltenkopf nennt Netto und Gesamtpause des Tages', kopf === '4:45 · 45 min Pause', kopf);
+
+    // Ueberlappende Auftraege duerfen NICHT doppelt zaehlen — der haeufigste Rechenfehler bei
+    // dieser Art Summe, und in dieser App schon einmal aufgetreten (Hoechstarbeitszeit-Warnung).
+    const parallel = await anlegen('10:30', '11:30', 0, 'Gleichzeitig');
+    await p.evaluate((d) => { S.currentDate = new Date(d + 'T12:00:00'); render(); }, TAG);
+    await sleep(2500);
+    const kopf2 = await p.evaluate(() => {
+      const sp = [...document.querySelectorAll('.timeline-column')];
+      const t = sp.find(c => /Monteur/.test(c.querySelector('.tl-col-header-name').innerText));
+      const s = t && t.querySelector('.tl-col-header-sum');
+      return s ? s.innerText.replace(/\s+/g, ' ').trim() : '(keine Summe)';
+    });
+    ok('ein zeitgleicher Auftrag erhöht die Summe NICHT (10:30-11:30 liegt in 10:00-14:00)',
+      kopf2 === '4:45 · 45 min Pause', kopf2);
+    await req('DELETE', '/api/entries/' + parallel.id, admin, { reason: 'Testaufräumen' });
+
     console.log('\n── Wochenansicht ──');
-    await p.evaluate(() => { S.view = 'week'; render(); }); await sleep(2500);
+    await p.evaluate((d) => { S.view = 'week'; S.currentDate = new Date(d + 'T12:00:00'); render(); }, TAG);
+    await sleep(2500);
     const wMit = await textVon(p, '.grid-entry', kurzMitPause.id);
     ok('Eintrag mit Pause: Netto UND Pause', /0:30/.test(wMit) && /P15/.test(wMit), wMit);
     const wLang = await textVon(p, '.grid-entry', langMitPause.id);

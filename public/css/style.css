@@ -939,6 +939,17 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   opacity: 0.75;
   margin-top: 1px;
 }
+/* Tagessumme je Mitarbeiter im Spaltenkopf: ruhiger als der Name, damit die Spalte weiterhin
+   ueber den Namen gefunden wird — die Zahl ist die Antwort auf eine Frage, die man stellt. */
+.tl-col-header-sum {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.8;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* Nettostunden im Zeitstrahl: gleiche Zeile wie die Uhrzeit, aber ruhiger — die Spanne bleibt
    die Hauptinformation, die Nettozahl ergaenzt sie. */
 .tl-entry .tl-e-netto {
