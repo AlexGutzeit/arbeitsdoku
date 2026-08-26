@@ -939,6 +939,16 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   opacity: 0.75;
   margin-top: 1px;
 }
+/* Nettostunden im Zeitstrahl: gleiche Zeile wie die Uhrzeit, aber ruhiger — die Spanne bleibt
+   die Hauptinformation, die Nettozahl ergaenzt sie. */
+.tl-entry .tl-e-netto {
+  font-weight: 600;
+  opacity: 0.85;
+}
+/* Nur im Kompakt-Layout: dort steht die Nettozahl allein und darf nicht untergehen. */
+.tl-entry .tl-e-pause {
+  font-size: 0.9em;
+}
 /* Pause-Markierung */
 .tl-entry .tl-e-break {
   font-size: 0.65rem;
@@ -1070,6 +1080,12 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   color: var(--primary);
   white-space: nowrap;
   font-size: 0.76rem;
+}
+/* Pause in der Wochenansicht: haengt an den Nettostunden, aber leiser und in normaler Staerke —
+   die Nettozahl soll die Zeile weiterhin anfuehren. */
+.grid-e-hours .grid-e-pause {
+  font-weight: 400;
+  opacity: 0.7;
 }
 .grid-cell-total {
   font-size: 0.75rem;

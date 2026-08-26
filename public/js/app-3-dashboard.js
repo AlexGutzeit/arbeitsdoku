@@ -429,6 +429,15 @@ function renderTimelineHtml(entries, absences) {
         const parts = [
           `<span class="tl-e-time" style="white-space:nowrap;flex-shrink:0">${esc(e.time_from)}-${esc(e.time_to)}</span>`
         ];
+        // Netto und Pause hier NUR, wenn eine Pause gebucht ist (Alex, 26.08.2026). Ohne Pause
+        // sagt „0:45" dasselbe wie „07:00-07:45" — die Zahl waere eine Wiederholung und wuerde
+        // den Projektnamen aus der ohnehin engen Zeile draengen. Mit Pause weicht Netto von der
+        // Spanne ab, und genau dann traegt sie etwas bei.
+        if (e.break_minutes > 0) {
+          parts.push(`<span class="tl-e-sep" style="opacity:0.5;flex-shrink:0">·</span>`
+            + `<span class="tl-e-netto" style="white-space:nowrap;flex-shrink:0">${fmtH(e.net_hours)}</span>`
+            + `<span class="tl-e-pause" style="white-space:nowrap;flex-shrink:0;opacity:0.85"> P${e.break_minutes}</span>`);
+        }
         if (projClientLabel) parts.push(`<span class="tl-e-sep" style="opacity:0.5;flex-shrink:0">·</span><span class="tl-e-project" style="white-space:nowrap;flex-shrink:1;overflow:hidden;text-overflow:ellipsis">${esc(projClientLabel)}</span>`);
         if (e.description) parts.push(`<span class="tl-e-sep" style="opacity:0.5;flex-shrink:0">·</span><span class="tl-e-desc" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.description)}</span>`);
         bodyHtml += `<div class="tl-entry" data-entry-id="${e.id}" style="top:${top}px;height:${height}px;background:${bg};left:${leftPct}%;width:${widthPct}%;right:auto;flex-direction:row;align-items:center;gap:4px;">
@@ -438,7 +447,7 @@ function renderTimelineHtml(entries, absences) {
       } else {
         bodyHtml += `<div class="tl-entry" data-entry-id="${e.id}" style="top:${top}px;height:${height}px;background:${bg};left:${leftPct}%;width:${widthPct}%;right:auto;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span class="tl-e-time">${esc(e.time_from)} - ${esc(e.time_to)}</span>
+            <span class="tl-e-time">${esc(e.time_from)} - ${esc(e.time_to)}<span class="tl-e-netto"> · ${fmtH(e.net_hours)}</span></span>
             ${navBtn}
           </div>
           ${projClientLabel ? `<span class="tl-e-project">${esc(projClientLabel)}</span>` : ''}
@@ -538,7 +547,7 @@ function renderWeekGridHtml(entries, range, absences) {
           bodyHtml += `<div class="grid-entry" data-entry-id="${e.id}" style="border-left-color:${bg}">
             <span class="grid-e-time">${esc(e.time_from)}-${esc(e.time_to)} ${e.address ? `<button class="nav-to-addr grid-nav-btn" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}</span>
             <span class="grid-e-proj">${esc(e.project_name || e.project_text || '')}${e.client ? ' – ' + esc(e.client) : ''}</span>
-            <span class="grid-e-hours">${fmtH(e.net_hours)}</span>
+            <span class="grid-e-hours">${fmtH(e.net_hours)}${e.break_minutes > 0 ? `<span class="grid-e-pause"> · P${e.break_minutes}</span>` : ''}</span>
             <span class="grid-e-regie">${regieHtml}</span>
           </div>`;
         });
