@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**188 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**189 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -61,6 +61,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `ansicht-erhalten-ui.js` | Puppeteer-Test (B10): Ansicht bleibt über Neuaufbauten hinweg erhalten. |
 | `arbeitsbeginn-prodklon.js` | Abwaertskompatibilitaet des Arbeitsbeginns — der Aussperr-Fall. |
 | `arbeitsbeginn-ui.js` | Arbeitsbeginn je Mitarbeiter + Zeit-Vorbelegung, die nie unmöglich ist. |
+| `arbeitszeitrecht-regeln.js` | Die Gesetzesregeln selbst: ArbZG und JArbSchG als Falltabelle (Alex, 26.08.2026) |
 | `audit-beschriftungen.js` | Jede protokollierte Aktion braucht eine Beschriftung (Alex, 26.08.2026) |
 | `audit-events.js` | Audit-Events-Test: prüft, dass login_success, logout (manuell), session_expired (abgelaufenes |
 | `aushang-mitternacht-ui.js` | Ein Aushang, der kurz nach Mitternacht geschrieben wurde, muss auf der Willkommensseite stehen. |
