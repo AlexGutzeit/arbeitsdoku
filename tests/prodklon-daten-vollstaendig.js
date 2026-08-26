@@ -73,6 +73,7 @@ async function summeUeberSpalten(datei, tabelle, spalten) {
 const ERLAUBT_NEUE_TABELLEN = [
   'twofa_secrets', 'twofa_devices', 'user_avatars', 'user_sitzung', 'geburtstag_freigabe',  // 23.08.2026
   'backup_empfaenger',                                                                      // 25.08.2026
+  'warnung_prefs',                                                                          // 26.08.2026
 ];
 const ERLAUBT_NEUE_SPALTEN = {
   users: ['can_order'],   // 25.08.2026, Bestellrecht
@@ -157,12 +158,15 @@ const ERLAUBT_NEUE_SPALTEN = {
   // dann schlicht falsch. Geprueft gehoert, was wirklich zaehlt: Die MIGRATION darf nichts
   // erfinden. Also leer nur, was sie gerade erst angelegt hat; alles, was schon im Bestand war,
   // muss Zeichen fuer Zeichen so bleiben.
-  const neuAngelegt = RUNDE.filter(t => !vorher[t]);
+  // Ueber ALLE neu entstandenen Tabellen, nicht nur ueber die einer bestimmten Runde: Sonst waere
+  // eine spaeter dazugekommene Tabelle zwar erlaubt, aber nie darauf geprueft, ob die Migration sie
+  // auch FUELLT. Genau das war am 26.08.2026 bei warnung_prefs der Fall.
+  const neuAngelegt = [...new Set([...RUNDE.filter(t => !vorher[t]), ...neu])];
   const schonDa = RUNDE.filter(t => vorher[t]);
   console.log(`     (neu angelegt: ${neuAngelegt.join(', ') || 'keine'} · schon im Bestand: ${schonDa.join(', ') || 'keine'})`);
 
   if (neuAngelegt.length) {
-    ok('die NEU angelegten sind leer (niemand ist ploetzlich eingerichtet)',
+    ok(`die NEU angelegten sind leer (${neuAngelegt.join(', ')})`,
       neuAngelegt.every(t => !nachher[t] || nachher[t].anzahl === 0),
       JSON.stringify(neuAngelegt.map(t => t + '=' + (nachher[t] ? nachher[t].anzahl : '?'))));
   }
