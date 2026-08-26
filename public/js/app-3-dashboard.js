@@ -847,56 +847,9 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     return max === '00:00' ? null : max;
   }
 
-  /**
-   * Gesetzlich vorgeschriebene Mindestpause nach § 4 Arbeitszeitgesetz, bezogen auf die
-   * ANWESENHEIT eines Tages (Brutto, also inklusive Pause).
-   *
-   * Das Gesetz bemisst die Pause an der Arbeitszeit — und die ist Anwesenheit MINUS Pause.
-   * Daraus wird schnell ein Ringelspiel: 9:45 Anwesenheit ergibt mit 30 min Pause 9:15
-   * Arbeitszeit (über 9 → 45 nötig), mit 45 min aber 9:00 (nicht über 9 → 30 genügt).
-   * Deshalb wird hier die KLEINSTE Pause gesucht, mit der die Vorschrift erfüllt ist — bei
-   * 9:45 also 45, weil 30 sie verletzen würde. Damit gibt es keine Schwingung.
-   *
-   * Fängt nebenbei die bekannte Sechs-Stunden-Falle: 6:20 Anwesenheit braucht 30 min Pause,
-   * sonst wären es 6:20 Arbeit am Stück.
-   */
-  function gesetzlichePause(bruttoMin, jugendlich) {
-    // § 11 JArbSchG (unter 18): über 4½ bis 6 Std → 30 min, über 6 Std → 60 min.
-    // § 4 ArbZG (ab 18):        über 6 bis 9 Std → 30 min, über 9 Std → 45 min.
-    const noetig = jugendlich
-      ? (a) => a > 6 * 60 ? 60 : (a > 4.5 * 60 ? 30 : 0)
-      : (a) => a > 9 * 60 ? 45 : (a > 6 * 60 ? 30 : 0);
-    // Kandidaten sind die im Gesetz genannten Werte — nur sie ergeben eine erklärbare Zahl.
-    for (const p of (jugendlich ? [0, 30, 60] : [0, 30, 45])) {
-      if (noetig(bruttoMin - p) <= p) return p;
-    }
-    return jugendlich ? 60 : 45;
-  }
-
-  /**
-   * Ist die Person am `datum` noch keine 18?
-   *
-   * OHNE Geburtsdatum wird „ja" angenommen — lieber eine zu lange Pause vorschlagen als eine zu
-   * kurze bei einem Minderjährigen. Gerechnet wird auf den Eintragstag, nicht auf heute: Wer im
-   * Mai 18 wird, fällt für einen Eintrag aus dem März noch unter den Jugendschutz.
-   */
-  // ZUERST der angemeldete Nutzer selbst: Ein Mitarbeiter darf /api/users nicht laden, für ihn
-  // ist S.users leer — derselbe Grund wie beim Arbeitsbeginn.
-  function geburtsdatumVon(userId) {
-    const id = userId ? Number(userId) : (S.user && Number(S.user.id));
-    if (S.user && Number(S.user.id) === id && S.user.birth_date) return S.user.birth_date;
-    const u = (S.users || []).find(x => Number(x.id) === id);
-    return (u && u.birth_date) || null;
-  }
-
-  function istJugendlich(userId, datum) {
-    const geburt = geburtsdatumVon(userId);
-    if (!geburt) return true;                                   // unbekannt → strengere Regel
-    const achtzehn = new Date(String(geburt) + 'T12:00:00Z');
-    if (isNaN(achtzehn.getTime())) return true;
-    achtzehn.setUTCFullYear(achtzehn.getUTCFullYear() + 18);
-    return String(datum || '') < achtzehn.toISOString().slice(0, 10);
-  }
+  // Die Gesetzesregeln (Pause, Alter, Anwesenheit, Hoechstzeit) stehen seit dem 26.08.2026 in
+  // public/js/arbeitszeitrecht.js — eine Fassung fuer Formular UND Uebersicht. Vorher lagen sie
+  // hier lokal und waren von aussen nicht erreichbar.
 
   const bruttoMinuten = (von, bis) => {
     const [vh, vm] = String(von || '').split(':').map(Number);
@@ -917,73 +870,13 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
    *
    * @returns {{ rest: number, genommen: number, firma: number, hatEintraege: boolean }}
    */
-  /**
-   * Anwesenheit eines Tages in Minuten — überlappende Einträge zählen NICHT doppelt.
-   *
-   * Zeitgleich dokumentierte Aufträge sind bei SenTec ausdrücklich gewollt (zwei Baustellen auf
-   * einem Beleg, Regie neben Festpreis). Für alles, was das Gesetz an der Anwesenheit festmacht,
-   * zählt aber die Uhr und nicht die Anzahl der Belege.
-   */
-  function anwesenheitMinuten(liste, aktuellVon, aktuellBis) {
-    const zuMin = (s) => {
-      const [h, m] = String(s || '').split(':').map(Number);
-      return (Number.isFinite(h) && Number.isFinite(m)) ? h * 60 + m : null;
-    };
-    const spannen = [];
-    for (const e of liste) {
-      const a = zuMin(e.time_from), b = zuMin(e.time_to);
-      if (a !== null && b !== null && b > a) spannen.push([a, b]);
-    }
-    const a = zuMin(aktuellVon), b = zuMin(aktuellBis);
-    if (a !== null && b !== null && b > a) spannen.push([a, b]);
-    if (!spannen.length) return 0;
-    spannen.sort((x, y) => x[0] - y[0]);
-    let summe = 0, von = spannen[0][0], bis = spannen[0][1];
-    for (let i = 1; i < spannen.length; i++) {
-      if (spannen[i][0] <= bis) bis = Math.max(bis, spannen[i][1]);
-      else { summe += bis - von; von = spannen[i][0]; bis = spannen[i][1]; }
-    }
-    return summe + (bis - von);
-  }
 
-  function restPause(liste, aktuellVon, aktuellBis, jugendlich, geburtBekannt) {
-    const firma = Number(arbeitszeitJetzt().break_minutes_default) || 0;
-    const genommen = liste.reduce((s, e) => s + (Number(e.break_minutes) || 0), 0);
 
-    // Anwesenheit des GANZEN Tages — ÜBERLAPPUNGSFREI, nicht als Summe der Einträge.
-    //
-    // Wer zwei Aufträge zeitgleich dokumentiert (zweimal 07:00–12:00, beim Kunden 10 Stunden), war
-    // trotzdem nur 5 Stunden da. Die frühere Summe kam hier auf 10 Stunden und hob die Pause nach
-    // § 4 ArbZG auf 45 Minuten an — für eine Arbeitszeit, die es nie gab, und mit einem Gesetz
-    // begründet, das gar nicht greift. (Gefunden von Alex, 30.07.2026.)
-    const bruttoTag = anwesenheitMinuten(liste, aktuellVon, aktuellBis);
-    const gesetzlich = gesetzlichePause(bruttoTag, jugendlich);
+  // Alte Namen als Verweis auf das Modul — so bleibt der Rest des Formulars unangetastet.
+  const MAX_TAG_ERWACHSEN = AZ_MAX_TAG_ERWACHSEN;
+  const MAX_TAG_JUGEND    = AZ_MAX_TAG_JUGEND;
+  const MAX_WOCHE_JUGEND  = AZ_MAX_WOCHE_JUGEND;
 
-    // Der Firmenwert ist die Untergrenze — das Gesetz kann ihn nur ANHEBEN, nie senken.
-    const ziel = Math.max(firma, gesetzlich);
-    return {
-      rest: Math.max(0, ziel - genommen), genommen, firma, gesetzlich, ziel,
-      bruttoTag, hatEintraege: liste.length > 0, jugendlich, geburtBekannt: !!geburtBekannt,
-      gesetzGreift: gesetzlich > firma,
-    };
-  }
-
-  // ── Höchstarbeitszeit ──────────────────────────────────────────────────────────────────────
-  //
-  // § 3 ArbZG: werktäglich 8 Stunden, verlängerbar auf 10, wenn der Schnitt über 24 Wochen bei 8
-  // bleibt. 10 Stunden sind die harte Decke.
-  // § 8 JArbSchG: 8 Stunden täglich UND 40 Stunden wöchentlich. 8½ an einzelnen Tagen nur, wenn an
-  // einem anderen Werktag derselben Woche verkürzt wird — das ist keine freie Option, sondern eine
-  // Bedingung. Die App nennt sie im Text und überlässt die Beurteilung dem Menschen (Alex' Wahl).
-  const MAX_TAG_ERWACHSEN = 10 * 60;
-  const MAX_TAG_JUGEND    = 8 * 60;
-  const MAX_WOCHE_JUGEND  = 40 * 60;
-
-  // Netto-Minuten einer Menge von Einträgen — über calcActualHours, damit sich überlappende
-  // Einträge nicht doppelt zählen (dieselbe Rechnung wie in Statistik und PDF).
-  function nettoMinuten(eintraege) {
-    return Math.round(calcActualHours(eintraege) * 60);
-  }
 
   // Der Tag/die Woche MIT dem, was gerade im Formular steht. Beim Bearbeiten muss der eigene
   // gespeicherte Eintrag raus, sonst zählt er doppelt — dieselbe Falle wie bei der Restpause.
@@ -995,12 +888,6 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     return ohneSichSelbst.concat(jetzt);
   }
 
-  function montagDer(datum) {
-    const d = new Date(datum + 'T12:00:00Z');
-    const wt = d.getUTCDay();                       // 0 = Sonntag
-    d.setUTCDate(d.getUTCDate() + (wt === 0 ? -6 : 1 - wt));
-    return d.toISOString().slice(0, 10);
-  }
   function plusTage(iso, n) {
     const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n);
     return d.toISOString().slice(0, 10);
@@ -1140,10 +1027,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   }
   // Der Text erklärt die Zahl im Feld. Ohne ihn wirkt eine 0 wie ein Fehler und ein Nachschlag
   // von 15 min wie Willkür.
-  const STUNDEN = (min) => {
-    const h = Math.floor(min / 60), m = min % 60;
-    return m ? `${h} Std ${m} min` : `${h} Std`;
-  };
+  const STUNDEN = stundenText;   // dieselbe Formatierung wie im Regelmodul, nur der alte Name
   const pausenHinweis = (info) => {
     if (info.gesetzGreift) {
       const schwelle = info.jugendlich ? (info.gesetzlich === 60 ? 6 : '4½') : (info.gesetzlich === 45 ? 9 : 6);
