@@ -30,6 +30,14 @@ und sprang danach auf 6:00. Ohne Begrenzung wäre man oben in sechs Stunden Leer
 zeichnet es jetzt nur noch die Stunden des Tages — eine davor, eine danach, mindestens acht. Damit
 ist auch das Scrollen auf 6:00 ersatzlos entfallen: Es gibt nichts mehr zu überspringen.
 
+**Fast eine Regression eingebaut.** `passeScrollflaechenAn()` gilt für ALLE Scrollflächen, also auch
+für die Zeitleiste der **Planung** — und die zeichnet weiterhin 00:00–24:00 und springt danach auf
+6:00. Ohne Begrenzung liefe dieser Sprung ins Leere und man landete morgens um Mitternacht.
+Aufgefallen ist es an `tests/platznutzung-ui.js` vom 07.08., der zwei Zusicherungen dazu enthält.
+Die Fläche darf jetzt nur wachsen, wo sie es ausdrücklich erlaubt (`data-frei`) — das ist genau die
+Fläche, deren Inhalt zugeschnitten ist. Danach lief der alte Test **unverändert** durch: kein
+Aufweichen einer bestehenden Zusicherung.
+
 Bemerkenswert an dem Fall: Der Ärger kam von einer Zahl, die jemand (ich, drei Wochen früher)
 bewusst gesetzt hatte — mit dem richtigen Gedanken und einem zu niedrigen Wert. Erst ein echtes
 Gerät in echter Hand zeigte es.

@@ -561,7 +561,7 @@ function renderTimelineHtml(entries, absences, verstoesse) {
   });
 
   return `<div class="timeline-wrapper">
-    <div class="timeline-scroll">
+    <div class="timeline-scroll" data-frei>
       <div class="timeline-container">
         <div class="timeline-hours"><div class="tl-col-header" style="visibility:hidden">.</div>${hoursHtml}</div>
         ${colsHtml}

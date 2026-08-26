@@ -272,8 +272,14 @@ function passeScrollflaechenAn() {
     const darunter = Math.max(0, main.getBoundingClientRect().bottom - karte.getBoundingClientRect().bottom);
     const platz = window.innerHeight - obenImDokument - darunter - _FLAECHE_LUFT;
     // Zu wenig Platz? Dann gar keine Begrenzung — die Karte nimmt ihre volle Höhe und die SEITE
-    // scrollt. Das ist dasselbe Verhalten wie im Wochen- und Monatsraster.
-    const neu = platz < _FLAECHE_MIN ? 'none' : Math.round(platz) + 'px';
+    // scrollt, wie im Wochen- und Monatsraster.
+    //
+    // NUR wo die Fläche das ausdrücklich erlaubt (`data-frei`). Der Tagesverlauf im Zeitnachweis
+    // zeichnet seit dem 26.08.2026 nur noch die Stunden des Tages und ist dadurch kurz genug
+    // dafür. Die Zeitleiste der PLANUNG zeigt weiterhin 00:00–24:00 und springt danach auf 6:00 —
+    // ohne Begrenzung liefe dieser Sprung ins Leere und man landete morgens um Mitternacht.
+    const darfWachsen = box.hasAttribute('data-frei');
+    const neu = (darfWachsen && platz < _FLAECHE_MIN) ? 'none' : Math.max(260, Math.round(platz)) + 'px';
     if (box.style.maxHeight !== neu) box.style.maxHeight = neu;   // unnötige Neuberechnung vermeiden
   });
 }
