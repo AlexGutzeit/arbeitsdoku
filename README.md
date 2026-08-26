@@ -244,6 +244,40 @@ aber nur **8 gearbeitete** Stunden — dann erscheint keine Warnung. Beim Bearbe
 gespeicherte Eintrag herausgerechnet. **Es ist ein Hinweis, keine Sperre:** Wer elf Stunden
 gearbeitet hat, muss das eintragen können. Der Hinweis gilt für neue Einträge wie fürs Bearbeiten.
 
+**Verstöße in der Übersicht (Tag, Woche, Monat):** Derselbe Maßstab greift nicht nur beim Buchen,
+sondern auch beim Draufschauen. Wo eine Grenze gerissen ist, erscheint ein **gelbes Warnzeichen ⚠️
+und ein Rahmen** — in der **Tagesansicht** am Spaltenkopf des Mitarbeiters, in der **Wochenansicht**
+an der Tageszelle (und am Spaltenkopf, wenn die *Woche* zu lang ist), in der **Monatsansicht** an
+der Tageszeile und an der Kalenderwoche. **Mouseover oder langer Druck** (Handy) zeigt die
+Erklärung samt Paragraf. Sichtbar für Chef, Buchhalter und Admin — und **für den Mitarbeiter in
+seiner eigenen Ansicht**.
+
+Geprüft wird gegen fünf Grenzen, je nach Alter am Tag des Eintrags:
+
+| | ab 18 | unter 18 |
+|---|---|---|
+| Arbeitszeit je Tag | über 10 Std (§ 3 ArbZG) | über 8 Std (§ 8 JArbSchG) |
+| Ruhepause | § 4 ArbZG (30 min ab 6 Std, 45 ab 9) | § 11 JArbSchG (30 min ab 4½ Std, 60 ab 6) |
+| Ruhezeit bis zum nächsten Arbeitsbeginn | unter 11 Std (§ 5 ArbZG) | unter 12 Std (§ 13 JArbSchG) |
+| Arbeitszeit je Woche | über 48 Std — **Hinweis**, kein Verstoß | über 40 Std (§ 8 JArbSchG) |
+
+Die **48-Stunden-Woche** ist bewusst anders formuliert als der Rest: § 3 ArbZG erlaubt 10 Stunden
+täglich und damit mehr als 48 in der Woche, **solange der Schnitt über 24 Wochen bei 8 Stunden
+werktäglich bleibt**. Die App kennt diesen Zeitraum nicht und behauptet deshalb keinen Verstoß,
+sondern nennt die Ausgleichspflicht.
+
+Zwei Eigenheiten, die man kennen sollte: Für die Prüfung wird ein **etwas weiterer Zeitraum
+geladen** als angezeigt wird — ein Tag davor (die Ruhezeit braucht den Feierabend des Vortags) und
+volle Kalenderwochen (eine Wochengrenze ist nur an einer vollständigen Woche zu beurteilen). Im
+Monatsraster kann eine Randwoche deshalb einen Rahmen tragen, obwohl die angezeigte Summe darunter
+liegt; der Tooltip nennt dann beide Zahlen. Und: Die Marker rechnen **immer den ganzen Tag**,
+unabhängig von einem gesetzten Projektfilter — das Gesetz kennt keinen Filter. Auch das sagt der
+Tooltip.
+
+Es bleibt ein **Hinweis, keine Rechtsberatung**: Tarifverträge und § 7 ArbZG kennen Abweichungen,
+die die App nicht kennt. Nicht geprüft werden der 24-Wochen-Ausgleich, die verkürzte Ruhezeit nach
+§ 5 Abs. 2 ArbZG und die Fünf-Tage-Woche nach § 15 JArbSchG.
+
 **Zwei Alterstabellen (§ 4 ArbZG / § 11 JArbSchG):** Für **Jugendliche unter 18** gelten längere Pausen — **30 Minuten ab 4½** und **60 Minuten ab 6 Stunden** Arbeitszeit. Die App entscheidet das selbst: Aus dem **Geburtsdatum** des Mitarbeiters (Mitarbeiter → bearbeiten) errechnet sie das Alter **am Tag des Eintrags**, nicht am heutigen Tag — wer im Juli 18 wird, bekommt für einen nachgetragenen Juni-Eintrag noch die Jugendschutz-Werte. Der Hinweis unter dem Feld nennt jeweils das **zutreffende** Gesetz. **Ist das Geburtsdatum leer, rechnet die App vorsichtshalber „unter 18"** und sagt das im Hinweis dazu — lieber eine zu lange Pause vorschlagen als eine unzulässig kurze. Praktische Folge: Solange keine Geburtsdaten gepflegt sind, schlägt schon ein normaler 8-Stunden-Tag **60 Minuten** vor. Das Geburtsdatum wird beim Öffnen des Formulars frisch ausgewertet; die Sitzung des Mitarbeiters holt einen nachgetragenen Wert beim nächsten Wechsel zurück in die App ab — ohne neues Anmelden. Keine Rechtsberatung; Tarifverträge können abweichen. Nettostunden werden automatisch berechnet; überlappende Einträge werden nicht doppelt gezählt.
 
 #### 🏖️ Abwesenheit

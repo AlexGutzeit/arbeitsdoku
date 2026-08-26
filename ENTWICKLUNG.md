@@ -14,6 +14,51 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-26 · Gesetzesverstöße sichtbar machen — und was dabei still schiefgehen kann
+
+Die App kannte ArbZG und JArbSchG längst. Sie prüfte nur an einer einzigen Stelle: als Warnzeile im
+Eintragsformular, während jemand bucht. Wer später auf die Übersicht sah, sah davon nichts — ein
+11-Stunden-Tag und ein 8-Stunden-Tag sahen gleich aus.
+
+**Der Zuschnitt kam aus dem Befund, nicht aus dem Wunsch.** Die gesamte Gesetzeslogik steckte als
+lokale Funktionen INNERHALB von `renderEntryForm()`: nicht exportiert, ein einziger Aufrufer, und
+sie lieferte einen fertigen Satz. Um sie ein zweites Mal zu benutzen, musste sie heraus — und aus
+dem Satz musste eine Auskunft werden, die man auswerten kann. Ein Verstoß ist jetzt ein Objekt mit
+`art`, `ist`, `grenze`, `gesetz`. Nebeneffekt: Der Test befragt die Regel direkt, statt mit
+Suchmustern auf Fließtext zu zielen.
+
+**Die eigentliche Gefahr war nicht die Kryptografie der Regeln, sondern die Datenbeschaffung.** Für
+die Ruhezeit braucht es den Vortag, für eine Wochengrenze die volle Kalenderwoche — im Monatsraster
+ragt die erste und letzte KW über den Monatsrand. Also wird mehr geladen als angezeigt. Rutschen
+diese Zusatztage in eine Summe, ist die Monatszahl zu hoch, sieht aber plausibel aus, und niemand
+rechnet sie nach. Deshalb stand die Regressionsprüfung im Ablauf VOR dem ersten Warnzeichen, und
+die Gegenprobe zeigte, was sonst passiert wäre: **43:30 statt 28:30**.
+
+**Der Null-Dauer-Filter.** Im Bestand liegen 18 Einträge mit `07:00–07:00`. Für die Stundenrechnung
+sind sie harmlos — sie zählen null. Die Ruhezeit fragt aber nicht „wie lange", sondern „wann ging es
+los": Ein Platzhalter um 07:00 an einem Tag, an dem die Arbeit um 09:00 begann, verkürzt die
+gerechnete Nachtruhe um zwei Stunden und erzeugt einen Verstoß, den es nicht gibt. Meine erste
+Gegenprobe biss nicht, weil ich den Platzhalter an den *Vortag* gesetzt hatte — dort verlängert er
+die Ruhezeit und fällt gar nicht auf. Erst am Tagesanfang zeigt sich die Falle.
+
+**Die 48-Stunden-Woche ist kein Verbot.** § 3 ArbZG erlaubt 10 Stunden täglich, also mehr als 48 in
+der Woche, solange über 24 Wochen ausgeglichen wird. Ein Zeichen, das „Verstoß" behauptet, wäre
+falsch — und zwar plausibel falsch, also unauffällig. Sie ist deshalb als Hinweis gekennzeichnet
+(`hinweis: true`), leiser dargestellt und anders formuliert. Ich hatte Alex die Grenze zuerst als
+harte verkauft und das korrigiert, bevor er entschied.
+
+**Rahmen als innerer Schatten, nicht als Randlinie.** Eine Randlinie macht die Tabellenzelle breiter
+und verschiebt das ganze Raster — der Fehler fällt erst auf, wenn genug Zellen markiert sind.
+
+**Das Zeichen ist ein `<span>`, kein `<button>`.** Ein Knopf mit ⚠️ als einzigem Inhalt rutscht durch
+die Prüfung in `tests/barrierefrei-ui.js`, weil deren Regex das Warnzeichen nicht wegstreicht und
+der Text damit als „vorhanden" gilt. Ein `title` gäbe zwei Sprechblasen übereinander.
+
+**Was die echten Daten zeigten.** Am Prod-Klon: 85 von 738 Personentagen ohne gebuchte Pause bei
+über sechs Stunden Anwesenheit, dazu Tage über zehn Stunden — und ein Fall mit Feierabend 23:30 und
+Arbeitsbeginn 05:45 am Folgetag: 6 Std 15 min Ruhezeit. Das stand seit Monaten so da und war
+nirgends sichtbar.
+
 ### 2026-08-25 · Bestellen, wenn Chef und Chefin im Urlaub sind
 
 Alex' Beobachtung: Nur Admin, Chef und Buchhalter dürfen eine offene Bestellung abschliessen. Sind
@@ -778,3 +823,10 @@ Ausstellen: `node tests/ausstellen-zweifaktor.js` (der zweite Faktor und die gem
 weg, Profilbild, Rechte, Soll-Stunden, Start-Überstunden, Personalnummer, Arbeitsbeginn und
 Geburtsdatum bleiben; Login 403, laufende Sitzung 401; nach dem Wiedereinstellen muss der zweite
 Faktor neu eingerichtet werden).
+
+Gesetzesverstöße: `node tests/arbeitszeitrecht-regeln.js` (die Regeln als Falltabelle, Grenzwerte
+punktgenau — genau 10:00 und genau 11:00 Ruhezeit sind erlaubt; Jahreswechsel; die Null-Dauer-
+Platzhalter) und `node tests/verstoesse-uebersicht-ui.js` (zuerst die Regression: die zusätzlich
+geladenen Tage dürfen in keine angezeigte Zahl geraten — die erwarteten Werte werden dabei selbst
+ausgerechnet, nicht mit gestern verglichen; danach Marker, Rahmen und Sprechblase in allen drei
+Ansichten, Chef- wie Mitarbeiter-Sicht, samt der Randwoche, die über den Monatsrand ragt).
