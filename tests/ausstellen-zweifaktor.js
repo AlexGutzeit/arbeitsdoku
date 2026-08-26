@@ -84,8 +84,14 @@ function req(m, p, t, b) {
     ok('vorher: ein Push-Abo liegt vor', vor.abos === 1, JSON.stringify(vor.abos));
 
     console.log('\n── Ausstellen ──');
-    const r = await req('POST', `/api/users/${u.id}/deactivate`, admin, { employed_until: '2026-08-25' });
-    ok('ausgestellt', r.status === 200, r.status + ' ' + r.text.slice(0, 80));
+    // Relativ rechnen, nicht fest eintragen: Der Mitarbeiter wird HEUTE angelegt, sein
+    // Anstellungszeitraum beginnt also heute. Ein festes Datum ist am naechsten Tag zwangslaeufig
+    // zu frueh — genau daran ist dieser Test einen Tag nach seiner Entstehung umgefallen
+    // (dieselbe Falle wie in tests/trash-access.js, 25.08.2026).
+    const heute = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+    const morgen = new Date(Date.now() + 24 * 3600 * 1000).toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+    const r = await req('POST', `/api/users/${u.id}/deactivate`, admin, { employed_until: heute });
+    ok('ausgestellt', r.status === 200, r.status + ' ' + r.text.slice(0, 90));
 
     const nach = await tabellen();
     ok('der Zwei-Faktor ist WEG', nach.secrets === 0, JSON.stringify(nach.secrets));
@@ -109,7 +115,7 @@ function req(m, p, t, b) {
     ok('… und die laufende Sitzung fliegt sofort raus (401)', alteSitzung.status === 401, alteSitzung.status + '');
 
     console.log('\n── Wiedereinstellen ──');
-    const wieder = await req('POST', `/api/users/${u.id}/reactivate`, admin, { start_date: '2026-09-01' });
+    const wieder = await req('POST', `/api/users/${u.id}/reactivate`, admin, { start_date: morgen });
     ok('wiedereingestellt', wieder.status === 200, wieder.status + ' ' + wieder.text.slice(0, 80));
     const tok2 = (await req('POST', '/api/auth/login', null, { username: 'monteur', password: PW })).body.token;
     ok('… Anmelden geht wieder', !!tok2);
