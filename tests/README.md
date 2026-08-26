@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**190 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**191 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -228,6 +228,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `vacation-multi.js` | Unit-Test: mehrere Mitarbeiter PARALLEL, jeder mit eigenem Anspruchsverlauf über mehrere Jahre und |
 | `vacation-ui.js` | UI-Test (Puppeteer) Urlaubskonto: |
 | `verstoesse-uebersicht-ui.js` | Gesetzesverstöße in den Übersichten des Zeitnachweises (Alex, 26.08.2026) |
+| `warn-schalter-ui.js` | Warnungen für sich selbst ausblenden (Alex, 26.08.2026) |
 | `wetter-heute-ui.js` | Die Wetterkarte zeigte den heutigen Tag ZWEIMAL (Alex, 30.07.2026). |
 | `willkommen-unveraendert-ui.js` | RÜCKSCHRITTS-PRÜFUNG der Willkommensseite (Alex, 07.08.2026). |
 | `zeitnachweis-netto-pause-ui.js` | Nettostunden und gebuchte Pause je Auftrag im Zeitnachweis (Alex, 26.08.2026) |
