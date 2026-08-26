@@ -134,9 +134,18 @@ function req(m, p, t, b) {
       JSON.stringify(await tag([[null, '08:59', '15:00', 30]], [[gestern, '06:00', '22:00', 45]], false, { ladeVon: '2026-07-08' })));
 
     console.log('\n── Die 18 Bestands-Platzhalter (07:00–07:00) ──');
-    ok('ein Null-Dauer-Eintrag am Vortag gilt nicht als Feierabend',
-      arten(await tag([[null, '08:00', '15:00', 30]], [[gestern, '07:00', '07:00']], false, opt)) === '',
-      JSON.stringify(await tag([[null, '08:00', '15:00', 30]], [[gestern, '07:00', '07:00']], false, opt)));
+    // Der Fall, in dem der Filter WIRKLICH zaehlt: Der Platzhalter liegt frueher als der echte
+    // Arbeitsbeginn. Ohne Filter gilt 07:00 als Beginn, die Ruhezeit schrumpft von 11 auf 9 Std
+    // und es erschiene ein Verstoss, den es nicht gibt. (Im ersten Wurf stand der Platzhalter am
+    // Vortag — dort verlaengert er die Ruhezeit und faellt gar nicht auf.)
+    ok('ein Platzhalter 07:00–07:00 gilt nicht als Arbeitsbeginn',
+      arten(await tag([[null, '07:00', '07:00'], [null, '09:00', '15:00', 30]], [[gestern, '06:00', '22:00', 45]], false, opt)) === '',
+      JSON.stringify(await tag([[null, '07:00', '07:00'], [null, '09:00', '15:00', 30]], [[gestern, '06:00', '22:00', 45]], false, opt)));
+    // Und dieselbe Falle am anderen Ende: ein spaeter Platzhalter am Vortag als vermeintlicher
+    // Feierabend.
+    ok('… und ein Platzhalter 23:00–23:00 nicht als Feierabend',
+      arten(await tag([[null, '09:00', '15:00', 30]], [[gestern, '06:00', '14:00', 30], [gestern, '23:00', '23:00']], false, opt)) === '',
+      JSON.stringify(await tag([[null, '09:00', '15:00', 30]], [[gestern, '06:00', '14:00', 30], [gestern, '23:00', '23:00']], false, opt)));
     ok('ein Tag, der NUR aus Platzhaltern besteht, erzeugt gar nichts',
       arten(await tag([[null, '07:00', '07:00']], [], false, opt)) === '');
 
