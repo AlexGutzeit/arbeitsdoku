@@ -43,6 +43,11 @@ async function anmelden(browser, user, pw) {
   return { ktx, seite };
 }
 const tagesbild = async (p) => {
+  // ZUERST auf den Zeitnachweis. Ohne das rendert render() die Seite, auf der man gerade steht —
+  // nach dem Abschnitt „Mein Konto" also die Kontoseite, mit null Spalten. Jede Pruefung auf
+  // „kein Zeichen mehr" waere dann trivial wahr (genau so war dieser Test im ersten Wurf falsch).
+  await p.evaluate(() => { if (location.hash !== '#/') location.hash = '#/'; });
+  await sleep(600);
   await p.evaluate((d) => { S.view = 'day'; S.currentDate = new Date(d + 'T12:00:00'); render(); }, TAG);
   await sleep(2500);
   return p.evaluate(() => ({
@@ -136,6 +141,7 @@ const tagesbild = async (p) => {
     ok('… sie nennt die Paragrafen', /§ 4 ArbZG/.test(karte.text) && /§ 5 ArbZG/.test(karte.text) && /§ 8 JArbSchG/.test(karte.text), karte.text.slice(0, 200));
     ok('… und sagt, dass es nur die eigene Ansicht betrifft', /nur für deine Ansicht/i.test(karte.text), karte.text.slice(0, 300));
     ok('… und dass es an den Pflichten des Betriebs nichts ändert', /Pflichten des Betriebs/.test(karte.text));
+    ok('… und dass der Hinweis beim EINTRAGEN bleibt', /nicht abschalten/i.test(karte.text), karte.text.slice(0, 400));
 
     // Klicken statt API: der Weg, den ein Mensch geht.
     await a.seite.evaluate(() => { document.querySelector('.warn-schalter[data-key="ruhezeit"]').click(); });
@@ -151,8 +157,35 @@ const tagesbild = async (p) => {
     ok('das Abschalten steht im Audit-Log', !!eintrag && /ausgeblendet/.test(eintrag.details || ''), JSON.stringify(eintrag && eintrag.details));
 
     console.log('\n── Ein unvollständiger Aufruf blendet nichts aus ──');
-    const halb = await req('PUT', '/api/users/warnungen', admin, { pausen: false });
-    ok('fehlende Felder gelten als AN', halb.body.arbeitszeit === true && halb.body.ruhezeit === true, JSON.stringify(halb.body));
+    // Erst alles ABschalten, dann einen LEEREN Aufruf schicken: Jedes einzelne Feld muss dadurch
+    // wieder auf AN gehen. Mit `{ pausen: false }` prüfte der Test nur die beiden Felder, die er
+    // ohnehin nicht anfasst — eine Sabotage am geprüften Feld wäre unbemerkt geblieben.
+    await req('PUT', '/api/users/warnungen', admin, { pausen: false, arbeitszeit: false, ruhezeit: false });
+    const leer = await req('PUT', '/api/users/warnungen', admin, {});
+    ok('ein leerer Aufruf setzt ALLE drei auf an',
+      leer.body.pausen === true && leer.body.arbeitszeit === true && leer.body.ruhezeit === true, JSON.stringify(leer.body));
+    for (const feld of ['pausen', 'arbeitszeit', 'ruhezeit']) {
+      await req('PUT', '/api/users/warnungen', admin, { pausen: false, arbeitszeit: false, ruhezeit: false });
+      const nur = await req('PUT', '/api/users/warnungen', admin, { [feld]: false });
+      const andere = ['pausen', 'arbeitszeit', 'ruhezeit'].filter(f => f !== feld);
+      ok(`nur „${feld}" gesetzt → die anderen beiden stehen wieder auf an`,
+        nur.body[feld] === false && andere.every(f => nur.body[f] === true), JSON.stringify(nur.body));
+    }
+
+    console.log('\n── Wenn der Abruf scheitert, bleibt alles sichtbar ──');
+    // Der gefährlichste stille Fehler: Eine Warnung verschwindet, weil eine Abfrage schiefging.
+    // Hier wird genau das nachgestellt — ladeWarnungen liefert nichts, S.warnungen bleibt null.
+    await req('PUT', '/api/users/warnungen', admin, { pausen: true, arbeitszeit: true, ruhezeit: true });
+    await a.seite.evaluate(() => {
+      window.ladeWarnungen = async () => null;    // als waere der Server nicht erreichbar
+      S.warnungen = null;
+    });
+    const beiAusfall = await tagesbild(a.seite);
+    ok('… und die Ansicht ist wirklich aufgebaut (nicht bloss leer)',
+      (await a.seite.evaluate(() => document.querySelectorAll('.timeline-column').length)) > 0);
+    ok('trotz gescheitertem Abruf steht das Warnzeichen da', beiAusfall.zeichen === 1, JSON.stringify(beiAusfall.zeichen));
+    ok('… mit allen drei Verstößen', /11 Std Arbeitszeit/.test(beiAusfall.arten) && /Pause/.test(beiAusfall.arten)
+      && /Ruhezeit/.test(beiAusfall.arten), beiAusfall.arten);
   } catch (e) {
     console.error(e); fail++; fails.push('Ausnahme: ' + e.message);
   } finally {

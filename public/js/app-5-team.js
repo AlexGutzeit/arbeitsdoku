@@ -2418,8 +2418,9 @@ async function kontoWarnungenKarte() {
   ];
   k.innerHTML = `
     <h3>&#9888;&#65039; Gesetzliche Warnungen</h3>
-    <p style="margin-top:0">Im Zeitnachweis erscheint ein Warnzeichen, wenn ein Tag oder eine Woche
-      über einer gesetzlichen Grenze liegt. Hier kannst du einzelne davon für dich ausblenden.</p>
+    <p style="margin-top:0">In der Tages-, Wochen- und Monatsübersicht erscheint ein Warnzeichen,
+      wenn ein Tag oder eine Woche über einer gesetzlichen Grenze liegt. Hier kannst du einzelne
+      davon für dich ausblenden.</p>
     ${schalter.map(([key, titel, gesetz]) => `
       <label style="display:flex; align-items:flex-start; gap:.5rem; cursor:pointer; margin-top:.5rem">
         <input type="checkbox" class="warn-schalter" data-key="${key}" style="width:auto;margin-top:.25rem"${d[key] !== false ? ' checked' : ''}>
@@ -2427,8 +2428,10 @@ async function kontoWarnungenKarte() {
       </label>`).join('')}
     <div style="font-size:.78rem;color:var(--text-light);margin-top:.7rem">
       Die Einstellung gilt nur für <strong>deine</strong> Ansicht — bei anderen bleiben die Hinweise
-      sichtbar, und niemand blendet dir etwas aus. Ausblenden ändert nichts an den Zeiten und nichts
-      an den gesetzlichen Pflichten des Betriebs; es nimmt nur den Hinweis weg.
+      sichtbar, und niemand blendet dir etwas aus. Sie betrifft nur die <strong>Übersichten</strong>:
+      Beim Eintragen einer Zeit erscheint der Hinweis weiterhin, dort lässt er sich nicht
+      abschalten. Ausblenden ändert nichts an den Zeiten und nichts an den gesetzlichen Pflichten
+      des Betriebs; es nimmt nur das Zeichen weg.
     </div>`;
 
   const speichern = async () => {

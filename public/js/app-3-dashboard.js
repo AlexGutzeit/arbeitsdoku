@@ -958,29 +958,8 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     return d.toISOString().slice(0, 10);
   }
 
-  /**
-   * Text der Warnung — leer, solange alles im Rahmen ist.
-   * @returns {string}
-   */
-  function hoechstzeitWarnung(tagMin, wochenMin, jugendlich) {
-    const grenze = jugendlich ? MAX_TAG_JUGEND : MAX_TAG_ERWACHSEN;
-    const saetze = [];
-    if (tagMin > grenze) {
-      saetze.push(jugendlich
-        ? `Der Tag kommt auf ${STUNDEN(tagMin)} Arbeitszeit. Für unter 18-Jährige sind höchstens `
-          + `8 Stunden erlaubt; 8½ nur, wenn an einem anderen Tag derselben Woche verkürzt wird `
-          + `(§ 8 Jugendarbeitsschutzgesetz).`
-        : `Der Tag kommt auf ${STUNDEN(tagMin)} Arbeitszeit. Das Arbeitszeitgesetz erlaubt `
-          + `höchstens 10 Stunden (§ 3 ArbZG).`);
-    }
-    // Die Wochengrenze reisst man mit fünf normalen Tagen schneller als die Tagesgrenze — und beim
-    // Buchen fällt es niemandem auf, weil man immer nur einen Tag vor sich hat.
-    if (jugendlich && wochenMin !== null && wochenMin > MAX_WOCHE_JUGEND) {
-      saetze.push(`Die Woche kommt damit auf ${STUNDEN(wochenMin)}. Für unter 18-Jährige sind `
-        + `höchstens 40 Stunden pro Woche erlaubt (§ 8 Jugendarbeitsschutzgesetz).`);
-    }
-    return saetze.join(' ');
-  }
+  // hoechstzeitWarnung ist entfallen: Der Text kommt jetzt aus den Verstoss-Objekten des
+  // Regelmoduls (public/js/arbeitszeitrecht.js) — dieselbe Fassung wie in den Uebersichten.
 
   async function lastEndOfDay(dateStr, userId) {
     return letzteEndzeit(await tagesEintraege(dateStr, userId));
@@ -1290,27 +1269,33 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     if (!d || !uid || !von || !bis) { warnEl.style.display = 'none'; return; }
 
     const jugendlich = istJugendlich(uid, d);
-    const tagListe = await tagesEintraege(d, uid);
     const eigeneId = isEdit ? entry.id : null;
-    const tagMin = nettoMinuten(mitFormular(tagListe, eigeneId, uid, d, von, bis, pause));
 
-    // Die Woche wird nur geholt, wenn sie ueberhaupt eine Grenze hat (unter 18).
-    let wochenMin = null;
-    if (jugendlich) {
-      const mo = montagDer(d);
-      try {
-        const params = new URLSearchParams({ date_from: mo, date_to: plusTage(mo, 6), user_id: String(uid) });
-        const data = await api('GET', '/api/entries?' + params.toString());
-        const woche = ((data && data.entries) || []).filter(e => e.user_id === uid);
-        wochenMin = nettoMinuten(mitFormular(woche, eigeneId, uid, d, von, bis, pause));
-      } catch (_) { wochenMin = null; }
-    }
+    // EINE Abfrage statt zwei: Vortag (fuer die Ruhezeit) bis Sonntag deckt Tag UND Woche ab.
+    // Vorher wurde der Tag einzeln geholt und die Woche nur bei Jugendlichen.
+    const mo = montagDer(d);
+    const vonTag = plusTage(mo, -1) < plusTage(d, -1) ? plusTage(mo, -1) : plusTage(d, -1);
+    let umfeld = [];
+    try {
+      const params = new URLSearchParams({ date_from: vonTag, date_to: plusTage(mo, 6), user_id: String(uid) });
+      const data = await api('GET', '/api/entries?' + params.toString());
+      umfeld = ((data && data.entries) || []).filter(e => e.user_id === uid);
+    } catch (_) { umfeld = await tagesEintraege(d, uid); }
 
-    // Derselbe Schalter wie in der Uebersicht (Gruppe „Arbeitszeit"): Wer die Warnungen dort
-    // abgeschaltet hat, soll sie nicht hier doch wieder vorgesetzt bekommen. Der Pausen-Hinweis
-    // unter dem Feld bleibt davon unberuehrt — der erklaert die vorgeschlagene Zahl und warnt nicht.
-    const zeigen = !(S.warnungen && S.warnungen.arbeitszeit === false);
-    const txt = zeigen ? hoechstzeitWarnung(tagMin, wochenMin, jugendlich) : '';
+    const mitJetzt = mitFormular(umfeld, eigeneId, uid, d, von, bis, pause);
+    const amTag = (datum) => mitJetzt.filter(e => e.date === datum);
+
+    // DIESELBEN Regeln wie in der Uebersicht — auch die neu hinzugekommenen (Ruhezeit,
+    // Erwachsenen-Woche, zu kurze Pause). Eine Fassung des Gesetzes, zwei Anzeigeorte.
+    //
+    // Der persoenliche Warn-Schalter greift hier ABSICHTLICH NICHT (Alex, 26.08.2026): Er blendet
+    // nur die Zeichen in den Uebersichten aus. Der Hinweis beim Buchen bleibt immer stehen — das
+    // ist der Moment, in dem man es noch richtig machen kann.
+    const liste = [
+      ...verstoesseTag(uid, d, amTag(d), amTag(plusTage(d, -1)), jugendlich, { ladeVon: vonTag }),
+      ...verstoesseWoche(uid, mo, mitJetzt.filter(e => e.date >= mo && e.date <= plusTage(mo, 6)), jugendlich),
+    ];
+    const txt = liste.map(v => v.text).join(' ');
     warnEl.textContent = txt ? '⚠️ ' + txt : '';
     warnEl.style.display = txt ? '' : 'none';
   };

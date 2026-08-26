@@ -123,7 +123,13 @@ const plusTage = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCD
     w = await messen(tagB, '14:00', '17:00', 0);        // 4 + 4 + 3 = 11:00
     ok('3 Einträge zusammen 11:00 → Warnung', /11 Std/.test(w) && /§ 3 ArbZG/.test(w), `„${w}"`);
     w = await messen(tagB, '14:00', '16:00', 0);        // 4 + 4 + 2 = 10:00
-    ok('… bei zusammen genau 10:00 wieder weg', w === '', `„${w}"`);
+    // Geprueft wird die TAGESGRENZE an ihrem Grenzwert. Seit dem 26.08.2026 meldet dieselbe
+    // Zeile zusaetzlich die zu kurze Pause — 10 Std Anwesenheit ohne jede Pause verletzen § 4
+    // ArbZG wirklich. Deshalb hier gezielt auf die Tagesgrenze pruefen statt auf eine leere Zeile.
+    ok('… bei zusammen genau 10:00 ist die TAGESGRENZE wieder weg',
+      !/erlaubt höchstens 10 Stunden/.test(w), `„${w}"`);
+    ok('… die zu kurze Pause wird dabei zu Recht weiterhin gemeldet',
+      /45 Minuten Pause vorgeschrieben/.test(w), `„${w}"`);
 
     // ── Alex' Fall: zwei ZEITGLEICHE Einträge ───────────────────────────────────────────────
     // 7–11 und noch einmal 7–11 (zwei Auftraege parallel dokumentiert, so gewollt), dann 11–15:30
@@ -147,7 +153,8 @@ const plusTage = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCD
 
     await anmelden('klein', 'Start!2345');
     w = await messen(tagD, '11:00', '15:30', 30);          // ebenfalls genau 8:00
-    ok('unter 18: dieselbe Buchung → noch keine Warnung (genau 8:00)', w === '', `„${w}"`);
+    ok('unter 18: dieselbe Buchung → TAGESGRENZE noch nicht gerissen (genau 8:00)',
+      !/8 Stunden erlaubt/.test(w), `„${w}"`);
     w = await messen(tagD, '11:00', '15:45', 30);          // eine Viertelstunde laenger → 8:15
     ok('unter 18: eine Viertelstunde länger → Warnung', /8 Std 15 min/.test(w) && /Jugendarbeitsschutzgesetz/.test(w), `„${w}"`);
     await anmelden('gross', 'Start!2345');
