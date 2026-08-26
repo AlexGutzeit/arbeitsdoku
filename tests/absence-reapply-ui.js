@@ -35,7 +35,11 @@ function req(method, p, token, body) {
     await req('POST','/api/users', admin, { username:'wkr', password:'Test1234!', name:'Worker', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
     const tok = (await req('POST','/api/auth/login', null, { username:'wkr', password:'Test1234!' })).body.token;
     // MA legt eine Abwesenheit an und löscht sie (landet im Papierkorb)
-    const D = '2026-09-15';
+    // Relativ, nicht fest: Ein fest eingetragenes Zukunftsdatum wird irgendwann „heute" und dann
+    // „gestern" — und der Test faellt an einem einzigen Tag um, ohne dass sich etwas geaendert
+    // haette. (Genau so geschehen in trash-access und ausstellen-zweifaktor, 25./26.08.2026.)
+    const D = new Date(Date.now() + 20 * 24 * 3600 * 1000)
+      .toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
     const a = (await req('POST','/api/absences', tok, { type:'krank', date_from:D, date_to:D })).body.absence;
     await req('DELETE','/api/absences/'+a.id, tok);
     ok('Setup: Abwesenheit angelegt + gelöscht', !!(a && a.id));
@@ -67,7 +71,7 @@ function req(method, p, token, body) {
     }));
     ok('Antragsformular öffnet sich (neuer Antrag)', form.overlay && form.isNew, JSON.stringify(form));
     ok('Vorbefüllt: Typ krank', form.type === 'krank', JSON.stringify(form));
-    ok('Vorbefüllt: Datum 2026-09-15', form.from === D && form.to === D, JSON.stringify(form));
+    ok('Vorbefüllt: dasselbe Datum wie die gelöschte Abwesenheit', form.from === D && form.to === D, JSON.stringify(form) + ' erwartet ' + D);
 
     // --- Admin: sieht „Wiederherstellen" statt „Neu beantragen" ---
     await p.evaluate(() => { localStorage.clear(); });
