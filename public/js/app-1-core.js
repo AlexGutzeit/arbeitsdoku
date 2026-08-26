@@ -247,7 +247,13 @@ document.addEventListener('scroll', (e) => {
 // Legende oder eine weitere Karte aus dem Bild.
 const _FLAECHE_SEL = '.timeline-scroll, .board-scroll';
 const _FLAECHE_LUFT = 10;    // schmaler Rand, damit die Karte nicht am Bildschirmrand klebt
-const _FLAECHE_MIN = 260;    // darunter wird die Fläche unbrauchbar → dann lieber die Seite scrollen
+// Unterhalb dieser Höhe lohnt sich eine eigene Scrollfläche nicht mehr: Man wischt in einem Kasten,
+// der kaum mehr zeigt als drei Stunden, während die Seite darüber starr stehenbleibt — und wer auf
+// den Kennzahlen wischt, bewegt gar nichts. Dann lieber die ganze Seite scrollen lassen, wie es
+// Wochen- und Monatsansicht ohnehin tun (Alex, 26.08.2026: „so hätte ich es auch gern").
+// 260 war zu niedrig: Auf einem 830-px-Handy blieben 317 px übrig — knapp darüber, also blieb es
+// beim Kasten.
+const _FLAECHE_MIN = 440;
 
 function passeScrollflaechenAn() {
   const main = document.querySelector('.main');
@@ -265,7 +271,9 @@ function passeScrollflaechenAn() {
     const obenImDokument = box.getBoundingClientRect().top + scrollY;
     const darunter = Math.max(0, main.getBoundingClientRect().bottom - karte.getBoundingClientRect().bottom);
     const platz = window.innerHeight - obenImDokument - darunter - _FLAECHE_LUFT;
-    const neu = Math.max(_FLAECHE_MIN, Math.round(platz)) + 'px';
+    // Zu wenig Platz? Dann gar keine Begrenzung — die Karte nimmt ihre volle Höhe und die SEITE
+    // scrollt. Das ist dasselbe Verhalten wie im Wochen- und Monatsraster.
+    const neu = platz < _FLAECHE_MIN ? 'none' : Math.round(platz) + 'px';
     if (box.style.maxHeight !== neu) box.style.maxHeight = neu;   // unnötige Neuberechnung vermeiden
   });
 }

@@ -345,14 +345,8 @@ async function renderDashboardContent() {
   mainEl.querySelectorAll('.btn-continue').forEach(btn => {
     btn.addEventListener('click', (e) => { e.stopPropagation(); navigate('/entry/continue/' + btn.dataset.id); });
   });
-  // Timeline zur Kernarbeitszeit scrollen
-  if (S.view === 'day') {
-    const scrollContainer = mainEl.querySelector('.timeline-scroll');
-    if (scrollContainer) {
-      const scrollY = (TL_SCROLL_TO_HOUR - TL_START_HOUR) * TL_HOUR_PX - 20;
-      scrollContainer.scrollTop = Math.max(0, scrollY);
-    }
-  }
+  // Das frühere Scrollen auf 6:00 ist entfallen: Das Raster beginnt jetzt selbst kurz vor dem
+  // ersten Eintrag, es gibt also nichts mehr zu überspringen.
 }
 
 // --- Timeline Rendering (Tagansicht) ---
@@ -361,14 +355,38 @@ function renderTimelineHtml(entries, absences, verstoesse) {
     return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge an diesem Tag</p></div>';
   }
 
-  const totalH = (TL_END_HOUR - TL_START_HOUR) * TL_HOUR_PX;
+  // Nur die Stunden zeigen, die der Tag wirklich braucht (Alex, 26.08.2026).
+  //
+  // Vorher wurden immer 00:00–24:00 gezeichnet — 1200 px, davon oben sechs und unten meist sieben
+  // Stunden leeres Raster. Auf dem Handy blieben dadurch von 830 px Bildschirm 317 px Verlauf, in
+  // dem man erst scrollen musste. Jetzt beginnt das Raster eine Stunde vor dem ersten Eintrag und
+  // endet eine Stunde nach dem letzten; mindestens acht Stunden, damit ein einzelner kurzer
+  // Auftrag kein Briefmarken-Raster ergibt.
+  const grenzen = (() => {
+    const min = [], max = [];
+    for (const e of entries) {
+      const a = azMinuten(e.time_from), b2 = azMinuten(e.time_to);
+      if (a !== null && b2 !== null && b2 > a) { min.push(a); max.push(b2); }
+    }
+    if (!min.length) return { von: 6, bis: 18 };                    // nur Abwesenheiten: Kernzeit
+    let von = Math.max(TL_START_HOUR, Math.floor(Math.min(...min) / 60) - 1);
+    let bis = Math.min(TL_END_HOUR, Math.ceil(Math.max(...max) / 60) + 1);
+    while (bis - von < 8 && (von > TL_START_HOUR || bis < TL_END_HOUR)) {
+      if (von > TL_START_HOUR) von--;
+      if (bis - von < 8 && bis < TL_END_HOUR) bis++;
+    }
+    return { von, bis };
+  })();
+  const VON = grenzen.von, BIS = grenzen.bis;
+
+  const totalH = (BIS - VON) * TL_HOUR_PX;
   const isSingle = S.user.role === 'mitarbeiter';
   const currentDay = formatDateISO(S.currentDate);
 
   // Stundenleiste
   let hoursHtml = '<div class="timeline-hours-body" style="height:' + totalH + 'px">';
-  for (let h = TL_START_HOUR; h <= TL_END_HOUR; h++) {
-    const y = (h - TL_START_HOUR) * TL_HOUR_PX;
+  for (let h = VON; h <= BIS; h++) {
+    const y = (h - VON) * TL_HOUR_PX;
     hoursHtml += `<span class="tl-hour-label" style="top:${y}px">${String(h).padStart(2,'0')}:00</span>`;
   }
   hoursHtml += '</div>';
@@ -413,7 +431,7 @@ function renderTimelineHtml(entries, absences, verstoesse) {
   let nowLineHtml = '';
   if (today === currentDay) {
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const startMin = TL_START_HOUR * 60;
+    const startMin = VON * 60;
     const y = ((nowMinutes - startMin) / 60) * TL_HOUR_PX;
     if (y >= 0 && y <= totalH) {
       nowLineHtml = `<div class="tl-now-line" style="top:${y}px"></div>`;
@@ -426,10 +444,10 @@ function renderTimelineHtml(entries, absences, verstoesse) {
     const colColor = PALETTE[ci % PALETTE.length];
     let bodyHtml = '';
     // Stundenlinien
-    for (let h = TL_START_HOUR; h <= TL_END_HOUR; h++) {
-      const y = (h - TL_START_HOUR) * TL_HOUR_PX;
+    for (let h = VON; h <= BIS; h++) {
+      const y = (h - VON) * TL_HOUR_PX;
       bodyHtml += `<div class="tl-hour-line" style="top:${y}px"></div>`;
-      if (h < TL_END_HOUR) {
+      if (h < BIS) {
         bodyHtml += `<div class="tl-hour-line half" style="top:${y + TL_HOUR_PX / 2}px"></div>`;
       }
     }
@@ -460,7 +478,7 @@ function renderTimelineHtml(entries, absences, verstoesse) {
     });
     const totalLanes = Math.max(1, lanes.length);
     sorted.forEach(e => {
-      const top = ((e._startMin - TL_START_HOUR * 60) / 60) * TL_HOUR_PX;
+      const top = ((e._startMin - VON * 60) / 60) * TL_HOUR_PX;
       const height = Math.max(20, ((e._endMin - e._startMin) / 60) * TL_HOUR_PX);
       const bg = e.project_id ? colorFor(e.project_id) : colColor;
       const projLabel = e.project_name || e.project_text || '';

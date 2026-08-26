@@ -14,6 +14,26 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-08-26 · „Ich kann nicht mehr weiter nach unten scrollen"
+
+Alex' Meldung vom eigenen Handy. Gemessen bei 393×830: 317 px für den Tagesverlauf, die Seite
+selbst unbeweglich. Der Verlauf scrollte in sich — wer auf Kennzahlen oder Filtern wischte, bewegte
+gar nichts.
+
+**Die Absicht stand schon im Code:** `_FLAECHE_MIN = 260  // darunter wird die Fläche unbrauchbar →
+dann lieber die Seite scrollen`. Die Schwelle griff nur nie, weil 317 knapp darüber lag — und 317 px
+sind praktisch genauso unbrauchbar wie 260. Schwelle auf 440, und darunter bekommt die Fläche gar
+keine Begrenzung mehr.
+
+**Das allein wäre eine Verschlechterung gewesen.** Das Raster zeichnete immer 00:00–24:00 (1200 px)
+und sprang danach auf 6:00. Ohne Begrenzung wäre man oben in sechs Stunden Leere gelandet. Deshalb
+zeichnet es jetzt nur noch die Stunden des Tages — eine davor, eine danach, mindestens acht. Damit
+ist auch das Scrollen auf 6:00 ersatzlos entfallen: Es gibt nichts mehr zu überspringen.
+
+Bemerkenswert an dem Fall: Der Ärger kam von einer Zahl, die jemand (ich, drei Wochen früher)
+bewusst gesetzt hatte — mit dem richtigen Gedanken und einem zu niedrigen Wert. Erst ein echtes
+Gerät in echter Hand zeigte es.
+
 ### 2026-08-26 · Gesetzesverstöße sichtbar machen — und was dabei still schiefgehen kann
 
 Die App kannte ArbZG und JArbSchG längst. Sie prüfte nur an einer einzigen Stelle: als Warnzeile im
@@ -854,3 +874,8 @@ Ansichten, Chef- wie Mitarbeiter-Sicht, samt der Randwoche, die über den Monats
 Warn-Schalter: `node tests/warn-schalter-ui.js` (Standard ist an — auch bei gescheitertem Abruf und
 bei unvollständigem PUT; es gilt die Einstellung des Betrachters, niemand kann eigene Verstöße
 verstecken; Ausblenden ändert keine Zahl; der Hinweis beim Eintragen bleibt trotzdem stehen).
+
+Tagesverlauf am Handy: `node tests/handy-verlauf-ui.js` (unter der Schwelle scrollt die SEITE und der
+Verlauf hat keine Begrenzung mehr; das Raster passt sich dem Tag an — normaler Tag, sehr langer Tag,
+einzelner Termin mit Mindestbreite; die Blockpositionen stimmen relativ zum verschobenen
+Rasteranfang; am Rechner und in Woche/Monat bleibt alles unverändert).

@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**191 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**192 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -112,6 +112,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `geburtstag-freigabe.js` | Geburtstags-Freigabe: Der Mitarbeiter sieht sein hinterlegtes Datum und entscheidet selbst, |
 | `geburtstag-ui.js` | Geburtstags-Einblendung auf der Willkommensseite. |
 | `geheimnis-krypto.js` | Verschlüsselung der TOTP-Geheimnisse und der Notfall-Schalter (geheimnis.js). |
+| `handy-verlauf-ui.js` | Der Tagesverlauf auf dem Handy: Seite scrollt, Raster passt sich dem Tag an (Alex, 26.08.2026) |
 | `hardening-b5b6.js` | API-Test (B5 + B6): |
 | `hoechstarbeitszeit-ui.js` | Hinweis bei Überschreitung der gesetzlichen Höchstarbeitszeit. |
 | `hoechstzeit-komplex-ui.js` | Die unangenehmen Fälle rund um Anwesenheit, Warnung und Pausenvorschlag. |

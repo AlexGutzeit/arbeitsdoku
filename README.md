@@ -225,6 +225,13 @@ Verliert der einzige Admin sein Handy, hilft der Notfall-Schalter
 
 Kern-Zeiterfassung. Eintrag mit Datum, Von/Bis, Pause, Arbeitsort, Kunde, Projekt, Beschreibung und optionalem „Regie"-Vermerk. **Vorbelegung der Zeiten:** „Von" schließt an den letzten Eintrag des Tages an; gibt es keinen, gilt die geplante Startzeit, sonst der **Arbeitsbeginn** (je Mitarbeiter, sonst Firmenwert). „Bis" ist die aktuelle Uhrzeit — und **nie vor „Von"**: Wer um 06:30 bucht, obwohl der Arbeitsbeginn 07:00 ist, bekommt 06:30–06:30 statt einer unmöglichen Spanne. Läge die Endzeit eines bereits gebuchten Eintrags nach „jetzt" (Tag im Voraus gebucht), bleibt „Von" stehen und „Bis" zieht nach. **Die Pause wird mit dem REST zur Firmenpause vorbelegt:** `max(0, Firmenpause − heute schon erfasste Pausen)` für denselben Mitarbeiter am selben Tag. Firmenpause 30 → erster Auftrag 30, danach 0; wurden im ersten nur 15 genommen, schlägt der nächste 15 vor, davon 10 genommen → der dritte 5, bis 0. Es zählen **alle** Einträge des Tages, auch vom Chef nachgetragene: Es ist der Arbeitstag des Mitarbeiters, unabhängig davon, wer ihn erfasst hat. Steht schon etwas, erklärt eine kleine Zeile unter dem Feld warum („Firmenpause 30 min · heute schon 20 min erfasst"); beim ersten Eintrag bleibt sie leer. Bei **Übernahme aus der Planung** gilt der geplante Wert nur, solange der Tag leer ist; sonst gewinnt die Restpause. **Beim Bearbeiten** bleibt die gespeicherte Pause unangetastet.
 
+**Am Handy scrollt die Seite, nicht der Kasten.** Bleibt für den Tagesverlauf weniger als rund 440 px
+übrig, bekommt er keine Höhenbegrenzung mehr und die **Seite scrollt als Ganzes** — wie im Wochen-
+und Monatsraster. Dazu zeichnet das Raster nur noch die Stunden, die der Tag wirklich braucht: eine
+Stunde vor dem ersten Eintrag bis eine Stunde nach dem letzten, mindestens acht Stunden. Vorher
+waren es immer 00:00–24:00, also oben sechs und unten meist sieben Stunden leeres Raster, das man
+erst wegscrollen musste. Am Rechner ist genug Platz, dort bleibt die eigene Scrollfläche.
+
 **Was am einzelnen Eintrag steht:** In der **Tagesansicht** zeigt ein Block die Spanne und daneben
 die **Nettostunden** — `07:30 – 15:30 · 7:30`; die gebuchte Pause steht darunter. Ist ein Block zu
 kurz für das volle Layout (unter einer Stunde), erscheinen Netto und Pause **nur dann**, wenn eine
