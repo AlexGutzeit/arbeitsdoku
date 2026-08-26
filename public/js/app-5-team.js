@@ -2039,6 +2039,7 @@ async function renderKonto() {
       </div>` : ''}
       <div class="welcome-section" id="konto-avatar"></div>
       <div class="welcome-section" id="konto-geburtstag"></div>
+      <div class="welcome-section" id="konto-warnungen"></div>
       <div class="welcome-section" id="konto-2fa"><div class="loading"><div class="spinner"></div></div></div>
       <div class="welcome-section" id="konto-passwort"></div>
       <div class="welcome-section" id="konto-geraete" style="display:none"></div>
@@ -2052,6 +2053,7 @@ async function renderKonto() {
   if (fab) fab.style.display = 'none';
   await kontoAvatarKarte();
   await kontoGeburtstagKarte();
+  await kontoWarnungenKarte();
   kontoPasswortKarte();
   await kontoZweiFaktorKarte();
   // Benachrichtigungen: dieselbe Karte wie bisher, nur an einem anderen Ort. initPushCard() baut
@@ -2392,6 +2394,56 @@ async function kontoGeburtstagKarte() {
   };
   if (zeigen && !zeigen.disabled) zeigen.addEventListener('change', speichern);
   if (alter) alter.addEventListener('change', speichern);
+}
+
+// Gesetzliche Warnungen im Zeitnachweis ein- und ausblenden (Alex, 26.08.2026).
+//
+// Es ist eine Einstellung des BETRACHTERS: Wer die Pausen-Hinweise abschaltet, sieht sie nirgends
+// mehr — auch nicht bei Kollegen. Niemand kann damit seine eigenen Verstoesse vor anderen
+// verstecken, und niemandem wird von aussen etwas ausgeblendet.
+//
+// Gruppiert nach THEMA statt nach Gesetz: Nach Gesetz waere fuer einen Erwachsenen der
+// Jugendschutz-Schalter tot und fuer einen Minderjaehrigen der ArbZG-Schalter. So wirkt jeder.
+async function kontoWarnungenKarte() {
+  const k = document.getElementById('konto-warnungen');
+  if (!k) return;
+  let d;
+  try { d = await api('GET', '/api/users/warnungen'); }
+  catch (_) { k.style.display = 'none'; return; }
+
+  const schalter = [
+    ['pausen', 'Zu kurze Pausen', '§ 4 ArbZG bzw. § 11 JArbSchG'],
+    ['arbeitszeit', 'Zu lange Arbeitszeit (Tag und Woche)', '§ 3 ArbZG bzw. § 8 JArbSchG'],
+    ['ruhezeit', 'Zu kurze Ruhezeit bis zum nächsten Tag', '§ 5 ArbZG bzw. § 13 JArbSchG'],
+  ];
+  k.innerHTML = `
+    <h3>&#9888;&#65039; Gesetzliche Warnungen</h3>
+    <p style="margin-top:0">Im Zeitnachweis erscheint ein Warnzeichen, wenn ein Tag oder eine Woche
+      über einer gesetzlichen Grenze liegt. Hier kannst du einzelne davon für dich ausblenden.</p>
+    ${schalter.map(([key, titel, gesetz]) => `
+      <label style="display:flex; align-items:flex-start; gap:.5rem; cursor:pointer; margin-top:.5rem">
+        <input type="checkbox" class="warn-schalter" data-key="${key}" style="width:auto;margin-top:.25rem"${d[key] !== false ? ' checked' : ''}>
+        <span>${esc(titel)}<br><span style="font-size:.78rem;color:var(--text-light)">${esc(gesetz)}</span></span>
+      </label>`).join('')}
+    <div style="font-size:.78rem;color:var(--text-light);margin-top:.7rem">
+      Die Einstellung gilt nur für <strong>deine</strong> Ansicht — bei anderen bleiben die Hinweise
+      sichtbar, und niemand blendet dir etwas aus. Ausblenden ändert nichts an den Zeiten und nichts
+      an den gesetzlichen Pflichten des Betriebs; es nimmt nur den Hinweis weg.
+    </div>`;
+
+  const speichern = async () => {
+    const werte = {};
+    k.querySelectorAll('.warn-schalter').forEach(cb => { werte[cb.dataset.key] = cb.checked; });
+    try {
+      const neu = await api('PUT', '/api/users/warnungen', werte);
+      // Sofort wirksam machen: sonst stimmte der Zeitnachweis erst nach dem naechsten Anmelden.
+      S.warnungen = { pausen: neu.pausen !== false, arbeitszeit: neu.arbeitszeit !== false, ruhezeit: neu.ruhezeit !== false };
+      toast('Gespeichert', 'success');
+    } catch (err) {
+      toast(err.message || 'Konnte nicht gespeichert werden', 'error');
+    }
+  };
+  k.querySelectorAll('.warn-schalter').forEach(cb => cb.addEventListener('change', speichern));
 }
 
 // Eigene Stammdaten, nur lesend. „So hat die Verwaltung dich hinterlegt."

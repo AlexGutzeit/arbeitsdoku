@@ -50,6 +50,7 @@ const S = {
   // Arbeitszeit-Vorgaben der Firma (Beginn, Stunden/Tag, Pause). Einmal je Sitzung geladen und
   // hier gemerkt — sie ändern sich selten und werden an mehreren Stellen zur Vorbelegung gebraucht.
   arbeitszeit: null,
+  warnungen: null,          // persoenliche Warn-Schalter; null = noch nicht geladen ⇒ alles an
 };
 
 // Ein zweiter Tab desselben Geraets haelt sein Anmelde-Token im Speicher DIESER Seite. Wird es
@@ -1227,6 +1228,18 @@ async function ladeArbeitszeit() {
   return S.arbeitszeit;
 }
 function arbeitszeitJetzt() { return S.arbeitszeit || ARBEITSZEIT_RUECKFALL; }
+
+// Die persoenlichen Warn-Schalter — einmal je Sitzung, wie die Firmenwerte darueber.
+// Faellt der Abruf aus, bleibt S.warnungen null und es gilt ALLES AN: Eine Warnung darf nie
+// verschwinden, weil eine Abfrage gescheitert ist.
+async function ladeWarnungen() {
+  if (S.warnungen) return S.warnungen;
+  try {
+    const d = await api('GET', '/api/users/warnungen');
+    if (d) S.warnungen = { pausen: d.pausen !== false, arbeitszeit: d.arbeitszeit !== false, ruhezeit: d.ruhezeit !== false };
+  } catch (_) { /* alles an */ }
+  return S.warnungen;
+}
 
 // ── Abrechnungs-Abschluss ────────────────────────────────────────────────────────────────────
 // Der Stichtag, bis zu dem alles abgerechnet und damit schreibgeschützt ist (null = nichts

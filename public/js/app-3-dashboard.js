@@ -18,6 +18,9 @@ async function renderDashboard() {
 
 async function renderDashboardContent() {
   const _tok = renderToken();
+  // Die persoenlichen Warn-Schalter, einmal je Sitzung. Vor dem Aufbau, damit die Marker beim
+  // ersten Bild schon richtig gefiltert sind und nicht kurz aufblitzen.
+  await ladeWarnungen();
   const range = getDateRange();
   const params = new URLSearchParams({ date_from: range.from, date_to: range.to });
   if (S.filterProjectId) params.set('project_id', S.filterProjectId);
@@ -1303,7 +1306,11 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
       } catch (_) { wochenMin = null; }
     }
 
-    const txt = hoechstzeitWarnung(tagMin, wochenMin, jugendlich);
+    // Derselbe Schalter wie in der Uebersicht (Gruppe „Arbeitszeit"): Wer die Warnungen dort
+    // abgeschaltet hat, soll sie nicht hier doch wieder vorgesetzt bekommen. Der Pausen-Hinweis
+    // unter dem Feld bleibt davon unberuehrt — der erklaert die vorgeschlagene Zahl und warnt nicht.
+    const zeigen = !(S.warnungen && S.warnungen.arbeitszeit === false);
+    const txt = zeigen ? hoechstzeitWarnung(tagMin, wochenMin, jugendlich) : '';
     warnEl.textContent = txt ? '⚠️ ' + txt : '';
     warnEl.style.display = txt ? '' : 'none';
   };

@@ -431,6 +431,8 @@ async function initDatabase() {
   ensureSitzungSchema(db);
   // Empfaenger fuer verschluesselte Sicherungen (idempotent, hier UND im Restore-Pfad)
   ensureBackupEmpfaengerSchema(db);
+  // Persoenliche Schalter fuer die Gesetzeswarnungen (idempotent, hier UND im Restore-Pfad)
+  ensureWarnungSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -964,6 +966,7 @@ function ensureAuditSchema(targetDb) {
   ensureGeburtstagSchema(targetDb);
   ensureSitzungSchema(targetDb);
   ensureBackupEmpfaengerSchema(targetDb);
+  ensureWarnungSchema(targetDb);
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
@@ -1276,6 +1279,36 @@ function ensureProjectSchema(targetDb) {
     `);
   } catch (e) {
     console.error('ensureProjectSchema fehlgeschlagen:', e.message);
+  }
+}
+
+// Persoenliche Schalter fuer die Gesetzeswarnungen im Zeitnachweis (Alex, 26.08.2026).
+//
+// Es ist eine ANZEIGE-Einstellung des BETRACHTERS, nicht der betroffenen Person: Wer die
+// Pausen-Hinweise abschaltet, sieht sie nirgends mehr — auch nicht bei Kollegen. Umgekehrt kann
+// niemand seine eigenen Verstoesse vor dem Chef verstecken (Entscheidung Alex).
+//
+// Fehlt die Zeile, sind ALLE Warnungen an. Das ist der Sinn des Default 1: Wer nichts einstellt,
+// bekommt sie — abschalten muss man bewusst.
+//
+// Gruppiert nach THEMA, nicht nach Gesetz: Nach Gesetz waere bei jedem Menschen die Haelfte der
+// Schalter wirkungslos (ein Erwachsener sieht nie eine JArbSchG-Warnung, ein Minderjaehriger nie
+// eine nach ArbZG). So wirkt jeder Schalter bei jedem.
+// Idempotent — laeuft bei Init UND nach Backup-Restore ([[feedback_abwaertskompatibilitaet]]).
+function ensureWarnungSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS warnung_prefs (
+        user_id     INTEGER PRIMARY KEY,
+        pausen      INTEGER DEFAULT 1,
+        arbeitszeit INTEGER DEFAULT 1,
+        ruhezeit    INTEGER DEFAULT 1,
+        geaendert   TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (e) {
+    console.error('ensureWarnungSchema fehlgeschlagen:', e.message);
   }
 }
 

@@ -154,6 +154,49 @@ router.get('/geburtstag-freigabe', authenticate, (req, res) => {
   });
 });
 
+// Eigene Warn-Schalter lesen und setzen. Wie bei der Geburtstags-Freigabe immer gegen
+// req.user.id — es gibt keinen Weg, damit die Anzeige eines anderen zu verstellen.
+// FEHLENDE Zeile heisst: alles an. Wer nichts einstellt, bekommt die Warnungen.
+// MUSS vor "/:id" stehen.
+router.get('/warnungen', authenticate, (req, res) => {
+  const db = getDb();
+  let z = null;
+  try { z = db.prepare('SELECT pausen, arbeitszeit, ruhezeit FROM warnung_prefs WHERE user_id = ?').get(req.user.id); } catch (_) {}
+  res.json({
+    pausen: z ? !!z.pausen : true,
+    arbeitszeit: z ? !!z.arbeitszeit : true,
+    ruhezeit: z ? !!z.ruhezeit : true,
+  });
+});
+
+router.put('/warnungen', authenticate, (req, res) => {
+  const db = getDb();
+  const b = req.body || {};
+  // Fehlt ein Feld, bleibt es AN — ein unvollstaendiger Aufruf darf keine Warnung stillegen.
+  const werte = {
+    pausen: b.pausen === undefined ? 1 : (b.pausen ? 1 : 0),
+    arbeitszeit: b.arbeitszeit === undefined ? 1 : (b.arbeitszeit ? 1 : 0),
+    ruhezeit: b.ruhezeit === undefined ? 1 : (b.ruhezeit ? 1 : 0),
+  };
+  try {
+    db.prepare(`INSERT INTO warnung_prefs (user_id, pausen, arbeitszeit, ruhezeit, geaendert)
+                VALUES (?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f','now'))
+                ON CONFLICT(user_id) DO UPDATE SET pausen = excluded.pausen,
+                  arbeitszeit = excluded.arbeitszeit, ruhezeit = excluded.ruhezeit,
+                  geaendert = excluded.geaendert`)
+      .run(req.user.id, werte.pausen, werte.arbeitszeit, werte.ruhezeit);
+    // Abgeschaltete Warnungen gehoeren ins Protokoll: Es ist eine bewusste Entscheidung gegen einen
+    // gesetzlichen Hinweis, und sie sollte nachvollziehbar bleiben.
+    const aus = Object.keys(werte).filter(k => !werte[k]);
+    logAudit(db, { userId: req.user.id, username: req.user.username, action: 'warnungen_geaendert',
+      details: aus.length ? 'ausgeblendet: ' + aus.join(', ') : 'alle Warnungen sichtbar', ip: req.ip });
+    res.json({ pausen: !!werte.pausen, arbeitszeit: !!werte.arbeitszeit, ruhezeit: !!werte.ruhezeit });
+  } catch (e) {
+    console.error('Warn-Schalter fehlgeschlagen:', e.message);
+    res.status(500).json({ error: 'Interner Serverfehler' });
+  }
+});
+
 router.put('/geburtstag-freigabe', authenticate, (req, res) => {
   const db = getDb();
   const zeigen = !!(req.body || {}).zeigen;

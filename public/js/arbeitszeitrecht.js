@@ -334,8 +334,12 @@ function pruefeEintraege(eintraege, opt) {
   return index;
 }
 
-const verstossTag   = (index, userId, datum) => (index && index.tag[Number(userId) + '|' + datum]) || [];
-const verstossWoche = (index, userId, datum) => (index && index.woche[Number(userId) + '|' + montagDer(datum)]) || [];
+// Nachschlagen — schon gefiltert nach den Schaltern des Betrachters (siehe unten). Der INDEX bleibt
+// vollstaendig; ausgeblendet wird erst beim Anzeigen. So aendert ein Schalter nie eine Rechnung.
+const verstossTag   = (index, userId, datum) =>
+  verstoesseSichtbar((index && index.tag[Number(userId) + '|' + datum]) || []);
+const verstossWoche = (index, userId, datum) =>
+  verstoesseSichtbar((index && index.woche[Number(userId) + '|' + montagDer(datum)]) || []);
 
 // ── Darstellung ─────────────────────────────────────────────────────────────────────────────────
 //
@@ -397,3 +401,33 @@ function verstossAusSchluessel(index, schluessel) {
   const [ebene, uid, datum] = String(schluessel || '').split('|');
   return ebene === 'woche' ? verstossWoche(index, uid, datum) : verstossTag(index, uid, datum);
 }
+
+// ── Persoenliche Schalter ───────────────────────────────────────────────────────────────────────
+//
+// Jeder darf Warnungen fuer sich ausblenden (Alex, 26.08.2026). Es ist eine Einstellung des
+// BETRACHTERS: Wer die Pausen-Hinweise abschaltet, sieht sie nirgends mehr — auch nicht bei
+// Kollegen. Umgekehrt kann niemand seine eigenen Verstoesse vor dem Chef verstecken.
+//
+// Gruppiert nach THEMA statt nach Gesetz, damit jeder Schalter bei jedem Menschen wirkt: Nach
+// Gesetz waere fuer einen Erwachsenen der Jugendschutz-Schalter tot und fuer einen Minderjaehrigen
+// der ArbZG-Schalter.
+//
+// Fehlt die Einstellung (noch nicht geladen, alter Server), gilt ALLES AN — eine Warnung
+// auszublenden muss eine bewusste Entscheidung sein, kein Nebeneffekt.
+const AZ_GRUPPE = {
+  'pause-erwachsen': 'pausen',      'pause-jugend': 'pausen',
+  'tag-erwachsen': 'arbeitszeit',   'tag-jugend': 'arbeitszeit',
+  'woche-erwachsen': 'arbeitszeit', 'woche-jugend': 'arbeitszeit',
+  'ruhezeit-erwachsen': 'ruhezeit', 'ruhezeit-jugend': 'ruhezeit',
+};
+
+function verstossSichtbar(v) {
+  const w = (typeof S !== 'undefined' && S.warnungen) || null;
+  if (!w) return true;
+  const gruppe = AZ_GRUPPE[v.art];
+  return !gruppe || w[gruppe] !== false;
+}
+
+// Filtert eine Liste auf das, was der Betrachter sehen will. EINE Stelle — sonst wenden die drei
+// Ansichten und das Formular die Einstellung unterschiedlich an.
+const verstoesseSichtbar = (liste) => (liste || []).filter(verstossSichtbar);
