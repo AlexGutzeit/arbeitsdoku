@@ -24,19 +24,37 @@ async function renderDashboardContent() {
   if (S.filterSearch) params.set('search', S.filterSearch);
   if (S.filterRegie !== '') params.set('regie', S.filterRegie);
 
-  // Ungefilterte Einträge für Soll/Ist-Berechnung laden
-  const allParams = new URLSearchParams({ date_from: range.from, date_to: range.to });
+  // Ungefilterte Einträge für Soll/Ist-Berechnung — und zugleich die Grundlage der
+  // Gesetzesprüfung. Dafür wird der Zeitraum ETWAS WEITER geladen als angezeigt wird:
+  //
+  //   * einen Tag vor den Anfang, weil die Ruhezeit den Feierabend des Vortags braucht
+  //   * bis zum Sonntag der letzten angezeigten Woche, weil eine Wochengrenze nur an einer
+  //     VOLLSTÄNDIGEN Woche zu beurteilen ist — im Monatsraster ragt die erste und letzte
+  //     Kalenderwoche über den Monatsrand hinaus (Entscheidung Alex, 26.08.2026).
+  //
+  // Gemessen am Prod-Klon kostet das wenig: Juli 286 → 314 Einträge, Woche 81 → 82, Tag 26 → 27.
+  //
+  // ACHTUNG: Diese Zusatztage dürfen NIE in eine Anzeige oder Summe geraten. Deshalb wird
+  // S.allEntries sofort auf den sichtbaren Bereich geschnitten, und an die Ansichten geht
+  // ausschliesslich der fertige Prüf-INDEX, nie diese Liste.
+  const pruefVon = plusTage(montagDer(range.from), -1);
+  const pruefBis = plusTage(montagDer(range.to), 6);
+  const weitParams = new URLSearchParams({ date_from: pruefVon, date_to: pruefBis });
   const hasFilter = S.filterProjectId || S.filterSearch || S.filterRegie !== '';
 
+  let weitEintraege = [];
   try {
-    const data = await api('GET', '/api/entries?' + params.toString());
-    if (!data) return;
-    S.entries = data.entries;
+    const weitData = await api('GET', '/api/entries?' + weitParams.toString());
+    if (!weitData) return;
+    weitEintraege = weitData.entries;
+    S.allEntries = weitEintraege.filter(e => e.date >= range.from && e.date <= range.to);
+
     if (hasFilter) {
-      const allData = await api('GET', '/api/entries?' + allParams.toString());
-      S.allEntries = allData ? allData.entries : S.entries;
+      const data = await api('GET', '/api/entries?' + params.toString());
+      if (!data) return;
+      S.entries = data.entries;
     } else {
-      S.allEntries = S.entries;
+      S.entries = S.allEntries;      // dieselbe Abfrage, nur enger — kein zweiter Abruf
     }
   } catch (e) {
     if (renderStale(_tok)) return;                 // inzwischen woanders → nichts überschreiben
@@ -45,6 +63,14 @@ async function renderDashboardContent() {
     return;
   }
   if (renderStale(_tok)) return;                   // verspätete Antwort verwerfen
+
+  // Gesetzliche Verstösse einmal je Neuaufbau ermitteln. Die Wache auf `typeof` ist kein Zierrat:
+  // Behält ein Browser eine alte index.html, die arbeitszeitrecht.js gar nicht anfordert, gäbe es
+  // sonst mitten im Aufbau einen Fehler und die Hauptseite bliebe beim Spinner stehen. So
+  // degradiert ein halber Cache zu „keine Zeichen" statt zu „keine Übersicht".
+  const verstoesse = (typeof pruefeEintraege === 'function')
+    ? pruefeEintraege(weitEintraege, { ladeVon: pruefVon, ladeBis: pruefBis })
+    : { tag: {}, woche: {} };
 
   // Summenstunden: gefilterte Ansicht für Anzeige
   let visibleEntries = S.entries;
@@ -149,11 +175,11 @@ async function renderDashboardContent() {
   // Entscheidung: Timeline (Tag), Wochenraster, Monatsraster
   let contentHtml = '';
   if (S.view === 'day') {
-    contentHtml = renderTimelineHtml(visibleEntries, filteredAbsences);
+    contentHtml = renderTimelineHtml(visibleEntries, filteredAbsences, verstoesse);
   } else if (S.view === 'week') {
-    contentHtml = renderWeekGridHtml(visibleEntries, range, filteredAbsences);
+    contentHtml = renderWeekGridHtml(visibleEntries, range, filteredAbsences, verstoesse);
   } else {
-    contentHtml = renderMonthGridHtml(visibleEntries, range, filteredAbsences);
+    contentHtml = renderMonthGridHtml(visibleEntries, range, filteredAbsences, verstoesse);
   }
 
   mainEl.innerHTML = `
@@ -308,7 +334,7 @@ async function renderDashboardContent() {
 }
 
 // --- Timeline Rendering (Tagansicht) ---
-function renderTimelineHtml(entries, absences) {
+function renderTimelineHtml(entries, absences, verstoesse) {
   if (entries.length === 0 && !(absences || []).length) {
     return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge an diesem Tag</p></div>';
   }
@@ -496,7 +522,7 @@ function renderTimelineHtml(entries, absences) {
 }
 
 // --- Wochenraster ---
-function renderWeekGridHtml(entries, range, absences) {
+function renderWeekGridHtml(entries, range, absences, verstoesse) {
   const dayNames = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
   const dayNamesShort = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
@@ -577,7 +603,7 @@ function renderWeekGridHtml(entries, range, absences) {
 }
 
 // --- Monatsraster ---
-function renderMonthGridHtml(entries, range, absences = []) {
+function renderMonthGridHtml(entries, range, absences = [], verstoesse) {
   // Kalenderwochen des Monats ermitteln
   const weeks = getCalendarWeeks(range.from, range.to);
   const columns = getGridColumns(entries, range);
