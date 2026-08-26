@@ -465,11 +465,8 @@ function renderTimelineHtml(entries, absences) {
     // calcActualHours fasst ueberlappende Auftraege zusammen: Wer zwei Eintraege zur selben Zeit
     // hat, arbeitet trotzdem nur einmal. Die Pause wird passend dazu SUMMIERT, genau wie es die
     // Nettorechnung tut — so geht brutto minus Pause auch sichtbar auf.
-    const spaltenNetto = calcActualHours(col.entries);
-    const spaltenPause = col.entries.reduce((sum, e) => sum + (Number(e.break_minutes) || 0), 0);
-    const summeHtml = col.entries.length
-      ? `<div class="tl-col-header-sum">${fmtH(spaltenNetto)}${spaltenPause > 0 ? ` · ${spaltenPause} min Pause` : ''}</div>`
-      : '';
+    const summeText = summeFuer(col.entries);
+    const summeHtml = summeText ? `<div class="tl-col-header-sum">${summeText}</div>` : '';
     const dayAbsences = getAbsencesForDay(col.id, currentDay, absences);
     const colBannerHtml = dayAbsences.map(a => {
       const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
@@ -529,7 +526,10 @@ function renderWeekGridHtml(entries, range, absences) {
   let headerHtml = '<th class="grid-row-header">Tag</th>';
   columns.forEach((col, i) => {
     const c = PALETTE[i % PALETTE.length];
-    headerHtml += `<th class="grid-col-header" style="color:${c}">${esc(col.name)}</th>`;
+    const summeText = summeFuer(entries.filter(e => e.user_id === col.id));
+    headerHtml += `<th class="grid-col-header" style="color:${c}">${esc(col.name)}`
+      + (summeText ? `<div class="grid-col-header-sum">${summeText}</div>` : '')
+      + `</th>`;
   });
 
   let bodyHtml = '';
@@ -598,7 +598,10 @@ function renderMonthGridHtml(entries, range, absences = []) {
   let headerHtml = '<th class="grid-row-header">KW</th>';
   columns.forEach((col, i) => {
     const c = PALETTE[i % PALETTE.length];
-    headerHtml += `<th class="grid-col-header" style="color:${c}">${esc(col.name)}</th>`;
+    const summeText = summeFuer(entries.filter(e => e.user_id === col.id));
+    headerHtml += `<th class="grid-col-header" style="color:${c}">${esc(col.name)}`
+      + (summeText ? `<div class="grid-col-header-sum">${summeText}</div>` : '')
+      + `</th>`;
   });
 
   let bodyHtml = '';
@@ -661,6 +664,26 @@ function renderMonthGridHtml(entries, range, absences = []) {
 }
 
 // --- Grid-Hilfsfunktionen ---
+// Summe einer Person ueber den angezeigten Zeitraum — Kopfzeile in Tag, Woche und Monat.
+//
+// calcActualHours gruppiert selbst nach Nutzer UND Datum und fasst ueberlappende Auftraege
+// zusammen: Wer zwei Eintraege zur selben Zeit hat, arbeitet trotzdem nur einmal. Die Pause wird
+// passend dazu summiert, damit brutto minus Pause sichtbar aufgeht.
+//
+// Pausen unter einer Stunde stehen in Minuten („45 min Pause"), darueber als Zeit („2:30 Pause") —
+// eine Woche mit „150 min Pause" muesste man im Kopf umrechnen.
+function pauseText(minuten) {
+  if (minuten <= 0) return '';
+  return minuten < 60 ? `${minuten} min Pause` : `${fmtH(minuten / 60)} Pause`;
+}
+function summeFuer(eintraege) {
+  if (!eintraege.length) return '';
+  const netto = calcActualHours(eintraege);
+  const pause = eintraege.reduce((s, e) => s + (Number(e.break_minutes) || 0), 0);
+  const p = pauseText(pause);
+  return fmtH(netto) + (p ? ' · ' + p : '');
+}
+
 function getGridColumns(entries, range) {
   if (S.user.role === 'mitarbeiter') {
     return [{ id: S.user.id, name: S.user.name }];

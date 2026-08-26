@@ -950,6 +950,14 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Dieselbe Summe im Wochen- und Monatsraster. */
+.grid-col-header-sum {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.8;
+  margin-top: 1px;
+  white-space: nowrap;
+}
 /* Nettostunden im Zeitstrahl: gleiche Zeile wie die Uhrzeit, aber ruhiger — die Spanne bleibt
    die Hauptinformation, die Nettozahl ergaenzt sie. */
 .tl-entry .tl-e-netto {

@@ -148,6 +148,29 @@ const textVon = (seite, wahl, id) => seite.evaluate((w, i) => {
     ok('ohne Pause steht dort nur die Nettozahl', (await stundenFeld(kurzOhnePause.id)) === '0:45',
       await stundenFeld(kurzOhnePause.id));
 
+    console.log('\n── Dieselbe Summe im Wochen- und Monatskopf ──');
+    // Die schaerfste Probe fuer eine Summe ist eine ZWEITE, unabhaengig gebildete Summe: Die
+    // Kopfzahlen aller Spalten muessen die grosse Zahl oben ergeben. Waere eine der beiden
+    // Rechnungen falsch — etwa weil Ueberlappungen doppelt zaehlen —, ginge das nicht auf.
+    const inMinuten = (t) => { const m = /(-?)(\d+):(\d{2})/.exec(t || ''); return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : null; };
+    for (const [ansicht, name] of [['week', 'Woche'], ['month', 'Monat']]) {
+      await p.evaluate((v, d) => { S.view = v; S.currentDate = new Date(d + 'T12:00:00'); render(); }, ansicht, TAG);
+      await sleep(2500);
+      const kopfzahl = await p.evaluate(() => {
+        // Klein/Gross egal: die Karte setzt den Text per CSS in Grossbuchstaben, innerText liefert
+        // ihn genau so zurueck („NETTOSTUNDEN") — ein exakter Vergleich findet sie nie.
+        const k = [...document.querySelectorAll('.summary-card')].find(c => /nettostunden/i.test(c.innerText));
+        return k ? k.querySelector('.value').innerText.trim() : null;
+      });
+      const spalten = await p.evaluate(() => [...document.querySelectorAll('.grid-col-header-sum')].map(e => e.innerText.trim()));
+      const summe = spalten.reduce((s, t) => s + (inMinuten(t) || 0), 0);
+      ok(`${name}: es gibt ueberhaupt Spaltensummen`, spalten.length > 0, JSON.stringify(spalten));
+      ok(`${name}: die Spaltensummen ergeben die Kopfzahl (${kopfzahl})`,
+        summe === inMinuten(kopfzahl), `${summe} min gegen ${inMinuten(kopfzahl)} min`);
+      ok(`${name}: die Pause steht als Zeit, nicht als dreistellige Minutenzahl`,
+        spalten.every(t => !/\b\d{3,} min\b/.test(t)), JSON.stringify(spalten.filter(t => /\b\d{3,} min\b/.test(t))));
+    }
+
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.slice(0, 2).join(' | '));
   } catch (e) {
     console.error(e); fail++; fails.push('Ausnahme: ' + e.message);
