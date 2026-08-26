@@ -151,10 +151,42 @@ const tagesbild = async (p) => {
     const sofort = await tagesbild(a.seite);
     ok('… und wirkt sofort, ohne neues Anmelden', !/Ruhezeit/.test(sofort.arten), sofort.arten);
 
+    console.log('\n── Der Hinweis BEIM EINTRAGEN bleibt, auch wenn alles ausgeblendet ist ──');
+    // Alex' Klarstellung: Die Schalter blenden nur die Zeichen in den Uebersichten aus. Beim
+    // Buchen muss der Hinweis stehenbleiben — das ist der Moment, in dem man es noch richtig
+    // machen kann.
+    await req('PUT', '/api/users/warnungen', admin, { pausen: false, arbeitszeit: false, ruhezeit: false });
+    await a.seite.evaluate(() => { S.warnungen = null; });
+    await a.seite.evaluate(() => ladeWarnungen());
+    await a.seite.evaluate(() => { location.hash = '#/'; }); await sleep(1200);
+    await a.seite.evaluate((d) => { S.view = 'day'; S.currentDate = new Date(d + 'T12:00:00'); render(); }, TAG);
+    await sleep(2000);
+    ok('in der Uebersicht ist kein Zeichen mehr',
+      (await a.seite.evaluate(() => document.querySelectorAll('.verstoss-zeichen').length)) === 0);
+    // Jetzt dasselbe im Eintrags-Formular.
+    await a.seite.evaluate(() => { const b2 = document.querySelector('.fab, #fab-add, [data-neu]'); if (b2) b2.click(); });
+    await sleep(1500);
+    const imFormular = await a.seite.evaluate(async (uid, datum) => {
+      const setz = (id, v) => { const el = document.getElementById(id); if (el) { el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); } };
+      if (!document.getElementById('ef-date')) return '(kein Formular)';
+      setz('ef-user', String(uid)); setz('ef-date', datum);
+      setz('ef-from', '06:00'); setz('ef-to', '17:30'); setz('ef-break', '30');
+      await new Promise(r => setTimeout(r, 1800));
+      const w2 = document.getElementById('ef-zeit-warnung');
+      return w2 ? w2.textContent.trim() : '(kein Feld)';
+    }, volker.id, TAG);
+    ok('… im Formular steht der Hinweis trotzdem', /Arbeitszeitgesetz|ArbZG/.test(imFormular), `„${imFormular}"`);
+    await req('PUT', '/api/users/warnungen', admin, { pausen: true, arbeitszeit: true, ruhezeit: true });
+
     console.log('\n── Im Protokoll ──');
     const audit = await req('GET', '/api/audit?limit=50', admin);
-    const eintrag = (audit.body.logs || audit.body.entries || []).find(z => z.action === 'warnungen_geaendert');
-    ok('das Abschalten steht im Audit-Log', !!eintrag && /ausgeblendet/.test(eintrag.details || ''), JSON.stringify(eintrag && eintrag.details));
+    // IRGENDEIN Eintrag mit „ausgeblendet" — nicht der neueste: Der Test schaltet zwischendurch
+    // wieder alles ein, und dann steht ganz oben „alle Warnungen sichtbar".
+    const alle = (audit.body.logs || audit.body.entries || []).filter(z => z.action === 'warnungen_geaendert');
+    ok('das Abschalten steht im Audit-Log',
+      alle.some(z => /ausgeblendet/.test(z.details || '')), JSON.stringify(alle.map(z => z.details).slice(0, 4)));
+    ok('… und das Wiedereinschalten ebenso', alle.some(z => /alle Warnungen sichtbar/.test(z.details || '')),
+      JSON.stringify(alle.map(z => z.details).slice(0, 4)));
 
     console.log('\n── Ein unvollständiger Aufruf blendet nichts aus ──');
     // Erst alles ABschalten, dann einen LEEREN Aufruf schicken: Jedes einzelne Feld muss dadurch

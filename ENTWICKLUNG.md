@@ -54,6 +54,26 @@ und verschiebt das ganze Raster — der Fehler fällt erst auf, wenn genug Zelle
 die Prüfung in `tests/barrierefrei-ui.js`, weil deren Regex das Warnzeichen nicht wegstreicht und
 der Text damit als „vorhanden" gilt. Ein `title` gäbe zwei Sprechblasen übereinander.
 
+**Die Schalter kamen nach — und mit ihnen die schärfste Frage des Tages.** Jeder darf Warnungen für
+sich ausblenden. Entscheidend war: *wessen* Einstellung gilt. Zählte die der betroffenen Person,
+könnte ein Mitarbeiter seine eigenen Verstöße vor dem Chef unsichtbar machen. Also gilt die des
+Betrachters. Und die Schalter wirken nur in den Übersichten — beim Eintragen bleibt der Hinweis
+stehen, das ist der Moment, in dem sich etwas richtigstellen lässt (Alex' Klarstellung). Damit ist
+das Formular auf dieselbe Regelmenge umgestellt und meldet jetzt auch Ruhezeit, Erwachsenen-Woche
+und zu kurze Pause.
+
+**Zwei Zusicherungen im Bestand prüften danach etwas anderes, als sie behaupteten.** In
+`hoechstarbeitszeit-ui` stand „bei genau 10:00 wieder weg" gegen eine leere Warnzeile — die dortige
+Buchung hat aber 10 Std Anwesenheit **ohne jede Pause** und verletzt damit § 4 ArbZG wirklich. Statt
+die Prüfung abzuschwächen, prüft sie jetzt gezielt die Tagesgrenze, und eine zweite belegt die
+Pausenmeldung.
+
+**Und im eigenen Test der Schalter steckten zwei stille Fehler.** `tagesbild()` rief `render()`,
+ohne vorher auf den Zeitnachweis zu wechseln — nach dem Abschnitt „Mein Konto" rendert das die
+Kontoseite mit null Spalten, und jede Prüfung auf „kein Zeichen mehr" ist trivial wahr. Der Fall
+„Abruf gescheitert" kam gar nicht vor, weil der Test immer erfolgreich lud; erst mit einem
+ersetzten `ladeWarnungen` biss die Gegenprobe.
+
 **Was die echten Daten zeigten.** Am Prod-Klon: 85 von 738 Personentagen ohne gebuchte Pause bei
 über sechs Stunden Anwesenheit, dazu Tage über zehn Stunden — und ein Fall mit Feierabend 23:30 und
 Arbeitsbeginn 05:45 am Folgetag: 6 Std 15 min Ruhezeit. Das stand seit Monaten so da und war
@@ -830,3 +850,7 @@ Platzhalter) und `node tests/verstoesse-uebersicht-ui.js` (zuerst die Regression
 geladenen Tage dürfen in keine angezeigte Zahl geraten — die erwarteten Werte werden dabei selbst
 ausgerechnet, nicht mit gestern verglichen; danach Marker, Rahmen und Sprechblase in allen drei
 Ansichten, Chef- wie Mitarbeiter-Sicht, samt der Randwoche, die über den Monatsrand ragt).
+
+Warn-Schalter: `node tests/warn-schalter-ui.js` (Standard ist an — auch bei gescheitertem Abruf und
+bei unvollständigem PUT; es gilt die Einstellung des Betrachters, niemand kann eigene Verstöße
+verstecken; Ausblenden ändert keine Zahl; der Hinweis beim Eintragen bleibt trotzdem stehen).

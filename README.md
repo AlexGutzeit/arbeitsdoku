@@ -274,6 +274,22 @@ liegt; der Tooltip nennt dann beide Zahlen. Und: Die Marker rechnen **immer den 
 unabhängig von einem gesetzten Projektfilter — das Gesetz kennt keinen Filter. Auch das sagt der
 Tooltip.
 
+**Warnungen für sich ausblenden:** Unter *Mein Konto → Gesetzliche Warnungen* kann jede Person drei
+Häkchen setzen — **Pausen**, **Arbeitszeit**, **Ruhezeit**. Standard ist **an**; wer nichts
+einstellt, bekommt die Hinweise, abschalten muss man bewusst. Zwei Dinge dazu:
+
+- Es gilt die Einstellung des **Betrachters**, nicht der betroffenen Person. Wer die
+  Pausen-Hinweise abschaltet, sieht sie nirgends mehr — auch nicht bei Kollegen. Umgekehrt kann
+  **niemand seine eigenen Verstöße vor anderen verstecken**.
+- Die Schalter betreffen **nur die Übersichten**. Beim **Eintragen einer Zeit** erscheint der
+  Hinweis weiterhin und lässt sich dort nicht abschalten — das ist der Moment, in dem sich etwas
+  richtigstellen lässt.
+
+Ausblenden ändert keine Zahl und keine Pflicht; jede Änderung steht im Audit-Log. Gruppiert ist
+nach **Thema** statt nach Gesetz, weil nach Gesetz bei jedem Menschen die Hälfte der Schalter
+wirkungslos wäre (ein Erwachsener sieht nie eine JArbSchG-Warnung, ein Minderjähriger nie eine nach
+ArbZG).
+
 Es bleibt ein **Hinweis, keine Rechtsberatung**: Tarifverträge und § 7 ArbZG kennen Abweichungen,
 die die App nicht kennt. Nicht geprüft werden der 24-Wochen-Ausgleich, die verkürzte Ruhezeit nach
 § 5 Abs. 2 ArbZG und die Fünf-Tage-Woche nach § 15 JArbSchG.
