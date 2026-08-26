@@ -939,6 +939,40 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
   opacity: 0.75;
   margin-top: 1px;
 }
+/* Gesetzlicher Verstoss (ArbZG / JArbSchG) in den Uebersichten.
+   Der Rahmen ist ein INNERER SCHATTEN und keine Randlinie: Eine Randlinie macht die Tabellenzelle
+   breiter und verschiebt damit das ganze Raster. box-shadow aendert die Kastengroesse nicht. */
+.verstoss-zeichen {
+  cursor: help;
+  margin-left: 0.3rem;
+  line-height: 1;
+  font-size: 0.95em;
+  vertical-align: baseline;
+}
+/* Blosser Hinweis (48-Std-Woche) — leiser, weil er keinen Verstoss behauptet. */
+.verstoss-zeichen--hinweis { opacity: 0.75; }
+
+.tl-col-header--verstoss,
+.grid-col-header--verstoss {
+  box-shadow: inset 0 0 0 2px var(--warning);
+  border-radius: 4px;
+}
+/* Bewusst OHNE eigenen Hintergrund: Die Zelle traegt in der Wochenansicht schon Wochenend- und
+   Heute-Schattierung; ein dritter Hintergrund wuerde sich damit schlagen. */
+.grid-cell--verstoss { box-shadow: inset 0 0 0 2px var(--warning); }
+.grid-kw-day--verstoss {
+  box-shadow: inset 0 0 0 1px var(--warning);
+  background: var(--warning-light);
+  border-radius: 3px;
+}
+/* Die Wochenzeile im Tages-Spaltenkopf erscheint NUR bei einem Verstoss. */
+.tl-col-header-woche {
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
 /* Tagessumme je Mitarbeiter im Spaltenkopf: ruhiger als der Name, damit die Spalte weiterhin
    ueber den Namen gefunden wird — die Zahl ist die Antwort auf eine Frage, die man stellt. */
 .tl-col-header-sum {

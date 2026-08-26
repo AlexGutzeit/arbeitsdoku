@@ -304,6 +304,25 @@ async function renderDashboardContent() {
       return e ? entryTooltipHtml(e) : '';
     });
   });
+
+  // Erklärung zum Warnzeichen — dieselben vier Ereignisse wie beim Eintrags-Tooltip.
+  //
+  // attachLongPressTooltip bringt den Klick-Riegel mit: Nach einem langen Druck auf das Zeichen in
+  // einer Monatszeile springt die App NICHT zusätzlich in die Tagesansicht.
+  mainEl.querySelectorAll('[data-verstoss]').forEach(el => {
+    const html = () => verstossTooltipHtml(verstossAusSchluessel(verstoesse, el.dataset.verstoss));
+    el.addEventListener('mouseenter', (ev) => {
+      if (!istMauszeiger()) return;
+      showTooltip(html(), ev.clientX, ev.clientY);
+    });
+    el.addEventListener('mousemove', (ev) => {
+      if (!istMauszeiger()) return;
+      if (tooltipEl && tooltipEl.style.display !== 'none') showTooltip(tooltipEl.innerHTML, ev.clientX, ev.clientY);
+    });
+    el.addEventListener('mouseleave', () => { if (istMauszeiger()) hideTooltip(); });
+    attachLongPressTooltip(el, html);
+  });
+
   // Nav-Buttons in Übersichten
   mainEl.querySelectorAll('.nav-to-addr').forEach(btn => {
     btn.addEventListener('click', (e) => { e.stopPropagation(); hideTooltip(); openNav(btn.dataset.addr); });
@@ -492,7 +511,15 @@ function renderTimelineHtml(entries, absences, verstoesse) {
     // hat, arbeitet trotzdem nur einmal. Die Pause wird passend dazu SUMMIERT, genau wie es die
     // Nettorechnung tut — so geht brutto minus Pause auch sichtbar auf.
     const summeText = summeFuer(col.entries);
-    const summeHtml = summeText ? `<div class="tl-col-header-sum">${summeText}</div>` : '';
+    // Tages- UND Wochenverstoss: In der Tagesansicht ist nur ein Tag zu sehen, die Wochengrenze
+    // haengt aber an der ganzen Woche. Sie erscheint deshalb als eigene Zeile — und nur dann,
+    // damit die Tagesansicht nicht dauerhaft eine KW-Zeile bekommt.
+    const tv = verstossTag(verstoesse, col.id, currentDay);
+    const wv = verstossWoche(verstoesse, col.id, currentDay);
+    const summeHtml = summeText
+      ? `<div class="tl-col-header-sum">${summeText}${verstossMarkerHtml(tv, 'tag', col.id, currentDay)}</div>` : '';
+    const wocheHtml = wv.length
+      ? `<div class="tl-col-header-woche">Woche${verstossMarkerHtml(wv, 'woche', col.id, currentDay)}</div>` : '';
     const dayAbsences = getAbsencesForDay(col.id, currentDay, absences);
     const colBannerHtml = dayAbsences.map(a => {
       const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
@@ -502,9 +529,10 @@ function renderTimelineHtml(entries, absences, verstoesse) {
     }).join('');
     const colBannerWrap = colBannerHtml ? `<div class="tl-col-banner">${colBannerHtml}</div>` : '';
     colsHtml += `<div class="timeline-column">
-      <div class="tl-col-header" style="${!isSingle ? 'color:' + colColor : ''}">
+      <div class="tl-col-header${(tv.length || wv.length) ? ' tl-col-header--verstoss' : ''}" style="${!isSingle ? 'color:' + colColor : ''}">
         <div class="tl-col-header-name">${isSingle ? '' : avatarHtml({ id: col.id, name: col.name }, 22) + ' '}${headerLabel}</div>
         ${summeHtml}
+        ${wocheHtml}
         ${colBannerWrap}
       </div>
       <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
@@ -553,8 +581,10 @@ function renderWeekGridHtml(entries, range, absences, verstoesse) {
   columns.forEach((col, i) => {
     const c = PALETTE[i % PALETTE.length];
     const summeText = summeFuer(entries.filter(e => e.user_id === col.id));
-    headerHtml += `<th class="grid-col-header" style="color:${c}">${esc(col.name)}`
-      + (summeText ? `<div class="grid-col-header-sum">${summeText}</div>` : '')
+    // In der Wochenansicht IST die Spalte die Woche — hier gehoert der Wochenverstoss hin.
+    const wv = verstossWoche(verstoesse, col.id, range.from);
+    headerHtml += `<th class="grid-col-header${wv.length ? ' grid-col-header--verstoss' : ''}" style="color:${c}">${esc(col.name)}`
+      + (summeText ? `<div class="grid-col-header-sum">${summeText}${verstossMarkerHtml(wv, 'woche', col.id, range.from)}</div>` : '')
       + `</th>`;
   });
 
@@ -569,7 +599,8 @@ function renderWeekGridHtml(entries, range, absences, verstoesse) {
       const cellEntries = lookup[day + '_' + col.id] || [];
       const totalH = calcActualHours(cellEntries);
       const dayAbsences = getAbsencesForDay(col.id, day, absences);
-      bodyHtml += `<td class="grid-cell" data-jump-date="${day}">`;
+      const tv = verstossTag(verstoesse, col.id, day);
+      bodyHtml += `<td class="grid-cell${tv.length ? ' grid-cell--verstoss' : ''}" data-jump-date="${day}">`;
       if (dayAbsences.length > 0) {
         bodyHtml += `<div class="grid-absence-chips">${dayAbsences.map(a => {
           const t = ABSENCE_TYPES[a.type] || { label: a.type, icon: '' };
@@ -589,7 +620,7 @@ function renderWeekGridHtml(entries, range, absences, verstoesse) {
             <span class="grid-e-regie">${regieHtml}</span>
           </div>`;
         });
-        bodyHtml += `<div class="grid-cell-total">${fmtH(totalH)}</div>`;
+        bodyHtml += `<div class="grid-cell-total">${fmtH(totalH)}${verstossMarkerHtml(tv, 'tag', col.id, day)}</div>`;
       }
       bodyHtml += '</td>';
     });
@@ -637,6 +668,9 @@ function renderMonthGridHtml(entries, range, absences = [], verstoesse) {
     columns.forEach(col => {
       const cellEntries = lookup[w.kw + '_' + col.id] || [];
       const totalH = calcActualHours(cellEntries);
+      // Die Zelle IST eine Kalenderwoche. Beurteilt wird die VOLLE Woche (auch der Teil im
+      // Nachbarmonat), angezeigt bleibt der Monatsanteil — der Tooltip nennt beide Zahlen.
+      const wv = verstossWoche(verstoesse, col.id, w.from);
       const days = new Set(cellEntries.map(e => e.date)).size;
       // Klick auf Zelle → erster Tag der KW
       // Alle Arbeitstage der KW im Monatsbereich für Abwesenheits-Anzeige sammeln
@@ -648,7 +682,7 @@ function renderMonthGridHtml(entries, range, absences = [], verstoesse) {
         if (wd !== 0 && wd !== 6) allDaysInKW.push(formatDateISO(d));
       }
 
-      bodyHtml += `<td class="grid-cell" data-jump-date="${w.from}">`;
+      bodyHtml += `<td class="grid-cell${wv.length ? ' grid-cell--verstoss' : ''}" data-jump-date="${w.from}">`;
       // Gruppiere Einträge nach Tag
       const byDay = {};
       cellEntries.forEach(e => {
@@ -668,15 +702,17 @@ function renderMonthGridHtml(entries, range, absences = [], verstoesse) {
           const pendingCls = a.status === 'pending' ? ' grid-absence-chip--pending' : '';
           return `<span class="grid-absence-chip grid-absence-chip--${a.type}${pendingCls}" title="${t.label}">${t.icon}</span>`;
         }).join('');
-        bodyHtml += `<div class="grid-kw-day" data-jump-date="${day}">
+        const tv = verstossTag(verstoesse, col.id, day);
+        bodyHtml += `<div class="grid-kw-day${tv.length ? ' grid-kw-day--verstoss' : ''}" data-jump-date="${day}">
           <span class="grid-kw-dayname">${dn}</span>
           ${absChips ? `<span class="grid-month-abs-chips">${absChips}</span>` : ''}
           ${dayH > 0 ? `<span class="grid-kw-dayhours">${fmtH(dayH)}</span>` : ''}
+          ${verstossMarkerHtml(tv, 'tag', col.id, day)}
         </div>`;
       });
       if (cellEntries.length > 0) {
         const days = new Set(cellEntries.map(e => e.date)).size;
-        bodyHtml += `<div class="grid-cell-total">${fmtH(totalH)} / ${days} Tage</div>`;
+        bodyHtml += `<div class="grid-cell-total">${fmtH(totalH)} / ${days} Tage${verstossMarkerHtml(wv, 'woche', col.id, w.from)}</div>`;
       }
       bodyHtml += '</td>';
     });

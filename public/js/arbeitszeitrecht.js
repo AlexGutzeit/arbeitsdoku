@@ -336,3 +336,64 @@ function pruefeEintraege(eintraege, opt) {
 
 const verstossTag   = (index, userId, datum) => (index && index.tag[Number(userId) + '|' + datum]) || [];
 const verstossWoche = (index, userId, datum) => (index && index.woche[Number(userId) + '|' + montagDer(datum)]) || [];
+
+// ── Darstellung ─────────────────────────────────────────────────────────────────────────────────
+//
+// Zeichen und Text entstehen HIER und nicht in den drei Ansichten — sonst sähe dasselbe Problem in
+// Tag, Woche und Monat unterschiedlich aus, und niemand fiele es auf, weil man selten zwei
+// Ansichten nebeneinander hat.
+
+// Sind ALLE Funde blosse Hinweise (48-Std-Woche), ist es kein Verstoss. Das faerbt den Text.
+const azNurHinweis = (liste) => liste.length > 0 && liste.every(v => v.hinweis);
+
+/**
+ * Das Warnzeichen. Bewusst ein <span> und kein <button>:
+ *   * Ein Knopf muesste einen zugaenglichen Namen tragen; ⚠️ als einziger Inhalt wuerde in
+ *     tests/barrierefrei-ui.js faelschlich als „Text" durchgehen — ein blinder Fleck.
+ *   * Kein `title`, sonst stuenden zwei Sprechblasen uebereinander: die eigene und die des
+ *     Browsers.
+ *   * Kein `tabindex`: Ueber einen Monat entstuenden Dutzende zusaetzlicher Tabstopps. Der Inhalt
+ *     steht ueber aria-label im Barrierebaum.
+ */
+function verstossMarkerHtml(liste, ebene, userId, datum) {
+  if (!liste || !liste.length) return '';
+  return `<span class="verstoss-zeichen${azNurHinweis(liste) ? ' verstoss-zeichen--hinweis' : ''}"`
+    + ` role="img" aria-label="${esc(verstossKurztext(liste))}"`
+    + ` data-verstoss="${esc(ebene)}|${Number(userId)}|${esc(datum)}">&#9888;&#65039;</span>`;
+}
+
+function verstossKurztext(liste) {
+  if (!liste || !liste.length) return '';
+  return (azNurHinweis(liste) ? 'Hinweis zur Arbeitszeit: ' : 'Gesetzlicher Verstoß: ')
+    + liste.map(v => v.text).join(' ');
+}
+
+/**
+ * Der Inhalt der Sprechblase.
+ *
+ * Die Schlusszeile ist kein Zierrat: Bei gesetztem Projektfilter zeigt die Spalte daneben womöglich
+ * 6:00, waehrend hier 11 Std stehen. Beides stimmt — das Gesetz kennt keinen Projektfilter —, aber
+ * ohne diesen Satz sieht es nach einem Fehler aus.
+ */
+function verstossTooltipHtml(liste) {
+  if (!liste || !liste.length) return '';
+  const kopf = azNurHinweis(liste) ? '&#9888;&#65039; Hinweis zur Arbeitszeit' : '&#9888;&#65039; Gesetzlicher Verstoß';
+  const zeilen = liste.map(v => esc(v.text));
+  // Fehlt das Geburtsdatum, gilt der strengere Jugendschutz. Ohne diesen Satz wirkt die Warnung
+  // willkuerlich, und niemand kaeme darauf, dass ein leeres Feld sie ausloest.
+  const jugend = liste.some(v => /jugend/.test(v.art)) && !geburtsdatumVon(liste[0].user_id);
+  if (jugend) {
+    zeilen.push('Für dieses Konto ist kein Geburtsdatum hinterlegt, deshalb gilt vorsorglich der '
+      + 'Jugendschutz. Ist die Person volljährig, bitte das Datum bei den Mitarbeitern eintragen.');
+  }
+  return `<strong>${kopf}</strong><br>` + zeilen.join('<br>')
+    + '<br><span style="opacity:.7">Gerechnet wird immer der ganze Tag bzw. die ganze Woche — '
+    + 'unabhängig von Filter und Zeitraum.</span>';
+}
+
+// Schluessel aus dem data-Attribut zurueck in die Liste. Eine Stelle, damit die drei Ansichten
+// nicht je eigene Zerlegungen bauen.
+function verstossAusSchluessel(index, schluessel) {
+  const [ebene, uid, datum] = String(schluessel || '').split('|');
+  return ebene === 'woche' ? verstossWoche(index, uid, datum) : verstossTag(index, uid, datum);
+}
