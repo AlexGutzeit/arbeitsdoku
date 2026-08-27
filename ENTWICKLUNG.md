@@ -50,6 +50,15 @@ Bemerkenswert an dem Fall: Der Ärger kam von einer Zahl, die jemand (ich, drei 
 bewusst gesetzt hatte — mit dem richtigen Gedanken und einem zu niedrigen Wert. Erst ein echtes
 Gerät in echter Hand zeigte es.
 
+**Und dabei fast verloren gegangen.** Der Planungs-Umbau war einmal geschrieben und dann weg: Ich
+hatte die Gegenprobe (Sabotage einbauen, Test umfallen sehen, `git checkout --`) und den Commit in
+denselben Befehl gepackt. Das Zurücksetzen lief vor dem Commit. Übrig blieb ein Commit, dessen
+Nachricht die Änderung beschreibt, während die Datei nicht einmal in seiner Dateiliste steht.
+Gefunden hat es allein der Testlauf danach: `handy-verlauf-ui` meldete für die Planung wieder
+00:00–24:00 und `scrollTop 280`. Die Lehre steht jetzt als harte Regel fest — `git checkout --`
+und `git commit` nie im selben Befehl, und nach jedem Commit mit `git show --stat` prüfen, dass
+die Datei wirklich drin ist.
+
 ### 2026-08-26 · Gesetzesverstöße sichtbar machen — und was dabei still schiefgehen kann
 
 Die App kannte ArbZG und JArbSchG längst. Sie prüfte nur an einer einzigen Stelle: als Warnzeile im
