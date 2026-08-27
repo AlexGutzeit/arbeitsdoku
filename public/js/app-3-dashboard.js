@@ -382,8 +382,13 @@ function renderTimelineHtml(entries, absences, verstoesse) {
     // Und dann so weit aufziehen, wie die Einträge es verlangen — je eine Stunde Luft.
     for (const e of entries) {
       const a = azMinuten(e.time_from), b2 = azMinuten(e.time_to);
-      if (a === null || b2 === null || b2 <= a) continue;
+      if (a === null) continue;
+      // Auch ein Eintrag OHNE DAUER (07:00-07:00) wird gezeichnet — die API laesst ihn zu
+      // (geprueft wird nur `time_from > time_to`), und im Altbestand stecken 18 davon. Zaehlte er
+      // hier nicht mit, laege ein frueher Platzhalter ueber dem Raster (top negativ) und waere
+      // schlicht unsichtbar. Fuer die UNTERGRENZE zaehlt er deshalb, fuer die Obergrenze nicht.
       von = Math.min(von, Math.floor(a / 60) - 1);
+      if (b2 === null || b2 <= a) continue;
       bis = Math.max(bis, Math.ceil(b2 / 60) + 1);
     }
     return { von: Math.max(TL_START_HOUR, von), bis: Math.min(TL_END_HOUR, bis) };

@@ -440,10 +440,14 @@ function renderPlanningTimeline(entries, absences, canEdit) {
     for (const e of entries) {
       const [fh, fm] = String(e.time_from || '').split(':').map(Number);
       const [th, tm] = String(e.time_to || '').split(':').map(Number);
-      if (![fh, fm, th, tm].every(Number.isFinite)) continue;
+      if (![fh, fm].every(Number.isFinite)) continue;
       const a2 = fh * 60 + fm, b2 = th * 60 + tm;
-      if (b2 <= a2) continue;
+      // Auch ein Eintrag OHNE DAUER (07:00-07:00) wird gezeichnet — die API laesst ihn zu
+      // (geprueft wird nur `time_from > time_to`), und im Altbestand stecken 18 davon. Zaehlte er
+      // hier nicht mit, laege ein frueher Platzhalter ueber dem Raster (top negativ) und waere
+      // schlicht unsichtbar. Fuer die UNTERGRENZE zaehlt er deshalb, fuer die Obergrenze nicht.
       von = Math.min(von, Math.floor(a2 / 60) - 1);
+      if (!Number.isFinite(b2) || b2 <= a2) continue;
       bis = Math.max(bis, Math.ceil(b2 / 60) + 1);
     }
     return { von: Math.max(TL_START_HOUR, von), bis: Math.min(TL_END_HOUR, bis) };

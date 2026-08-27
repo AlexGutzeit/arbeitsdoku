@@ -72,6 +72,7 @@ const messen = async (p, datum) => {
     await buch('2026-07-09', '13:00', '14:00', 0);      // EIN kurzer Eintrag am Nachmittag
     await buch('2026-07-10', '06:15', '23:30', 45);     // sehr langer Tag
     await buch('2026-07-13', '04:00', '09:00', 0);      // Ausnahme: Beginn um 4 Uhr
+    await buch('2026-07-07', '04:30', '04:30', 0);      // ohne Dauer, frueh — die API laesst das zu
     await buch('2026-07-14', '09:00', '12:00', 0);      // spaeter Beginn — Raster bleibt beim Firmenwert
     // Eine Planung fuer denselben Tag, damit die Planungs-Zeitleiste etwas zu zeigen hat.
     const plan = await req('POST', '/api/planning', admin,
@@ -117,6 +118,18 @@ const messen = async (p, datum) => {
 
     m = await messen(handy, '2026-07-10');
     ok('Feierabend 23:30 → das Raster läuft bis 24:00', m.stundeBis === '24:00', m.stundeBis);
+
+    // Ein Eintrag OHNE DAUER wird gezeichnet, traegt aber keine Spanne bei. Zaehlte er beim
+    // Aufziehen nicht mit, saesse er bei 04:30 ueber einem Raster ab 06:00 — top negativ, also
+    // unsichtbar. Er muss die Untergrenze mitziehen, ohne die Obergrenze zu beruehren.
+    m = await messen(handy, '2026-07-07');
+    ok('Eintrag ohne Dauer um 04:30 → das Raster zieht auf 03:00 vor',
+      m.stundeVon === '03:00', `${m.stundeVon}–${m.stundeBis}`);
+    // 04:30 ist anderthalb Stunden nach dem Rasteranfang 03:00 → 75 px. Ohne die Regel waere
+    // es -75, der Block laege oberhalb des Rasters.
+    ok('… und er sitzt sichtbar im Raster statt darüber (75 px)', m.ersterBlockTop === 75,
+      String(m.ersterBlockTop));
+    ok('… und die Obergrenze bleibt beim Firmenwert', m.stundeBis === '17:00', m.stundeBis);
 
     m = await messen(handy, '2026-07-09');
     ok('ein einzelner Termin 13:00–14:00 bleibt im Firmen-Raster',
