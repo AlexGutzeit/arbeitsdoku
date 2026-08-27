@@ -227,10 +227,13 @@ Kern-Zeiterfassung. Eintrag mit Datum, Von/Bis, Pause, Arbeitsort, Kunde, Projek
 
 **Am Handy scrollt die Seite, nicht der Kasten.** Bleibt für den Tagesverlauf weniger als rund 440 px
 übrig, bekommt er keine Höhenbegrenzung mehr und die **Seite scrollt als Ganzes** — wie im Wochen-
-und Monatsraster. Dazu zeichnet das Raster nur noch die Stunden, die der Tag wirklich braucht: eine
-Stunde vor dem ersten Eintrag bis eine Stunde nach dem letzten, mindestens acht Stunden. Vorher
-waren es immer 00:00–24:00, also oben sechs und unten meist sieben Stunden leeres Raster, das man
-erst wegscrollen musste. Am Rechner ist genug Platz, dort bleibt die eigene Scrollfläche.
+und Monatsraster. Dazu zeichnet das Raster nur noch die Stunden, die der Tag wirklich braucht.
+**Anker ist die Firmenvorgabe:** eine Stunde vor dem eingestellten *Arbeitsbeginn* bis eine Stunde
+nach dem regulären Feierabend (Beginn + Arbeitszeit + Pause) — bei 07:00 / 8 Std / 30 min also
+06:00 bis 17:00. Dadurch sieht ein Tag jeden Tag gleich aus, statt zu wandern. **Wer früher anfängt
+oder später aufhört, zieht das Raster auf:** Ein Eintrag ab 04:00 lässt es bei 03:00 beginnen, ein
+Feierabend um 23:30 bis 24:00 laufen. Vorher waren es immer 00:00–24:00, also oben sechs und unten
+meist sieben Stunden leeres Raster, das man erst wegscrollen musste. Am Rechner ist genug Platz, dort bleibt die eigene Scrollfläche.
 
 **Was am einzelnen Eintrag steht:** In der **Tagesansicht** zeigt ein Block die Spanne und daneben
 die **Nettostunden** — `07:30 – 15:30 · 7:30`; die gebuchte Pause steht darunter. Ist ein Block zu

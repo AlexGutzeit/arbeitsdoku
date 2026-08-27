@@ -21,6 +21,10 @@ async function renderDashboardContent() {
   // Die persoenlichen Warn-Schalter, einmal je Sitzung. Vor dem Aufbau, damit die Marker beim
   // ersten Bild schon richtig gefiltert sind und nicht kurz aufblitzen.
   await ladeWarnungen();
+  // Firmenvorgaben ebenso: Der Tagesverlauf richtet sein Raster nach dem Arbeitsbeginn. Ohne das
+  // gaelte bis zum ersten Oeffnen des Eintragsformulars der Rueckfallwert 07:00 — auf einer Anlage
+  // mit anderem Beginn faenge das Raster dann an der falschen Stelle an.
+  await ladeArbeitszeit();
   const range = getDateRange();
   const params = new URLSearchParams({ date_from: range.from, date_to: range.to });
   if (S.filterProjectId) params.set('project_id', S.filterProjectId);
@@ -355,27 +359,34 @@ function renderTimelineHtml(entries, absences, verstoesse) {
     return '<div class="empty-state"><div class="icon">&#128203;</div><p>Keine Einträge an diesem Tag</p></div>';
   }
 
-  // Nur die Stunden zeigen, die der Tag wirklich braucht (Alex, 26.08.2026).
+  // Welche Stunden das Raster zeigt (Alex, 26./27.08.2026).
   //
-  // Vorher wurden immer 00:00–24:00 gezeichnet — 1200 px, davon oben sechs und unten meist sieben
-  // Stunden leeres Raster. Auf dem Handy blieben dadurch von 830 px Bildschirm 317 px Verlauf, in
-  // dem man erst scrollen musste. Jetzt beginnt das Raster eine Stunde vor dem ersten Eintrag und
-  // endet eine Stunde nach dem letzten; mindestens acht Stunden, damit ein einzelner kurzer
-  // Auftrag kein Briefmarken-Raster ergibt.
+  // Vorher immer 00:00–24:00 — 1200 px, davon oben sechs und unten meist sieben Stunden leer. Auf
+  // dem Handy blieben von 830 px Bildschirm 317 px Verlauf, in dem man erst scrollen musste.
+  //
+  // Der Anker ist die FIRMENVORGABE, nicht der erste Eintrag: „standard nach den Firmen-Beginn-
+  // Einstellungen minus eine Stunde" (Alex). Damit sieht der Tag jeden Tag gleich aus, statt zu
+  // wandern, je nachdem wer wann angefangen hat. Wer FRÜHER beginnt oder SPÄTER aufhört, zieht das
+  // Raster in seine Richtung auf — ein Eintrag ab 04:00 ist also immer vollständig zu sehen.
   const grenzen = (() => {
-    const min = [], max = [];
+    const az = arbeitszeitJetzt();
+    const beginn = azMinuten(az.work_start_default);
+    const regelBeginn = Number.isFinite(beginn) && beginn !== null ? beginn : 7 * 60;
+    const regelEnde = regelBeginn + Math.round(Number(az.work_hours_per_day || 8) * 60)
+                    + Number(az.break_minutes_default || 0);
+
+    // Vorgabe: eine Stunde vor Arbeitsbeginn bis eine Stunde nach dem regulären Feierabend.
+    let von = Math.floor(regelBeginn / 60) - 1;
+    let bis = Math.ceil(regelEnde / 60) + 1;
+
+    // Und dann so weit aufziehen, wie die Einträge es verlangen — je eine Stunde Luft.
     for (const e of entries) {
       const a = azMinuten(e.time_from), b2 = azMinuten(e.time_to);
-      if (a !== null && b2 !== null && b2 > a) { min.push(a); max.push(b2); }
+      if (a === null || b2 === null || b2 <= a) continue;
+      von = Math.min(von, Math.floor(a / 60) - 1);
+      bis = Math.max(bis, Math.ceil(b2 / 60) + 1);
     }
-    if (!min.length) return { von: 6, bis: 18 };                    // nur Abwesenheiten: Kernzeit
-    let von = Math.max(TL_START_HOUR, Math.floor(Math.min(...min) / 60) - 1);
-    let bis = Math.min(TL_END_HOUR, Math.ceil(Math.max(...max) / 60) + 1);
-    while (bis - von < 8 && (von > TL_START_HOUR || bis < TL_END_HOUR)) {
-      if (von > TL_START_HOUR) von--;
-      if (bis - von < 8 && bis < TL_END_HOUR) bis++;
-    }
-    return { von, bis };
+    return { von: Math.max(TL_START_HOUR, von), bis: Math.min(TL_END_HOUR, bis) };
   })();
   const VON = grenzen.von, BIS = grenzen.bis;
 

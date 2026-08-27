@@ -71,6 +71,8 @@ const messen = async (p, datum) => {
     await buch('2026-07-08', '07:00', '16:30', 45);     // normaler Tag
     await buch('2026-07-09', '13:00', '14:00', 0);      // EIN kurzer Eintrag am Nachmittag
     await buch('2026-07-10', '06:15', '23:30', 45);     // sehr langer Tag
+    await buch('2026-07-13', '04:00', '09:00', 0);      // Ausnahme: Beginn um 4 Uhr
+    await buch('2026-07-14', '09:00', '12:00', 0);      // spaeter Beginn — Raster bleibt beim Firmenwert
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
 
@@ -97,13 +99,24 @@ const messen = async (p, datum) => {
     ok('… und der erste Eintrag sitzt an der richtigen Stelle (50 px = eine Stunde)',
       m.ersterBlockTop === 50, String(m.ersterBlockTop));
 
+    console.log('\n── Der Anker ist die Firmenvorgabe (07:00 / 8 Std / 30 min) ──');
+    // Alex' Regel: „standard nach den Firmen-Beginn-Einstellungen minus eine Stunde, aber wenn
+    // jemand eher beginnt, entsprechend eher anfangen — bzw. abends laenger laufen lassen."
+    m = await messen(handy, '2026-07-14');
+    ok('Beginn erst 09:00 → das Raster startet trotzdem bei 06:00 (Firmenbeginn − 1)',
+      m.stundeVon === '06:00', `${m.stundeVon}–${m.stundeBis}`);
+    ok('… und reicht bis 17:00 (regulärer Feierabend 15:30 + 1)', m.stundeBis === '17:00', m.stundeBis);
+
+    m = await messen(handy, '2026-07-13');
+    ok('Beginn um 04:00 → das Raster zieht auf 03:00 vor', m.stundeVon === '03:00', `${m.stundeVon}–${m.stundeBis}`);
+    ok('… und der frühe Eintrag ist vollständig sichtbar', m.ersterBlockTop === 50, String(m.ersterBlockTop));
+
     m = await messen(handy, '2026-07-10');
-    ok('langer Tag 06:15–23:30 → Raster 05:00 bis 24:00', m.stundeVon === '05:00' && m.stundeBis === '24:00',
-      `${m.stundeVon}–${m.stundeBis}`);
+    ok('Feierabend 23:30 → das Raster läuft bis 24:00', m.stundeBis === '24:00', m.stundeBis);
 
     m = await messen(handy, '2026-07-09');
-    ok('ein einzelner Termin 13:00–14:00 ergibt trotzdem mindestens acht Stunden Raster',
-      m.stunden >= 9, `${m.stundeVon}–${m.stundeBis} (${m.stunden} Marken)`);
+    ok('ein einzelner Termin 13:00–14:00 bleibt im Firmen-Raster',
+      m.stundeVon === '06:00' && m.stundeBis === '17:00', `${m.stundeVon}–${m.stundeBis}`);
     ok('… und er ist im Raster enthalten',
       Number(m.stundeVon.slice(0, 2)) <= 13 && Number(m.stundeBis.slice(0, 2)) >= 14, `${m.stundeVon}–${m.stundeBis}`);
 
