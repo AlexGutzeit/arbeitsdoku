@@ -117,9 +117,15 @@ function req(server, method, p, token, body) {
   }
 
   try {
-    // 1. Bestellung von max → Chef + Admin (badges: orders fuer chef/admin)
+    // 1. Bestellung von max → an alle, die bestellen duerfen
+    //
+    // Bis zum 27.08.2026 stand hier ['admin', 'chef']. Der Buchhalter DURFTE bestellen, bekam davon
+    // aber weder Zaehler noch Meldung — er hatte den Knopf und erfuhr nie, dass etwas offen ist.
+    // Alex hat das umgedreht: „wer bestellen kann, muss auch coin und push bekommen!"
+    // Die Empfaengerliste kommt seitdem aus bestellrecht.js (SQL_BESTELLBERECHTIGT), damit sie
+    // nicht wieder von darfBestellen() abweichen kann.
     await act('POST', '/api/orders', 'max', { product: 'Kabeltrommel', quantity: 3 });
-    expectTargets('Bestellung → Chef + Admin', ['admin', 'chef']);
+    expectTargets('Bestellung → alle mit Bestellrecht', ['admin', 'buchhalter', 'chef']);
     {
       const okIcon = SENT.length && SENT.every(s => s.payload.icon === '/icons/cat-orders.png');
       if (okIcon) { pass++; console.log('  ✓ Bestellung nutzt Kategorie-Icon cat-orders'); }
@@ -269,10 +275,11 @@ function req(server, method, p, token, body) {
     await act('PUT', `/api/bulletin/${aushangId}`, 'chef', { title: 'Betriebsversammlung' });
     expectTargets('Aushang ohne Textfeld gespeichert → kein Push', []);
 
-    // 10. Kategorie-Schalter: chef schaltet Bestellungen ab → Bestellung geht nur noch an admin
+    // 10. Kategorie-Schalter: chef schaltet Bestellungen ab → er faellt raus, die anderen bleiben.
+    // Das Recht entscheidet, WER in Frage kommt; der Schalter, wer davon wirklich etwas hoert.
     await req(server, 'PUT', '/api/push/prefs', tokens.chef, { orders: false });
     await act('POST', '/api/orders', 'max', { product: 'Schrauben', quantity: 10 });
-    expectTargets('Bestellung mit chef-Pref aus → nur admin', ['admin']);
+    expectTargets('Bestellung mit chef-Pref aus → ohne chef', ['admin', 'buchhalter']);
     await req(server, 'PUT', '/api/push/prefs', tokens.chef, { orders: true });
 
     // 11. Auslöser-Ausschluss: chef legt Aushang an, hat selbst ein Abo → bekommt selbst nichts
