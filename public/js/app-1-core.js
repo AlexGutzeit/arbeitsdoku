@@ -947,6 +947,11 @@ const TL_HOUR_PX = 50;
 const TL_START_HOUR = 0;
 const TL_END_HOUR = 24;
 const TL_SCROLL_TO_HOUR = 6; // Scroll-Position: 6 Uhr oben sichtbar
+// Luft unter der letzten Stundenmarke. Die Marke sitzt MITTIG auf ihrer Linie
+// (`.tl-hour-label { transform: translateY(-50%) }`), also ragt die unterste um ihre halbe Hoehe
+// ueber das Raster hinaus — dazu die Linie selbst. Ohne diese Luft scrollte der Kasten um 5 px,
+// obwohl der ganze Tag hineinpasst: ein Wischweg, der nichts zeigt.
+const TL_UNTEN_PX = 8;
 
 function isChefOrAdmin() {
   return S.user && (S.user.role === 'admin' || S.user.role === 'chef');

@@ -395,7 +395,7 @@ function renderTimelineHtml(entries, absences, verstoesse) {
   const currentDay = formatDateISO(S.currentDate);
 
   // Stundenleiste
-  let hoursHtml = '<div class="timeline-hours-body" style="height:' + totalH + 'px">';
+  let hoursHtml = '<div class="timeline-hours-body" style="height:' + (totalH + TL_UNTEN_PX) + 'px">';
   for (let h = VON; h <= BIS; h++) {
     const y = (h - VON) * TL_HOUR_PX;
     hoursHtml += `<span class="tl-hour-label" style="top:${y}px">${String(h).padStart(2,'0')}:00</span>`;
@@ -567,7 +567,7 @@ function renderTimelineHtml(entries, absences, verstoesse) {
         ${wocheHtml}
         ${colBannerWrap}
       </div>
-      <div class="tl-col-body" style="height:${totalH}px">${bodyHtml}</div>
+      <div class="tl-col-body" style="height:${totalH + TL_UNTEN_PX}px">${bodyHtml}</div>
     </div>`;
   });
 
