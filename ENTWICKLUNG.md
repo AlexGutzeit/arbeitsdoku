@@ -59,6 +59,37 @@ Gefunden hat es allein der Testlauf danach: `handy-verlauf-ui` meldete für die 
 und `git commit` nie im selben Befehl, und nach jedem Commit mit `git show --stat` prüfen, dass
 die Datei wirklich drin ist.
 
+### 2026-08-27 · Ein Helfer allein hilft nicht, wenn ihn keiner fragt
+
+Alex, mit Bildschirmfoto vom Handy: Als **Mitarbeiter mit Bestellrecht** ist der „Bestellt"-Knopf
+da, aber neben „Bestellungen" steht kein Zähler.
+
+Das Merkwürdige: Beide Seiten waren schon richtig gebaut. `bestellrecht.js` hat `darfBestellen()`,
+das Frontend hat sein Gegenstück in `app-1-core.js`, und `routes/badges.js` rechnet den Zähler
+längst mit `can_order`. Nur die eine Zeile, die die Marke ins Menü schreibt
+(`app-2-auth-layout.js`), fragte weiter `role === 'chef' || role === 'admin'`.
+
+**Warum das so lange unsichtbar blieb:** `refreshBadges()` überspringt, was es nicht findet
+(`if (!el) continue`). Die Marke wurde also nie gezeichnet und deshalb auch nie aktualisiert — kein
+Fehler, keine leere Marke, einfach nichts. Gleichzeitig zählt `setAppBadge` die offenen
+Bestellungen mit: Das App-Symbol zeigte eine Zahl, die im Menü nirgends auftauchte.
+
+**Die Warnung stand längst im Code.** In `bestellrecht.js`, ganz oben: „Auch users.js, badges.js und
+der Zeitplaner müssen dieselbe Frage stellen, und drei Fassungen derselben Regel driften
+auseinander." Genau das ist passiert — der Helfer war da, der Aufrufer nicht. Einen gemeinsamen
+Helfer zu schreiben genügt nicht; man muss auch jede Stelle finden, die die Frage anders stellt.
+`grep` nach der harten Rollenprüfung findet sie in Sekunden, wenn man daran denkt.
+
+**Und das README hatte recht behalten.** Dort stand seit dem Bau der Satz „Zähler und Push-Meldung
+folgen dem Recht – sonst hätte man den Knopf, erführe aber nie, dass etwas zu bestellen ist."
+Beschrieben war also das gewünschte Verhalten, gebaut nur die Hälfte davon. Am README war nichts
+zu ändern.
+
+**Offen geblieben:** Auf der Meldungsseite (Zähler und Push) ist der **Buchhalter** bewusst außen
+vor, obwohl er bestellen darf — `routes/badges.js` und `routes/orders.js` prüfen beide
+`role IN ('chef','admin') OR can_order = 1`. Nach der Begründung im README müsste er den Zähler
+eigentlich bekommen. Das ist eine Entscheidung für Alex, keine für mich.
+
 ### 2026-08-26 · Gesetzesverstöße sichtbar machen — und was dabei still schiefgehen kann
 
 Die App kannte ArbZG und JArbSchG längst. Sie prüfte nur an einer einzigen Stelle: als Warnzeile im
