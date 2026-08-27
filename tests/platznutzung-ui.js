@@ -96,6 +96,7 @@ const MINDESTFLAECHE = 440;
         scrollt: box.scrollHeight > box.clientHeight + 2,
         restUnten: Math.round(window.innerHeight - karte.getBoundingClientRect().bottom),
         seitenScroll: Math.round(document.documentElement.scrollHeight - window.innerHeight),
+        maxH: getComputedStyle(box).maxHeight,
         mainUnten: Math.round(main.getBoundingClientRect().bottom),
       };
     });
@@ -181,8 +182,12 @@ const MINDESTFLAECHE = 440;
     // auf „flacher" zweierlei sein: entweder die Flaeche schrumpft, oder sie faellt unter das
     // Mindestmass und wird ganz freigegeben — dann scrollt die Seite. Beides ist richtig,
     // eingefroren mit abgeschnittenem Inhalt ist es nicht.
-    ok('beim Drehen wird neu gerechnet — quer flacher oder Fläche freigegeben',
-      quer.hoehe < hochkant || quer.seitenScroll > 2, `${hochkant} → ${quer.hoehe}, Seitenscroll ${quer.seitenScroll}`);
+    // Nicht am Seitenscroll festmachen: Im Querformat ist das Fenster so flach, dass die Seite
+    // ohnehin scrollt — die Zusicherung ginge dann auch bei eingefrorener Hoehe durch. Gepruft
+    // wird die Begrenzung selbst: entweder sie ist kleiner geworden, oder sie ist ganz gefallen.
+    ok('beim Drehen wird neu gerechnet — quer flacher oder Begrenzung ganz gefallen',
+      quer.hoehe < hochkant || quer.maxH === 'none',
+      `${hochkant} → ${quer.hoehe}, max-height ${quer.maxH}, Seitenscroll ${quer.seitenScroll}`);
     ok('… und quer bleibt der ganze Tag erreichbar', !quer.scrollt || quer.restUnten <= ERLAUBTER_REST,
       `Fläche ${quer.hoehe}, Inhalt ${quer.inhalt}, Rest unten ${quer.restUnten}`);
     await page.setViewport({ width: 411, height: 795 });
