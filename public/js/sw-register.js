@@ -13,6 +13,24 @@ if ('serviceWorker' in navigator) {
     });
   }
 
+  // Gegenstueck zu `notificationclick` im Service Worker: Wer auf eine Meldung tippt, soll in dem
+  // Menue landen, aus dem sie kam. Die App routet das selbst ueber den Hash — ohne Neuladen, und
+  // ohne dass `client.navigate()` bei einem reinen Fragmentwechsel still scheitern kann.
+  //
+  // Bewusst NUR fuer '/#/...'-Ziele: Die Zusammenfassung und die Testmeldung zeigen auf '/' und
+  // sollen niemanden aus einem offenen Formular reissen.
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    const d = e && e.data;
+    if (!d || d.typ !== 'meldung-geklickt') return;
+    const ziel = String(d.url || '');
+    const raute = ziel.indexOf('#');
+    if (raute < 0) return;
+    const hash = ziel.slice(raute + 1);
+    if (!hash.startsWith('/')) return;
+    if (window.location.hash.slice(1) === hash) return;   // steht schon richtig
+    window.location.hash = hash;
+  });
+
   navigator.serviceWorker.register('/sw.js').then(reg => {
     setInterval(() => reg.update(), 60000);
     // SW wartet bereits (z.B. Tab war beim letzten Update offen)

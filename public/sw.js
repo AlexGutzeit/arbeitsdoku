@@ -1,4 +1,4 @@
-const CACHE_VERSION = 350;
+const CACHE_VERSION = 351;
 const CACHE_NAME = 'arbeitsdoku-v' + CACHE_VERSION;
 
 // Install: NICHT sofort aktivieren — warten bis User bestätigt oder App neu startet
@@ -45,20 +45,37 @@ self.addEventListener('push', (event) => {
 
 // Klick auf die Benachrichtigung: bestehendes App-Fenster fokussieren (und zur Route schicken)
 // oder ein neues oeffnen.
+// Klick auf eine Meldung soll in dem Menue landen, aus dem sie kam.
+//
+// Warum das nicht mit `client.navigate()` allein geht: Die App ist eine HASH-Anwendung. Der Sprung
+// von /#/dashboard nach /#/orders ist keine neue Seite, sondern eine Routen-Aenderung im laufenden
+// Programm. `navigate()` gibt dafuer ein Versprechen zurueck, das still abgelehnt werden kann
+// (nicht kontrollierter Client, reiner Fragmentwechsel) — und ein `try/catch` faengt das NICHT,
+// weil die Ablehnung asynchron kommt. Ausserdem lief `focus()` vorher sofort los, ohne die
+// Navigation abzuwarten. Ergebnis: Die App kam nach vorn und blieb stehen, wo sie war
+// (Alex, 27.08.2026).
+//
+// Deshalb zwei Wege, in dieser Reihenfolge:
+//   1. Der offenen App direkt sagen, wohin — sie routet selbst, ohne Neuladen.
+//   2. `navigate()` als Rueckfall fuer eine alte, noch gecachte Programmfassung ohne den
+//      Empfaenger aus Schritt 1. Steht die App danach schon richtig, ist es ein Leerlauf.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
-      for (const w of wins) {
-        if ('focus' in w) {
-          if ('navigate' in w && url !== '/') { try { w.navigate(url); } catch (_) {} }
-          return w.focus();
-        }
+  const ziel = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const w of wins) {
+      // '/' ist das Ziel der Zusammenfassung und der Testmeldung — die haben kein eigenes Menue.
+      // Wer gerade mitten in einem Formular steckt, soll davon nicht weggerissen werden.
+      if (ziel !== '/') {
+        try { w.postMessage({ typ: 'meldung-geklickt', url: ziel }); } catch (_) {}
+        if ('navigate' in w) { try { await w.navigate(ziel); } catch (_) {} }
       }
-      if (self.clients.openWindow) return self.clients.openWindow(url);
-    })
-  );
+      if ('focus' in w) { try { return await w.focus(); } catch (_) {} }
+      return;
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(ziel);
+  })());
 });
 
 // Fetch: Network-first für alles, Cache nur als Offline-Fallback

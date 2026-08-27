@@ -134,7 +134,10 @@ function reminderParts(db, r, occKey, startWall) {
 function buildReminderPush(db, r, occKey, startWall) {
   const { label, names, own, when } = reminderParts(db, r, occKey, startWall);
   const body = own ? `Am ${when}: ${label}` : `${(names.join(', ') || 'Mitarbeiter')} hat am ${when} einen Termin: ${label}`;
-  return { title: '🔔 Erinnerung', body, url: '/planning' };
+  // '/#/planning', NICHT '/planning': Die App ist eine Hash-Anwendung. Ohne die Raute liefert
+  // der Server nur die Startseite aus, und die Erinnerung landete auf „Willkommen" statt beim
+  // Termin (Alex, 27.08.2026). Alle anderen Meldungen machen es seit jeher richtig.
+  return { title: '🔔 Erinnerung', body, url: '/#/planning' };
 }
 function markSent(db, reminderId, occKey) {
   db.prepare('INSERT OR IGNORE INTO planning_reminder_sent (reminder_id, occ_key) VALUES (?, ?)').run(reminderId, occKey);
@@ -263,4 +266,4 @@ function start(getDb) {
   timer = setInterval(run, 60 * 1000); // dann minütlich (Serien-Verlängerung nur 1×/Tag)
 }
 
-module.exports = { start, tick, extendSeries, firePlanningReminders, collectDueForUser, shiftDate, fmtWall, isDue, buildSummaryText, berlinParts, VALID_CATS, CAT_LABELS };
+module.exports = { start, tick, extendSeries, firePlanningReminders, collectDueForUser, shiftDate, fmtWall, isDue, buildSummaryText, buildReminderPush, berlinParts, VALID_CATS, CAT_LABELS };
