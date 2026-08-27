@@ -47,6 +47,11 @@ const GERAETE = [
   { name: 'flaches Fenster 1280x500', w: 1280, h: 500 },
 ];
 const ERLAUBTER_REST = 40;   // Luft (10) + Innenabstand der Hauptfläche (8) + etwas Spielraum
+// Das Mindestmass aus app-1-core.js (`_FLAECHE_MIN`). Bleibt weniger uebrig, bekommt die Flaeche
+// GAR KEINE Begrenzung mehr und die Seite scrollt als Ganzes — Alex am 27.08.2026 zum Handy:
+// „der 1/3 bildschirmplatz fuer den Zeitverlauf ist knapp ... da scrollt die ganze Seite, oder?
+// So haette ich es auch gern." Vorher stand hier 270, das war die alte Untergrenze.
+const MINDESTFLAECHE = 440;
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
@@ -113,17 +118,29 @@ const ERLAUBTER_REST = 40;   // Luft (10) + Innenabstand der Hauptfläche (8) + 
         ok(`${g.name}: der ganze Tag ist im Bild (kein Scrollen nötig)`, true, `Fläche ${m.hoehe} px, Inhalt ${m.inhalt} px`);
       }
       // Die Seite selbst soll nicht scrollen — ausser der Bildschirm ist flacher als das Mindestmass.
-      const passtUeberhaupt = m.fenster - m.oben >= 270;
+      const passtUeberhaupt = m.fenster - m.oben >= MINDESTFLAECHE;
       if (passtUeberhaupt) ok(`${g.name}: die Seite selbst muss nicht gescrollt werden`, m.seitenScroll <= 2, `${m.seitenScroll} px`);
-      else ok(`${g.name}: zu flach für das Mindestmaß → Seite darf scrollen`, true, `${m.seitenScroll} px`);
+      // Zu flach: die Flaeche wird freigegeben, die Seite scrollt. Das ist kein Freifahrtschein —
+      // gepruft wird, dass dabei WIRKLICH alles erreichbar ist statt abgeschnitten zu werden.
+      else ok(`${g.name}: zu flach für das Mindestmaß → Seite scrollt, nichts wird abgeschnitten`,
+        !m.scrollt, `Seitenscroll ${m.seitenScroll} px, Kasten ${m.hoehe} px, Inhalt ${m.inhalt} px`);
     }
     // Solange der Inhalt nicht hineinpasst, muss mehr Bildschirmhöhe auch mehr Fläche bedeuten.
     const wachsend = werte.filter(x => x.m.scrollt).map(x => x.m);
     const monoton = wachsend.every((m, i) => i === 0 || m.hoehe >= wachsend[i - 1].hoehe - 2 || m.fenster < wachsend[i - 1].fenster);
     ok('die Fläche wächst mit dem Bildschirm mit', monoton, wachsend.map(m => `${m.fenster}→${m.hoehe}`).join(', '));
-    const h360 = werte.find(x => x.g.w === 360).m.hoehe, h430 = werte.find(x => x.g.w === 430).m.hoehe;
-    ok('… und zwar ungefähr um den Höhenunterschied der Geräte',
-      Math.abs((h430 - h360) - (932 - 640)) < 20, `${h430 - h360} px statt 292 px`);
+    const m360 = werte.find(x => x.g.w === 360).m, m430 = werte.find(x => x.g.w === 430).m;
+    // Frueher zeichnete das Raster immer 00:00-24:00 (1200 px) und war damit auf JEDEM Geraet
+    // hoeher als der Bildschirm — mehr Hoehe hiess deshalb immer exakt so viel mehr Flaeche.
+    // Seit dem Zuschnitt auf die gebrauchten Stunden (27.08.2026) endet das Wachsen beim Inhalt:
+    // Ist der ganze Tag im Bild, waere jedes weitere Pixel der graue Streifen, den der Abschnitt
+    // darueber gerade verbietet. Geprueft wird also beides — waechst mit, aber nie ueber den
+    // Inhalt hinaus.
+    const gewachsen = m430.hoehe - m360.hoehe;
+    const amInhalt = m430.hoehe >= m430.inhalt - 2;
+    ok('… und zwar um den Höhenunterschied der Geräte, bis der Inhalt ganz im Bild ist',
+      amInhalt ? gewachsen > 0 : Math.abs(gewachsen - (932 - 640)) < 20,
+      `${gewachsen} px gewachsen; 430er: Fläche ${m430.hoehe}, Inhalt ${m430.inhalt}`);
 
     console.log('\n── Was unter der Karte steht, bleibt sichtbar ──');
     // Wochenansicht: darunter liegt das Raster mit eigener Legende. Nichts darf aus dem Bild rutschen.
@@ -158,8 +175,16 @@ const ERLAUBTER_REST = 40;   // Luft (10) + Innenabstand der Hauptfläche (8) + 
     const hochkant = (await messen()).hoehe;
     await page.setViewport({ width: 795, height: 411 });   // quer
     await sleep(900);
-    const quer = (await messen()).hoehe;
-    ok('quer ist die Fläche flacher als hochkant', quer < hochkant, `${hochkant} → ${quer}`);
+    const quer = await messen();
+    // Was hier zaehlt, ist dass beim Drehen NEU GERECHNET wird — eine eingefrorene Hoehe aus dem
+    // Hochformat wuerde den Inhalt im Querformat abschneiden. Seit dem Zuschnitt kann die Antwort
+    // auf „flacher" zweierlei sein: entweder die Flaeche schrumpft, oder sie faellt unter das
+    // Mindestmass und wird ganz freigegeben — dann scrollt die Seite. Beides ist richtig,
+    // eingefroren mit abgeschnittenem Inhalt ist es nicht.
+    ok('beim Drehen wird neu gerechnet — quer flacher oder Fläche freigegeben',
+      quer.hoehe < hochkant || quer.seitenScroll > 2, `${hochkant} → ${quer.hoehe}, Seitenscroll ${quer.seitenScroll}`);
+    ok('… und quer bleibt der ganze Tag erreichbar', !quer.scrollt || quer.restUnten <= ERLAUBTER_REST,
+      `Fläche ${quer.hoehe}, Inhalt ${quer.inhalt}, Rest unten ${quer.restUnten}`);
     await page.setViewport({ width: 411, height: 795 });
     await sleep(900);
     const zurueck = (await messen()).hoehe;

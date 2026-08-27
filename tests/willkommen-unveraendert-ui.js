@@ -231,14 +231,24 @@ function tagDerWoche(n) {
       'ohne Leiste sagt der Abschnitt nichts aus');
     const ohneSprung = await page.evaluate(() => {
       const sc = document.querySelector('.timeline-scroll');
+      const marken = [...document.querySelectorAll('.tl-hour-label')].map(e => e.textContent.trim());
+      const ersteMarke = marken.length ? Number(marken[0].slice(0, 2)) : null;
       return {
         gescrollt: sc ? sc.scrollTop : null,
+        // Welche Stunde steht ganz oben im Bild — egal, WIE sie dort hingekommen ist.
+        obenSichtbar: (sc && ersteMarke !== null) ? ersteMarke + sc.scrollTop / 50 : null,
+        ersteMarke,
         markiert: document.querySelectorAll('.tl-plan-entry--hervor').length,
       };
     });
     ok('nichts ist hervorgehoben, wenn man direkt hingeht', ohneSprung.markiert === 0, JSON.stringify(ohneSprung));
-    ok('… und der Verlauf ist wie gehabt zur Kernarbeitszeit gescrollt',
-      ohneSprung.gescrollt === null || ohneSprung.gescrollt > 0, JSON.stringify(ohneSprung));
+    // Gepruft wird das ZIEL, nicht der Weg: Wer direkt hierher kommt, sieht oben die Arbeitszeit
+    // und nicht Mitternacht. Bis zum 27.08.2026 zeichnete das Raster 00:00-24:00 und sprang danach
+    // auf 6:00 — die Zusicherung hiess deshalb „scrollTop > 0". Seit das Raster selbst kurz vor
+    // dem Arbeitsbeginn anfaengt, gibt es nichts mehr zu ueberspringen und scrollTop ist 0. Beide
+    // Bauarten erfuellen diese Fassung; eine, die morgens um Mitternacht landet, faellt durch.
+    ok('… und man landet oben bei der Arbeitszeit, nicht um Mitternacht',
+      ohneSprung.obenSichtbar === null || ohneSprung.obenSichtbar >= 5, JSON.stringify(ohneSprung));
 
     console.log('\n── Keine hängengebliebene Markierung ──');
     await willkommen();
