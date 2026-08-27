@@ -18,6 +18,10 @@ async function renderPlanningContent() {
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
   mainEl.classList.add('main-wide');
+  // Firmenvorgaben: Die Zeitleiste richtet ihr Raster nach dem Arbeitsbeginn. Ohne das gaelte bis
+  // zum ersten Oeffnen eines Formulars der Rueckfallwert 07:00 — auf einer Anlage mit anderem
+  // Beginn faenge das Raster an der falschen Stelle an.
+  await ladeArbeitszeit();
 
   const view = S.planningView || 'day';
   const d = S.planningDate || new Date();
@@ -256,8 +260,9 @@ async function renderPlanningContent() {
   if (view === 'day') {
     const scrollContainer = mainEl.querySelector('.timeline-scroll');
     if (scrollContainer) {
-      const scrollY = (TL_SCROLL_TO_HOUR - TL_START_HOUR) * TL_HOUR_PX - 20;
-      scrollContainer.scrollTop = Math.max(0, scrollY);
+      // Das Raster beginnt jetzt selbst kurz vor dem Arbeitsbeginn — es gibt nichts mehr zu
+      // ueberspringen. (Der Aufruf bleibt stehen, damit eine gemerkte Position zurueckgesetzt wird.)
+      scrollContainer.scrollTop = 0;
     }
   }
 
@@ -416,12 +421,41 @@ function renderPlanningTimeline(entries, absences, canEdit) {
     return '<div class="empty-state"><div class="icon">&#128197;</div><p>Keine Planungen für diesen Tag</p></div>';
   }
 
-  const totalH = (TL_END_HOUR - TL_START_HOUR) * TL_HOUR_PX;
+  // Welche Stunden das Raster zeigt — dieselbe Regel wie im Zeitnachweis (Alex, 27.08.2026).
+  //
+  // Anker ist die FIRMENVORGABE (Arbeitsbeginn − 1 Std bis regulaerer Feierabend + 1 Std), damit
+  // der Tag jeden Tag gleich aussieht. Wer frueher beginnt oder spaeter aufhoert, zieht das Raster
+  // in seine Richtung auf — sonst laege ein Termin ab 04:00 ausserhalb und waere unsichtbar.
+  //
+  // Vorher wurden immer 00:00–24:00 gezeichnet und danach auf 6:00 gesprungen. Am Handy blieben
+  // dadurch 588 px Wischflaeche, beginnend bei Mitternacht.
+  const grenzen = (() => {
+    const az = arbeitszeitJetzt();
+    const [bh, bm] = String(az.work_start_default || '07:00').split(':').map(Number);
+    const regelBeginn = Number.isFinite(bh) && Number.isFinite(bm) ? bh * 60 + bm : 7 * 60;
+    const regelEnde = regelBeginn + Math.round(Number(az.work_hours_per_day || 8) * 60)
+                    + Number(az.break_minutes_default || 0);
+    let von = Math.floor(regelBeginn / 60) - 1;
+    let bis = Math.ceil(regelEnde / 60) + 1;
+    for (const e of entries) {
+      const [fh, fm] = String(e.time_from || '').split(':').map(Number);
+      const [th, tm] = String(e.time_to || '').split(':').map(Number);
+      if (![fh, fm, th, tm].every(Number.isFinite)) continue;
+      const a2 = fh * 60 + fm, b2 = th * 60 + tm;
+      if (b2 <= a2) continue;
+      von = Math.min(von, Math.floor(a2 / 60) - 1);
+      bis = Math.max(bis, Math.ceil(b2 / 60) + 1);
+    }
+    return { von: Math.max(TL_START_HOUR, von), bis: Math.min(TL_END_HOUR, bis) };
+  })();
+  const VON = grenzen.von, BIS = grenzen.bis;
+
+  const totalH = (BIS - VON) * TL_HOUR_PX;
 
   // Stundenleiste
   let hoursHtml = '<div class="timeline-hours-body" style="height:' + totalH + 'px">';
-  for (let h = TL_START_HOUR; h <= TL_END_HOUR; h++) {
-    const y = (h - TL_START_HOUR) * TL_HOUR_PX;
+  for (let h = VON; h <= BIS; h++) {
+    const y = (h - VON) * TL_HOUR_PX;
     hoursHtml += `<span class="tl-hour-label" style="top:${y}px">${String(h).padStart(2,'0')}:00</span>`;
   }
   hoursHtml += '</div>';
@@ -464,10 +498,10 @@ function renderPlanningTimeline(entries, absences, canEdit) {
   columns.forEach((col, ci) => {
     const colColor = PALETTE[ci % PALETTE.length];
     let bodyHtml = '';
-    for (let h = TL_START_HOUR; h <= TL_END_HOUR; h++) {
-      const y = (h - TL_START_HOUR) * TL_HOUR_PX;
+    for (let h = VON; h <= BIS; h++) {
+      const y = (h - VON) * TL_HOUR_PX;
       bodyHtml += `<div class="tl-hour-line" style="top:${y}px"></div>`;
-      if (h < TL_END_HOUR) bodyHtml += `<div class="tl-hour-line half" style="top:${y + TL_HOUR_PX / 2}px"></div>`;
+      if (h < BIS) bodyHtml += `<div class="tl-hour-line half" style="top:${y + TL_HOUR_PX / 2}px"></div>`;
     }
 
     // Überlappungen berechnen
@@ -486,7 +520,7 @@ function renderPlanningTimeline(entries, absences, canEdit) {
     });
     const totalLanes = Math.max(1, lanes.length);
     sorted.forEach(e => {
-      const top = ((e._startMin - TL_START_HOUR * 60) / 60) * TL_HOUR_PX;
+      const top = ((e._startMin - VON * 60) / 60) * TL_HOUR_PX;
       const height = Math.max(20, ((e._endMin - e._startMin) / 60) * TL_HOUR_PX);
       const projLabel = e.project_name || e.project_text || '';
       const laneW = (100 - 6) / totalLanes;
@@ -536,7 +570,7 @@ function renderPlanningTimeline(entries, absences, canEdit) {
 
   return `<div class="timeline-wrapper">
     ${globalBannerHtml ? `<div class="tl-global-banner-row">${globalBannerHtml}</div>` : ''}
-    <div class="timeline-scroll">
+    <div class="timeline-scroll" data-frei>
       <div class="timeline-container">
         <div class="timeline-hours"><div class="tl-col-header" style="visibility:hidden">.</div>${hoursHtml}</div>
         ${colsHtml}
