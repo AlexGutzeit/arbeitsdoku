@@ -345,7 +345,7 @@ function layout(content, activeNav) {
         </a>
         <a href="#/orders" class="${activeNav === 'orders' ? 'active' : ''}">
           <span class="icon">&#128722;</span> Bestellungen
-          ${(S.user.role === 'chef' || S.user.role === 'admin') ? `<span class="nav-badge" id="nav-badge-orders"${S.badges.orders ? '' : ' style="display:none"'}>${S.badges.orders || ''}</span>` : ''}
+          ${darfBestellen() ? `<span class="nav-badge" id="nav-badge-orders"${S.badges.orders ? '' : ' style="display:none"'}>${S.badges.orders || ''}</span>` : ''}
         </a>
         <a href="#/notes" class="${activeNav === 'notes' ? 'active' : ''}">
           <span class="icon">&#128221;</span> Notizen

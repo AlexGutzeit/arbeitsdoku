@@ -126,6 +126,23 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     ok('… mit dem Vorarbeiter als Besteller', db[0].ordered_by_name === 'Volker Vorarbeiter', db[0].ordered_by_name);
     ok('… und die offene Liste ist leer', ((await req('GET', '/api/orders', admin)).body.orders || []).length === 0);
 
+    console.log('\n── Der Zähler im Menü folgt dem Recht ──');
+    // Alex am 27.08.2026 mit Bildschirmfoto: „das mit dem zaehl coin scheint bei den berechtigten
+    // noch nicht zu funktionieren." Der Server rechnete den Zaehler laengst nach dem Recht, aber
+    // die Menuezeile fragte weiter `role === 'chef' || role === 'admin'` — die Marke wurde also nie
+    // GEZEICHNET, und refreshBadges() ueberspringt, was es nicht findet (`if (!el) continue`).
+    // Fuer den Berechtigten hiess das: Das App-Symbol zaehlte mit, im Menue stand nichts.
+    await req('POST', '/api/orders', kollegeTok, { product: 'Klemmen', quantity: 5 });
+    await v.seite.goto(BASIS + '/#/dashboard', { waitUntil: 'domcontentloaded' });
+    await sleep(2000);
+    ok('die Marke ist im Menü überhaupt vorhanden',
+      await v.seite.evaluate(() => !!document.getElementById('nav-badge-orders')),
+      'ohne das Element aktualisiert refreshBadges() nichts');
+    ok('… und sie ist sichtbar', await sichtbar(v.seite, '#nav-badge-orders'));
+    ok('… und zeigt die eine offene Bestellung',
+      (await v.seite.evaluate(() => (document.getElementById('nav-badge-orders') || {}).textContent)) === '1',
+      await v.seite.evaluate(() => (document.getElementById('nav-badge-orders') || {}).textContent));
+
     console.log('\n── Die Kategorie „Bestellungen" folgt dem Recht ──');
     // NICHT den Seitentext durchsuchen: „Bestellungen" steht als Menuepunkt auf JEDER Seite, die
     // Pruefung waere immer gruen (erst so gebaut, dann gemerkt). Gemessen wird die Funktion, die
@@ -146,6 +163,12 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     await v.seite.goto(BASIS + '/#/orders', { waitUntil: 'domcontentloaded' });
     await sleep(2000);
     ok('der Knopf ist wieder weg', await v.seite.evaluate(() => !document.querySelector('.order-mark-btn')));
+    // Es liegen jetzt zwei offene Bestellungen („Klemmen", „Dosen") — die Marke darf trotzdem weg
+    // sein. Ohne offene Bestellung waere die Zusicherung wertlos, weil sie auch bei kaputtem
+    // Recht gruen waere.
+    ok('… und die Marke im Menü ist es auch',
+      !(await v.seite.evaluate(() => !!document.getElementById('nav-badge-orders'))),
+      'offen: ' + JSON.stringify(((await req('GET', '/api/orders', admin)).body.orders || []).map(o => o.product)));
     await v.seite.goto(BASIS + '/#/notifications', { waitUntil: 'domcontentloaded' });
     await sleep(2000);
     ok('darfBestellen() sagt nein', await v.seite.evaluate(() => darfBestellen() === false));
