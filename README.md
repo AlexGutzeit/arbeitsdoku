@@ -233,7 +233,8 @@ nach dem regulären Feierabend (Beginn + Arbeitszeit + Pause) — bei 07:00 / 8 
 06:00 bis 17:00. Dadurch sieht ein Tag jeden Tag gleich aus, statt zu wandern. **Wer früher anfängt
 oder später aufhört, zieht das Raster auf:** Ein Eintrag ab 04:00 lässt es bei 03:00 beginnen, ein
 Feierabend um 23:30 bis 24:00 laufen. Vorher waren es immer 00:00–24:00, also oben sechs und unten
-meist sieben Stunden leeres Raster, das man erst wegscrollen musste. Am Rechner ist genug Platz, dort bleibt die eigene Scrollfläche.
+meist sieben Stunden leeres Raster, das man erst wegscrollen musste. Am Rechner ist genug Platz, dort bleibt die eigene Scrollfläche. **Die Zeitleiste der Planung folgt
+derselben Regel** — durch den Zuschnitt passt sie dort meist ganz ins Fenster, ohne jedes Scrollen.
 
 **Was am einzelnen Eintrag steht:** In der **Tagesansicht** zeigt ein Block die Spanne und daneben
 die **Nettostunden** — `07:30 – 15:30 · 7:30`; die gebuchte Pause steht darunter. Ist ein Block zu

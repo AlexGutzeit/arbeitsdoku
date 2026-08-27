@@ -73,6 +73,10 @@ const messen = async (p, datum) => {
     await buch('2026-07-10', '06:15', '23:30', 45);     // sehr langer Tag
     await buch('2026-07-13', '04:00', '09:00', 0);      // Ausnahme: Beginn um 4 Uhr
     await buch('2026-07-14', '09:00', '12:00', 0);      // spaeter Beginn — Raster bleibt beim Firmenwert
+    // Eine Planung fuer denselben Tag, damit die Planungs-Zeitleiste etwas zu zeigen hat.
+    const plan = await req('POST', '/api/planning', admin,
+      { date: '2026-07-14', time_from: '08:00', time_to: '15:00', assigned_user_ids: [ma.id], client: 'Planprobe' });
+    ok('Planung angelegt', plan.status === 201 || plan.status === 200, plan.status + ' ' + plan.text.slice(0, 90));
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
 
@@ -137,7 +141,39 @@ const messen = async (p, datum) => {
     ok('dort behält der Verlauf seine eigene Scrollfläche', r.maxHeight !== 'none' && /px$/.test(r.maxHeight || ''), String(r.maxHeight));
     ok('… und die Seite selbst bleibt stehen', r.seiteScrolltUm === 0, String(r.seiteScrolltUm));
 
+    console.log('\n── Die Planung folgt derselben Regel ──');
+    // Alex, 27.08.2026: „bevor du deployst, pass die planung auch darauf an."
+    // Sie darf NUR zusammen mit dem Zuschnitt freigegeben werden — sonst zeichnet sie 00:00–24:00
+    // ohne Begrenzung und man landet morgens um Mitternacht.
+    await handy.evaluate((d) => {
+      S.planningView = 'day'; S.planningDate = new Date(d + 'T12:00:00'); location.hash = '#/planning';
+    }, '2026-07-14');
+    await sleep(3500);
+    const pl = await handy.evaluate(() => {
+      const doc = document.documentElement, sc = document.querySelector('.timeline-scroll');
+      const st = [...document.querySelectorAll('.tl-hour-label')].map(e => e.textContent);
+      return { seiteScrollt: doc.scrollHeight - window.innerHeight, maxHeight: sc ? sc.style.maxHeight : null,
+               von: st[0] || null, bis: st[st.length - 1] || null, marken: st.length,
+               oben: sc ? sc.scrollTop : null, innen: sc ? sc.scrollHeight - sc.clientHeight : null };
+    });
+    if (pl.von) {
+      ok('Planung: Raster beginnt am Firmenwert (06:00), nicht bei Mitternacht', pl.von === '06:00', `${pl.von}–${pl.bis}`);
+      ok('… und endet bei 17:00', pl.bis === '17:00', String(pl.bis));
+      // Der Zuschnitt macht das Raster so kurz, dass es hier komplett ins Fenster passt — es gibt
+      // gar nichts mehr zu scrollen. Das ist das beste Ergebnis; die Zusicherung darf es nicht
+      // gegen „die Seite muss scrollen" ausspielen. Was NICHT sein darf, ist das alte Verhalten:
+      // ein enger Kasten, in dem man wischen muss, waehrend die Seite starr steht.
+      // Toleranz statt 0: Rahmen und Innenabstaende lassen ein paar Pixel Rest — gemessen 5 px.
+      // Das ist kein Scrollen, das ist Rundung. Alles unter 30 px ist keine Flaeche zum Wischen.
+      ok('… und niemand muss mehr in einem engen Kasten wischen',
+        pl.innen <= 30 || pl.maxHeight === 'none', JSON.stringify(pl));
+      ok('… und man startet ganz oben, nicht mitten im Raster', pl.oben === 0, String(pl.oben));
+    } else {
+      ok('Planung: die Zeitleiste ist überhaupt aufgebaut', false, 'kein Raster gefunden: ' + JSON.stringify(pl));
+    }
+
     console.log('\n── Woche und Monat sind unberührt ──');
+    await handy.evaluate(() => { location.hash = '#/'; }); await sleep(2000);
     for (const [v, name] of [['week', 'Woche'], ['month', 'Monat']]) {
       await handy.evaluate((vv) => { S.view = vv; render(); }, v);
       await sleep(2200);

@@ -38,6 +38,14 @@ Die Fläche darf jetzt nur wachsen, wo sie es ausdrücklich erlaubt (`data-frei`
 Fläche, deren Inhalt zugeschnitten ist. Danach lief der alte Test **unverändert** durch: kein
 Aufweichen einer bestehenden Zusicherung.
 
+**Nachtrag am 27.08.:** Zwei Korrekturen an der eigenen Regel. Erstens leitete sie den Rasteranfang
+aus dem ERSTEN EINTRAG ab — dadurch wanderte er täglich, und Alex kam „nicht mehr auf vor 6:00
+Uhr". Anker ist jetzt die Firmenvorgabe (Arbeitsbeginn − 1 Std bis regulärer Feierabend + 1 Std);
+wer früher beginnt oder später aufhört, zieht das Raster auf. Ohne dieses Aufziehen bekäme ein
+Eintrag ab 04:00 `top: -100` — er läge über dem Raster und wäre schlicht unsichtbar. Zweitens
+bekam die **Planung** dieselbe Behandlung, auf Alex' Wunsch vor dem Deploy: dort war es dieselbe
+Falle, nur mit 588 px Wischfläche ab Mitternacht.
+
 Bemerkenswert an dem Fall: Der Ärger kam von einer Zahl, die jemand (ich, drei Wochen früher)
 bewusst gesetzt hatte — mit dem richtigen Gedanken und einem zu niedrigen Wert. Erst ein echtes
 Gerät in echter Hand zeigte es.
