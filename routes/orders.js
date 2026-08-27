@@ -3,7 +3,7 @@ const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const push = require('../push');
-const { darfBestellen } = require('../bestellrecht');
+const { darfBestellen, SQL_BESTELLBERECHTIGT, SQL_BESTELLROLLEN } = require('../bestellrecht');
 
 const router = express.Router();
 
@@ -80,12 +80,16 @@ router.post('/', authenticate, (req, res) => {
   broadcast('orders', req.headers['x-tab-id']);
   res.status(201).json({ order });
 
-  // Push an alle, deren Bestell-Zaehler steigt (analog badges.js) — also Chef/Admin UND
-  // Rechteinhaber. Ohne Letztere haette ein Vorarbeiter zwar den Knopf, erfuehre aber nie, dass
-  // es etwas zu bestellen gibt. Der Buchhalter bleibt wie bisher aussen vor (Alex, 25.08.2026).
+  // Push an alle, deren Bestell-Zaehler steigt (analog badges.js) — also an jeden, der bestellen
+  // darf. Ohne das haette ein Vorarbeiter zwar den Knopf, erfuehre aber nie, dass es etwas zu
+  // bestellen gibt.
+  //
+  // Der BUCHHALTER war hier bis zum 27.08.2026 ausgenommen. Alex hat das umgedreht: „wer bestellen
+  // kann, muss auch coin und push bekommen." Die Bedingung kommt deshalb aus bestellrecht.js und
+  // wird nicht mehr hier hingeschrieben.
   const chefIds = db.prepare(
-    "SELECT id FROM users WHERE (role IN ('chef','admin') OR can_order = 1) AND COALESCE(active,1) = 1"
-  ).all().map(r => r.id);
+    `SELECT id FROM users WHERE ${SQL_BESTELLBERECHTIGT} AND COALESCE(active,1) = 1`
+  ).all(...SQL_BESTELLROLLEN).map(r => r.id);
   push.notifyUsers(db, chefIds, 'orders', {
     title: 'Neue Bestellung',
     body: `${qty ? qty + '× ' : ''}${order.product} — von ${order.user_name}`,

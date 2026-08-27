@@ -21,6 +21,19 @@ function darfBestellen(user) {
   return Number(user.can_order) === 1;
 }
 
+// DIESELBE Regel als SQL — fuer die Faelle, in denen nicht EIN Nutzer geprueft, sondern die LISTE
+// der Berechtigten geholt wird (die Push-Empfaenger einer neuen Bestellung).
+//
+// Warum aus der Rollenliste gebaut und nicht hingeschrieben: Genau daran ist es schon zweimal
+// auseinandergelaufen. Eine hingeschriebene Bedingung `role IN ('chef','admin')` sieht richtig
+// aus und uebersieht den Buchhalter still — niemand merkt es, weil nichts kaputtgeht, es kommt
+// nur keine Meldung an.
+const SQL_BESTELLBERECHTIGT =
+  `(role IN (${ROLLEN_MIT_BESTELLRECHT.map(() => '?').join(', ')}) OR can_order = 1)`;
+
+// Die Platzhalter dazu, in derselben Reihenfolge.
+const SQL_BESTELLROLLEN = ROLLEN_MIT_BESTELLRECHT.slice();
+
 // Ein Recht wegzunehmen ist nicht das Gegenteil vom Geben: Es bleibt etwas liegen.
 // Wer das Bestellrecht verliert, darf auch keine Bestell-Meldungen mehr bekommen — weder die
 // einzelne Push noch die Kategorie in einer geplanten Zusammenfassung.
@@ -72,4 +85,5 @@ function bestellmeldungenAufraeumen(db, userId) {
   return { pushAus, gekuerzt, entfernt, text: teile.join('; ') };
 }
 
-module.exports = { ROLLEN_MIT_BESTELLRECHT, darfBestellen, bestellmeldungenAufraeumen };
+module.exports = { ROLLEN_MIT_BESTELLRECHT, darfBestellen, bestellmeldungenAufraeumen,
+                   SQL_BESTELLBERECHTIGT, SQL_BESTELLROLLEN };

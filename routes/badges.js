@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
+const { darfBestellen } = require('../bestellrecht');
 
 const router = express.Router();
 
@@ -37,10 +38,12 @@ function computeBadgeCounts(db, user) {
     "SELECT COUNT(*) as n FROM note_offers WHERE to_user_id = ? AND status = 'pending'"
   ).get(uid).n;
 
-  // Der Zaehler folgt dem Recht, nicht nur der Rolle: Wer bestellen darf, muss auch sehen,
-  // dass etwas offen ist. Buchhalter bleibt wie bisher aussen vor.
+  // Der Zaehler folgt dem Recht, nicht der Rolle: Wer bestellen darf, muss auch sehen, dass etwas
+  // offen ist. Seit dem 27.08.2026 gilt das ausnahmslos, den Buchhalter eingeschlossen (Alex: „wer
+  // bestellen kann, muss auch coin und push bekommen") — und die Frage wird mit demselben Helfer
+  // gestellt wie ueberall sonst, damit die Fassungen nicht wieder auseinanderlaufen.
   let orders = 0;
-  if (role === 'chef' || role === 'admin' || Number(user.can_order) === 1) {
+  if (darfBestellen(user)) {
     orders = db.prepare("SELECT COUNT(*) as n FROM orders WHERE ordered_at IS NULL").get().n;
   }
 

@@ -85,10 +85,20 @@ folgen dem Recht – sonst hätte man den Knopf, erführe aber nie, dass etwas z
 Beschrieben war also das gewünschte Verhalten, gebaut nur die Hälfte davon. Am README war nichts
 zu ändern.
 
-**Offen geblieben:** Auf der Meldungsseite (Zähler und Push) ist der **Buchhalter** bewusst außen
-vor, obwohl er bestellen darf — `routes/badges.js` und `routes/orders.js` prüfen beide
-`role IN ('chef','admin') OR can_order = 1`. Nach der Begründung im README müsste er den Zähler
-eigentlich bekommen. Das ist eine Entscheidung für Alex, keine für mich.
+**Nachtrag, noch am selben Tag.** Beim Suchen nach weiteren Abweichungen fiel auf, dass der
+**Buchhalter** auf der Meldungsseite ausgenommen war, obwohl er bestellen darf — `routes/badges.js`
+und `routes/orders.js` prüften beide `role IN ('chef','admin') OR can_order = 1`. Alex hat das
+entschieden: „wer bestellen kann, muss auch coin und push bekommen!"
+
+Damit gab es die Regel an **vier** Stellen in **drei** Fassungen. Sie steht jetzt zweimal, beide in
+`bestellrecht.js` und aus derselben Rollenliste gebaut: `darfBestellen(user)` für einen Nutzer und
+`SQL_BESTELLBERECHTIGT` für die Liste der Empfänger. Eine hingeschriebene Bedingung
+`role IN ('chef','admin')` sieht richtig aus und übersieht den Buchhalter still — niemand merkt es,
+weil nichts kaputtgeht, es kommt nur keine Meldung an.
+
+Der Test prüft die beiden Fassungen deshalb **gegeneinander** statt jede für sich: Wen liefert das
+SQL, wen die Funktion? Zwei ungleiche Listen fallen sofort auf, egal welche der beiden jemand
+später anfasst.
 
 ### 2026-08-26 · Gesetzesverstöße sichtbar machen — und was dabei still schiefgehen kann
 

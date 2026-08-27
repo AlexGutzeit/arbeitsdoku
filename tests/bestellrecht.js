@@ -36,7 +36,7 @@ try { fs.unlinkSync(process.env.DB_PATH); } catch (_) {}
 const express = require('express');
 const { initDatabase, getDb } = require('../database/init');
 const { computeBadgeCounts } = require('../routes/badges');
-const { darfBestellen } = require('../bestellrecht');
+const { darfBestellen, SQL_BESTELLBERECHTIGT, SQL_BESTELLROLLEN } = require('../bestellrecht');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];
@@ -107,9 +107,13 @@ function req(server, method, p, token, body) {
     let r = await act('POST', '/api/orders', 'max', { product: 'Kabeltrommel', quantity: 3 });
     const bestellung = r.body.order;
     ok('Mitarbeiter darf anfordern', r.status === 201, r.status + '');
-    ok('… und die Meldung geht nur an Chef + Admin', empfaenger() === 'admin,chef', empfaenger());
+    // Bis zum 27.08.2026 stand hier 'admin,chef': Der Buchhalter DURFTE bestellen, bekam davon aber
+    // weder Zaehler noch Meldung. Alex hat das umgedreht — „wer bestellen kann, muss auch coin und
+    // push bekommen!" —, also gilt jetzt ueberall dieselbe Frage: darfBestellen().
+    ok('… und die Meldung geht an alle, die bestellen dürfen', empfaenger() === 'admin,buchhalter,chef', empfaenger());
     ok('… sein eigener Bestell-Coin bleibt 0', coinsVon('max').orders === 0, JSON.stringify(coinsVon('max')));
     ok('… beim Chef steht er auf 1', coinsVon('chef').orders === 1, JSON.stringify(coinsVon('chef')));
+    ok('… und beim Buchhalter ebenfalls', coinsVon('buchhalter').orders === 1, JSON.stringify(coinsVon('buchhalter')));
 
     r = await req(server, 'POST', `/api/orders/${bestellung.id}/order`, tokens.max);
     ok('„Bestellt" ist gesperrt (403)', r.status === 403, r.status + '');
@@ -128,8 +132,8 @@ function req(server, method, p, token, body) {
 
     ok('der Coin zeigt jetzt die offenen Bestellungen', coinsVon('max').orders === 2, JSON.stringify(coinsVon('max')));
     r = await act('POST', '/api/orders', 'chef', { product: 'Dosen', quantity: 10 });
-    ok('… und die Meldung erreicht ihn', empfaenger() === 'admin,max', empfaenger());
-    ok('… der Buchhalter bleibt aussen vor (wie bisher)', !empfaenger().includes('buchhalter'), empfaenger());
+    ok('… und die Meldung erreicht ihn', empfaenger() === 'admin,buchhalter,max', empfaenger());
+    ok('… der Buchhalter ist jetzt dabei', empfaenger().includes('buchhalter'), empfaenger());
 
     r = await req(server, 'PUT', `/api/orders/${fremd.id}`, tokens.max, { product: 'Klemmen', quantity: 20 });
     ok('darf fremden offenen Eintrag korrigieren', r.status === 200, r.status + '');
@@ -205,6 +209,20 @@ function req(server, method, p, token, body) {
     ]) {
       ok(`${was} → ${erwartet ? 'darf' : 'darf nicht'}`, darfBestellen(user) === erwartet);
     }
+
+    // Es gibt die Regel ZWEIMAL: als Funktion (ein Nutzer) und als SQL (die Liste der Empfaenger).
+    // Genau an dieser Doppelung ist sie schon zweimal auseinandergelaufen — einmal beim Buchhalter
+    // im Zaehler, einmal in der Menuezeile. Deshalb werden beide Fassungen gegeneinander geprueft
+    // statt jede fuer sich.
+    const perSql = db.prepare(`SELECT username, role, can_order FROM users WHERE ${SQL_BESTELLBERECHTIGT}`)
+      .all(...SQL_BESTELLROLLEN).map(u => u.username).sort();
+    const perFunktion = db.prepare('SELECT username, role, can_order FROM users').all()
+      .filter(u => darfBestellen(u)).map(u => u.username).sort();
+    ok('die SQL-Fassung der Regel sagt dasselbe wie die Funktion',
+      JSON.stringify(perSql) === JSON.stringify(perFunktion),
+      `SQL ${JSON.stringify(perSql)} vs. Funktion ${JSON.stringify(perFunktion)}`);
+    ok('… und der Buchhalter steht in beiden', perSql.includes('buchhalter') && perFunktion.includes('buchhalter'),
+      JSON.stringify(perSql));
   } catch (e) {
     console.error(e); fail++; fails.push('Ausnahme: ' + e.message);
   } finally {
