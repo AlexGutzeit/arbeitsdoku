@@ -202,8 +202,15 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     console.log('\n── Jeder hat seine eigene Zeile ──');
     const zeilen = await a.seite.$$eval('.abscal-name', els => els.map(e => e.textContent.trim()));
     ok('alle acht Mitarbeiter haben eine Zeile', namen.every(n => zeilen.includes(n)), JSON.stringify(zeilen));
+    // Diese Zusicherung braucht einen Monat, in dem die Person auch ANGESTELLT ist. Die Testnutzer
+    // entstehen heute (die API setzt den Eintritt immer auf heute), im Juni 2026 waren sie es also
+    // nicht — dort erscheinen nur die mit Eintraegen, ueber das Sicherheitsnetz.
+    const heuteAnker = new Date().toLocaleDateString('sv-SE').slice(0, 8) + '01';
+    await kalenderOeffnen(a.seite, heuteAnker, 'monat');
+    const zeilenHeute = await a.seite.$$eval('.abscal-name', els => els.map(e => e.textContent.trim()));
     ok('… auch wer gar nichts eingetragen hat (sonst wüsste man nicht, wer DA ist)',
-      zeilen.includes('Volker Vor'), JSON.stringify(zeilen));
+      zeilenHeute.includes('Volker Vor'), JSON.stringify(zeilenHeute));
+    await kalenderOeffnen(a.seite, MONAT + '-01', 'monat');
     ok('der Feiertag ist KEINE eigene Zeile', !zeilen.some(n => /feiertag|fronleichnam/i.test(n)), JSON.stringify(zeilen));
     ok('… sondern eine Spalte hinter allen Zeilen',
       (await a.seite.$$('.abscal-spalte--feiertag')).length === 1);
@@ -434,6 +441,58 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     ok('nach einer fremden Änderung steht die Ansicht noch da, wo man war',
       wisch.modus === 'jahr' && Math.abs(wisch.scrollLeft - gewischt.gesetzt) < 5,
       JSON.stringify({ ...wisch, erwartet: gewischt.gesetzt }));
+
+    console.log('\n── Nur wer im Zeitraum angestellt war, bekommt eine Zeile ──');
+    // Alex am 28.08.2026: „hast du auch darauf geachtet, dass immer die eingestellten ma angezeigt
+    // werden?" — Nein. Die Zeilen waren „alle aktiven Nutzer". Damit erschien in einem laengst
+    // vergangenen Monat jemand, der erst spaeter anfing, und ein altes Jahr zeigte die heutige
+    // Mannschaft.
+    //
+    // Die Daten muessen RELATIV zu heute sein: `POST /api/users` setzt den Eintritt immer auf
+    // heute, ein Rueckdatieren gibt es dort nicht. Damit lassen sich beide Faelle trotzdem
+    // nachbauen — Eintritt mitten im Monat (Sarah, ab heute) und Austritt mitten im Monat
+    // (Gerda, bis heute).
+    const heute = new Date().toLocaleDateString('sv-SE');
+    const monatVon = (n) => { const d = new Date(heute + 'T12:00:00Z'); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 8) + '01'; };
+
+    const sarah = (await req('POST', '/api/users', admin, { username: 'spaet', password: PW, name: 'Späte Sarah',
+      role: 'mitarbeiter', target_hours_per_week: 40 })).body.user;
+    ok('Späteinsteigerin angelegt (Eintritt heute)', !!sarah, JSON.stringify(sarah && sarah.id));
+    const gerda = (await req('POST', '/api/users', admin, { username: 'weg', password: PW, name: 'Gehende Gerda',
+      role: 'mitarbeiter', target_hours_per_week: 40 })).body.user;
+    const aus = await req('POST', `/api/users/${gerda.id}/deactivate`, admin, { employed_until: heute });
+    ok('Ausscheidende ausgestellt (Austritt heute)', aus.status === 200, aus.status + ' ' + aus.text.slice(0, 90));
+
+    // Die Seite hat ihre Nutzerliste beim Oeffnen geladen — die beiden Neuen kennt sie noch nicht.
+    // Ohne dieses Neuladen fehlten sie in JEDER Ansicht, und der Test pruefte nur, dass etwas
+    // fehlt, was es im Browser gar nicht gibt.
+    await a.seite.reload({ waitUntil: 'domcontentloaded' });
+    await sleep(2200);
+    ok('die neuen Konten sind in der Oberfläche angekommen',
+      (await a.seite.evaluate(() => (S.users || []).map(u => u.name))).includes('Späte Sarah'),
+      JSON.stringify(await a.seite.evaluate(() => (S.users || []).length)));
+
+    const zeilenIn = async (anker, modus) => {
+      await kalenderOeffnen(a.seite, anker, modus);
+      return a.seite.evaluate(() => [...document.querySelectorAll('.abscal-name')].map(e => e.textContent.trim()));
+    };
+    let z = await zeilenIn(monatVon(-1), 'monat');
+    ok('Vormonat: die Späteinsteigerin ist NOCH nicht da', !z.includes('Späte Sarah'), JSON.stringify(z));
+    ok('… die Ausscheidende ebenfalls nicht (sie kam erst diesen Monat)', !z.includes('Gehende Gerda'), JSON.stringify(z));
+    z = await zeilenIn(monatVon(0), 'monat');
+    ok('dieser Monat: die Späteinsteigerin ist da', z.includes('Späte Sarah'), JSON.stringify(z));
+    ok('… und die Ausscheidende AUCH NOCH (Austritt mitten im Monat)', z.includes('Gehende Gerda'), JSON.stringify(z));
+    z = await zeilenIn(monatVon(1), 'monat');
+    ok('Folgemonat: die Ausscheidende ist weg', !z.includes('Gehende Gerda'), JSON.stringify(z));
+    ok('… die Späteinsteigerin bleibt (offenes Ende)', z.includes('Späte Sarah'), JSON.stringify(z));
+    z = await zeilenIn(heute.slice(0, 4) + '-01-01', 'jahr');
+    ok('dieses Jahr: BEIDE stehen drin (irgendwann darin angestellt)',
+      z.includes('Späte Sarah') && z.includes('Gehende Gerda'), JSON.stringify(z));
+    z = await zeilenIn((Number(heute.slice(0, 4)) - 2) + '-01-01', 'jahr');
+    ok('ein Jahr, in dem niemand angestellt war → keine Zeilen', z.length === 0, JSON.stringify(z));
+    ok('… und es steht ein verständlicher Hinweis statt eines leeren Rasters',
+      /niemand angestellt/.test(await a.seite.evaluate(() => document.querySelector('.absence-empty')?.textContent || '')),
+      await a.seite.evaluate(() => document.querySelector('.absence-empty')?.textContent || ''));
 
     console.log('\n── Auch ein ALTER Eintrag aus dem Verlauf wird gefunden ──');
     ok('der alte Eintrag wurde angelegt', !!altId, JSON.stringify(altR.body && altR.body.error));
