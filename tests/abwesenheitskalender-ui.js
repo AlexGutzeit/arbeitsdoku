@@ -115,6 +115,14 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     const maTok = (await req('POST', '/api/auth/login', null, { username: 'ma1', password: PW })).body.token;
     await req('POST', '/api/absences', maTok, { type: 'urlaub', date_from: MONAT + '-22', date_to: MONAT + '-24' });
 
+    // Ein ALTER, laengst abgeschlossener Eintrag. Der landet im „Verlauf", und dessen Monate werden
+    // erst beim Aufklappen gezeichnet. Genau diesen Fall hat der erste Anlauf komplett verfehlt:
+    // Der Sprung suchte eine Karte, die im Dokument noch gar nicht existierte, und tat still
+    // nichts. In echten Daten ist das der Normalfall — alles aelter als eine Woche liegt dort.
+    const langHer = (() => { const d = new Date(); d.setMonth(d.getMonth() - 5); return d.toISOString().slice(0, 10); })();
+    const altR = await abw(ids[6], 'sonderurlaub', langHer, langHer);
+    const altId = altR.body && altR.body.absence && altR.body.absence.id;
+
     const misslungen = angelegt.filter(x => x.status !== 201 && x.status !== 200);
     ok('alle Testdaten wurden wirklich angelegt', misslungen.length === 0, JSON.stringify(misslungen.slice(0, 4)));
 
@@ -419,6 +427,34 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     ok('nach einer fremden Änderung steht die Ansicht noch da, wo man war',
       wisch.modus === 'jahr' && Math.abs(wisch.scrollLeft - gewischt.gesetzt) < 5,
       JSON.stringify({ ...wisch, erwartet: gewischt.gesetzt }));
+
+    console.log('\n── Auch ein ALTER Eintrag aus dem Verlauf wird gefunden ──');
+    ok('der alte Eintrag wurde angelegt', !!altId, JSON.stringify(altR.body && altR.body.error));
+    // Alles zuklappen, damit wirklich etwas aufzudecken ist.
+    await a.seite.evaluate(() => {
+      _collapsedSections = new Set(['krank', 'urlaub', 'freizeitausgleich', 'sonderurlaub', 'berufsschule', 'innung', 'feiertag']);
+      localStorage.setItem('absenceCollapsed', JSON.stringify([..._collapsedSections]));
+    });
+    await kalenderOeffnen(a.seite, langHer.slice(0, 8) + '01', 'monat');
+    const alt = await a.seite.evaluate(async (id) => {
+      const bar = document.querySelector(`.abscal-bar[data-abs="${id}"]`);
+      if (!bar) return { balkenDa: false };
+      bar.click();
+      await new Promise(r => setTimeout(r, 1800));
+      const karte = document.querySelector(`.absence-card[data-id="${id}"]`);
+      const offen = [...document.querySelectorAll('.absence-section')]
+        .filter(s => !s.querySelector('.absence-section-body')?.classList.contains('collapsed'))
+        .map(s => s.dataset.sectionType);
+      return { balkenDa: true, karteDa: !!karte, sichtbar: !!karte && karte.checkVisibility(),
+               hervor: !!karte && karte.className.includes('absence-card--hervor'), offeneAbschnitte: offen };
+    }, altId);
+    ok('der alte Eintrag ist im Kalender gezeichnet', alt.balkenDa, JSON.stringify(alt));
+    ok('… ein Klick holt seine Karte aus dem Verlauf hervor', alt.karteDa, JSON.stringify(alt));
+    ok('… sie ist sichtbar und hervorgehoben', alt.sichtbar && alt.hervor, JSON.stringify(alt));
+    // Alex' Frage: klappt das ALLE Abschnitte auf?
+    ok('… und es geht NUR sein Abschnitt auf, nicht alle',
+      alt.offeneAbschnitte && alt.offeneAbschnitte.length === 1 && alt.offeneAbschnitte[0] === 'sonderurlaub',
+      JSON.stringify(alt.offeneAbschnitte));
 
     console.log('\n── In der Jahresansicht: Jahre blättern und in den Monat springen ──');
     const jetztJahr = new Date().getFullYear();
