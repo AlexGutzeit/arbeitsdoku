@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const push = require('../push');
+const { darfBestellen } = require('../bestellrecht');
 
 const router = express.Router();
 
@@ -100,12 +101,19 @@ const scheduleOut = (r) => ({
   cats: String(r.cats || '').split(',').filter(Boolean),
   paused: r.paused === 1,
 });
-// Eingabe validieren/normalisieren. orders nur für Chef/Admin. Gibt {error} oder {name,weekdays,time,cats}.
-function normalizeSchedule(body, role) {
+// Eingabe validieren/normalisieren. Gibt {error} oder {name,weekdays,time,cats}.
+//
+// Zweiter Parameter ist der GANZE Nutzer, nicht nur seine Rolle: Ob „Bestellungen" erlaubt ist,
+// haengt am Recht `can_order` — eine Rolle allein beantwortet die Frage nicht. Bis zum 28.08.2026
+// stand hier `role === 'chef' || role === 'admin'`. Das verwarf die Kategorie still: Wer sie
+// allein waehlte, bekam „Mindestens eine Kategorie erforderlich"; wer sie mit einer zweiten
+// waehlte, speicherte und fand nur die zweite wieder (Alex, mit Bildschirmfoto). Betroffen waren
+// Rechteinhaber UND der Buchhalter.
+function normalizeSchedule(body, user) {
   const name = (typeof body.name === 'string' ? body.name.trim() : '').slice(0, NAME_MAX);
   const days = [...new Set((Array.isArray(body.weekdays) ? body.weekdays : []).map(Number).filter(n => n >= 1 && n <= 7))].sort((a, b) => a - b);
   const time = (typeof body.time === 'string' && TIME_RE.test(body.time)) ? body.time : null;
-  const canOrders = role === 'chef' || role === 'admin';
+  const canOrders = darfBestellen(user);
   const cats = [...new Set((Array.isArray(body.cats) ? body.cats : []).filter(c => CATEGORIES.includes(c)))]
     .filter(c => c !== 'orders' || canOrders);
   if (!days.length) return { error: 'Mindestens ein Wochentag erforderlich' };
@@ -124,7 +132,7 @@ router.get('/summaries', authenticate, (req, res) => {
 
 // Neuen Plan anlegen
 router.post('/summaries', authenticate, (req, res) => {
-  const norm = normalizeSchedule(req.body || {}, req.user.role);
+  const norm = normalizeSchedule(req.body || {}, req.user);
   if (norm.error) return res.status(400).json({ error: norm.error });
   const db = getDb();
   const r = db.prepare(
@@ -154,7 +162,7 @@ router.put('/summaries/:id', authenticate, (req, res) => {
   // Feld-Änderung (Wochentage/Zeit/Kategorien) nur, wenn mindestens eines mitgeschickt wird.
   if (body.name !== undefined || body.weekdays !== undefined || body.time !== undefined || body.cats !== undefined) {
     const cur = scheduleOut(row);
-    const norm = normalizeSchedule({ name: body.name ?? cur.name, weekdays: body.weekdays ?? cur.weekdays, time: body.time ?? row.time, cats: body.cats ?? cur.cats }, req.user.role);
+    const norm = normalizeSchedule({ name: body.name ?? cur.name, weekdays: body.weekdays ?? cur.weekdays, time: body.time ?? row.time, cats: body.cats ?? cur.cats }, req.user);
     if (norm.error) return res.status(400).json({ error: norm.error });
     db.prepare('UPDATE summary_schedules SET name = ?, weekdays = ?, time = ?, cats = ? WHERE id = ?').run(norm.name, norm.weekdays, norm.time, norm.cats, row.id);
   }

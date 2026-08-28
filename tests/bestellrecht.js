@@ -81,6 +81,7 @@ function req(server, method, p, token, body) {
   app.use('/api/orders', require('../routes/orders'));
   app.use('/api/users', require('../routes/users'));
   app.use('/api/badges', require('../routes/badges'));
+  app.use('/api/push', require('../routes/push'));
   const server = app.listen(0);
   await new Promise(r => server.once('listening', r));
 
@@ -149,6 +150,35 @@ function req(server, method, p, token, body) {
     r = await req(server, 'DELETE', `/api/orders/${bestellung.id}`, tokens.admin);
     ok('… der Admin darf es', r.status === 200, r.status + '');
 
+    console.log('\n── Eine Zusammenfassung mit „Bestellungen" lässt sich wirklich anlegen ──');
+    // Der Weg über die API, nicht per INSERT in die Tabelle. Genau diese Lücke hat den Fehler vom
+    // 28.08.2026 durchgelassen: Die Aufräum-Prüfungen weiter unten legen ihre Zeilen direkt in der
+    // Datenbank an — damit ist `normalizeSchedule` nie beteiligt, und dass es „orders" still
+    // verwarf, konnte niemandem auffallen.
+    //
+    // Alex mit Bildschirmfoto: Allein gewählt kam „Mindestens eine Kategorie erforderlich"; zusammen
+    // mit einer zweiten wurde gespeichert und nur die zweite stand danach da.
+    r = await req(server, 'POST', '/api/push/summaries', tokens.max,
+      { name: 'Einkauf', weekdays: [1, 2, 3, 4, 5], time: '10:37', cats: ['orders'] });
+    ok('„Bestellungen" allein wird angenommen', r.status === 201, r.status + ' ' + JSON.stringify(r.body));
+    ok('… und steht auch wirklich drin', r.body && r.body.schedule && r.body.schedule.cats.join(',') === 'orders',
+      JSON.stringify(r.body && r.body.schedule && r.body.schedule.cats));
+    r = await req(server, 'POST', '/api/push/summaries', tokens.max,
+      { name: 'Beides', weekdays: [1], time: '10:37', cats: ['orders', 'bulletin'] });
+    ok('… zusammen mit „Schwarzes Brett" bleiben BEIDE erhalten',
+      r.status === 201 && r.body.schedule.cats.slice().sort().join(',') === 'bulletin,orders',
+      JSON.stringify(r.body && r.body.schedule && r.body.schedule.cats));
+    // Und der Buchhalter, der es per Rolle darf — er war ebenso betroffen.
+    r = await req(server, 'POST', '/api/push/summaries', tokens.buchhalter,
+      { name: 'Einkauf', weekdays: [1], time: '08:00', cats: ['orders'] });
+    ok('… der Buchhalter darf es auch', r.status === 201 && r.body.schedule.cats.join(',') === 'orders',
+      r.status + ' ' + JSON.stringify(r.body));
+    // Die Kehrseite — „ohne Recht bleibt es gesperrt" — steht nach dem Entzug weiter unten.
+    // Aufraeumen, damit die Pruefungen dort mit ihrem eigenen Bestand arbeiten.
+    for (const row of db.prepare('SELECT id FROM summary_schedules WHERE user_id = ?').all(ids.max)) {
+      db.prepare('DELETE FROM summary_schedules WHERE id = ?').run(row.id);
+    }
+
     console.log('\n── Der Entzug räumt auf ──');
     // Ausgangslage: Push an, zwei Zusammenfassungen — eine gemischte und eine reine.
     db.prepare('INSERT OR REPLACE INTO push_prefs (user_id, orders, bulletin, notes, absences) VALUES (?, 1, 1, 1, 1)').run(ids.max);
@@ -173,6 +203,11 @@ function req(server, method, p, token, body) {
     r = await act('POST', '/api/orders', 'chef', { product: 'Schellen' });
     ok('… und er bekommt keine Meldung mehr', !empfaenger().includes('max'), empfaenger());
     ok('… sein Coin steht wieder auf 0', coinsVon('max').orders === 0, JSON.stringify(coinsVon('max')));
+    r = await req(server, 'POST', '/api/push/summaries', tokens.max,
+      { name: 'Einkauf', weekdays: [1], time: '10:37', cats: ['orders'] });
+    ok('… und er kann keine Bestell-Zusammenfassung mehr anlegen',
+      r.status === 400 && /Kategorie/.test(String(r.body && r.body.error)),
+      r.status + ' ' + JSON.stringify(r.body));
 
     console.log('\n── Auch der Weg über die Rolle ──');
     // Ein Chef verliert das Recht implizit, wenn er zum Mitarbeiter zurueckgestuft wird. Ohne
