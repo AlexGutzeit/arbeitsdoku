@@ -122,6 +122,13 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     const langHer = (() => { const d = new Date(); d.setMonth(d.getMonth() - 5); return d.toISOString().slice(0, 10); })();
     const altR = await abw(ids[6], 'sonderurlaub', langHer, langHer);
     const altId = altR.body && altR.body.absence && altR.body.absence.id;
+    // GENEHMIGEN ist hier Pflicht, nicht Beiwerk: Ein offener Antrag steht immer oben in der
+    // Liste („recent"), egal wie alt er ist — er waere also im Dokument und der Test liefe am
+    // eigentlichen Fall vorbei. Erst genehmigt wandert er in den Verlauf. (Genau daran ist der
+    // erste Anlauf gescheitert: Die Gegenprobe blieb gruen.)
+    const altGen = await req('POST', `/api/absences/${altId}/approve`, admin);
+    ok('der alte Eintrag ist genehmigt und liegt damit im Verlauf',
+      altGen.status === 200, altGen.status + ' ' + altGen.text.slice(0, 80));
 
     const misslungen = angelegt.filter(x => x.status !== 201 && x.status !== 200);
     ok('alle Testdaten wurden wirklich angelegt', misslungen.length === 0, JSON.stringify(misslungen.slice(0, 4)));
