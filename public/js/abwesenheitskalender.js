@@ -91,14 +91,36 @@
   const istFeiertag = (a) => a.type === 'feiertag';
 
   /**
-   * Die Zeilen des Kalenders: alle aktiven Mitarbeiter, plus jeder, der in der Spanne eine
-   * Abwesenheit hat (auch ein ausgestellter — seine alten Zeiten gehoeren in den Monat, in dem
-   * sie lagen).
+   * War jemand im gezeigten Zeitraum ANGESTELLT? Nicht „ist er heute aktiv" — sonst zeigte der
+   * April eine Kollegin, die erst im Juni anfing, und das Jahr 2025 die ganze heutige Mannschaft
+   * (Alex, 28.08.2026).
+   *
+   * Gerechnet wird auf `employment_periods` (kommt als `u.employment` mit `/api/users`): Es
+   * genuegt EINE Ueberschneidung mit dem Zeitraum. Damit ergibt sich alles Weitere von selbst —
+   * wer Mitte Maerz anfaengt, erscheint ab Maerz; wer Mitte Juni geht, im Juni noch und ab Juli
+   * nicht mehr; wer wieder eingestellt wird, ab dann erneut; im Jahr, wer irgendwann darin
+   * angestellt war.
+   *
+   * Ein offenes Ende (`e` leer) heisst „bis heute", ein fehlender Anfang „seit jeher".
+   */
+  function angestelltIm(u, von, bis) {
+    const zeiten = u.employment || [];
+    // Altbestand ohne hinterlegte Zeitraeume: auf das Aktiv-Kennzeichen zurueckfallen, sonst
+    // verschwaende die Ansicht bei einer alten Datenbank alle Zeilen auf einmal.
+    if (!zeiten.length) return Number(u.active) !== 0;
+    return zeiten.some(z => (!z.s || z.s <= bis) && (!z.e || z.e >= von));
+  }
+
+  /**
+   * Die Zeilen des Kalenders: jeder, der im gezeigten Zeitraum angestellt war — plus jeder, der
+   * dort eine Abwesenheit hat. Das Zweite ist ein Sicherheitsnetz: Steht in den Daten eine
+   * Abwesenheit ausserhalb jedes Anstellungszeitraums, ist es besser, sie zu zeigen, als sie
+   * stillschweigend zu verschlucken.
    */
   function zeilenBauen(abwesenheiten, nutzer, von, bis) {
     const nachId = new Map();
     for (const u of (nutzer || [])) {
-      if (Number(u.active) === 0) continue;
+      if (!angestelltIm(u, von, bis)) continue;
       nachId.set(u.id, { id: u.id, name: u.name, eintraege: [] });
     }
     for (const a of abwesenheiten) {
@@ -263,7 +285,7 @@
           <button class="btn btn-sm btn-outline abscal-heute" data-heute="1">Heute</button>
         </div>
       </div>
-      ${leer ? '<p class="absence-empty">Keine Mitarbeiter zum Anzeigen.</p>' : `
+      ${leer ? `<p class="absence-empty">In ${zustand.modus === 'jahr' ? 'diesem Jahr' : 'diesem Monat'} war niemand angestellt.</p>` : `
       <div class="abscal-scroll">
         <div class="abscal-grid abscal-grid--${zustand.modus}"
              style="grid-template-columns:var(--abscal-name) repeat(${spalten}, var(--abscal-tag))">
@@ -364,5 +386,5 @@
       ${a.comment ? '<br><em>' + esc(a.comment) + '</em>' : ''}`;
   }
 
-  window.Abwesenheitskalender = { zeichnen, zustand, _intern: { spanne, zeilenBauen, verschieben, titel } };
+  window.Abwesenheitskalender = { zeichnen, zustand, _intern: { spanne, zeilenBauen, verschieben, titel, angestelltIm } };
 })();
