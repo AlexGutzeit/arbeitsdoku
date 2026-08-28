@@ -358,7 +358,10 @@ Antrag ist schraffiert. Läuft ein Zeitraum über den Rand des Zeitfensters hina
 Schnittkante **gepunktet** — er endet dort nicht, er geht weiter. **Feiertage** bekommen keine
 eigene Zeile, sondern färben die ganze Spalte (sie gelten für alle), **heute** ist senkrecht
 markiert, und im Monat sind Wochenenden hinterlegt. Mitarbeiter **ohne** Eintrag bleiben als leere
-Zeile stehen — sonst wüsste man nicht, wer da ist. Ein **Mouseover** (am Handy: langer Druck) auf
+Zeile stehen — sonst wüsste man nicht, wer da ist. **Gezeigt wird, wer im dargestellten Zeitraum
+angestellt war**, nicht wer heute im Haus ist: Wer Mitte März anfängt, erscheint ab März; wer Mitte
+Juni ausscheidet, im Juni noch und ab Juli nicht mehr; wer wieder eingestellt wird, ab dann erneut.
+In der Jahresansicht steht jeder, der irgendwann in diesem Jahr angestellt war. Ein **Mouseover** (am Handy: langer Druck) auf
 einen Balken nennt Name, Art, Zeitraum, Anzahl Tage und Kommentar. **Ein Klick auf den Balken führt
 in die Liste, genau zu diesem Eintrag** — zugeklappte Abschnitte gehen dabei auf, und der Eintrag
 wird kurz grün umrandet (wie ein Termin, den man auf der Willkommensseite antippt). Im Jahr führt
