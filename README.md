@@ -359,9 +359,15 @@ Schnittkante **gepunktet** — er endet dort nicht, er geht weiter. **Feiertage*
 eigene Zeile, sondern färben die ganze Spalte (sie gelten für alle), **heute** ist senkrecht
 markiert, und im Monat sind Wochenenden hinterlegt. Mitarbeiter **ohne** Eintrag bleiben als leere
 Zeile stehen — sonst wüsste man nicht, wer da ist. Ein **Mouseover** (am Handy: langer Druck) auf
-einen Balken nennt Name, Art, Zeitraum, Anzahl Tage und Kommentar. Der Name bleibt beim seitlichen
-Wischen stehen; gewischt wird nur die Kalenderfläche, nie die Seite. Beim Öffnen steht **heute**
-im Bild. Die Ansicht ist **rein lesend** — eingetragen und bearbeitet wird weiter in der Liste.
+einen Balken nennt Name, Art, Zeitraum, Anzahl Tage und Kommentar. **Ein Klick auf den Balken führt
+in die Liste, genau zu diesem Eintrag** — zugeklappte Abschnitte gehen dabei auf, und der Eintrag
+wird kurz grün umrandet (wie ein Termin, den man auf der Willkommensseite antippt). Im Jahr führt
+ein Klick auf einen **Monatsnamen** in genau diesen Monat; mit **‹ ›** blättert man Jahre (im Monat
+Monate), **Heute** holt die Gegenwart zurück, und beim Öffnen steht immer das **laufende** Jahr bzw.
+der laufende Monat. Der Name bleibt beim seitlichen Wischen stehen; gewischt wird nur die
+Kalenderfläche, nie die Seite. Beim Öffnen steht **heute** im Bild. Die Ansicht aktualisiert sich
+**live**: Genehmigt jemand anderes einen Urlaub, erscheint er sofort — und die Wischposition bleibt,
+wo sie war. Die Ansicht ist **rein lesend** — eingetragen und bearbeitet wird weiter in der Liste.
 
 *Warum eine Matrix und kein Kalenderblatt:* An vollen Tagen sind hier acht von zwölf gleichzeitig
 weg. Eine Tageszelle mit acht Namen endet bei „+5 weitere" — ausgerechnet die Tage, auf die es

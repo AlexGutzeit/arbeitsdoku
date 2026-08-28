@@ -101,6 +101,21 @@ steht jetzt im Test, mitsamt der Warnung.
 Zusatz: Die Farben der Abwesenheitsarten lagen **dreifach** im Stylesheet; der Kalender wäre die
 vierte Kopie geworden. Sie stehen jetzt einmal als CSS-Variablen.
 
+**Nachtrag: eine Zusicherung, die nichts zusicherte.** Zum Sprung „Balken antippen → Liste" gehört,
+dass zugeklappte Abschnitte aufgehen. Der Test prüfte „Eintrag sichtbar" — und blieb grün, als ich
+das Aufdecken zur Gegenprobe abschaltete. Grund: Standardmäßig ist gar nichts zugeklappt, der
+Eintrag war ohnehin sichtbar. Der Test klappt jetzt vorher alles zu **und** weist nach, dass es
+wirklich etwas aufzudecken gab.
+
+Dabei fiel ein echter Fehler auf: Ein Eintrag, der noch eine Aktion braucht, steht **zweimal** auf
+der Seite — im Posteingang oben und in der Liste unten. Der Sprung nahm `querySelector`, also die
+erste Kopie; die Karte in der Liste blieb zugeklappt und unmarkiert. Wer danach weiterlas, fand sie
+dort nicht wieder. Jetzt werden alle Kopien aufgedeckt und hervorgehoben.
+
+Und einer, den nur ein echtes Gerät gezeigt hätte: `attachLongPressTooltip` ruft sein zweites
+Argument als **Funktion** auf (`htmlFor()`); ich übergab einen String. Am Rechner läuft alles über
+`mouseenter` — der lange Druck wäre erst auf dem Handy auf die Nase gefallen.
+
 ### 2026-08-27 · Ein Helfer allein hilft nicht, wenn ihn keiner fragt
 
 Alex, mit Bildschirmfoto vom Handy: Als **Mitarbeiter mit Bestellrecht** ist der „Bestellt"-Knopf
