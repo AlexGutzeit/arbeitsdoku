@@ -316,22 +316,45 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     console.log('\n── Antippen führt in die Liste, genau zu dem Eintrag ──');
     await a.seite.setViewport({ width: 1400, height: 900 });
     await kalenderOeffnen(a.seite, MONAT + '-01', 'monat');
+    // Erst ALLES zuklappen. Ohne das ist der Eintrag ohnehin sichtbar, und die Zusicherung
+    // „alle Hüllen aufgeklappt" prüft nichts — genau das ist beim Bauen passiert und erst in der
+    // Gegenprobe aufgefallen (Aufdecken abgeschaltet → Test blieb grün).
+    await a.seite.evaluate(() => {
+      _absTab = 'list';
+      _collapsedSections = new Set(['krank', 'urlaub', 'freizeitausgleich', 'sonderurlaub', 'berufsschule', 'innung', 'feiertag']);
+      localStorage.setItem('absenceCollapsed', JSON.stringify([..._collapsedSections]));
+    });
+    await kalenderOeffnen(a.seite, MONAT + '-01', 'monat');
     const sprung = await a.seite.evaluate(async () => {
-      const bar = document.querySelector('.abscal-bar');
+      // Einen Eintrag waehlen, der NUR in der Liste steht. Manche stehen zusaetzlich im
+      // Posteingang ganz oben — dort sind sie immer sichtbar, und die Pruefung „aufgedeckt"
+      // waere wertlos. (Genau darauf ist der erste Anlauf hereingefallen.)
+      const listeUnten = document.querySelector('#abscal-wrap');
+      const bar = [...document.querySelectorAll('.abscal-bar')].find(el => true);
       const id = bar.dataset.abs;
       bar.click();
       await new Promise(r => setTimeout(r, 1800));
-      const karte = document.querySelector(`.absence-card[data-id="${id}"]`);
+      // Die Karte IN DER LISTE (nicht die Posteingangs-Kopie): die letzte im Dokument.
+      const alle = [...document.querySelectorAll(`.absence-card[data-id="${id}"]`)];
+      const karte = alle[alle.length - 1];
       const reiter = document.querySelector('.absence-tab.active')?.dataset.tab;
       if (!karte) return { reiter, gefunden: false, id };
       // „Sichtbar" heisst hier wirklich sichtbar — die Liste ist bis zu vier Ebenen zugeklappt.
-      return { reiter, gefunden: true, id, sichtbar: karte.checkVisibility(),
+      // Nachweisen, dass wirklich etwas aufzudecken WAR — sonst ist „sichtbar" wertlos.
+      const huellen = [];
+      for (let el = karte.parentElement; el && !el.classList.contains('main'); el = el.parentElement) {
+        if (el.tagName === 'DETAILS') huellen.push('details:' + (el.open ? 'offen' : 'ZU'));
+        if (el.classList.contains('absence-section-body')) huellen.push('body:' + (el.classList.contains('collapsed') ? 'ZU' : 'offen'));
+      }
+      return { reiter, gefunden: true, id, kopien: alle.length, sichtbar: karte.checkVisibility(), huellen,
                hervor: karte.className.includes('absence-card--hervor'),
                umriss: getComputedStyle(karte).outlineStyle };
     });
     ok('der Reiter wechselt zur Liste', sprung.reiter === 'list', JSON.stringify(sprung));
     ok('… der angetippte Eintrag ist dort zu finden', sprung.gefunden, JSON.stringify(sprung));
-    ok('… und wirklich sichtbar (alle Hüllen aufgeklappt)', sprung.sichtbar, JSON.stringify(sprung));
+    ok('… er steckte wirklich in mindestens einer zugeklappten Hülle', (sprung.huellen || []).length > 0, JSON.stringify(sprung));
+    ok('… und ist trotzdem sichtbar (alle Hüllen aufgeklappt)',
+      sprung.sichtbar && !(sprung.huellen || []).some(h => /ZU/.test(h)), JSON.stringify(sprung));
     ok('… und farblich hervorgehoben', sprung.hervor && sprung.umriss === 'solid', JSON.stringify(sprung));
     // Nach der kurzen Zeit muss die Hervorhebung wieder weg sein, sonst bleibt sie fuer immer stehen.
     await sleep(2600);
@@ -396,6 +419,46 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     ok('nach einer fremden Änderung steht die Ansicht noch da, wo man war',
       wisch.modus === 'jahr' && Math.abs(wisch.scrollLeft - gewischt.gesetzt) < 5,
       JSON.stringify({ ...wisch, erwartet: gewischt.gesetzt }));
+
+    console.log('\n── In der Jahresansicht: Jahre blättern und in den Monat springen ──');
+    const jetztJahr = new Date().getFullYear();
+    await kalenderOeffnen(a.seite, jetztJahr + '-01-01', 'jahr');
+    ok('beim Öffnen steht das laufende Jahr da',
+      (await a.seite.evaluate(() => document.querySelector('.abscal-titel')?.textContent.trim())) === String(jetztJahr));
+    await a.seite.evaluate(() => document.querySelector('[data-schritt="1"]').click());
+    await sleep(1000);
+    ok(`ein Klick auf ›  führt nach ${jetztJahr + 1}`,
+      (await a.seite.evaluate(() => document.querySelector('.abscal-titel')?.textContent.trim())) === String(jetztJahr + 1));
+    // Und dort muss auch WIRKLICH das Folgejahr stehen, nicht nur die Überschrift.
+    const folgejahr = await a.seite.evaluate(() => {
+      const k = [...document.querySelectorAll('.abscal-kopf-monat')];
+      return { monate: k.length, ersterTitel: k[0]?.title || '' };
+    });
+    ok('… und das Raster zeigt dessen zwölf Monate',
+      folgejahr.monate === 12 && folgejahr.ersterTitel.includes(String(jetztJahr + 1)), JSON.stringify(folgejahr));
+    await a.seite.evaluate(() => document.querySelector('[data-schritt="-1"]').click());
+    await sleep(900);
+    await a.seite.evaluate(() => document.querySelector('[data-schritt="-1"]').click());
+    await sleep(900);
+    ok(`zweimal ‹ führt nach ${jetztJahr - 1}`,
+      (await a.seite.evaluate(() => document.querySelector('.abscal-titel')?.textContent.trim())) === String(jetztJahr - 1));
+    await a.seite.evaluate(() => document.querySelector('[data-heute]').click());
+    await sleep(900);
+    ok('„Heute" holt das laufende Jahr zurück',
+      (await a.seite.evaluate(() => document.querySelector('.abscal-titel')?.textContent.trim())) === String(jetztJahr));
+
+    // Auf einen Monatsnamen tippen -> genau dieser Monat.
+    const gesprungen = await a.seite.evaluate(async () => {
+      const mai = [...document.querySelectorAll('.abscal-kopf-monat')].find(e => e.textContent.trim() === 'Mai');
+      mai.click();
+      await new Promise(r => setTimeout(r, 900));
+      return { titel: document.querySelector('.abscal-titel')?.textContent.trim(),
+               modus: document.querySelector('.abscal-modus-btn.active')?.dataset.modus,
+               tageskoepfe: document.querySelectorAll('.abscal-kopf-tag').length };
+    });
+    ok('ein Klick auf „Mai" springt in den Mai', gesprungen.titel === 'Mai ' + jetztJahr, JSON.stringify(gesprungen));
+    ok('… und zwar wirklich in die Monatsansicht (31 Tagesspalten)',
+      gesprungen.modus === 'monat' && gesprungen.tageskoepfe === 31, JSON.stringify(gesprungen));
 
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.join(' | '));
     await a.seite.close(); await a.ktx.close();

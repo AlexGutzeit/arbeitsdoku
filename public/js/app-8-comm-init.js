@@ -1425,8 +1425,11 @@ async function renderAbsences() {
   if (S._abwesenheitZiel != null && !showVac && !showCal) {
     const zielId = S._abwesenheitZiel;
     S._abwesenheitZiel = null;
-    const karte = mainEl.querySelector(`.absence-card[data-id="${zielId}"]`);
-    if (karte) {
+    // ALLE Kopien, nicht nur die erste: Ein Eintrag, der noch eine Aktion braucht, steht
+    // zusaetzlich im Posteingang ganz oben. Nur die erste zu nehmen hiesse, die Karte in der
+    // Liste bliebe zugeklappt und unmarkiert — man findet sie beim Weiterlesen nicht wieder.
+    const karten = [...mainEl.querySelectorAll(`.absence-card[data-id="${zielId}"]`)];
+    for (const karte of karten) {
       for (let el = karte.parentElement; el && el !== mainEl; el = el.parentElement) {
         if (el.tagName === 'DETAILS') el.open = true;
         if (el.classList.contains('absence-section-body') && el.classList.contains('collapsed')) {
@@ -1438,10 +1441,10 @@ async function renderAbsences() {
           if (typ) { _collapsedSections.delete(typ); localStorage.setItem('absenceCollapsed', JSON.stringify([..._collapsedSections])); }
         }
       }
-      karte.scrollIntoView({ block: 'center', behavior: 'smooth' });
       karte.classList.add('absence-card--hervor');
       setTimeout(() => karte.classList.remove('absence-card--hervor'), 2500);
     }
+    if (karten.length) karten[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
   mainEl.querySelectorAll('.absence-new').forEach(btn => {

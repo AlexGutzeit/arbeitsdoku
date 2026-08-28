@@ -2286,8 +2286,13 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .abscal-kopf-tag--we { color: var(--text-lighter); }
 .abscal-kopf-wt { display: block; }
 .abscal-kopf-nr { display: block; font-weight: 600; color: var(--text); }
-.abscal-kopf-monat { grid-row: 1; z-index: 1; font-size: 0.7rem;
-  font-weight: 600; text-align: center; padding-bottom: 3px; }
+/* Ein <button>, damit der Sprung in den Monat auch mit der Tastatur geht — sieht aus wie eine
+   Beschriftung, verhaelt sich wie ein Schalter. */
+.abscal-kopf-monat { grid-row: 1; z-index: 1; font: inherit; font-size: 0.7rem; font-weight: 600;
+  text-align: center; padding: 0 0 3px; border: none; background: none; color: var(--text);
+  cursor: pointer; border-radius: 4px; }
+.abscal-kopf-monat:hover { background: var(--primary-light); color: var(--primary-hover); }
+.abscal-kopf-monat:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 
 .abscal-spalte { z-index: 0; pointer-events: none; }
 .abscal-spalte--we { background: var(--bg, #f6f7f5); }

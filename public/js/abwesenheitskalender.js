@@ -150,7 +150,10 @@
         const ersterNaechster = alsIso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)));
         const ende = ersterNaechster > bis ? plusTag(bis, 1) : ersterNaechster;
         const tage = tagAbstand(iso, ende);
-        html += `<div class="abscal-kopf-monat" style="grid-column:${tagAbstand(von, iso) + TAG1} / span ${tage}">${MONAT_KURZ[d.getUTCMonth()]}</div>`;
+        const ersterDesMonats = iso.slice(0, 8) + '01';
+        html += `<button type="button" class="abscal-kopf-monat" data-monat="${ersterDesMonats}"
+          style="grid-column:${tagAbstand(von, iso) + TAG1} / span ${tage}"
+          title="${MONAT_LANG[d.getUTCMonth()]} ${d.getUTCFullYear()} im Detail">${MONAT_KURZ[d.getUTCMonth()]}</button>`;
         iso = ende;
       }
       return html;
@@ -305,6 +308,13 @@
     }));
     ziel.querySelectorAll('[data-schritt]').forEach(b => b.addEventListener('click', () => {
       verschieben(Number(b.dataset.schritt));
+      zeichnen(ziel, abwesenheiten, nutzer, opt);
+    }));
+    // Auf einen Monatsnamen tippen fuehrt in genau diesen Monat — der naheliegende Weg vom
+    // Ueberblick ins Detail, ohne den Umweg ueber „Monat" und dann vor-/zurueckblaettern.
+    ziel.querySelectorAll('[data-monat]').forEach(b => b.addEventListener('click', () => {
+      zustand.modus = 'monat';
+      zustand.anker = b.dataset.monat;
       zeichnen(ziel, abwesenheiten, nutzer, opt);
     }));
     ziel.querySelector('[data-heute]')?.addEventListener('click', () => {
