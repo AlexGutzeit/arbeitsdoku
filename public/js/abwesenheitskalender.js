@@ -47,7 +47,13 @@
   const zustand = {
     modus: 'monat',                       // 'monat' | 'jahr'
     anker: heuteIso().slice(0, 7) + '-01', // erster Tag des gezeigten Monats bzw. Jahres
+    // Wischposition je Ansicht. Der Kalender wird bei JEDER Aenderung neu gezeichnet — auch, wenn
+    // die Chefin nebenan einen Urlaub genehmigt (SSE). Ohne dieses Gedaechtnis spraenge man dabei
+    // zurueck zu „heute", obwohl man gerade den Maerz ansieht. Dieselbe Falle wie beim
+    // Scroll-Ruecksprung im Zeitnachweis (B10).
+    wisch: {},
   };
+  const wischSchluessel = () => zustand.modus + '|' + zustand.anker;
 
   function spanne() {
     if (zustand.modus === 'jahr') {
@@ -214,7 +220,8 @@
    * @param {Array} abwesenheiten  die bereits geladene Liste (ungefiltert)
    * @param {Array} nutzer         S.users
    */
-  function zeichnen(ziel, abwesenheiten, nutzer) {
+  function zeichnen(ziel, abwesenheiten, nutzer, opt) {
+    opt = opt || {};
     if (!ziel) return;
     const { von, bis } = spanne();
     const spalten = tagAbstand(von, bis) + 1;
@@ -268,13 +275,17 @@
     // Handy-Fenster; ohne das startet man im Januar und wischt sich erst zur Gegenwart durch.
     // Nur waagerecht und nur innerhalb der Flaeche — die Seite selbst bleibt, wo sie ist.
     const flaeche = ziel.querySelector('.abscal-scroll');
-    const h = heuteIso();
-    if (flaeche && h >= von && h <= bis) {
-      const spalte = ziel.querySelector('.abscal-spalte--heute');
-      if (spalte) {
-        const ziel_x = spalte.offsetLeft - flaeche.clientWidth / 3;
-        flaeche.scrollLeft = Math.max(0, ziel_x);
+    if (flaeche) {
+      const schluessel = wischSchluessel();
+      const gemerkt = zustand.wisch[schluessel];
+      if (gemerkt != null) {
+        flaeche.scrollLeft = gemerkt;                 // dieselbe Ansicht: Position halten
+      } else {
+        const h = heuteIso();
+        const spalte = (h >= von && h <= bis) ? ziel.querySelector('.abscal-spalte--heute') : null;
+        flaeche.scrollLeft = spalte ? Math.max(0, spalte.offsetLeft - flaeche.clientWidth / 3) : 0;
       }
+      flaeche.addEventListener('scroll', () => { zustand.wisch[schluessel] = flaeche.scrollLeft; }, { passive: true });
     }
 
     ziel.querySelectorAll('.abscal-modus-btn').forEach(b => b.addEventListener('click', () => {
@@ -290,16 +301,16 @@
       } else {
         zustand.anker = zustand.anker.slice(0, 8) + '01';
       }
-      zeichnen(ziel, abwesenheiten, nutzer);
+      zeichnen(ziel, abwesenheiten, nutzer, opt);
     }));
     ziel.querySelectorAll('[data-schritt]').forEach(b => b.addEventListener('click', () => {
       verschieben(Number(b.dataset.schritt));
-      zeichnen(ziel, abwesenheiten, nutzer);
+      zeichnen(ziel, abwesenheiten, nutzer, opt);
     }));
     ziel.querySelector('[data-heute]')?.addEventListener('click', () => {
       const h = heuteIso();
       zustand.anker = zustand.modus === 'jahr' ? h.slice(0, 4) + '-01-01' : h.slice(0, 8) + '01';
-      zeichnen(ziel, abwesenheiten, nutzer);
+      zeichnen(ziel, abwesenheiten, nutzer, opt);
     });
 
     // Erklärung am Balken. Dasselbe Muster wie bei den Gesetzes-Markern: Maus UND langer Druck,
@@ -311,10 +322,12 @@
       // Dasselbe Muster wie bei den Verstoss-Markern in app-3-dashboard.js: `istMauszeiger()`
       // filtert die Maus-Ersatzereignisse weg, die Chrome nach jeder Beruehrung schickt — sonst
       // waere die per langem Druck geoeffnete Sprechblase beim Loslassen sofort wieder zu.
-      const html = balkenTooltipHtml(a);
+      // attachLongPressTooltip ruft sein zweites Argument als FUNKTION auf (`htmlFor()`) — ein
+      // String flöge dort auf die Nase, und zwar nur beim langen Druck auf einem echten Gerät.
+      const html = () => balkenTooltipHtml(a);
       el.addEventListener('mouseenter', (ev) => {
         if (!istMauszeiger()) return;
-        showTooltip(html, ev.clientX, ev.clientY);
+        showTooltip(html(), ev.clientX, ev.clientY);
       });
       el.addEventListener('mousemove', (ev) => {
         if (!istMauszeiger()) return;
@@ -322,6 +335,12 @@
       });
       el.addEventListener('mouseleave', () => { if (istMauszeiger()) hideTooltip(); });
       attachLongPressTooltip(el, html);
+      // Antippen fuehrt zum Eintrag in der Liste. attachLongPressTooltip setzt bei einem langen
+      // Druck einen Riegel, damit das Aufklappen der Sprechblase nicht zugleich als Klick zaehlt.
+      if (typeof opt.beiKlick === 'function') {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', () => { hideTooltip(); opt.beiKlick(a); });
+      }
     });
   }
 

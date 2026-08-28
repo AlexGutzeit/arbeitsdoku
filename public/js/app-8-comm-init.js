@@ -1409,7 +1409,40 @@ async function renderAbsences() {
   });
   if (showVac) renderVacationOverview();
   // Der Kalender rechnet aus den bereits geladenen Daten — keine weitere Anfrage.
-  if (showCal) Abwesenheitskalender.zeichnen(document.getElementById('abscal-wrap'), absences, S.users || []);
+  if (showCal) {
+    Abwesenheitskalender.zeichnen(document.getElementById('abscal-wrap'), absences, S.users || [], {
+      // Antippen fuehrt in die Liste, genau zu diesem Eintrag — wie ein Termin auf der
+      // Willkommensseite in die Tagesansicht der Planung fuehrt.
+      beiKlick: (a) => { _absTab = 'list'; S._abwesenheitZiel = a.id; renderAbsences(); },
+    });
+  }
+
+  // Von dort gekommen? Den Eintrag aufdecken, hinscrollen und kurz hervorheben.
+  //
+  // „Aufdecken" ist hier die eigentliche Arbeit: Die Liste ist bis zu vier Ebenen tief zugeklappt
+  // (Typ-Abschnitt -> Verlauf -> Jahr -> Monat). Ohne das Oeffnen aller Huellen scrollte man zu
+  // etwas Unsichtbarem und stuende scheinbar vor einer leeren Seite.
+  if (S._abwesenheitZiel != null && !showVac && !showCal) {
+    const zielId = S._abwesenheitZiel;
+    S._abwesenheitZiel = null;
+    const karte = mainEl.querySelector(`.absence-card[data-id="${zielId}"]`);
+    if (karte) {
+      for (let el = karte.parentElement; el && el !== mainEl; el = el.parentElement) {
+        if (el.tagName === 'DETAILS') el.open = true;
+        if (el.classList.contains('absence-section-body') && el.classList.contains('collapsed')) {
+          el.classList.remove('collapsed');
+          const kopf = el.previousElementSibling;
+          const pfeil = kopf && kopf.querySelector('.absence-section-chevron');
+          if (pfeil) pfeil.textContent = '▼';
+          const typ = kopf && kopf.dataset ? kopf.dataset.sectionType : null;
+          if (typ) { _collapsedSections.delete(typ); localStorage.setItem('absenceCollapsed', JSON.stringify([..._collapsedSections])); }
+        }
+      }
+      karte.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      karte.classList.add('absence-card--hervor');
+      setTimeout(() => karte.classList.remove('absence-card--hervor'), 2500);
+    }
+  }
 
   mainEl.querySelectorAll('.absence-new').forEach(btn => {
     btn.addEventListener('click', () => showAbsenceForm(null, btn.dataset.type, null, null, null));

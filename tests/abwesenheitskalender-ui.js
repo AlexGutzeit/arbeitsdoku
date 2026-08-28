@@ -313,6 +313,90 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     const erwartet = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][Number(jetzt.slice(5, 7)) - 1] + ' ' + jetzt.slice(0, 4);
     ok('Wechsel ins Monatsraster landet im aktuellen Monat', monatTitel === erwartet, `${monatTitel} statt ${erwartet}`);
 
+    console.log('\n── Antippen führt in die Liste, genau zu dem Eintrag ──');
+    await a.seite.setViewport({ width: 1400, height: 900 });
+    await kalenderOeffnen(a.seite, MONAT + '-01', 'monat');
+    const sprung = await a.seite.evaluate(async () => {
+      const bar = document.querySelector('.abscal-bar');
+      const id = bar.dataset.abs;
+      bar.click();
+      await new Promise(r => setTimeout(r, 1800));
+      const karte = document.querySelector(`.absence-card[data-id="${id}"]`);
+      const reiter = document.querySelector('.absence-tab.active')?.dataset.tab;
+      if (!karte) return { reiter, gefunden: false, id };
+      // „Sichtbar" heisst hier wirklich sichtbar — die Liste ist bis zu vier Ebenen zugeklappt.
+      return { reiter, gefunden: true, id, sichtbar: karte.checkVisibility(),
+               hervor: karte.className.includes('absence-card--hervor'),
+               umriss: getComputedStyle(karte).outlineStyle };
+    });
+    ok('der Reiter wechselt zur Liste', sprung.reiter === 'list', JSON.stringify(sprung));
+    ok('… der angetippte Eintrag ist dort zu finden', sprung.gefunden, JSON.stringify(sprung));
+    ok('… und wirklich sichtbar (alle Hüllen aufgeklappt)', sprung.sichtbar, JSON.stringify(sprung));
+    ok('… und farblich hervorgehoben', sprung.hervor && sprung.umriss === 'solid', JSON.stringify(sprung));
+    // Nach der kurzen Zeit muss die Hervorhebung wieder weg sein, sonst bleibt sie fuer immer stehen.
+    await sleep(2600);
+    ok('… die Hervorhebung verschwindet nach ein paar Sekunden',
+      await a.seite.evaluate(() => !document.querySelector('.absence-card--hervor')));
+
+    console.log('\n── Live: genehmigt die Chefin nebenan, erscheint es sofort ──');
+    // Der eigentliche Anspruch: Der Kalender steht offen, jemand ANDERES genehmigt, und der Balken
+    // ist da — ohne Neuladen. Ausgeloest wird das ueber eine echte Anfrage eines zweiten Nutzers,
+    // nicht durch einen nachgebauten Aufruf im Browser.
+    await kalenderOeffnen(a.seite, MONAT + '-01', 'monat');
+    const vorher = await a.seite.evaluate(() => document.querySelectorAll('.abscal-bar').length);
+    const antrag = (await req('GET', '/api/absences?type=urlaub', admin)).body.absences.find(x => x.status === 'pending');
+    ok('es gibt einen offenen Antrag zum Genehmigen', !!antrag, JSON.stringify(antrag && antrag.id));
+    const gen = await req('POST', `/api/absences/${antrag.id}/approve`, admin);
+    ok('… genehmigt', gen.status === 200, gen.status + ' ' + gen.text.slice(0, 80));
+    await sleep(2500);
+    const nachher = await a.seite.evaluate(() => ({
+      balken: document.querySelectorAll('.abscal-bar').length,
+      nochOffen: document.querySelectorAll('.abscal-bar--pending').length,
+      reiter: document.querySelector('.absence-tab.active')?.dataset.tab,
+      titel: document.querySelector('.abscal-titel')?.textContent.trim(),
+    }));
+    ok('der Kalender bleibt offen und beim selben Monat', nachher.reiter === 'kalender' && nachher.titel === 'Juni 2026',
+      JSON.stringify(nachher));
+    // Gezielt DEN genehmigten Balken pruefen. „Gar keine Schraffur mehr" waere falsch: Ein
+    // Fremdeintrag, den ein Manager fuer jemanden anlegt, ist ebenfalls erst einmal offen — die
+    // acht vom 05.06. sind es also auch, voellig zu Recht.
+    const derBalken = await a.seite.evaluate((id) => {
+      const el = document.querySelector(`.abscal-bar[data-abs="${id}"]`);
+      return el ? { da: true, offen: el.className.includes('--pending') } : { da: false };
+    }, antrag.id);
+    ok('… der genehmigte Eintrag ist ohne Neuladen nicht mehr schraffiert',
+      derBalken.da && !derBalken.offen, JSON.stringify(derBalken));
+    ok('… die Balken sind dabei nicht verloren gegangen', nachher.balken >= vorher, `${vorher} → ${nachher.balken}`);
+
+    console.log('\n── … und dabei bleibt die Wischposition stehen ──');
+    // Wer gerade den März ansieht, darf durch die Genehmigung eines Kollegen nicht zu „heute"
+    // zurückgerissen werden. Dieselbe Falle wie beim Scroll-Rücksprung im Zeitnachweis.
+    await a.seite.evaluate(() => {
+      [...document.querySelectorAll('.abscal-modus-btn')].find(b => b.dataset.modus === 'jahr').click();
+    });
+    await sleep(1200);
+    // Auf einen Wert wischen, den es WIRKLICH gibt: Auf einem breiten Fenster passt das Jahr fast
+    // hinein, der Wischweg ist dann nur wenige Dutzend Pixel. Ein Wunschwert von 250 wuerde
+    // stillschweigend auf das Maximum gekappt — und der Test pruefte nichts.
+    const gewischt = await a.seite.evaluate(() => {
+      const sc = document.querySelector('.abscal-scroll');
+      const max = sc.scrollWidth - sc.clientWidth;
+      sc.scrollLeft = Math.round(max / 2);
+      sc.dispatchEvent(new Event('scroll'));
+      return { max, gesetzt: Math.round(sc.scrollLeft) };
+    });
+    ok('es gibt überhaupt einen Wischweg zum Merken', gewischt.max > 10 && gewischt.gesetzt > 0, JSON.stringify(gewischt));
+    await sleep(400);
+    await req('POST', '/api/absences', admin, { target_user_id: ids[3], type: 'krank', date_from: MONAT + '-18', date_to: MONAT + '-19' });
+    await sleep(2500);
+    const wisch = await a.seite.evaluate(() => ({
+      scrollLeft: Math.round(document.querySelector('.abscal-scroll').scrollLeft),
+      modus: document.querySelector('.abscal-modus-btn.active')?.dataset.modus,
+    }));
+    ok('nach einer fremden Änderung steht die Ansicht noch da, wo man war',
+      wisch.modus === 'jahr' && Math.abs(wisch.scrollLeft - gewischt.gesetzt) < 5,
+      JSON.stringify({ ...wisch, erwartet: gewischt.gesetzt }));
+
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.join(' | '));
     await a.seite.close(); await a.ktx.close();
   } catch (e) {

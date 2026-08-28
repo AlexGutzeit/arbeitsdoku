@@ -2339,3 +2339,7 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
   .abscal-grid--monat, .abscal-grid--jahr { --abscal-name: 6.5rem; }
   .abscal-name { font-size: 0.72rem; }
 }
+
+/* Angetippter Eintrag aus dem Kalender — dieselbe Sprache wie ein Termin, den man auf der
+   Willkommensseite antippt (.tl-plan-entry--hervor). */
+.absence-card--hervor { outline: 3px solid var(--primary); outline-offset: 2px; }
