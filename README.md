@@ -350,6 +350,24 @@ den nächsten offenen Monat und nur **lückenlos**; offene Urlaubs-/Krankanträg
 
 ### Arbeit organisieren
 
+**Abwesenheitskalender** *(Chef/Admin/Buchhalter)*: Der Reiter **Kalender** neben *Liste* und
+*Urlaubsübersicht* zeigt, **wer wann fehlt** — eine Zeile je Mitarbeiter, eine Spalte je Tag,
+umschaltbar zwischen **Monat** und **Jahr**. Zusammenhängende Zeiträume erscheinen als Balken in der
+Farbe ihrer Art (dieselben Farben wie in Zeitnachweis und Planung); ein **noch nicht genehmigter**
+Antrag ist schraffiert. Läuft ein Zeitraum über den Rand des Zeitfensters hinaus, ist die
+Schnittkante **gepunktet** — er endet dort nicht, er geht weiter. **Feiertage** bekommen keine
+eigene Zeile, sondern färben die ganze Spalte (sie gelten für alle), **heute** ist senkrecht
+markiert, und im Monat sind Wochenenden hinterlegt. Mitarbeiter **ohne** Eintrag bleiben als leere
+Zeile stehen — sonst wüsste man nicht, wer da ist. Ein **Mouseover** (am Handy: langer Druck) auf
+einen Balken nennt Name, Art, Zeitraum, Anzahl Tage und Kommentar. Der Name bleibt beim seitlichen
+Wischen stehen; gewischt wird nur die Kalenderfläche, nie die Seite. Beim Öffnen steht **heute**
+im Bild. Die Ansicht ist **rein lesend** — eingetragen und bearbeitet wird weiter in der Liste.
+
+*Warum eine Matrix und kein Kalenderblatt:* An vollen Tagen sind hier acht von zwölf gleichzeitig
+weg. Eine Tageszelle mit acht Namen endet bei „+5 weitere" — ausgerechnet die Tage, auf die es
+ankommt, wären die unlesbaren. In der Matrix hat jeder seine eigene Zeile, und ein voller Tag ist
+eine senkrechte Wand.
+
 #### 📅 Planung
 
 **Die Zeitleiste nutzt den vorhandenen Platz:** Ihre Höhe wird auf jedem Gerät gemessen — vom großen Monitor bis zum kleinen Handy reicht sie bis knapp an den unteren Rand, beim Drehen zieht sie nach. Am Rechner wird innerhalb der Leiste gescrollt, die Seite bleibt stehen. **Am Handy scrollt die Seite als Ganzes** — bleibt weniger als rund 440 px übrig, wäre der Kasten zu eng zum Wischen. Das Raster zeichnet dabei nur die gebrauchten Stunden, verankert an der Firmenvorgabe (*Arbeitsbeginn* − 1 Std bis regulärer Feierabend + 1 Std) und aufgezogen, wenn ein Termin früher beginnt oder später endet — dieselbe Regel wie im [Zeitnachweis](#-zeitnachweis).

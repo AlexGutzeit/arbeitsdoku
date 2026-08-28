@@ -59,6 +59,48 @@ Gefunden hat es allein der Testlauf danach: `handy-verlauf-ui` meldete für die 
 und `git commit` nie im selben Befehl, und nach jedem Commit mit `git show --stat` prüfen, dass
 die Datei wirklich drin ist.
 
+### 2026-08-28 · Abwesenheitskalender — und drei Fehler, die man nur durch Messen findet
+
+Liste und Urlaubsübersicht beantworten „wer hat wie viel". Offen war „wer fehlt wann". Alex wollte
+Monats- und Jahresansicht, alle Mitarbeiter auf einen Blick.
+
+**Der Zuschnitt kam aus den Daten, nicht aus dem Geschmack.** Am 05.06.2026 waren acht von zwölf
+gleichzeitig weg (5× Urlaub, 3× Freizeitausgleich). Ein klassisches Kalenderblatt müsste diese eine
+Tageszelle mit acht Namen füllen — und endet bei „+5 weitere". Ausgerechnet die Tage, wegen derer
+man die Ansicht baut, wären die unlesbaren. Eine Matrix (Zeile je Mitarbeiter, Spalte je Tag) hat
+das Problem nicht: Jeder hat seine Zeile, und ein voller Tag ist eine senkrechte Wand.
+
+Weitere Zahlen aus dem Prod-Klon, die die Arbeit klein hielten: 93 Abwesenheiten im ganzen Jahr
+(kein Performance-Thema), `GET /api/absences` liefert Managern längst alles mit Namen (**keine neue
+Route**), Feiertage haben `user_id NULL` (also Spalte, nicht Zeile), und der längste Zeitraum ist
+47 Tage — er läuft über Monatsgrenzen, die Schnittkante braucht eine Markierung.
+
+**Monat und Jahr sind dieselbe Funktion**, unterschieden nur durch Spaltenbreite und Kopfzeile.
+Zwei Renderer wären zwei Fassungen derselben Regel — dieselbe Falle wie beim Bestellrecht zwei Tage
+zuvor.
+
+**Drei Fehler, die kein Blick auf den Bildschirm gezeigt hätte:**
+
+1. **Die Namensspalte lag über den ersten vier Tagen.** Sie saß in Gitterspalte 1 statt in einer
+   eigenen; im Juni verschwand ausgerechnet der 05. darunter — der Tag, der die ganze Ansicht
+   rechtfertigt.
+2. **Die Kurzschreibweise `background:` knipste die Schraffur aus.** Die Farbklassen stehen im Blatt
+   nach `.abscal-bar--pending` und setzten `background-image` auf `none` zurück. Offene Anträge
+   sahen aus wie genehmigte. Im Bild ist der Unterschied nicht zu bemerken; gesehen hat es der Test.
+3. **In einem Grid gilt `z-index` auch ohne `position`.** Die Unterlage-Streifen (z-index 0) hoben
+   sich damit über die Kopfzellen — Wochenenden und Feiertage verloren ihre Tageszahl. Gefunden hat
+   es Alex am 04.06.
+
+**Und ein Fehler in meiner Prüfmethode, der schlimmer war als die Fehler selbst.** Ich hatte Punkt 3
+zuvor mit `elementFromPoint` „widerlegt" und gemeldet, nichts sei verdeckt. Die Streifen haben
+`pointer-events: none` — das Werkzeug überspringt sie und meldet brav, was *darunter* liegt. Der
+Beweis war wertlos, und ich hatte ihn als Beweis ausgegeben. Richtig geht es nur, indem man die
+Streifen kurz anfassbar macht (dann stimmt die Antwort) oder die Zelle als Bild ausschneidet. Beides
+steht jetzt im Test, mitsamt der Warnung.
+
+Zusatz: Die Farben der Abwesenheitsarten lagen **dreifach** im Stylesheet; der Kalender wäre die
+vierte Kopie geworden. Sie stehen jetzt einmal als CSS-Variablen.
+
 ### 2026-08-27 · Ein Helfer allein hilft nicht, wenn ihn keiner fragt
 
 Alex, mit Bildschirmfoto vom Handy: Als **Mitarbeiter mit Bestellrecht** ist der „Bestellt"-Knopf
