@@ -1150,7 +1150,7 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
 
 let _inboxUserFilter = '';
 let _allAbsenceUserFilter = '';
-let _absTab = 'list';                         // Manager-Reiter: 'list' | 'vacation'
+let _absTab = 'list';                         // Manager-Reiter: 'list' | 'vacation' | 'kalender'
 let _vacOverviewYear = new Date().getFullYear();
 let _vacOverviewSearch = '';
 // Lazy-Render-Cache der Verlauf-Monate: Key "type|YYYY-MM" -> Array der Abwesenheiten.
@@ -1368,26 +1368,29 @@ async function renderAbsences() {
   }).join('');
 
   const isMgr = isManagerRole();
-  // Manager-Reiter (neue Urlaubsübersicht) erst zeigen, wenn irgendwo ein Anspruch hinterlegt ist —
-  // sonst bleibt die Abwesenheits-Ansicht exakt wie bisher.
-  const showTabs = isMgr && anyVacCfg;
-  const showVac = showTabs && _absTab === 'vacation';
+  // Der KALENDER braucht keine Voraussetzung — er zeigt, wer wann fehlt, und das gilt immer.
+  // Die URLAUBSÜBERSICHT dagegen erst, wenn irgendwo ein Anspruch hinterlegt ist: ohne Anspruch
+  // stuende dort ueberall 0, und die Ansicht bliebe wie vor ihrer Einfuehrung.
+  const showTabs = isMgr;
+  const showVac = isMgr && anyVacCfg && _absTab === 'vacation';
+  const showCal = isMgr && _absTab === 'kalender';
   const tabBar = showTabs ? `
       <div class="absence-tabs">
         <button class="absence-tab ${_absTab === 'list' ? 'active' : ''}" data-tab="list">Liste</button>
-        <button class="absence-tab ${_absTab === 'vacation' ? 'active' : ''}" data-tab="vacation">Urlaubsübersicht</button>
+        ${anyVacCfg ? `<button class="absence-tab ${_absTab === 'vacation' ? 'active' : ''}" data-tab="vacation">Urlaubsübersicht</button>` : ''}
+        <button class="absence-tab ${_absTab === 'kalender' ? 'active' : ''}" data-tab="kalender">Kalender</button>
       </div>` : '';
   mainEl.innerHTML = `
-    <div class="card" style="max-width:${showVac ? '1200px' : '900px'};margin:0 auto">
+    <div class="card" style="max-width:${(showVac || showCal) ? '1200px' : '900px'};margin:0 auto">
       <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
         <h2>&#128197; Abwesenheit</h2>
         ${!isMgr ? `<span class="absence-counter">Urlaub ${thisYear}: ${(myVac && myVac.configured)
           ? `<strong>${myVac.genommen}</strong> genommen · <strong>${myVac.geplant}</strong> geplant · <strong>${myVac.nochZuPlanen}</strong> verbleibend <span class="absence-counter-of">(von ${myVac.verfuegbar})</span>`
           : `<strong>${urlaubTageJahr} Arbeitstage</strong>`}</span>` : ''}
-        ${showVac ? '' : '<button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>'}
+        ${(showVac || showCal) ? '' : '<button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>'}
       </div>
       ${tabBar}
-      ${showVac ? '<div id="vac-overview-wrap"><div class="loading"><div class="spinner"></div></div></div>' : `
+      ${showCal ? '<div id="abscal-wrap"></div>' : showVac ? '<div id="vac-overview-wrap"><div class="loading"><div class="spinner"></div></div></div>' : `
       ${maInboxHtml}
       ${inboxHtml}
       <div class="absence-all-header">
@@ -1405,6 +1408,8 @@ async function renderAbsences() {
     btn.addEventListener('click', () => { _absTab = btn.dataset.tab; renderAbsences(); });
   });
   if (showVac) renderVacationOverview();
+  // Der Kalender rechnet aus den bereits geladenen Daten — keine weitere Anfrage.
+  if (showCal) Abwesenheitskalender.zeichnen(document.getElementById('abscal-wrap'), absences, S.users || []);
 
   mainEl.querySelectorAll('.absence-new').forEach(btn => {
     btn.addEventListener('click', () => showAbsenceForm(null, btn.dataset.type, null, null, null));

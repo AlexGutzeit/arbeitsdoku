@@ -2,6 +2,22 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  /* Abwesenheitsarten — EINE Quelle. Die Farben standen bis zum 28.08.2026 in jeder
+     Ansicht eigens; der Kalender waere die vierte Kopie geworden. */
+  --abs-krank-bg: #fee2e2;
+  --abs-krank-fg: #dc2626;
+  --abs-urlaub-bg: #dbeafe;
+  --abs-urlaub-fg: #1d4ed8;
+  --abs-freizeitausgleich-bg: #e0e7ff;
+  --abs-freizeitausgleich-fg: #4338ca;
+  --abs-sonderurlaub-bg: #fce7f3;
+  --abs-sonderurlaub-fg: #9d174d;
+  --abs-berufsschule-bg: #fef3c7;
+  --abs-berufsschule-fg: #92400e;
+  --abs-innung-bg: #d1fae5;
+  --abs-innung-fg: #065f46;
+  --abs-feiertag-bg: #fdf4ff;
+  --abs-feiertag-fg: #7e22ce;
   --primary: #5DB635;
   --primary-hover: #4a9229;
   --primary-light: #e6f7dd;
@@ -2132,26 +2148,26 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .tl-absence-banner { font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 4px; margin: 2px 4px 3px; text-align: center; }
 .tl-absence-banner--pending { opacity: 0.65; }
 .tl-absence-comment { display: block; font-size: 0.68rem; font-weight: 400; opacity: 0.8; margin-top: 1px; word-break: break-word; }
-.tl-absence-banner--krank        { background: #fee2e2; color: #dc2626; }
-.tl-absence-banner--urlaub       { background: #dbeafe; color: #1d4ed8; }
-.tl-absence-banner--freizeitausgleich { background: #e0e7ff; color: #4338ca; }
-.tl-absence-banner--sonderurlaub { background: #fce7f3; color: #9d174d; }
-.tl-absence-banner--berufsschule { background: #fef3c7; color: #92400e; }
-.tl-absence-banner--innung       { background: #d1fae5; color: #065f46; }
-.tl-absence-banner--feiertag     { background: #fdf4ff; color: #7e22ce; }
+.tl-absence-banner--krank        { background: var(--abs-krank-bg); color: var(--abs-krank-fg); }
+.tl-absence-banner--urlaub       { background: var(--abs-urlaub-bg); color: var(--abs-urlaub-fg); }
+.tl-absence-banner--freizeitausgleich { background: var(--abs-freizeitausgleich-bg); color: var(--abs-freizeitausgleich-fg); }
+.tl-absence-banner--sonderurlaub { background: var(--abs-sonderurlaub-bg); color: var(--abs-sonderurlaub-fg); }
+.tl-absence-banner--berufsschule { background: var(--abs-berufsschule-bg); color: var(--abs-berufsschule-fg); }
+.tl-absence-banner--innung       { background: var(--abs-innung-bg); color: var(--abs-innung-fg); }
+.tl-absence-banner--feiertag     { background: var(--abs-feiertag-bg); color: var(--abs-feiertag-fg); }
 
 /* Wochenraster-Abwesenheits-Chips */
 .grid-absence-chips { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 4px; }
 .grid-absence-chip { font-size: 0.65rem; font-weight: 600; padding: 2px 5px; border-radius: 3px; display: inline-flex; flex-direction: column; }
 .grid-absence-chip-comment { font-size: 0.62rem; font-weight: 400; opacity: 0.8; margin-top: 1px; word-break: break-word; }
 .grid-absence-chip--pending { opacity: 0.65; }
-.grid-absence-chip--krank        { background: #fee2e2; color: #dc2626; }
-.grid-absence-chip--urlaub       { background: #dbeafe; color: #1d4ed8; }
-.grid-absence-chip--freizeitausgleich { background: #e0e7ff; color: #4338ca; }
-.grid-absence-chip--sonderurlaub { background: #fce7f3; color: #9d174d; }
-.grid-absence-chip--berufsschule { background: #fef3c7; color: #92400e; }
-.grid-absence-chip--innung       { background: #d1fae5; color: #065f46; }
-.grid-absence-chip--feiertag     { background: #fdf4ff; color: #7e22ce; }
+.grid-absence-chip--krank        { background: var(--abs-krank-bg); color: var(--abs-krank-fg); }
+.grid-absence-chip--urlaub       { background: var(--abs-urlaub-bg); color: var(--abs-urlaub-fg); }
+.grid-absence-chip--freizeitausgleich { background: var(--abs-freizeitausgleich-bg); color: var(--abs-freizeitausgleich-fg); }
+.grid-absence-chip--sonderurlaub { background: var(--abs-sonderurlaub-bg); color: var(--abs-sonderurlaub-fg); }
+.grid-absence-chip--berufsschule { background: var(--abs-berufsschule-bg); color: var(--abs-berufsschule-fg); }
+.grid-absence-chip--innung       { background: var(--abs-innung-bg); color: var(--abs-innung-fg); }
+.grid-absence-chip--feiertag     { background: var(--abs-feiertag-bg); color: var(--abs-feiertag-fg); }
 
 /* Manager-für-MA Badge im Card */
 .absence-created-by { font-size: 0.75rem; color: var(--text-lighter); font-style: italic; }
@@ -2227,3 +2243,99 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 
 /* Vorschau auf „Mein Konto" */
 .avatar-gross { width: 96px; height: 96px; font-size: 34px; }
+
+/* ── Abwesenheitskalender (Manager-Reiter) ────────────────────────────────────────────────────
+   Matrix: eine Zeile je Mitarbeiter, eine Spalte je Tag. Kein Kalenderblatt — am 05.06.2026 waren
+   in den echten Daten 8 von 12 gleichzeitig weg; eine Tageszelle mit acht Namen ist unlesbar.
+   Monat und Jahr benutzen dieselbe Struktur, nur --abscal-tag ist anders. */
+.abscal-steuer { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;
+  justify-content: space-between; margin-bottom: 0.75rem; }
+.abscal-modus { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.abscal-modus-btn { font: inherit; font-size: 0.85rem; padding: 0.4rem 0.9rem; border: none;
+  background: var(--bg); color: var(--text); cursor: pointer; min-height: 40px; }
+.abscal-modus-btn.active { background: var(--primary); color: #fff; font-weight: 600; }
+.abscal-nav { display: flex; align-items: center; gap: 0.4rem; }
+.abscal-titel { font-weight: 600; min-width: 9ch; text-align: center; }
+
+/* Waagerecht scrollen darf NUR diese Flaeche — nie die Seite. Ein Jahr ist rund 1100 px breit. */
+.abscal-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px; }
+/* `width: max-content` ist Pflicht, nicht Kosmetik: Ohne das bleibt die Gitter-Box so breit wie
+   ihr Container, die Spalten laufen unsichtbar darueber hinaus, und der Scroll-Container hat nichts
+   zu scrollen. Im Jahr war dadurch der DEZEMBER weder sichtbar noch erreichbar. */
+.abscal-grid { display: grid; position: relative; align-items: stretch;
+  grid-auto-rows: var(--abscal-zeile); }
+.abscal-grid--monat { --abscal-tag: 34px; --abscal-zeile: 30px; --abscal-name: 9rem; }
+.abscal-grid--jahr  { --abscal-tag: 3px;  --abscal-zeile: 24px; --abscal-name: 9rem; }
+
+/* Namensspalte: bleibt beim Wischen stehen, sonst weiss man im Jahr nicht mehr, wessen Zeile das ist. */
+.abscal-name { position: sticky; left: 0; z-index: 3; grid-column: 1;
+  background: var(--card-bg, #fff); padding-right: 0.5rem; font-size: 0.8rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center;
+  border-right: 1px solid var(--border); }
+.abscal-zeile { border-top: 1px solid var(--border-light, #eee); }
+
+/* z-index MUSS hier stehen. In einem Grid gilt z-index auch fuer Elemente ohne `position` — die
+   Unterlage-Streifen (z-index 0) heben sich damit ueber die Kopfzellen, und genau die Tage mit
+   Streifen verlieren ihre Zahl: Wochenenden und Feiertage. Alex hat es am 04.06. gesehen
+   („der 4. Juni ist scheinbar ein Feiertag, aber das Datum ist nicht zu sehen").
+   Nicht mit elementFromPoint pruefen — die Streifen haben `pointer-events: none`, das Werkzeug
+   ueberspringt sie und meldet faelschlich, es sei nichts verdeckt. */
+.abscal-kopf-tag { grid-row: 1; z-index: 1; font-size: 0.6rem; text-align: center; line-height: 1.1;
+  padding-bottom: 3px; color: var(--text-light); }
+.abscal-kopf-tag--we { color: var(--text-lighter); }
+.abscal-kopf-wt { display: block; }
+.abscal-kopf-nr { display: block; font-weight: 600; color: var(--text); }
+.abscal-kopf-monat { grid-row: 1; z-index: 1; font-size: 0.7rem;
+  font-weight: 600; text-align: center; padding-bottom: 3px; }
+
+.abscal-spalte { z-index: 0; pointer-events: none; }
+.abscal-spalte--we { background: var(--bg, #f6f7f5); }
+.abscal-spalte--feiertag { background: var(--abs-feiertag-bg); }
+.abscal-spalte--heute { box-shadow: inset 1px 0 0 var(--primary), inset -1px 0 0 var(--primary); }
+/* Monatsgrenze in der Jahresansicht — dort gibt es keine Tageszahlen, an denen man sich festhält. */
+.abscal-spalte--monat { box-shadow: inset 1px 0 0 var(--border); }
+
+.abscal-bar { z-index: 2; border-radius: 4px; margin: 3px 0; font-size: 0.62rem; font-weight: 600;
+  line-height: 1.6; padding: 0 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  cursor: default; }
+.abscal-grid--jahr .abscal-bar { border-radius: 2px; margin: 4px 0; padding: 0; position: relative; }
+/* Ein Ein-Tages-Balken ist im Jahr DREI Pixel breit. Mit der Maus kaum zu treffen, mit dem Finger
+   gar nicht — die Erklaerung waere da, aber unerreichbar. Diese unsichtbare Flaeche macht ihn
+   anfassbar, ohne ihn breiter aussehen zu lassen. */
+.abscal-grid--jahr .abscal-bar::after { content: ''; position: absolute; inset: -3px -4px; }
+/* Noch nicht genehmigt: schraffiert statt nur blasser — auf einem 3-px-Balken im Jahr waere ein
+   Deckkraft-Unterschied nicht zu sehen.
+   ACHTUNG: Die Farbklassen darunter setzen `background-COLOR`, nicht `background`. Die
+   Kurzschreibweise wuerde `background-image` auf `none` zuruecksetzen und diese Schraffur
+   ausknipsen — sie stehen im Blatt spaeter und gewinnen. Genau so ist es beim Bauen passiert;
+   gesehen hat es erst der Test, im Bild war der Unterschied nicht zu bemerken. */
+.abscal-bar--pending { background-image: repeating-linear-gradient(45deg,
+  rgba(255,255,255,.55) 0 3px, transparent 3px 6px); }
+.abscal-bar--rejected { opacity: 0.35; text-decoration: line-through; }
+/* Laeuft der Zeitraum ueber den Rand hinaus, darf die Kante nicht nach Ende aussehen. */
+.abscal-bar--offen-links  { border-top-left-radius: 0; border-bottom-left-radius: 0;
+  border-left: 3px dotted currentColor; }
+.abscal-bar--offen-rechts { border-top-right-radius: 0; border-bottom-right-radius: 0;
+  border-right: 3px dotted currentColor; }
+.abscal-bar--krank             { background-color: var(--abs-krank-bg);             color: var(--abs-krank-fg); }
+.abscal-bar--urlaub            { background-color: var(--abs-urlaub-bg);            color: var(--abs-urlaub-fg); }
+.abscal-bar--freizeitausgleich { background-color: var(--abs-freizeitausgleich-bg); color: var(--abs-freizeitausgleich-fg); }
+.abscal-bar--sonderurlaub      { background-color: var(--abs-sonderurlaub-bg);      color: var(--abs-sonderurlaub-fg); }
+.abscal-bar--berufsschule      { background-color: var(--abs-berufsschule-bg);      color: var(--abs-berufsschule-fg); }
+.abscal-bar--innung            { background-color: var(--abs-innung-bg);            color: var(--abs-innung-fg); }
+.abscal-bar--feiertag          { background-color: var(--abs-feiertag-bg);          color: var(--abs-feiertag-fg); }
+
+.abscal-legende { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-top: 0.75rem;
+  font-size: 0.75rem; color: var(--text-light); }
+.abscal-legende-eintrag { display: inline-flex; align-items: center; gap: 0.35rem; }
+.abscal-legende-farbe { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
+.abscal-legende-we { background: var(--bg, #f6f7f5); border: 1px solid var(--border); }
+.abscal-legende-hinweis { font-style: italic; }
+.abscal-tt-tage { opacity: 0.8; }
+
+@media (max-width: 640px) {
+  .abscal-grid--monat { --abscal-tag: 26px; }
+  .abscal-grid--monat, .abscal-grid--jahr { --abscal-name: 6.5rem; }
+  .abscal-name { font-size: 0.72rem; }
+}

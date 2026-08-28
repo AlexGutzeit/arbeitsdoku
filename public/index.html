@@ -15,7 +15,7 @@
   <meta name="msapplication-TileImage" content="{{iconBase}}/icon-144x144.png">
   <meta name="msapplication-TileColor" content="{{themeColor}}">
   <title>{{appName}}</title>
-  <link rel="stylesheet" href="/css/style.css?v=351">
+  <link rel="stylesheet" href="/css/style.css?v=352">
   <style>:root {
     --primary: {{themeColor}};
     --primary-hover: color-mix(in srgb, {{themeColor}} 78%, black);
@@ -25,18 +25,21 @@
 </head>
 <body>
   <div id="app"></div>
-  <script src="/js/app-1-core.js?v=351"></script>
+  <script src="/js/app-1-core.js?v=352"></script>
   <!-- ArbZG/JArbSchG als eigene Datei: dieselben Regeln fuer das Eintragsformular UND die
        Uebersichten. Muss nach app-1-core stehen (nutzt calcActualHours). -->
-  <script src="/js/arbeitszeitrecht.js?v=351"></script>
-  <script src="/js/app-2-auth-layout.js?v=351"></script>
-  <script src="/js/app-3-dashboard.js?v=351"></script>
-  <script src="/js/app-4-planning-tools.js?v=351"></script>
-  <script src="/js/app-5-team.js?v=351"></script>
-  <script src="/js/sicherung-krypto.js?v=351"></script>
-  <script src="/js/app-6-admin.js?v=351"></script>
-  <script src="/js/app-7-stats-pdf.js?v=351"></script>
-  <script src="/js/app-8-comm-init.js?v=351"></script>
-  <script src="/js/sw-register.js?v=351"></script>
+  <script src="/js/arbeitszeitrecht.js?v=352"></script>
+  <!-- Abwesenheitskalender als eigene Datei (wie arbeitszeitrecht.js): Matrix Mitarbeiter x
+       Tage, Monat und Jahr aus derselben Funktion. Braucht app-1-core (esc, Tooltip). -->
+  <script src="/js/abwesenheitskalender.js?v=352"></script>
+  <script src="/js/app-2-auth-layout.js?v=352"></script>
+  <script src="/js/app-3-dashboard.js?v=352"></script>
+  <script src="/js/app-4-planning-tools.js?v=352"></script>
+  <script src="/js/app-5-team.js?v=352"></script>
+  <script src="/js/sicherung-krypto.js?v=352"></script>
+  <script src="/js/app-6-admin.js?v=352"></script>
+  <script src="/js/app-7-stats-pdf.js?v=352"></script>
+  <script src="/js/app-8-comm-init.js?v=352"></script>
+  <script src="/js/sw-register.js?v=352"></script>
 </body>
 </html>
