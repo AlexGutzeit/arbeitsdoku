@@ -66,10 +66,16 @@ globalThis.Date = G;`);
     await p.waitForSelector('#login-user'); await p.type('#login-user', 'admin'); await p.type('#login-pass', pw);
     await p.click('#login-form button[type="submit"]'); await p.waitForSelector('a[href="#/planning"]');
 
-    // --- 0) Vor jeder Konfiguration: Manager sieht KEINE Urlaubs-Reiter (alte Ansicht bleibt) ---
+    // --- 0) Vor jeder Konfiguration: KEIN Urlaubs-Reiter (die Uebersicht zeigte sonst ueberall 0) ---
+    // Seit dem 28.08.2026 gibt es daneben den Reiter „Kalender". Der haengt bewusst an KEINER
+    // Voraussetzung — „wer fehlt wann" gilt immer, auch ohne hinterlegten Urlaubsanspruch.
+    // Geprueft wird deshalb nicht mehr „gar keine Reiter", sondern der Anspruch, um den es geht:
+    // die URLAUBSUEBERSICHT erscheint erst mit Konfiguration.
     await p.evaluate(() => { location.hash = '#/absences'; }); await sleep(900);
     await p.waitForSelector('.card', { timeout: 8000 });
-    ok('vor Konfiguration: keine Manager-Reiter', await p.$$eval('.absence-tab', els => els.length) === 0);
+    const reiter0 = await p.$$eval('.absence-tab', els => els.map(e => e.dataset.tab));
+    ok('vor Konfiguration: kein Reiter „Urlaubsübersicht"', !reiter0.includes('vacation'), JSON.stringify(reiter0));
+    ok('… der Kalender steht trotzdem bereit (braucht keinen Anspruch)', reiter0.includes('kalender'), JSON.stringify(reiter0));
 
     // --- 1) Mitarbeiter-Formular: Urlaubsanspruch anlegen ---
     await p.evaluate(() => { location.hash = '#/users'; }); await sleep(900);
@@ -102,7 +108,9 @@ globalThis.Date = G;`);
     // --- 2) Abwesenheit: Manager-Reiter „Urlaubsübersicht" ---
     await p.evaluate(() => { location.hash = '#/absences'; }); await sleep(900);
     await p.waitForSelector('.absence-tabs', { timeout: 8000 });
-    ok('Manager sieht Reiter (Liste + Urlaubsübersicht)', await p.$$eval('.absence-tab', els => els.length) === 2);
+    const reiter1 = await p.$$eval('.absence-tab', els => els.map(e => e.dataset.tab));
+    ok('nach Konfiguration ist „Urlaubsübersicht" da', reiter1.includes('vacation'), JSON.stringify(reiter1));
+    ok('… neben Liste und Kalender', reiter1.includes('list') && reiter1.includes('kalender'), JSON.stringify(reiter1));
     await p.evaluate(() => document.querySelector('.absence-tab[data-tab="vacation"]').click());
     await p.waitForSelector('.vac-ov-table', { timeout: 8000 }); await sleep(400);
     const row = await p.evaluate(() => {
