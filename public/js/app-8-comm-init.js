@@ -889,19 +889,24 @@ function renderAbsenceCard(a, opts = {}) {
   </div>`;
 }
 
+// Die Karten eines Verlaufs-Monats nachzeichnen. Eigene Funktion, weil es ZWEI Ausloeser gibt:
+// das Aufklappen durch den Nutzer (`toggle`) und den Sprung aus dem Kalender. Letzterer darf sich
+// NICHT auf das Ereignis verlassen — `toggle` feuert asynchron, und der Sprung stuende danach vor
+// einem noch leeren Monat.
+function verlaufMonatZeichnen(d) {
+  const body = d.querySelector('.absence-history-month-body');
+  if (!body || body.dataset.rendered) return;
+  body.dataset.rendered = '1';
+  const items = _absHistory[d.dataset.absKey] || [];
+  body.innerHTML = items.map(a => renderAbsenceCard(a)).join('');
+  bindAbsenceCardActions(body); // Aktionen + Änderungsverlauf der frisch gebauten Karten binden
+}
+
 function bindAbsenceCardActions(container) {
   // Lazy-Render: Karten eines Verlauf-Monats erst beim Aufklappen ins DOM bauen (einmalig),
   // danach deren Aktionen binden. Spart DOM-Knoten bei vielen Einträgen über die Jahre.
   container.querySelectorAll('details.absence-history-month').forEach(d => {
-    d.addEventListener('toggle', () => {
-      if (!d.open) return;
-      const body = d.querySelector('.absence-history-month-body');
-      if (!body || body.dataset.rendered) return;
-      body.dataset.rendered = '1';
-      const items = _absHistory[d.dataset.absKey] || [];
-      body.innerHTML = items.map(a => renderAbsenceCard(a)).join('');
-      bindAbsenceCardActions(body); // Aktionen + Änderungsverlauf der frisch gebauten Karten binden
-    });
+    d.addEventListener('toggle', () => { if (d.open) verlaufMonatZeichnen(d); });
   });
 
   // Änderungsverlauf (chef/admin): beim ersten Aufklappen laden
@@ -1417,35 +1422,6 @@ async function renderAbsences() {
     });
   }
 
-  // Von dort gekommen? Den Eintrag aufdecken, hinscrollen und kurz hervorheben.
-  //
-  // „Aufdecken" ist hier die eigentliche Arbeit: Die Liste ist bis zu vier Ebenen tief zugeklappt
-  // (Typ-Abschnitt -> Verlauf -> Jahr -> Monat). Ohne das Oeffnen aller Huellen scrollte man zu
-  // etwas Unsichtbarem und stuende scheinbar vor einer leeren Seite.
-  if (S._abwesenheitZiel != null && !showVac && !showCal) {
-    const zielId = S._abwesenheitZiel;
-    S._abwesenheitZiel = null;
-    // ALLE Kopien, nicht nur die erste: Ein Eintrag, der noch eine Aktion braucht, steht
-    // zusaetzlich im Posteingang ganz oben. Nur die erste zu nehmen hiesse, die Karte in der
-    // Liste bliebe zugeklappt und unmarkiert — man findet sie beim Weiterlesen nicht wieder.
-    const karten = [...mainEl.querySelectorAll(`.absence-card[data-id="${zielId}"]`)];
-    for (const karte of karten) {
-      for (let el = karte.parentElement; el && el !== mainEl; el = el.parentElement) {
-        if (el.tagName === 'DETAILS') el.open = true;
-        if (el.classList.contains('absence-section-body') && el.classList.contains('collapsed')) {
-          el.classList.remove('collapsed');
-          const kopf = el.previousElementSibling;
-          const pfeil = kopf && kopf.querySelector('.absence-section-chevron');
-          if (pfeil) pfeil.textContent = '▼';
-          const typ = kopf && kopf.dataset ? kopf.dataset.sectionType : null;
-          if (typ) { _collapsedSections.delete(typ); localStorage.setItem('absenceCollapsed', JSON.stringify([..._collapsedSections])); }
-        }
-      }
-      karte.classList.add('absence-card--hervor');
-      setTimeout(() => karte.classList.remove('absence-card--hervor'), 2500);
-    }
-    if (karten.length) karten[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }
 
   mainEl.querySelectorAll('.absence-new').forEach(btn => {
     btn.addEventListener('click', () => showAbsenceForm(null, btn.dataset.type, null, null, null));
@@ -1478,6 +1454,54 @@ async function renderAbsences() {
   });
 
   bindAbsenceCardActions(mainEl);
+
+  // MUSS nach bindAbsenceCardActions stehen: Der Sprung klappt ggf. einen Monat im Verlauf
+  // auf, und dessen Karten entstehen erst durch den `toggle`-Zeichner, der dort angemeldet
+  // wird. Stand der Sprung davor, feuerte `open = true` ins Leere und die Karte fehlte.
+  // Von dort gekommen? Den Eintrag aufdecken, hinscrollen und kurz hervorheben.
+  //
+  // „Aufdecken" ist hier die eigentliche Arbeit: Die Liste ist bis zu vier Ebenen tief zugeklappt
+  // (Typ-Abschnitt -> Verlauf -> Jahr -> Monat). Ohne das Oeffnen aller Huellen scrollte man zu
+  // etwas Unsichtbarem und stuende scheinbar vor einer leeren Seite.
+  if (S._abwesenheitZiel != null && !showVac && !showCal) {
+    const zielId = S._abwesenheitZiel;
+    S._abwesenheitZiel = null;
+    // Ein AELTERER Eintrag steht noch gar nicht im Dokument: Die Monate im Verlauf werden erst
+    // beim Aufklappen gezeichnet (`_absHistory` haelt die Daten, `toggle` baut die Karten). Wer
+    // im Kalender auf einen Urlaub vom Juni tippt, faende hier sonst nichts — und der Sprung
+    // taete stillschweigend gar nichts. Also zuerst den richtigen Monat oeffnen.
+    for (const [schluessel, eintraege] of Object.entries(_absHistory)) {
+      if (!eintraege.some(x => x.id === zielId)) continue;
+      const monat = mainEl.querySelector(`details.absence-history-month[data-abs-key="${schluessel}"]`);
+      if (!monat) continue;
+      for (let el = monat; el && el !== mainEl; el = el.parentElement) {
+        if (el.tagName === 'DETAILS') el.open = true;
+      }
+      verlaufMonatZeichnen(monat);   // direkt, nicht ueber `toggle` — das feuert erst spaeter
+      break;
+    }
+
+    // ALLE Kopien, nicht nur die erste: Ein Eintrag, der noch eine Aktion braucht, steht
+    // zusaetzlich im Posteingang ganz oben. Nur die erste zu nehmen hiesse, die Karte in der
+    // Liste bliebe zugeklappt und unmarkiert — man findet sie beim Weiterlesen nicht wieder.
+    const karten = [...mainEl.querySelectorAll(`.absence-card[data-id="${zielId}"]`)];
+    for (const karte of karten) {
+      for (let el = karte.parentElement; el && el !== mainEl; el = el.parentElement) {
+        if (el.tagName === 'DETAILS') el.open = true;
+        if (el.classList.contains('absence-section-body') && el.classList.contains('collapsed')) {
+          el.classList.remove('collapsed');
+          const kopf = el.previousElementSibling;
+          const pfeil = kopf && kopf.querySelector('.absence-section-chevron');
+          if (pfeil) pfeil.textContent = '▼';
+          const typ = kopf && kopf.dataset ? kopf.dataset.sectionType : null;
+          if (typ) { _collapsedSections.delete(typ); localStorage.setItem('absenceCollapsed', JSON.stringify([..._collapsedSections])); }
+        }
+      }
+      karte.classList.add('absence-card--hervor');
+      setTimeout(() => karte.classList.remove('absence-card--hervor'), 2500);
+    }
+    if (karten.length) karten[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
 }
 
 function renderAbsenceType(type) {
