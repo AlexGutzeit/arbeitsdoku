@@ -100,6 +100,29 @@ Der Test prüft die beiden Fassungen deshalb **gegeneinander** statt jede für s
 SQL, wen die Funktion? Zwei ungleiche Listen fallen sofort auf, egal welche der beiden jemand
 später anfasst.
 
+**Und einen Tag später die fünfte.** Alex, wieder mit Bildschirmfoto: Als Mitarbeiter mit
+Bestellrecht wählt er in der geplanten Zusammenfassung „Bestellungen" — und bekommt *„Mindestens
+eine Kategorie erforderlich"*. Wählt er zusätzlich „Schwarzes Brett", wird gespeichert, und danach
+steht dort nur das Brett.
+
+`normalizeSchedule()` in `routes/push.js` bekam als zweiten Parameter nur die **Rolle**. Damit kann
+die Frage gar nicht richtig beantwortet werden — `can_order` steht am Nutzer, nicht an der Rolle.
+Die Kategorie wurde still weggefiltert, und *danach* schlug die Prüfung „mindestens eine Kategorie"
+zu. Betroffen waren Rechteinhaber **und** der Buchhalter.
+
+**Die eigentliche Lehre steckt aber im Test, nicht im Code.** `tests/bestellrecht.js` prüft seit
+jeher gründlich, dass der Entzug des Rechts eine Zusammenfassung kürzt und eine leer gewordene
+löscht. Nur legt er seine Zusammenfassungen per `INSERT` **direkt in der Tabelle** an — damit ist
+`normalizeSchedule` nie beteiligt. Der Test war gründlich auf dem Rückweg und hatte den Hinweg nie
+betreten. Jetzt geht ein Abschnitt über die API: allein, kombiniert, als Buchhalter, und nach dem
+Entzug wieder gesperrt.
+
+**Bilanz dieser Regel:** fünf Stellen, drei davon falsch, gefunden in drei Runden — zwei davon von
+Alex am Gerät, nicht von mir am Code. Ein `grep` nach `can_order` findet die Fassungen, die das
+Recht wenigstens erwähnen. Es findet nicht die, die stattdessen `role` prüfen — und genau die waren
+alle drei Fehler. Wer nach so einer Regel sucht, muss nach dem **Ersatz** suchen, nicht nach dem
+Original.
+
 ### 2026-08-26 · Gesetzesverstöße sichtbar machen — und was dabei still schiefgehen kann
 
 Die App kannte ArbZG und JArbSchG längst. Sie prüfte nur an einer einzigen Stelle: als Warnzeile im
