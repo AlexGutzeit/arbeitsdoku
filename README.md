@@ -352,29 +352,38 @@ den nächsten offenen Monat und nur **lückenlos**; offene Urlaubs-/Krankanträg
 
 **Abwesenheitskalender** *(Chef/Admin/Buchhalter)*: Der Reiter **Kalender** neben *Liste* und
 *Urlaubsübersicht* zeigt, **wer wann fehlt** — eine Zeile je Mitarbeiter, eine Spalte je Tag,
-umschaltbar zwischen **Monat** und **Jahr**. Zusammenhängende Zeiträume erscheinen als Balken in der
-Farbe ihrer Art (dieselben Farben wie in Zeitnachweis und Planung); ein **noch nicht genehmigter**
-Antrag ist schraffiert. Läuft ein Zeitraum über den Rand des Zeitfensters hinaus, ist die
-Schnittkante **gepunktet** — er endet dort nicht, er geht weiter. **Feiertage** bekommen keine
-eigene Zeile, sondern färben die ganze Spalte (sie gelten für alle), **heute** ist senkrecht
-markiert, und im Monat sind Wochenenden hinterlegt. Mitarbeiter **ohne** Eintrag bleiben als leere
-Zeile stehen — sonst wüsste man nicht, wer da ist. **Gezeigt wird, wer im dargestellten Zeitraum
-angestellt war**, nicht wer heute im Haus ist: Wer Mitte März anfängt, erscheint ab März; wer Mitte
-Juni ausscheidet, im Juni noch und ab Juli nicht mehr; wer wieder eingestellt wird, ab dann erneut.
-In der Jahresansicht steht jeder, der irgendwann in diesem Jahr angestellt war. Ein **Mouseover** (am Handy: langer Druck) auf
-einen Balken nennt Name, Art, Zeitraum, Anzahl Tage und Kommentar. **Der Posteingang steht auch hier** — offene
-Urlaubsanträge genehmigen oder ablehnen, Krankmeldungen quittieren, ohne in die Liste zu wechseln;
-beim Überfahren einer Anfrage mit der Maus wird der zugehörige Balken im Raster darunter
-hervorgehoben. **Ein Klick auf einen Balken** führt dorthin, wo man etwas damit tun kann: Liegt der
-Eintrag im Posteingang, springt die Ansicht zu dieser Anfrage und markiert sie — sonst **in die
-Liste, genau zu diesem Eintrag**, wobei zugeklappte Abschnitte aufgehen und der Eintrag kurz grün
-umrandet wird (wie ein Termin, den man auf der Willkommensseite antippt). Im Jahr führt
-ein Klick auf einen **Monatsnamen** in genau diesen Monat; mit **‹ ›** blättert man Jahre (im Monat
-Monate), **Heute** holt die Gegenwart zurück, und beim Öffnen steht immer das **laufende** Jahr bzw.
-der laufende Monat. Der Name bleibt beim seitlichen Wischen stehen; gewischt wird nur die
-Kalenderfläche, nie die Seite. Beim Öffnen steht **heute** im Bild. Die Ansicht aktualisiert sich
-**live**: Genehmigt jemand anderes einen Urlaub, erscheint er sofort — und die Wischposition bleibt,
-wo sie war. Die Ansicht ist **rein lesend** — eingetragen und bearbeitet wird weiter in der Liste.
+umschaltbar zwischen **Monat** und **Jahr**.
+
+*Was man sieht:* Zusammenhängende Zeiträume erscheinen als Balken in der Farbe ihrer Art (dieselben
+Farben wie in Zeitnachweis und Planung); ein **noch nicht genehmigter** Antrag ist **schraffiert**.
+Läuft ein Zeitraum über den Rand des Zeitfensters hinaus, ist die Schnittkante **gepunktet** — er
+endet dort nicht, er geht weiter. **Feiertage** bekommen keine eigene Zeile, sondern färben die
+ganze Spalte (sie gelten für alle), **heute** ist senkrecht markiert, und im Monat sind Wochenenden
+hinterlegt. Mitarbeiter **ohne** Eintrag bleiben als leere Zeile stehen — sonst wüsste man nicht,
+wer da ist.
+
+*Wer eine Zeile bekommt:* **wer im dargestellten Zeitraum angestellt war**, nicht wer heute im Haus
+ist. Wer Mitte März anfängt, erscheint ab März; wer Mitte Juni ausscheidet, im Juni noch und ab Juli
+nicht mehr; wer wieder eingestellt wird, ab dann erneut. In der Jahresansicht steht jeder, der
+irgendwann in diesem Jahr angestellt war.
+
+*Bewegen:* Mit **‹ ›** blättert man Monate bzw. Jahre, **Heute** holt die Gegenwart zurück, und beim
+Öffnen steht immer der laufende Monat bzw. das laufende Jahr — mit **heute im Bild**. Im Jahr führt
+ein Klick auf einen **Monatsnamen** in genau diesen Monat. Der Name bleibt beim seitlichen Wischen
+stehen; gewischt wird nur die Kalenderfläche, nie die Seite.
+
+*Arbeiten statt nur schauen:* **Der Posteingang steht auch hier** — offene Urlaubsanträge genehmigen
+oder ablehnen, Krankmeldungen quittieren, ohne in die Liste zu wechseln. Fährt man mit der Maus über
+eine Anfrage, wird ihr Balken im Raster darunter hervorgehoben. Ein **Mouseover** (am Handy: langer
+Druck) auf einen Balken nennt Name, Art, Zeitraum, Anzahl Tage und Kommentar. Ein **Klick** führt
+dorthin, wo man etwas damit tun kann: Liegt der Eintrag im Posteingang, springt die Ansicht zu
+dieser Anfrage und markiert sie; sonst geht es **in die Liste, genau zu diesem Eintrag** — zugeklappte
+Abschnitte gehen dabei auf, und der Eintrag wird kurz grün umrandet (wie ein Termin, den man auf der
+Willkommensseite antippt). **Neu eingetragen** wird weiterhin in der Liste.
+
+*Live:* Genehmigt oder quittiert jemand anderes etwas, ändert sich die Ansicht sofort — in beide
+Richtungen und über alle Chefs und Admins hinweg, ohne Neuladen. Der gezeigte Monat und die
+Wischposition bleiben dabei stehen.
 
 *Warum eine Matrix und kein Kalenderblatt:* An vollen Tagen sind hier acht von zwölf gleichzeitig
 weg. Eine Tageszelle mit acht Namen endet bei „+5 weitere" — ausgerechnet die Tage, auf die es
