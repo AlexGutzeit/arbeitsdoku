@@ -1446,7 +1446,23 @@ async function renderAbsences() {
     Abwesenheitskalender.zeichnen(document.getElementById('abscal-wrap'), absences, S.users || [], {
       // Antippen fuehrt in die Liste, genau zu diesem Eintrag — wie ein Termin auf der
       // Willkommensseite in die Tagesansicht der Planung fuehrt.
-      beiKlick: (a) => { _absTab = 'list'; S._abwesenheitZiel = a.id; renderAbsences(); },
+      // Antippen eines Balkens: Steht der Eintrag HIER im Posteingang, bleibt man im Kalender und
+      // springt zur Anfrage — dann sind Genehmigen/Ablehnen einen Wimpernschlag entfernt (Alex,
+      // 29.08.2026). Nur was dort nicht liegt, fuehrt weiter in die Liste.
+      //
+      // Die Regel haengt am Posteingang, nicht an der Schraffur: Eine Krankmeldung, die noch
+      // quittiert werden muss, ist nicht schraffiert, liegt aber genauso oben — und auch dort ist
+      // der Knopf das, was man sucht.
+      beiKlick: (a) => {
+        const imPosteingang = mainEl.querySelector(`.absence-inbox .absence-card[data-id="${a.id}"]`);
+        if (imPosteingang) {
+          imPosteingang.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          imPosteingang.classList.add('absence-card--hervor');
+          setTimeout(() => imPosteingang.classList.remove('absence-card--hervor'), 2500);
+          return;
+        }
+        _absTab = 'list'; S._abwesenheitZiel = a.id; renderAbsences();
+      },
     });
     verknuepfePosteingangMitKalender(mainEl);
   }

@@ -340,6 +340,14 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     ok('Wechsel ins Monatsraster landet im aktuellen Monat', monatTitel === erwartet, `${monatTitel} statt ${erwartet}`);
 
     console.log('\n── Antippen führt in die Liste, genau zu dem Eintrag ──');
+    // Dafuer braucht es einen Eintrag, der NICHT im Posteingang liegt — sonst greift seit dem
+    // 29.08.2026 der andere Weg (Sprung zur Anfrage im Posteingang). Alle Juni-Eintraege sind als
+    // Fremdeintrag offen, also wird hier einer genehmigt.
+    const juni = (await req('GET', `/api/absences?from=${MONAT}-01&to=${MONAT}-30`, admin)).body.absences
+      .find(x => x.type === 'urlaub' && x.status === 'pending');
+    const juniGen = await req('POST', `/api/absences/${juni.id}/approve`, admin);
+    ok('ein Juni-Eintrag ist genehmigt (liegt damit nicht mehr im Posteingang)',
+      juniGen.status === 200, juniGen.status + ' ' + juniGen.text.slice(0, 80));
     await a.seite.setViewport({ width: 1400, height: 900 });
     await kalenderOeffnen(a.seite, MONAT + '-01', 'monat');
     // Erst ALLES zuklappen. Ohne das ist der Eintrag ohnehin sichtbar, und die Zusicherung
@@ -352,11 +360,12 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     });
     await kalenderOeffnen(a.seite, MONAT + '-01', 'monat');
     const sprung = await a.seite.evaluate(async () => {
-      // Einen Eintrag waehlen, der NUR in der Liste steht. Manche stehen zusaetzlich im
-      // Posteingang ganz oben — dort sind sie immer sichtbar, und die Pruefung „aufgedeckt"
-      // waere wertlos. (Genau darauf ist der erste Anlauf hereingefallen.)
-      const listeUnten = document.querySelector('#abscal-wrap');
-      const bar = [...document.querySelectorAll('.abscal-bar')].find(el => true);
+      // Einen Eintrag waehlen, der NICHT im Posteingang liegt. Seit dem 29.08.2026 fuehrt ein
+      // Klick auf eine offene Anfrage naemlich absichtlich NICHT mehr in die Liste, sondern zur
+      // Anfrage im Posteingang darueber — dieser Abschnitt prueft den anderen Weg.
+      const imPosteingang = new Set([...document.querySelectorAll('.absence-inbox .absence-card')].map(k => k.dataset.id));
+      const bar = [...document.querySelectorAll('.abscal-bar')].find(el => !imPosteingang.has(el.dataset.abs));
+      if (!bar) return { reiter: null, gefunden: false, id: null, keinKandidat: true };
       const id = bar.dataset.abs;
       bar.click();
       await new Promise(r => setTimeout(r, 1800));
@@ -602,6 +611,38 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     ok('Mouseover hebt GENAU den zugehörigen Balken hervor',
       hover.waehrend && hover.waehrend.length === 1 && String(hover.waehrend[0]) === String(frisch.id), JSON.stringify(hover));
     ok('… und beim Wegfahren ist es wieder weg', hover.nachher === 0, JSON.stringify(hover));
+
+    // Klick auf einen OFFENEN Balken: bleibt im Kalender und springt zur Anfrage im Posteingang.
+    // (Alex, 29.08.2026: „bei klick auf ein schraffiertes Feld muss jetzt nicht mehr in die Liste
+    // gesprungen werden, sondern zur Anfrage im Posteingang".)
+    const zumPosteingang = await a.seite.evaluate(async (id) => {
+      const bar = document.querySelector(`.abscal-bar[data-abs="${id}"]`);
+      if (!bar) return { balkenDa: false };
+      bar.click();
+      await new Promise(r => setTimeout(r, 1600));
+      const karte = document.querySelector(`.absence-inbox .absence-card[data-id="${id}"]`);
+      return { balkenDa: true, reiter: document.querySelector('.absence-tab.active')?.dataset.tab,
+               hervor: !!karte && karte.className.includes('absence-card--hervor'),
+               umriss: karte ? getComputedStyle(karte).outlineStyle : 'keine Karte' };
+    }, frisch.id);
+    ok('ein Klick auf den offenen Balken bleibt im Kalender',
+      zumPosteingang.balkenDa && zumPosteingang.reiter === 'kalender', JSON.stringify(zumPosteingang));
+    ok('… und hebt die Anfrage im Posteingang hervor',
+      zumPosteingang.hervor && zumPosteingang.umriss === 'solid', JSON.stringify(zumPosteingang));
+    // Die Kehrseite: Was NICHT im Posteingang liegt, fuehrt weiter in die Liste — sonst waere die
+    // Regel wertlos, weil sie fuer alles dasselbe taete.
+    await kalenderOeffnen(a.seite, MONAT + '-01', 'monat');
+    const inDieListe = await a.seite.evaluate(async () => {
+      const ids = new Set([...document.querySelectorAll('.absence-inbox .absence-card')].map(k => k.dataset.id));
+      const bar = [...document.querySelectorAll('.abscal-bar')].find(b => !ids.has(b.dataset.abs));
+      if (!bar) return { balkenDa: false };
+      bar.click();
+      await new Promise(r => setTimeout(r, 1800));
+      return { balkenDa: true, reiter: document.querySelector('.absence-tab.active')?.dataset.tab };
+    });
+    ok('ein Eintrag, der NICHT im Posteingang liegt, führt weiter in die Liste',
+      inDieListe.balkenDa && inDieListe.reiter === 'list', JSON.stringify(inDieListe));
+    await kalenderOeffnen(a.seite, heuteIso2.slice(0, 8) + '01', 'monat');
 
     // Genehmigen DIREKT aus dem Kalender-Reiter — das ist der Punkt der ganzen Uebung.
     const offenVorher = await a.seite.evaluate(() => document.querySelectorAll('.abscal-bar--pending').length);
