@@ -289,6 +289,10 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     console.log('\n── Der Name bleibt beim Wischen stehen ──');
     const klebt = await a.seite.evaluate(() => {
       const sc = document.querySelector('.abscal-scroll');
+      // Erst ins Bild holen: Seit der Posteingang mit im Kalender steht, liegt das Raster weiter
+      // unten, und `elementFromPoint` liefert ausserhalb des Sichtfensters schlicht `null` —
+      // die Pruefung sagte dann „nichts", ohne dass etwas kaputt waere.
+      sc.scrollIntoView({ block: 'center' });
       sc.scrollLeft = 0;
       const n = document.querySelector('.abscal-name');
       const vorher = Math.round(n.getBoundingClientRect().left);
@@ -561,6 +565,61 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     ok('ein Klick auf „Mai" springt in den Mai', gesprungen.titel === 'Mai ' + jetztJahr, JSON.stringify(gesprungen));
     ok('… und zwar wirklich in die Monatsansicht (31 Tagesspalten)',
       gesprungen.modus === 'monat' && gesprungen.tageskoepfe === 31, JSON.stringify(gesprungen));
+
+    console.log('\n── Der Posteingang ist auch im Kalender da und wirkt dort ──');
+    // Alex: „so dass man bei einer urlaubsanfrage nicht immer hin und her schalten muss."
+    // Ein frischer Antrag DES MITARBEITERS (nicht ein Fremdeintrag), damit er im Posteingang steht.
+    const heuteIso2 = new Date().toLocaleDateString('sv-SE');
+    const inZwei = (() => { const d = new Date(heuteIso2 + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 2); return d.toISOString().slice(0, 10); })();
+    const frisch = (await req('POST', '/api/absences', maTok, { type: 'urlaub', date_from: inZwei, date_to: inZwei })).body.absence;
+    ok('ein offener Antrag liegt vor', !!frisch && frisch.status === 'pending', JSON.stringify(frisch && frisch.status));
+    await a.seite.reload({ waitUntil: 'domcontentloaded' }); await sleep(2000);
+    await kalenderOeffnen(a.seite, heuteIso2.slice(0, 8) + '01', 'monat');
+    const pe = await a.seite.evaluate(() => ({
+      da: !!document.querySelector('.absence-inbox'),
+      karten: document.querySelectorAll('.absence-inbox .absence-card').length,
+      knoepfe: [...document.querySelectorAll('.absence-inbox button')].map(b => b.textContent.trim()),
+      kalenderDa: !!document.querySelector('.abscal-grid'),
+    }));
+    ok('der Posteingang steht im Kalender-Reiter', pe.da && pe.karten > 0, JSON.stringify(pe));
+    ok('… mit den Aktionen (Genehmigen/Ablehnen)',
+      pe.knoepfe.some(t => /Genehmigen/i.test(t)) && pe.knoepfe.some(t => /Ablehnen/i.test(t)), JSON.stringify(pe.knoepfe));
+    ok('… und das Raster ist trotzdem da', pe.kalenderDa, JSON.stringify(pe));
+
+    // Mouseover: hebt GENAU den zugehoerigen Balken hervor und laesst ihn wieder los.
+    const hover = await a.seite.evaluate(async (id) => {
+      const k = document.querySelector(`.absence-inbox .absence-card[data-id="${id}"]`);
+      if (!k) return { karteDa: false };
+      const vorher = document.querySelectorAll('.abscal-bar--zeigen').length;
+      k.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 150));
+      const waehrend = [...document.querySelectorAll('.abscal-bar--zeigen')].map(e => e.dataset.abs);
+      k.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 150));
+      return { karteDa: true, vorher, waehrend, nachher: document.querySelectorAll('.abscal-bar--zeigen').length };
+    }, frisch.id);
+    ok('vorher ist nichts hervorgehoben', hover.karteDa && hover.vorher === 0, JSON.stringify(hover));
+    ok('Mouseover hebt GENAU den zugehörigen Balken hervor',
+      hover.waehrend && hover.waehrend.length === 1 && String(hover.waehrend[0]) === String(frisch.id), JSON.stringify(hover));
+    ok('… und beim Wegfahren ist es wieder weg', hover.nachher === 0, JSON.stringify(hover));
+
+    // Genehmigen DIREKT aus dem Kalender-Reiter — das ist der Punkt der ganzen Uebung.
+    const offenVorher = await a.seite.evaluate(() => document.querySelectorAll('.abscal-bar--pending').length);
+    await a.seite.evaluate((id) => {
+      const k = document.querySelector(`.absence-inbox .absence-card[data-id="${id}"]`);
+      [...k.querySelectorAll('button')].find(x => /genehmig/i.test(x.textContent)).click();
+    }, frisch.id);
+    await sleep(2600);
+    const danach = await a.seite.evaluate((id) => ({
+      reiter: document.querySelector('.absence-tab.active')?.dataset.tab,
+      balkenNochOffen: !!document.querySelector(`.abscal-bar[data-abs="${id}"]`)?.className.includes('--pending'),
+      balkenDa: !!document.querySelector(`.abscal-bar[data-abs="${id}"]`),
+    }), frisch.id);
+    const inDb = (await req('GET', '/api/absences', admin)).body.absences.find(x => x.id === frisch.id);
+    ok('das Genehmigen aus dem Kalender wirkt wirklich', inDb && inDb.status === 'approved', JSON.stringify(inDb && inDb.status));
+    ok('… man bleibt dabei im Kalender', danach.reiter === 'kalender', JSON.stringify(danach));
+    ok('… und der Balken verliert seine Schraffur',
+      danach.balkenDa && !danach.balkenNochOffen, JSON.stringify({ offenVorher, ...danach }));
 
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.join(' | '));
     await a.seite.close(); await a.ktx.close();
