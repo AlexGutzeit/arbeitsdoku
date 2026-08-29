@@ -362,9 +362,13 @@ Zeile stehen — sonst wüsste man nicht, wer da ist. **Gezeigt wird, wer im dar
 angestellt war**, nicht wer heute im Haus ist: Wer Mitte März anfängt, erscheint ab März; wer Mitte
 Juni ausscheidet, im Juni noch und ab Juli nicht mehr; wer wieder eingestellt wird, ab dann erneut.
 In der Jahresansicht steht jeder, der irgendwann in diesem Jahr angestellt war. Ein **Mouseover** (am Handy: langer Druck) auf
-einen Balken nennt Name, Art, Zeitraum, Anzahl Tage und Kommentar. **Ein Klick auf den Balken führt
-in die Liste, genau zu diesem Eintrag** — zugeklappte Abschnitte gehen dabei auf, und der Eintrag
-wird kurz grün umrandet (wie ein Termin, den man auf der Willkommensseite antippt). Im Jahr führt
+einen Balken nennt Name, Art, Zeitraum, Anzahl Tage und Kommentar. **Der Posteingang steht auch hier** — offene
+Urlaubsanträge genehmigen oder ablehnen, Krankmeldungen quittieren, ohne in die Liste zu wechseln;
+beim Überfahren einer Anfrage mit der Maus wird der zugehörige Balken im Raster darunter
+hervorgehoben. **Ein Klick auf einen Balken** führt dorthin, wo man etwas damit tun kann: Liegt der
+Eintrag im Posteingang, springt die Ansicht zu dieser Anfrage und markiert sie — sonst **in die
+Liste, genau zu diesem Eintrag**, wobei zugeklappte Abschnitte aufgehen und der Eintrag kurz grün
+umrandet wird (wie ein Termin, den man auf der Willkommensseite antippt). Im Jahr führt
 ein Klick auf einen **Monatsnamen** in genau diesen Monat; mit **‹ ›** blättert man Jahre (im Monat
 Monate), **Heute** holt die Gegenwart zurück, und beim Öffnen steht immer das **laufende** Jahr bzw.
 der laufende Monat. Der Name bleibt beim seitlichen Wischen stehen; gewischt wird nur die
