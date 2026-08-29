@@ -2348,3 +2348,7 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 /* Angetippter Eintrag aus dem Kalender — dieselbe Sprache wie ein Termin, den man auf der
    Willkommensseite antippt (.tl-plan-entry--hervor). */
 .absence-card--hervor { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+/* Posteingang -> Kalender: Beim Ueberfahren einer Anfrage zeigt das Raster, WANN sie liegt.
+   Kraeftiger Umriss statt Farbwechsel — die Farbe traegt hier schon die Art der Abwesenheit. */
+.abscal-bar--zeigen { outline: 2px solid var(--text); outline-offset: 1px; z-index: 4; }

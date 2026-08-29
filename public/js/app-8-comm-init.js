@@ -889,6 +889,34 @@ function renderAbsenceCard(a, opts = {}) {
   </div>`;
 }
 
+/**
+ * Posteingang und Kalender verbinden: Wer mit der Maus ueber eine Anfrage faehrt, sieht im Raster
+ * darunter, WANN sie liegt (Alex, 29.08.2026). Ohne das muss man die Zeile selbst suchen — bei
+ * zwoelf Mitarbeitern und einem ganzen Jahr ist das genau die Arbeit, die die Ansicht abnehmen soll.
+ *
+ * Der Balken wird bei jedem Ueberfahren NEU gesucht, nicht einmal gemerkt: Der Kalender zeichnet
+ * sich beim Blaettern und bei jeder Live-Aenderung neu, eine gemerkte Liste zeigte danach auf
+ * Elemente, die es nicht mehr gibt.
+ *
+ * Liegt die Anfrage ausserhalb des gezeigten Zeitraums, passiert nichts — die Ansicht springt
+ * NICHT von selbst dorthin. Ein Kalender, der beim blossen Darueberfahren den Monat wechselt,
+ * waere unbenutzbar.
+ */
+function verknuepfePosteingangMitKalender(mainEl) {
+  const zeigen = (id, an) => {
+    mainEl.querySelectorAll('.abscal-bar[data-abs="' + id + '"]')
+      .forEach(el => el.classList.toggle('abscal-bar--zeigen', an));
+  };
+  mainEl.querySelectorAll('.absence-inbox .absence-card[data-id]').forEach(karte => {
+    const id = karte.dataset.id;
+    karte.addEventListener('mouseenter', () => zeigen(id, true));
+    karte.addEventListener('mouseleave', () => zeigen(id, false));
+    // Beim Klicken auf einen Knopf (Genehmigen o. ae.) wird neu gezeichnet — die Markierung
+    // vorher loesen, damit sie nicht an einem Balken haengen bleibt, den es gleich nicht mehr gibt.
+    karte.addEventListener('click', () => zeigen(id, false));
+  });
+}
+
 // Die Karten eines Verlaufs-Monats nachzeichnen. Eigene Funktion, weil es ZWEI Ausloeser gibt:
 // das Aufklappen durch den Nutzer (`toggle`) und den Sprung aus dem Kalender. Letzterer darf sich
 // NICHT auf das Ereignis verlassen — `toggle` feuert asynchron, und der Sprung stuende danach vor
@@ -1395,7 +1423,7 @@ async function renderAbsences() {
         ${(showVac || showCal) ? '' : '<button class="btn btn-primary" id="absence-new-btn">+ Eintragen</button>'}
       </div>
       ${tabBar}
-      ${showCal ? '<div id="abscal-wrap"></div>' : showVac ? '<div id="vac-overview-wrap"><div class="loading"><div class="spinner"></div></div></div>' : `
+      ${showCal ? `${maInboxHtml}${inboxHtml}<div id="abscal-wrap"></div>` : showVac ? '<div id="vac-overview-wrap"><div class="loading"><div class="spinner"></div></div></div>' : `
       ${maInboxHtml}
       ${inboxHtml}
       <div class="absence-all-header">
@@ -1420,6 +1448,7 @@ async function renderAbsences() {
       // Willkommensseite in die Tagesansicht der Planung fuehrt.
       beiKlick: (a) => { _absTab = 'list'; S._abwesenheitZiel = a.id; renderAbsences(); },
     });
+    verknuepfePosteingangMitKalender(mainEl);
   }
 
 
