@@ -662,6 +662,80 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     ok('… und der Balken verliert seine Schraffur',
       danach.balkenDa && !danach.balkenNochOffen, JSON.stringify({ offenVorher, ...danach }));
 
+    console.log('\n── Zwei Chefs gleichzeitig: alles live, in beide Richtungen ──');
+    // Alex: „egal in welcher Ansicht ich im posteingang quittiere, ablehne oder annehme, der andere
+    // wird live synchronisiert, so wie auch bei den anderen Chefs und admins?"
+    //
+    // Deshalb ZWEI echte Sitzungen nebeneinander — eine im Kalender, eine in der Liste. Ein
+    // nachgebauter Aufruf im selben Fenster wuerde die Frage nicht beantworten: Der handelnde Tab
+    // zeichnet sich ohnehin selbst neu; interessant ist der ANDERE.
+    const pwChef = (log.match(/chef\s+->\s+(\S+)/) || [])[1];
+    const c = await anmelden(browser, 'chef', pwChef);
+    c.seite.on('pageerror', e => jsFehler.push('pageerror(chef): ' + e.message));
+
+    // Jeder Antrag braucht seinen EIGENEN Tag: Urlaub/FZA/Sonderurlaub duerfen sich pro Person und
+    // Tag nicht ueberschneiden — der zweite Antrag auf denselben Tag wird abgewiesen.
+    const neuerAntrag = async (inTagen) => {
+      const tag = (() => { const d = new Date(); d.setDate(d.getDate() + inTagen); return d.toISOString().slice(0, 10); })();
+      const r = await req('POST', '/api/absences', maTok, { type: 'urlaub', date_from: tag, date_to: tag });
+      if (!r.body || !r.body.absence) console.log('     (Antrag abgewiesen: ' + r.status + ' ' + r.text.slice(0, 90) + ')');
+      return r.body && r.body.absence;
+    };
+    const v1 = await neuerAntrag(1);
+    ok('ein neuer offener Antrag liegt vor', !!v1 && v1.status === 'pending', JSON.stringify(v1 && v1.status));
+
+    // A: Kalender im Monat des Antrags. B: Liste.
+    await a.seite.reload({ waitUntil: 'domcontentloaded' }); await sleep(2000);
+    await kalenderOeffnen(a.seite, v1.date_from.slice(0, 8) + '01', 'monat');
+    await c.seite.goto(BASIS + '/#/absences', { waitUntil: 'domcontentloaded' }); await sleep(2200);
+
+    const imKalender = async (id) => a.seite.evaluate((i) => {
+      const b = document.querySelector(`.abscal-bar[data-abs="${i}"]`);
+      return { balken: !!b, offen: !!b && b.className.includes('--pending'),
+               imPosteingang: !!document.querySelector(`.absence-inbox .absence-card[data-id="${i}"]`) };
+    }, id);
+    const vorher1 = await imKalender(v1.id);
+    ok('im Kalender steht er offen und im Posteingang',
+      vorher1.balken && vorher1.offen && vorher1.imPosteingang, JSON.stringify(vorher1));
+
+    // RICHTUNG 1: Der Chef genehmigt IN DER LISTE — der Kalender des Admins muss nachziehen.
+    const geklickt = await c.seite.evaluate((i) => {
+      const k = document.querySelector(`.absence-inbox .absence-card[data-id="${i}"]`);
+      if (!k) return false;
+      const b = [...k.querySelectorAll('button')].find(x => /genehmig/i.test(x.textContent));
+      if (!b) return false;
+      b.click(); return true;
+    }, v1.id);
+    ok('der zweite Chef genehmigt in der LISTE', geklickt);
+    await sleep(3000);
+    const nachher1 = await imKalender(v1.id);
+    ok('… der Kalender des anderen zieht OHNE Neuladen nach (Schraffur weg)',
+      nachher1.balken && !nachher1.offen, JSON.stringify(nachher1));
+    ok('… und der Antrag verschwindet dort aus dem Posteingang',
+      !nachher1.imPosteingang, JSON.stringify(nachher1));
+
+    // RICHTUNG 2: Jetzt im KALENDER handeln — die Liste des anderen muss nachziehen.
+    const v2 = await neuerAntrag(3);
+    ok('ein zweiter offener Antrag liegt vor', !!v2, JSON.stringify(v2 && v2.id));
+    await sleep(3000);   // beide Sitzungen bekommen ihn per SSE
+    const beiChef = async (i) => c.seite.evaluate((x) =>
+      !!document.querySelector(`.absence-inbox .absence-card[data-id="${x}"]`), i);
+    ok('er taucht beim zweiten Chef von selbst im Posteingang auf', await beiChef(v2.id), 'ohne Neuladen');
+    const geklickt2 = await a.seite.evaluate((i) => {
+      const k = document.querySelector(`.absence-inbox .absence-card[data-id="${i}"]`);
+      if (!k) return false;
+      const b = [...k.querySelectorAll('button')].find(x => /ablehn/i.test(x.textContent));
+      if (!b) return false;
+      b.click(); return true;
+    }, v2.id);
+    ok('im KALENDER wird abgelehnt', geklickt2);
+    await sleep(3000);
+    ok('… und beim anderen verschwindet er aus dem Posteingang', !(await beiChef(v2.id)), 'ohne Neuladen');
+    const inDb2 = (await req('GET', '/api/absences', admin)).body.absences.find(x => x.id === v2.id);
+    ok('… mit dem richtigen Ergebnis in der Datenbank', inDb2 && inDb2.status === 'rejected',
+      JSON.stringify(inDb2 && inDb2.status));
+    await c.seite.close(); await c.ktx.close();
+
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.join(' | '));
     await a.seite.close(); await a.ktx.close();
   } catch (e) {
