@@ -579,8 +579,13 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     // Alex: „so dass man bei einer urlaubsanfrage nicht immer hin und her schalten muss."
     // Ein frischer Antrag DES MITARBEITERS (nicht ein Fremdeintrag), damit er im Posteingang steht.
     const heuteIso2 = new Date().toLocaleDateString('sv-SE');
-    const inZwei = (() => { const d = new Date(heuteIso2 + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 2); return d.toISOString().slice(0, 10); })();
-    const frisch = (await req('POST', '/api/absences', maTok, { type: 'urlaub', date_from: inZwei, date_to: inZwei })).body.absence;
+    // BEWUSST 40 Tage voraus, nicht zwei: Damit liegt der Antrag IMMER in einem anderen Monat als
+    // heute, und der Abschnitt prueft jeden Tag den schwierigen Fall. Mit „heute + 2" trat er nur
+    // am Monatsletzten auf — dort fiel er dann prompt um (31.08.2026), und zwar aus einem Grund,
+    // der nichts mit der Sache zu tun hatte. Ein Test, der die harte Variante einmal im Monat
+    // erwischt, findet den Fehler einmal im Monat.
+    const weitVoraus = (() => { const d = new Date(heuteIso2 + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 40); return d.toISOString().slice(0, 10); })();
+    const frisch = (await req('POST', '/api/absences', maTok, { type: 'urlaub', date_from: weitVoraus, date_to: weitVoraus })).body.absence;
     ok('ein offener Antrag liegt vor', !!frisch && frisch.status === 'pending', JSON.stringify(frisch && frisch.status));
     // Den Monat DES ANTRAGS zeigen, nicht den laufenden. Am Monatsletzten liegt „heute + 2" im
     // Folgemonat — der Balken waere dann gar nicht im Bild, und die Pruefungen fielen aus einem
