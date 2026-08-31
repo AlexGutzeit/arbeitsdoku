@@ -582,8 +582,12 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     const inZwei = (() => { const d = new Date(heuteIso2 + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 2); return d.toISOString().slice(0, 10); })();
     const frisch = (await req('POST', '/api/absences', maTok, { type: 'urlaub', date_from: inZwei, date_to: inZwei })).body.absence;
     ok('ein offener Antrag liegt vor', !!frisch && frisch.status === 'pending', JSON.stringify(frisch && frisch.status));
+    // Den Monat DES ANTRAGS zeigen, nicht den laufenden. Am Monatsletzten liegt „heute + 2" im
+    // Folgemonat — der Balken waere dann gar nicht im Bild, und die Pruefungen fielen aus einem
+    // Grund um, der nichts mit der Sache zu tun hat. (Genau so passiert am 31.08.2026.)
+    const monatDesAntrags = frisch.date_from.slice(0, 8) + '01';
     await a.seite.reload({ waitUntil: 'domcontentloaded' }); await sleep(2000);
-    await kalenderOeffnen(a.seite, heuteIso2.slice(0, 8) + '01', 'monat');
+    await kalenderOeffnen(a.seite, monatDesAntrags, 'monat');
     const pe = await a.seite.evaluate(() => ({
       da: !!document.querySelector('.absence-inbox'),
       karten: document.querySelectorAll('.absence-inbox .absence-card').length,
@@ -642,7 +646,7 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     });
     ok('ein Eintrag, der NICHT im Posteingang liegt, führt weiter in die Liste',
       inDieListe.balkenDa && inDieListe.reiter === 'list', JSON.stringify(inDieListe));
-    await kalenderOeffnen(a.seite, heuteIso2.slice(0, 8) + '01', 'monat');
+    await kalenderOeffnen(a.seite, monatDesAntrags, 'monat');
 
     // Genehmigen DIREKT aus dem Kalender-Reiter — das ist der Punkt der ganzen Uebung.
     const offenVorher = await a.seite.evaluate(() => document.querySelectorAll('.abscal-bar--pending').length);
