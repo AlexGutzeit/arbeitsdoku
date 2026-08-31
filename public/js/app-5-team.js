@@ -85,7 +85,8 @@ async function renderWelcomeWeek() {
 
       const planningsHtml = dayPlannings.map(e => {
         const proj = e.project_name || e.project_text || '';
-        const colleagues = e.assigned_users.filter(u => u.user_id !== S.user.id).map(u => u.user_name);
+        // Die ganzen Objekte behalten, nicht nur die Namen — fuer die Profilbilder braucht es die id.
+        const colleagues = e.assigned_users.filter(u => u.user_id !== S.user.id);
         // Anklickbar wie die Aushaenge: fuehrt in die Tagesansicht der Planung zu genau diesem
         // Termin. Die Knoepfe darin (Navigieren/Uebernehmen) fangen ihre Klicks selbst ab.
         return `<div class="welcome-task welcome-task--klickbar${isToday ? ' welcome-task-today' : ''}"
@@ -96,7 +97,13 @@ async function renderWelcomeWeek() {
             ${proj ? `<span>&#128193; ${esc(proj)}</span>` : ''}
             ${e.address ? `<span>&#128205; ${esc(e.address)}</span>` : ''}
             ${e.description ? `<span>${esc(e.description)}</span>` : ''}
-            ${colleagues.length ? `<span>&#128101; mit ${esc(colleagues.join(', '))}</span>` : ''}
+            ${colleagues.length ? `<span class="welcome-task-mit">&#128101; mit ${colleagues.map(u =>
+              // Bild direkt VOR dem Namen, nicht alle Bilder in einer Reihe: Sonst muesste man
+              // Reihenfolge mit Reihenfolge abgleichen, um zu wissen, wer wer ist.
+              // 'initialen' statt leerer Kreise — wer kein Bild hinterlegt hat, ist so trotzdem
+              // auf einen Blick zu unterscheiden.
+              `<span class="welcome-mit-person">${avatarHtml({ id: u.user_id, name: u.user_name }, 20, 'initialen')}${esc(u.user_name)}</span>`
+            ).join('')}</span>` : ''}
           </div>
           <div class="welcome-task-actions">
             ${e.address ? `<button class="btn btn-sm btn-outline btn-nav nav-to-addr" data-addr="${esc(e.address)}" title="Navigieren">&#128506;</button>` : ''}
@@ -119,6 +126,10 @@ async function renderWelcomeWeek() {
 
   document.getElementById('welcome-week-prev')?.addEventListener('click', () => { S.welcomeWeekOffset--; renderWelcomeWeek(); });
   document.getElementById('welcome-week-next')?.addEventListener('click', () => { S.welcomeWeekOffset++; renderWelcomeWeek(); });
+  // KEIN eigenes avatareLaden hier: Der MutationObserver in app-1-core.js (initViewStateKeeper)
+  // beobachtet #app mit subtree und laedt die Bilder nach JEDER strukturellen Aenderung nach —
+  // auch nach diesem nachtraeglichen Fuellen und beim Blaettern zwischen den Wochen.
+  // Nachgemessen: Mit einem Aufruf hier verhaelt sich die Seite genauso wie ohne.
 }
 
 // --- Web-Push (Benachrichtigungen) ---

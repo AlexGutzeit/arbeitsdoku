@@ -2352,3 +2352,8 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 /* Posteingang -> Kalender: Beim Ueberfahren einer Anfrage zeigt das Raster, WANN sie liegt.
    Kraeftiger Umriss statt Farbwechsel — die Farbe traegt hier schon die Art der Abwesenheit. */
 .abscal-bar--zeigen { outline: 2px solid var(--text); outline-offset: 1px; z-index: 4; }
+
+/* „mit …" auf der Willkommensseite: Bild und Name gehoeren zusammen und duerfen nicht getrennt
+   umbrechen — sonst stuende ein Gesicht am Zeilenende und der Name in der naechsten Zeile. */
+.welcome-task-mit { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.15rem 0.5rem; }
+.welcome-mit-person { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
