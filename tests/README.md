@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**195 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**196 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -48,6 +48,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `abschluss-gleichheit.js` | DIE zentrale Probe zum Abrechnungs-Abschluss: Ändert das Abschließen eine angezeigte Zahl? |
 | `abschluss-haerte.js` | Härtetest für den Abrechnungs-Abschluss: gezielt die Fälle, in denen die Mechanik brechen KANN. |
 | `abschluss-nachtrag.js` | Nachträge in einem bereits abgerechneten Monat: kommen die Stunden am Ende beim Mitarbeiter an? |
+| `abschluss-posteingang.js` | Der Posteingang darf nach einem Abschluss nicht auf ewig verstopfen (Alex, 31.08.2026). |
 | `abschluss-prodklon.js` | Abrechnungs-Abschluss gegen eine KOPIE der Produktivdaten. |
 | `abschluss-statistik-monat-ui.js` | Der „abgerechnet"-Hinweis auf der Statistik gehört zum ANGEWÄHLTEN Zeitraum. |
 | `abschluss-statistik-prodklon.js` | Der zeitraum-bezogene „abgerechnet"-Hinweis an ECHTEN Daten. |

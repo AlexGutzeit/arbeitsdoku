@@ -18,6 +18,23 @@ function sperreFuerAbwesenheit(db, absence, req) {
     req.user, req.body && req.body.reason);
 }
 
+// Der Abschluss schuetzt BEZAHLTE ZAHLEN, nicht Vorgaenge.
+//
+// Gezaehlt werden nur Abwesenheiten mit Status 'active' oder 'approved' (routes/absence-days.js).
+// Eine Aktion, die daran nichts aendert, darf deshalb auch nach dem Abschluss laufen — sonst haengt
+// sie fuer immer im Posteingang, ohne dass irgendjemand sie je loswerden kann (Alex, 31.08.2026:
+// „Was wenn jemand etwas in der Vergangenheit noch nicht akzeptiert oder quittiert hat und der
+// abschluss gemacht wurde? Dann verschwindet dieser Eintrag nie mehr aus dem Posteingang.").
+//
+// Es gilt also, Aktion fuer Aktion:
+//   genehmigen (/approve)             offen -> genehmigt   ZAEHLT PLOETZLICH   -> gesperrt
+//   Vorschlag annehmen (/accept, acknowledge-ma mit proposed)  desgleichen     -> gesperrt
+//   Vorschlag ablehnen (/reject-manager-edit)  genehmigt -> offen              -> gesperrt
+//   ablehnen (/reject) eines OFFENEN Antrags   zaehlt vorher wie nachher nicht -> erlaubt
+//   ablehnen eines gezaehlten Eintrags         Tage fielen weg                 -> gesperrt
+//   quittieren (Chef und MA ohne Vorschlag)    nur ein Kennzeichen             -> erlaubt
+const ZAEHLENDE_STATUS = ['active', 'approved'];
+
 // Datumsbereich „TT.MM.–TT.MM." (bzw. ein einzelnes Datum, wenn von==bis) für Push-Texte.
 function fmtRange(from, to) {
   const f = (d) => String(d).split('-').reverse().join('.');
@@ -745,7 +762,9 @@ router.post('/:id/reject', authenticate, (req, res) => {
   const absence = db.prepare('SELECT * FROM absences WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
 
-  const sperre = sperreFuerAbwesenheit(db, absence, req);
+  // Einen OFFENEN Antrag abzulehnen aendert keine bezahlte Zahl (weder offen noch abgelehnt
+  // zaehlen). Einen bereits gezaehlten Eintrag abzulehnen sehr wohl — dort bleibt es gesperrt.
+  const sperre = ZAEHLENDE_STATUS.includes(absence.status) ? sperreFuerAbwesenheit(db, absence, req) : null;
   if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
 
   db.prepare(`
@@ -833,6 +852,10 @@ router.post('/:id/reject-ma', authenticate, (req, res) => {
 });
 
 // POST /api/absences/:id/acknowledge — Chef quittiert Krank/Berufsschule/Innung
+//
+// BEWUSST OHNE Abschluss-Sperre: Quittieren setzt nur `notified_at` und aendert keine bezahlte
+// Zahl. Wer hier eine Sperre ergaenzt, sorgt dafuer, dass eine Krankmeldung aus einem
+// abgerechneten Monat nie mehr aus dem Posteingang verschwindet.
 router.post('/:id/acknowledge', authenticate, (req, res) => {
   if (!canManageAbsences(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
 
@@ -858,7 +881,11 @@ router.post('/:id/acknowledge-ma', authenticate, (req, res) => {
   if (!absence) return res.status(404).json({ error: 'Abwesenheit nicht gefunden' });
   if (absence.user_id !== req.user.id) return res.status(403).json({ error: 'Keine Berechtigung' });
 
-  const sperre = sperreFuerAbwesenheit(db, absence, req);
+  // Einen Terminvorschlag anzunehmen uebernimmt Daten und setzt 'approved' — das verschiebt
+  // bezahlte Tage und bleibt gesperrt. Reines Quittieren loescht nur `ma_needs_ack` und ist
+  // deshalb immer erlaubt; sonst haengt eine Krankmeldung aus einem abgerechneten Monat auf ewig
+  // im Posteingang des Mitarbeiters.
+  const sperre = absence.proposed_date_from ? sperreFuerAbwesenheit(db, absence, req) : null;
   if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
 
   if (absence.proposed_date_from) {
