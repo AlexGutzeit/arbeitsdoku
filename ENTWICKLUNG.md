@@ -59,6 +59,43 @@ Gefunden hat es allein der Testlauf danach: `handy-verlauf-ui` meldete für die 
 und `git commit` nie im selben Befehl, und nach jedem Commit mit `git show --stat` prüfen, dass
 die Datei wirklich drin ist.
 
+### 2026-08-31 · Der Abschluss sperrte Vorgänge, nicht Zahlen
+
+Alex: „Was wenn jemand etwas in der Vergangenheit noch nicht akzeptiert oder quittiert hat und der
+abschluss gemacht wurde? Dann verschwindet dieser Eintrag nie mehr aus dem Posteingang."
+
+**Der Fall war längst da, nicht nur denkbar.** Abschluss bis 30.06.2026, und zwei Innung-Einträge
+von Jakob Wolf (26.–28.05. und 01.06.) warteten dauerhaft auf seine Quittierung.
+
+**Die Frage, die niemand gestellt hatte:** Wovor schützt der Abschluss eigentlich? Vor verschobenen
+**Zahlen** — nicht vor Vorgängen. Gezählt werden nur Abwesenheiten mit Status `active` oder
+`approved` (`routes/absence-days.js`). Damit lässt sich jede Aktion sauber einsortieren:
+
+| Aktion | ändert eine gezählte Zahl? | |
+|---|---|---|
+| quittieren (Chef wie MA, ohne Vorschlag) | nein — nur ein Kennzeichen | **erlaubt** |
+| ablehnen eines **offenen** Antrags | nein — offen wie abgelehnt zählen nicht | **erlaubt** |
+| genehmigen | ja — der Tag zählt plötzlich | gesperrt |
+| ablehnen eines **gezählten** Eintrags | ja — Tage fielen weg | gesperrt |
+| Terminvorschlag annehmen | ja — übernimmt Daten, setzt `approved` | gesperrt |
+
+Zwei Zeilen in `routes/absences.js`. Bemerkenswert daran: Die Chef-Quittierung war **schon immer**
+frei — sie prüft die Sperre gar nicht. Das war richtig, stand aber nirgends; jetzt steht es als
+Kommentar dort, damit niemand die Sperre „nachrüstet" und das Problem wieder einbaut.
+
+**Und ein Fund beim Bauen:** Alex' zweiter Vorschlag — der Abschluss soll sich weigern, solange
+etwas offen ist — existiert bereits. Nur prüft `offeneAntraege` in `routes/closure.js`
+ausschließlich `status = 'pending'`; **Quittierungen sieht sie nicht**. Genau das deckt sich mit den
+echten Daten: null hängende Anträge, zwei hängende Quittierungen. Die Prüfung bleibt, wie sie ist —
+Quittieren geht jetzt immer, also muss sie den Abschluss dafür nicht aufhalten.
+
+**Der Test prüft beide Seiten.** Nur „was jetzt geht" zu prüfen wäre hier gefährlich: Eine Sperre,
+die zu viel freigibt, verschiebt still bezahlte Stunden, und das fiele erst bei der Lohnabrechnung
+auf. Deshalb steht neben jeder Freigabe die Gegenrichtung — und als Anker die **Lohn-CSV des
+abgerechneten Monats**, die vor und nach allen erlaubten Aktionen zeichengleich sein muss. Die drei
+Gegenproben treffen entsprechend beides: zu streng (alte pauschale Sperre) **und** zu locker (Sperre
+ganz weg).
+
 ### 2026-08-28 · Abwesenheitskalender — und drei Fehler, die man nur durch Messen findet
 
 Liste und Urlaubsübersicht beantworten „wer hat wie viel". Offen war „wer fehlt wann". Alex wollte
