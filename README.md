@@ -818,6 +818,28 @@ Alle veränderlichen Daten liegen im Projektordner (und sind aus der Versionsver
 Für Server-Betrieb zusätzlich eine **dateibasierte Sicherung** (z. B. nächtlicher `rsync`/Cron der
 Ordner `data/`, `uploads/`, `storage/`) einrichten.
 
+**Eine tägliche Kontrolle lohnt sich — und sollte sagen, *was* klemmt.** Bewährt hat sich ein
+Cron-Skript auf einem zweiten, ständig laufenden Rechner, das beides an einer Stelle prüft: Liegt
+dort eine Sicherung von *heute*, hat der Server nachts gesichert **und** das Abholen funktioniert.
+Dazu ein Aufruf von `/health`. Das Ergebnis kommt als Push-Meldung.
+
+Zwei Dinge machen den Unterschied zwischen einer nützlichen und einer nervigen Meldung:
+
+- **Die Ursache benennen, nicht den Symptomcode.** `curl` liefert bei jedem Fehlschlag `000` — das
+  kann Namensauflösung, Verbindung, Zeitüberschreitung oder TLS sein. Wer nur `000` meldet, weiß am
+  nächsten Morgen nichts. Der **Rückgabecode** von `curl` unterscheidet das eindeutig (6 = Name,
+  7 = Verbindung, 28 = Zeitüberschreitung, 35/51/60 = TLS); aus den *Zeiten* lässt es sich **nicht**
+  ableiten, weil „Verbindung 0 s" sowohl „Name nicht aufgelöst" als auch „sofort abgewiesen"
+  bedeuten kann. Nützlich ist außerdem, **IPv4 und IPv6 getrennt** zu prüfen — sonst bleibt offen,
+  welcher Weg klemmt.
+- **Einen einzelnen Aussetzer nicht zur Störung machen.** Ein zweiter Versuch nach ein paar Sekunden
+  fängt kurze Netz- oder DNS-Hänger ab. Berichtet werden sollte er trotzdem („OK nach 2. Versuch"),
+  damit Häufungen auffallen.
+
+Wer den Server über einen **Namen** prüft, prüft die Namensauflösung gleich mit — was richtig ist,
+aber bedacht sein will: Hängt der einzige Nameserver, meldet die Kontrolle einen Ausfall, obwohl
+Server und App laufen.
+
 **Wiederherstellung (getestet):** Ein per *Backup herunterladen* (oder per Cron) erzeugtes ZIP wird über
 *Einstellungen → Backup einspielen* hochgeladen. Der Server prüft das ZIP, legt **zuerst** ein
 Safety-Backup der aktuellen Daten an, schreibt die Datenbank **atomar** zurück, stellt Uploads/Dokumente
