@@ -7,7 +7,7 @@ const { ROLLEN_MIT_BESTELLRECHT, bestellmeldungenAufraeumen } = require('../best
 const { pruefeSperre, pruefeSperreGlobal, protokolliereEingriff, abgerechnetBis } = require('../abschluss');
 const { istUhrzeit } = require('../zeit');
 const zweiFaktor = require('../zweifaktor');
-const { austrittsdatumSetzen, ausstellenVollziehen } = require('../ausstellen');
+const { austrittsdatumSetzen, austrittsdatumAufheben, ausstellenVollziehen, berlinHeute } = require('../ausstellen');
 
 const router = express.Router();
 
@@ -671,12 +671,66 @@ router.post('/:id/deactivate', authenticate, authorize('chef'), (req, res) => {
   const sperre = pruefeSperre(db, [employedUntil], req.user, req.body && req.body.reason);
   if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
 
-  // Reihenfolge wie bisher: erst das Konto schliessen, dann das Austrittsdatum festschreiben.
+  // Das Austrittsdatum steht in beiden Faellen sofort fest — es begrenzt die Soll-Stunden.
   austrittsdatumSetzen(db, Number(req.params.id), employedUntil);
+
+  // LIEGT DER LETZTE ARBEITSTAG NOCH VOR UNS, wird nur VORGEMERKT: Das Konto bleibt offen, der
+  // Zeitplaner schliesst es am Tag danach (scheduler.js, austritteVollziehen).
+  //
+  // Vorher wurde IMMER sofort geschlossen. Wer am 05.09. ausstellte und den 30.09. als letzten
+  // Arbeitstag eintrug, sperrte den Mitarbeiter 25 Tage zu frueh aus — waehrend sein Soll
+  // weiterlief (isEmployedOn zaehlt bis einschliesslich Austrittsdatum). Ergebnis: 18 Arbeitstage
+  // mit Soll, aber ohne Ist, rund 144 Stunden still vom Ueberstundenstand abgezogen. Ausgerechnet
+  // in der Lage, in der dieser Stand ausgezahlt wird (Alex, 04.09.2026).
+  //
+  // Die Schwelle ist `< heute`, NICHT `<= heute`: Wer heute seinen letzten Tag hat, arbeitet heute
+  // noch und braucht bis zum Feierabend Zugang.
+  const heute = berlinHeute();
+  if (employedUntil >= heute) {
+    logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_austritt_vorgemerkt',
+      details: `Austritt vorgemerkt: ${user.username} (${user.role}, id=${req.params.id}), `
+        + `letzter Arbeitstag ${employedUntil} — Zugang bleibt bis dahin bestehen`, ip: req.ip });
+    protokolliereEingriff(db, req, sperre, `Austrittsdatum ${employedUntil} vorgemerkt`);
+    return res.json({ success: true, vorgemerkt: true, employed_until: employedUntil });
+  }
+
   ausstellenVollziehen(db, Number(req.params.id), employedUntil,
     { id: req.user.id, username: req.user.username, ip: req.ip });
 
   protokolliereEingriff(db, req, sperre, `Austrittsdatum ${employedUntil} gesetzt`);
+  res.json({ success: true, vorgemerkt: false });
+});
+
+// Eine VORMERKUNG wieder aufheben — der Anstellungszeitraum ist danach wieder offen.
+//
+// Nur solange das Konto noch aktiv ist: Ist es bereits geschlossen, ist „Wiedereinstellen" der
+// richtige Weg (der legt einen neuen Zeitraum an und laesst die Luecke stehen).
+router.post('/:id/austritt-aufheben', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
+  if (user.role === 'admin' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin-Accounts können nur von Admins bearbeitet werden' });
+  }
+  if (user.active === 0) {
+    return res.status(409).json({ error: 'Der Mitarbeiter ist bereits ausgestellt — bitte „Wiedereinstellen" verwenden.' });
+  }
+  const offen = db.prepare(
+    'SELECT id, end_date FROM employment_periods WHERE user_id = ? ORDER BY start_date DESC LIMIT 1'
+  ).get(req.params.id);
+  if (!offen || !offen.end_date) {
+    return res.status(409).json({ error: 'Für diesen Mitarbeiter ist kein Austritt vorgemerkt' });
+  }
+
+  // Das Aufheben verlaengert die Anstellung wieder — und damit die Soll-Stunden. In einem
+  // abgerechneten Zeitraum waere das eine rueckwirkende Aenderung an bezahlten Zahlen.
+  const sperre = pruefeSperre(db, [offen.end_date], req.user, req.body && req.body.reason);
+  if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
+  austrittsdatumAufheben(db, Number(req.params.id));
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_austritt_aufgehoben',
+    details: `Vormerkung aufgehoben: ${user.username} (id=${req.params.id}), war ${offen.end_date}`, ip: req.ip });
+  protokolliereEingriff(db, req, sperre, `Vormerkung zum ${offen.end_date} aufgehoben`);
   res.json({ success: true });
 });
 
