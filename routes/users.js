@@ -7,6 +7,7 @@ const { ROLLEN_MIT_BESTELLRECHT, bestellmeldungenAufraeumen } = require('../best
 const { pruefeSperre, pruefeSperreGlobal, protokolliereEingriff, abgerechnetBis } = require('../abschluss');
 const { istUhrzeit } = require('../zeit');
 const zweiFaktor = require('../zweifaktor');
+const { austrittsdatumSetzen, ausstellenVollziehen } = require('../ausstellen');
 
 const router = express.Router();
 
@@ -670,33 +671,11 @@ router.post('/:id/deactivate', authenticate, authorize('chef'), (req, res) => {
   const sperre = pruefeSperre(db, [employedUntil], req.user, req.body && req.body.reason);
   if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
 
-  const ts = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
-  db.prepare('UPDATE users SET active = 0, deactivated_at = ?, deactivated_by = ? WHERE id = ?').run(ts, req.user.id, req.params.id);
-  if (open) {
-    db.prepare('UPDATE employment_periods SET end_date = ? WHERE id = ?').run(employedUntil, open.id);
-  } else {
-    // Kein offener Zeitraum (Daten-Altlast) -> einen abgeschlossenen Tageszeitraum anlegen
-    db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, ?)').run(req.params.id, employedUntil, employedUntil);
-  }
-  // Push-Abos des ausgestellten Nutzers entfernen (er soll keine Benachrichtigungen mehr bekommen;
-  // notifyUsers sperrt zusaetzlich serverseitig). Bei Wiedereinstellung re-abonniert das Geraet beim Login.
-  db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(req.params.id);
+  // Reihenfolge wie bisher: erst das Konto schliessen, dann das Austrittsdatum festschreiben.
+  austrittsdatumSetzen(db, Number(req.params.id), employedUntil);
+  ausstellenVollziehen(db, Number(req.params.id), employedUntil,
+    { id: req.user.id, username: req.user.username, ip: req.ip });
 
-  // Zweiten Faktor loeschen (Alex, 25.08.2026). Ohne das ueberlebt der Authenticator auf dem
-  // privaten Handy das Ausstellen — samt der gemerkten Geraete, die je nach Intervall wochenlang
-  // gar keinen Code verlangen. Kaeme der Account je versehentlich wieder auf active=1, waere sein
-  // altes Handy sofort wieder ein gueltiger zweiter Faktor: kein Schutz mehr, sondern eine offene
-  // Tuer, die niemand sieht. Bei Wiedereinstellung richtet er neu ein — derselbe Weg wie beim
-  // Handywechsel, den es als Knopf ohnehin gibt.
-  //
-  // Profilbild und Rechte bleiben ABSICHTLICH stehen: Das Bild haengt an alten Ansichten, und die
-  // Rechte wirken ohne aktiven Account nicht — beide koennen nicht zur stillen Hintertuer werden.
-  const hatteZweiFaktor = !!db.prepare('SELECT user_id FROM twofa_secrets WHERE user_id = ?').get(req.params.id);
-  zweiFaktor.zuruecksetzen(db, req.params.id);
-
-  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_deactivate',
-    details: `Ausgestellt: ${user.username} (${user.role}, id=${req.params.id}), letzter Arbeitstag ${employedUntil}`
-      + (hatteZweiFaktor ? ' · Zwei-Faktor geloescht (Neueinrichtung noetig)' : ''), ip: req.ip });
   protokolliereEingriff(db, req, sperre, `Austrittsdatum ${employedUntil} gesetzt`);
   res.json({ success: true });
 });
