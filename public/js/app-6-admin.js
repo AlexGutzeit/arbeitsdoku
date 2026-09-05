@@ -907,6 +907,8 @@ const AUDIT_LABELS = {
   password_self_change_failed: 'Passwort ändern fehlgeschlagen',
   user_password_reset: 'Passwort zurückgesetzt',
   user_deactivate: 'Mitarbeiter ausgestellt',
+  user_austritt_vorgemerkt: 'Austritt vorgemerkt',
+  user_austritt_aufgehoben: 'Vormerkung aufgehoben',
   user_reactivate: 'Mitarbeiter wiedereingestellt',
   user_delete: 'Benutzer gelöscht',
   vacation_create: 'Urlaubsanspruch angelegt',
