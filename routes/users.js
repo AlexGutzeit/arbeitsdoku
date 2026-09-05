@@ -700,10 +700,18 @@ router.post('/:id/deactivate', authenticate, authorize('chef'), (req, res) => {
   // mit Soll, aber ohne Ist, rund 144 Stunden still vom Ueberstundenstand abgezogen. Ausgerechnet
   // in der Lage, in der dieser Stand ausgezahlt wird (Alex, 04.09.2026).
   //
-  // Die Schwelle ist `< heute`, NICHT `<= heute`: Wer heute seinen letzten Tag hat, arbeitet heute
-  // noch und braucht bis zum Feierabend Zugang.
+  // Die Schwelle ist `> heute`: Nur ein Tag, der noch BEVORSTEHT, wird vorgemerkt.
+  //
+  // Erst stand hier `>= heute` mit der Begruendung „wer heute seinen letzten Tag hat, arbeitet
+  // heute noch". Das war zu weit gegriffen: Der Knopf „Ausstellen" schickt ohne Datum das heutige,
+  // und damit schloss der Normalfall das Konto nicht mehr — auch nicht bei einer fristlosen
+  // Trennung, wo der Zugang sofort weg muss. Aufgefallen an auth-active-guard, ausstellen-zweifaktor
+  // und trash-access, die genau das zusichern.
+  //
+  // Wer moechte, dass jemand seinen letzten Tag noch zu Ende arbeitet, drueckt den Knopf am Abend
+  // oder am Tag danach — so lief es bisher, und der Chef behaelt die Entscheidung.
   const heute = berlinHeute();
-  if (employedUntil >= heute) {
+  if (employedUntil > heute) {
     logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_austritt_vorgemerkt',
       details: `Austritt vorgemerkt: ${user.username} (${user.role}, id=${req.params.id}), `
         + `letzter Arbeitstag ${employedUntil} — Zugang bleibt bis dahin bestehen`, ip: req.ip });

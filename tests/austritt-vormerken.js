@@ -132,13 +132,24 @@ const plus = (n) => { const d = new Date(heute + 'T12:00:00Z'); d.setUTCDate(d.g
     const nochmal = await req('POST', `/api/users/${v.id}/austritt-aufheben`, chef);
     ok('ein zweites Aufheben wird abgewiesen', nochmal.status === 409, nochmal.status + ' ' + nochmal.text.slice(0, 90));
 
-    console.log('\n── Heute als letzter Arbeitstag: er arbeitet heute noch ──');
+    console.log('\n── Heute als letzter Arbeitstag: wirkt SOFORT ──');
+    // Nur ein Tag, der noch BEVORSTEHT, wird vorgemerkt. „Heute" schliesst sofort — der Knopf
+    // „Ausstellen" schickt ohne Angabe genau dieses Datum, und er muss weiterhin das tun, was
+    // draufsteht (auch bei einer fristlosen Trennung).
     const t = await anlegen('heutetag', 'Theo Heute');
     const tTok = await anMit('heutetag');
     const rt = await req('POST', `/api/users/${t.id}/deactivate`, chef, { employed_until: heute });
-    ok('wird als Vormerkung behandelt, nicht als sofortiges Ausstellen',
-      rt.status === 200 && rt.body.vorgemerkt === true, rt.status + ' ' + JSON.stringify(rt.body));
-    ok('… er kommt heute noch hinein', (await req('GET', '/api/entries', tTok)).status === 200);
+    ok('wirkt sofort, ist KEINE Vormerkung',
+      rt.status === 200 && rt.body.vorgemerkt === false, rt.status + ' ' + JSON.stringify(rt.body));
+    ok('… seine Sitzung ist sofort tot', (await req('GET', '/api/entries', tTok)).status === 401);
+
+    // Und der Normalfall: der Knopf ohne Datumsangabe.
+    const o = await anlegen('ohnedatum', 'Olga Ohnedatum');
+    const oTok = await anMit('ohnedatum');
+    const ro = await req('POST', `/api/users/${o.id}/deactivate`, chef, {});
+    ok('Ausstellen OHNE Datum schliesst das Konto sofort',
+      ro.status === 200 && ro.body.vorgemerkt === false, ro.status + ' ' + JSON.stringify(ro.body));
+    ok('… auch dort ist die Sitzung sofort tot', (await req('GET', '/api/entries', oTok)).status === 401);
 
     console.log('\n── Rückwirkendes Datum wirkt weiterhin SOFORT ──');
     // Der bewährte Weg. Würde er sich mit ändern, wäre die Reparatur eine Verschlechterung.
