@@ -59,6 +59,43 @@ Gefunden hat es allein der Testlauf danach: `handy-verlauf-ui` meldete für die 
 und `git commit` nie im selben Befehl, und nach jedem Commit mit `git show --stat` prüfen, dass
 die Datei wirklich drin ist.
 
+### 2026-09-05 · Ausstellen sperrte sofort, egal wann der letzte Arbeitstag war
+
+Alex beim Planen der Überstunden-Auszahlung: „wenn der chef heute sagt, dass MA am 30.9 ausgestellt
+wird, hat der MA ab heute keinen zugriff mehr. Was ja nicht richtig ist."
+
+Stimmte. `POST /:id/deactivate` setzte `active = 0` **unbedingt**, egal welches Austrittsdatum
+danebenstand. Das Datum wanderte nur in `employment_periods.end_date` — und **das Soll lief bis
+dahin weiter** (`isEmployedOn` zählt bis einschließlich Enddatum). Buchen konnte er nicht mehr.
+
+**Die Zahl macht den Unterschied zwischen Ärgernis und Schaden:** 18 Arbeitstage mit Soll, aber
+ohne Ist — rund 144 Stunden, die still vom Überstundenstand abgehen. Ausgerechnet in der Lage, in
+der dieser Stand ausgezahlt wird. Getroffen hat es die Firma nie: Der einzige ausgestellte
+Mitarbeiter wurde *rückwirkend* ausgestellt.
+
+**Die Vormerkung brauchte kein neues Feld.** Sie ist die Kombination, die es vorher nicht geben
+konnte: Konto aktiv **und** der jüngste Anstellungszeitraum hat schon ein Ende. Der Zeitplaner
+vollzieht sie in der Nacht danach — mit `end_date < heute`, nicht `== gestern`: Lief der Server
+über den Stichtag nicht, holt der nächste Start es nach. Ein Konto, das über seinen Austrittstag
+hinaus offen bleibt, wäre ein echtes Sicherheitsproblem.
+
+**Zwei Fehler, die ich selbst eingebaut und die Tests gefunden haben:**
+
+Ich wählte die Schwelle `>= heute` mit der Begründung „wer heute seinen letzten Tag hat, arbeitet
+heute noch". Zu weit gegriffen: Der Knopf *Ausstellen* schickt ohne Angabe das heutige Datum — damit
+schloss der **Normalfall** das Konto nicht mehr, auch nicht bei einer fristlosen Trennung. Drei
+bestehende Tests (`auth-active-guard`, `ausstellen-zweifaktor`, `trash-access`) waren rot, und zwar
+zu Recht. Jetzt `> heute`: Nur ein Tag, der noch bevorsteht, wird vorgemerkt.
+
+Und beim Gegenprüfen fiel auf, dass **„Meine Daten" die Anstellungszeiträume samt künftigem
+Enddatum zeigt** — der Mitarbeiter hätte dort von seiner Kündigung gelesen. Geschlossen wird das
+serverseitig, nicht in der Anzeige; die formale Datenauskunft bleibt vollständig.
+
+**Und warum mein Test das Leck zuerst durchließ:** Er suchte nach „19.09.2026". Die Karte schreibt
+`toLocaleDateString('de-DE')`, also **„19.9.2026" ohne führende Null**. Eine formatabhängige
+Zusicherung ist keine. Jetzt wird in allen Schreibweisen gesucht **und** direkt an der Karte
+geprüft, statt nur im Seitentext.
+
 ### 2026-08-31 · Der Abschluss sperrte Vorgänge, nicht Zahlen
 
 Alex: „Was wenn jemand etwas in der Vergangenheit noch nicht akzeptiert oder quittiert hat und der
