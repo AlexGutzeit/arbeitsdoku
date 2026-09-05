@@ -1053,7 +1053,7 @@ async function renderUsers() {
       const user = S.users.find(u => u.id === Number(btn.dataset.id));
       const today = new Date().toLocaleDateString('sv-SE');
       const employedUntil = await promptModal(
-        `"${user?.name}" ausstellen. Alle Daten bleiben erhalten und werden weiter angezeigt.\n\n`
+        `„${user?.name}“ ausstellen. Alle Daten bleiben erhalten und werden weiter angezeigt.\n\n`
         + `Bis einschließlich zum letzten Arbeitstag bleibt der Zugang bestehen — er kann also bis zuletzt `
         + `seine Stunden buchen. Danach wird das Konto automatisch geschlossen; erst dann werden `
         + `Zwei-Faktor und Push-Benachrichtigungen gelöscht.\n\n`
