@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { computeBadgeCounts } = require('./routes/badges');
 const push = require('./push');
 const recur = require('./planning-recurrence');
+const { ausstellenVollziehen } = require('./ausstellen');
 
 // Standard-Tagesspanne aus den Firmen-Einstellungen (Arbeitsbeginn + Arbeitszeit + Pause).
 // Gleiche Rueckfallwerte wie im Frontend und in routes/settings.js: 07:00 / 8 h / 30 min.
@@ -256,14 +257,69 @@ function extendSeries(db, now = new Date()) {
 
 let timer = null;
 let lastExtendDate = null;
+let lastAustrittDate = null;
+/**
+ * Vorgemerkte Austritte vollziehen — einmal am Tag.
+ *
+ * Wer ein zukuenftiges Austrittsdatum bekommt, behaelt seinen Zugang bis zum letzten Arbeitstag
+ * (routes/users.js). Hier wird das Konto danach wirklich geschlossen: dieselbe Aufraeumarbeit wie
+ * beim sofortigen Ausstellen, aus derselben Funktion (ausstellen.js).
+ *
+ * `end_date < heute`, NICHT `end_date == gestern`: Lief der Server ueber den Stichtag nicht, holt
+ * der naechste Start es nach. Ein Konto, das ueber seinen Austrittstag hinaus offen bleibt, waere
+ * ein echtes Sicherheitsproblem — Versaeumtes muss aufholbar sein.
+ *
+ * `deactivated_by` wird der, der VORGEMERKT hat: Der Vollzug ist seine Entscheidung, nur
+ * zeitversetzt. Steht im Protokoll niemand, faellt es auf den Vormerkenden aus dem Audit-Log
+ * zurueck; findet sich auch der nicht, bleibt es leer statt falsch.
+ */
+function austritteVollziehen(db, heute) {
+  const tag = heute || berlinParts().date;
+  let faellig;
+  try {
+    faellig = db.prepare(
+      `SELECT u.id, u.username, e.end_date
+         FROM users u
+         JOIN employment_periods e ON e.id = (
+           SELECT id FROM employment_periods WHERE user_id = u.id ORDER BY start_date DESC LIMIT 1)
+        WHERE COALESCE(u.active, 1) = 1 AND e.end_date IS NOT NULL AND e.end_date < ?`
+    ).all(tag);
+  } catch (_) { return []; }          // sehr alte Datenbank ohne employment_periods
+
+  const vollzogen = [];
+  for (const f of faellig) {
+    // Wer hat vorgemerkt? Der letzte passende Protokolleintrag. Nur fuer `deactivated_by` und den
+    // Protokolltext — ist er nicht auffindbar, wird trotzdem vollzogen.
+    let wer = { id: null, username: 'Zeitplaner', ip: null };
+    try {
+      const eintrag = db.prepare(
+        `SELECT user_id, username FROM audit_logs
+          WHERE action = 'user_austritt_vorgemerkt' AND details LIKE ?
+          ORDER BY id DESC LIMIT 1`
+      ).get('%id=' + f.id + '%');
+      if (eintrag) wer = { id: eintrag.user_id, username: eintrag.username, ip: null };
+    } catch (_) { /* kein Protokoll -> Zeitplaner */ }
+
+    ausstellenVollziehen(db, f.id, f.end_date, wer, ` (am ${f.end_date} vorgemerkt, heute vollzogen)`);
+    vollzogen.push({ id: f.id, username: f.username, end_date: f.end_date });
+  }
+  if (vollzogen.length) {
+    console.log('[austritt] vollzogen: ' + vollzogen.map(v => `${v.username} (bis ${v.end_date})`).join(', '));
+  }
+  return vollzogen;
+}
+
 function start(getDb) {
   if (timer) return;
   const run = () => {
     try { tick(getDb()); } catch (e) { console.error('summary tick fehlgeschlagen:', e && e.message); }
     try { const d = berlinParts().date; if (d !== lastExtendDate) { lastExtendDate = d; extendSeries(getDb()); } } catch (e) { console.error('series extend fehlgeschlagen:', e && e.message); }
+    // Eigener Tagesmerker: Faellt die Serien-Verlaengerung mit einem Fehler aus, darf der Austritt
+    // trotzdem vollzogen werden — ein offen bleibendes Konto ist das groessere Problem.
+    try { const d = berlinParts().date; if (d !== lastAustrittDate) { lastAustrittDate = d; austritteVollziehen(getDb()); } } catch (e) { console.error('austritte vollziehen fehlgeschlagen:', e && e.message); }
   };
   setTimeout(run, 15000);            // kurz nach Boot einmal
   timer = setInterval(run, 60 * 1000); // dann minütlich (Serien-Verlängerung nur 1×/Tag)
 }
 
-module.exports = { start, tick, extendSeries, firePlanningReminders, collectDueForUser, shiftDate, fmtWall, isDue, buildSummaryText, buildReminderPush, berlinParts, VALID_CATS, CAT_LABELS };
+module.exports = { start, tick, extendSeries, austritteVollziehen, firePlanningReminders, collectDueForUser, shiftDate, fmtWall, isDue, buildSummaryText, buildReminderPush, berlinParts, VALID_CATS, CAT_LABELS };

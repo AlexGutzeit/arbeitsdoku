@@ -14,15 +14,29 @@
 // Und die Gegenrichtung: Ein RÜCKWIRKENDES Datum muss weiterhin sofort wirken — das ist der
 // bewährte Weg, den die Firma bisher benutzt hat.
 //
+// IN-PROCESS, kein eigener Server-Prozess: Der Vollzug durch den Zeitplaner wird direkt aufgerufen
+// und muss dabei DIESELBE Datenbank sehen wie die Routen. Ein zweiter Prozess auf derselben Datei
+// hätte eine eigene Kopie im Speicher — die Prüfungen liefen ins Leere, und der Autosave-Takt
+// beider Seiten überschriebe sich gegenseitig ([[reference_zweiter_prozess_db]]).
+//
 //   node tests/austritt-vormerken.js
-const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path');
+const fs = require('fs');
+const http = require('http');
+const bcrypt = require('bcryptjs');
 
-const PORT = 3303, DB = '/tmp/austritt-vormerken.db', LOG = '/tmp/austritt-vormerken-srv.log';
+process.env.JWT_SECRET = 'test-secret-mindestens-32-zeichen-lang';
+process.env.DB_PATH = '/tmp/austritt-vormerken.db';
+try { fs.unlinkSync(process.env.DB_PATH); } catch (_) {}
+
+const express = require('express');
+const { initDatabase, getDb } = require('../database/init');
+const { austritteVollziehen } = require('../scheduler');
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, fails.push(n), console.log('  ✗ ' + n + (e ? '  → ' + e : '')));
 
+let PORT = 0;
 function req(m, p, t, b) {
   return new Promise((res, rej) => { const d = b ? JSON.stringify(b) : null;
     const r = http.request({ host: 'localhost', port: PORT, path: p, method: m,
@@ -35,29 +49,29 @@ function req(m, p, t, b) {
 // ([[reference_tests_zeitfallen]]).
 const heute = new Date().toLocaleDateString('sv-SE');
 const plus = (n) => { const d = new Date(heute + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-const werktage = (von, bis) => {
-  let n = 0; const c = new Date(von + 'T12:00:00Z'), e = new Date(bis + 'T12:00:00Z');
-  while (c <= e) { const d = c.getUTCDay(); if (d !== 0 && d !== 6) n++; c.setUTCDate(c.getUTCDate() + 1); }
-  return n;
-};
-
-const zeitraeume = (db, id) => db;   // Platzhalter, wird über die API gelesen
 
 (async () => {
-  try { fs.unlinkSync(DB); } catch (_) {}
-  const lg = fs.openSync(LOG, 'w');
-  const srv = spawn('node', ['server.js'], { cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT: String(PORT), DB_PATH: DB, JWT_SECRET: 'test-secret-mindestens-32-zeichen-lang' },
-    stdio: ['ignore', lg, lg] });
+  await initDatabase();
+  const db = getDb();
+  const PWSEED = 'Seed!12345';
+  db.prepare('UPDATE users SET password_hash = ?').run(bcrypt.hashSync(PWSEED, 10));
+
+  const app = express();
+  app.use(express.json());
+  app.use('/api/auth', require('../routes/auth'));
+  app.use('/api/users', require('../routes/users'));
+  app.use('/api/entries', require('../routes/entries'));
+  app.use('/api/statistics', require('../routes/statistics'));
+  app.use('/api/payroll', require('../routes/payroll'));
+  app.use('/api/twofa', require('../routes/twofa'));
+  const server = app.listen(0);
+  await new Promise(r => server.once('listening', r));
+  PORT = server.address().port;
+
   try {
-    for (let i = 0; i < 150; i++) { try { if ((await req('GET', '/health')).status === 200) break; } catch (_) {} await sleep(200); }
-    let log = ''; for (let i = 0; i < 150; i++) { log = fs.readFileSync(LOG, 'utf8'); if (/admin\s+->\s+\S+/.test(log) && /chef\s+->\s+\S+/.test(log)) break; await sleep(200); }
-    const pw = n => (log.match(new RegExp(n + '\\s+->\\s+(\\S+)')) || [])[1];
-    const an = async n => (await req('POST', '/api/auth/login', null, { username: n, password: pw(n) })).body.token;
-    const admin = await an('admin'), chef = await an('chef');
+    const anSeed = async n => (await req('POST', '/api/auth/login', null, { username: n, password: PWSEED })).body.token;
+    const admin = await anSeed('admin'), chef = await anSeed('chef');
     const PW = 'Austritt!2345';
-    // Die selbst angelegten Konten haben PW — `pw()` liest nur die Startpasswoerter aus dem
-    // Server-Protokoll und liefert fuer sie `undefined`.
     const anMit = async n => (await req('POST', '/api/auth/login', null, { username: n, password: PW })).body.token;
 
     const anlegen = async (benutzer, name, abWann) => {
@@ -140,10 +154,69 @@ const zeitraeume = (db, id) => db;   // Platzhalter, wird über die API gelesen
     const aufS = await req('POST', `/api/users/${s.id}/austritt-aufheben`, chef);
     ok('bei einem geschlossenen Konto verweist das Aufheben auf „Wiedereinstellen"',
       aufS.status === 409 && /Wiedereinstellen/i.test(aufS.text), aufS.status + ' ' + aufS.text.slice(0, 110));
+    console.log('\n── Der Zeitplaner vollzieht die Vormerkung ──');
+    // Der eigentliche Prüfstein: Nach dem Vollzug muss der Zustand ZEICHENGLEICH dem sein, den ein
+    // sofortiges Ausstellen erzeugt hätte. Sonst wäre die Vormerkung ein zweiter, leicht anderer
+    // Weg — genau die Sorte Doppelung, die auseinanderläuft.
+    const p1 = await anlegen('spaeter', 'Petra Später', plus(-60));
+    const p1Tok = await anMit('spaeter');
+    await req('POST', `/api/users/${p1.id}/deactivate`, chef, { employed_until: plus(3) });
+    ok('vorgemerkt zum ' + plus(3), Number((await holen(p1.id)).active) === 1);
+
+    // „Heute" vorgestellt: der Tag NACH dem letzten Arbeitstag.
+    const vollzogen = austritteVollziehen(db, plus(4));
+    // NICHT „genau einer": Ein frueherer Abschnitt hat Theo zum heutigen Tag vorgemerkt, und mit
+    // „heute = plus(4)" ist auch er faellig. Das ist richtig so — der Zeitplaner holt ALLE
+    // faelligen. Gepruefft wird deshalb das, worauf es ankommt: Petra ist dabei, und niemand,
+    // dessen letzter Arbeitstag noch bevorsteht.
+    ok('der Zeitplaner vollzieht den fälligen Austritt',
+      vollzogen.some(v => v.id === p1.id), JSON.stringify(vollzogen));
+    ok('… und fasst niemanden an, der noch arbeitet',
+      vollzogen.every(v => v.end_date < plus(4)), JSON.stringify(vollzogen));
+
+    const nachVollzug = (await req('GET', '/api/users/inactive', admin)).body.users.find(u => u.id === p1.id);
+    ok('das Konto ist danach geschlossen', !!nachVollzug, JSON.stringify(nachVollzug));
+    ok('… und seine Sitzung tot', (await req('GET', '/api/entries', p1Tok)).status === 401);
+
+    // Vergleich mit dem sofortigen Weg — Feld für Feld.
+    const wieSofort = (await req('GET', '/api/users/inactive', admin)).body.users.find(u => u.name === 'Sofia Sofort');
+    const felder = (u) => u ? {
+      active: Number(u.active),
+      hatAustrittsdatum: !!u.employed_until || (u.employment || []).some(p => p.e),
+      deactivated_gesetzt: !!u.deactivated_at,
+    } : null;
+    ok('Vollzug und sofortiges Ausstellen hinterlassen denselben Zustand',
+      JSON.stringify(felder(nachVollzug)) === JSON.stringify(felder(wieSofort)),
+      JSON.stringify(felder(nachVollzug)) + ' vs. ' + JSON.stringify(felder(wieSofort)));
+
+    // Die Aufräumarbeit muss ebenfalls gelaufen sein.
+    ok('… Push-Abos sind entfernt',
+      db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?').get(p1.id).n === 0);
+    ok('… Zwei-Faktor ist entfernt',
+      !db.prepare('SELECT user_id FROM twofa_secrets WHERE user_id = ?').get(p1.id));
+    const prot = db.prepare("SELECT details FROM audit_logs WHERE action='user_deactivate' ORDER BY id DESC LIMIT 1").get();
+    ok('… und im Protokoll steht, dass es vorgemerkt war',
+      prot && /vorgemerkt/.test(prot.details), JSON.stringify(prot));
+
+    console.log('\n── Versäumtes wird nachgeholt, nicht übersprungen ──');
+    // Läuft der Server über den Stichtag nicht, darf das Konto nicht für immer offen bleiben.
+    const p2 = await anlegen('verpasst', 'Vera Verpasst', plus(-60));
+    await req('POST', `/api/users/${p2.id}/deactivate`, chef, { employed_until: plus(2) });
+    const spaet = austritteVollziehen(db, plus(30));   // erst 28 Tage später gestartet
+    ok('ein längst fälliger Austritt wird nachgeholt',
+      spaet.some(v => v.id === p2.id), JSON.stringify(spaet));
+
+    console.log('\n── Wer noch arbeitet, wird NICHT geschlossen ──');
+    const p3 = await anlegen('laeuft', 'Lena Läuft', plus(-60));
+    await req('POST', `/api/users/${p3.id}/deactivate`, chef, { employed_until: plus(10) });
+    const zuFrueh = austritteVollziehen(db, plus(10));  // sein LETZTER Arbeitstag
+    ok('am letzten Arbeitstag selbst passiert nichts',
+      !zuFrueh.some(v => v.id === p3.id), JSON.stringify(zuFrueh));
+    ok('… sein Konto ist noch offen', Number((await holen(p3.id)).active) === 1);
   } catch (e) {
     console.error(e); fail++; fails.push('Ausnahme: ' + e.message);
   } finally {
-    srv.kill();
+    server.close();
   }
   console.log(`\nAustritt vormerken: ${pass} bestanden, ${fail} fehlgeschlagen` + (fails.length ? `\nFehlgeschlagen: ${fails.join(', ')}` : ''));
   process.exit(fail === 0 ? 0 : 1);
