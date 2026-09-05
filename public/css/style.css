@@ -2357,3 +2357,9 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
    umbrechen — sonst stuende ein Gesicht am Zeilenende und der Name in der naechsten Zeile. */
 .welcome-task-mit { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.15rem 0.5rem; }
 .welcome-mit-person { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+
+/* „scheidet aus zum …" in der Mitarbeiterliste. Bewusst zurückhaltend: eine Vormerkung ist eine
+   Information, keine Warnung — und sie steht neben dem Namen eines Kollegen. */
+.austritt-vormerkung { display: inline-block; margin-left: 0.5rem; font-size: 0.72rem;
+  color: var(--text-light); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 1px 7px; white-space: nowrap; }

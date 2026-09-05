@@ -970,6 +970,20 @@ async function renderBulletinForm(editId) {
 }
 
 // --- Users Management ---
+/**
+ * Ist fuer diesen Mitarbeiter ein Austritt VORGEMERKT? Dann das Datum, sonst null.
+ *
+ * Die Vormerkung hat kein eigenes Feld — sie ist die Kombination, die es vorher nicht geben
+ * konnte: Konto aktiv UND der juengste Anstellungszeitraum hat schon ein Ende. Ein ausgestellter
+ * Mitarbeiter hat dasselbe Ende, aber `active = 0`; deshalb steht die Pruefung hier zusammen.
+ */
+function austrittVorgemerktAm(u) {
+  if (!u || Number(u.active) === 0) return null;
+  const zeiten = (u.employment || []).filter(p => p && p.e);
+  if (!zeiten.length) return null;
+  return zeiten.map(p => p.e).sort().pop();
+}
+
 async function renderUsers() {
   if (!canManageUsers()) { navigate('/'); return; }
 
@@ -1004,13 +1018,17 @@ async function renderUsers() {
           <tbody id="users-tbody">
             ${S.users.filter(u => u.active !== 0).map(u => `
               <tr data-suchtext="${esc([u.name, u.username, roleName(u.role)].join(' '))}">
-                <td><span class="zelle-mit-bild">${avatarHtml(u, 26)}<span>${esc(u.name)}</span></span></td>
+                <td><span class="zelle-mit-bild">${avatarHtml(u, 26)}<span>${esc(u.name)}</span>${
+                  austrittVorgemerktAm(u) ? `<span class="austritt-vormerkung" title="Der Zugang bleibt bis einschließlich diesem Tag bestehen">scheidet aus zum ${formatDateDE(austrittVorgemerktAm(u))}</span>` : ''
+                }</span></td>
                 <td>${esc(u.username)}</td>
                 <td><span class="badge badge-${u.role}">${roleName(u.role)}</span></td>
                 <td>${u.target_hours_per_week}</td>
                 <td class="actions">
                   <button class="btn btn-sm btn-outline edit-user" data-id="${u.id}">Bearbeiten</button>
-                  ${u.id !== S.user.id ? `<button class="btn btn-sm btn-warning deactivate-user" data-id="${u.id}">Ausstellen</button>` : ''}
+                  ${u.id === S.user.id ? '' : austrittVorgemerktAm(u)
+                    ? `<button class="btn btn-sm btn-outline austritt-aufheben" data-id="${u.id}">Vormerkung aufheben</button>`
+                    : `<button class="btn btn-sm btn-warning deactivate-user" data-id="${u.id}">Ausstellen</button>`}
                 </td>
               </tr>
             `).join('')}
@@ -1035,15 +1053,36 @@ async function renderUsers() {
       const user = S.users.find(u => u.id === Number(btn.dataset.id));
       const today = new Date().toLocaleDateString('sv-SE');
       const employedUntil = await promptModal(
-        `"${user?.name}" ausstellen. Der Account kann sich dann nicht mehr anmelden, aber alle Daten bleiben erhalten und werden weiter angezeigt.\n\n`
-        + `Die Zwei-Faktor-Anmeldung wird dabei gelöscht — bei einer Wiedereinstellung muss sie neu eingerichtet werden.\n\n`
+        `"${user?.name}" ausstellen. Alle Daten bleiben erhalten und werden weiter angezeigt.\n\n`
+        + `Bis einschließlich zum letzten Arbeitstag bleibt der Zugang bestehen — er kann also bis zuletzt `
+        + `seine Stunden buchen. Danach wird das Konto automatisch geschlossen; erst dann werden `
+        + `Zwei-Faktor und Push-Benachrichtigungen gelöscht.\n\n`
+        + `Liegt der Tag bereits in der Vergangenheit, wirkt das Ausstellen sofort.\n\n`
         + `Letzter Arbeitstag (Austrittsdatum):`,
         { title: 'Mitarbeiter ausstellen', okLabel: 'Ausstellen', multiline: false, inputType: 'date', defaultValue: today, required: true, requiredMsg: 'Bitte ein Austrittsdatum wählen.' }
       );
       if (employedUntil === null) return; // Abbrechen
       try {
-        await api('POST', '/api/users/' + btn.dataset.id + '/deactivate', { employed_until: employedUntil.trim() });
-        toast('Mitarbeiter ausgestellt', 'success');
+        const r = await api('POST', '/api/users/' + btn.dataset.id + '/deactivate', { employed_until: employedUntil.trim() });
+        toast(r && r.vorgemerkt
+          ? `Austritt zum ${formatDateDE(employedUntil.trim())} vorgemerkt — der Zugang bleibt bis dahin bestehen`
+          : 'Mitarbeiter ausgestellt', 'success', r && r.vorgemerkt ? 6000 : undefined);
+        renderUsers();
+      } catch (e) { toast(e.message, 'error'); }
+    });
+  });
+
+  mainEl.querySelectorAll('.austritt-aufheben').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const user = S.users.find(u => u.id === Number(btn.dataset.id));
+      const wann = austrittVorgemerktAm(user);
+      if (!(await confirmModal(
+        `Der Austritt von "${user?.name}" zum ${formatDateDE(wann)} wird zurückgenommen. `
+        + `Der Anstellungszeitraum läuft dann wieder offen weiter.`,
+        { title: 'Vormerkung aufheben', okLabel: 'Aufheben' }))) return;
+      try {
+        await api('POST', '/api/users/' + btn.dataset.id + '/austritt-aufheben');
+        toast('Vormerkung aufgehoben', 'success');
         renderUsers();
       } catch (e) { toast(e.message, 'error'); }
     });
