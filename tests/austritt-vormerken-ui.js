@@ -114,13 +114,43 @@ async function anmelden(browser, user, pw) {
       const texte = [];
       for (const route of ['/welcome', '/konto', '/dashboard', '/absences']) {
         location.hash = route;
-        await new Promise(r => setTimeout(r, 1400));
+        await new Promise(r => setTimeout(r, 1800));
         texte.push(document.body.innerText);
       }
       return texte.join('\n');
     });
     ok('nirgends steht „scheidet aus"', !/scheidet aus/i.test(beimMa));
-    ok('… und auch nicht sein Austrittsdatum', !beimMa.includes(deDatum(zieltag)), deDatum(zieltag));
+
+    // FORMATUNABHAENGIG suchen. Der erste Anlauf prüfte auf „19.09.2026" — die Karte schreibt aber
+    // `toLocaleDateString('de-DE')`, also „19.9.2026" OHNE führende Null. Die Zusicherung war damit
+    // wertlos und hat ein echtes Leck durchgelassen: „Meine Daten" zeigte die Anstellung samt
+    // künftigem Enddatum.
+    const [jj, mm, tt] = zieltag.split('-');
+    const alleSchreibweisen = [
+      `${tt}.${mm}.${jj}`, `${Number(tt)}.${Number(mm)}.${jj}`,
+      `${tt}.${Number(mm)}.${jj}`, `${Number(tt)}.${mm}.${jj}`, zieltag,
+    ];
+    const gefunden = alleSchreibweisen.filter(f => beimMa.includes(f));
+    ok('… und sein Austrittsdatum in KEINER Schreibweise',
+      gefunden.length === 0, 'gefunden: ' + JSON.stringify(gefunden));
+
+    // Und ausdrücklich an der Karte, die es zeigen würde — nicht nur im Seitentext.
+    const karte = await m.seite.evaluate(async () => {
+      location.hash = '/konto';
+      await new Promise(r => setTimeout(r, 1800));
+      const k = document.getElementById('konto-stammdaten');
+      return k ? k.innerText.replace(/\s+/g, ' ') : null;
+    });
+    ok('die Karte „Meine Daten" ist überhaupt geladen', !!karte && /Anstellung/i.test(karte), String(karte).slice(0, 160));
+    ok('… und zeigt die Anstellung als laufend („– heute")',
+      !!karte && /–\s*heute/.test(karte), String(karte).slice(0, 200));
+
+    // Die FORMALE Datenauskunft darf dagegen vollständig sein — dort etwas wegzulassen wäre das
+    // Verstecken von Daten.
+    const maTok2 = (await req('POST', '/api/auth/login', null, { username: 'gehtbald', password: PW })).body.token;
+    const auskunft = await req('GET', '/api/users/meine-daten', maTok2);
+    ok('die formale Datenauskunft enthält den Zeitraum vollständig',
+      auskunft.status === 200 && auskunft.text.includes(zieltag), auskunft.status + ' ' + auskunft.text.slice(0, 120));
     // Der Zeitnachweis haengt im Menue an `#/` (app-2-auth-layout.js:327), nicht an `#/dashboard`.
     ok('… er kann normal arbeiten: Zeitnachweis im Menü und Eintragen möglich',
       await m.seite.evaluate(() => !!document.querySelector('a[href="#/"]')

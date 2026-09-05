@@ -232,10 +232,27 @@ router.get('/meine-stammdaten', authenticate, (req, res) => {
   const u = lies('SELECT * FROM users WHERE id = ?', req.user.id) || {};
 
   // Anstellungszeitraeume (Ein- und Austritt). Fehlt die Tabelle auf einem Altstand, bleibt es leer.
+  //
+  // EIN NOCH NICHT ERREICHTES AUSTRITTSDATUM WIRD HIER NICHT MITGESCHICKT.
+  //
+  // Seit dem 05.09.2026 kann ein Austritt VORGEMERKT werden: Das Datum steht fest, das Konto laeuft
+  // bis dahin weiter. Diese Karte ist die Anzeige „so hat die Verwaltung dich hinterlegt" — stuende
+  // dort ein kuenftiges Enddatum, erfuehre der Mitarbeiter aus der App von seiner Kuendigung, bevor
+  // der Chef mit ihm gesprochen hat. Das waere der schlimmste Fehler, den diese Funktion machen
+  // kann, und er passiert leise.
+  //
+  // Es wird nicht GELOGEN, sondern der Stand von HEUTE gezeigt: Ein Zeitraum, dessen Ende noch
+  // bevorsteht, laeuft heute — die Oberflaeche schreibt dafuer „– heute".
+  //
+  // Die FORMALE Datenauskunft (`/meine-daten`, weiter unten) enthaelt die Zeitraeume dagegen
+  // VOLLSTAENDIG, mit dem kuenftigen Datum. Sie ist der Auszug aus dem Bestand, nicht die Anzeige
+  // des heutigen Stands — dort etwas wegzulassen waere das Verstecken von Daten.
   let zeitraeume = [];
   try {
+    const heuteIso = new Date().toLocaleDateString('sv-SE');
     zeitraeume = db.prepare('SELECT start_date, end_date FROM employment_periods WHERE user_id = ? ORDER BY start_date')
-      .all(req.user.id);
+      .all(req.user.id)
+      .map(z => (z.end_date && z.end_date >= heuteIso) ? { ...z, end_date: null } : z);
   } catch (_) {}
 
   // Urlaubsanspruch: die derzeit gueltige Zeile aus der versionierten Historie, sonst der Wert
