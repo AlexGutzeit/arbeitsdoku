@@ -1445,6 +1445,43 @@ function ensureClosureSchema(targetDb) {
         created_by_name TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_adjust_user ON payroll_adjustments(user_id, wirksam_ab);
+
+      -- Ausgezahlte Ueberstunden. BEWUSST eine eigene Tabelle und NICHT payroll_adjustments:
+      -- dort ist closure_id NOT NULL, und ein Nachtrag bedeutet etwas anderes ("hier fehlten
+      -- Stunden") als eine Auszahlung ("diese Stunden sind mit Geld abgegolten"). Im Lohn-Export
+      -- muessen beide getrennt ausgewiesen sein, sonst kann das Lohnbuero sie nicht auseinander-
+      -- halten und zahlt womoeglich doppelt.
+      --
+      -- KEIN Geldbetrag und kein Stundensatz: Die App liefert Stunden, das Lohnbuero rechnet.
+      CREATE TABLE IF NOT EXISTS overtime_payouts (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id              INTEGER NOT NULL,
+        stunden              REAL NOT NULL,
+        -- Ab wann die Auszahlung den Ueberstundenstand mindert. Liegt der Wunschtag in einem
+        -- bereits abgeschlossenen Monat, wird er auf den ersten offenen Tag gezogen (der
+        -- urspruengliche steht dann im Protokoll) — ein Abschluss, der sich nachtraeglich
+        -- bewegt, waere das Gegenteil von revisionssicher.
+        wirksam_ab           TEXT NOT NULL,
+        -- 'offen'        vom Chef angelegt, der Mitarbeiter hat noch nicht entschieden
+        -- 'bestaetigt'   der Mitarbeiter hat zugestimmt — NUR DIESER Status rechnet
+        -- 'abgelehnt'    der Mitarbeiter hat abgelehnt (mit Grund)
+        -- 'zurueckgezogen' der Chef hat zurueckgezogen, oder der Austritt wurde vollzogen,
+        --                bevor der Mitarbeiter entscheiden konnte
+        status               TEXT NOT NULL DEFAULT 'offen',
+        grund                TEXT,
+        -- 'app'          der Mitarbeiter hat in der App zugestimmt
+        -- 'unterschrift' die Zustimmung liegt unterschrieben vor, der Chef hat sie eingetragen
+        -- Eine Zustimmung, die nicht vom Mitarbeiter selbst kommt, darf nirgends wie eine
+        -- aussehen — deshalb wird dieser Weg ueberall mit ausgewiesen.
+        belegweg             TEXT NOT NULL DEFAULT 'app',
+        created_at           TEXT NOT NULL,
+        created_by           INTEGER,
+        created_by_name      TEXT,
+        entschieden_am       TEXT,
+        entschieden_von      INTEGER,
+        entschieden_von_name TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_payout_user ON overtime_payouts(user_id, wirksam_ab);
     `);
     // Nachtrag fuer Datenbanken, die die Tabellen schon vor diesen Spalten bekommen haben.
     const cols = targetDb.prepare("PRAGMA table_info(payroll_closure_rows)").all();

@@ -19,6 +19,7 @@ function bausteine() { return require('./statistics'); }
 
 // abschluss.js bindet bewusst keine Routen ein — hier ist ein normales require gefahrlos.
 const { letzterAbschlussBis, snapshotZeile, tagDanach, korrekturenSumme } = require('../abschluss');
+const { auszahlungenSumme } = require('../auszahlung');
 
 /**
  * Kumulierte Ist- und Soll-Stunden vom Anstellungsbeginn bis `to` — UNGERUNDET.
@@ -56,6 +57,10 @@ function kumulierteRohwerte(db, userId, angestelltAb, to) {
     // Nachtraege, die in einem bereits bezahlten Monat entstanden und bewusst uebernommen wurden.
     // Sie stecken NICHT in istRoh/sollRoh — der festgehaltene Zeitraum bleibt unangetastet.
     korrekturen: korrekturenSumme(db, userId, to),
+    // Ausgezahlte Ueberstunden. Stecken wie die Nachtraege NICHT in istRoh/sollRoh: Gearbeitet
+    // wurden die Stunden irgendwann, abgegolten werden sie mit Geld — der Zeiteintrag bleibt,
+    // wo er ist. Nur BESTAETIGTE zaehlen; eine offene Anfrage bewegt keine Zahl.
+    auszahlungen: auszahlungenSumme(db, userId, to),
   };
 }
 
@@ -125,7 +130,7 @@ function stundenFuerZeitraum(db, userId, from, to, startUeberstunden) {
     // als hier noch über den gesamten Zeitraum am Stück gerechnet wurde. Nur so kommt bei
     // abgeschlossenen und nicht abgeschlossenen Zeiträumen dieselbe Zahl heraus.
     const kum = kumulierteRohwerte(db, userId, angestelltAb, to);
-    ueberstundenGesamt = startOT + runde2(kum.istRoh) - runde2(kum.sollRoh) + kum.korrekturen;
+    ueberstundenGesamt = startOT + runde2(kum.istRoh) - runde2(kum.sollRoh) + kum.korrekturen - kum.auszahlungen;
   }
 
   return {
