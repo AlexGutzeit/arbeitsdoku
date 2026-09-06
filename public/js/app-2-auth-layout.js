@@ -224,6 +224,7 @@ function _sseOnMessage(e) {
   // Auszahlungen: der Zaehler an „Mein Konto" muss auf JEDER Route mitlaufen — er haengt an einer
   // Entscheidung, die der Mitarbeiter treffen soll, nicht an einer Ansicht.
   if (p.type === 'payouts') loadBadges();
+  if (p.type === 'payouts' && getRoute() === '/users') renderUsers(true);
   if (p.originTab === S.tabId) return;
   const route = getRoute();
   if (p.type === 'orders'   && route === '/orders' && !_editorBusy('#order-form-area'))   renderOrders();
@@ -333,6 +334,7 @@ function layout(content, activeNav) {
         </a>
         ${showUsers ? `<a href="#/users" class="${activeNav === 'users' ? 'active' : ''}">
           <span class="icon">&#128101;</span> Mitarbeiter
+          <span class="nav-badge" id="nav-badge-mitarbeiter"${S.badges.mitarbeiter ? '' : ' style="display:none"'}>${S.badges.mitarbeiter || ''}</span>
         </a>` : ''}
         ${showProjects ? `<a href="#/projects" class="${activeNav === 'projects' ? 'active' : ''}">
           <span class="icon">&#128193;</span> Projekte

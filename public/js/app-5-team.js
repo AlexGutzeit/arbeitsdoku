@@ -984,7 +984,14 @@ function austrittVorgemerktAm(u) {
   return zeiten.map(p => p.e).sort().pop();
 }
 
-async function renderUsers() {
+/**
+ * @param ausSse  true, wenn der Neuaufbau von einer Live-Meldung kommt und NICHT davon, dass
+ *   jemand die Seite aufgerufen hat. Dann wird nicht „gesehen" gemeldet: Sonst gälte eine
+ *   Entscheidung als zur Kenntnis genommen, nur weil das Fenster zufällig offen stand — womöglich
+ *   im Hintergrund. Genau daran war der Browser-Test flatterhaft: Je nachdem, ob der Neuaufbau
+ *   durch die Live-Meldung schon durch war, stand die Marke noch da oder nicht.
+ */
+async function renderUsers(ausSse) {
   if (!canManageUsers()) { navigate('/'); return; }
 
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'users');
@@ -1003,8 +1010,10 @@ async function renderUsers() {
   // schwerere Weg (Schema, Einstellungen, Tests); die Liste ist die Stelle, an der er ohnehin
   // nachsieht. Ein Fehlschlag hier darf die Liste nicht verhindern.
   const auszahlungStand = {};
+  let auszahlungAlle = [];
   try {
-    for (const z of ((await api('GET', '/api/payouts')) || {}).auszahlungen || []) {
+    auszahlungAlle = ((await api('GET', '/api/payouts')) || {}).auszahlungen || [];
+    for (const z of auszahlungAlle) {
       // Die Liste kommt neueste zuerst — die ERSTE Zeile je Mitarbeiter ist die jüngste.
       if (!auszahlungStand[z.user_id]) auszahlungStand[z.user_id] = z;
     }
@@ -1036,10 +1045,17 @@ async function renderUsers() {
                   austrittVorgemerktAm(u) ? `<span class="austritt-vormerkung" title="Der Zugang bleibt bis einschließlich diesem Tag bestehen">scheidet aus zum ${formatDateDE(austrittVorgemerktAm(u))}</span>` : ''
                 }${(() => {
                   const z = auszahlungStand[u.id];
-                  if (!z || (z.status !== 'offen' && z.status !== 'abgelehnt')) return '';
-                  return z.status === 'offen'
-                    ? `<span class="auszahlung-marke offen" title="Wartet auf seine Entscheidung">Auszahlung offen: ${esc(fmtH(Number(z.stunden)))} h</span>`
-                    : `<span class="auszahlung-marke abgelehnt" title="${esc(z.grund || '')}">Auszahlung abgelehnt</span>`;
+                  if (!z) return '';
+                  // „offen" ist ein ZUSTAND und bleibt stehen, solange er gilt. Eine Entscheidung
+                  // ist eine MELDUNG: Sie verschwindet, sobald der Chef die Liste einmal gesehen
+                  // hat (Alex, 06.09.2026) — nachzulesen bleibt sie im Verlauf darunter.
+                  if (z.status === 'offen') {
+                    return `<span class="auszahlung-marke offen" title="Wartet auf seine Entscheidung">Auszahlung offen: ${esc(fmtH(Number(z.stunden)))} h</span>`;
+                  }
+                  if (!z.neu) return '';
+                  return z.status === 'abgelehnt'
+                    ? `<span class="auszahlung-marke abgelehnt" title="${esc(z.grund || '')}">Auszahlung abgelehnt</span>`
+                    : `<span class="auszahlung-marke bestaetigt">Auszahlung bestätigt: ${esc(fmtH(Number(z.stunden)))} h</span>`;
                 })()}</span></td>
                 <td>${esc(u.username)}</td>
                 <td><span class="badge badge-${u.role}">${roleName(u.role)}</span></td>
@@ -1057,6 +1073,41 @@ async function renderUsers() {
         </table>
       </div>
     </div>`;
+
+  // Verlauf: was mit den Auszahlungen bisher geschah. Er bleibt dauerhaft nachlesbar — gerade
+  // WEIL die Meldung oben nach einmal Ansehen verschwindet.
+  if (auszahlungAlle.length) {
+    const wort = { offen: 'wartet auf Entscheidung', bestaetigt: 'ausgezahlt', abgelehnt: 'abgelehnt', zurueckgezogen: 'zurückgezogen' };
+    const dat = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('de-DE');
+    mainEl.querySelector('.card').insertAdjacentHTML('beforeend', `
+      <details class="auszahlung-verlauf" style="margin-top:1rem">
+        <summary style="cursor:pointer; font-weight:600; font-size:.9rem">
+          Überstunden-Auszahlungen — Verlauf (${auszahlungAlle.length})
+        </summary>
+        <div class="table-wrap" style="margin-top:.6rem">
+          <table class="data-table" style="font-size:.85rem">
+            <thead><tr><th>Mitarbeiter</th><th>Stunden</th><th>Wirksam ab</th><th>Stand</th><th>Angelegt von</th><th>Entschieden</th></tr></thead>
+            <tbody>
+              ${auszahlungAlle.map(z => `<tr>
+                <td>${esc(z.name || '—')}</td>
+                <td>${esc(fmtH(Number(z.stunden)))} h</td>
+                <td>${esc(dat(z.wirksam_ab))}</td>
+                <td>${esc(wort[z.status] || z.status)}${z.per_unterschrift ? ' <span style="color:var(--text-light)">(per Unterschrift)</span>' : ''}${
+                  z.grund ? ` <span style="color:var(--text-light)">— ${esc(z.grund)}</span>` : ''}</td>
+                <td>${esc(z.created_by_name || '')}</td>
+                <td>${z.entschieden_am ? esc(String(z.entschieden_am).slice(0, 10).split('-').reverse().join('.')) + (z.entschieden_von_name ? ` · ${esc(z.entschieden_von_name)}` : '') : '—'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>`);
+  }
+
+  // ERST rendern, DANN „gesehen" melden — sonst waere die Meldung schon weg, bevor sie einmal
+  // sichtbar war.
+  if (!ausSse && auszahlungAlle.some(z => z.neu)) {
+    api('POST', '/api/badges/mitarbeiter').then(() => { S.badges.mitarbeiter = 0; refreshBadges(); }).catch(() => {});
+  }
 
   bindListenSuche('mitarbeiter', '#users-tbody');
 

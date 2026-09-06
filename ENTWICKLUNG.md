@@ -85,6 +85,27 @@ Autosave-Takt zurück — die Datei wächst und sammelt Zustand aus früheren L�
 `/tmp` ist das ungefährlich, für eine *Vorlage* nicht: Genau so hatte ein früherer Lauf schon einen
 Authenticator hinterlassen. Wer die Vorlage neu braucht, baut sie mit dem Skript neu.
 
+**Die Rückmeldung an den Chef — und zwei Fehler dabei.** Der Ablehnungs-Test förderte zutage, dass
+der Chef von der Entscheidung nie erfuhr. Der Zähler am Menüpunkt *Mitarbeiter* schließt das; die
+Meldung in der Liste verschwindet nach einmaligem Ansehen, der Verlauf darunter bleibt.
+
+Zwei Dinge gingen dabei schief, und beide waren nur durch Messen zu finden:
+
+*Zeitzonen.* `user_seen.seen_at` entsteht mit SQLites `strftime('now')` — also **UTC**.
+`overtime_payouts.entschieden_am` kommt aus `berlinNow()` — also **Ortszeit**. Im Sommer lag
+„gesehen" damit zwei Stunden hinter der Entscheidung, und die Meldung wäre trotz Ansehen noch zwei
+Stunden stehen geblieben. Die anderen Zähler sind davon nicht betroffen: Sie vergleichen gegen
+Felder, die ebenfalls per `strftime('now')` gesetzt werden (bulletin, notes). Behoben mit
+`getSeenAtBerlin()`, das über den echten Zeitstempel umrechnet — ein festes „+2 Stunden" wäre im
+Winter falsch.
+
+*Ein flatterhafter Test.* Danach fiel der Browser-Test mal durch, mal nicht. Ursache war die
+SSE-Zeile, die ich selbst eingebaut hatte: Trifft die Ablehnung ein, während der Chef auf der Liste
+steht, baut sich die Seite neu auf — und meldete „gesehen", obwohl niemand hingesehen haben muss;
+das Fenster kann im Hintergrund stehen. Seitdem meldet nur der Aufruf der Seite „gesehen", nicht
+der Live-Neuaufbau (`renderUsers(ausSse)`). Dreimal hintereinander grün gegengeprüft — ein Test,
+der mal so und mal so ausgeht, ist schlimmer als einer, der immer rot ist.
+
 **Der heikle Reihenfolgefall:** angelegt, während der Monat offen war, bestätigt, nachdem er
 abgeschlossen wurde. Erwartet und geprüft ist dieselbe Semantik wie beim Nachtrag — der eingefrorene
 Monat behält seine Zahlen, der laufende Stand sinkt. Der Test dafür musste zweimal umgebaut werden:

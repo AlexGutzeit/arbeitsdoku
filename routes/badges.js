@@ -5,6 +5,26 @@ const { darfBestellen } = require('../bestellrecht');
 
 const router = express.Router();
 
+/**
+ * `seen_at` als BERLINER Ortszeit — vergleichbar mit Feldern, die `berlinNow()` geschrieben hat.
+ *
+ * `user_seen.seen_at` entsteht mit SQLites `strftime('now')` und ist damit UTC. Die meisten Zähler
+ * vergleichen es gegen Felder, die ebenfalls per `strftime('now')` gesetzt wurden (bulletin,
+ * notes) — dort passt es. `overtime_payouts.entschieden_am` kommt dagegen aus `berlinNow()`, also
+ * aus der Ortszeit: Im Sommer läge „gesehen" zwei Stunden HINTER der Entscheidung, und die
+ * Meldung bliebe nach dem Ansehen noch zwei Stunden stehen. Gefunden, weil der Test genau das
+ * gemessen hat.
+ *
+ * Die Umrechnung geht über den echten Zeitstempel und ist damit sommerzeitfest — ein festes
+ * „+2 Stunden" wäre im Winter falsch.
+ */
+function getSeenAtBerlin(db, userId, topic) {
+  const utc = getSeenAt(db, userId, topic);
+  const d = new Date(String(utc).replace(' ', 'T') + 'Z');
+  if (isNaN(d)) return utc;
+  return d.toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+}
+
 function getSeenAt(db, userId, topic) {
   const row = db.prepare('SELECT seen_at FROM user_seen WHERE user_id = ? AND topic = ?').get(userId, topic);
   return row ? row.seen_at : '2000-01-01 00:00:00';
@@ -95,7 +115,26 @@ function computeBadgeCounts(db, user) {
     konto = db.prepare("SELECT COUNT(*) as n FROM overtime_payouts WHERE user_id = ? AND status = 'offen'").get(uid).n;
   } catch (_) { konto = 0; }   // Tabelle fehlt (sehr alte Sicherung) -> nichts offen
 
-  return { bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount, konto };
+  // Manager: Entscheidungen ueber Ueberstunden-Auszahlungen, die er noch nicht gesehen hat.
+  //
+  // Ohne diesen Zaehler haette der Chef keinen Anlass, ueberhaupt in die Mitarbeiterliste zu
+  // schauen — er stellt eine Anfrage und erfaehrt nie, was daraus wurde. Gezaehlt werden nur
+  // FREMDE Entscheidungen: Traegt er selbst eine unterschriebene Zustimmung ein, muss er sich
+  // darueber nicht selbst benachrichtigen.
+  let mitarbeiter = 0;
+  if (role === 'chef' || role === 'admin') {
+    const seit = getSeenAtBerlin(db, uid, 'mitarbeiter');
+    try {
+      mitarbeiter = db.prepare(
+        `SELECT COUNT(*) as n FROM overtime_payouts
+          WHERE status IN ('bestaetigt','abgelehnt')
+            AND entschieden_am IS NOT NULL AND entschieden_am > ?
+            AND COALESCE(entschieden_von, 0) != ?`
+      ).get(seit, uid).n;
+    } catch (_) { mitarbeiter = 0; }   // Tabelle fehlt (sehr alte Sicherung)
+  }
+
+  return { bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount, konto, mitarbeiter };
 }
 
 router.get('/', authenticate, (req, res) => {
@@ -104,7 +143,7 @@ router.get('/', authenticate, (req, res) => {
 
 router.post('/:topic', authenticate, (req, res) => {
   const { topic } = req.params;
-  if (!['bulletin', 'notes', 'absences', 'absence_status'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
+  if (!['bulletin', 'notes', 'absences', 'absence_status', 'mitarbeiter'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
   const db = getDb();
   db.prepare(
     "INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now')) " +
@@ -114,4 +153,6 @@ router.post('/:topic', authenticate, (req, res) => {
 });
 
 module.exports = router;
+module.exports.getSeenAt = getSeenAt;
+module.exports.getSeenAtBerlin = getSeenAtBerlin;
 module.exports.computeBadgeCounts = computeBadgeCounts;

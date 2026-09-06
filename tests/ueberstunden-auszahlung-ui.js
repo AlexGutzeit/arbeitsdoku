@@ -186,6 +186,38 @@ async function anmelden(browser, user, pw) {
     await c.seite.evaluate(() => { const b = document.querySelector('.modal [data-act="cancel"]'); if (b) b.click(); });
     await sleep(500);
 
+    console.log('\n── Ein Zähler holt ihn überhaupt erst hin ──');
+    // Ohne Zaehler haette der Chef keinen Anlass, in die Mitarbeiterliste zu schauen.
+    const zaehlerChef = await c.seite.evaluate(() => {
+      const el = document.getElementById('nav-badge-mitarbeiter');
+      return { da: !!el, sichtbar: el ? el.style.display !== 'none' : false, text: el ? el.textContent.trim() : null };
+    });
+    ok('das Zählerfeld am Menüpunkt „Mitarbeiter" ist vorhanden', zaehlerChef.da, JSON.stringify(zaehlerChef));
+
+    console.log('\n── Die Meldung verschwindet nach EINMAL Ansehen ──');
+    // Alex, 06.09.2026: „Mir wäre es recht, wenn sie nach einmal verschwinden würde."
+    await c.seite.reload({ waitUntil: 'domcontentloaded' });
+    await sleep(3000);
+    const zweitesMal = await c.seite.evaluate((id) => {
+      const zeile = document.querySelector(`.auszahlen-user[data-id="${id}"]`)?.closest('tr');
+      return {
+        marke: !!(zeile && zeile.querySelector('.auszahlung-marke.abgelehnt')),
+        zaehler: (() => { const el = document.getElementById('nav-badge-mitarbeiter');
+          return el ? el.style.display !== 'none' : false; })(),
+        verlauf: !!document.querySelector('.auszahlung-verlauf'),
+        // innerText eines ZUGEKLAPPTEN <details> liefert nur die Ueberschrift — deshalb innerHTML.
+        imVerlauf: /abgelehnt/i.test(document.querySelector('.auszahlung-verlauf')?.innerHTML || ''),
+      };
+    }, ma2.id);
+    ok('beim zweiten Blick ist die Meldung weg', zweitesMal.marke === false, JSON.stringify(zweitesMal));
+    ok('… und der Zähler auch', zweitesMal.zaehler === false, JSON.stringify(zweitesMal));
+    ok('… der Verlauf bleibt aber da', zweitesMal.verlauf === true, JSON.stringify(zweitesMal));
+    ok('… und die Ablehnung steht darin', zweitesMal.imVerlauf === true, JSON.stringify(zweitesMal));
+    // Fuers Bild aufklappen — sonst zeigt der Screenshot nur die Ueberschrift.
+    await c.seite.evaluate(() => { const d = document.querySelector('.auszahlung-verlauf'); if (d) d.open = true; });
+    await sleep(600);
+    await schuss(c.seite, '9-verlauf.png');
+
     console.log('\n── Der Ausstellen-Dialog nennt den Stand ──');
     await c.seite.goto(BASIS + '/#/users', { waitUntil: 'domcontentloaded' });
     await c.seite.waitForSelector('.deactivate-user'); await sleep(700);

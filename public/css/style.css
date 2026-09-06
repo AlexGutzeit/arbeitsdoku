@@ -2367,6 +2367,7 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
   border-radius: 10px; padding: 1px 7px; white-space: nowrap; }
 .auszahlung-marke.offen { color: var(--text-light); background: var(--bg); border: 1px solid var(--border); }
 .auszahlung-marke.abgelehnt { color: #92400e; background: #fef3c7; border: 1px solid #fcd34d; }
+.auszahlung-marke.bestaetigt { color: #14532d; background: #dcfce7; border: 1px solid #86efac; }
 
 .austritt-vormerkung { display: inline-block; margin-left: 0.5rem; font-size: 0.72rem;
   color: var(--text-light); background: var(--bg); border: 1px solid var(--border);

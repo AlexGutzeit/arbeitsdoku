@@ -152,6 +152,14 @@ function werktage(v, b) { const o = []; const d = new Date(heute); d.setUTCDate(
     const chefZaehler = (await req('GET', '/api/badges', chef)).body;
     ok('der Chef hat KEINEN Zähler für Auszahlungen (bewusst festgehalten)',
       chefZaehler.konto === 0, JSON.stringify(chefZaehler));
+    console.log('\n── Was im Protokoll steht ──');
+    const eintraege = db.prepare("SELECT action, username, details FROM audit_logs WHERE action LIKE 'overtime%' ORDER BY id").all();
+    for (const e of eintraege) console.log(`  ${e.action.padEnd(26)} ${String(e.username).padEnd(10)} ${e.details}`);
+    ok('jede Aktion ist protokolliert (anlegen, ablehnen, erneut anlegen)',
+      eintraege.length === 3 && eintraege.map(e => e.action).join(',') === 'overtime_payout_create,overtime_payout_reject,overtime_payout_create',
+      eintraege.map(e => e.action).join(', '));
+    ok('… mit dem Namen dessen, der gehandelt hat',
+      eintraege[1] && eintraege[1].username === 'ablehner', JSON.stringify(eintraege[1] && eintraege[1].username));
   } catch (e) {
     ok('Durchlauf ohne Ausnahme', false, e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e.message);
   } finally { server.close(); }

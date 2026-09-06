@@ -18,6 +18,7 @@ const { logAudit, berlinNow } = require('../audit');
 const { broadcast } = require('../sse');
 const { abgerechnetBis, tagDanach, MIN_GRUND, deDatum } = require('../abschluss');
 const { stundenFuerZeitraum } = require('./user-hours');
+const { getSeenAtBerlin } = require('./badges');
 const {
   OFFEN, BESTAETIGT, ABGELEHNT, ZURUECKGEZOGEN,
   BELEG_APP, BELEG_UNTERSCHRIFT, offeneSumme,
@@ -59,7 +60,7 @@ function zeile(db, id) {
 }
 
 /** Eine Zeile so, wie die Oberfläche sie braucht. */
-function fuerAnzeige(z, name) {
+function fuerAnzeige(z, name, seit) {
   return {
     id: z.id, user_id: z.user_id, name: name || null,
     stunden: Number(z.stunden), wirksam_ab: z.wirksam_ab,
@@ -70,6 +71,10 @@ function fuerAnzeige(z, name) {
     per_unterschrift: z.belegweg === BELEG_UNTERSCHRIFT,
     created_at: z.created_at, created_by_name: z.created_by_name || '',
     entschieden_am: z.entschieden_am || null, entschieden_von_name: z.entschieden_von_name || '',
+    // „neu" = seit dem letzten Blick des Managers entschieden. Damit kann die Liste die Meldung
+    // nach EINMAL Ansehen wieder fallen lassen (Alex, 06.09.2026) — der Verlauf bleibt.
+    neu: !!(seit && z.entschieden_am && z.entschieden_am > seit
+            && (z.status === 'bestaetigt' || z.status === 'abgelehnt')),
   };
 }
 
@@ -90,7 +95,9 @@ router.get('/', authenticate, (req, res) => {
     : db.prepare(`SELECT p.*, u.name FROM overtime_payouts p LEFT JOIN users u ON u.id = p.user_id
                    ORDER BY p.created_at DESC, p.id DESC`).all();
 
-  res.json({ auszahlungen: rows.map(z => fuerAnzeige(z, z.name)) });
+  // Nur fuer Manager: Was ist seit ihrem letzten Blick entschieden worden?
+  const seit = manager ? getSeenAtBerlin(db, req.user.id, 'mitarbeiter') : null;
+  res.json({ auszahlungen: rows.map(z => fuerAnzeige(z, z.name, seit)) });
 });
 
 // ── Anlegen (Chef/Admin) ─────────────────────────────────────────────────────────────────────
