@@ -67,6 +67,24 @@ Namen, und „12:00 Stunden" las sich wie eine Uhrzeit. Beides sieht kein Test, 
 prüft. Umgekehrt war der Verdacht, die Aktionen-Spalte laufe über, **falsch** — gemessen kein
 Überlauf bei 1280 und 1024; schmaler scrollt die Tabelle in ihrem eigenen Bereich wie zuvor.
 
+**Der Prod-Klon ist eine VORLAGE, keine rohe Kopie.** Für die Nullprobe holte ich eine frische
+Kopie der Produktivdaten und legte sie über `/tmp/prodklon.db`. Danach fielen zwei Tests um, die
+mit meiner Arbeit nichts zu tun hatten: `aussperren-prodklon` und `zweifaktor-klickweg-prodklon`.
+Grund: Diese Tests melden sich mit dem Passwort `test` an — die Vorlage ist **aufbereitet**, und das
+stand nirgends. Deshalb gibt es jetzt `scripts/prodklon-vorbereiten.js`.
+
+Aufbereitet gehört zweierlei: die Passwörter **und** die Zwei-Faktor-Einträge. Seit auf Produktion
+wirklich jemand einen Authenticator eingerichtet hat, bringt eine rohe Kopie einen echten Eintrag
+mit; `POST /2fa/setup` liefert dann keinen Schlüssel mehr, und der Test stirbt an „Leerer
+Base32-Schlüssel". Das sieht nach einem Fehler in der App aus und ist eine unpassende Vorlage.
+
+Beim Suchen fiel nebenbei auf: **sechs Tests starten einen Server direkt auf `/tmp/prodklon.db`**
+(`ux-runde1-`, `longpress-`, `entwurf-`, `listen-suche-`, `barrierefrei-`, `scroll-ruckeln-prodklon`).
+Sie nennen sich im Kopfkommentar „nur lesend", aber ein laufender Server schreibt durch den
+Autosave-Takt zurück — die Datei wächst und sammelt Zustand aus früheren Läufen. Für eine Kopie in
+`/tmp` ist das ungefährlich, für eine *Vorlage* nicht: Genau so hatte ein früherer Lauf schon einen
+Authenticator hinterlassen. Wer die Vorlage neu braucht, baut sie mit dem Skript neu.
+
 **Der heikle Reihenfolgefall:** angelegt, während der Monat offen war, bestätigt, nachdem er
 abgeschlossen wurde. Erwartet und geprüft ist dieselbe Semantik wie beim Nachtrag — der eingefrorene
 Monat behält seine Zahlen, der laufende Stand sinkt. Der Test dafür musste zweimal umgebaut werden:
