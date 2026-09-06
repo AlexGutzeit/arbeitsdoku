@@ -87,7 +87,15 @@ function computeBadgeCounts(db, user) {
     `).get(uid, statusSince).n;
   }
 
-  return { bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount };
+  // Offene Ueberstunden-Auszahlung, die AUF MICH wartet. Sie haengt an "Mein Konto", weil dort
+  // entschieden wird — und nur der Betroffene selbst kann entscheiden, auch kein Admin fuer ihn.
+  // Jede Rolle kann betroffen sein, deshalb ohne Rollenabfrage.
+  let konto = 0;
+  try {
+    konto = db.prepare("SELECT COUNT(*) as n FROM overtime_payouts WHERE user_id = ? AND status = 'offen'").get(uid).n;
+  } catch (_) { konto = 0; }   // Tabelle fehlt (sehr alte Sicherung) -> nichts offen
+
+  return { bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount, konto };
 }
 
 router.get('/', authenticate, (req, res) => {

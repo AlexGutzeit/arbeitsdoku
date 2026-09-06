@@ -364,6 +364,7 @@ function layout(content, activeNav) {
         <div class="sidebar-divider"></div>
         <a href="#/konto" class="${activeNav === 'konto' ? 'active' : ''}">
           <span class="icon">&#128100;</span> Mein Konto
+          <span class="nav-badge" id="nav-badge-konto"${S.badges.konto ? '' : ' style="display:none"'}>${S.badges.konto || ''}</span>
         </a>
         ${abrechnungsSicht ? `<a href="#/pdf" class="${activeNav === 'pdf' ? 'active' : ''}">
           <span class="icon">&#129534;</span> Abrechnung

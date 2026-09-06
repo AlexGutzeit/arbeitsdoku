@@ -200,6 +200,31 @@ const rund = (n) => Math.round((Number(n) || 0) * 100) / 100;
     const alle = await req('GET', '/api/payouts', chef);
     ok('der Chef sieht alle', alle.status === 200 && (alle.body.auszahlungen || []).length > 0, String(alle.status));
 
+    console.log('\n── Ausstellen: nicht blockieren, aber nichts haengen lassen ──');
+    // Alex, 06.09.2026: "Die Ueberstunden koennen doch auch mitgenommen werden." Der Austritt ist
+    // eine arbeitsrechtliche Tatsache und darf nicht daran haengen, ob in der App eine Anfrage
+    // offenliegt. Ohne das automatische Zurueckziehen haenge sie aber FUER IMMER — zustimmen darf
+    // nur der Betroffene, und der kommt nicht mehr hinein.
+    const g = await anlegen('gehtweg', 'Gustav Gehtweg');
+    const anfrage = await req('POST', '/api/payouts', chef, { user_id: g.id, stunden: 12, wirksam_ab: heute });
+    ok('Aufbau: eine offene Anfrage steht', anfrage.status === 201, String(anfrage.status));
+
+    const aus = await req('POST', `/api/users/${g.id}/deactivate`, chef, { employed_until: heute });
+    ok('Ausstellen wird NICHT blockiert', aus.status === 200, aus.status + ' ' + aus.text.slice(0, 120));
+    ok('… das Konto ist zu', db.prepare('SELECT active FROM users WHERE id = ?').get(g.id).active === 0);
+
+    const danach = db.prepare('SELECT status FROM overtime_payouts WHERE user_id = ?').get(g.id);
+    ok('… die offene Anfrage ist zurückgezogen, haengt also nicht ewig',
+      danach && danach.status === 'zurueckgezogen', JSON.stringify(danach));
+    // MESSFEHLER des ersten Entwurfs: Den Ueberstundenstand vor und nach dem Ausstellen zu
+    // vergleichen sagt hier nichts — das Ausstellen beendet den Anstellungszeitraum, damit hoert
+    // auch das SOLL auf zu laufen und die Zahl aendert sich aus einem ganz anderen Grund.
+    // Die Behauptung "die Stunden bleiben stehen" heisst genau: es wird keine Auszahlung gerechnet.
+    ok('… und die Stunden bleiben stehen (keine Auszahlung zaehlt)',
+      auszahlungenSumme(db, g.id, plus(400)) === 0, String(auszahlungenSumme(db, g.id, plus(400))));
+    const protAus = db.prepare("SELECT details FROM audit_logs WHERE action = 'overtime_payout_auto_withdraw' ORDER BY id DESC LIMIT 1").get();
+    ok('… und es steht im Protokoll', !!protAus && /12 h/.test(protAus.details), JSON.stringify(protAus));
+
     console.log('\n── Unsinn wird abgewiesen ──');
     ok('0 Stunden', (await req('POST', '/api/payouts', chef, { user_id: m.id, stunden: 0, wirksam_ab: heute })).status === 400);
     ok('negative Stunden', (await req('POST', '/api/payouts', chef, { user_id: m.id, stunden: -5, wirksam_ab: heute })).status === 400);

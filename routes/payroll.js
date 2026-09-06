@@ -17,6 +17,7 @@ const { stundenFuerZeitraum } = require('./user-hours');
 const { computeAbsenceSummary } = require('./absence-days');
 const { getEmploymentPeriods, employmentOverlaps } = require('./statistics');
 const { nachtraegeImZeitraum, monatLabel } = require('../abschluss');
+const { auszahlungenImZeitraum } = require('../auszahlung');
 
 const router = express.Router();
 
@@ -49,6 +50,13 @@ const SPALTEN = [
   // dieses Monats — im „Ueberstunden gesamt" stecken sie aber, und ohne Ausweis stuenden dort
   // ploetzlich Stunden, die niemand zuordnen kann.
   'Nachtrag Vormonat', 'Nachtrag Herkunft',
+  // Ausgezahlte Ueberstunden — EIGENE Spalten, aus demselben Grund wie beim Nachtrag, aber mit
+  // anderer Bedeutung: Ein Nachtrag heisst "hier fehlten Stunden", eine Auszahlung heisst "diese
+  // Stunden sind mit Geld abgegolten". Stuenden sie in derselben Spalte, koennte das Lohnbuero sie
+  // nicht auseinanderhalten. Im "Ueberstunden gesamt" sind sie bereits abgezogen.
+  // "Auszahlung Beleg" nennt den Weg der Zustimmung: eine Zustimmung, die nicht vom Mitarbeiter
+  // selbst kommt, darf nirgends wie eine aussehen.
+  'Auszahlung Stunden', 'Auszahlung Beleg',
   'Beschäftigt bis',
 ];
 
@@ -87,6 +95,13 @@ function lohnZeilen(db, von, bis, titel) {
       if (letzter.end_date && letzter.end_date <= bis) bisDatum = letzter.end_date;
     }
 
+    // Ausgezahlte Ueberstunden, die in DIESEM Monat wirksam werden.
+    const auszahlungen = auszahlungenImZeitraum(db, u.id, von, bis);
+    const auszahlungStunden = Math.round(auszahlungen.reduce((sum, a) => sum + (Number(a.stunden) || 0), 0) * 100) / 100;
+    const auszahlungBeleg = auszahlungen.length
+      ? [...new Set(auszahlungen.map(a => a.belegweg === 'unterschrift' ? 'per Unterschrift' : 'in der App bestätigt'))].join(' · ')
+      : '';
+
     zeilen.push({
       userId: u.id,                      // fuer den Abrechnungs-Abschluss; in der CSV nicht enthalten
       personalnummer: u.personnel_no || '',
@@ -104,6 +119,7 @@ function lohnZeilen(db, von, bis, titel) {
       innung: tag('innung'),
       feiertage: tag('feiertag'),
       nachtragStunden, nachtragHerkunft,
+      auszahlungStunden, auszahlungBeleg,
       beschaeftigtBis: bisDatum,
     });
   }
@@ -112,7 +128,7 @@ function lohnZeilen(db, von, bis, titel) {
 
 function baueCsv(zeilen, titel) {
   const lines = [SPALTEN.map(csvZelle).join(';')];
-  const summe = { soll: 0, ist: 0, saldo: 0, urlaub: 0, krank: 0, fza: 0, sonderurlaub: 0, berufsschule: 0, innung: 0, feiertage: 0, nachtragStunden: 0 };
+  const summe = { soll: 0, ist: 0, saldo: 0, urlaub: 0, krank: 0, fza: 0, sonderurlaub: 0, berufsschule: 0, innung: 0, feiertage: 0, nachtragStunden: 0, auszahlungStunden: 0 };
   for (const z of zeilen) {
     for (const k of Object.keys(summe)) summe[k] += Number(z[k]) || 0;
     lines.push([
@@ -121,6 +137,7 @@ function baueCsv(zeilen, titel) {
       zahlDe(z.urlaub), zahlDe(z.krank), zahlDe(z.fza), zahlDe(z.sonderurlaub),
       zahlDe(z.berufsschule), zahlDe(z.innung), zahlDe(z.feiertage),
       zahlDe(z.nachtragStunden), z.nachtragHerkunft || '',
+      zahlDe(z.auszahlungStunden), z.auszahlungBeleg || '',
       z.beschaeftigtBis,
     ].map(csvZelle).join(';'));
   }
@@ -132,6 +149,7 @@ function baueCsv(zeilen, titel) {
     zahlDe(summe.urlaub), zahlDe(summe.krank), zahlDe(summe.fza), zahlDe(summe.sonderurlaub),
     zahlDe(summe.berufsschule), zahlDe(summe.innung), zahlDe(summe.feiertage),
     zahlDe(summe.nachtragStunden), '',
+    zahlDe(summe.auszahlungStunden), '',
     '',
   ].map(csvZelle).join(';'));
   return csvDatei(lines);

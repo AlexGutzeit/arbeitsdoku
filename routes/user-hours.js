@@ -137,6 +137,10 @@ function stundenFuerZeitraum(db, userId, from, to, startUeberstunden) {
     angestelltAb, vonEffektiv, ausserhalb: false,
     istStunden, sollStunden, saldo: istStunden - sollStunden,
     startUeberstunden: startOT, ueberstundenGesamt: runde2(ueberstundenGesamt),
+    // Damit die Zahl ERKLAERBAR bleibt: Ein Stand, der ploetzlich 87,5 Stunden niedriger ist,
+    // ohne dass irgendwo steht warum, ist genau die Verwirrung, vor der der Kommentar im
+    // Lohn-Export warnt. Der Wert steckt in ueberstundenGesamt bereits ABGEZOGEN drin.
+    ausgezahlt: runde2(angestelltAb ? auszahlungenSumme(db, userId, to) : 0),
   };
 }
 

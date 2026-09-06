@@ -361,14 +361,14 @@ function markSeen(topic) {
 }
 
 function refreshBadges() {
-  for (const key of ['bulletin', 'notes', 'orders', 'absences']) {
+  for (const key of ['bulletin', 'notes', 'orders', 'absences', 'konto']) {
     const el = document.getElementById('nav-badge-' + key);
     if (!el) continue;
     const n = S.badges[key] || 0;
     el.textContent = n > 99 ? '99+' : String(n);
     el.style.display = n ? '' : 'none';
   }
-  const total = (S.badges.bulletin || 0) + (S.badges.notes || 0) + (S.badges.orders || 0) + (S.badges.absences || 0);
+  const total = (S.badges.bulletin || 0) + (S.badges.notes || 0) + (S.badges.orders || 0) + (S.badges.absences || 0) + (S.badges.konto || 0);
   if ('setAppBadge' in navigator) {
     if (total > 0) navigator.setAppBadge(total).catch(() => {});
     else navigator.clearAppBadge().catch(() => {});

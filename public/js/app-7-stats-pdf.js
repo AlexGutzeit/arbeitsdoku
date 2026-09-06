@@ -290,6 +290,10 @@ async function renderStatisticsContent() {
           <div class="value">${c.ueber_gesamt >= 0 ? '+' : ''}${fmtH(c.ueber_gesamt)}</div>
           <div class="label">Gesamt (inkl. Start)</div>
         </div>` : ''}
+        ${c.ausgezahlt ? `<div class="summary-card" title="Bereits im Gesamtstand abgezogen">
+          <div class="value">${fmtH(c.ausgezahlt)}</div>
+          <div class="label">davon ausgezahlt</div>
+        </div>` : ''}
       </div>
       <div class="stats-charts">
         <div class="stats-chart-card">

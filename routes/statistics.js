@@ -416,6 +416,9 @@ router.get('/', authenticate, (req, res) => {
       ueber: Math.round(ueber * 100) / 100,
       start_overtime: startOvertime,
       ueber_gesamt: Math.round(ueberGesamt * 100) / 100,
+      // Steckt in ueber_gesamt schon abgezogen drin — nur damit die Anzeige sagen kann, WARUM
+      // der Stand niedriger ist als die reine Ist-Soll-Rechnung.
+      ausgezahlt: stunden.ausgezahlt || 0,
       projects: Object.values(projectMap).sort((a, b) => b.hours - a.hours),
       timeline: timelineData,
     });
@@ -427,6 +430,7 @@ router.get('/', authenticate, (req, res) => {
     ueber: Math.round(userStats.reduce((s, u) => s + u.ueber, 0) * 100) / 100,
     start_overtime: Math.round(userStats.reduce((s, u) => s + u.start_overtime, 0) * 100) / 100,
     ueber_gesamt: Math.round(userStats.reduce((s, u) => s + u.ueber_gesamt, 0) * 100) / 100,
+    ausgezahlt: Math.round(userStats.reduce((s, u) => s + (u.ausgezahlt || 0), 0) * 100) / 100,
   };
 
   const combinedTimeline = timeline.map((t, i) => ({

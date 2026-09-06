@@ -12,6 +12,7 @@
 // Server, startet der Dienst nach dem Neustart gar nicht mehr.
 const zweiFaktor = require('./zweifaktor');
 const { logAudit } = require('./audit');
+const { OFFEN, ZURUECKGEZOGEN } = require('./auszahlung');
 
 const berlinHeute = () =>
   new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
@@ -76,6 +77,37 @@ function ausstellenVollziehen(db, userId, employedUntil, wer, zusatz = '') {
   const hatteZweiFaktor = !!db.prepare('SELECT user_id FROM twofa_secrets WHERE user_id = ?').get(userId);
   zweiFaktor.zuruecksetzen(db, userId);
 
+  // Eine noch OFFENE Ueberstunden-Auszahlung zurueckziehen.
+  //
+  // Das Ausstellen wird dadurch NICHT blockiert (Alex, 06.09.2026: "Die Ueberstunden koennen doch
+  // auch mitgenommen werden") — der Austritt ist eine arbeitsrechtliche Tatsache und haengt nicht
+  // daran, ob in der App noch eine Anfrage offenliegt. Die Stunden bleiben stehen, das ist der
+  // Normalfall.
+  //
+  // Ohne diesen Schritt haenge die Anfrage aber FUER IMMER: Zustimmen darf nur der Betroffene
+  // selbst, und der kommt nicht mehr hinein. Genau die Form von Fehler wie die Posteingangs-
+  // Eintraege, die nach einem Monatsabschluss nie mehr verschwanden.
+  //
+  // Soll doch ausgezahlt werden, ist der Weg die unterschriebene Zustimmung (belegweg
+  // 'unterschrift') — sie ist ueberall als solche gekennzeichnet.
+  let offeneAuszahlungen = [];
+  try {
+    offeneAuszahlungen = db.prepare('SELECT id, stunden FROM overtime_payouts WHERE user_id = ? AND status = ?')
+      .all(userId, OFFEN);
+    if (offeneAuszahlungen.length) {
+      db.prepare(
+        'UPDATE overtime_payouts SET status = ?, entschieden_am = ?, entschieden_von = ?, entschieden_von_name = ? WHERE user_id = ? AND status = ?'
+      ).run(ZURUECKGEZOGEN, berlinJetzt(), wer.id, wer.username, userId, OFFEN);
+      logAudit(db, {
+        userId: wer.id, username: wer.username, action: 'overtime_payout_auto_withdraw',
+        details: `Beim Ausstellen von ${nutzer ? nutzer.username : userId} zurueckgezogen: `
+          + offeneAuszahlungen.map(a => `${a.stunden} h`).join(', ')
+          + ' — die Stunden bleiben stehen',
+        ip: wer.ip,
+      });
+    }
+  } catch (_) { /* Tabelle fehlt (sehr alte Sicherung) -> nichts zurueckzuziehen */ }
+
   logAudit(db, {
     userId: wer.id, username: wer.username, action: 'user_deactivate',
     details: `Ausgestellt: ${nutzer ? nutzer.username : '?'} (${nutzer ? nutzer.role : '?'}, id=${userId}), `
@@ -83,7 +115,7 @@ function ausstellenVollziehen(db, userId, employedUntil, wer, zusatz = '') {
       + (hatteZweiFaktor ? ' · Zwei-Faktor geloescht (Neueinrichtung noetig)' : ''),
     ip: wer.ip,
   });
-  return { hatteZweiFaktor };
+  return { hatteZweiFaktor, zurueckgezogeneAuszahlungen: offeneAuszahlungen.length };
 }
 
 module.exports = { austrittsdatumSetzen, austrittsdatumAufheben, ausstellenVollziehen, berlinHeute, berlinJetzt };

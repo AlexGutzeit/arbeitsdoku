@@ -1026,6 +1026,7 @@ async function renderUsers() {
                 <td>${u.target_hours_per_week}</td>
                 <td class="actions">
                   <button class="btn btn-sm btn-outline edit-user" data-id="${u.id}">Bearbeiten</button>
+                  ${u.id === S.user.id ? '' : `<button class="btn btn-sm btn-outline auszahlen-user" data-id="${u.id}" data-name="${esc(u.name)}">Überstunden auszahlen</button>`}
                   ${u.id === S.user.id ? '' : austrittVorgemerktAm(u)
                     ? `<button class="btn btn-sm btn-outline austritt-aufheben" data-id="${u.id}">Vormerkung aufheben</button>`
                     : `<button class="btn btn-sm btn-warning deactivate-user" data-id="${u.id}">Ausstellen</button>`}
@@ -1052,8 +1053,27 @@ async function renderUsers() {
     btn.addEventListener('click', async () => {
       const user = S.users.find(u => u.id === Number(btn.dataset.id));
       const today = new Date().toLocaleDateString('sv-SE');
+
+      // Der Ueberstundenstand gehoert AN DIESE STELLE: Beim Ausstellen entscheidet sich, ob
+      // abgefeiert, stehen gelassen oder ausgezahlt wird — und genau hier ist der Fehler
+      // aufgefallen, dass diese Frage nirgends gestellt wurde. Eine noch offene Anfrage wird
+      // ausdruecklich genannt, weil der Vollzug sie zurueckzieht.
+      let standZeile = '';
+      try {
+        const st = await api('GET', `/api/payouts/stand/${user.id}`);
+        const h = fmtH(Number(st.ueberstunden));
+        standZeile = `${user?.name} hat derzeit ${h} Überstunden — abfeiern, stehen lassen oder auszahlen?\n`;
+        if (Number(st.offen) > 0) {
+          standZeile += `ACHTUNG: Es ist eine Auszahlung über ${fmtH(Number(st.offen))} Stunden offen. `
+            + `Nach dem letzten Arbeitstag kann er nicht mehr zustimmen — sie wird dann zurückgezogen, `
+            + `die Stunden bleiben stehen.\n`;
+        }
+        standZeile += '\n';
+      } catch (_) { /* der Stand ist ein Hinweis, kein Muss */ }
+
       const employedUntil = await promptModal(
         `„${user?.name}“ ausstellen. Alle Daten bleiben erhalten und werden weiter angezeigt.\n\n`
+        + standZeile
         + `Bis einschließlich zum letzten Arbeitstag bleibt der Zugang bestehen — er kann also bis zuletzt `
         + `seine Stunden buchen. Danach wird das Konto automatisch geschlossen; erst dann werden `
         + `Zwei-Faktor und Push-Benachrichtigungen gelöscht.\n\n`
@@ -1070,6 +1090,10 @@ async function renderUsers() {
         renderUsers();
       } catch (e) { toast(e.message, 'error'); }
     });
+  });
+
+  mainEl.querySelectorAll('.auszahlen-user').forEach(btn => {
+    btn.addEventListener('click', () => auszahlungAnlegen(Number(btn.dataset.id), btn.dataset.name));
   });
 
   mainEl.querySelectorAll('.austritt-aufheben').forEach(btn => {
@@ -2087,6 +2111,7 @@ async function renderKonto() {
         Für deine Rolle ist ein zweiter Faktor vorgeschrieben. Bis du ihn eingerichtet hast, kommst
         du nicht in die App.
       </div>` : ''}
+      <div class="welcome-section" id="konto-auszahlung" style="display:none"></div>
       <div class="welcome-section" id="konto-avatar"></div>
       <div class="welcome-section" id="konto-geburtstag"></div>
       <div class="welcome-section" id="konto-warnungen"></div>
@@ -2101,6 +2126,7 @@ async function renderKonto() {
   bindLayout();
   const fab = document.getElementById('fab-new');
   if (fab) fab.style.display = 'none';
+  await kontoAuszahlungKarte();
   await kontoAvatarKarte();
   await kontoGeburtstagKarte();
   await kontoWarnungenKarte();
@@ -2497,6 +2523,184 @@ async function kontoWarnungenKarte() {
     }
   };
   k.querySelectorAll('.warn-schalter').forEach(cb => cb.addEventListener('change', speichern));
+}
+
+/**
+ * Eine Überstunden-Auszahlung anlegen (Chef/Admin).
+ *
+ * Zeigt den aktuellen Stand, damit niemand ins Blaue tippt, und weist eine bereits offene Anfrage
+ * aus — sonst verplante man dieselben Stunden zweimal.
+ *
+ * Der Weg „Zustimmung liegt unterschrieben vor" ist ABSICHTLICH die zweite, unscheinbarere Wahl.
+ * Der Normalfall ist, dass der Mitarbeiter in der App zustimmt; eine Zustimmung, die nicht von ihm
+ * kommt, wird überall gekennzeichnet (siehe routes/payouts.js).
+ */
+async function auszahlungAnlegen(userId, name) {
+  let stand = null, offen = 0;
+  try {
+    const r = await api('GET', `/api/payouts/stand/${userId}`);
+    stand = Number(r.ueberstunden); offen = Number(r.offen) || 0;
+  } catch (_) { /* Stand ist ein Komfort, kein Muss */ }
+
+  if (offen > 0) {
+    toast(`Für ${name} ist bereits eine Auszahlung über ${fmtH(offen)} Stunden offen.`, 'error');
+    return;
+  }
+
+  const heute = new Date().toLocaleDateString('sv-SE');
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay dialog-modal';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header"><h3>Überstunden auszahlen</h3></div>
+      <div class="modal-body">
+        <p style="margin:0 0 .8rem">
+          <strong>${esc(name)}</strong>${stand !== null
+            ? ` hat derzeit <strong>${esc(fmtH(stand))}</strong> Überstunden.` : '.'}
+        </p>
+        <div class="form-group">
+          <label for="az-stunden">Stunden auszahlen</label>
+          <input id="az-stunden" type="number" step="0.25" min="0" class="form-control"
+                 value="${stand !== null && stand > 0 ? String(Math.round(stand * 100) / 100) : ''}">
+        </div>
+        <div class="form-group">
+          <label for="az-datum">Wirksam ab</label>
+          <input id="az-datum" type="date" class="form-control" value="${heute}">
+        </div>
+        <label style="display:flex; gap:.5rem; align-items:flex-start; font-size:.85rem; margin-top:.5rem">
+          <input type="checkbox" id="az-unterschrift" style="margin-top:.2rem">
+          <span>Die Zustimmung liegt <strong>unterschrieben</strong> vor.<br>
+            <span style="color:var(--text-light)">Sonst entscheidet ${esc(name)} selbst in der App.
+            Dieser Weg wird überall als „per Unterschrift" gekennzeichnet.</span></span>
+        </label>
+        <div id="az-fehler" style="color:#dc2626;font-size:.85rem;margin-top:.5rem;display:none"></div>
+      </div>
+      <div class="modal-footer" style="display:flex;gap:.5rem;justify-content:flex-end;padding:1rem">
+        <button class="btn btn-outline" data-act="cancel">Abbrechen</button>
+        <button class="btn btn-primary" data-act="ok">Auszahlen</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const aufraeumen = dialogBarrierefrei(overlay);
+  const schliessen = () => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); };
+  const onKey = (e) => { if (e.key === 'Escape') schliessen(); };
+  document.addEventListener('keydown', onKey);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) schliessen(); });
+  overlay.querySelector('[data-act="cancel"]').addEventListener('click', schliessen);
+  overlay.querySelector('#az-stunden').focus();
+
+  overlay.querySelector('[data-act="ok"]').addEventListener('click', async () => {
+    const fehler = overlay.querySelector('#az-fehler');
+    const stunden = Number(String(overlay.querySelector('#az-stunden').value).replace(',', '.'));
+    const datum = overlay.querySelector('#az-datum').value;
+    const unterschrift = overlay.querySelector('#az-unterschrift').checked;
+    if (!(stunden > 0)) {
+      fehler.textContent = 'Bitte eine Stundenzahl größer als 0 angeben.'; fehler.style.display = ''; return;
+    }
+    try {
+      const r = await api('POST', '/api/payouts', {
+        user_id: userId, stunden, wirksam_ab: datum,
+        belegweg: unterschrift ? 'unterschrift' : 'app' });
+      schliessen();
+      // Die Warnungen des Servers werden GEZEIGT, nicht verschluckt: "mehr als der Stand" und
+      // "in einen abgeschlossenen Monat gefallen" sind genau die Faelle, in denen der Chef etwas
+      // anderes gemeint haben koennte, als jetzt passiert ist.
+      for (const w of (r.warnungen || [])) toast(w, 'error', 8000);
+      toast(unterschrift
+        ? `${fmtH(stunden)} Stunden ausgezahlt (Zustimmung per Unterschrift).`
+        : `${fmtH(stunden)} Stunden angefragt — ${name} entscheidet in der App.`);
+      renderUsers();
+    } catch (e) {
+      fehler.textContent = e.message || 'Fehlgeschlagen'; fehler.style.display = '';
+    }
+  });
+}
+
+// Überstunden-Auszahlung: die Entscheidung des Mitarbeiters.
+//
+// Sie steht GANZ OBEN und nur dann, wenn wirklich etwas offen ist — anders als die übrigen Karten
+// verlangt sie eine Handlung. Der Verzicht auf Stunden ist seine Entscheidung, keine
+// Verwaltungshandlung: Deshalb kann hier ausdrücklich niemand für ihn zustimmen, auch der Admin
+// nicht (siehe routes/payouts.js).
+async function kontoAuszahlungKarte() {
+  const k = document.getElementById('konto-auszahlung');
+  if (!k) return;
+  let liste = [];
+  try { liste = (await api('GET', '/api/payouts')).auszahlungen || []; }
+  catch (_) { k.style.display = 'none'; return; }
+
+  const offen = liste.filter(z => z.status === 'offen');
+  const erledigt = liste.filter(z => z.status !== 'offen');
+  if (!offen.length && !erledigt.length) { k.style.display = 'none'; return; }
+  k.style.display = '';
+
+  const dat = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('de-DE');
+  const statusWort = { bestaetigt: 'ausgezahlt', abgelehnt: 'abgelehnt', zurueckgezogen: 'zurückgezogen' };
+
+  // Der Verlauf steht AUCH ohne offene Anfrage da: Wer sich fragt, warum sein Stand niedriger ist
+  // als erwartet, findet hier die Antwort — statt sie im Büro erfragen zu müssen.
+  const verlauf = erledigt.length ? `
+    <div style="margin-top:${offen.length ? '1.2rem' : '0'}">
+      ${offen.length ? '<div style="font-weight:600;font-size:.85rem;margin-bottom:.35rem">Früher</div>' : ''}
+      <table style="border-collapse:collapse; font-size:.85rem">
+        ${erledigt.map(e => `<tr>
+          <td style="padding:.2rem .75rem .2rem 0; white-space:nowrap"><strong>${esc(fmtH(Number(e.stunden)))} h</strong></td>
+          <td style="padding:.2rem .75rem .2rem 0; white-space:nowrap; color:var(--text-light)">${esc(dat(e.wirksam_ab))}</td>
+          <td style="padding:.2rem 0">${esc(statusWort[e.status] || e.status)}${
+            e.per_unterschrift ? ' <span style="color:var(--text-light)">(per Unterschrift)</span>' : ''
+          }${e.grund ? ` <span style="color:var(--text-light)">— ${esc(e.grund)}</span>` : ''}</td>
+        </tr>`).join('')}
+      </table>
+    </div>` : '';
+
+  if (!offen.length) {
+    k.innerHTML = `<h3>&#128176; Ausgezahlte Überstunden</h3>${verlauf}`;
+    return;
+  }
+
+  const z = offen[0];
+  k.innerHTML = `
+    <h3>&#128176; Überstunden auszahlen?</h3>
+    <p style="margin-top:0">
+      ${esc(z.created_by_name || 'Die Firma')} möchte dir
+      <strong>${esc(fmtH(Number(z.stunden)))} Stunden</strong> auszahlen, wirksam ab
+      <strong>${esc(dat(z.wirksam_ab))}</strong>.
+    </p>
+    <p style="color:var(--text-light); font-size:.85rem">
+      Stimmst du zu, werden die Stunden von deinem Überstundenstand abgezogen und über die
+      Lohnabrechnung ausgezahlt. Bis dahin ändert sich nichts. Du kannst auch ablehnen — dann
+      bleiben die Stunden stehen.
+    </p>
+    <div class="btn-row" style="display:flex; gap:.5rem; flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" id="auszahlung-ja" data-id="${z.id}">Zustimmen</button>
+      <button class="btn btn-outline btn-sm" id="auszahlung-nein" data-id="${z.id}">Ablehnen</button>
+    </div>
+    ${verlauf}`;
+
+  document.getElementById('auszahlung-ja').onclick = async () => {
+    // danger:false — Zustimmen ist keine zerstoererische Handlung, also gruene Taste und Enter erlaubt.
+    const ja = await confirmModal(
+      `${fmtH(Number(z.stunden))} Stunden werden von deinem Überstundenstand abgezogen und über die `
+      + 'Lohnabrechnung ausgezahlt.',
+      { title: 'Auszahlung bestätigen', okLabel: 'Ja, auszahlen', danger: false });
+    if (!ja) return;
+    try {
+      await api('POST', `/api/payouts/${z.id}/bestaetigen`);
+      toast('Zugestimmt — die Stunden werden ausgezahlt.');
+      await kontoAuszahlungKarte(); loadBadges();
+    } catch (e) { toast(e.message || 'Fehlgeschlagen', 'error'); }
+  };
+  document.getElementById('auszahlung-nein').onclick = async () => {
+    const grund = await promptModal('Warum lehnst du ab? Der Chef sieht deine Begründung.',
+      { title: 'Auszahlung ablehnen', okLabel: 'Ablehnen', required: true,
+        requiredMsg: 'Bitte einen kurzen Grund angeben.' });
+    if (grund === null) return;
+    try {
+      await api('POST', `/api/payouts/${z.id}/ablehnen`, { grund });
+      toast('Abgelehnt — deine Stunden bleiben stehen.');
+      await kontoAuszahlungKarte(); loadBadges();
+    } catch (e) { toast(e.message || 'Fehlgeschlagen', 'error'); }
+  };
 }
 
 // Eigene Stammdaten, nur lesend. „So hat die Verwaltung dich hinterlegt."
