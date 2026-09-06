@@ -14,6 +14,67 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-06 · Überstunden auszahlen — und was die Nullprobe wert ist
+
+Der Anlass kam aus der vorigen Reparatur: Beim Ausstellen entscheidet sich, ob Überstunden
+abgefeiert, stehen gelassen oder ausgezahlt werden — nur konnte die App den dritten Weg gar nicht,
+und die Frage wurde nirgends gestellt.
+
+**Eigene Tabelle, nicht `payroll_adjustments` erweitern.** Dort ist `closure_id NOT NULL`, und das
+loszuwerden verlangt in SQLite einen Tabellen-Neubau auf Lohndaten. Wichtiger als die Technik ist
+aber die Bedeutung: Ein Nachtrag heißt „hier fehlten Stunden", eine Auszahlung heißt „diese Stunden
+sind mit Geld abgegolten". In derselben Spalte könnte das Lohnbüro sie nicht auseinanderhalten.
+
+**Die Nullprobe, und warum sie allein nichts beweist.** Der gefährlichste Fehler war nicht ein
+kaputter neuer Knopf, sondern ein stillschweigend verschobener alter Überstundenstand — etwas, das
+ein Test der neuen Funktion nie sieht. Dafür entstand `tests/user-hours-nullprobe.js`: zwei Server
+auf je einer Kopie derselben Produktivdaten, Vergleich über alle Nutzer, Monate und Jahre plus den
+Lohn-Export zeichenweise.
+
+Sie war sofort grün — und genau das war der Punkt, an dem man aufhören könnte und nichts wüsste:
+Genauso grün wäre sie, wenn der neue Summand schlicht nichts täte. Zwei Gegenproben:
+
+* Ein künstliches `- 0.01` in der Formel ließ alle drei Zusicherungen fallen. Das Werkzeug misst.
+* Eine echte Auszahlung über 40 Stunden senkte den Stand von −1634,25 auf −1674,25, exakt 40; eine
+  **offene** Anfrage über 25 Stunden bewegte nichts; vor dem `wirksam_ab` war der Stand identisch.
+
+Erst beides zusammen ist ein Beweis. Dieselbe Doppelrichtung gibt es schon in
+`tests/stunden-vorher-nachher.js` — der beweist, dass sich eine Zahl **ändert** (die korrigierte
+Projektfilter-Rechnung). Verwechselt man die Richtungen, beweist der Test das Gegenteil von dem,
+was man glaubt.
+
+**Als der Lohn-Export dann doch abwich**, war das richtig: zwei neue Spalten. Per Spaltenvergleich
+geprüft, dass jeder andere Wert zeichengleich blieb — eine rote Nullprobe ist kein Grund, das
+Werkzeug abzuschalten, sondern einer, den Unterschied zu erklären.
+
+**Vier Messfehler in den eigenen Tests**, alle derselben Art — gemessen wurde etwas anderes als
+behauptet:
+
+| Behauptung | Was tatsächlich gemessen wurde |
+|---|---|
+| „vor dem `wirksam_ab` zählt sie nicht" | zwei verschiedene Stichtage — dazwischen läuft auch das **Soll** (26 statt 10) |
+| „mehr Stunden als vorhanden" | `Stand + 500` wird negativ, wenn der Stand es ist → Abweisung aus ganz anderem Grund |
+| „die Stunden bleiben stehen" (beim Ausstellen) | das Ausstellen beendet den Anstellungszeitraum, das **Soll** fällt weg |
+| „der Unterschriftsweg steht im Verlauf" | `goto` auf **dieselbe** Adresse löst kein `hashchange` aus — die Seite baute sich nie neu auf |
+
+Der letzte ist der lehrreichste: Er sah aus wie ein Fehler im Code und war ein Fehler im Messen.
+Dahinter steckte aber eine echte Lücke — ohne SSE-Broadcast erschiene die Anfrage beim Mitarbeiter
+erst beim nächsten Laden. Über eine Entscheidung, die seine Stunden betrifft, soll er nicht
+zufällig stolpern.
+
+**Zwei Funde erst aus den Screenshots.** „chef möchte dir …" stand mit dem Benutzernamen statt dem
+Namen, und „12:00 Stunden" las sich wie eine Uhrzeit. Beides sieht kein Test, der auf Vorhandensein
+prüft. Umgekehrt war der Verdacht, die Aktionen-Spalte laufe über, **falsch** — gemessen kein
+Überlauf bei 1280 und 1024; schmaler scrollt die Tabelle in ihrem eigenen Bereich wie zuvor.
+
+**Der heikle Reihenfolgefall:** angelegt, während der Monat offen war, bestätigt, nachdem er
+abgeschlossen wurde. Erwartet und geprüft ist dieselbe Semantik wie beim Nachtrag — der eingefrorene
+Monat behält seine Zahlen, der laufende Stand sinkt. Der Test dafür musste zweimal umgebaut werden:
+Der laufende Monat lässt sich zu Recht nicht abschließen, und wer heute angelegt wird, hat im
+Vormonat gar keine eingefrorene Zeile, gegen die man prüfen könnte.
+
+---
+
 ### 2026-08-26 · „Ich kann nicht mehr weiter nach unten scrollen"
 
 Alex' Meldung vom eigenen Handy. Gemessen bei 393×830: 317 px für den Tagesverlauf, die Seite
