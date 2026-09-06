@@ -6,6 +6,7 @@ const { computeBadgeCounts } = require('./routes/badges');
 const push = require('./push');
 const recur = require('./planning-recurrence');
 const { ausstellenVollziehen } = require('./ausstellen');
+const { berlinJetzt, berlinWochentag } = require('./zeit');
 
 // Standard-Tagesspanne aus den Firmen-Einstellungen (Arbeitsbeginn + Arbeitszeit + Pause).
 // Gleiche Rueckfallwerte wie im Frontend und in routes/settings.js: 07:00 / 8 h / 30 min.
@@ -32,10 +33,8 @@ const CAT_LABELS = { orders: 'Bestellungen', absences: 'Abwesenheiten', bulletin
 
 // Berlin-Datum/Uhrzeit/Wochentag (1=Mo … 7=So) aus einem Date.
 function berlinParts(now = new Date()) {
-  const s = now.toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }); // "YYYY-MM-DD HH:MM:SS"
-  const wd = now.toLocaleDateString('en-US', { timeZone: 'Europe/Berlin', weekday: 'short' }); // Mon..Sun
-  const map = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
-  return { date: s.slice(0, 10), hhmm: s.slice(11, 16), weekday: map[wd] };
+  const s = berlinJetzt(now).replace(' ', 'T');   // wie zuvor: 'YYYY-MM-DDTHH:MM:SS'
+  return { date: s.slice(0, 10), hhmm: s.slice(11, 16), weekday: berlinWochentag(now) };
 }
 
 // Fällig? Rein — ohne Global-Pause (die prüft tick() separat, weil sie den Nutzer braucht).

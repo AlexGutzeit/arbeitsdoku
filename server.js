@@ -1,3 +1,15 @@
+// ZEITZONE — muss VOR allem anderen stehen, sonst haben bereits geladene Module eine andere.
+//
+// Die App rechnet an vielen Stellen in Ortszeit (Arbeitstage, Monatsgrenzen, „heute"), teils
+// ausdruecklich mit `timeZone: 'Europe/Berlin'`, teils ueber die Zeitzone des Prozesses. Solange
+// der Server auf Europe/Berlin steht, ist beides gleich — genau das ist aber eine unausgesprochene
+// Abhaengigkeit von der Serverkonfiguration. Auf einem Server, der wie ueblich auf UTC steht,
+// verschoeben sich Datumsangaben lautlos um zwei Stunden.
+//
+// Deshalb hier festgelegt, aber NUR wenn nichts vorgegeben ist: Wer `TZ` bewusst setzt, behaelt
+// die Kontrolle. Auf dem heutigen Produktivserver aendert das nichts (er steht bereits so).
+if (!process.env.TZ) process.env.TZ = 'Europe/Berlin';
+
 require('dotenv').config();
 const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
@@ -9,6 +21,7 @@ const { initDatabase, saveToFile } = require('./database/init');
 const { JWT_SECRET } = require('./middleware/auth');
 const { addClient, removeClient, getClientCount } = require('./sse');
 const { authenticate, authorize } = require('./middleware/auth');
+const { berlinJetzt } = require('./zeit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -186,7 +199,7 @@ function cleanupToolHistory() {
     const db = getDb();
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - 3);
-    const cutoffStr = cutoff.toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+    const cutoffStr = berlinJetzt(cutoff);
     const result = db.prepare('DELETE FROM tool_checkouts WHERE returned_at IS NOT NULL AND returned_at < ?').run(cutoffStr);
     if (result.changes > 0) console.log(`Werkzeug-Historie: ${result.changes} alte Einträge bereinigt.`);
   } catch (e) {}

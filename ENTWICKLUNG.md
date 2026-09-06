@@ -14,6 +14,56 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-06 · Eine Zeitzone im ganzen Servercode
+
+Alex' Frage nach dem Deploy: „Nicht dass noch irgendwo Zeiten um (mehrere) Stunde(n) auseinander
+laufen." Anlass war der Zeitzonen-Fehler beim Auszahlungs-Zähler — die Frage war, ob es weitere
+gibt.
+
+**Die Lage ist zweigeteilt, und das ist in Ordnung**, solange nicht über die Grenze hinweg
+verglichen wird:
+
+| Quelle | Zone | wo |
+|---|---|---|
+| `strftime('now')` in SQL | **UTC** | Aushang, Notizen, Abwesenheiten, `user_seen` |
+| `berlinJetzt()` in JS | **Ortszeit** | Protokoll, Ausstellen, Auszahlung, Werkzeuge |
+
+Gefährlich sind genau drei Dinge, und danach wurde gesucht:
+
+**1. „Heute" aus `toISOString()`.** Das ist das UTC-Datum — zwischen Mitternacht und zwei Uhr
+(Sommerzeit) liefert es den **Vortag**. Zwei Fundstellen, beide echte Fehler:
+
+* `routes/bulletin.js` löschte abgelaufene Aushänge mit `auto_delete_date < heute(UTC)` — ein
+  abgelaufener Aushang blieb bis zu zwei Stunden zu lange stehen.
+* `routes/absence-days.js` bestimmte den Stichtag des Urlaubskontos so. Am 1. Januar früh wäre
+  noch das **Vorjahr** gerechnet worden: falscher Anspruch, falscher Verfall-Stichtag.
+
+**2. Ein Vergleich über die Zonengrenze.** Nur einer, und der war am Vortag schon repariert
+(`getSeenAtBerlin`). Die übrigen Zähler wurden einzeln nachgesehen: alle UTC gegen UTC. Auch die
+eine Stelle, die `absences` in Ortszeit schreibt, ist harmlos — sie setzt `deleted_at`, und das
+wird nur auf `IS NULL` geprüft, nie verglichen.
+
+**3. Die Zeitzone des Prozesses.** `toLocaleDateString('sv-SE')` ohne Angabe nimmt sie. Der
+Produktivserver steht auf `Europe/Berlin`, deshalb war nichts kaputt — aber das ist eine
+unausgesprochene Abhängigkeit von der Serverkonfiguration, und auf einem Server, der wie üblich
+auf UTC steht, verschöbe sich alles lautlos. `server.js` legt `TZ` jetzt fest, sofern nichts
+vorgegeben ist. Auf dem heutigen Server ändert das nichts.
+
+**Die Rechnung gibt es jetzt einmal** (`zeit.js`), vorher lag sie in siebzehn Fassungen herum. Der
+Wächter `tests/zeitzonen.js` hält das fest — und hat sich sofort bewährt: Beim ersten Durchgang
+fand er **vierzehn Stellen, die ich übersehen hatte**. Ein Test, der nur bestätigt, was man schon
+weiß, hätte hier nichts gebracht.
+
+**Gegengeprüft**, weil ein Umbau an so vielen Stellen leicht etwas verschiebt: jedes umgestellte
+Format einzeln gegen das alte verglichen (alle zeichengleich), und die Nullprobe gegen die echten
+Produktivdaten — Statistik, alle Überstundenstände und der Lohn-Export unverändert.
+
+**Nebenbei:** `scripts/suite.sh` sperrt mit `flock`; die Sperrdatei bleibt nach einem Abbruch
+liegen, die Sperre selbst wird aber freigegeben. Wer auf die DATEI prüft statt auf die Sperre,
+hält die Suite fälschlich für laufend — mir genau so passiert.
+
+---
+
 ### 2026-09-06 · Überstunden auszahlen — und was die Nullprobe wert ist
 
 Der Anlass kam aus der vorigen Reparatur: Beim Ausstellen entscheidet sich, ob Überstunden

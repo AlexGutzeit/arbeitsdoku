@@ -3,6 +3,7 @@ const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const push = require('../push');
+const { berlinHeute } = require('../zeit');
 
 const router = express.Router();
 
@@ -23,7 +24,11 @@ function canBulletin(req, res, next) {
 
 // Abgelaufene Einträge automatisch löschen
 function cleanExpired(db) {
-  const today = new Date().toISOString().slice(0, 10);
+  // ORTSZEIT, nicht `toISOString()`: Das liefert das UTC-Datum, und zwischen Mitternacht und
+  // zwei Uhr (Sommerzeit) ist das noch der Vortag — ein abgelaufener Aushang wäre bis zu zwei
+  // Stunden zu lange stehen geblieben. Wer ihn löschen sieht, denkt in seiner Uhrzeit, nicht in
+  // der von Greenwich.
+  const today = berlinHeute();
   db.prepare('DELETE FROM bulletin_entries WHERE auto_delete_date IS NOT NULL AND auto_delete_date != \'\' AND auto_delete_date < ?').run(today);
 }
 

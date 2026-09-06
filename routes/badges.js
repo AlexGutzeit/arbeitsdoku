@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { darfBestellen } = require('../bestellrecht');
+const { berlinJetzt } = require('../zeit');
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ function getSeenAtBerlin(db, userId, topic) {
   const utc = getSeenAt(db, userId, topic);
   const d = new Date(String(utc).replace(' ', 'T') + 'Z');
   if (isNaN(d)) return utc;
-  return d.toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+  return berlinJetzt(d);
 }
 
 function getSeenAt(db, userId, topic) {

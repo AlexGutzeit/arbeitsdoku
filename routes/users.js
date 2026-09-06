@@ -64,7 +64,7 @@ function normGeburtsdatum(v) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
   const d = new Date(s + 'T12:00:00Z');
   if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) return null;
-  const heute = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+  const heute = berlinHeute();
   if (s > heute) return null;                           // in der Zukunft geboren gibt es nicht
   if (s < '1900-01-01') return null;
   return s;
@@ -249,7 +249,7 @@ router.get('/meine-stammdaten', authenticate, (req, res) => {
   // des heutigen Stands — dort etwas wegzulassen waere das Verstecken von Daten.
   let zeitraeume = [];
   try {
-    const heuteIso = new Date().toLocaleDateString('sv-SE');
+    const heuteIso = berlinHeute();
     zeitraeume = db.prepare('SELECT start_date, end_date FROM employment_periods WHERE user_id = ? ORDER BY start_date')
       .all(req.user.id)
       .map(z => (z.end_date && z.end_date >= heuteIso) ? { ...z, end_date: null } : z);
@@ -259,7 +259,7 @@ router.get('/meine-stammdaten', authenticate, (req, res) => {
   // am Nutzer.
   let anspruch = u.vacation_days_per_year;
   try {
-    const heute = new Date().toLocaleDateString('sv-SE');
+    const heute = berlinHeute();
     const zeile = db.prepare(`SELECT days FROM vacation_entitlements WHERE user_id = ? AND valid_from <= ?
                               ORDER BY valid_from DESC LIMIT 1`).get(req.user.id, heute);
     if (zeile && zeile.days != null) anspruch = zeile.days;
@@ -345,7 +345,7 @@ router.get('/geburtstage', authenticate, (req, res) => {
   const db = getDb();
   // Ortszeit, nicht UTC: Um 01:00 Berliner Zeit ist es in UTC noch gestern — der Geburtstag ginge
   // sonst eine Stunde zu spaet an und eine Stunde zu frueh aus.
-  const heute = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+  const heute = berlinHeute();
   const [jahr, monat, tag] = heute.split('-').map(Number);
   const schaltjahr = (jahr % 4 === 0 && jahr % 100 !== 0) || jahr % 400 === 0;
   // Am 29. Februar Geborene haetten in drei von vier Jahren gar keinen Geburtstag. Sie werden in
@@ -490,7 +490,7 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
 
   const userId = result.lastInsertRowid;
   // B6: „heute" in Europe/Berlin (wie im Rest der App) statt UTC — sonst nahe Mitternacht 1 Tag daneben.
-  const today = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+  const today = berlinHeute();
   db.prepare(
     'INSERT INTO user_target_hours (user_id, hours_per_week, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(userId, hpw, hMon, hTue, hWed, hThu, hFri, today);
@@ -673,7 +673,7 @@ router.post('/:id/deactivate', authenticate, authorize('chef'), (req, res) => {
   }
   if (user.active === 0) return res.status(409).json({ error: 'Mitarbeiter ist bereits ausgestellt' });
 
-  const today = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+  const today = berlinHeute();
   const employedUntil = req.body && req.body.employed_until ? String(req.body.employed_until) : today;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(employedUntil)) {
     return res.status(400).json({ error: 'Ungültiges Austrittsdatum (Format JJJJ-MM-TT)' });
@@ -770,7 +770,7 @@ router.post('/:id/reactivate', authenticate, authorize('chef'), (req, res) => {
   }
   if (user.active === 1) return res.status(409).json({ error: 'Mitarbeiter ist bereits aktiv' });
 
-  const today = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+  const today = berlinHeute();
   const startDate = req.body && req.body.start_date ? String(req.body.start_date) : today;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
     return res.status(400).json({ error: 'Ungültiges Wiedereintrittsdatum (Format JJJJ-MM-TT)' });

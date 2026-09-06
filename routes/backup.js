@@ -11,6 +11,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { abgerechnetBis } = require('../abschluss');
 const krypto = require('../backup-krypto');
+const { berlinJetzt } = require('../zeit');
 
 const router = express.Router();
 
@@ -228,7 +229,7 @@ router.post('/empfaenger/:id/probe/bestaetigen', authenticate, authorize('chef')
   if (gegeben !== offen.erwartet) {
     return res.status(400).json({ error: 'Mit diesem Schlüssel liess sich die Probe nicht öffnen — er gehört nicht zu diesem Eintrag.' });
   }
-  const jetzt = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 16);
+  const jetzt = berlinJetzt().slice(0, 16);
   db.prepare('UPDATE backup_empfaenger SET geprueft_am = ?, geprueft_von = ? WHERE id = ?').run(jetzt, req.user.id, zeile.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'backup_empfaenger_geprueft',
     details: zeile.name, ip: req.ip });

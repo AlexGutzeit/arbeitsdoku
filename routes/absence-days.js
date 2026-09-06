@@ -10,6 +10,8 @@
 
 // Anstellungszeiträume (employment_periods) — für die Lücken-Erkennung bei ausgestellten/wieder
 // eingestellten Mitarbeitern. Konsistent zu statistics.js (dort schon in calcTargetHours genutzt).
+const { berlinHeute } = require('../zeit');
+
 function getEmploymentPeriods(db, userId) {
   try { return db.prepare('SELECT start_date, end_date FROM employment_periods WHERE user_id = ? ORDER BY start_date ASC').all(userId); }
   catch (_) { return []; } // Tabelle fehlt (sehr altes Backup) → wie durchgehend angestellt
@@ -250,9 +252,12 @@ function firstEntitlementYear(db, userId) {
 // JAHR geltenden Zeile bestimmt, was in das Folgejahr getragen wird (yearend=0, never=Rest,
 // date=Rest bis zum Stichtag im Folgejahr, danach verfallen). Vergangene Jahre bleiben unberührt.
 function vacationAccount(db, userId, year, now) {
+  // ORTSZEIT statt `toISOString()`: Letzteres liefert das UTC-Datum. Zwischen Mitternacht und
+  // zwei Uhr (Sommerzeit) waere das der Vortag — am 1. Januar frueh also noch das VORJAHR, und
+  // damit der falsche Urlaubsanspruch und der falsche Verfall-Stichtag.
   const nowStr = now instanceof Date
-    ? now.toISOString().slice(0, 10)
-    : (typeof now === 'string' && now ? now.slice(0, 10) : new Date().toISOString().slice(0, 10));
+    ? berlinHeute(now)
+    : (typeof now === 'string' && now ? now.slice(0, 10) : berlinHeute());
 
   const { genommen, geplant } = urlaubSplitInYear(db, userId, year, nowStr);
   const anspruch = entitlementFor(db, userId, year).days;

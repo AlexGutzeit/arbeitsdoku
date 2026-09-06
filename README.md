@@ -470,6 +470,9 @@ Gelöschte Einträge und Abwesenheiten bleiben mit Begründung erhalten (GoBD). 
 
 ## Was überall gilt
 
+**Zeitzone:** Die App rechnet in **deutscher Ortszeit** (`Europe/Berlin`, mit Sommer-/Winterzeit). Der Server setzt `TZ` beim Start selbst, sofern nichts vorgegeben ist — die Anzeige stimmt damit unabhängig davon, wie der Wirt konfiguriert ist. Rein technische Zeitstempel in der Datenbank (Änderungszeiten für die „neu"-Erkennung) laufen wie in SQLite üblich in UTC; sie werden nur untereinander verglichen und tauchen nirgends in der Anzeige auf.
+
+
 Echtzeit-Updates über alle Geräte (Server-Sent Events), **Push-Benachrichtigungen
 aufs Handy auch bei geschlossener App** (Web Push, optional je Gerät aktivierbar), **Navigations-Button mit
 freier Wahl der Karten-App/des -Dienstes** (Auswahl-Dialog statt fester Google-Bindung – Android zeigt die

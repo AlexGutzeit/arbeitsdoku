@@ -27,7 +27,8 @@ const {
 const router = express.Router();
 
 const istManager = (u) => u && (u.role === 'admin' || u.role === 'chef');
-const heuteIso = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
+const { berlinHeute } = require('../zeit');
+const heuteIso = () => berlinHeute();
 
 function nutzer(db, id) {
   return db.prepare('SELECT id, name, username, start_overtime FROM users WHERE id = ?').get(Number(id));

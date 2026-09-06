@@ -4,6 +4,7 @@ const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const recur = require('../planning-recurrence');
+const { berlinHeute } = require('../zeit');
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ const router = express.Router();
 // „Heute" in Europe/Berlin wie im Rest der App (audit.js, scheduler.js, users.js). Mit UTC lieferte das
 // zwischen 00:00 und 02:00 Ortszeit den VORTAG — dann hätte z. B. „Serie ab heute beenden" einen Tag zu viel
 // gelöscht („Vergangenes bleibt" wäre verletzt).
-const todayISO = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
+const todayISO = () => berlinHeute();
 const addDaysISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const addMonthsISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
 const diffDays = (aISO, bISO) => Math.round((new Date(bISO + 'T00:00:00Z') - new Date(aISO + 'T00:00:00Z')) / 86400000);

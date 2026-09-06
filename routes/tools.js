@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
+const { berlinJetzt } = require('../zeit');
 
 const router = express.Router();
 
@@ -101,7 +102,7 @@ router.post('/:id/checkout', authenticate, (req, res) => {
   }
 
   const { project_id, project_text, address } = req.body;
-  const now = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+  const now = berlinJetzt();
   db.prepare(
     'INSERT INTO tool_checkouts (tool_id, user_id, checked_out_at, project_id, project_text, address) VALUES (?, ?, ?, ?, ?, ?)'
   ).run(toolId, req.user.id, now, project_id || null, project_text || null, address || null);
@@ -122,7 +123,7 @@ router.post('/:id/return', authenticate, (req, res) => {
     return res.status(403).json({ error: 'Nur der aktuelle Besitzer kann zurückgeben' });
   }
 
-  const now = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+  const now = berlinJetzt();
   db.prepare('UPDATE tool_checkouts SET returned_at = ? WHERE id = ?').run(now, checkout.id);
   broadcast('tools', req.headers['x-tab-id']);
   res.json({ success: true });
@@ -142,7 +143,7 @@ router.post('/:id/takeover', authenticate, (req, res) => {
   }
 
   const { project_id, project_text, address } = req.body;
-  const now = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+  const now = berlinJetzt();
   db.prepare('UPDATE tool_checkouts SET returned_at = ? WHERE id = ?').run(now, checkout.id);
   db.prepare(
     'INSERT INTO tool_checkouts (tool_id, user_id, checked_out_at, project_id, project_text, address) VALUES (?, ?, ?, ?, ?, ?)'

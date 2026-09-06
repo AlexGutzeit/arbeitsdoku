@@ -3,10 +3,11 @@
 // logAudit: protokolliert sicherheits-/betriebsrelevante Ereignisse.
 
 // Zeitstempel "YYYY-MM-DD HH:MM:SS" in Europe/Berlin (beruecksichtigt Sommer-/Winterzeit).
-// SQLites strftime('now') liefert UTC — daher erzeugen wir die Zeit explizit in JS,
-// konsistent mit dem Rest der App (z.B. cleanupToolHistory in server.js).
+// SQLites strftime('now') liefert UTC — daher erzeugen wir die Zeit explizit in JS.
+// Die Rechnung selbst steht seit dem 06.09.2026 in zeit.js, damit es sie nur EINMAL gibt.
+const { berlinJetzt } = require('./zeit');
 function berlinNow() {
-  return new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+  return berlinJetzt();
 }
 
 // Felder, die im Snapshot eines Eintrags festgehalten werden (Vorher-Zustand).

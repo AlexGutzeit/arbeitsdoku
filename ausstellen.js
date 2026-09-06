@@ -14,10 +14,8 @@ const zweiFaktor = require('./zweifaktor');
 const { logAudit } = require('./audit');
 const { OFFEN, ZURUECKGEZOGEN } = require('./auszahlung');
 
-const berlinHeute = () =>
-  new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
-const berlinJetzt = () =>
-  new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).replace('T', ' ');
+// Beide kommen aus zeit.js — eine Rechnung, eine Zeitzone (siehe dort).
+const { berlinHeute, berlinJetzt } = require('./zeit');
 
 /**
  * Das Austrittsdatum am Anstellungszeitraum festschreiben.
