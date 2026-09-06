@@ -90,6 +90,7 @@ app.use('/api/pdf', require('./routes/pdf'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/statistics', require('./routes/statistics'));
 app.use('/api/payroll', require('./routes/payroll'));
+app.use('/api/payouts', require('./routes/payouts'));
 app.use('/api/closure', require('./routes/closure'));
 app.use('/api/planning', require('./routes/planning'));
 app.use('/api/bulletin', require('./routes/bulletin'));

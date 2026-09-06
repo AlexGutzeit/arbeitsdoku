@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**200 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**201 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -223,6 +223,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `twofa-schluessel-bestand.js` | Der Schlüssel muss alle Umschaltungen überleben (Alex, 22.08.2026). |
 | `uebernahme-zurueck-ui.js` | Puppeteer-Test: „Zurück" nach dem Übernehmen einer Planung führt dorthin zurück, wo das |
 | `ueberschneidung-kette-ui.js` | Drei sich überschneidende Aufträge — Pausenvorschlag UND Arbeitszeit-Warnung, Schritt für Schritt. |
+| `ueberstunden-auszahlung.js` | Überstunden auszahlen — Routen, Rechnung und die Regeln drumherum. |
 | `user-hours-gleichheit.js` | Gleichheitsbeweis fuer die Zusammenlegung der Stunden-Rechnung (C1). |
 | `user-hours-nullprobe.js` | NULLPROBE: Eine Änderung an der Stunden-Rechnung darf bestehende Stände NICHT verschieben. |
 | `user-role-guard.js` | API-Test (B1): Rollen-Absicherung von POST/PUT /api/users. |
