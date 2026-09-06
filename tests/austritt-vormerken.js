@@ -110,12 +110,28 @@ const plus = (n) => { const d = new Date(heute + 'T12:00:00Z'); d.setUTCDate(d.g
 
     console.log('\n── Das Soll endet trotzdem am Austrittstag ──');
     // Ohne diese Prüfung wäre die Vormerkung wirkungslos — dann liefe die Anstellung einfach weiter.
-    const nachAustritt = plus(25);
-    const csv = (await req('GET', `/api/payroll/monat.csv?month=${nachAustritt.slice(0, 7)}`, admin)).text;
+    // ZEITFALLE, am 06.09.2026 zugeschlagen: Der Test fragte den Monat von „heute + 25" ab,
+    // das Austrittsdatum liegt bei „heute + 20". Solange beide im selben Monat lagen, war er
+    // gruen — sobald die 25 Tage in den Folgemonat rutschten, gab es zu Recht GAR KEINE Zeile
+    // (payroll.js: `if (!employmentOverlaps(...)) continue`), und die Zusicherung fiel um.
+    // Jetzt werden ausdruecklich BEIDE Monate geprueft. Damit ist der Test nicht nur wieder
+    // gruen, sondern prueft die Monatsgrenze an JEDEM Tag statt zufaellig an einigen.
+    const austrittsMonat = inZwanzig.slice(0, 7);
+    const folgeMonat = (() => { const [j, m] = austrittsMonat.split('-').map(Number);
+      return m === 12 ? `${j + 1}-01` : `${j}-${String(m + 1).padStart(2, '0')}`; })();
+
+    const csv = (await req('GET', `/api/payroll/monat.csv?month=${austrittsMonat}`, admin)).text;
     ok('der Lohn-Export ist abrufbar', csv.length > 20, csv.slice(0, 60));
     const zeile = csv.split('\r\n').find(z => z.includes('Vera Vorgemerkt'));
     ok('… und nennt „Beschäftigt bis" mit dem vorgemerkten Datum',
       !!zeile && zeile.includes(inZwanzig), (zeile || '').slice(0, 160));
+
+    // Der Monat DANACH: Sie war keinen Tag mehr angestellt, also gehoert sie nicht in die
+    // Lohnabrechnung. Faende sich hier eine Zeile, zahlte das Buero einen Monat zu viel.
+    const csvDanach = (await req('GET', `/api/payroll/monat.csv?month=${folgeMonat}`, admin)).text;
+    ok('… und im Monat danach steht sie gar nicht mehr im Export',
+      !csvDanach.includes('Vera Vorgemerkt'),
+      (csvDanach.split('\r\n').find(z => z.includes('Vera Vorgemerkt')) || '').slice(0, 160));
 
     console.log('\n── Zwei-Faktor und Push bleiben bis zum Vollzug ──');
     // Sie erst beim Vollzug zu löschen ist der Sinn der Sache: Bis dahin arbeitet er normal weiter.
