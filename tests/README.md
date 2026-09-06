@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**203 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**204 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -73,6 +73,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `austritt-vormerken-ui.js` | Vorgemerkter Austritt in der Oberfläche (Alex, 04.09.2026). |
 | `austritt-vormerken.js` | Ausstellen mit ZUKÜNFTIGEM Austrittsdatum: vormerken statt sofort aussperren. |
 | `auszahlung-durchrechnung.js` | Alex' Szenario, Ende zu Ende durchgerechnet (06.09.2026): |
+| `auszahlung-gesamtbild.js` | Das GESAMTBILD (Alex, 06.09.2026): mehrere Aufbau-Phasen, Freizeitausgleich dazwischen, |
 | `auth-active-guard.js` | API-Test (B1): Ein bereits ausgestelltes JWT wird sofort abgelehnt (401), sobald der Nutzer ausgestellt ist — |
 | `avatar-api.js` | Profilbilder: Hochladen, Ausliefern, Entfernen — und vor allem, wer sie NICHT sehen darf. |
 | `avatar-ui.js` | Profilbilder in der Oberfläche: hochladen, in der Kopfzeile sehen, wieder entfernen. |

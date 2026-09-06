@@ -309,13 +309,20 @@ async function renderStatisticsContent() {
       <div class="stats-user-details">
         <h3>Pro Mitarbeiter</h3>
         <table class="data-table">
-          <tr><th>Name</th><th>Ist</th><th>Soll</th><th>+/-</th><th>Start-Ü.</th><th>Gesamt</th></tr>
+          <!-- Spalte „Ausgezahlt" nur, wenn es ueberhaupt eine gibt: Sonst stuenden hier fuer die
+               ganze Firma leere Striche. Ohne sie waere in der Zeile aber "+151" neben "+126" zu
+               lesen, ohne dass die 25 Stunden Unterschied irgendwo herkaemen — und bei mehreren
+               Mitarbeitern liesse sich nicht zuordnen, wessen Auszahlung gemeint ist. -->
+          <tr><th>Name</th><th>Ist</th><th>Soll</th><th>+/-</th>${
+            stats.users.some(u => u.ausgezahlt) ? '<th>Ausgezahlt</th>' : ''
+          }<th>Start-Ü.</th><th>Gesamt</th></tr>
           ${stats.users.map(u => `
             <tr>
               <td>${esc(u.user_name)}</td>
               <td>${fmtH(u.ist)}</td>
               <td>${fmtH(u.soll)}</td>
               <td class="${u.ueber >= 0 ? 'positive' : 'negative'}">${u.ueber >= 0 ? '+' : ''}${fmtH(u.ueber)}</td>
+              ${stats.users.some(x => x.ausgezahlt) ? `<td>${u.ausgezahlt ? '-' + fmtH(u.ausgezahlt) : '-'}</td>` : ''}
               <td>${u.start_overtime ? fmtH(u.start_overtime) : '-'}</td>
               <td class="${u.ueber_gesamt >= 0 ? 'positive' : 'negative'}">${u.ueber_gesamt >= 0 ? '+' : ''}${fmtH(u.ueber_gesamt)}</td>
             </tr>
