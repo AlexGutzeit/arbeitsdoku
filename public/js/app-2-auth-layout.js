@@ -221,6 +221,9 @@ function _sseOnMessage(e) {
   let p; try { p = JSON.parse(e.data); } catch (_) { return; }
   // Bestellungs-Badge immer aktualisieren (live-Zähler, auch eigene Aktionen)
   if (p.type === 'orders') loadBadges();
+  // Auszahlungen: der Zaehler an „Mein Konto" muss auf JEDER Route mitlaufen — er haengt an einer
+  // Entscheidung, die der Mitarbeiter treffen soll, nicht an einer Ansicht.
+  if (p.type === 'payouts') loadBadges();
   if (p.originTab === S.tabId) return;
   const route = getRoute();
   if (p.type === 'orders'   && route === '/orders' && !_editorBusy('#order-form-area'))   renderOrders();
@@ -236,6 +239,7 @@ function _sseOnMessage(e) {
     else if (route === '/' || route === '/dashboard')  renderDashboardContent();  // #1: Dashboard-Zeitliste live
   }
   if ((p.type === 'planning' || p.type === 'bulletin') && route === '/welcome')  renderWelcome();
+  if (p.type === 'payouts' && route === '/konto') kontoAuszahlungKarte();
   if (p.type === 'bulletin'  && route !== '/bulletin')  loadBadges();
   if (p.type === 'notes'     && route !== '/notes')     loadBadges();
   if (p.type === 'absences') {

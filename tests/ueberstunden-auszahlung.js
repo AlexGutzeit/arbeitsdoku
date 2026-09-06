@@ -170,13 +170,46 @@ const rund = (n) => Math.round((Number(n) || 0) * 100) / 100;
     const protokoll = db.prepare("SELECT details FROM audit_logs WHERE action = 'overtime_payout_signed' ORDER BY id DESC LIMIT 1").get();
     ok('… auch im Protokoll', !!protokoll && /unterschrieben/i.test(protokoll.details), JSON.stringify(protokoll));
 
-    console.log('\n── Ein abgeschlossener Monat wird nicht rückwirkend bewegt ──');
-    // Den Vormonat abschliessen und dann versuchen, in ihn hinein auszuzahlen.
+    console.log('\n── Angelegt VOR dem Abschluss, bestätigt DANACH ──');
+    // Der heikle Fall: Der Wunschtag war beim Anlegen offen, beim Bestätigen liegt er im
+    // eingefrorenen Zeitraum. Erwartet wird dasselbe Verhalten wie bei einem Nachtrag: Der
+    // abgeschlossene Monat behält seine festgehaltenen Zahlen, der LAUFENDE Stand sinkt.
+    // Der laufende Monat laesst sich nicht abschliessen ("noch nicht vorbei") — deshalb spielt der
+    // Fall im VORMONAT: dort anlegen, solange er offen ist, dann abschliessen, dann bestaetigen.
     const vormonat = (() => { const d = new Date(heute + 'T12:00:00Z'); d.setUTCDate(1); d.setUTCDate(0);
       return d.toISOString().slice(0, 7); })();
-    const abschluss = await req('POST', '/api/closure', chef, { month: vormonat });
-    ok('Vormonat abgeschlossen', abschluss.status === 200 || abschluss.status === 201,
-      abschluss.status + ' ' + abschluss.text.slice(0, 120));
+    const s2 = await anlegen('spaetbest', 'Sonja Spätbestätigt');
+    const s2Tok = await anMit('spaetbest');
+    db.prepare('UPDATE users SET start_overtime = 80 WHERE id = ?').run(s2.id);
+    // Anstellungsbeginn zurueckziehen: Wer heute angelegt wird, war im Vormonat nicht angestellt
+    // und bekommt deshalb GAR KEINE eingefrorene Zeile — die Pruefung liefe ins Leere.
+    db.prepare('UPDATE employment_periods SET start_date = ? WHERE user_id = ?').run(`${vormonat}-01`, s2.id);
+    const a4 = await req('POST', '/api/payouts', chef, { user_id: s2.id, stunden: 8, wirksam_ab: `${vormonat}-15` });
+    ok('Aufbau: Anfrage im noch offenen Vormonat angelegt',
+      a4.status === 201 && a4.body.auszahlung.wirksam_ab === `${vormonat}-15`,
+      JSON.stringify(a4.body && a4.body.auszahlung));
+
+    const schluss = await req('POST', '/api/closure', chef, { month: vormonat });
+    ok('… dann wird der Vormonat abgeschlossen', schluss.status === 200 || schluss.status === 201,
+      schluss.status + ' ' + schluss.text.slice(0, 120));
+    const eingefroren = db.prepare(
+      'SELECT ueberstunden_gesamt AS u FROM payroll_closure_rows WHERE user_id = ? ORDER BY id DESC LIMIT 1').get(s2.id);
+
+    const spaetOk = await req('POST', `/api/payouts/${a4.body.auszahlung.id}/bestaetigen`, s2Tok, {});
+    ok('… und danach bestätigt', spaetOk.status === 200, spaetOk.status + ' ' + spaetOk.text.slice(0, 90));
+    const nachher2 = db.prepare(
+      'SELECT ueberstunden_gesamt AS u FROM payroll_closure_rows WHERE user_id = ? ORDER BY id DESC LIMIT 1').get(s2.id);
+    ok('… es gibt ueberhaupt eine eingefrorene Zeile', !!eingefroren, JSON.stringify(eingefroren));
+    ok('der abgeschlossene Monat bleibt eingefroren',
+      !!eingefroren && !!nachher2 && rund(eingefroren.u) === rund(nachher2.u),
+      JSON.stringify({ vorher: eingefroren, nachher: nachher2 }));
+    ok('… der laufende Stand sinkt trotzdem um 8',
+      rund(auszahlungenSumme(db, s2.id, plus(400))) === 8, String(auszahlungenSumme(db, s2.id, plus(400))));
+
+    console.log('\n── Ein abgeschlossener Monat wird nicht rückwirkend bewegt ──');
+    // Der Vormonat ist im Block davor bereits abgeschlossen worden.
+    ok('Aufbau: der Vormonat ist abgeschlossen',
+      !!db.prepare('SELECT id FROM payroll_closures WHERE period_to LIKE ?').get(`${vormonat}%`));
     const rueck = await req('POST', '/api/payouts', chef, { user_id: m.id, stunden: 4, wirksam_ab: `${vormonat}-15` });
     ok('eine Auszahlung in den abgeschlossenen Monat wird angenommen', rueck.status === 201,
       rueck.status + ' ' + rueck.text.slice(0, 120));

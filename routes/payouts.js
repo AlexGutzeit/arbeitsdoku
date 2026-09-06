@@ -15,6 +15,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { logAudit, berlinNow } = require('../audit');
+const { broadcast } = require('../sse');
 const { abgerechnetBis, tagDanach, MIN_GRUND, deDatum } = require('../abschluss');
 const { stundenFuerZeitraum } = require('./user-hours');
 const {
@@ -126,6 +127,10 @@ router.post('/', authenticate, (req, res) => {
   }
 
   const jetzt = berlinNow();
+  // Der ANZEIGENAME, nicht der Benutzername: In der Karte des Mitarbeiters stand sonst
+  // "chef moechte dir ...". Das Protokoll bekommt weiterhin den Benutzernamen (logAudit).
+  const anzeigename = (db.prepare('SELECT name FROM users WHERE id = ?').get(req.user.id) || {}).name
+    || req.user.username;
   // Unterschriftsweg: Die Zustimmung liegt schon vor, es gibt nichts mehr zu bestätigen. Sie wird
   // aber ÜBERALL als solche gekennzeichnet — belegweg bleibt 'unterschrift'.
   const direkt = belegweg === BELEG_UNTERSCHRIFT;
@@ -135,8 +140,8 @@ router.post('/', authenticate, (req, res) => {
         entschieden_am, entschieden_von, entschieden_von_name)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(uid, stunden, wirksamAb, direkt ? BESTAETIGT : OFFEN, belegweg, jetzt,
-    req.user.id, req.user.username,
-    direkt ? jetzt : null, direkt ? req.user.id : null, direkt ? req.user.username : null);
+    req.user.id, anzeigename,
+    direkt ? jetzt : null, direkt ? req.user.id : null, direkt ? anzeigename : null);
 
   logAudit(db, {
     userId: req.user.id, username: req.user.username,
@@ -147,6 +152,9 @@ router.post('/', authenticate, (req, res) => {
     ip: req.ip,
   });
 
+  // Damit der Zaehler beim Mitarbeiter SOFORT erscheint und nicht erst beim naechsten Laden — er
+  // soll ueber eine Entscheidung, die seine Stunden betrifft, nicht zufaellig stolpern.
+  broadcast('payouts');
   res.status(201).json({ success: true, auszahlung: fuerAnzeige(zeile(db, r.lastInsertRowid), u.name), warnungen });
 });
 
@@ -181,6 +189,7 @@ function entscheiden(req, res, neuerStatus) {
     ip: req.ip,
   });
 
+  broadcast('payouts');
   res.json({ success: true, auszahlung: fuerAnzeige(zeile(db, z.id)) });
 }
 
@@ -204,6 +213,7 @@ router.post('/:id/zurueckziehen', authenticate, (req, res) => {
     details: `${z.stunden} h zur Auszahlung (wirksam ab ${z.wirksam_ab}) zurückgezogen`,
     ip: req.ip,
   });
+  broadcast('payouts');
   res.json({ success: true, auszahlung: fuerAnzeige(zeile(db, z.id)) });
 });
 

@@ -1062,7 +1062,7 @@ async function renderUsers() {
       try {
         const st = await api('GET', `/api/payouts/stand/${user.id}`);
         const h = fmtH(Number(st.ueberstunden));
-        standZeile = `${user?.name} hat derzeit ${h} Überstunden — abfeiern, stehen lassen oder auszahlen?\n`;
+        standZeile = `${user?.name} hat derzeit ${h} h Überstunden — abfeiern, stehen lassen oder auszahlen?\n`;
         if (Number(st.offen) > 0) {
           standZeile += `ACHTUNG: Es ist eine Auszahlung über ${fmtH(Number(st.offen))} Stunden offen. `
             + `Nach dem letzten Arbeitstag kann er nicht mehr zustimmen — sie wird dann zurückgezogen, `
@@ -2543,7 +2543,7 @@ async function auszahlungAnlegen(userId, name) {
   } catch (_) { /* Stand ist ein Komfort, kein Muss */ }
 
   if (offen > 0) {
-    toast(`Für ${name} ist bereits eine Auszahlung über ${fmtH(offen)} Stunden offen.`, 'error');
+    toast(`Für ${name} ist bereits eine Auszahlung über ${fmtH(offen)} h offen.`, 'error');
     return;
   }
 
@@ -2607,8 +2607,8 @@ async function auszahlungAnlegen(userId, name) {
       // anderes gemeint haben koennte, als jetzt passiert ist.
       for (const w of (r.warnungen || [])) toast(w, 'error', 8000);
       toast(unterschrift
-        ? `${fmtH(stunden)} Stunden ausgezahlt (Zustimmung per Unterschrift).`
-        : `${fmtH(stunden)} Stunden angefragt — ${name} entscheidet in der App.`);
+        ? `${fmtH(stunden)} h ausgezahlt (Zustimmung per Unterschrift).`
+        : `${fmtH(stunden)} h angefragt — ${name} entscheidet in der App.`);
       renderUsers();
     } catch (e) {
       fehler.textContent = e.message || 'Fehlgeschlagen'; fehler.style.display = '';
@@ -2663,7 +2663,7 @@ async function kontoAuszahlungKarte() {
     <h3>&#128176; Überstunden auszahlen?</h3>
     <p style="margin-top:0">
       ${esc(z.created_by_name || 'Die Firma')} möchte dir
-      <strong>${esc(fmtH(Number(z.stunden)))} Stunden</strong> auszahlen, wirksam ab
+      <strong>${esc(fmtH(Number(z.stunden)))} h</strong> auszahlen, wirksam ab
       <strong>${esc(dat(z.wirksam_ab))}</strong>.
     </p>
     <p style="color:var(--text-light); font-size:.85rem">
@@ -2671,7 +2671,7 @@ async function kontoAuszahlungKarte() {
       Lohnabrechnung ausgezahlt. Bis dahin ändert sich nichts. Du kannst auch ablehnen — dann
       bleiben die Stunden stehen.
     </p>
-    <div class="btn-row" style="display:flex; gap:.5rem; flex-wrap:wrap">
+    <div class="btn-row" style="display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.9rem">
       <button class="btn btn-primary btn-sm" id="auszahlung-ja" data-id="${z.id}">Zustimmen</button>
       <button class="btn btn-outline btn-sm" id="auszahlung-nein" data-id="${z.id}">Ablehnen</button>
     </div>
@@ -2680,7 +2680,7 @@ async function kontoAuszahlungKarte() {
   document.getElementById('auszahlung-ja').onclick = async () => {
     // danger:false — Zustimmen ist keine zerstoererische Handlung, also gruene Taste und Enter erlaubt.
     const ja = await confirmModal(
-      `${fmtH(Number(z.stunden))} Stunden werden von deinem Überstundenstand abgezogen und über die `
+      `${fmtH(Number(z.stunden))} h werden von deinem Überstundenstand abgezogen und über die `
       + 'Lohnabrechnung ausgezahlt.',
       { title: 'Auszahlung bestätigen', okLabel: 'Ja, auszahlen', danger: false });
     if (!ja) return;
