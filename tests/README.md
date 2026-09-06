@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**199 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**200 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -224,6 +224,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `uebernahme-zurueck-ui.js` | Puppeteer-Test: „Zurück" nach dem Übernehmen einer Planung führt dorthin zurück, wo das |
 | `ueberschneidung-kette-ui.js` | Drei sich überschneidende Aufträge — Pausenvorschlag UND Arbeitszeit-Warnung, Schritt für Schritt. |
 | `user-hours-gleichheit.js` | Gleichheitsbeweis fuer die Zusammenlegung der Stunden-Rechnung (C1). |
+| `user-hours-nullprobe.js` | NULLPROBE: Eine Änderung an der Stunden-Rechnung darf bestehende Stände NICHT verschieben. |
 | `user-role-guard.js` | API-Test (B1): Rollen-Absicherung von POST/PUT /api/users. |
 | `ux-runde1-prodklon.js` | Prod-Klon-Pruefung der UX-Runde 1 (B3 Zoom + B2 Tap-Ziele + B8a Kontrast). |
 | `vacation-account.js` | Unit-Test: Urlaubskonto-Berechnung (entitlementFor + vacationAccount) gegen eine frische Temp-DB. |
