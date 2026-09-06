@@ -2360,6 +2360,14 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 
 /* „scheidet aus zum …" in der Mitarbeiterliste. Bewusst zurückhaltend: eine Vormerkung ist eine
    Information, keine Warnung — und sie steht neben dem Namen eines Kollegen. */
+/* Stand einer Überstunden-Auszahlung in der Mitarbeiterliste. Ruhiger als die Rollen-Marken —
+   sie ist ein Hinweis, keine Warnung. „abgelehnt" bekommt einen warmen Ton, weil der Chef dort
+   wirklich etwas erfährt, das er nicht erwartet hat. */
+.auszahlung-marke { display: inline-block; margin-left: 0.5rem; font-size: 0.72rem;
+  border-radius: 10px; padding: 1px 7px; white-space: nowrap; }
+.auszahlung-marke.offen { color: var(--text-light); background: var(--bg); border: 1px solid var(--border); }
+.auszahlung-marke.abgelehnt { color: #92400e; background: #fef3c7; border: 1px solid #fcd34d; }
+
 .austritt-vormerkung { display: inline-block; margin-left: 0.5rem; font-size: 0.72rem;
   color: var(--text-light); background: var(--bg); border: 1px solid var(--border);
   border-radius: 10px; padding: 1px 7px; white-space: nowrap; }

@@ -151,6 +151,41 @@ async function anmelden(browser, user, pw) {
       /per Unterschrift/i.test(mitUnterschrift), mitUnterschrift.slice(0, 260));
     await schuss(m.seite, '5-unterschrift.png');
 
+    console.log('\n── Der Chef sieht eine Ablehnung ──');
+    // Ohne diese Rueckmeldung stellt der Chef eine Anfrage und erfaehrt NIE, was daraus wurde.
+    const ma2 = (await req('POST', '/api/users', chefTok, { username: 'neinsager', password: PW,
+      name: 'Nina Neinsager', role: 'mitarbeiter', target_hours_per_week: 40 })).body.user;
+    const anfrage = await req('POST', '/api/payouts', chefTok, { user_id: ma2.id, stunden: 8, wirksam_ab: heute });
+    const n = await anmelden(browser, 'neinsager', PW);
+    await req('POST', `/api/payouts/${anfrage.body.auszahlung.id}/ablehnen`,
+      (await req('POST', '/api/auth/login', null, { username: 'neinsager', password: PW })).body.token,
+      { grund: 'Ich feiere lieber ab.' });
+    await n.ktx.close();
+
+    // reload() statt goto(): Die Seite steht bereits auf #/users, und ein goto auf DIESELBE
+    // Adresse loest kein hashchange aus — sie baute sich nicht neu auf und der Test las den
+    // alten Stand. Dieselbe Falle wie beim Verlauf auf „Mein Konto".
+    await c.seite.reload({ waitUntil: 'domcontentloaded' });
+    await sleep(3000);
+    await schuss(c.seite, '7-chef-sieht-ablehnung.png');
+    const marke = await c.seite.evaluate((id) => {
+      const zeile = document.querySelector(`.auszahlen-user[data-id="${id}"]`)?.closest('tr');
+      const m = zeile && zeile.querySelector('.auszahlung-marke');
+      return { da: !!m, text: m ? m.textContent.trim() : '', titel: m ? m.getAttribute('title') : '' };
+    }, ma2.id);
+    ok('in der Mitarbeiterliste steht „Auszahlung abgelehnt"',
+      marke.da && /abgelehnt/i.test(marke.text), JSON.stringify(marke));
+    ok('… und die Begründung hängt daran', /lieber ab/i.test(marke.titel || ''), JSON.stringify(marke.titel));
+
+    await c.seite.evaluate(id => document.querySelector(`.auszahlen-user[data-id="${id}"]`).click(), ma2.id);
+    await sleep(1400);
+    await schuss(c.seite, '8-chef-dialog-verlauf.png');
+    const dlg = await c.seite.evaluate(() => (document.querySelector('.modal') || document.body).innerText);
+    ok('… und der Dialog zeigt sie im Wortlaut',
+      /abgelehnt/i.test(dlg) && /Ich feiere lieber ab/.test(dlg), dlg.slice(0, 400));
+    await c.seite.evaluate(() => { const b = document.querySelector('.modal [data-act="cancel"]'); if (b) b.click(); });
+    await sleep(500);
+
     console.log('\n── Der Ausstellen-Dialog nennt den Stand ──');
     await c.seite.goto(BASIS + '/#/users', { waitUntil: 'domcontentloaded' });
     await c.seite.waitForSelector('.deactivate-user'); await sleep(700);

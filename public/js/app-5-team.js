@@ -996,6 +996,20 @@ async function renderUsers() {
     S.users = data.users;
   } catch (e) { toast(e.message, 'error'); return; }
 
+  // Stand der Überstunden-Auszahlungen mitladen.
+  //
+  // Ohne das erfährt der Chef NIE, was aus seiner Anfrage geworden ist: Er stellt sie, der
+  // Mitarbeiter entscheidet — und kein Signal geht zurück. Eine eigene Push-Kategorie wäre der
+  // schwerere Weg (Schema, Einstellungen, Tests); die Liste ist die Stelle, an der er ohnehin
+  // nachsieht. Ein Fehlschlag hier darf die Liste nicht verhindern.
+  const auszahlungStand = {};
+  try {
+    for (const z of ((await api('GET', '/api/payouts')) || {}).auszahlungen || []) {
+      // Die Liste kommt neueste zuerst — die ERSTE Zeile je Mitarbeiter ist die jüngste.
+      if (!auszahlungStand[z.user_id]) auszahlungStand[z.user_id] = z;
+    }
+  } catch (_) { /* Auszahlungen sind ein Zusatz, keine Voraussetzung */ }
+
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
     <div class="card">
@@ -1020,7 +1034,13 @@ async function renderUsers() {
               <tr data-suchtext="${esc([u.name, u.username, roleName(u.role)].join(' '))}">
                 <td><span class="zelle-mit-bild">${avatarHtml(u, 26)}<span>${esc(u.name)}</span>${
                   austrittVorgemerktAm(u) ? `<span class="austritt-vormerkung" title="Der Zugang bleibt bis einschließlich diesem Tag bestehen">scheidet aus zum ${formatDateDE(austrittVorgemerktAm(u))}</span>` : ''
-                }</span></td>
+                }${(() => {
+                  const z = auszahlungStand[u.id];
+                  if (!z || (z.status !== 'offen' && z.status !== 'abgelehnt')) return '';
+                  return z.status === 'offen'
+                    ? `<span class="auszahlung-marke offen" title="Wartet auf seine Entscheidung">Auszahlung offen: ${esc(fmtH(Number(z.stunden)))} h</span>`
+                    : `<span class="auszahlung-marke abgelehnt" title="${esc(z.grund || '')}">Auszahlung abgelehnt</span>`;
+                })()}</span></td>
                 <td>${esc(u.username)}</td>
                 <td><span class="badge badge-${u.role}">${roleName(u.role)}</span></td>
                 <td>${u.target_hours_per_week}</td>
@@ -2536,16 +2556,39 @@ async function kontoWarnungenKarte() {
  * kommt, wird überall gekennzeichnet (siehe routes/payouts.js).
  */
 async function auszahlungAnlegen(userId, name) {
-  let stand = null, offen = 0;
+  let stand = null, offen = 0, frueher = [];
   try {
     const r = await api('GET', `/api/payouts/stand/${userId}`);
     stand = Number(r.ueberstunden); offen = Number(r.offen) || 0;
   } catch (_) { /* Stand ist ein Komfort, kein Muss */ }
+  try {
+    frueher = (((await api('GET', `/api/payouts?user_id=${userId}`)) || {}).auszahlungen || [])
+      .filter(z => z.status !== 'offen').slice(0, 3);
+  } catch (_) { /* dito */ }
 
   if (offen > 0) {
     toast(`Für ${name} ist bereits eine Auszahlung über ${fmtH(offen)} h offen.`, 'error');
     return;
   }
+
+  // Was zuletzt geschah — vor allem eine ABLEHNUNG samt Begründung. Der Chef hat die Anfrage
+  // gestellt und bekommt sonst nie zu sehen, was daraus geworden ist; hier ist die Stelle, an der
+  // er als Nächstes handelt.
+  const statusWort = { bestaetigt: 'ausgezahlt', abgelehnt: 'abgelehnt', zurueckgezogen: 'zurückgezogen' };
+  const verlaufHtml = frueher.length ? `
+    <div style="margin-top:.9rem; padding-top:.7rem; border-top:1px solid var(--border)">
+      <div style="font-size:.8rem; font-weight:600; margin-bottom:.3rem">Bisher</div>
+      <table style="border-collapse:collapse; font-size:.8rem">
+        ${frueher.map(z => `<tr>
+          <td style="padding:.15rem .6rem .15rem 0; white-space:nowrap"><strong>${esc(fmtH(Number(z.stunden)))} h</strong></td>
+          <td style="padding:.15rem .6rem .15rem 0; white-space:nowrap; color:var(--text-light)">${
+            esc(new Date(z.wirksam_ab + 'T12:00:00').toLocaleDateString('de-DE'))}</td>
+          <td style="padding:.15rem 0">${esc(statusWort[z.status] || z.status)}${
+            z.per_unterschrift ? ' <span style="color:var(--text-light)">(per Unterschrift)</span>' : ''
+          }${z.grund ? ` — <em>${esc(z.grund)}</em>` : ''}</td>
+        </tr>`).join('')}
+      </table>
+    </div>` : '';
 
   const heute = new Date().toLocaleDateString('sv-SE');
   const overlay = document.createElement('div');
@@ -2574,6 +2617,7 @@ async function auszahlungAnlegen(userId, name) {
             Dieser Weg wird überall als „per Unterschrift" gekennzeichnet.</span></span>
         </label>
         <div id="az-fehler" style="color:#dc2626;font-size:.85rem;margin-top:.5rem;display:none"></div>
+        ${verlaufHtml}
       </div>
       <div class="modal-footer" style="display:flex;gap:.5rem;justify-content:flex-end;padding:1rem">
         <button class="btn btn-outline" data-act="cancel">Abbrechen</button>

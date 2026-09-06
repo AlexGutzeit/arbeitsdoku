@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**204 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**205 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -72,6 +72,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `ausstellen-zweifaktor.js` | Was bleibt liegen, wenn jemand ausgestellt wird? (Alex, 25.08.2026) |
 | `austritt-vormerken-ui.js` | Vorgemerkter Austritt in der Oberfläche (Alex, 04.09.2026). |
 | `austritt-vormerken.js` | Ausstellen mit ZUKÜNFTIGEM Austrittsdatum: vormerken statt sofort aussperren. |
+| `auszahlung-ablehnung.js` | Was passiert, wenn der Mitarbeiter eine Auszahlung ABLEHNT (Alex, 06.09.2026)? |
 | `auszahlung-durchrechnung.js` | Alex' Szenario, Ende zu Ende durchgerechnet (06.09.2026): |
 | `auszahlung-gesamtbild.js` | Das GESAMTBILD (Alex, 06.09.2026): mehrere Aufbau-Phasen, Freizeitausgleich dazwischen, |
 | `auth-active-guard.js` | API-Test (B1): Ein bereits ausgestelltes JWT wird sofort abgelehnt (401), sobald der Nutzer ausgestellt ist — |
