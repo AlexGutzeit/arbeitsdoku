@@ -221,6 +221,36 @@ const rund = (n) => Math.round((Number(n) || 0) * 100) / 100;
     ok('… der ursprünglich gewünschte Tag steht im Protokoll',
       !!prot2 && prot2.details.includes(`${vormonat}-15`), JSON.stringify(prot2));
 
+    console.log('\n── Spät bestätigt: der abgerechnete Monat darf sich NICHT bewegen ──');
+    // Alex' Frage (06.09.2026): "Was, wenn der MA die Auszahlung bis zu diesem Datum nicht
+    // annimmt?" Antwort: Sie verfaellt NICHT, sie bleibt offen. Genau daraus entsteht aber der
+    // Fehler, den diese Pruefung festhaelt — zwischen Anlegen und Zustimmen kann ein
+    // Monatsabschluss liegen. Gemessen sprang die Spalte "Auszahlung Stunden" im laengst
+    // abgerechneten Monat von 0 auf 20 und der eingefrorene Stand von -68 auf -88.
+    // Deshalb wird der Stichtag beim BESTAETIGEN noch einmal geprueft, nicht nur beim Anlegen.
+    const s3 = await anlegen('spaetzu', 'Sina Spätzu');
+    const s3Tok = await anMit('spaetzu');
+    db.prepare('UPDATE employment_periods SET start_date = ? WHERE user_id = ?').run(`${vormonat}-01`, s3.id);
+    // Der Vormonat ist bereits abgeschlossen — eine Anfrage mit einem Stichtag DARIN bekommt beim
+    // Anlegen schon den gezogenen Tag. Fuer den Fall "beim Anlegen noch offen" wird der Stichtag
+    // deshalb direkt in der Datenbank auf den alten Tag zurueckgesetzt.
+    const a5 = await req('POST', '/api/payouts', chef, { user_id: s3.id, stunden: 20, wirksam_ab: heute });
+    ok('Aufbau: Anfrage steht offen', a5.status === 201 && a5.body.auszahlung.status === 'offen', String(a5.status));
+    db.prepare('UPDATE overtime_payouts SET wirksam_ab = ? WHERE id = ?').run(`${vormonat}-15`, a5.body.auszahlung.id);
+
+    const csvVor = (await req('GET', `/api/payroll/monat.csv?month=${vormonat}`, admin)).text;
+    const spaetBest = await req('POST', `/api/payouts/${a5.body.auszahlung.id}/bestaetigen`, s3Tok, {});
+    ok('… sie lässt sich weiterhin bestätigen (sie verfällt nicht)', spaetBest.status === 200, String(spaetBest.status));
+    ok('… der Stichtag wird auf den ersten offenen Tag gezogen',
+      spaetBest.body.auszahlung.wirksam_ab > `${vormonat}-31`, JSON.stringify(spaetBest.body.auszahlung.wirksam_ab));
+    ok('… und die Verschiebung wird gesagt',
+      (spaetBest.body.warnungen || []).some(w => /abgerechnet/i.test(w)), JSON.stringify(spaetBest.body.warnungen));
+    const csvNach = (await req('GET', `/api/payroll/monat.csv?month=${vormonat}`, admin)).text;
+    ok('… der abgerechnete Monat bleibt ZEICHENGLEICH', csvVor === csvNach,
+      csvVor === csvNach ? '' : 'CSV hat sich geändert');
+    ok('… die Stunden gehen trotzdem ab', rund(auszahlungenSumme(db, s3.id, plus(400))) === 20,
+      String(auszahlungenSumme(db, s3.id, plus(400))));
+
     console.log('\n── Sichtbarkeit ──');
     const eigene = await req('GET', '/api/payouts', mTok);
     ok('der Mitarbeiter sieht seine eigenen', eigene.status === 200 && (eigene.body.auszahlungen || []).length > 0,

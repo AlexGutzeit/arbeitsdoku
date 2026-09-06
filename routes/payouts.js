@@ -177,6 +177,23 @@ function entscheiden(req, res, neuerStatus) {
     return res.status(400).json({ error: `Bitte einen Grund angeben (mindestens ${MIN_GRUND} Zeichen).` });
   }
 
+  // Der Stichtag wird beim BESTAETIGEN noch einmal geprueft — nicht nur beim Anlegen.
+  //
+  // Eine Anfrage verfaellt nicht: Sie bleibt offen, bis der Mitarbeiter entscheidet. Zwischen
+  // Anlegen und Zustimmen kann aber ein Monatsabschluss liegen. Ohne diese zweite Pruefung landete
+  // die Auszahlung dann in einem Monat, der laengst abgerechnet und ans Lohnbuero gegeben war:
+  // gemessen sprang die Spalte "Auszahlung Stunden" dort von 0 auf 20 und der eingefrorene
+  // Ueberstundenstand von -68 auf -88. Ein Abschluss, der sich nachtraeglich bewegt, ist das
+  // Gegenteil von revisionssicher.
+  let gezogen = null;
+  if (neuerStatus === BESTAETIGT) {
+    const r = wirksamAbZiehen(db, z.wirksam_ab);
+    if (r.gezogenVon) {
+      gezogen = r;
+      db.prepare('UPDATE overtime_payouts SET wirksam_ab = ? WHERE id = ?').run(r.wirksamAb, z.id);
+    }
+  }
+
   db.prepare(
     'UPDATE overtime_payouts SET status = ?, grund = ?, entschieden_am = ?, entschieden_von = ?, entschieden_von_name = ? WHERE id = ?'
   ).run(neuerStatus, neuerStatus === ABGELEHNT ? grund : null, berlinNow(), req.user.id, req.user.username, z.id);
@@ -184,13 +201,18 @@ function entscheiden(req, res, neuerStatus) {
   logAudit(db, {
     userId: req.user.id, username: req.user.username,
     action: neuerStatus === BESTAETIGT ? 'overtime_payout_confirm' : 'overtime_payout_reject',
-    details: `${z.stunden} h zur Auszahlung (wirksam ab ${z.wirksam_ab}) ${neuerStatus === BESTAETIGT ? 'bestätigt' : 'abgelehnt'}`
+    details: `${z.stunden} h zur Auszahlung (wirksam ab ${gezogen ? gezogen.wirksamAb : z.wirksam_ab}) ${neuerStatus === BESTAETIGT ? 'bestätigt' : 'abgelehnt'}`
+      + (gezogen ? ` — gewünscht war ${gezogen.gezogenVon}, dieser Zeitraum ist seit dem Anlegen abgeschlossen (bis ${gezogen.abschlussBis})` : '')
       + (grund ? `: ${grund}` : ''),
     ip: req.ip,
   });
 
   broadcast('payouts');
-  res.json({ success: true, auszahlung: fuerAnzeige(zeile(db, z.id)) });
+  res.json({ success: true, auszahlung: fuerAnzeige(zeile(db, z.id)),
+    warnungen: gezogen
+      ? [`Der ${deDatum(gezogen.gezogenVon)} ist inzwischen abgerechnet (bis ${deDatum(gezogen.abschlussBis)}). `
+         + `Die Auszahlung wirkt deshalb ab ${deDatum(gezogen.wirksamAb)}.`]
+      : [] });
 }
 
 router.post('/:id/bestaetigen', authenticate, (req, res) => entscheiden(req, res, BESTAETIGT));

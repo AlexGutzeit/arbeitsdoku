@@ -317,6 +317,8 @@ router.get('/export', authenticate, (req, res) => {
       userStats.push({
         name: u.name, ist: h.istStunden, soll: h.sollStunden,
         ueber: h.saldo, ueber_gesamt: h.ueberstundenGesamt,
+        // Steckt in ueber_gesamt bereits abgezogen drin — hier nur, um die Zahl zu ERKLAEREN.
+        ausgezahlt: h.ausgezahlt || 0,
       });
     }
 
@@ -326,6 +328,7 @@ router.get('/export', authenticate, (req, res) => {
     const totalIstAlle = userStats.reduce((s, u) => s + u.ist, 0);
     const totalUeber = totalIstAlle - totalSoll;
     const totalUeberGesamt = userStats.reduce((s, u) => s + u.ueber_gesamt, 0);
+    const totalAusgezahlt = userStats.reduce((s, u) => s + (u.ausgezahlt || 0), 0);
 
     // Zusammenfassung Text
     doc.font('Helvetica').fontSize(9);
@@ -343,6 +346,15 @@ router.get('/export', authenticate, (req, res) => {
     ensureSpace(14);
     doc.text(`Differenz (Zeitraum): ${prefix}${fmtH(totalUeber)}`, 40, y);
     y += 14;
+    // Ausgezahlte Ueberstunden ausdruecklich nennen. Ohne diese Zeile stand hier "Differenz
+    // (Zeitraum): +263:00" ueber "Ueberstunden gesamt: +211:00" — und die 52 Stunden Unterschied
+    // waren NIRGENDS erklaert. Ein Nachweis, den man einem Mitarbeiter in die Hand gibt, muss seine
+    // eigene Zahl begruenden koennen.
+    if (totalAusgezahlt) {
+      ensureSpace(14);
+      doc.text(`davon ausgezahlt: -${fmtH(totalAusgezahlt)}`, 40, y);
+      y += 14;
+    }
     const prefixG = totalUeberGesamt >= 0 ? '+' : '';
     ensureSpace(14);
     doc.text(`Überstunden gesamt: ${prefixG}${fmtH(totalUeberGesamt)}`, 40, y);
