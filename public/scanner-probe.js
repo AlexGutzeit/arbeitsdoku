@@ -55,8 +55,16 @@
     versuche = 0; ersterTrefferMs = null; beginn = performance.now();
     try {
       melde('Kamera wird angefragt …');
+      // Höhere Auflösung ANFRAGEN, nicht erzwingen: Ein Barcode liegt quer, ein breiteres Bild
+      // trifft ihn besser. Alex' Gerät lieferte auf 1280×720 hin ein hochkantes 720×1280 —
+      // das Handy dreht, wie es mag. `ideal` lässt ihm die Wahl, statt die Kamera abzuweisen.
       strom = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 }, height: { ideal: 1080 },
+          // Autofokus dauerhaft — bei Barcodes im Regal der wichtigste Einzelwert.
+          focusMode: { ideal: 'continuous' },
+        },
         audio: false,
       });
     } catch (e) {
@@ -82,9 +90,26 @@
         + 'bei iPhones ist das immer so, bei Android je nach Modell und Browser. '
         + 'Im Lager hilft dann nur das Licht im Raum oder die Taschenlampe im Handy-Menü.';
     $('fakten').insertAdjacentHTML('beforeend',
-        zeile('Kamera-Auflösung', (f.width || '?') + '×' + (f.height || '?'))
+        zeile('Kamera-Auflösung', (f.width || '?') + '×' + (f.height || '?')
+              + ((f.width && f.height && f.height > f.width) ? ' (hochkant)' : ''))
       + zeile('Taschenlampe schaltbar', jaNein(hatLicht))
-      + zeile('Zoom steuerbar', jaNein(!!koennen.zoom)));
+      + zeile('Zoom steuerbar', jaNein(!!koennen.zoom))
+      + zeile('Autofokus', (f.focusMode || koennen.focusMode && koennen.focusMode.join('/') || 'nicht auslesbar')));
+
+    // Zoom ist auf Alex' Android verfügbar, die Taschenlampe nicht. Bei wenig Licht ist Zoom oft
+    // der bessere Hebel — deshalb hier ausprobierbar machen statt nur anzeigen.
+    if (koennen.zoom) {
+      const z = $('zoom');
+      z.min = koennen.zoom.min; z.max = koennen.zoom.max;
+      z.step = koennen.zoom.step || 0.1; z.value = f.zoom || koennen.zoom.min;
+      $('zoomwert').textContent = `(${(+z.value).toFixed(1)}× von ${koennen.zoom.min}–${koennen.zoom.max}×)`;
+      $('zoombox').style.display = '';
+      z.addEventListener('input', async () => {
+        $('zoomwert').textContent = `(${(+z.value).toFixed(1)}× von ${koennen.zoom.min}–${koennen.zoom.max}×)`;
+        try { await spur.applyConstraints({ advanced: [{ zoom: +z.value }] }); }
+        catch (e) { melde('Zoom ließ sich nicht setzen: ' + e.message, 'schlecht'); }
+      });
+    }
 
     if (hatNativ) {
       try { nativDetector = new BarcodeDetector(); } catch (_) { nativDetector = null; }
@@ -128,6 +153,7 @@
     if (strom) { strom.getTracks().forEach(t => t.stop()); strom = null; }
     $('video').srcObject = null;
     licht = false;
+    $('zoombox').style.display = 'none';
     $('licht').disabled = true;
     $('licht').classList.remove('an');
     $('licht').textContent = 'Taschenlampe der Kamera';
