@@ -44,6 +44,9 @@
   // Ausserdem wird der echte Scanner genau EINMAL lesen und dann aufhoeren; das laesst sich hier
   // mit dem Haken ausprobieren.
   function treffer(text, format, weg, ms) {
+    // Letzter Riegel: Meldet eine ueberlebende Schleife trotzdem noch, wird sie ignoriert.
+    // Drei Riegel statt einem, weil der Fehler genau daran lag, dass EINER nicht gehalten hat.
+    if (!laeuft) return;
     const neu = !gesehen.has(text);
     if (ersterTrefferMs === null) ersterTrefferMs = ms;
     const e = gesehen.get(text) || { n: 0, format, weg, ersteMs: ms };
@@ -71,7 +74,11 @@
   }
 
   async function start() {
-    if (laeuft) return;
+    // IMMER erst aufraeumen. Ohne das legte jeder Start einen weiteren Decoder an, waehrend der
+    // alte weiterlief — die Schleifen summierten sich und meldeten Treffer, obwohl "gestoppt"
+    // dastand. Genau das hat Alex gesehen: 33 Bestaetigungen bei angehaktem "einmal stoppen".
+    stop();
+    await new Promise(r => setTimeout(r, 150));
     versuche = 0; ersterTrefferMs = null; beginn = performance.now();
     gesehen.clear();
     $('treffer').dataset.leer = '1'; $('treffer').innerHTML = '<li>noch keiner</li>';
@@ -112,12 +119,18 @@
       : 'Die LED neben der Kamera. DIESES GERÄT GIBT SIE ÜBER DEN BROWSER NICHT HER — '
         + 'bei iPhones ist das immer so, bei Android je nach Modell und Browser. '
         + 'Im Lager hilft dann nur das Licht im Raum oder die Taschenlampe im Handy-Menü.';
+    // ERSETZEN, nicht anhaengen: Bei jedem Start kamen sonst vier weitere Zeilen dazu — nach
+    // sechs Versuchen stand die Tabelle sechsmal da. Von Alex im Betrieb gefunden.
+    const alt = $('fakten').querySelector('#kamerafakten');
+    if (alt) alt.remove();
     $('fakten').insertAdjacentHTML('beforeend',
-        zeile('Kamera-Auflösung', (f.width || '?') + '×' + (f.height || '?')
+      '<tbody id="kamerafakten">'
+      + zeile('Kamera-Auflösung', (f.width || '?') + '×' + (f.height || '?')
               + ((f.width && f.height && f.height > f.width) ? ' (hochkant)' : ''))
       + zeile('Taschenlampe schaltbar', jaNein(hatLicht))
       + zeile('Zoom steuerbar', jaNein(!!koennen.zoom))
-      + zeile('Autofokus', (f.focusMode || koennen.focusMode && koennen.focusMode.join('/') || 'nicht auslesbar')));
+      + zeile('Autofokus', (f.focusMode || koennen.focusMode && koennen.focusMode.join('/') || 'nicht auslesbar'))
+      + '</tbody>');
 
     // Zoom ist auf Alex' Android verfügbar, die Taschenlampe nicht. Bei wenig Licht ist Zoom oft
     // der bessere Hebel — deshalb hier ausprobierbar machen statt nur anzeigen.
@@ -172,7 +185,14 @@
 
   function stop() {
     laeuft = false;
-    if (zxingLeser) { try { zxingLeser.reset(); } catch (_) {} zxingLeser = null; }
+    nativDetector = null;
+    if (zxingLeser) {
+      // BEIDES: stopContinuousDecode beendet die Schleife, reset gibt die Kameraspur frei.
+      // reset() allein liess die Schleife in dieser Fassung weiterlaufen.
+      try { zxingLeser.stopContinuousDecode(); } catch (_) {}
+      try { zxingLeser.reset(); } catch (_) {}
+      zxingLeser = null;
+    }
     if (strom) { strom.getTracks().forEach(t => t.stop()); strom = null; }
     $('video').srcObject = null;
     licht = false;
