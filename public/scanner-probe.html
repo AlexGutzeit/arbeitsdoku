@@ -26,6 +26,14 @@
   #treffer li:last-child { border-bottom:none }
   code { background:#f1f5f9; padding:.1rem .3rem; border-radius:4px; font-size:.85em }
   .hinweis { font-size:.8rem; color:var(--grau); margin-top:.5rem }
+  /* Die Rueckmeldung stand vorher UNTER dem Videobild — auf dem Handy schiebt sich die Kamera
+     davor und man sieht sie nie. Jetzt oben und deutlich. */
+  .melde { font-size:.9rem; padding:.5rem .7rem; border-radius:8px; margin-bottom:.7rem;
+           background:#f1f5f9; border-left:4px solid #94a3b8 }
+  .melde.gut { background:#dcfce7; border-left-color:#22c55e }
+  .melde.schlecht { background:#fef3c7; border-left-color:#f59e0b }
+  button[disabled] { opacity:.45; cursor:not-allowed }
+  button.an { background:#fde68a; border-color:#f59e0b }
 </style>
 </head>
 <body>
@@ -39,11 +47,13 @@
 
 <div class="karte">
   <h2>Kamera</h2>
+  <div id="status" class="melde">Noch nicht gestartet.</div>
   <button class="haupt" id="start">Scanner starten</button>
   <button id="stop">Stoppen</button>
-  <button id="licht">Licht an/aus</button>
+  <button id="licht" disabled>Taschenlampe der Kamera</button>
+  <div class="hinweis" id="lichtinfo">Die LED neben der Kamera — für dunkle Regale.
+    Ob sie sich schalten lässt, steht fest, sobald die Kamera läuft.</div>
   <video id="video" playsinline muted autoplay></video>
-  <div class="hinweis" id="status">Noch nicht gestartet.</div>
 </div>
 
 <div class="karte">

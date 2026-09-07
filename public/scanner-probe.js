@@ -31,7 +31,11 @@
   let versuche = 0, ersterTrefferMs = null, beginn = 0;
   const gesehen = new Map();
 
-  function melde(t) { $('status').textContent = t; }
+  function melde(t, art) {
+    const el = $('status');
+    el.textContent = t;
+    el.className = 'melde' + (art ? ' ' + art : '');
+  }
 
   function treffer(text, format, weg, ms) {
     if (ersterTrefferMs === null) ersterTrefferMs = ms;
@@ -64,7 +68,23 @@
     laeuft = true;
     const spur = strom.getVideoTracks()[0];
     const f = spur.getSettings ? spur.getSettings() : {};
-    melde(`Kamera läuft (${f.width || '?'}×${f.height || '?'}). Barcode ins Bild halten.`);
+    melde(`Kamera läuft (${f.width || '?'}×${f.height || '?'}). Barcode ins Bild halten.`, 'gut');
+
+    // Taschenlampe: erst JETZT lässt sich sagen, ob das Gerät sie über den Browser hergibt —
+    // `getCapabilities()` liefert erst an einer laufenden Spur etwas. Der Knopf war vorher
+    // immer anklickbar und die Absage verschwand in einer Zeile unter dem Videobild.
+    const koennen = spur.getCapabilities ? spur.getCapabilities() : {};
+    const hatLicht = !!koennen.torch;
+    $('licht').disabled = !hatLicht;
+    $('lichtinfo').textContent = hatLicht
+      ? 'Die LED neben der Kamera — für dunkle Regale. Dieses Gerät kann sie schalten.'
+      : 'Die LED neben der Kamera. DIESES GERÄT GIBT SIE ÜBER DEN BROWSER NICHT HER — '
+        + 'bei iPhones ist das immer so, bei Android je nach Modell und Browser. '
+        + 'Im Lager hilft dann nur das Licht im Raum oder die Taschenlampe im Handy-Menü.';
+    $('fakten').insertAdjacentHTML('beforeend',
+        zeile('Kamera-Auflösung', (f.width || '?') + '×' + (f.height || '?'))
+      + zeile('Taschenlampe schaltbar', jaNein(hatLicht))
+      + zeile('Zoom steuerbar', jaNein(!!koennen.zoom)));
 
     if (hatNativ) {
       try { nativDetector = new BarcodeDetector(); } catch (_) { nativDetector = null; }
@@ -107,18 +127,31 @@
     if (zxingLeser) { try { zxingLeser.reset(); } catch (_) {} zxingLeser = null; }
     if (strom) { strom.getTracks().forEach(t => t.stop()); strom = null; }
     $('video').srcObject = null;
+    licht = false;
+    $('licht').disabled = true;
+    $('licht').classList.remove('an');
+    $('licht').textContent = 'Taschenlampe der Kamera';
     melde('Gestoppt.');
   }
 
   let licht = false;
   async function lichtSchalten() {
-    if (!strom) return melde('Erst starten.');
+    if (!strom) return melde('Erst „Scanner starten" antippen.', 'schlecht');
     const spur = strom.getVideoTracks()[0];
-    const f = spur.getCapabilities ? spur.getCapabilities() : {};
-    if (!f.torch) return melde('Dieses Gerät bietet kein schaltbares Licht im Browser.');
+    const koennen = spur.getCapabilities ? spur.getCapabilities() : {};
+    if (!koennen.torch) {
+      return melde('Dieses Gerät gibt die Taschenlampe über den Browser nicht her.', 'schlecht');
+    }
     licht = !licht;
-    try { await spur.applyConstraints({ advanced: [{ torch: licht }] }); melde('Licht ' + (licht ? 'an' : 'aus')); }
-    catch (e) { melde('Licht ließ sich nicht schalten: ' + e.message); }
+    try {
+      await spur.applyConstraints({ advanced: [{ torch: licht }] });
+      $('licht').classList.toggle('an', licht);
+      $('licht').textContent = licht ? 'Taschenlampe AN — antippen zum Ausschalten' : 'Taschenlampe der Kamera';
+      melde('Taschenlampe ' + (licht ? 'eingeschaltet' : 'ausgeschaltet') + '.', licht ? 'gut' : null);
+    } catch (e) {
+      licht = false;
+      melde('Die Taschenlampe ließ sich nicht schalten: ' + e.message, 'schlecht');
+    }
   }
 
   $('start').addEventListener('click', start);
