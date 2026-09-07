@@ -72,7 +72,12 @@ function werktage(v, b) { const o = []; const d = new Date(heute); d.setUTCDate(
     for (const t of tage) await req('POST', '/api/entries', mTok, {
       date: t, time_from: '07:00', time_to: '17:00', break_minutes: 0, description: 'Arbeit' });
 
-    const stand = async () => (await req('GET', `/api/statistics/overtime?user_id=${u.id}&date_to=${iso(heute)}`, admin)).body.overtime;
+    // ZEITFALLE: bis zum LETZTEN GEBUCHTEN Tag messen, nicht bis „heute". Gebucht ist bis gestern;
+    // faellt heute auf einen Werktag, laeuft dessen Soll ohne Ist mit und der Stand ist 8 h
+    // niedriger. Geschrieben an einem Sonntag (da 0 Soll), am Montag darauf rot
+    // ([[reference_tests_zeitfallen]]).
+    const letzterTag = tage[tage.length - 1];
+    const stand = async () => (await req('GET', `/api/statistics/overtime?user_id=${u.id}&date_to=${letzterTag}`, admin)).body.overtime;
     const vorher = await stand();
     ok(`Aufbau: ${tage.length} Tage à 10 h → Stand ${rund(vorher)} h`, rund(vorher) === tage.length * 2, String(vorher));
 
@@ -131,7 +136,9 @@ function werktage(v, b) { const o = []; const d = new Date(heute); d.setUTCDate(
       Number(String(z[kopf.indexOf('Auszahlung Stunden')]).replace(',', '.')) === 0, JSON.stringify(z[kopf.indexOf('Auszahlung Stunden')]));
     ok('… und „Auszahlung Beleg" bleibt leer', !z[kopf.indexOf('Auszahlung Beleg')], JSON.stringify(z[kopf.indexOf('Auszahlung Beleg')]));
 
-    const pdf = await req('GET', `/api/pdf/export?user_id=${u.id}&date_from=${tage[0]}&date_to=${iso(heute)}`, admin, null, true);
+    // Denselben Zeitraum wie `stand()` — sonst enthaelt das PDF das heutige Soll ohne Ist und
+    // weicht genau um ein Tagessoll ab.
+    const pdf = await req('GET', `/api/pdf/export?user_id=${u.id}&date_from=${tage[0]}&date_to=${letzterTag}`, admin, null, true);
     fs.writeFileSync('/tmp/auszahlung-ablehnung.pdf', pdf.buf);
     let text = '';
     try {
