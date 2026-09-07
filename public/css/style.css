@@ -2369,6 +2369,37 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .auszahlung-marke.abgelehnt { color: #92400e; background: #fef3c7; border: 1px solid #fcd34d; }
 .auszahlung-marke.bestaetigt { color: #14532d; background: #dcfce7; border: 1px solid #86efac; }
 
+/* Vorschlagsliste im Produktfeld. Sie LIEGT ÜBER dem Formular, statt es aufzuschieben — ein Feld,
+   unter dem beim Tippen der Rest wegspringt, ist auf dem Handy unbedienbar. Höhe begrenzt und
+   scrollbar, damit man auch stöbern kann, ohne die halbe Seite zu füllen. */
+.produkt-vorschlaege {
+  position: absolute; z-index: 30; left: 0; right: 0; top: 100%;
+  margin: 2px 0 0; padding: 0; list-style: none;
+  max-height: 15rem; overflow-y: auto;
+  background: var(--card-bg, #fff); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.12);
+}
+.produkt-vorschlaege li {
+  padding: .55rem .7rem; cursor: pointer; font-size: .9rem;
+  display: flex; justify-content: space-between; gap: .5rem; align-items: baseline;
+  border-bottom: 1px solid var(--border);
+}
+.produkt-vorschlaege li:last-child { border-bottom: none; }
+.produkt-vorschlaege li:hover,
+.produkt-vorschlaege li:focus { background: var(--bg); }
+.produkt-vorschlaege .kat { color: var(--text-light); font-size: .78rem; white-space: nowrap; }
+/* Der Produktname darf nicht mitten im Wort umbrechen; lieber die Kategorie schrumpfen lassen. */
+.produkt-vorschlaege li > :first-child { min-width: 0; }
+
+/* Auf dem Handy bekommen Produktfeld und Kategorie die VOLLE Breite. Nebeneinander bleiben bei
+   390 px je gut 160 px übrig — die Namen brechen dann mitten im Wort um („Kabelbinder / 200 mm"),
+   und die Vorschlagsliste ist so schmal, dass man nichts erkennt. Im Lager wird am Handy getippt,
+   also entscheidet diese Ansicht. */
+@media (max-width: 560px) {
+  .order-form .produkt-gruppe,
+  .order-form .kategorie-gruppe { flex: 1 1 100% !important; width: 100% !important; min-width: 0 !important; }
+}
+
 .austritt-vormerkung { display: inline-block; margin-left: 0.5rem; font-size: 0.72rem;
   color: var(--text-light); background: var(--bg); border: 1px solid var(--border);
   border-radius: 10px; padding: 1px 7px; white-space: nowrap; }

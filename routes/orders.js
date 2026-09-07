@@ -53,8 +53,26 @@ router.get('/ordered', authenticate, (req, res) => {
 });
 
 // Neuen Eintrag erstellen
+/**
+ * Verknuepfung zum Produktverzeichnis pruefen.
+ *
+ * `orders.product` (der TEXT) bleibt die Wahrheit — er wird immer mitgeschrieben. `product_id` ist
+ * nur die Verknuepfung: Wird das Produkt spaeter umbenannt oder geloescht, bleibt die Bestellung
+ * lesbar. Zeigt die Verknuepfung ins Leere, wird sie still verworfen statt die Bestellung
+ * abzuweisen — eine Bestellung darf nicht daran scheitern, dass ein Katalogeintrag verschwunden
+ * ist.
+ */
+function pruefeProduktId(db, wert) {
+  const id = Number(wert);
+  if (!wert || !Number.isFinite(id)) return null;
+  try {
+    const p = db.prepare('SELECT id FROM products WHERE id = ? AND deleted_at IS NULL').get(id);
+    return p ? p.id : null;
+  } catch (_) { return null; }   // Tabelle fehlt (sehr alte Sicherung)
+}
+
 router.post('/', authenticate, (req, res) => {
-  const { quantity, unit, product, comment, project_id } = req.body;
+  const { quantity, unit, product, comment, project_id, product_id } = req.body;
   if (!product || !product.trim()) {
     return res.status(400).json({ error: 'Produkt ist erforderlich' });
   }
@@ -68,9 +86,10 @@ router.post('/', authenticate, (req, res) => {
 
   const db = getDb();
   const loc = resolveLocation(db, project_id);
+  const pid = pruefeProduktId(db, product_id);
   const result = db.prepare(
-    'INSERT INTO orders (quantity, unit, product, comment, user_id, project_id, location_text) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, req.user.id, loc.project_id, loc.location_text);
+    'INSERT INTO orders (quantity, unit, product, comment, user_id, project_id, location_text, product_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, req.user.id, loc.project_id, loc.location_text, pid);
 
   const order = db.prepare(`
     SELECT o.*, u.name as user_name
@@ -107,7 +126,7 @@ router.put('/:id', authenticate, (req, res) => {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
 
-  const { quantity, unit, product, comment, project_id } = req.body;
+  const { quantity, unit, product, comment, project_id, product_id } = req.body;
   if (!product || !product.trim()) {
     return res.status(400).json({ error: 'Produkt ist erforderlich' });
   }
@@ -121,8 +140,8 @@ router.put('/:id', authenticate, (req, res) => {
 
   const loc = resolveLocation(db, project_id);
   db.prepare(
-    'UPDATE orders SET quantity = ?, unit = ?, product = ?, comment = ?, project_id = ?, location_text = ? WHERE id = ?'
-  ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, loc.project_id, loc.location_text, req.params.id);
+    'UPDATE orders SET quantity = ?, unit = ?, product = ?, comment = ?, project_id = ?, location_text = ?, product_id = ? WHERE id = ?'
+  ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, loc.project_id, loc.location_text, pruefeProduktId(db, product_id), req.params.id);
 
   const updated = db.prepare(`
     SELECT o.*, u.name as user_name

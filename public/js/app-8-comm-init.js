@@ -4,6 +4,14 @@ async function renderOrders() {
   bindLayout();
 
   const manage = darfBestellen();   // Rolle ODER Einzelrecht (s. app-1-core.js)
+
+  // Produktverzeichnis mitladen — in EINEM Zug (Kategorien, Produkte, Barcodes). Ein Fehlschlag
+  // darf die Bestellseite NICHT aufhalten: Der Katalog ist eine Hilfe, kein Voraussetzung. Wer
+  // ihn nicht bekommt, tippt wie bisher.
+  try {
+    const kat = await api('GET', '/api/products/katalog');
+    S.produktKatalog = kat || { kategorien: [], produkte: [] };
+  } catch (_) { S.produktKatalog = S.produktKatalog || { kategorien: [], produkte: [] }; }
   let orders = [];
   try {
     const [oData, pData] = await Promise.all([
@@ -142,10 +150,23 @@ function showOrderForm(editOrder, orders, manage) {
   area.innerHTML = `
     <form id="order-form" class="order-form" style="margin-bottom:1rem">
       <div class="form-row" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end">
-        <div class="form-group" style="flex:1;min-width:150px">
+        <div class="form-group produkt-gruppe" style="flex:1;min-width:150px;position:relative">
           <label>Produkt *</label>
-          <input type="text" id="of-product" class="form-control" value="${esc(product)}" required>
+          <input type="text" id="of-product" class="form-control" value="${esc(product)}" required
+                 autocomplete="off" placeholder="tippen — bekannte Produkte erscheinen">
+          <!-- Die Vorschlagsliste liegt UEBER dem Formular (position:absolute), damit sie beim
+               Tippen nichts verschiebt. Ein Feld, unter dem der Rest wegspringt, ist auf dem Handy
+               unbedienbar. -->
+          <ul id="of-vorschlaege" class="produkt-vorschlaege" style="display:none"></ul>
         </div>
+        ${(S.produktKatalog && S.produktKatalog.kategorien.length) ? `
+        <div class="form-group kategorie-gruppe" style="width:170px">
+          <label>Kategorie</label>
+          <select id="of-kategorie" class="form-control">
+            <option value="">alle</option>
+            ${S.produktKatalog.kategorien.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('')}
+          </select>
+        </div>` : ''}
         <div class="form-group" style="flex:1;min-width:150px">
           <label>Kommentar</label>
           <input type="text" id="of-comment" class="form-control" value="${esc(comment)}">
@@ -177,6 +198,7 @@ function showOrderForm(editOrder, orders, manage) {
 
   document.getElementById('of-product').focus();
   document.getElementById('of-cancel').addEventListener('click', () => { area.innerHTML = ''; });
+  produktSucheBinden();
 
   const ofEntwurf = 'bestellung:' + (editOrder ? editOrder.id : 'neu');
   initDraftKeeper(document.getElementById('order-form'), ofEntwurf);
@@ -190,6 +212,9 @@ function showOrderForm(editOrder, orders, manage) {
       quantity: qtyNum > 0 ? qtyNum : null,
       unit: document.getElementById('of-unit').value.trim(),
       product: document.getElementById('of-product').value.trim(),
+      // Die VERKNUEPFUNG, nicht die Wahrheit: Der Text oben bleibt das, was bestellt wurde.
+      product_id: document.getElementById('of-product').dataset.produktId
+        ? Number(document.getElementById('of-product').dataset.produktId) : null,
       comment: document.getElementById('of-comment').value.trim(),
       project_id: locVal ? Number(locVal) : null
     };
@@ -204,6 +229,78 @@ function showOrderForm(editOrder, orders, manage) {
       entwurfLoeschen(ofEntwurf);
       renderOrders();
     } catch (err) { toast(err.message, 'error'); }
+  });
+}
+
+/**
+ * Live-Suche im Produktfeld — mit JEDEM getippten Zeichen.
+ *
+ * Das ist nicht Komfort, sondern die Qualitätssicherung des Verzeichnisses: Weil jeder Mitarbeiter
+ * Produkte anlegen darf, entstehen Doppel („Kabelbinder", „kabelbinder", „kabel-binder"). Dagegen
+ * hilft kein Recht, sondern eine Suche, die so gut trifft, dass Anlegen die Ausnahme bleibt.
+ *
+ * Verglichen wird über eine VERGLEICHSFORM (klein, ohne Leerzeichen, Bindestriche, Satzzeichen) —
+ * dieselbe Regel wie im Server (routes/products.js). Ein reiner Textvergleich fände „kabel-binder"
+ * nicht, und genau dort entstehen die Doppel.
+ *
+ * Freier Text bleibt ausdrücklich erlaubt: Wer etwas tippt, das es nicht gibt, bestellt es
+ * trotzdem. Der Katalog ist ein Angebot, keine Schranke.
+ */
+function vergleichsform(s) {
+  return String(s || '').toLowerCase().replace(/[\s\-_.,/()]/g, '');
+}
+
+function produktSucheBinden() {
+  const feld = document.getElementById('of-product');
+  const liste = document.getElementById('of-vorschlaege');
+  const katFeld = document.getElementById('of-kategorie');
+  if (!feld || !liste) return;
+
+  const zeigen = () => {
+    const katalog = (S.produktKatalog && S.produktKatalog.produkte) || [];
+    const q = vergleichsform(feld.value);
+    const kat = katFeld && katFeld.value ? Number(katFeld.value) : null;
+    let treffer = katalog.filter(p => !kat || p.category_id === kat);
+    if (q) treffer = treffer.filter(p => vergleichsform(p.name).includes(q));
+    // Ohne Eingabe die ganze (gefilterte) Liste zeigen — Alex wollte ausdruecklich auch
+    // DURCHSCROLLEN koennen, nicht nur suchen.
+    treffer = treffer.slice(0, 50);
+    // LEEREN, nicht nur verstecken. Sonst bleiben die alten Vorschläge im Dokument stehen und
+    // blitzen beim nächsten Aufklappen kurz auf, bevor die neuen da sind.
+    if (!treffer.length) { liste.innerHTML = ''; liste.style.display = 'none'; return; }
+    const katName = (id) => {
+      const k = ((S.produktKatalog || {}).kategorien || []).find(x => x.id === id);
+      return k ? k.name : '';
+    };
+    liste.innerHTML = treffer.map(p =>
+      `<li data-id="${p.id}" data-name="${esc(p.name)}" data-unit="${esc(p.default_unit || '')}">
+         ${esc(p.name)}${p.category_id ? `<span class="kat">${esc(katName(p.category_id))}</span>` : ''}
+       </li>`).join('');
+    liste.style.display = '';
+  };
+
+  feld.addEventListener('input', zeigen);
+  feld.addEventListener('focus', zeigen);
+  if (katFeld) katFeld.addEventListener('change', zeigen);
+
+  liste.addEventListener('click', (e) => {
+    const li = e.target.closest('li');
+    if (!li) return;
+    feld.value = li.dataset.name;
+    liste.innerHTML = '';
+    const einheit = document.getElementById('of-unit');
+    // Einheit nur vorbelegen, wenn das Feld leer ist — eine getippte Angabe wird nicht ueberschrieben.
+    if (einheit && !einheit.value.trim() && li.dataset.unit) einheit.value = li.dataset.unit;
+    feld.dataset.produktId = li.dataset.id;
+    liste.style.display = 'none';
+    feld.focus();
+  });
+
+  // Wer weiterhin tippt, hat sich vom gewaehlten Produkt geloest.
+  feld.addEventListener('input', () => { delete feld.dataset.produktId; });
+
+  document.addEventListener('click', (e) => {
+    if (!liste.contains(e.target) && e.target !== feld) liste.style.display = 'none';
   });
 }
 

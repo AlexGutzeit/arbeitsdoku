@@ -130,6 +130,21 @@ function req(m, p, t, b) {
     ok('… jedes Produkt hat mindestens einen Barcode',
       k.body.produkte.every(p => p.barcodes.length >= 1), JSON.stringify(k.body.produkte.map(p => p.barcodes.length)));
 
+    console.log('\n── Die Verknüpfung zur Bestellung ──');
+    const mitProdukt = await req('POST', '/api/orders', max, {
+      product: 'Kabelbinder 200 mm', quantity: 5, product_id: p1.body.produkt.id });
+    ok('eine Bestellung mit Katalogprodukt geht', mitProdukt.status === 201, String(mitProdukt.status));
+    const gespeichert = db.prepare('SELECT product, product_id FROM orders WHERE id = ?').get(mitProdukt.body.order.id);
+    ok('… der TEXT ist gespeichert', gespeichert.product === 'Kabelbinder 200 mm', JSON.stringify(gespeichert));
+    ok('… und die Verknüpfung auch', gespeichert.product_id === p1.body.produkt.id, JSON.stringify(gespeichert));
+
+    // Eine ins Leere zeigende Verknuepfung darf die Bestellung NICHT scheitern lassen.
+    const inLeere = await req('POST', '/api/orders', max, { product: 'Irgendwas', product_id: 999999 });
+    ok('eine ungültige Verknüpfung wird still verworfen, nicht abgewiesen', inLeere.status === 201, String(inLeere.status));
+    ok('… und die Bestellung steht trotzdem',
+      db.prepare('SELECT product, product_id FROM orders WHERE id = ?').get(inLeere.body.order.id).product_id === null,
+      JSON.stringify(db.prepare('SELECT product, product_id FROM orders WHERE id = ?').get(inLeere.body.order.id)));
+
     console.log('\n── Bestellungen bleiben unberührt ──');
     const best = await req('GET', '/api/orders', max);
     ok('die getippte Bestellung steht unverändert da',
