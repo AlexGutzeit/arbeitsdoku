@@ -85,7 +85,17 @@
   <!-- Die Bilanz steht OBEN. Vorher stand sie unter der Liste, und die Liste wuchs mit jedem
        gelesenen Bild — die eine Zahl, auf die es ankommt (Zeit bis zum ERSTEN Treffer), war
        damit unauffindbar. Alex' Screenshot hat das gezeigt. -->
+  <!-- Kurzfassung von Geraet und Einstellungen IN DER ERGEBNISKARTE. Grund: Auf dem Handy ist
+       die Liste lang, alles andere liegt ausserhalb des Bildes — und wer einen Screenshot macht,
+       macht ihn von dem, was er sieht. So genuegt EIN Bild dieser Karte. -->
+  <div id="steckbrief" class="hinweis" style="margin:0 0 .6rem;line-height:1.5">wird gefüllt, sobald die Kamera läuft</div>
   <div id="bilanz" class="bilanz">Noch nichts gelesen.</div>
+  <!-- KEIN Versand: Die Seite verspricht oben, nichts zu senden, und das bleibt so. Der Knopf
+       legt den Bericht in die Zwischenablage; wer mag, schickt ihn Alex per Nachricht.
+       OBEN, nicht unten: Unter der Liste war er auf dem Handy nie im Bild. -->
+  <button id="kopieren" class="haupt" style="margin:.7rem 0 .3rem;width:100%">&#128203; Ergebnis kopieren — dann an Alex schicken</button>
+  <div class="hinweis" id="kopierinfo">Kopiert Gerät, Einstellungen und Messwerte als Text.
+    Es wird nichts gesendet und nichts gespeichert.</div>
   <div style="font-size:.85rem;margin:.6rem 0">
     <label for="lesungen" style="font-weight:600">Nötige Lesungen, bevor ein Code gilt</label>
     <select id="lesungen" style="font:inherit;padding:.3rem;border-radius:6px;border:1px solid #cbd5e1;margin-left:.4rem">
@@ -110,12 +120,6 @@
         die es nicht gibt.</span></span>
   </label>
   <ul id="treffer" style="margin:0;padding-left:1.1rem"><li>noch keiner</li></ul>
-  <!-- KEIN Versand: Die Seite verspricht oben, nichts zu senden, und das bleibt so. Der Knopf
-       legt den Bericht in die Zwischenablage; wer mag, schickt ihn Alex per Nachricht. So
-       entscheidet jeder selbst, und es wird nirgends etwas gespeichert. -->
-  <button id="kopieren" style="margin-top:.9rem">&#128203; Ergebnis kopieren — dann an Alex schicken</button>
-  <div class="hinweis" id="kopierinfo">Kopiert Gerätedaten und Messwerte als Text.
-    Es wird nichts gesendet und nichts gespeichert.</div>
 </div>
 
 <script src="/vendor/zxing.min.js"></script>

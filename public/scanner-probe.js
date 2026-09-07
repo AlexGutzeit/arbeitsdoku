@@ -184,6 +184,14 @@
       + zeile('Autofokus', (f.focusMode || koennen.focusMode && koennen.focusMode.join('/') || 'nicht auslesbar'))
       + '</tbody>');
 
+    // Kurzfassung in der Ergebniskarte — damit EIN Screenshot davon alles enthaelt.
+    $('steckbrief').innerHTML =
+      `<strong>${installiert ? 'installierte App' : 'im Browser'}</strong>`
+      + ` · ${hatNativ ? 'nativer Scanner' : 'mitgelieferter Decoder'}`
+      + ` · ${f.width || '?'}×${f.height || '?'}`
+      + ` · Licht ${hatLicht ? 'schaltbar' : 'nicht schaltbar'}`
+      + ` · ${(navigator.userAgent.match(/iPhone|iPad|Android|Firefox|Chrome/) || ['?'])[0]}`;
+
     // Zoom ist auf Alex' Android verfügbar, die Taschenlampe nicht. Bei wenig Licht ist Zoom oft
     // der bessere Hebel — deshalb hier ausprobierbar machen statt nur anzeigen.
     if (koennen.zoom) {
