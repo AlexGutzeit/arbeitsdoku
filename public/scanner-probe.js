@@ -53,7 +53,15 @@
   // Ein echter Barcode wird bei jedem Bild wieder gelesen, eine Fehllesung nicht. Zwei
   // uebereinstimmende Lesungen kosten Bruchteile einer Sekunde und schliessen genau diesen
   // Fall aus.
-  const NOETIGE_LESUNGEN = 2;
+  // Im Feld gemessen (Alex, 07.09.2026, drei Laeufe an einer Strassenlaterne):
+  //   echte Codes:   8, 14, 14, 15, 17, 18, 19, 23, 24, 25, 26, 36, 37 Lesungen
+  //   Fehllesungen:  1, 1, 1, 1, 2, 2 Lesungen
+  // Zwei genuegten NICHT: 4046281411216, 5056891027874 und 5056891027843 kamen mit je zwei
+  // Lesungen durch — alle mit gueltiger Pruefziffer, alle nur in den vorderen Ziffern verfaelscht
+  // (bei EAN-13 steckt die erste Ziffer in der Paritaet der linken Haelfte, dem anfaelligsten
+  // Teil). Drei trennt in diesen Daten sauber, und echte Codes erreichen drei in Bruchteilen
+  // einer Sekunde.
+  const NOETIGE_LESUNGEN = () => Number(($('lesungen') || {}).value || 3);
 
   let strom = null, laeuft = false, nativDetector = null, zxingLeser = null;
   let aktuelleSpur = null;
@@ -80,27 +88,28 @@
     if (ersterTrefferMs === null) ersterTrefferMs = ms;
     const e = gesehen.get(text) || { n: 0, format, weg, ersteMs: ms };
     e.n++; gesehen.set(text, e);
-    const geradeBestaetigt = e.n === NOETIGE_LESUNGEN;
+    const noetig = NOETIGE_LESUNGEN();
+    const geradeBestaetigt = e.n === noetig;
 
     const ul = $('treffer');
     if (ul.dataset.leer !== '0') { ul.innerHTML = ''; ul.dataset.leer = '0'; }
     ul.innerHTML = [...gesehen.entries()].map(([code, d]) => {
-      const sicher = d.n >= NOETIGE_LESUNGEN;
+      const sicher = d.n >= noetig;
       return `<li style="${sicher ? '' : 'opacity:.55'}">`
         + `<code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
         + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms · `
         + (sicher ? `${d.n}× gelesen — bestätigt`
-                  : 'nur EINMAL gelesen — vermutlich Fehllesung, wird nicht übernommen')
+                  : `nur ${d.n}× gelesen (nötig: ${noetig}) — vermutlich Fehllesung, wird nicht übernommen`)
         + '</span></li>';
     }).join('');
 
-    const bestaetigte = [...gesehen.values()].filter(d => d.n >= NOETIGE_LESUNGEN).length;
+    const bestaetigte = [...gesehen.values()].filter(d => d.n >= noetig).length;
     const einzelne = gesehen.size - bestaetigte;
     $('bilanz').className = 'bilanz' + (bestaetigte ? ' gut' : '');
     $('bilanz').textContent =
       `Erster Treffer nach ${(ersterTrefferMs / 1000).toFixed(1)} Sekunden`
       + ` · ${bestaetigte} bestätigt`
-      + (einzelne ? ` · ${einzelne} verworfen (nur einmal gelesen)` : '')
+      + (einzelne ? ` · ${einzelne} verworfen (zu selten gelesen)` : '')
       + ` · ${versuche} Bilder geprüft`
       + (versuche > 5 ? ` (${(versuche / ((performance.now() - beginn) / 1000)).toFixed(1)}/s)` : '');
 
