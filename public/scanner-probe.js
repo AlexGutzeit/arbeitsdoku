@@ -101,7 +101,8 @@
       `Erster Treffer nach ${(ersterTrefferMs / 1000).toFixed(1)} Sekunden`
       + ` · ${bestaetigte} bestätigt`
       + (einzelne ? ` · ${einzelne} verworfen (nur einmal gelesen)` : '')
-      + ` · ${versuche} Bilder geprüft`;
+      + ` · ${versuche} Bilder geprüft`
+      + (versuche > 5 ? ` (${(versuche / ((performance.now() - beginn) / 1000)).toFixed(1)}/s)` : '');
 
     if (geradeBestaetigt && navigator.vibrate) navigator.vibrate(60);
     // So wird der echte Scanner arbeiten: lesen, BESTAETIGEN lassen, dann aufhoeren und das Feld
@@ -124,13 +125,15 @@
     $('bilanz').className = 'bilanz'; $('bilanz').textContent = 'Noch nichts gelesen.';
     try {
       melde('Kamera wird angefragt …');
+      const [wunschBreite, wunschHoehe] =
+        ($('aufloesung') ? $('aufloesung').value : '1920x1080').split('x').map(Number);
       // Höhere Auflösung ANFRAGEN, nicht erzwingen: Ein Barcode liegt quer, ein breiteres Bild
       // trifft ihn besser. Alex' Gerät lieferte auf 1280×720 hin ein hochkantes 720×1280 —
       // das Handy dreht, wie es mag. `ideal` lässt ihm die Wahl, statt die Kamera abzuweisen.
       strom = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'environment' },
-          width: { ideal: 1920 }, height: { ideal: 1080 },
+          width: { ideal: wunschBreite }, height: { ideal: wunschHoehe },
           // Autofokus dauerhaft — bei Barcodes im Regal der wichtigste Einzelwert.
           focusMode: { ideal: 'continuous' },
         },
@@ -211,12 +214,18 @@
         });
       } catch (e) { zxingLeser = null; melde('Decoder ließ sich nicht starten: ' + e.message); }
     }
-    if (hatNativ) schleife();
+    schleife();   // zaehlt Bilder in jedem Fall, entschluesselt nur mit nativem Detektor
   }
 
   // Nur fuer den NATIVEN Weg: BarcodeDetector bekommt das Video-Element direkt.
+  // Laeuft NUR das Buendel (iPhone), zaehlt diese Schleife trotzdem die Bilder mit — sonst
+  // stuende dort „0 Bilder geprueft" und der Vergleich zwischen Aufloesungen waere blind.
   async function schleife() {
-    if (!laeuft || !nativDetector) return;
+    if (!laeuft) return;
+    if (!nativDetector) {
+      if ($('video').readyState >= 2) versuche++;
+      return setTimeout(() => requestAnimationFrame(schleife), 120);
+    }
     const v = $('video');
     if (v.readyState >= 2) {
       versuche++;

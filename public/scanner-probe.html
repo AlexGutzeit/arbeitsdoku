@@ -54,6 +54,17 @@
 <div class="karte">
   <h2>Kamera</h2>
   <div id="status" class="melde">Noch nicht gestartet.</div>
+  <div style="margin-bottom:.6rem;font-size:.85rem">
+    <label for="aufloesung" style="font-weight:600">Auflösung</label>
+    <select id="aufloesung" style="font:inherit;padding:.35rem;border-radius:6px;border:1px solid #cbd5e1;margin-left:.4rem">
+      <option value="1920x1080">hoch (1920×1080)</option>
+      <option value="1280x720">mittel (1280×720)</option>
+      <option value="640x480">niedrig (640×480)</option>
+    </select>
+    <div class="hinweis">Hoch = mehr Bilddetails, aber weniger Versuche pro Sekunde.
+      Niedrig = gröber, dafür öfter. Bei schlechtem Licht ist nicht vorher klar, was gewinnt —
+      deshalb hier vergleichbar. Nach dem Umstellen neu starten.</div>
+  </div>
   <button class="haupt" id="start">Scanner starten</button>
   <button id="stop">Stoppen</button>
   <button id="licht" disabled>Taschenlampe der Kamera</button>
