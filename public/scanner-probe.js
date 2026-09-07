@@ -38,7 +38,22 @@
   // Warenetiketten sind EAN/UPC, Lageretiketten meist Code-128 oder Code-39, Kartons ITF.
   // Mehr braucht es nicht.
   const FORMATE_1D = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'];
+  // QR ist NICHT das Problem: Alex' Versuch las einen echten Produkt-QR
+  // (https://www.eltropa.de/Produkt/2810834) — den pauschal abzuschalten waere falsch.
+  // Das Rauschen kam ausschliesslich von MICRO_QR_CODE, und der laesst sich einzeln weglassen.
   const FORMATE_2D = ['qr_code', 'data_matrix'];
+
+  // WIEVIELE LESUNGEN, BEVOR EIN CODE GILT.
+  //
+  // Die Pruefziffer allein genuegt nicht. In Alex' Lauf stand neben dem echten
+  // EAN-13 4050821808435 (25x gelesen) ein UPC_A 010812808435 — mit FORMAL GUELTIGER
+  // Pruefziffer, aber genau EINMAL gelesen und eine lange Ziffernfolge mit dem echten Code
+  // teilend. Eine Fehllesung, die die Pruefziffer bestanden hat.
+  //
+  // Ein echter Barcode wird bei jedem Bild wieder gelesen, eine Fehllesung nicht. Zwei
+  // uebereinstimmende Lesungen kosten Bruchteile einer Sekunde und schliessen genau diesen
+  // Fall aus.
+  const NOETIGE_LESUNGEN = 2;
 
   let strom = null, laeuft = false, nativDetector = null, zxingLeser = null;
   let aktuelleSpur = null;
@@ -65,25 +80,35 @@
     if (ersterTrefferMs === null) ersterTrefferMs = ms;
     const e = gesehen.get(text) || { n: 0, format, weg, ersteMs: ms };
     e.n++; gesehen.set(text, e);
+    const geradeBestaetigt = e.n === NOETIGE_LESUNGEN;
 
     const ul = $('treffer');
     if (ul.dataset.leer !== '0') { ul.innerHTML = ''; ul.dataset.leer = '0'; }
-    ul.innerHTML = [...gesehen.entries()].map(([code, d]) =>
-      `<li><code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
-      + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms`
-      + (d.n > 1 ? ` · seither ${d.n}× bestätigt` : '') + '</span></li>').join('');
+    ul.innerHTML = [...gesehen.entries()].map(([code, d]) => {
+      const sicher = d.n >= NOETIGE_LESUNGEN;
+      return `<li style="${sicher ? '' : 'opacity:.55'}">`
+        + `<code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
+        + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms · `
+        + (sicher ? `${d.n}× gelesen — bestätigt`
+                  : 'nur EINMAL gelesen — vermutlich Fehllesung, wird nicht übernommen')
+        + '</span></li>';
+    }).join('');
 
-    $('bilanz').className = 'bilanz gut';
+    const bestaetigte = [...gesehen.values()].filter(d => d.n >= NOETIGE_LESUNGEN).length;
+    const einzelne = gesehen.size - bestaetigte;
+    $('bilanz').className = 'bilanz' + (bestaetigte ? ' gut' : '');
     $('bilanz').textContent =
       `Erster Treffer nach ${(ersterTrefferMs / 1000).toFixed(1)} Sekunden`
-      + ` · ${gesehen.size} ${gesehen.size === 1 ? 'Code' : 'Codes'}`
+      + ` · ${bestaetigte} bestätigt`
+      + (einzelne ? ` · ${einzelne} verworfen (nur einmal gelesen)` : '')
       + ` · ${versuche} Bilder geprüft`;
 
-    if (neu && navigator.vibrate) navigator.vibrate(60);
-    // So wird der echte Scanner arbeiten: einmal lesen, dann aufhoeren und das Feld fuellen.
-    if (neu && $('einmal') && $('einmal').checked) {
+    if (geradeBestaetigt && navigator.vibrate) navigator.vibrate(60);
+    // So wird der echte Scanner arbeiten: lesen, BESTAETIGEN lassen, dann aufhoeren und das Feld
+    // fuellen. Erst die zweite uebereinstimmende Lesung zaehlt.
+    if (geradeBestaetigt && $('einmal') && $('einmal').checked) {
       stop();
-      melde(`Gelesen: ${text} — nach ${(ms / 1000).toFixed(1)} Sekunden. Scanner gestoppt.`, 'gut');
+      melde(`Gelesen und bestätigt: ${text} — nach ${(ms / 1000).toFixed(1)} Sekunden. Scanner gestoppt.`, 'gut');
     }
   }
 
