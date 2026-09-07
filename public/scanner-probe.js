@@ -27,7 +27,21 @@
     + zeile('BarcodeDetector (nativ)', jaNein(hatNativ))
     + zeile('mitgelieferter Decoder', jaNein(zxingDa) + (zxingDa ? ' (354 KB)' : ''));
 
+  // WONACH gesucht wird — der wichtigste Regler gegen Fehllesungen.
+  //
+  // Alex' Versuch im Freien las fuenf MICRO_QR_CODE aus Kies, Schuhen und einer Pappkiste:
+  // „8801", „103944", „71715", „596352" und einen leeren. Die drei EAN-13 daneben hatten
+  // gueltige Pruefziffern, waren also echt. 2D-Codes haben keine vergleichbare Absicherung —
+  // der Decoder reimt sie sich aus Rauschen zusammen. Im Lager hiesse das: erfundener Code am
+  // falschen Produkt.
+  //
+  // Warenetiketten sind EAN/UPC, Lageretiketten meist Code-128 oder Code-39, Kartons ITF.
+  // Mehr braucht es nicht.
+  const FORMATE_1D = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'];
+  const FORMATE_2D = ['qr_code', 'data_matrix'];
+
   let strom = null, laeuft = false, nativDetector = null, zxingLeser = null;
+  let aktuelleSpur = null;
   let versuche = 0, ersterTrefferMs = null, beginn = 0;
   const gesehen = new Map();
 
@@ -105,6 +119,7 @@
     await $('video').play().catch(() => {});
     laeuft = true;
     const spur = strom.getVideoTracks()[0];
+    aktuelleSpur = spur;
     const f = spur.getSettings ? spur.getSettings() : {};
     melde(`Kamera läuft (${f.width || '?'}×${f.height || '?'}). Barcode ins Bild halten.`, 'gut');
 
@@ -140,19 +155,24 @@
       z.step = koennen.zoom.step || 0.1; z.value = f.zoom || koennen.zoom.min;
       $('zoomwert').textContent = `(${(+z.value).toFixed(1)}× von ${koennen.zoom.min}–${koennen.zoom.max}×)`;
       $('zoombox').style.display = '';
-      z.addEventListener('input', async () => {
-        $('zoomwert').textContent = `(${(+z.value).toFixed(1)}× von ${koennen.zoom.min}–${koennen.zoom.max}×)`;
-        try { await spur.applyConstraints({ advanced: [{ zoom: +z.value }] }); }
-        catch (e) { melde('Zoom ließ sich nicht setzen: ' + e.message, 'schlecht'); }
-      });
+      // Der Zuhoerer haengt EINMAL am Regler (siehe unten) und schlaegt die AKTUELLE Spur nach.
+      // Vorher wurde bei jedem Start ein weiterer angehaengt; die alten hielten tote Spuren fest
+      // und meldeten „The associated Track is in an invalid state", waehrend der neueste den Zoom
+      // tatsaechlich setzte. Alex sah also die Fehlermeldung einer Leiche. Gefunden von ihm.
     }
 
+    const mit2d = $('zweid') && $('zweid').checked;
+    const formate = mit2d ? FORMATE_1D.concat(FORMATE_2D) : FORMATE_1D;
     if (hatNativ) {
-      try { nativDetector = new BarcodeDetector(); } catch (_) { nativDetector = null; }
+      try { nativDetector = new BarcodeDetector({ formats: formate }); }
+      catch (_) { try { nativDetector = new BarcodeDetector(); } catch (_) { nativDetector = null; } }
     }
     if (zxingDa) {
       try {
-        zxingLeser = new ZXing.BrowserMultiFormatReader();
+        const hinweise = new Map();
+        hinweise.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,
+          formate.map(f => ZXing.BarcodeFormat[f.toUpperCase()]).filter(v => v !== undefined));
+        zxingLeser = new ZXing.BrowserMultiFormatReader(hinweise);
         // ZXing bringt seine EIGENE Dauerschleife mit. Eine Methode `decodeFromCanvas` gibt es in
         // dieser Fassung NICHT — mein erster Entwurf rief sie auf und hätte auf dem Gerät gar
         // nichts gelesen. Gefunden, weil ich die Schnittstelle des Bündels abgefragt habe,
@@ -194,6 +214,7 @@
       zxingLeser = null;
     }
     if (strom) { strom.getTracks().forEach(t => t.stop()); strom = null; }
+    aktuelleSpur = null;
     $('video').srcObject = null;
     licht = false;
     $('zoombox').style.display = 'none';
@@ -222,6 +243,15 @@
       melde('Die Taschenlampe ließ sich nicht schalten: ' + e.message, 'schlecht');
     }
   }
+
+  // EINMAL anhaengen, nicht bei jedem Start.
+  $('zoom').addEventListener('input', async () => {
+    const z = $('zoom');
+    $('zoomwert').textContent = `(${(+z.value).toFixed(1)}× von ${z.min}–${z.max}×)`;
+    if (!aktuelleSpur || aktuelleSpur.readyState !== 'live') return;
+    try { await aktuelleSpur.applyConstraints({ advanced: [{ zoom: +z.value }] }); }
+    catch (e) { melde('Zoom ließ sich nicht setzen: ' + e.message, 'schlecht'); }
+  });
 
   $('start').addEventListener('click', start);
   $('stop').addEventListener('click', stop);
