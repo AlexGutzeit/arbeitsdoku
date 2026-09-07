@@ -37,22 +37,45 @@
     el.className = 'melde' + (art ? ' ' + art : '');
   }
 
+  // EIN Eintrag je Code, nicht je Bild.
+  //
+  // Vorher wurde jedes gelesene Bild angehaengt — derselbe Barcode stand dann zwanzigmal da, und
+  // die einzige Zahl, auf die es ankommt (Zeit bis zum ERSTEN Treffer), war unauffindbar.
+  // Ausserdem wird der echte Scanner genau EINMAL lesen und dann aufhoeren; das laesst sich hier
+  // mit dem Haken ausprobieren.
   function treffer(text, format, weg, ms) {
+    const neu = !gesehen.has(text);
     if (ersterTrefferMs === null) ersterTrefferMs = ms;
-    const s = gesehen.get(text) || { n: 0, format, weg };
-    s.n++; gesehen.set(text, s);
+    const e = gesehen.get(text) || { n: 0, format, weg, ersteMs: ms };
+    e.n++; gesehen.set(text, e);
+
     const ul = $('treffer');
     if (ul.dataset.leer !== '0') { ul.innerHTML = ''; ul.dataset.leer = '0'; }
-    ul.insertAdjacentHTML('afterbegin',
-      `<li><code>${String(text).replace(/</g, '&lt;')}</code> — ${format}, ${weg}, nach ${Math.round(ms)} ms</li>`);
+    ul.innerHTML = [...gesehen.entries()].map(([code, d]) =>
+      `<li><code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
+      + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms`
+      + (d.n > 1 ? ` · seither ${d.n}× bestätigt` : '') + '</span></li>').join('');
+
+    $('bilanz').className = 'bilanz gut';
     $('bilanz').textContent =
-      `${gesehen.size} verschiedene Codes · ${versuche} Bildversuche · erster Treffer nach ${Math.round(ersterTrefferMs)} ms`;
-    if (navigator.vibrate) navigator.vibrate(60);
+      `Erster Treffer nach ${(ersterTrefferMs / 1000).toFixed(1)} Sekunden`
+      + ` · ${gesehen.size} ${gesehen.size === 1 ? 'Code' : 'Codes'}`
+      + ` · ${versuche} Bilder geprüft`;
+
+    if (neu && navigator.vibrate) navigator.vibrate(60);
+    // So wird der echte Scanner arbeiten: einmal lesen, dann aufhoeren und das Feld fuellen.
+    if (neu && $('einmal') && $('einmal').checked) {
+      stop();
+      melde(`Gelesen: ${text} — nach ${(ms / 1000).toFixed(1)} Sekunden. Scanner gestoppt.`, 'gut');
+    }
   }
 
   async function start() {
     if (laeuft) return;
     versuche = 0; ersterTrefferMs = null; beginn = performance.now();
+    gesehen.clear();
+    $('treffer').dataset.leer = '1'; $('treffer').innerHTML = '<li>noch keiner</li>';
+    $('bilanz').className = 'bilanz'; $('bilanz').textContent = 'Noch nichts gelesen.';
     try {
       melde('Kamera wird angefragt …');
       // Höhere Auflösung ANFRAGEN, nicht erzwingen: Ein Barcode liegt quer, ein breiteres Bild

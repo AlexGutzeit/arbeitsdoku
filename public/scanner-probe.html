@@ -34,6 +34,9 @@
   .melde.schlecht { background:#fef3c7; border-left-color:#f59e0b }
   button[disabled] { opacity:.45; cursor:not-allowed }
   button.an { background:#fde68a; border-color:#f59e0b }
+  .bilanz { font-size:1rem; font-weight:600; padding:.6rem .8rem; border-radius:8px;
+            background:#f1f5f9; border-left:4px solid #94a3b8 }
+  .bilanz.gut { background:#dcfce7; border-left-color:#22c55e }
 </style>
 </head>
 <body>
@@ -67,8 +70,15 @@
 
 <div class="karte">
   <h2>Gelesene Codes</h2>
+  <!-- Die Bilanz steht OBEN. Vorher stand sie unter der Liste, und die Liste wuchs mit jedem
+       gelesenen Bild — die eine Zahl, auf die es ankommt (Zeit bis zum ERSTEN Treffer), war
+       damit unauffindbar. Alex' Screenshot hat das gezeigt. -->
+  <div id="bilanz" class="bilanz">Noch nichts gelesen.</div>
+  <label style="display:flex;gap:.5rem;align-items:center;font-size:.85rem;margin:.6rem 0">
+    <input type="checkbox" id="einmal" checked>
+    <span>Nach dem ersten Treffer stoppen — so wird der echte Scanner arbeiten</span>
+  </label>
   <ul id="treffer" style="margin:0;padding-left:1.1rem"><li>noch keiner</li></ul>
-  <div class="hinweis" id="bilanz"></div>
 </div>
 
 <script src="/vendor/zxing.min.js"></script>
