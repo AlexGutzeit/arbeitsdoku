@@ -296,6 +296,41 @@
     catch (e) { melde('Zoom ließ sich nicht setzen: ' + e.message, 'schlecht'); }
   });
 
+  // Bericht in die Zwischenablage — der einzige Weg, wie ein Ergebnis den Weg zu Alex findet.
+  // Absichtlich manuell: Die Seite verspricht, nichts zu senden.
+  $('kopieren').addEventListener('click', async () => {
+    const zeilen = [];
+    zeilen.push('Scanner-Prüfstand — ' + new Date().toLocaleString('de-DE'));
+    zeilen.push('');
+    for (const tr of $('fakten').querySelectorAll('tr')) {
+      const td = tr.querySelectorAll('td');
+      if (td.length === 2) zeilen.push('  ' + td[0].textContent.trim() + ': ' + td[1].textContent.trim());
+    }
+    zeilen.push('');
+    zeilen.push('  Auflösung gewählt: ' + $('aufloesung').value
+      + ' · nötige Lesungen: ' + $('lesungen').value
+      + ' · QR/2D: ' + ($('zweid').checked ? 'an' : 'aus'));
+    const zoom = $('zoombox').style.display !== 'none' ? $('zoomwert').textContent : '(nicht verfügbar)';
+    zeilen.push('  Zoom: ' + zoom);
+    zeilen.push('');
+    zeilen.push('  ' + $('bilanz').textContent);
+    zeilen.push('');
+    for (const li of $('treffer').querySelectorAll('li')) {
+      zeilen.push('  - ' + li.textContent.replace(/\s+/g, ' ').trim());
+    }
+    const text = zeilen.join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      $('kopierinfo').textContent = 'Kopiert. Jetzt in eine Nachricht an Alex einfügen.';
+    } catch (_) {
+      // Ohne Zwischenablage-Recht (aeltere Browser, kein sicherer Kontext): zum Markieren anbieten.
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.width = '100%'; ta.rows = 12;
+      $('kopierinfo').textContent = 'Zwischenablage nicht erlaubt — Text bitte von Hand markieren:';
+      $('kopierinfo').after(ta); ta.select();
+    }
+  });
+
   $('start').addEventListener('click', start);
   $('stop').addEventListener('click', stop);
   $('licht').addEventListener('click', lichtSchalten);
