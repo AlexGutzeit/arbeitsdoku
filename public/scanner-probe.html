@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scanner-Prüfstand</title>
+<style>
+  :root { --gruen:#4CAF50; --rot:#dc2626; --grau:#4b5563; }
+  * { box-sizing:border-box }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+         background:#f1f5f9; color:#1e293b; padding:1rem; }
+  h1 { font-size:1.15rem; margin:0 0 .3rem }
+  p.unter { margin:.2rem 0 1rem; color:var(--grau); font-size:.85rem }
+  .karte { background:#fff; border-radius:10px; padding:.9rem; margin-bottom:.9rem;
+           box-shadow:0 1px 3px rgba(0,0,0,.08) }
+  .karte h2 { font-size:.95rem; margin:0 0 .5rem }
+  table { border-collapse:collapse; font-size:.85rem; width:100% }
+  td { padding:.2rem .5rem .2rem 0; vertical-align:top }
+  td:first-child { color:var(--grau); white-space:nowrap; width:10.5rem }
+  .ja { color:#15803d; font-weight:600 } .nein { color:var(--rot); font-weight:600 }
+  button { font:inherit; padding:.6rem 1rem; border-radius:8px; border:1px solid #cbd5e1;
+           background:#fff; cursor:pointer; margin-right:.4rem; margin-bottom:.4rem }
+  button.haupt { background:var(--gruen); color:#fff; border-color:var(--gruen) }
+  video { width:100%; max-height:55vh; background:#000; border-radius:8px; display:block }
+  #treffer li { padding:.35rem 0; border-bottom:1px solid #e2e8f0; font-size:.9rem }
+  #treffer li:last-child { border-bottom:none }
+  code { background:#f1f5f9; padding:.1rem .3rem; border-radius:4px; font-size:.85em }
+  .hinweis { font-size:.8rem; color:var(--grau); margin-top:.5rem }
+</style>
+</head>
+<body>
+<h1>Scanner-Prüfstand</h1>
+<p class="unter">Nur zum Ausprobieren. Es wird nichts gespeichert und nichts gesendet.</p>
+
+<div class="karte">
+  <h2>Was dieses Gerät kann</h2>
+  <table id="fakten"><tr><td>wird geprüft …</td></tr></table>
+</div>
+
+<div class="karte">
+  <h2>Kamera</h2>
+  <button class="haupt" id="start">Scanner starten</button>
+  <button id="stop">Stoppen</button>
+  <button id="licht">Licht an/aus</button>
+  <video id="video" playsinline muted autoplay></video>
+  <div class="hinweis" id="status">Noch nicht gestartet.</div>
+</div>
+
+<div class="karte">
+  <h2>Gelesene Codes</h2>
+  <ul id="treffer" style="margin:0;padding-left:1.1rem"><li>noch keiner</li></ul>
+  <div class="hinweis" id="bilanz"></div>
+</div>
+
+<script src="/vendor/zxing.min.js"></script>
+<script src="/scanner-probe.js"></script>
+</body>
+</html>
