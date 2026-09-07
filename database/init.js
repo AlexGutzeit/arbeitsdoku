@@ -433,6 +433,7 @@ async function initDatabase() {
   ensureBackupEmpfaengerSchema(db);
   // Persoenliche Schalter fuer die Gesetzeswarnungen (idempotent, hier UND im Restore-Pfad)
   ensureWarnungSchema(db);
+  ensureProduktSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -967,6 +968,7 @@ function ensureAuditSchema(targetDb) {
   ensureSitzungSchema(targetDb);
   ensureBackupEmpfaengerSchema(targetDb);
   ensureWarnungSchema(targetDb);
+  ensureProduktSchema(targetDb);
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
@@ -1295,6 +1297,76 @@ function ensureProjectSchema(targetDb) {
 // Schalter wirkungslos (ein Erwachsener sieht nie eine JArbSchG-Warnung, ein Minderjaehriger nie
 // eine nach ArbZG). So wirkt jeder Schalter bei jedem.
 // Idempotent — laeuft bei Init UND nach Backup-Restore ([[feedback_abwaertskompatibilitaet]]).
+/**
+ * Produktverzeichnis fuer die Bestellungen: Kategorien, Produkte, Barcodes.
+ *
+ * DIE REGEL, an der alles haengt (Alex, 07.09.2026): In den Katalog kommt NUR, was einen Barcode
+ * hat. Wer wie bisher "2 Rollen Klebeband" tippt, bestellt genau das — der Katalog bleibt
+ * unberuehrt. Erst ein angelernter Code erzeugt einen Eintrag. Das haelt das Verzeichnis klein und
+ * vertrauenswuerdig: Jeder Eintrag ist etwas, das jemand in der Hand hatte.
+ *
+ * Daraus folgt eine harte Zusicherung, die die Routen durchsetzen: Ein Produkt hat IMMER
+ * mindestens einen Barcode. Den letzten zu entfernen wird abgewiesen — auch beim Zusammenfuehren.
+ *
+ * `orders.product` bleibt Text und bleibt Pflicht. Der Name wird beim Anlegen mitgeschrieben, auch
+ * wenn ein Katalogprodukt gewaehlt wurde: Alte Bestellungen und alte Sicherungen funktionieren
+ * unveraendert weiter, und eine Bestellung von 2026 bleibt lesbar, wenn das Produkt spaeter
+ * umbenannt oder geloescht wird. `product_id` ist nur die VERKNUEPFUNG, nicht die Wahrheit.
+ */
+function ensureProduktSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS product_categories (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        created_by INTEGER,
+        deleted_at TEXT
+      );
+      -- Eindeutig nur unter den NICHT geloeschten: Eine geloeschte Kategorie soll den Namen nicht
+      -- fuer immer blockieren.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_kat_name
+        ON product_categories(name) WHERE deleted_at IS NULL;
+
+      CREATE TABLE IF NOT EXISTS products (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT NOT NULL,
+        category_id  INTEGER,
+        default_unit TEXT,
+        created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        created_by   INTEGER,
+        deleted_at   TEXT,
+        -- Beim Zusammenfuehren: worin dieses Produkt aufgegangen ist. Damit bleibt ein alter
+        -- Barcode-Scan nachvollziehbar, statt ins Leere zu zeigen.
+        merged_into  INTEGER,
+        FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_prod_kat ON products(category_id);
+
+      CREATE TABLE IF NOT EXISTS product_barcodes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        -- EINDEUTIG: Ein Code gehoert zu genau EINEM Produkt. Ein Produkt darf beliebig viele
+        -- haben (1:n) — verschiedene Hersteller, Gebinde, Etiketten.
+        code       TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        created_by INTEGER,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_code_prod ON product_barcodes(product_id);
+    `);
+
+    // orders.product_id nachtragen — Altbestaende bekommen die Spalte, ohne dass etwas kaputtgeht.
+    const cols = targetDb.prepare('PRAGMA table_info(orders)').all();
+    if (cols.length && !cols.some(c => c.name === 'product_id')) {
+      targetDb.exec('ALTER TABLE orders ADD COLUMN product_id INTEGER');
+      console.log('Migration: product_id in orders hinzugefuegt.');
+    }
+  } catch (e) {
+    console.error('ensureProduktSchema fehlgeschlagen:', e.message);
+  }
+}
+
 function ensureWarnungSchema(targetDb) {
   try {
     targetDb.exec(`

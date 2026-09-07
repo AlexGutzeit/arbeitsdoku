@@ -109,6 +109,7 @@ app.use('/api/planning', require('./routes/planning'));
 app.use('/api/bulletin', require('./routes/bulletin'));
 app.use('/api/tools', require('./routes/tools'));
 app.use('/api/orders', require('./routes/orders'));
+app.use('/api/products', require('./routes/products'));
 app.use('/api/notes', require('./routes/notes'));
 app.use('/api/badges', require('./routes/badges'));
 app.use('/api/absences', require('./routes/absences'));
