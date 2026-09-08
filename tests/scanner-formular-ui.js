@@ -106,12 +106,19 @@ function req(m, p, t, b) {
       ean8:         scannerPlausibel('23198982', 'EAN_8'),
       upcA:         scannerPlausibel('043899923098', 'upc_a'),
       code39Kurz:   scannerPlausibel('S', 'CODE_39'),
+      // „K" als Data-Matrix, 19x gelesen (Alex, 08.09.2026). Besonders heikel: 2D gilt schon nach
+      // EINER Lesung, die Laengenpruefung ist dort der einzige Riegel.
+      matrixEinBuchstabe: scannerPlausibel('K', 'data_matrix'),
+      matrixEchterInhalt: scannerPlausibel('0004036034', 'data_matrix'),
       code128:      scannerPlausibel('A2026052700123', 'code_128'),
       qr:           scannerPlausibel('https://id.abb/2CKA006800A3087', 'QR_CODE'),
     }));
     ok('achtstelliges ITF wird gar nicht erst gezählt', plaus.itfAcht === false, JSON.stringify(plaus));
     ok('… ITF-14 dagegen schon (Karton-Standard)', plaus.itfVierzehn === true, JSON.stringify(plaus));
     ok('… ein einzelner Buchstabe als Code-39 auch nicht', plaus.code39Kurz === false, JSON.stringify(plaus));
+    ok('… und „K" als Data-Matrix erst recht nicht (2D gilt schon nach EINER Lesung)',
+      plaus.matrixEinBuchstabe === false, JSON.stringify(plaus));
+    ok('… ein echter Data-Matrix-Inhalt bleibt', plaus.matrixEchterInhalt === true, JSON.stringify(plaus));
     ok('… ein zu kurzes EAN-13 ebenfalls nicht', plaus.ean13Kurz === false, JSON.stringify(plaus));
     ok('echte Codes bleiben unangetastet',
       plaus.ean13 && plaus.ean8 && plaus.upcA && plaus.code128 && plaus.qr, JSON.stringify(plaus));
@@ -130,6 +137,13 @@ function req(m, p, t, b) {
       ohneGs1:    scannerCodeNormalisieren('A2026052700123'),
       schlichteEan: scannerCodeNormalisieren('4011395319475'),
       andererMatrix: scannerCodeNormalisieren('0004036034'),
+      // GS1 Digital Link: die Artikelnummer steckt in einer Internetadresse.
+      // Im Feld: der QR und der Strichcode DERSELBEN Packung.
+      edekaQr:    scannerCodeNormalisieren('https://herkunft.edeka.de/?01=04311501706954'),
+      digiPfad:   scannerCodeNormalisieren('https://id.gs1.org/01/04311501706954'),
+      digiMehr:   scannerCodeNormalisieren('https://example.de/x?lang=de&01=04311501706954&y=1'),
+      schlichterQr: scannerCodeNormalisieren('https://burti.de'),
+      qrOhneGtin: scannerCodeNormalisieren('https://qrfy.io/Jew6mKzNNF'),
     }));
     ok('aus dem Feld-Code wird die Artikelnummer 9798575242031',
       gs1.ausFeld.code === '9798575242031', JSON.stringify(gs1.ausFeld));
@@ -139,6 +153,13 @@ function req(m, p, t, b) {
     ok('ein Lageretikett bleibt unangetastet', gs1.ohneGs1.code === 'A2026052700123' && gs1.ohneGs1.artikelnummer === null, JSON.stringify(gs1.ohneGs1));
     ok('… ein schlichter EAN-13 ebenso', gs1.schlichteEan.code === '4011395319475', JSON.stringify(gs1.schlichteEan));
     ok('… und ein Data-Matrix ohne GS1-Aufbau auch', gs1.andererMatrix.code === '0004036034', JSON.stringify(gs1.andererMatrix));
+    ok('aus dem EDEKA-QR wird derselbe Code wie vom Strichcode',
+      gs1.edekaQr.code === '4311501706954', JSON.stringify(gs1.edekaQr));
+    ok('… auch in der Pfad-Schreibweise', gs1.digiPfad.code === '4311501706954', JSON.stringify(gs1.digiPfad));
+    ok('… und zwischen anderen Abfrage-Werten', gs1.digiMehr.code === '4311501706954', JSON.stringify(gs1.digiMehr));
+    ok('ein QR ohne Artikelnummer bleibt, wie er ist',
+      gs1.schlichterQr.code === 'https://burti.de' && gs1.qrOhneGtin.code === 'https://qrfy.io/Jew6mKzNNF',
+      JSON.stringify([gs1.schlichterQr.code, gs1.qrOhneGtin.code]));
 
     console.log('\n── Bekannter Code wird eingesetzt ──');
     await seite.click('#order-add-btn'); await sleep(500);

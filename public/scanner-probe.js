@@ -103,10 +103,18 @@
   // wird die Artikelnummer 9798575242031 — sonst zaehlte jede Packung ihre eigene Seriennummer
   // als eigenen Code, und der Katalog waere nach einer Woche unbrauchbar.
   const gs1Nummer = (w) => {
-    const bereinigt = String(w || '').replace(/^\][A-Za-z]\d/, '').replace(/\x1d/g, '');
-    const m = bereinigt.match(/^01(\d{14})/);
-    if (!m) return null;
-    return m[1].startsWith('0') ? m[1].slice(1) : m[1];
+    const b = String(w || '').replace(/^\][A-Za-z]\d/, '').replace(/\x1d/g, '');
+    let g = null;
+    const roh = b.match(/^01(\d{14})/);
+    if (roh) g = roh[1];
+    else if (/^https?:\/\//i.test(b)) {
+      // GS1 Digital Link: https://herkunft.edeka.de/?01=04311501706954 — im Feld gemessen,
+      // derselbe Artikel wie der Strichcode daneben.
+      const p = b.match(/\/01\/(\d{14})(?:[/?#]|$)/), q = b.match(/[?&]01=(\d{14})(?:[&#]|$)/);
+      g = p ? p[1] : (q ? q[1] : null);
+    }
+    if (!g) return null;
+    return g.startsWith('0') ? g.slice(1) : g;
   };
 
   function treffer(rohText, format, weg, ms) {

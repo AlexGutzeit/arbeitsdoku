@@ -142,9 +142,26 @@ function scannerCodeNormalisieren(code) {
   w = w.replace(/^\][A-Za-z]\d/, '');
   // Trennzeichen FNC1 (Gruppentrenner) entfernen.
   w = w.replace(/\x1d/g, '');
-  const m = w.match(/^01(\d{14})/);
-  if (!m) return { code: w, artikelnummer: null };
-  const gtin = m[1];
+
+  let gtin = null;
+  const roh = w.match(/^01(\d{14})/);
+  if (roh) {
+    gtin = roh[1];
+  } else if (/^https?:\/\//i.test(w)) {
+    // GS1 DIGITAL LINK: Die Artikelnummer steckt in einer Internetadresse, entweder als
+    // Pfadstück `/01/04311501706954` oder als Abfrage `?01=04311501706954`.
+    //
+    // Im Feld gemessen (Alex, 08.09.2026): Auf einer Packung stand
+    //   https://herkunft.edeka.de/?01=04311501706954   (48× gelesen, QR)
+    //   4311501706954                                  (14× gelesen, Strichcode)
+    // Ohne diese Zerlegung wären das ZWEI Einträge für DASSELBE Produkt — und wer den QR scannt,
+    // fände den Strichcode-Eintrag nicht.
+    const imPfad = w.match(/\/01\/(\d{14})(?:[/?#]|$)/);
+    const inAbfrage = w.match(/[?&]01=(\d{14})(?:[&#]|$)/);
+    if (imPfad) gtin = imPfad[1];
+    else if (inAbfrage) gtin = inAbfrage[1];
+  }
+  if (!gtin) return { code: w, artikelnummer: null };
   // GTIN-14 mit führender Null ist ein EAN-13.
   const nummer = gtin.startsWith('0') ? gtin.slice(1) : gtin;
   return { code: nummer, artikelnummer: nummer, roh: w };
