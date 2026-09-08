@@ -67,12 +67,24 @@
   // durchgerutscht. Valentins Lauf verwarf deshalb zwei ECHTE Hersteller-QRs (ABB, fischer) —
   // eine Regel, die richtige Daten wegwirft, ist genauso falsch wie eine, die falsche durchlaesst.
   const istZweiD = (f) => /qr|matrix|aztec|pdf417/i.test(String(f || ''));
+  // Dieselbe Plausibilitaetspruefung wie im echten Scanner: ITF nur 14-stellig (Karton-Standard).
+  // Alex' Buecherregal lieferte zwoelf achtstellige ITF-Treffer, neun davon 9- bis 16-mal gelesen —
+  // gegen eine STABILE Fehllesung hilft Wiederholung nicht.
+  const plausibel = (code, format) => {
+    const f = String(format || '').toLowerCase(), w = String(code || '');
+    if (f.includes('itf')) return /^\d{14}$/.test(w);
+    if (f.includes('ean_13') || f === 'ean13') return /^\d{13}$/.test(w);
+    if (f.includes('ean_8') || f === 'ean8') return /^\d{8}$/.test(w);
+    if (f.includes('upc_a') || f === 'upca') return /^\d{12}$/.test(w);
+    return w.trim().length >= 3;
+  };
   const NOETIGE_LESUNGEN = (format) => istZweiD(format) ? 1 : GEWAEHLTE_LESUNGEN();
 
   let strom = null, laeuft = false, nativDetector = null, zxingLeser = null;
   let aktuelleSpur = null;
   let versuche = 0, ersterTrefferMs = null, beginn = 0;
   const gesehen = new Map();
+  const unplausibel = new Set();
 
   function melde(t, art) {
     const el = $('status');
@@ -87,6 +99,7 @@
   // Ausserdem wird der echte Scanner genau EINMAL lesen und dann aufhoeren; das laesst sich hier
   // mit dem Haken ausprobieren.
   function treffer(text, format, weg, ms) {
+    if (!plausibel(text, format)) { unplausibel.add(text + ' (' + format + ')'); return; }
     // Letzter Riegel: Meldet eine ueberlebende Schleife trotzdem noch, wird sie ignoriert.
     // Drei Riegel statt einem, weil der Fehler genau daran lag, dass EINER nicht gehalten hat.
     if (!laeuft) return;
@@ -116,6 +129,7 @@
       `Erster Treffer nach ${(ersterTrefferMs / 1000).toFixed(1)} Sekunden`
       + ` · ${bestaetigte} bestätigt`
       + (einzelne ? ` · ${einzelne} verworfen (zu selten gelesen)` : '')
+      + (unplausibel.size ? ` · ${unplausibel.size} unplausibel (Format/Länge)` : '')
       + ` · ${versuche} Bilder geprüft`
       + (versuche > 5 ? ` (${(versuche / ((performance.now() - beginn) / 1000)).toFixed(1)}/s)` : '');
 
@@ -135,7 +149,7 @@
     stop();
     await new Promise(r => setTimeout(r, 150));
     versuche = 0; ersterTrefferMs = null; beginn = performance.now();
-    gesehen.clear();
+    gesehen.clear(); unplausibel.clear();
     $('treffer').dataset.leer = '1'; $('treffer').innerHTML = '<li>noch keiner</li>';
     $('bilanz').className = 'bilanz'; $('bilanz').textContent = 'Noch nichts gelesen.';
     try {

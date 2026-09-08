@@ -87,6 +87,34 @@ function scannerBesterTreffer(zaehlung) {
   return bester;
 }
 
+/**
+ * Ist der gelesene Wert für sein Format überhaupt plausibel?
+ *
+ * ITF (Interleaved 2 of 5) ist das einzige Format ohne Prüfziffer-Pflicht — und Scanner lesen
+ * darin bereitwillig Teilmuster anderer Codes. Im Feld gemessen (Alex, 08.09.2026, Bücherregal):
+ * ZWÖLF ITF-Treffer, alle exakt achtstellig, neun davon mit `00` beginnend — auf Gegenständen,
+ * die garantiert kein ITF tragen. Und sie wurden 9- bis 16-mal gelesen.
+ *
+ * DAS IST DER PUNKT: Gegen eine STABILE Fehllesung hilft Wiederholung nicht. Sie wird genauso oft
+ * bestätigt wie ein echter Code. Der einzige wirksame Riegel ist die Norm — auf Umkartons steht
+ * ITF-14 mit vierzehn Stellen. Alles andere ist bei uns kein Code, sondern ein Muster.
+ *
+ * Für EAN und UPC prüft der Decoder die Prüfziffer bereits selbst (belegt: ein Testcode mit
+ * falscher Ziffer wurde abgelehnt). Hier wird deshalb nur die Länge nachgehalten.
+ */
+function scannerPlausibel(code, format) {
+  const f = String(format || '').toLowerCase();
+  const w = String(code || '');
+  if (f.includes('itf')) return /^\d{14}$/.test(w);          // nur ITF-14, der Karton-Standard
+  if (f.includes('ean_13') || f === 'ean13') return /^\d{13}$/.test(w);
+  if (f.includes('ean_8') || f === 'ean8') return /^\d{8}$/.test(w);
+  if (f.includes('upc_a') || f === 'upca') return /^\d{12}$/.test(w);
+  if (f.includes('upc_e') || f === 'upce') return /^\d{6,8}$/.test(w);
+  // Code-128, Code-39, QR, Data-Matrix: freier Inhalt, aber nicht leer und nicht ein Zeichen.
+  // („S" als CODE_39 stand in Alex' Lauf — ein Buchstabe ist kein Artikelcode.)
+  return w.trim().length >= 3;
+}
+
 let _zxingGeladen = null;
 
 /**
@@ -176,6 +204,7 @@ async function scannerOeffnen() {
 
     function treffer(code, format) {
       if (!laeuft || !code) return;
+      if (!scannerPlausibel(code, format)) return;
       const vorher = gezaehlt.get(code);
       const n = (vorher ? vorher.n : 0) + 1;
       gezaehlt.set(code, { n, format: format || (vorher && vorher.format) || '' });

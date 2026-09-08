@@ -94,6 +94,28 @@ function req(m, p, t, b) {
     ok('… und ein QR schlägt eine EAN daneben im Bild',
       wahl.qrGegenEan === 'https://id.abb/2CKA006800A3087', JSON.stringify(wahl.qrGegenEan));
 
+    console.log('\n── Plausibilität: was gar nicht erst gezählt wird ──');
+    // Im Buecherregal las der Pruefstand ZWOELF achtstellige ITF-Codes, neun davon mit „00"
+    // beginnend — auf Gegenstaenden, die garantiert kein ITF tragen. Neun davon wurden 9- bis
+    // 16-mal gelesen: Gegen eine STABILE Fehllesung hilft Wiederholung nicht.
+    const plaus = await seite.evaluate(() => ({
+      itfAcht:      scannerPlausibel('00041285', 'itf'),
+      itfVierzehn:  scannerPlausibel('00012345678905', 'itf'),
+      ean13:        scannerPlausibel('4011395319475', 'EAN_13'),
+      ean13Kurz:    scannerPlausibel('401139531947', 'EAN_13'),
+      ean8:         scannerPlausibel('23198982', 'EAN_8'),
+      upcA:         scannerPlausibel('043899923098', 'upc_a'),
+      code39Kurz:   scannerPlausibel('S', 'CODE_39'),
+      code128:      scannerPlausibel('A2026052700123', 'code_128'),
+      qr:           scannerPlausibel('https://id.abb/2CKA006800A3087', 'QR_CODE'),
+    }));
+    ok('achtstelliges ITF wird gar nicht erst gezählt', plaus.itfAcht === false, JSON.stringify(plaus));
+    ok('… ITF-14 dagegen schon (Karton-Standard)', plaus.itfVierzehn === true, JSON.stringify(plaus));
+    ok('… ein einzelner Buchstabe als Code-39 auch nicht', plaus.code39Kurz === false, JSON.stringify(plaus));
+    ok('… ein zu kurzes EAN-13 ebenfalls nicht', plaus.ean13Kurz === false, JSON.stringify(plaus));
+    ok('echte Codes bleiben unangetastet',
+      plaus.ean13 && plaus.ean8 && plaus.upcA && plaus.code128 && plaus.qr, JSON.stringify(plaus));
+
     console.log('\n── Bekannter Code wird eingesetzt ──');
     await seite.click('#order-add-btn'); await sleep(500);
     ok('der Scan-Knopf ist da', await seite.$('#of-scan') !== null);
