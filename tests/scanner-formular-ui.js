@@ -69,18 +69,30 @@ function req(m, p, t, b) {
     // (EAN-13, 12x) — 239 ms auseinander, beide mit gueltiger Pruefziffer. Wer den ERSTEN nimmt,
     // der die Schwelle erreicht, bekommt den schwaecheren.
     const wahl = await seite.evaluate(() => {
-      const f = (paare, noetig) => scannerBesterTreffer(new Map(paare), noetig);
+      const e = (code, n) => [code, { n, format: 'EAN_13' }];
+      const q = (code, n) => [code, { n, format: 'QR_CODE' }];
+      const f = (paare) => scannerBesterTreffer(new Map(paare));
       return {
-        lagerfall: f([['043899923098', 3], ['4003899923098', 12]], 3),
-        knappDarunter: f([['A', 2], ['B', 5]], 3),
-        keinerReicht: f([['A', 1], ['B', 2]], 3),
-        einziger: f([['A', 7]], 3),
+        lagerfall: f([e('043899923098', 3), e('4003899923098', 12)]),
+        knappDarunter: f([e('A', 2), e('B', 5)]),
+        keinerReicht: f([e('A', 1), e('B', 2)]),
+        einziger: f([e('A', 7)]),
+        // Valentins Fall: echte Hersteller-QRs, einmal bzw. zweimal gelesen.
+        qrEinmal: f([q('https://id.abb/2CKA006800A3087', 1)]),
+        qrZweimal: f([q('https://qr.fischer.id/p/568010', 2)]),
+        // Ein 2D-Code schlaegt einen 1D-Code auch mit weniger Lesungen.
+        qrGegenEan: f([e('4011395319475', 10), q('https://id.abb/2CKA006800A3087', 1)]),
       };
     });
-    ok('der öfter gelesene Code gewinnt', wahl.lagerfall === '4003899923098', JSON.stringify(wahl));
+    ok('der öfter gelesene 1D-Code gewinnt', wahl.lagerfall === '4003899923098', JSON.stringify(wahl));
     ok('… wer die Schwelle verfehlt, zählt nicht', wahl.knappDarunter === 'B', JSON.stringify(wahl));
     ok('… reicht keiner, gibt es keinen Treffer', wahl.keinerReicht === null, JSON.stringify(wahl));
     ok('… ein einziger reicht auch', wahl.einziger === 'A', JSON.stringify(wahl));
+    ok('ein QR gilt schon nach EINER Lesung (Fehlerkorrektur)',
+      wahl.qrEinmal === 'https://id.abb/2CKA006800A3087', JSON.stringify(wahl.qrEinmal));
+    ok('… auch der zweite echte Hersteller-QR', wahl.qrZweimal === 'https://qr.fischer.id/p/568010', JSON.stringify(wahl.qrZweimal));
+    ok('… und ein QR schlägt eine EAN daneben im Bild',
+      wahl.qrGegenEan === 'https://id.abb/2CKA006800A3087', JSON.stringify(wahl.qrGegenEan));
 
     console.log('\n── Bekannter Code wird eingesetzt ──');
     await seite.click('#order-add-btn'); await sleep(500);

@@ -61,7 +61,13 @@
   // (bei EAN-13 steckt die erste Ziffer in der Paritaet der linken Haelfte, dem anfaelligsten
   // Teil). Drei trennt in diesen Daten sauber, und echte Codes erreichen drei in Bruchteilen
   // einer Sekunde.
-  const NOETIGE_LESUNGEN = () => Number(($('lesungen') || {}).value || 3);
+  const GEWAEHLTE_LESUNGEN = () => Number(($('lesungen') || {}).value || 3);
+  // 2D-Codes tragen eine Fehlerkorrektur (Reed-Solomon): Was sich entziffern laesst, ist praktisch
+  // sicher richtig. 1D hat nur eine Pruefziffer, und die ist uns zweimal bei einer Fehllesung
+  // durchgerutscht. Valentins Lauf verwarf deshalb zwei ECHTE Hersteller-QRs (ABB, fischer) —
+  // eine Regel, die richtige Daten wegwirft, ist genauso falsch wie eine, die falsche durchlaesst.
+  const istZweiD = (f) => /qr|matrix|aztec|pdf417/i.test(String(f || ''));
+  const NOETIGE_LESUNGEN = (format) => istZweiD(format) ? 1 : GEWAEHLTE_LESUNGEN();
 
   let strom = null, laeuft = false, nativDetector = null, zxingLeser = null;
   let aktuelleSpur = null;
@@ -88,22 +94,22 @@
     if (ersterTrefferMs === null) ersterTrefferMs = ms;
     const e = gesehen.get(text) || { n: 0, format, weg, ersteMs: ms };
     e.n++; gesehen.set(text, e);
-    const noetig = NOETIGE_LESUNGEN();
+    const noetig = NOETIGE_LESUNGEN(format);
     const geradeBestaetigt = e.n === noetig;
 
     const ul = $('treffer');
     if (ul.dataset.leer !== '0') { ul.innerHTML = ''; ul.dataset.leer = '0'; }
     ul.innerHTML = [...gesehen.entries()].map(([code, d]) => {
-      const sicher = d.n >= noetig;
+      const sicher = d.n >= NOETIGE_LESUNGEN(d.format);
       return `<li style="${sicher ? '' : 'opacity:.55'}">`
         + `<code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
         + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms · `
-        + (sicher ? `${d.n}× gelesen — bestätigt`
-                  : `nur ${d.n}× gelesen (nötig: ${noetig}) — vermutlich Fehllesung, wird nicht übernommen`)
+        + (sicher ? `${d.n}× gelesen — bestätigt` + (istZweiD(d.format) ? ' (2D: Fehlerkorrektur, eine Lesung genügt)' : '')
+                  : `nur ${d.n}× gelesen (nötig: ${NOETIGE_LESUNGEN(d.format)}) — vermutlich Fehllesung, wird nicht übernommen`)
         + '</span></li>';
     }).join('');
 
-    const bestaetigte = [...gesehen.values()].filter(d => d.n >= noetig).length;
+    const bestaetigte = [...gesehen.values()].filter(d => d.n >= NOETIGE_LESUNGEN(d.format)).length;
     const einzelne = gesehen.size - bestaetigte;
     $('bilanz').className = 'bilanz' + (bestaetigte ? ' gut' : '');
     $('bilanz').textContent =

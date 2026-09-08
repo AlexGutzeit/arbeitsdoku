@@ -31,7 +31,32 @@
 
 const SCANNER_FORMATE_1D = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'];
 const SCANNER_FORMATE_2D = ['qr_code', 'data_matrix'];
-const SCANNER_NOETIGE_LESUNGEN = 3;
+/**
+ * Wie oft ein Code gelesen werden muss, bevor er gilt — nach FORMAT unterschieden.
+ *
+ * Der Grund ist keine Vorliebe, sondern Bauart:
+ *
+ *  * EINDIMENSIONALE Codes (EAN, UPC, Code-128, ITF) haben nur eine Prüfziffer. Die ist uns
+ *    zweimal bei einer Fehllesung durchgerutscht: `010812808435` und `5000121411223` waren formal
+ *    gültig und trotzdem falsch. Dort schützt nur Wiederholung — drei Lesungen.
+ *
+ *  * ZWEIDIMENSIONALE Codes (QR, Data-Matrix) tragen eine Fehlerkorrektur nach Reed-Solomon. Was
+ *    sich überhaupt entziffern lässt, ist praktisch sicher richtig; ein „falsch, aber gültig"
+ *    gibt es dort nicht wie bei 1D.
+ *
+ * Warum das nicht theoretisch ist: Valentins Lauf im Lager (08.09.2026) verwarf zwei ECHTE
+ * Hersteller-QRs — `https://id.abb/2CKA006800A3087` (einmal gelesen) und
+ * `https://qr.fischer.id/p/568010` (zweimal). ABB und fischer, also genau die Marken eines
+ * Elektrobetriebs. Eine Regel, die richtige Daten wegwirft, ist genauso falsch wie eine, die
+ * falsche durchlässt.
+ */
+const SCANNER_LESUNGEN_1D = 3;
+const SCANNER_LESUNGEN_2D = 1;
+function scannerNoetigeLesungen(format) {
+  const f = String(format || '').toLowerCase();
+  return (f.includes('qr') || f.includes('matrix') || f.includes('aztec') || f.includes('pdf417'))
+    ? SCANNER_LESUNGEN_2D : SCANNER_LESUNGEN_1D;
+}
 
 /**
  * Aus mehreren gleichzeitig gelesenen Codes den glaubwürdigsten wählen: den am HÄUFIGSTEN
@@ -47,10 +72,17 @@ const SCANNER_NOETIGE_LESUNGEN = 3;
  * Als eigene Funktion, damit sie prüfbar ist — die Kamera lässt sich nicht nachstellen, diese
  * Entscheidung schon.
  */
-function scannerBesterTreffer(zaehlung, noetig) {
-  let bester = null, beste = 0;
-  for (const [code, n] of zaehlung) {
-    if (n >= noetig && n > beste) { bester = code; beste = n; }
+function scannerBesterTreffer(zaehlung) {
+  let bester = null, beste = -1;
+  for (const [code, d] of zaehlung) {
+    const n = typeof d === 'number' ? d : d.n;
+    const format = typeof d === 'number' ? '' : d.format;
+    if (n < scannerNoetigeLesungen(format)) continue;
+    // Ein 2D-Code schlaegt einen 1D-Code auch mit weniger Lesungen: Seine Fehlerkorrektur macht
+    // ihn zur verlaesslicheren Angabe, und ein Hersteller-QR ist praeziser als eine EAN, die
+    // daneben im Bild liegt.
+    const gewicht = n + (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D ? 1000 : 0);
+    if (gewicht > beste) { bester = code; beste = gewicht; }
   }
   return bester;
 }
@@ -142,19 +174,21 @@ async function scannerOeffnen() {
     overlay.querySelector('[data-act="zu"]').addEventListener('click', () => schliessen(null));
     overlay.addEventListener('click', (e) => { if (e.target === overlay) schliessen(null); });
 
-    function treffer(code) {
+    function treffer(code, format) {
       if (!laeuft || !code) return;
-      const n = (gezaehlt.get(code) || 0) + 1;
-      gezaehlt.set(code, n);
-      if (n < SCANNER_NOETIGE_LESUNGEN) {
-        if (!nachlauf) melde(`Gelesen (${n} von ${SCANNER_NOETIGE_LESUNGEN}) — bitte ruhig halten …`);
+      const vorher = gezaehlt.get(code);
+      const n = (vorher ? vorher.n : 0) + 1;
+      gezaehlt.set(code, { n, format: format || (vorher && vorher.format) || '' });
+      const noetig = scannerNoetigeLesungen(format);
+      if (n < noetig) {
+        if (!nachlauf) melde(`Gelesen (${n} von ${noetig}) — bitte ruhig halten …`);
         return;
       }
       if (nachlauf) return;   // laeuft schon
       if (navigator.vibrate) navigator.vibrate(80);
       melde('Erkannt — einen Moment …');
       nachlauf = setTimeout(() => {
-        const bester = scannerBesterTreffer(gezaehlt, SCANNER_NOETIGE_LESUNGEN) || code;
+        const bester = scannerBesterTreffer(gezaehlt) || code;
         melde('Gelesen: ' + bester);
         schliessen(bester);
       }, NACHLAUF_MS);
@@ -212,7 +246,9 @@ async function scannerOeffnen() {
           hinweise.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,
             formate.map(f => ZXing.BarcodeFormat[f.toUpperCase()]).filter(x => x !== undefined));
           zxing = new ZXing.BrowserMultiFormatReader(hinweise);
-          zxing.decodeFromVideoElementContinuously(v, (erg) => { if (erg) treffer(erg.getText()); });
+          zxing.decodeFromVideoElementContinuously(v, (erg) => {
+            if (erg) treffer(erg.getText(), ZXing.BarcodeFormat[erg.getBarcodeFormat()] || '');
+          });
         } catch (_) { zxing = null; }
       }
       if (!nativ && !zxing) { melde('Kein Decoder verfügbar. Bitte eintippen.'); setTimeout(() => schliessen(null), 3000); return; }
@@ -221,7 +257,7 @@ async function scannerOeffnen() {
       (async function schleife() {
         if (!laeuft || !nativ) return;
         if (v.readyState >= 2) {
-          try { const r = await nativ.detect(v); if (r && r.length) treffer(r[0].rawValue); }
+          try { const r = await nativ.detect(v); if (r && r.length) treffer(r[0].rawValue, r[0].format); }
           catch (_) { nativ = null; }
         }
         if (laeuft) setTimeout(() => requestAnimationFrame(schleife), 120);
