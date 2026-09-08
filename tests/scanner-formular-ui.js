@@ -64,7 +64,25 @@ function req(m, p, t, b) {
     await seite.goto(BASIS + '/#/orders', { waitUntil: 'domcontentloaded' });
     await seite.waitForSelector('#order-add-btn'); await sleep(800);
 
-    console.log('── Bekannter Code wird eingesetzt ──');
+    console.log('── Die Wahl unter mehreren gelesenen Codes ──');
+    // Im Lager gemessen: Auf einem Karton lagen 043899923098 (UPC-A, 3x) und 4003899923098
+    // (EAN-13, 12x) — 239 ms auseinander, beide mit gueltiger Pruefziffer. Wer den ERSTEN nimmt,
+    // der die Schwelle erreicht, bekommt den schwaecheren.
+    const wahl = await seite.evaluate(() => {
+      const f = (paare, noetig) => scannerBesterTreffer(new Map(paare), noetig);
+      return {
+        lagerfall: f([['043899923098', 3], ['4003899923098', 12]], 3),
+        knappDarunter: f([['A', 2], ['B', 5]], 3),
+        keinerReicht: f([['A', 1], ['B', 2]], 3),
+        einziger: f([['A', 7]], 3),
+      };
+    });
+    ok('der öfter gelesene Code gewinnt', wahl.lagerfall === '4003899923098', JSON.stringify(wahl));
+    ok('… wer die Schwelle verfehlt, zählt nicht', wahl.knappDarunter === 'B', JSON.stringify(wahl));
+    ok('… reicht keiner, gibt es keinen Treffer', wahl.keinerReicht === null, JSON.stringify(wahl));
+    ok('… ein einziger reicht auch', wahl.einziger === 'A', JSON.stringify(wahl));
+
+    console.log('\n── Bekannter Code wird eingesetzt ──');
     await seite.click('#order-add-btn'); await sleep(500);
     ok('der Scan-Knopf ist da', await seite.$('#of-scan') !== null);
     await scanVorgeben('4050821808435');

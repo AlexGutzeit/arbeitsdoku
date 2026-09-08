@@ -21,10 +21,39 @@
 //
 //  * DAS LICHT ENTSCHEIDET. Gutes Licht 0,5 s, Dämmerung 6 s, Straßenlaterne 12,7 s. Deshalb
 //    bleibt die Tastatur gleichwertig — im dunklen Regaleck ist Tippen schneller.
+//
+//  * TASCHENLAMPE: hängt am MODELL, nicht am Hersteller. Ein iPhone mit iOS 18.7 im Lager gibt sie
+//    her, zwei Android-Geräte nicht. Die frühere Annahme „iPhones nie" war falsch.
+//
+//  * IM LAGER GEMESSEN (08.09.2026): iPhone mit dem Bündel 6,2 Bilder/s und erster Treffer nach
+//    0,8 s — schneller als der native Weg auf Android (5,8/s). Der erste Code wurde 114× bestätigt.
+//    Gelesen wurden auch ein Code-128-Lageretikett und ein Produkt-QR; die Formatliste stimmt.
 
 const SCANNER_FORMATE_1D = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'];
 const SCANNER_FORMATE_2D = ['qr_code', 'data_matrix'];
 const SCANNER_NOETIGE_LESUNGEN = 3;
+
+/**
+ * Aus mehreren gleichzeitig gelesenen Codes den glaubwürdigsten wählen: den am HÄUFIGSTEN
+ * gelesenen, der die Schwelle erreicht hat.
+ *
+ * Warum das nötig ist — im Lager gemessen (08.09.2026): Auf demselben Karton lagen
+ *   043899923098   (UPC-A)  —  3× gelesen
+ *   4003899923098  (EAN-13) — 12× gelesen
+ * 239 Millisekunden auseinander, beide mit gültiger Prüfziffer, mit zehn gemeinsamen Endziffern.
+ * Wer den ERSTEN nimmt, der die Schwelle erreicht, bekommt hier den schwächeren. Der öfter
+ * gelesene ist der, den die Kamera wirklich sieht.
+ *
+ * Als eigene Funktion, damit sie prüfbar ist — die Kamera lässt sich nicht nachstellen, diese
+ * Entscheidung schon.
+ */
+function scannerBesterTreffer(zaehlung, noetig) {
+  let bester = null, beste = 0;
+  for (const [code, n] of zaehlung) {
+    if (n >= noetig && n > beste) { bester = code; beste = n; }
+  }
+  return bester;
+}
 
 let _zxingGeladen = null;
 
@@ -93,9 +122,14 @@ async function scannerOeffnen() {
 
     let strom = null, laeuft = true, nativ = null, zxing = null, spur = null, licht = false;
     const gezaehlt = new Map();
+    // Nach der ersten Bestaetigung noch kurz weiterlesen, statt sofort zu schliessen. Eine halbe
+    // Sekunde kostet nichts und entscheidet den Fall oben richtig.
+    const NACHLAUF_MS = 500;
+    let nachlauf = null;
 
     function schliessen(code) {
       laeuft = false;
+      if (nachlauf) { clearTimeout(nachlauf); nachlauf = null; }
       if (zxing) { try { zxing.stopContinuousDecode(); } catch (_) {} try { zxing.reset(); } catch (_) {} zxing = null; }
       nativ = null;
       if (strom) { strom.getTracks().forEach(t => t.stop()); strom = null; }
@@ -113,12 +147,17 @@ async function scannerOeffnen() {
       const n = (gezaehlt.get(code) || 0) + 1;
       gezaehlt.set(code, n);
       if (n < SCANNER_NOETIGE_LESUNGEN) {
-        melde(`Gelesen (${n} von ${SCANNER_NOETIGE_LESUNGEN}) — bitte ruhig halten …`);
+        if (!nachlauf) melde(`Gelesen (${n} von ${SCANNER_NOETIGE_LESUNGEN}) — bitte ruhig halten …`);
         return;
       }
+      if (nachlauf) return;   // laeuft schon
       if (navigator.vibrate) navigator.vibrate(80);
-      melde('Gelesen: ' + code);
-      schliessen(code);
+      melde('Erkannt — einen Moment …');
+      nachlauf = setTimeout(() => {
+        const bester = scannerBesterTreffer(gezaehlt, SCANNER_NOETIGE_LESUNGEN) || code;
+        melde('Gelesen: ' + bester);
+        schliessen(bester);
+      }, NACHLAUF_MS);
     }
 
     (async () => {

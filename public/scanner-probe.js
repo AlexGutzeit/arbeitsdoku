@@ -169,8 +169,13 @@
     $('lichtinfo').textContent = hatLicht
       ? 'Die LED neben der Kamera — für dunkle Regale. Dieses Gerät kann sie schalten.'
       : 'Die LED neben der Kamera. DIESES GERÄT GIBT SIE ÜBER DEN BROWSER NICHT HER — '
-        + 'bei iPhones ist das immer so, bei Android je nach Modell und Browser. '
-        + 'Im Lager hilft dann nur das Licht im Raum oder die Taschenlampe im Handy-Menü.';
+        // KORREKTUR (08.09.2026): Hier stand „bei iPhones ist das immer so". Das ist FALSCH.
+        // Jakobs iPhone (iOS 18.7) meldet die Taschenlampe als schaltbar — Safari kann das seit
+        // iOS 17.4. Ich hatte eine veraltete Annahme als Tatsache hingeschrieben, ausgerechnet
+        // an der Stelle, an der jemand sie liest.
+        + 'das hängt am Modell und am Browser, nicht am Hersteller. '
+        + 'Im Lager hilft dann das Licht im Raum, die Taschenlampe im Handy-Menü — oder der '
+        + 'Zoom weiter unten.';
     // ERSETZEN, nicht anhaengen: Bei jedem Start kamen sonst vier weitere Zeilen dazu — nach
     // sechs Versuchen stand die Tabelle sechsmal da. Von Alex im Betrieb gefunden.
     const alt = $('fakten').querySelector('#kamerafakten');
