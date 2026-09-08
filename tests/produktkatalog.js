@@ -149,6 +149,68 @@ function req(m, p, t, b) {
     const best = await req('GET', '/api/orders', max);
     ok('die getippte Bestellung steht unverändert da',
       best.body.orders.some(o => o.product === '2 Rollen Klebeband'), JSON.stringify(best.body.orders.map(o => o.product)));
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    // Wer darf PFLEGEN? (Alex, 08.09.2026)
+    //
+    // Bis hierher hing das an der Rolle. Jetzt gibt es das Einzelrecht can_products — dieselbe
+    // Idee wie beim Bestellrecht, wo Urlaub und Krankheit sonst die ganze Firma ausbremsen.
+    //
+    // Die Falle, gegen die dieser Abschnitt geschrieben ist: Beim Bestellrecht stand dieselbe
+    // Regel an fuenf Stellen, drei davon falsch. Eine hingeschriebene Bedingung
+    // `role IN ('chef','admin')` sieht richtig aus und uebersieht das Haekchen STILL — nichts
+    // geht kaputt, es geht nur nicht. Deshalb wird hier nicht die Funktion geprueft, sondern
+    // die WIRKUNG an der Route.
+    console.log('\n── Wer darf die Lagerdaten pflegen ──');
+    const buchhalter = await an('buchhalter');
+    const maxId = db.prepare("SELECT id FROM users WHERE username = 'max'").get().id;
+    const chefId = db.prepare("SELECT id FROM users WHERE username = 'chef'").get().id;
+    const codesVonP1 = () => db.prepare('SELECT code FROM product_barcodes WHERE product_id = ? ORDER BY code').all(p1.body.produkt.id).map(r => r.code);
+    const [codeA, codeB] = codesVonP1();
+
+    // Gegenprobe zum Bestellrecht: Der Buchhalter hat es dort PER ROLLE — hier NICHT.
+    const buchDarfNicht = await req('DELETE', `/api/products/${p1.body.produkt.id}/barcodes/${codeA}`, buchhalter);
+    ok('der Buchhalter hat das Recht NICHT per Rolle', buchDarfNicht.status === 403, String(buchDarfNicht.status));
+
+    // Anlegen bleibt fuer JEDEN offen — das ist kein Versehen, sondern der Zweck.
+    const maLegtAn = await req('POST', '/api/products', max, { name: 'Isolierband schwarz', barcode: '4008196000119' });
+    ok('anlegen darf weiterhin jeder, auch ohne Recht', maLegtAn.status === 201, maLegtAn.status + ' ' + maLegtAn.text.slice(0, 80));
+
+    const setzen = async (id, wert, token) => req('PUT', `/api/users/${id}`, token, { can_products: wert });
+    const gesetzt = await setzen(maxId, true, admin);
+    ok('das Häkchen lässt sich setzen', gesetzt.status === 200, gesetzt.status + ' ' + gesetzt.text.slice(0, 90));
+    ok('… und steht in der Datenbank',
+      db.prepare('SELECT can_products FROM users WHERE id = ?').get(maxId).can_products === 1,
+      JSON.stringify(db.prepare('SELECT can_products FROM users WHERE id = ?').get(maxId)));
+
+    // Ohne neues Anmelden: die Middleware liest das Recht bei JEDER Anfrage frisch. Haenge es an
+    // der Sitzung, muesste sich Max erst ab- und wieder anmelden — das wuerde niemand verstehen.
+    const jetztErlaubt = await req('DELETE', `/api/products/${p1.body.produkt.id}/barcodes/${codeA}`, max);
+    ok('mit Recht darf der Mitarbeiter — ohne neues Anmelden', jetztErlaubt.status === 200,
+      jetztErlaubt.status + ' ' + jetztErlaubt.text.slice(0, 90));
+    ok('… der Code ist wirklich weg', !codesVonP1().includes(codeA), JSON.stringify(codesVonP1()));
+
+    // Das Recht steht im Protokoll — sonst laesst sich hinterher nicht klaeren, wer es vergab.
+    const spur = db.prepare("SELECT details FROM audit_logs WHERE action = 'user_update' ORDER BY id DESC LIMIT 1").get();
+    ok('die Vergabe steht im Protokoll', /Produktverzeichnis/.test(spur && spur.details || ''),
+      JSON.stringify(spur));
+
+    // Entziehen muss genauso wirken. Ein Recht, das man nicht zurueckgeben kann, ist keins.
+    await setzen(maxId, false, admin);
+    const wiederGesperrt = await req('DELETE', `/api/products/${p1.body.produkt.id}/barcodes/${codeB}`, max);
+    ok('entzogen wirkt es sofort wieder', wiederGesperrt.status === 403, String(wiederGesperrt.status));
+    ok('… und der Code steht noch da', codesVonP1().includes(codeB), JSON.stringify(codesVonP1()));
+
+    // Chef/Admin haben es per Rolle — das Haekchen bleibt bei ihnen auf 0, damit nicht zwei
+    // Quellen dasselbe behaupten (und eine spaeter still veraltet).
+    await setzen(chefId, true, admin);
+    ok('beim Chef bleibt das Häkchen leer (er hat es per Rolle)',
+      db.prepare('SELECT can_products FROM users WHERE id = ?').get(chefId).can_products === 0,
+      JSON.stringify(db.prepare('SELECT can_products FROM users WHERE id = ?').get(chefId)));
+    const chefDarfWeiter = await req('DELETE', `/api/products/${p1.body.produkt.id}/barcodes/${codeB}`, chef);
+    ok('… und er darf trotzdem', chefDarfWeiter.status === 409 || chefDarfWeiter.status === 200,
+      String(chefDarfWeiter.status));
+
   } catch (e) {
     ok('Durchlauf ohne Ausnahme', false, e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e.message);
   } finally { server.close(); }

@@ -494,6 +494,16 @@ async function initDatabase() {
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
+  // Migration: can_products Spalte (Recht, das Produktverzeichnis zu pflegen).
+  // Regel und Begruendung stehen in produktrecht.js — hier nur die Spalte.
+  try {
+    const colsProd = db.prepare("PRAGMA table_info(users)").all();
+    if (!colsProd.some(c => c.name === 'can_products')) {
+      db.exec("ALTER TABLE users ADD COLUMN can_products INTEGER DEFAULT 0");
+      console.log('Migration: can_products Spalte hinzugefügt.');
+    }
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
+
   // Migration: can_plan_all Spalte (Planungsrecht-Stufe „alle" — can_plan allein = nur „sich")
   // Backfill: Bestandsplaner (can_plan=1) behalten das Recht, ALLE zu planen.
   ensurePlanAll(db);
@@ -939,6 +949,7 @@ function ensureAuditSchema(targetDb) {
     addCol('users', 'can_bulletin', 'INTEGER DEFAULT 0');
     addCol('users', 'can_upload', 'INTEGER DEFAULT 0');
     addCol('users', 'can_order', 'INTEGER DEFAULT 0');
+    addCol('users', 'can_products', 'INTEGER DEFAULT 0');
     addCol('users', 'start_overtime', 'REAL DEFAULT 0');
     addCol('users', 'target_hours_per_week', 'REAL DEFAULT 40');
     addCol('users', 'active', 'INTEGER DEFAULT 1');
@@ -995,10 +1006,10 @@ function ensurePlanAll(targetDb) {
 function normalizeManagerRights(targetDb) {
   try {
     const n = targetDb.prepare(
-      "SELECT COUNT(*) AS c FROM users WHERE role IN ('chef','admin') AND (can_plan=1 OR can_plan_all=1 OR can_bulletin=1 OR can_upload=1)"
+      "SELECT COUNT(*) AS c FROM users WHERE role IN ('chef','admin') AND (can_plan=1 OR can_plan_all=1 OR can_bulletin=1 OR can_upload=1 OR can_products=1)"
     ).get().c;
     if (n > 0) {
-      targetDb.exec("UPDATE users SET can_plan=0, can_plan_all=0, can_bulletin=0, can_upload=0 WHERE role IN ('chef','admin')");
+      targetDb.exec("UPDATE users SET can_plan=0, can_plan_all=0, can_bulletin=0, can_upload=0, can_products=0 WHERE role IN ('chef','admin')");
       console.log(`Normalisierung: ${n} Chef/Admin-Konto/-Konten von redundanten Einzelrechten bereinigt (#9).`);
     }
     // can_order EXTRA, weil hier auch der Buchhalter das Recht per Rolle hat. Die Zeile oben darf

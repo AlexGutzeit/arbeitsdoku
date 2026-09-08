@@ -14,6 +14,42 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-08 · Recht „Lagerdaten pflegen" — und ein Test, der aus dem falschen Grund grün war
+
+Alex: „Wer darf die Lagerdaten bearbeiten? Das darf ja momentan nur Chef und Admin. Auch hier würde
+ich bei *Mitarbeiter → Bearbeiten* gerne noch ein Recht hinzufügen."
+
+Gebaut nach dem Muster von `bestellrecht.js`, und zwar aus dem dort gelernten Grund: Beim
+Bestellrecht stand dieselbe Regel an **fünf Stellen, drei davon falsch**. Eine hingeschriebene
+Bedingung `role IN ('chef','admin')` sieht richtig aus und übersieht das Häkchen **still** — nichts
+geht kaputt, es geht nur nicht. Deshalb wieder **ein** Modul (`produktrecht.js`) mit der Regel,
+`routes/products.js` fragt nur noch dort. Es gehört in die `STAMMDATEIEN` von `deploy.sh`; fehlt es
+auf dem Server, startet der Dienst nach dem nächsten Neustart gar nicht.
+
+**Zwei Unterschiede zum Bestellrecht, beide bewusst:**
+
+* **Der Buchhalter hat es *nicht* per Rolle.** Beim Bestellen zählt er mit, weil er die Rechnungen
+  bekommt; mit dem Lagerverzeichnis hat er nichts zu tun. Die Rollenliste ist deshalb eine eigene
+  und wird *nicht* aus dem Bestellrecht übernommen.
+* **Anlegen bleibt für jeden offen.** Das Recht regelt nur das *Pflegen*. Wer im Lager vor einem
+  unbekannten Barcode steht und nichts eintragen kann, umgeht die App — dann ist der Katalog nach
+  vier Wochen wertlos.
+
+**Der eigentliche Fund kam aber vom neuen `tests/altdb-spalten.js`.** `middleware/auth.js` liest bei
+*jeder* Anfrage eine feste Spaltenliste aus `users`. Fehlt eine davon nach dem Wiederherstellen
+eines alten Backups, antwortet der Server auf alles mit `no such column` — auch dem Admin, ohne Weg
+zurück ausser über die Konsole. Bisher hat **kein Test** diesen Pfad geschützt. Der neue liest die
+Spaltenliste **aus dem Quelltext der Middleware**, statt sie abzuschreiben; damit wird er beim
+nächsten neuen Recht nicht still veraltet.
+
+Beim ersten Lauf war er grün — **und prüfte nichts**: Sein Muster traf die *erste* `SELECT … FROM
+users WHERE id = ?` in `auth.js`, und das ist `SELECT username`. Eine Spalte, alle Zusagen erfüllt.
+Jetzt nimmt er die **längste** Abfrage und wirft, wenn sie unter fünf Spalten fällt. Dasselbe Muster
+wie in [[reference_tests_zeitfallen]]: Grün allein beweist nichts, die Gegenprobe ist Pflicht.
+
+Gegenproben, alle drei greifen: Einzelrecht totgelegt → zwei Zusagen fallen. Buchhalter in die
+Rollenliste geschmuggelt → zwei fallen. `addCol` im Restore-Pfad entfernt → alle vier fallen.
+
 ### 2026-09-06 · Eine Zeitzone im ganzen Servercode
 
 Alex' Frage nach dem Deploy: „Nicht dass noch irgendwo Zeiten um (mehrere) Stunde(n) auseinander

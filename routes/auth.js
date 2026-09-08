@@ -118,6 +118,7 @@ function anmeldeAntwort(db, user) {
       can_bulletin: !!user.can_bulletin,
       can_upload: !!user.can_upload,
       can_order: !!user.can_order,
+      can_products: !!user.can_products,
       work_start: user.work_start || null,  // leer = Firmenwert aus den Einstellungen
       birth_date: user.birth_date || null   // leer = Alter unbekannt -> strengerer Jugendschutz
     },

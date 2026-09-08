@@ -1264,7 +1264,7 @@ async function showUserModal(user) {
           </div>
         </div>
         <div class="form-group" id="um-rights-role-hint" style="display:none;">
-          <p class="push-hint" style="margin:0;">Chef und Admin haben Planungs-, Schwarzes-Brett- und Upload-Recht automatisch (per Rolle) – Einzelrechte sind hier nicht nötig.</p>
+          <p class="push-hint" style="margin:0;">Chef und Admin haben Planungs-, Schwarzes-Brett-, Upload- und Lagerdaten-Recht automatisch (per Rolle) – Einzelrechte sind hier nicht nötig.</p>
         </div>
         <div class="form-group" id="um-rights-group">
           <label style="display:block;margin-bottom:0.3rem;">Planungsrecht</label>
@@ -1284,6 +1284,15 @@ async function showUserModal(user) {
             <input type="checkbox" id="um-can-upload" ${user?.can_upload ? 'checked' : ''}>
             Datei-Upload-Recht (darf Dokumente hochladen &amp; verwalten)
           </label>
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:0.6rem;">
+            <input type="checkbox" id="um-can-products" ${user?.can_products ? 'checked' : ''}>
+            Lagerdaten pflegen (Produktverzeichnis aufräumen)
+          </label>
+          <p class="push-hint" style="margin:0.25rem 0 0;">
+            Darf im Produktverzeichnis umbenennen, Kategorien ändern, Barcodes umhängen, doppelte
+            Einträge zusammenführen und löschen. <strong>Anlegen darf jeder</strong> – wer im Lager
+            vor einem unbekannten Barcode steht, soll ihn eintragen können.
+          </p>
         </div>
         <!-- Bewusst eine EIGENE Gruppe: Beim Bestellen hat auch der Buchhalter das Recht per
              Rolle, bei Planung/Brett/Upload nicht. Die beiden Bloecke werden deshalb nach
@@ -1532,6 +1541,7 @@ async function showUserModal(user) {
       can_bulletin: document.getElementById('um-can-bulletin').checked,
       can_order: document.getElementById('um-can-order').checked,
       can_upload: document.getElementById('um-can-upload').checked,
+      can_products: document.getElementById('um-can-products').checked,
     };
     // Bei neuem User Tages-Stunden setzen
     if (!isEdit) {

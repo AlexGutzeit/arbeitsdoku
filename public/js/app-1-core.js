@@ -965,6 +965,17 @@ function darfBestellen() {
   return ['admin', 'chef', 'buchhalter'].includes(S.user.role) || !!S.user.can_order;
 }
 
+// Darf das Produktverzeichnis PFLEGEN (umbenennen, Kategorie wechseln, Barcodes umhaengen,
+// zusammenfuehren, loeschen): per Rolle (Admin/Chef) oder per Einzelrecht. Der Buchhalter ist hier
+// bewusst NICHT dabei — anders als beim Bestellen. Gegenstueck zu produktrecht.js auf dem Server;
+// verboten wird dort, hier wird nur ein-/ausgeblendet.
+//
+// ANLEGEN darf jeder — das fragt diese Funktion nicht ab.
+function darfProduktePflegen() {
+  if (!S.user) return false;
+  return ['admin', 'chef'].includes(S.user.role) || !!S.user.can_products;
+}
+
 function canManageProjects() {
   return S.user && (S.user.role === 'admin' || S.user.role === 'chef');
 }

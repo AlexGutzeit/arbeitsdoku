@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**209 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**210 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -60,6 +60,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `absence-reapply-ui.js` | UI-Smoke (Puppeteer): Abwesenheits-Papierkorb bietet „Neu beantragen" (kein „Wiederherstellen"), |
 | `abwesenheitskalender-ui.js` | Abwesenheitskalender: wer fehlt wann, alle Mitarbeiter auf einen Blick (Alex, 28.08.2026). |
 | `alle-abmelden-ui.js` | „Auf allen Geräten abmelden" — der Knopf darf einen NICHT selbst hinauswerfen (Alex, 23.08.2026). |
+| `altdb-spalten.js` | Ein sehr altes Backup einspielen — und trotzdem hineinkommen. |
 | `ansicht-erhalten-ui.js` | Puppeteer-Test (B10): Ansicht bleibt über Neuaufbauten hinweg erhalten. |
 | `arbeitsbeginn-prodklon.js` | Abwaertskompatibilitaet des Arbeitsbeginns — der Aussperr-Fall. |
 | `arbeitsbeginn-ui.js` | Arbeitsbeginn je Mitarbeiter + Zeit-Vorbelegung, die nie unmöglich ist. |

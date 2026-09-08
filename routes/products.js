@@ -20,10 +20,9 @@ const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { logAudit, berlinNow } = require('../audit');
 const { broadcast } = require('../sse');
+const { darfProduktePflegen } = require('../produktrecht');
 
 const router = express.Router();
-
-const istPfleger = (u) => u && (u.role === 'admin' || u.role === 'chef');
 
 /**
  * Vergleichsform eines Namens: klein, ohne Leerzeichen, Bindestriche und Satzzeichen.
@@ -207,7 +206,7 @@ router.post('/:id/barcodes', authenticate, (req, res) => {
 
 // ── Barcode entfernen — aber nie den letzten ─────────────────────────────────────────────────
 router.delete('/:id/barcodes/:code', authenticate, (req, res) => {
-  if (!istPfleger(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
+  if (!darfProduktePflegen(req.user)) return res.status(403).json({ error: 'Keine Berechtigung' });
   const db = getDb();
   const id = Number(req.params.id);
   const code = String(req.params.code || '').trim();
