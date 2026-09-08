@@ -8,6 +8,11 @@
 // ausgeblendet (er darf per Rolle), seine Planungs- und Brett-Rechte aber NICHT — die beiden
 // Blöcke folgen deshalb verschiedenen Regeln, und genau da ist ein Fehler leicht zu machen.
 //
+// Seit 08.09.2026 gilt dasselbe für „Lagerdaten pflegen" (can_products) — mit dem UMGEKEHRTEN
+// Ausgang beim Buchhalter: Er darf NICHT pflegen, also muss dieses Kästchen bei ihm STEHEN
+// BLEIBEN. Wer das Recht später versehentlich in den Bestell-Block schiebt, nimmt es ihm still
+// weg. Deshalb wird hier beides nebeneinander geklickt.
+//
 //   node tests/bestellrecht-ui.js
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
@@ -97,20 +102,30 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     await a.seite.select('#um-role', 'buchhalter'); await sleep(400);
     ok('Buchhalter: Bestell-Kästchen verborgen', !(await sichtbar(a.seite, '#um-can-order')));
     ok('Buchhalter: Planungsrecht bleibt sichtbar', await sichtbar(a.seite, '#um-can-plan'));
+    // Der umgekehrte Fall: Lagerdaten hat er NICHT per Rolle, das Kästchen muss also bleiben.
+    ok('Buchhalter: Lagerdaten-Kästchen bleibt sichtbar', await sichtbar(a.seite, '#um-can-products'));
     ok('Buchhalter: Hinweis erscheint', await sichtbar(a.seite, '#um-order-role-hint'));
     await a.seite.select('#um-role', 'chef'); await sleep(400);
     ok('Chef: beides verborgen',
       !(await sichtbar(a.seite, '#um-can-order')) && !(await sichtbar(a.seite, '#um-can-plan')));
+    ok('Chef: auch Lagerdaten verborgen (er darf per Rolle)', !(await sichtbar(a.seite, '#um-can-products')));
     await a.seite.select('#um-role', 'mitarbeiter'); await sleep(400);
     ok('Mitarbeiter: beides wieder da',
       (await sichtbar(a.seite, '#um-can-order')) && (await sichtbar(a.seite, '#um-can-plan')));
+    ok('Mitarbeiter: Lagerdaten-Kästchen ist da', await sichtbar(a.seite, '#um-can-products'));
+    ok('… mit dem Hinweis, dass ANLEGEN jeder darf',
+      /[Aa]nlegen darf/.test(await a.seite.evaluate(() => document.getElementById('um-rights-group').innerText)),
+      await a.seite.evaluate(() => document.getElementById('um-rights-group').innerText.slice(-160)));
 
     console.log('\n── Speichern ──');
     await a.seite.click('#um-can-order');
+    await a.seite.click('#um-can-products');
     await a.seite.evaluate(() => document.querySelector('#um-can-order').closest('form').querySelector('button[type="submit"]').click());
     await sleep(2000);
     const gespeichert = (await req('GET', '/api/users', admin)).body.users.find(u => u.id === vor.id);
     ok('das Recht steht in der Datenbank', gespeichert && gespeichert.can_order === 1, JSON.stringify(gespeichert && gespeichert.can_order));
+    ok('… und das Lagerdaten-Recht ebenso', gespeichert && gespeichert.can_products === 1,
+      JSON.stringify(gespeichert && gespeichert.can_products));
 
     console.log('\n── Mit Recht: der Knopf wirkt ──');
     await v.seite.close(); await v.ktx.close();
