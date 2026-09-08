@@ -116,6 +116,30 @@ function req(m, p, t, b) {
     ok('echte Codes bleiben unangetastet',
       plaus.ean13 && plaus.ean8 && plaus.upcA && plaus.code128 && plaus.qr, JSON.stringify(plaus));
 
+    console.log('\n── GS1: die Artikelnummer aus dem Code lösen ──');
+    // Auf einer Packung im Feld: 010979857524203121SA3AUXMS78F7POQ4CZ7Z
+    // 01 = GTIN (14 Stellen), 21 = Seriennummer — und die ist PRO STUECK verschieden. Wer die
+    // Rohzeichenkette speichert, legt fuer jede Packung ein neues Produkt an.
+    const gs1 = await seite.evaluate(() => ({
+      ausFeld:    scannerCodeNormalisieren('010979857524203121SA3AUXMS78F7POQ4CZ7Z'),
+      mitKennung: scannerCodeNormalisieren(']d2010979857524203121SA3AUXMS78F7POQ4CZ7Z'),
+      // Realistischer Fall: Das Kennzeichen 01 hat FESTE Laenge 14, dahinter steht nie ein
+      // Trenner. Der folgt einem Kennzeichen mit VARIABLER Laenge — hier 10 (Charge).
+      // Mein erster Testfall hatte nur 13 GTIN-Ziffern und war schlicht kein gueltiger GS1-Code.
+      mitTrenner: scannerCodeNormalisieren('010979857524203110CHARGE7\x1d21SERIAL9'),
+      ohneGs1:    scannerCodeNormalisieren('A2026052700123'),
+      schlichteEan: scannerCodeNormalisieren('4011395319475'),
+      andererMatrix: scannerCodeNormalisieren('0004036034'),
+    }));
+    ok('aus dem Feld-Code wird die Artikelnummer 9798575242031',
+      gs1.ausFeld.code === '9798575242031', JSON.stringify(gs1.ausFeld));
+    ok('… das ist genau der EAN-13 von derselben Packung', gs1.ausFeld.artikelnummer === '9798575242031');
+    ok('… auch mit vorangestellter Symbolkennung', gs1.mitKennung.code === '9798575242031', JSON.stringify(gs1.mitKennung));
+    ok('… und mit Gruppentrenner im Code', gs1.mitTrenner.code === '9798575242031', JSON.stringify(gs1.mitTrenner));
+    ok('ein Lageretikett bleibt unangetastet', gs1.ohneGs1.code === 'A2026052700123' && gs1.ohneGs1.artikelnummer === null, JSON.stringify(gs1.ohneGs1));
+    ok('… ein schlichter EAN-13 ebenso', gs1.schlichteEan.code === '4011395319475', JSON.stringify(gs1.schlichteEan));
+    ok('… und ein Data-Matrix ohne GS1-Aufbau auch', gs1.andererMatrix.code === '0004036034', JSON.stringify(gs1.andererMatrix));
+
     console.log('\n── Bekannter Code wird eingesetzt ──');
     await seite.click('#order-add-btn'); await sleep(500);
     ok('der Scan-Knopf ist da', await seite.$('#of-scan') !== null);

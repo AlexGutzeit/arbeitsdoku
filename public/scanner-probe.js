@@ -85,6 +85,7 @@
   let versuche = 0, ersterTrefferMs = null, beginn = 0;
   const gesehen = new Map();
   const unplausibel = new Set();
+  const gs1Erkannt = new Map();
 
   function melde(t, art) {
     const el = $('status');
@@ -98,8 +99,21 @@
   // die einzige Zahl, auf die es ankommt (Zeit bis zum ERSTEN Treffer), war unauffindbar.
   // Ausserdem wird der echte Scanner genau EINMAL lesen und dann aufhoeren; das laesst sich hier
   // mit dem Haken ausprobieren.
-  function treffer(text, format, weg, ms) {
-    if (!plausibel(text, format)) { unplausibel.add(text + ' (' + format + ')'); return; }
+  // Dieselbe GS1-Zerlegung wie im echten Scanner: Aus 010979857524203121SA3AUXMS78F7POQ4CZ7Z
+  // wird die Artikelnummer 9798575242031 — sonst zaehlte jede Packung ihre eigene Seriennummer
+  // als eigenen Code, und der Katalog waere nach einer Woche unbrauchbar.
+  const gs1Nummer = (w) => {
+    const bereinigt = String(w || '').replace(/^\][A-Za-z]\d/, '').replace(/\x1d/g, '');
+    const m = bereinigt.match(/^01(\d{14})/);
+    if (!m) return null;
+    return m[1].startsWith('0') ? m[1].slice(1) : m[1];
+  };
+
+  function treffer(rohText, format, weg, ms) {
+    const nummer = gs1Nummer(rohText);
+    const text = nummer || rohText;
+    if (nummer) gs1Erkannt.set(text, rohText);
+    if (!plausibel(text, nummer ? 'ean_13' : format)) { unplausibel.add(text + ' (' + format + ')'); return; }
     // Letzter Riegel: Meldet eine ueberlebende Schleife trotzdem noch, wird sie ignoriert.
     // Drei Riegel statt einem, weil der Fehler genau daran lag, dass EINER nicht gehalten hat.
     if (!laeuft) return;
@@ -117,6 +131,7 @@
       return `<li style="${sicher ? '' : 'opacity:.55'}">`
         + `<code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
         + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms · `
+        + (gs1Erkannt.has(code) ? 'Artikelnummer aus GS1-Code · ' : '')
         + (sicher ? `${d.n}× gelesen — bestätigt` + (istZweiD(d.format) ? ' (2D: Fehlerkorrektur, eine Lesung genügt)' : '')
                   : `nur ${d.n}× gelesen (nötig: ${NOETIGE_LESUNGEN(d.format)}) — vermutlich Fehllesung, wird nicht übernommen`)
         + '</span></li>';
@@ -149,7 +164,7 @@
     stop();
     await new Promise(r => setTimeout(r, 150));
     versuche = 0; ersterTrefferMs = null; beginn = performance.now();
-    gesehen.clear(); unplausibel.clear();
+    gesehen.clear(); unplausibel.clear(); gs1Erkannt.clear();
     $('treffer').dataset.leer = '1'; $('treffer').innerHTML = '<li>noch keiner</li>';
     $('bilanz').className = 'bilanz'; $('bilanz').textContent = 'Noch nichts gelesen.';
     try {

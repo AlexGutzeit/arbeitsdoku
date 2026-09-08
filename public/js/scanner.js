@@ -115,6 +115,41 @@ function scannerPlausibel(code, format) {
   return w.trim().length >= 3;
 }
 
+/**
+ * Aus einem GS1-Code die reine Artikelnummer herauslösen.
+ *
+ * Im Feld gemessen (Alex, 08.09.2026). Auf einer Packung stand ein Data-Matrix:
+ *
+ *   010979857524203121SA3AUXMS78F7POQ4CZ7Z
+ *   ^^                ^^
+ *   01 = GTIN         21 = Seriennummer
+ *
+ * Nach „01" folgen 14 Stellen GTIN (`09798575242031`), danach „21" und die Seriennummer. Ohne die
+ * führende Null ist die GTIN genau der EAN-13 `9798575242031` — derselbe Code, der auf derselben
+ * Packung als Strichcode klebt und im selben Lauf gelesen wurde.
+ *
+ * WARUM DAS ENTSCHEIDEND IST: Die Seriennummer ist PRO STÜCK verschieden. Wer die Rohzeichenkette
+ * als Barcode speichert, legt für jede einzelne Packung ein neues „unbekanntes Produkt" an — der
+ * Katalog wäre nach einer Woche unbrauchbar. Genau das hätte diese Funktion verhindert, und
+ * genau das hätte ich ohne Alex' Feldversuch nicht bemerkt.
+ *
+ * Gilt für Data-Matrix, QR und GS1-128. Ein gewöhnliches Lageretikett wie `A2026052700123` bleibt
+ * unangetastet: Es beginnt nicht mit „01" plus vierzehn Ziffern.
+ */
+function scannerCodeNormalisieren(code) {
+  let w = String(code || '');
+  // Manche Decoder stellen eine Symbolkennung voran (]d2 = Data-Matrix, ]C1 = GS1-128).
+  w = w.replace(/^\][A-Za-z]\d/, '');
+  // Trennzeichen FNC1 (Gruppentrenner) entfernen.
+  w = w.replace(/\x1d/g, '');
+  const m = w.match(/^01(\d{14})/);
+  if (!m) return { code: w, artikelnummer: null };
+  const gtin = m[1];
+  // GTIN-14 mit führender Null ist ein EAN-13.
+  const nummer = gtin.startsWith('0') ? gtin.slice(1) : gtin;
+  return { code: nummer, artikelnummer: nummer, roh: w };
+}
+
 let _zxingGeladen = null;
 
 /**
@@ -186,6 +221,7 @@ async function scannerOeffnen() {
     // Sekunde kostet nichts und entscheidet den Fall oben richtig.
     const NACHLAUF_MS = 500;
     let nachlauf = null;
+    let gs1Gemeldet = false;
 
     function schliessen(code) {
       laeuft = false;
@@ -202,9 +238,17 @@ async function scannerOeffnen() {
     overlay.querySelector('[data-act="zu"]').addEventListener('click', () => schliessen(null));
     overlay.addEventListener('click', (e) => { if (e.target === overlay) schliessen(null); });
 
-    function treffer(code, format) {
-      if (!laeuft || !code) return;
-      if (!scannerPlausibel(code, format)) return;
+    function treffer(rohCode, format) {
+      if (!laeuft || !rohCode) return;
+      // Erst die Artikelnummer herauslösen, DANN prüfen und zählen. Sonst zählte jede Packung
+      // ihre eigene Seriennummer als eigenen Code.
+      const norm = scannerCodeNormalisieren(rohCode);
+      const code = norm.code;
+      if (norm.artikelnummer && !gs1Gemeldet) {
+        gs1Gemeldet = true;
+        melde('Artikelnummer aus dem Code gelesen: ' + norm.artikelnummer);
+      }
+      if (!scannerPlausibel(code, norm.artikelnummer ? 'ean_13' : format)) return;
       const vorher = gezaehlt.get(code);
       const n = (vorher ? vorher.n : 0) + 1;
       gezaehlt.set(code, { n, format: format || (vorher && vorher.format) || '' });
