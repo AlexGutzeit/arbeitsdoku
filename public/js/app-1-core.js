@@ -1600,6 +1600,10 @@ function render() {
   else if (route.startsWith('/planning/accept/')) renderEntryForm(null, null, route.split('/').pop());
   else if (route.startsWith('/planning/from-project/')) renderPlanningForm(null, null, null, route.split('/').pop());
   else if (route.startsWith('/entry/from-project/')) renderEntryForm(null, null, null, route.split('/').pop());
+  else if (route === '/produkte') renderProdukte();
+  // Tiefer Verweis aus den Bestellungen: „Grosshaendler-Infos bearbeiten" springt direkt auf
+  // das Produkt und klappt es auf.
+  else if (route.startsWith('/produkte/')) renderProdukte(route.split('/').pop());
   else if (route === '/tools') renderTools();
   else if (route === '/orders') renderOrders();
   else if (route === '/notes') renderNotizen();

@@ -408,6 +408,44 @@ Werkzeug-Inventar mit Ausleihe/Rückgabe: wer hat was wann entnommen, inkl. Hist
 
 Material-/Bestellanforderungen der Mitarbeiter; Chef sieht offene Bestellungen (Badge).
 
+Zeigt eine Bestellung auf ein **Produkt aus dem Verzeichnis**, steht darunter der Knopf
+**„📦 Großhändler"**: Er klappt Bestellnummer, Kommentar, Kundennummer und Ansprechpartner je
+Händler auf, und der Link führt mit einem Klick zum Artikel im Webshop. Die **Domain steht sichtbar
+daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Ausklapper für alle, die
+**bestellen** dürfen; wer zusätzlich **Lagerdaten pflegen** darf, findet darin
+**„✎ Großhändler-Infos bearbeiten"** und landet damit direkt bei diesem Produkt im Verzeichnis.
+Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
+erraten würde still die falsche Bestellnummer anhängen.
+
+#### 📦 Produktverzeichnis (nur mit dem Recht „Lagerdaten pflegen")
+
+Eigener Menüpunkt, der nur erscheint, wenn man das Recht hat. Drei Reiter:
+
+* **Produkte** — umbenennen, Kategorie und Einheit ändern, weitere **Barcodes** anlernen oder
+  entfernen (nie den letzten: ein Produkt ohne Code wäre weder scannbar noch auffindbar), Produkte
+  **zusammenführen** und löschen. Ganz oben meldet die Ansicht **mögliche Doppel-Eintragungen** –
+  Namen, die sich nur in Schreibweise, Leerzeichen oder Bindestrich unterscheiden („Kabelbinder
+  200 mm" = „kabel-binder 200mm") – mit einem Knopf direkt zum Zusammenführen. Suche und
+  Kategoriefilter arbeiten zusammen.
+* **Großhändler** — Name, Homepage/Webshop, Kundennummer, Ansprechpartner mit Telefon und E-Mail,
+  freie Notiz. Je **Produkt und Händler** kommen Bestellnummer, Link und Kommentar hinzu; sie
+  stehen beim Produkt, nicht beim Händler. Sortiert wird alphabetisch – es gibt bewusst keinen
+  „Hauptlieferanten". Ein Händler mit hinterlegten Produkten wird nicht ohne Rückfrage gelöscht,
+  und seine Einträge bleiben erhalten, damit sie beim Wiederherstellen zurückkommen.
+* **Gelöscht** — Gelöschtes lässt sich zurückholen. Wer einen Barcode eines gelöschten Produkts
+  scannt, bekommt „gehörte zu …" statt „unbekannt". **Zusammengeführte** Produkte lassen sich
+  dagegen nicht als eigene zurückholen – ihre Barcodes hängen am Nachfolger.
+
+**Beim Zusammenführen** wandern Barcodes, Bestell-Verknüpfungen und Großhändler-Angaben mit. Haben
+beide Produkte **denselben** Händler, wird die zweite Bestellnummer **an den Kommentar angehängt**
+statt verworfen (`(aus „Kabelbinder 200": Best.-Nr. 88123)`) und steht so im Protokoll. Der
+**Text** bereits geschriebener Bestellungen bleibt in jedem Fall unangetastet – er ist das, was ein
+Mensch geschrieben hat.
+
+**Links werden serverseitig geprüft:** nur `http://` und `https://`. Eine Adresse ohne Schema
+(`shop.sonepar.de/123`) wird ergänzt; ein `javascript:`-Link wird abgewiesen, weil er beim Klick
+Code im Anmelde-Kontext des Klickenden ausführen würde.
+
 ### Zusammenarbeit
 
 #### 📌 Schwarzes Brett

@@ -1,0 +1,554 @@
+// Produktverzeichnis pflegen — Produkte, Kategorien, Großhändler (Alex, 08./09.09.2026).
+//
+// Erreichbar nur mit dem Recht „Lagerdaten pflegen" (produktrecht.js auf dem Server,
+// darfProduktePflegen() hier). Der Menüpunkt erscheint auch nur dann.
+//
+// Zwei Dinge sind hier bewusst so und nicht anders:
+//
+//  1. KEINE inline-Handler. Die Seite läuft unter `script-src 'self'` — ein `onclick="…"` im
+//     HTML wird stillschweigend nicht ausgeführt. Alles hängt an Sammel-Handlern.
+//
+//  2. Der Link eines Händlers wird als TEXT gesetzt und mit `rel="noopener noreferrer"`
+//     geöffnet. Ohne das kann die Zielseite über `window.opener` die App-Seite im Hintergrund
+//     auf eine nachgebaute Anmeldemaske umleiten. Die Domain steht sichtbar daneben, damit man
+//     vor dem Klick sieht, wohin es geht.
+
+function pDomain(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch (_) { return ''; }
+}
+
+/** Ein Knopf, der eine hinterlegte Adresse öffnet — samt sichtbarer Domain. */
+function pLinkHtml(url, beschriftung) {
+  if (!url) return '';
+  return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer"
+             class="btn btn-sm btn-outline" style="text-decoration:none">${beschriftung}</a>
+          <span style="font-size:.78rem;color:var(--text-light);margin-left:.4rem">${esc(pDomain(url))}</span>`;
+}
+
+async function renderProdukte(fokusId) {
+  $app().innerHTML = layout('<div class="loading">Laden…</div>', 'produkte');
+  bindLayout();
+  const main = document.querySelector('.main');
+
+  if (!darfProduktePflegen()) {
+    main.innerHTML = `<div class="card" style="max-width:640px;margin:0 auto">
+      <h2>Produktverzeichnis</h2>
+      <p>Zum Pflegen des Verzeichnisses fehlt dir das Recht „Lagerdaten pflegen“.
+         Chef oder Admin können es unter <em>Mitarbeiter → Bearbeiten</em> vergeben.</p>
+      <p style="color:var(--text-light)">Neue Produkte <strong>anlegen</strong> darfst du auch ohne
+         dieses Recht — beim Scannen eines unbekannten Barcodes in den Bestellungen.</p>
+    </div>`;
+    return;
+  }
+
+  let v, hl;
+  try {
+    const [a, b] = await Promise.all([
+      api('GET', '/api/products/verzeichnis'),
+      api('GET', '/api/suppliers'),
+    ]);
+    if (!a || !b) return;
+    v = a; hl = b.haendler;
+  } catch (e) { toast(e.message, 'error'); return; }
+
+  S.verzeichnis = v;
+  S.haendlerListe = hl;
+
+  main.innerHTML = `
+    <div class="card" style="max-width:1000px;margin:0 auto">
+      <h2>Produktverzeichnis</h2>
+      <div class="pv-tabs" id="pv-tabs" role="tablist">
+        <button class="pv-tab-btn active" data-tab="produkte" role="tab">Produkte (${v.produkte.length})</button>
+        <button class="pv-tab-btn" data-tab="haendler" role="tab">Großhändler (${hl.length})</button>
+        <button class="pv-tab-btn" data-tab="papierkorb" role="tab">Gelöscht (${v.geloescht.length})</button>
+      </div>
+      <div id="pv-produkte" class="pv-tab">${pvProdukteHtml(v)}</div>
+      <div id="pv-haendler" class="pv-tab" style="display:none">${pvHaendlerHtml(hl)}</div>
+      <div id="pv-papierkorb" class="pv-tab" style="display:none">${pvPapierkorbHtml(v)}</div>
+    </div>`;
+
+  pvBinden();
+  if (fokusId) pvProduktOeffnen(Number(fokusId));
+}
+
+// ── Produkte ────────────────────────────────────────────────────────────────────────────────
+function pvProdukteHtml(v) {
+  const dub = v.dubletten.length ? `
+    <div class="hinweis-box" style="margin:.8rem 0">
+      <strong>${v.dubletten.length} mögliche Doppel-Eintragung(en)</strong> — gleiche Namen bis auf
+      Schreibweise, Leerzeichen oder Bindestrich:
+      ${v.dubletten.map(g => `<div style="margin-top:.4rem">
+        ${g.map(p => `<code>${esc(p.name)}</code>`).join(' &nbsp;=&nbsp; ')}
+        <button class="btn btn-sm btn-outline pv-dub-btn" data-ids="${g.map(p => p.id).join(',')}"
+                style="margin-left:.5rem">Zusammenführen…</button>
+      </div>`).join('')}
+    </div>` : '';
+
+  return dub + `
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.8rem 0">
+      <input type="search" id="pv-suche" class="form-control" style="flex:1;min-width:200px"
+             placeholder="Produkt, Barcode oder Kategorie suchen …">
+      <select id="pv-kat-filter" class="form-control" style="max-width:220px">
+        <option value="">Alle Kategorien</option>
+        ${v.kategorien.map(k => `<option value="${k.id}">${esc(k.name)} (${k.anzahl})</option>`).join('')}
+        <option value="ohne">— ohne Kategorie —</option>
+      </select>
+    </div>
+    <div id="pv-liste">${v.produkte.map(pvProduktZeile).join('') || '<p style="color:var(--text-lighter);text-align:center">Noch keine Produkte im Verzeichnis. Sie entstehen beim Scannen eines unbekannten Barcodes.</p>'}</div>
+    <details style="margin-top:1.4rem">
+      <summary style="cursor:pointer;font-weight:600">Kategorien verwalten (${v.kategorien.length})</summary>
+      <div id="pv-kats" style="margin-top:.6rem">${pvKategorienHtml(v.kategorien)}</div>
+    </details>`;
+}
+
+function pvProduktZeile(p) {
+  const such = [p.name, p.kategorie_name, ...(p.barcodes || [])].filter(Boolean).join(' ');
+  return `<details class="pv-produkt" data-id="${p.id}" data-kat="${p.category_id || 'ohne'}"
+                   data-suchtext="${esc(such.toLowerCase())}">
+    <summary>
+      <strong>${esc(p.name)}</strong>
+      <span style="color:var(--text-light);font-size:.82rem;margin-left:.5rem">
+        ${p.kategorie_name ? esc(p.kategorie_name) : '<em>ohne Kategorie</em>'}
+        · ${p.barcodes.length} Barcode${p.barcodes.length === 1 ? '' : 's'}
+        ${p.bestellungen ? ` · ${p.bestellungen} Bestellung${p.bestellungen === 1 ? '' : 'en'}` : ''}
+      </span>
+    </summary>
+    <div class="pv-detail" data-geladen="0"><div class="loading">Laden…</div></div>
+  </details>`;
+}
+
+/** Der Inhalt einer aufgeklappten Produktzeile — erst beim Öffnen geholt. */
+function pvDetailHtml(p, haendlerEintraege) {
+  const kats = S.verzeichnis.kategorien;
+  return `
+    <div class="form-group" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+      <label style="flex:2;min-width:180px">Name
+        <input type="text" class="form-control pv-f-name" value="${esc(p.name)}"></label>
+      <label style="flex:1;min-width:150px">Kategorie
+        <select class="form-control pv-f-kat">
+          <option value="">— ohne —</option>
+          ${kats.map(k => `<option value="${k.id}"${k.id === p.category_id ? ' selected' : ''}>${esc(k.name)}</option>`).join('')}
+        </select></label>
+      <label style="flex:0 0 110px">Einheit
+        <input type="text" class="form-control pv-f-einheit" value="${esc(p.default_unit || '')}" placeholder="Stk"></label>
+      <button class="btn btn-primary btn-sm pv-speichern">Speichern</button>
+    </div>
+
+    <div style="margin-top:.8rem">
+      <strong style="font-size:.9rem">Barcodes</strong>
+      <div class="pv-codes">${p.barcodes.map(c => `
+        <span class="pv-code">${esc(c)}
+          <button class="pv-code-weg" data-code="${esc(c)}" title="Entfernen"
+                  aria-label="Barcode ${esc(c)} entfernen">&times;</button></span>`).join('')}
+      </div>
+      <div style="display:flex;gap:.4rem;margin-top:.4rem">
+        <input type="text" class="form-control form-control-sm pv-code-neu" placeholder="Weiteren Barcode eintippen…" style="max-width:260px">
+        <button class="btn btn-sm pv-code-add">Anlernen</button>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem">
+      <strong style="font-size:.9rem">Großhändler</strong>
+      <div class="pv-haendler-eintraege">${pvEintraegeHtml(haendlerEintraege)}</div>
+      ${S.haendlerListe.length ? `
+      <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
+        <select class="form-control form-control-sm pv-h-neu" style="max-width:220px">
+          <option value="">Großhändler hinzufügen…</option>
+          ${S.haendlerListe.filter(h => !haendlerEintraege.some(e => e.supplier_id === h.id))
+            .map(h => `<option value="${h.id}">${esc(h.name)}</option>`).join('')}
+        </select>
+      </div>` : `<p style="color:var(--text-light);font-size:.85rem;margin:.4rem 0 0">
+          Noch kein Großhändler angelegt — das geht im Reiter „Großhändler“.</p>`}
+    </div>
+
+    <div style="margin-top:1rem;display:flex;gap:.5rem;flex-wrap:wrap">
+      <button class="btn btn-sm btn-outline pv-merge">Mit anderem Produkt zusammenführen…</button>
+      <button class="btn btn-sm btn-danger pv-loeschen">Produkt löschen</button>
+    </div>`;
+}
+
+function pvEintraegeHtml(eintraege) {
+  if (!eintraege.length) return '<p style="color:var(--text-lighter);font-size:.85rem;margin:.3rem 0">Nichts hinterlegt.</p>';
+  return eintraege.map(e => `
+    <div class="pv-h-eintrag" data-sid="${e.supplier_id}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+        <strong>${esc(e.name)}</strong>
+        <button class="btn btn-sm btn-danger pv-h-weg" title="Angaben entfernen"
+                aria-label="Angaben zu ${esc(e.name)} entfernen">&times;</button>
+      </div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem">
+        <label style="flex:1;min-width:150px;font-size:.82rem">Bestellnummer
+          <input type="text" class="form-control form-control-sm pv-h-nr" value="${esc(e.bestellnummer || '')}"></label>
+        <label style="flex:2;min-width:200px;font-size:.82rem">Link
+          <input type="text" class="form-control form-control-sm pv-h-link" value="${esc(e.link || '')}"
+                 placeholder="shop.example.de/artikel/123"></label>
+      </div>
+      <label style="font-size:.82rem;display:block;margin-top:.3rem">Kommentar
+        <textarea class="form-control form-control-sm pv-h-kom" rows="2">${esc(e.kommentar || '')}</textarea></label>
+      <div style="margin-top:.3rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-sm btn-primary pv-h-speichern">Speichern</button>
+        ${pvLinkKnopf(e)}
+      </div>
+    </div>`).join('');
+}
+
+function pvLinkKnopf(e) {
+  const teile = [];
+  if (e.link) teile.push(pLinkHtml(e.link, 'Artikel öffnen'));
+  else if (e.homepage) teile.push(pLinkHtml(e.homepage, 'Händler öffnen'));
+  if (e.kundennummer) teile.push(`<span style="font-size:.78rem;color:var(--text-light)">Kd.-Nr. ${esc(e.kundennummer)}</span>`);
+  return teile.join(' ');
+}
+
+function pvKategorienHtml(kats) {
+  if (!kats.length) return '<p style="color:var(--text-lighter)">Noch keine Kategorien.</p>';
+  return kats.map(k => `
+    <div class="pv-kat" data-id="${k.id}" style="display:flex;gap:.4rem;align-items:center;margin-bottom:.4rem;flex-wrap:wrap">
+      <input type="text" class="form-control form-control-sm pv-k-name" value="${esc(k.name)}" style="max-width:220px">
+      <span style="font-size:.8rem;color:var(--text-light)">${k.anzahl} Produkt(e)</span>
+      <button class="btn btn-sm pv-k-speichern">Umbenennen</button>
+      <select class="form-control form-control-sm pv-k-ziel" style="max-width:200px">
+        <option value="">verschmelzen mit…</option>
+        ${kats.filter(x => x.id !== k.id).map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}
+      </select>
+      <button class="btn btn-sm btn-danger pv-k-weg">Löschen</button>
+    </div>`).join('');
+}
+
+// ── Großhändler ─────────────────────────────────────────────────────────────────────────────
+function pvHaendlerHtml(hl) {
+  return `
+    <p style="color:var(--text-light);font-size:.88rem">
+      Was ein <em>einzelnes Produkt</em> bei einem Händler kostet an Bestellnummer, Link und
+      Kommentar, steht beim Produkt. Hier stehen die Angaben zum Händler selbst.</p>
+    <div id="pv-h-liste">${hl.map(pvHaendlerKarte).join('') || '<p style="color:var(--text-lighter)">Noch kein Großhändler angelegt.</p>'}</div>
+    <details style="margin-top:1rem"><summary style="cursor:pointer;font-weight:600">+ Großhändler anlegen</summary>
+      <div style="margin-top:.6rem" id="pv-h-neu-form">${pvHaendlerFelder({})}
+        <button class="btn btn-primary btn-sm pv-h-anlegen" style="margin-top:.5rem">Anlegen</button>
+      </div>
+    </details>`;
+}
+
+function pvHaendlerKarte(h) {
+  return `<details class="pv-haendler" data-id="${h.id}">
+    <summary><strong>${esc(h.name)}</strong>
+      <span style="color:var(--text-light);font-size:.82rem;margin-left:.5rem">
+        ${h.produkte} Produkt(e)${h.kundennummer ? ' · Kd.-Nr. ' + esc(h.kundennummer) : ''}</span>
+    </summary>
+    <div style="margin-top:.5rem">
+      ${pvHaendlerFelder(h)}
+      <div style="margin-top:.5rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-sm btn-primary pv-h-save">Speichern</button>
+        <button class="btn btn-sm btn-danger pv-h-del">Löschen</button>
+        ${h.homepage ? pLinkHtml(h.homepage, 'Webshop öffnen') : ''}
+      </div>
+    </div>
+  </details>`;
+}
+
+function pvHaendlerFelder(h) {
+  const f = (kl, label, wert, platz) => `<label style="flex:1;min-width:170px;font-size:.82rem">${label}
+    <input type="text" class="form-control form-control-sm ${kl}" value="${esc(wert || '')}"
+           ${platz ? `placeholder="${esc(platz)}"` : ''}></label>`;
+  return `
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      ${f('pv-hf-name', 'Name', h.name, 'Sonepar')}
+      ${f('pv-hf-homepage', 'Homepage / Webshop', h.homepage, 'shop.example.de')}
+      ${f('pv-hf-kundennummer', 'Kundennummer', h.kundennummer)}
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem">
+      ${f('pv-hf-ansprechpartner', 'Ansprechpartner', h.ansprechpartner)}
+      ${f('pv-hf-telefon', 'Telefon', h.telefon)}
+      ${f('pv-hf-email', 'E-Mail', h.email)}
+    </div>
+    <label style="font-size:.82rem;display:block;margin-top:.4rem">Notiz
+      <textarea class="form-control form-control-sm pv-hf-notiz" rows="2">${esc(h.notiz || '')}</textarea></label>`;
+}
+
+function pvPapierkorbHtml(v) {
+  if (!v.geloescht.length) return '<p style="color:var(--text-lighter)">Nichts gelöscht.</p>';
+  return v.geloescht.map(p => `
+    <div style="display:flex;gap:.6rem;align-items:center;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid var(--border)">
+      <div><strong>${esc(p.name)}</strong>
+        <span style="font-size:.8rem;color:var(--text-light);margin-left:.4rem">
+          ${p.merged_into ? 'aufgegangen in „' + esc(p.aufgegangen_in || '?') + '“' : 'gelöscht am ' + esc(String(p.deleted_at).slice(0, 10))}</span>
+      </div>
+      ${p.merged_into ? '' : `<button class="btn btn-sm pv-wieder" data-id="${p.id}">Wiederherstellen</button>`}
+    </div>`).join('');
+}
+
+// ── Verdrahtung ─────────────────────────────────────────────────────────────────────────────
+function pvBinden() {
+  const karte = document.querySelector('.main .card');
+
+  // Reiter
+  karte.querySelectorAll('#pv-tabs .pv-tab-btn').forEach(b => b.addEventListener('click', () => {
+    karte.querySelectorAll('#pv-tabs .pv-tab-btn').forEach(x => x.classList.toggle('active', x === b));
+    for (const t of ['produkte', 'haendler', 'papierkorb'])
+      document.getElementById('pv-' + t).style.display = (t === b.dataset.tab) ? '' : 'none';
+  }));
+
+  // Suche + Kategoriefilter: beide wirken auf dieselbe Liste, deshalb EINE Funktion.
+  const filtern = () => {
+    const q = (document.getElementById('pv-suche')?.value || '').trim().toLowerCase();
+    const kat = document.getElementById('pv-kat-filter')?.value || '';
+    document.querySelectorAll('#pv-liste .pv-produkt').forEach(el => {
+      const passtText = !q || el.dataset.suchtext.includes(q);
+      const passtKat = !kat || el.dataset.kat === kat;
+      el.style.display = (passtText && passtKat) ? '' : 'none';
+    });
+  };
+  document.getElementById('pv-suche')?.addEventListener('input', filtern);
+  document.getElementById('pv-kat-filter')?.addEventListener('change', filtern);
+
+  // Produktdetails erst beim Aufklappen holen — bei 300 Produkten wären 300 Abfragen im Voraus
+  // sinnlos, und die Händler-Angaben ändern sich ohnehin selten.
+  document.querySelectorAll('.pv-produkt').forEach(d => d.addEventListener('toggle', () => {
+    if (d.open) pvDetailLaden(d);
+  }));
+
+  karte.addEventListener('click', pvKlick);
+  karte.addEventListener('change', pvAenderung);
+}
+
+async function pvDetailLaden(details, erzwingen) {
+  const ziel = details.querySelector('.pv-detail');
+  if (!erzwingen && ziel.dataset.geladen === '1') return;
+  const id = Number(details.dataset.id);
+  const p = S.verzeichnis.produkte.find(x => x.id === id);
+  if (!p) return;
+  try {
+    const r = await api('GET', `/api/products/${id}/haendler`);
+    ziel.innerHTML = pvDetailHtml(p, (r && r.haendler) || []);
+    ziel.dataset.geladen = '1';
+  } catch (e) { ziel.innerHTML = `<p style="color:var(--danger)">${esc(e.message)}</p>`; }
+}
+
+function pvProduktOeffnen(id) {
+  const d = document.querySelector(`.pv-produkt[data-id="${id}"]`);
+  if (!d) { toast('Dieses Produkt steht nicht (mehr) im Verzeichnis.', 'error'); return; }
+  d.open = true;
+  pvDetailLaden(d);
+  d.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function pvKlick(ev) {
+  const b = ev.target.closest('button');
+  if (!b) return;
+  const details = b.closest('.pv-produkt');
+  const id = details ? Number(details.dataset.id) : null;
+  const neu = () => renderProdukte(id);
+
+  try {
+    // ── Produkt ──
+    if (b.classList.contains('pv-speichern')) {
+      const rumpf = {
+        name: details.querySelector('.pv-f-name').value.trim(),
+        category_id: details.querySelector('.pv-f-kat').value || null,
+        default_unit: details.querySelector('.pv-f-einheit').value.trim(),
+      };
+      try {
+        await api('PUT', `/api/products/${id}`, rumpf);
+      } catch (e) {
+        // Der Server meldet ein vorhandenes Produkt gleichen Namens. Das ist eine WARNUNG:
+        // Zwei ähnlich benannte Produkte dürfen verschieden sein.
+        if (!/bereits/i.test(e.message)) throw e;
+        if (!(await confirmModal(e.message + '\n\nTrotzdem so benennen?',
+          { title: 'Name gibt es schon', okLabel: 'Trotzdem', danger: false }))) return;
+        await api('PUT', `/api/products/${id}`, { ...rumpf, trotzdem: true });
+      }
+      toast('Gespeichert', 'success'); return neu();
+    }
+
+    if (b.classList.contains('pv-code-add')) {
+      const feld = details.querySelector('.pv-code-neu');
+      const code = feld.value.trim();
+      if (!code) return;
+      await api('POST', `/api/products/${id}/barcodes`, { code });
+      toast('Barcode angelernt', 'success'); return neu();
+    }
+    if (b.classList.contains('pv-code-weg')) {
+      const code = b.dataset.code;
+      if (!(await confirmModal(`Barcode ${code} von diesem Produkt entfernen?`,
+        { title: 'Barcode entfernen', okLabel: 'Entfernen' }))) return;
+      await api('DELETE', `/api/products/${id}/barcodes/${encodeURIComponent(code)}`);
+      toast('Barcode entfernt', 'success'); return neu();
+    }
+
+    if (b.classList.contains('pv-loeschen')) {
+      const p = S.verzeichnis.produkte.find(x => x.id === id);
+      if (!(await confirmModal(
+        `„${p.name}“ aus dem Verzeichnis löschen?\n\n`
+        + 'Bereits geschriebene Bestellungen bleiben unverändert stehen. Wer den Barcode später '
+        + 'scannt, bekommt einen Hinweis auf das gelöschte Produkt statt „unbekannt“ — '
+        + 'zurückholen geht im Reiter „Gelöscht“.',
+        { title: 'Produkt löschen', okLabel: 'Löschen' }))) return;
+      await api('DELETE', `/api/products/${id}`);
+      toast('Gelöscht', 'success'); return renderProdukte();
+    }
+    if (b.classList.contains('pv-wieder')) {
+      await api('POST', `/api/products/${b.dataset.id}/wiederherstellen`);
+      toast('Wiederhergestellt', 'success'); return renderProdukte();
+    }
+
+    if (b.classList.contains('pv-merge')) return pvMergeDialog(id);
+    if (b.classList.contains('pv-dub-btn')) {
+      const ids = b.dataset.ids.split(',').map(Number);
+      return pvMergeDialog(ids[0], ids[1]);
+    }
+
+    // ── Händler-Angaben AM PRODUKT ──
+    if (b.classList.contains('pv-h-speichern')) {
+      const zeile = b.closest('.pv-h-eintrag');
+      await api('PUT', `/api/products/${id}/haendler/${zeile.dataset.sid}`, {
+        bestellnummer: zeile.querySelector('.pv-h-nr').value.trim(),
+        link: zeile.querySelector('.pv-h-link').value.trim(),
+        kommentar: zeile.querySelector('.pv-h-kom').value.trim(),
+      });
+      toast('Gespeichert', 'success');
+      return pvDetailLaden(details, true);
+    }
+    if (b.classList.contains('pv-h-weg')) {
+      const zeile = b.closest('.pv-h-eintrag');
+      if (!(await confirmModal('Die hinterlegten Angaben zu diesem Händler entfernen?',
+        { title: 'Angaben entfernen', okLabel: 'Entfernen' }))) return;
+      await api('DELETE', `/api/products/${id}/haendler/${zeile.dataset.sid}`);
+      toast('Entfernt', 'success');
+      return pvDetailLaden(details, true);
+    }
+
+    // ── Kategorien ──
+    const kat = b.closest('.pv-kat');
+    if (kat && b.classList.contains('pv-k-speichern')) {
+      await api('PUT', `/api/products/kategorien/${kat.dataset.id}`, { name: kat.querySelector('.pv-k-name').value.trim() });
+      toast('Umbenannt', 'success'); return renderProdukte();
+    }
+    if (kat && b.classList.contains('pv-k-weg')) {
+      try {
+        await api('DELETE', `/api/products/kategorien/${kat.dataset.id}`);
+      } catch (e) {
+        if (!/hängen noch/i.test(e.message)) throw e;
+        if (!(await confirmModal(e.message + '\n\nDie Produkte bleiben dann ohne Kategorie.',
+          { title: 'Kategorie löschen', okLabel: 'Trotzdem löschen' }))) return;
+        await api('DELETE', `/api/products/kategorien/${kat.dataset.id}`, { loesen: true });
+      }
+      toast('Kategorie gelöscht', 'success'); return renderProdukte();
+    }
+
+    // ── Händler-Stammdaten ──
+    if (b.classList.contains('pv-h-anlegen')) {
+      const box = document.getElementById('pv-h-neu-form');
+      await api('POST', '/api/suppliers', pvHaendlerLesen(box));
+      toast('Großhändler angelegt', 'success'); return renderProdukte();
+    }
+    const hk = b.closest('.pv-haendler');
+    if (hk && b.classList.contains('pv-h-save')) {
+      await api('PUT', `/api/suppliers/${hk.dataset.id}`, pvHaendlerLesen(hk));
+      toast('Gespeichert', 'success'); return renderProdukte();
+    }
+    if (hk && b.classList.contains('pv-h-del')) {
+      try {
+        await api('DELETE', `/api/suppliers/${hk.dataset.id}`);
+      } catch (e) {
+        if (!/hängen/i.test(e.message)) throw e;
+        if (!(await confirmModal(e.message, { title: 'Großhändler löschen', okLabel: 'Löschen' }))) return;
+        await api('DELETE', `/api/suppliers/${hk.dataset.id}`, { trotzdem: true });
+      }
+      toast('Gelöscht', 'success'); return renderProdukte();
+    }
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function pvHaendlerLesen(box) {
+  const w = kl => (box.querySelector('.pv-hf-' + kl)?.value || '').trim();
+  return { name: w('name'), homepage: w('homepage'), kundennummer: w('kundennummer'),
+           ansprechpartner: w('ansprechpartner'), telefon: w('telefon'), email: w('email'),
+           notiz: (box.querySelector('.pv-hf-notiz')?.value || '').trim() };
+}
+
+async function pvAenderung(ev) {
+  const sel = ev.target;
+  try {
+    // „Großhändler hinzufügen…" — legt einen leeren Eintrag an, den man gleich ausfüllt.
+    if (sel.classList.contains('pv-h-neu') && sel.value) {
+      const details = sel.closest('.pv-produkt');
+      await api('PUT', `/api/products/${details.dataset.id}/haendler/${sel.value}`, {});
+      return pvDetailLaden(details, true);
+    }
+    // Kategorien verschmelzen
+    if (sel.classList.contains('pv-k-ziel') && sel.value) {
+      const kat = sel.closest('.pv-kat');
+      const von = S.verzeichnis.kategorien.find(k => k.id === Number(kat.dataset.id));
+      const nach = S.verzeichnis.kategorien.find(k => k.id === Number(sel.value));
+      if (!(await confirmModal(
+        `Alle ${von.anzahl} Produkt(e) aus „${von.name}“ nach „${nach.name}“ verschieben und `
+        + `„${von.name}“ danach löschen?`,
+        { title: 'Kategorien zusammenführen', okLabel: 'Zusammenführen' }))) { sel.value = ''; return; }
+      await api('POST', `/api/products/kategorien/${von.id}/zusammenfuehren`, { nach_id: nach.id });
+      toast('Zusammengeführt', 'success');
+      return renderProdukte();
+    }
+  } catch (e) { toast(e.message, 'error'); sel.value = ''; }
+}
+
+/**
+ * Zusammenführen. Bewusst mit AUSWAHL, WELCHES überlebt und unter welchem Namen — beim
+ * Aufräumen zweier Schreibweisen ist genau das die Frage, die man beantworten will.
+ */
+async function pvMergeDialog(zielId, vorschlagVonId) {
+  const alle = S.verzeichnis.produkte;
+  const ziel = alle.find(p => p.id === zielId);
+  if (!ziel) return;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay dialog-modal';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header"><h3>Produkte zusammenführen</h3></div>
+      <div class="modal-body">
+        <label style="display:block;margin-bottom:.6rem">Dieses Produkt geht auf in …
+          <select class="form-control" id="pm-ziel">
+            ${alle.map(p => `<option value="${p.id}"${p.id === zielId ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
+          </select></label>
+        <label style="display:block;margin-bottom:.6rem">… und dieses verschwindet:
+          <select class="form-control" id="pm-von">
+            <option value="">— bitte wählen —</option>
+            ${alle.map(p => `<option value="${p.id}"${p.id === vorschlagVonId ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
+          </select></label>
+        <label style="display:block">Name danach
+          <input type="text" class="form-control" id="pm-name" value="${esc(ziel.name)}"></label>
+        <p style="font-size:.84rem;color:var(--text-light);margin:.7rem 0 0">
+          Barcodes, Bestell-Verknüpfungen und Großhändler-Angaben wandern mit. Haben beide
+          denselben Großhändler, wird die zweite Bestellnummer an den Kommentar angehängt statt
+          verworfen. Der <strong>Text</strong> bereits geschriebener Bestellungen bleibt, wie er ist.</p>
+      </div>
+      <div class="modal-footer" style="display:flex;gap:.5rem;justify-content:flex-end;padding:1rem">
+        <button class="btn btn-outline" data-act="cancel">Abbrechen</button>
+        <button class="btn btn-primary" data-act="ok">Zusammenführen</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  if (typeof dialogBarrierefrei === 'function') dialogBarrierefrei(overlay);
+
+  const zu = () => overlay.remove();
+  const zielSel = overlay.querySelector('#pm-ziel');
+  const nameFeld = overlay.querySelector('#pm-name');
+  zielSel.addEventListener('change', () => {
+    const p = alle.find(x => x.id === Number(zielSel.value));
+    if (p) nameFeld.value = p.name;
+  });
+  overlay.addEventListener('click', async ev => {
+    if (ev.target === overlay || ev.target.dataset.act === 'cancel') return zu();
+    if (ev.target.dataset.act !== 'ok') return;
+    const zId = Number(zielSel.value), vId = Number(overlay.querySelector('#pm-von').value);
+    if (!vId) { toast('Bitte das Produkt wählen, das verschwinden soll.', 'error'); return; }
+    if (vId === zId) { toast('Das sind zweimal dasselbe Produkt.', 'error'); return; }
+    try {
+      const r = await api('POST', `/api/products/${zId}/zusammenfuehren`, { von_id: vId, name: nameFeld.value.trim() });
+      zu();
+      const v = r.haendler_verschmolzen || [];
+      toast('Zusammengeführt' + (v.length ? ` — Angaben bei ${v.join(', ')} in den Kommentar übernommen` : ''), 'success');
+      renderProdukte(zId);
+    } catch (e) { toast(e.message, 'error'); }
+  });
+}

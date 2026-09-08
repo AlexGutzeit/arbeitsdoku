@@ -83,6 +83,65 @@ async function renderOrders() {
   });
 
   bindOrderEvents(orders, manage);
+  bindHaendlerAusklapper();
+}
+
+/**
+ * Großhändler-Angaben zu einer Bestellung (Alex, 08.09.2026).
+ *
+ * Nur bei Bestellungen, die auf ein KATALOGPRODUKT zeigen — eine frei getippte Bestellung hat
+ * kein Produkt, und Namen zu raten würde still die falsche Bestellnummer anhängen.
+ * Sichtbar für alle, die bestellen dürfen; der Knopf zum Bearbeiten nur mit Pflegerecht.
+ */
+function bindHaendlerAusklapper() {
+  const liste = document.querySelector('.main .card');
+  if (!liste) return;
+  liste.addEventListener('click', async ev => {
+    const b = ev.target.closest('.order-hnd-btn');
+    if (!b) return;
+    const box = b.parentElement.querySelector('.order-hnd');
+    if (box.style.display !== 'none') {
+      box.style.display = 'none';
+      b.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    box.style.display = '';
+    b.setAttribute('aria-expanded', 'true');
+    if (box.dataset.geladen === '1') return;
+    box.innerHTML = '<div class="loading">Laden…</div>';
+    try {
+      const r = await api('GET', `/api/products/${b.dataset.pid}/haendler`);
+      box.innerHTML = haendlerBoxHtml(r, b.dataset.pid);
+      box.dataset.geladen = '1';
+    } catch (e) { box.innerHTML = `<p style="color:var(--danger)">${esc(e.message)}</p>`; }
+  });
+}
+
+function haendlerBoxHtml(r, pid) {
+  const pflegen = darfProduktePflegen()
+    ? `<a href="#/produkte/${pid}" class="btn btn-sm btn-outline" style="text-decoration:none;margin-top:.4rem">
+         &#9998; Großhändler-Infos bearbeiten</a>` : '';
+  if (!r.haendler.length) {
+    return `<div class="order-hnd-inner">
+      <p style="margin:.2rem 0;color:var(--text-light);font-size:.86rem">
+        Für „${esc(r.produkt.name)}“ ist noch kein Großhändler hinterlegt.</p>${pflegen}</div>`;
+  }
+  return `<div class="order-hnd-inner">
+    ${r.haendler.map(h => `
+      <div class="order-hnd-eintrag">
+        <div class="order-hnd-kopf"><strong>${esc(h.name)}</strong>
+          ${h.bestellnummer ? `<span class="order-hnd-nr">Best.-Nr. ${esc(h.bestellnummer)}</span>` : ''}
+        </div>
+        ${h.kommentar ? `<div style="font-size:.84rem;white-space:pre-line">${esc(h.kommentar)}</div>` : ''}
+        <div style="font-size:.78rem;color:var(--text-light)">
+          ${h.kundennummer ? 'Kd.-Nr. ' + esc(h.kundennummer) : ''}
+          ${h.ansprechpartner ? ' · ' + esc(h.ansprechpartner) : ''}
+          ${h.telefon ? ' · ' + esc(h.telefon) : ''}
+        </div>
+        <div style="margin-top:.3rem">${pLinkHtml(h.link || h.homepage, h.link ? 'Artikel öffnen' : 'Webshop öffnen')}</div>
+      </div>`).join('')}
+    ${pflegen}
+  </div>`;
 }
 
 function fmtOrderQty(o) {
@@ -108,6 +167,10 @@ function renderOrderList(orders, manage) {
         <div class="order-product">${fmtOrderQty(o)}${esc(o.product)}${fmtOrderLocation(o)}</div>
         ${o.comment ? `<div class="order-comment">${esc(o.comment)}</div>` : ''}
         <div class="order-meta">von ${esc(o.user_name)} am ${created}</div>
+        ${manage && o.product_id ? `
+        <button class="btn btn-sm btn-outline order-hnd-btn" data-pid="${o.product_id}"
+                aria-expanded="false" style="margin-top:.4rem">&#128230; Großhändler</button>
+        <div class="order-hnd" data-pid="${o.product_id}" style="display:none"></div>` : ''}
       </div>
       <div class="order-actions">
         ${canEdit ? `<button class="btn btn-sm order-edit-btn" data-id="${o.id}" title="Bearbeiten">&#9998;</button>` : ''}

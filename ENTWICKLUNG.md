@@ -14,6 +14,48 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Verzeichnis-Pflege und Großhändler
+
+Alex: „Ich würde gerne (Groß)händler hinzufügen können und dann die Möglichkeit haben, jedem
+Produkt einen Link, Kommentar und/oder Bestellnummer für jeden Großhändler hinzuzufügen."
+
+Entschieden (Alex): **keine** automatische Zuordnung frei getippter Bestellungen (Namen zu raten
+hängt still die falsche Bestellnummer an), **alle vier** Felder am Händler selbst, **kein**
+Hauptlieferant — alphabetisch.
+
+**Die Falle, für die `tests/produktpflege.js` überhaupt existiert.** `product_suppliers` hat ein
+`UNIQUE(product_id, supplier_id)`. Führt man zwei Produkte zusammen, die **beide** bei Sonepar
+liegen, kann die Zeile nicht einfach umgehängt werden. Der beiläufige Weg wäre
+`UPDATE OR IGNORE …; DELETE FROM … WHERE product_id = <quelle>` — und der verschluckt eine der
+beiden Bestellnummern **still**. Die Gegenprobe mit genau dieser Fassung ist aufschlussreich: „es
+steht genau EIN Eintrag da" bleibt grün, „die eigene Bestellnummer ist unverändert" bleibt grün.
+Nur die vier Zusagen, die gezielt nach der **zweiten** Nummer suchen, fallen. Eine Prüfung, die
+lediglich „ging durch" misst, hätte den Verlust durchgewinkt — bemerkt hätte ihn Monate später
+jemand beim Bestellen.
+
+Deshalb: Was das Ziel noch nicht hat, wandert. Was es schon hat, wird an dessen Kommentar
+angehängt, gekennzeichnet mit der Herkunft, und in Antwort wie Protokoll gezählt.
+
+**Zwei Fehler in meinem eigenen Code, die der Test gefunden hat:**
+
+* Die Dublettenwarnung beim Umbenennen hing an `vergleichsform(neu) !== vergleichsform(alt)`. Genau
+  beim Angleichen zweier Schreibweisen — „Kabelbinder 200 mm" → „kabel-binder 200mm" — ist die
+  Vergleichsform **identisch**, die Warnung wäre also stumm geblieben, wenn man sie braucht.
+  Verglichen wird jetzt zeichengenau.
+* `linkpruefung.js` wies `shop.sonepar.de/123` ab. So tippt man Adressen; die Prüfung ergänzt
+  jetzt `https://`. Ein `javascript:` trägt bereits ein Schema und fällt deshalb **nicht** in
+  diesen Zweig — es bleibt abgewiesen, auch als `JaVaScRiPt:`.
+
+**Im Bildschirmfoto gefunden, nicht im Test:** Auf 390 px brach die Bestellnummer im Ausklapper
+mitten entzwei — „Best.-Nr. 99-" / „2231". Eine Nummer über zwei Zeilen liest man falsch ab, und
+beim Bestellen fällt es niemandem auf. Jetzt `white-space: nowrap`; lieber rutscht der ganze Block
+in die nächste Zeile.
+
+Die Reiter der Ansicht borgen sich `.absence-tabs`, statt einen zweiten Reiter-Stil einzuführen.
+`rel="noopener"` an jedem Händler-Link ist im Browser-Test festgeschrieben: Ohne das kann die
+Zielseite über `window.opener` die App-Seite auf eine nachgebaute Anmeldemaske umleiten — der Knopf
+funktioniert dabei, es fällt also nichts auf.
+
 ### 2026-09-08 · Recht „Lagerdaten pflegen" — und ein Test, der aus dem falschen Grund grün war
 
 Alex: „Wer darf die Lagerdaten bearbeiten? Das darf ja momentan nur Chef und Admin. Auch hier würde

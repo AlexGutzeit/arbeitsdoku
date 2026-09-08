@@ -353,6 +353,9 @@ function layout(content, activeNav) {
           <span class="icon">&#128722;</span> Bestellungen
           ${darfBestellen() ? `<span class="nav-badge" id="nav-badge-orders"${S.badges.orders ? '' : ' style="display:none"'}>${S.badges.orders || ''}</span>` : ''}
         </a>
+        ${darfProduktePflegen() ? `<a href="#/produkte" class="${activeNav === 'produkte' ? 'active' : ''}">
+          <span class="icon">&#128230;</span> Produktverzeichnis
+        </a>` : ''}
         <a href="#/notes" class="${activeNav === 'notes' ? 'active' : ''}">
           <span class="icon">&#128221;</span> Notizen
           <span class="nav-badge" id="nav-badge-notes"${S.badges.notes ? '' : ' style="display:none"'}>${S.badges.notes || ''}</span>

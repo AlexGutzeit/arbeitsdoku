@@ -725,9 +725,9 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .vac-stand { margin-top: 0.6rem; font-size: 0.85rem; color: var(--text); }
 .vac-stand .vac-stand-detail { color: var(--text-lighter); }
 .vac-stand-select { display: inline-block; width: auto; }
-.absence-tabs { display: flex; gap: 0.4rem; border-bottom: 1px solid var(--border); margin: 0.4rem 0 0.8rem; }
-.absence-tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 0.5rem 0.9rem; cursor: pointer; font-weight: 600; color: var(--text-lighter); }
-.absence-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.absence-tabs, .pv-tabs { display: flex; gap: 0.4rem; border-bottom: 1px solid var(--border); margin: 0.4rem 0 0.8rem; }
+.absence-tab, .pv-tab-btn { background: none; border: none; border-bottom: 2px solid transparent; padding: 0.5rem 0.9rem; cursor: pointer; font-weight: 600; color: var(--text-lighter); }
+.absence-tab.active, .pv-tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
 .vac-ov-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
 .vac-ov-controls .vac-ov-stand { font-size: 0.8rem; color: var(--text-lighter); margin-left: auto; }
 .vac-ov-scroll { overflow-x: auto; }
@@ -2421,3 +2421,41 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .austritt-vormerkung { display: inline-block; margin-left: 0.5rem; font-size: 0.72rem;
   color: var(--text-light); background: var(--bg); border: 1px solid var(--border);
   border-radius: 10px; padding: 1px 7px; white-space: nowrap; }
+
+
+/* ── Produktverzeichnis: Pflege-Ansicht (app-9-produkte.js) ─────────────────────────────────
+   Die Reiter borgen sich den Stil der Abwesenheits-Reiter (oben), damit es in der App nicht
+   zwei verschiedene Reiter-Sorten gibt. */
+.hinweis-box { background: var(--bg-alt, #f7f7f5); border-left: 3px solid var(--primary);
+  padding: .6rem .8rem; border-radius: 4px; font-size: .88rem; }
+.pv-produkt > summary, .pv-haendler > summary { cursor: pointer; padding: .55rem .2rem;
+  border-bottom: 1px solid var(--border); }
+.pv-produkt[open] > summary, .pv-haendler[open] > summary { border-bottom-color: var(--primary); }
+.pv-detail, .pv-haendler > div { padding: .7rem .2rem 1.1rem; }
+.pv-codes { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .3rem; }
+.pv-code { display: inline-flex; align-items: center; gap: .3rem; background: var(--bg-alt, #f2f2f0);
+  border-radius: 3px; padding: .15rem .4rem; font-family: ui-monospace, monospace; font-size: .82rem; }
+/* Mindestens 32 px Tastfläche — mit dem Daumen im Lager, nicht mit der Maus (B2). */
+.pv-code-weg { border: none; background: none; cursor: pointer; color: var(--text-lighter);
+  font-size: 1.05rem; line-height: 1; min-width: 32px; min-height: 32px; }
+.pv-code-weg:hover { color: var(--danger); }
+.pv-h-eintrag { border: 1px solid var(--border); border-radius: 5px; padding: .55rem; margin-top: .45rem; }
+
+/* ── Großhändler-Ausklapper in den Bestellungen (app-8-comm-init.js) ───────────────────────── */
+.order-hnd-inner { border-left: 3px solid var(--primary); padding: .4rem .7rem; margin-top: .4rem; }
+.order-hnd-eintrag { padding: .35rem 0; }
+.order-hnd-eintrag + .order-hnd-eintrag { border-top: 1px dashed var(--border); }
+/* Die Nummer NIE umbrechen: Auf 390 px stand da „Best.-Nr. 99-" / „2231" — eine Bestellnummer
+   ueber zwei Zeilen liest man falsch ab, und beim Bestellen faellt es niemandem auf. Lieber
+   rutscht der ganze Block in die naechste Zeile. */
+.order-hnd-kopf { display: flex; flex-wrap: wrap; gap: .3rem; align-items: baseline; }
+.order-hnd-nr { font-family: ui-monospace, monospace; background: var(--bg-alt, #f2f2f0);
+  border-radius: 3px; padding: .05rem .35rem; font-size: .84rem; white-space: nowrap; }
+
+/* Unter 560 px teilen sich die Felder sonst 390 px und brechen mitten im Wort — dieselbe
+   Lehre wie beim Produktfeld in den Bestellungen. */
+@media (max-width: 560px) {
+  .pv-h-eintrag label, .pv-detail label { min-width: 100% !important; }
+  .pv-kat { gap: .3rem; }
+  .pv-kat .form-control-sm { max-width: 100% !important; }
+}
