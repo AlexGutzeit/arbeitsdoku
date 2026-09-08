@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**208 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**209 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -200,6 +200,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `restpause-firmenwert-ui.js` | Was passiert mit der Restpause, wenn die Firmenpause MITTEN im Betrieb umgestellt wird? |
 | `restpause-ui.js` | Restpausen-Vorbelegung (#13): Die Pause wird nur noch mit dem REST zur Firmenpause vorbelegt. |
 | `robustheit-v6-ui.js` | Test der Robustheits-Runde (letzte offene Punkte der Bugliste v6): |
+| `scanner-formular-ui.js` | Der Scanner im Bestellformular — mit GESTELLTEM Decoder. |
 | `scenario-shared-planning.js` | Komplexer Szenario-Test gegen den PROD-KLON (data/local.db, anonymisiert → Passwort 'test'). |
 | `scheduler-tick.js` | In-Process-Test des Zusammenfassungs-Schedulers: reine Funktionen isDue()/buildSummaryText() + |
 | `scroll-ruckeln-prodklon.js` | Prod-Klon-Pruefung: Kein Zurueckspringen beim Scrollen — mit den ECHTEN Daten, |

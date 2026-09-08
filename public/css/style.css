@@ -2391,6 +2391,24 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 /* Der Produktname darf nicht mitten im Wort umbrechen; lieber die Kategorie schrumpfen lassen. */
 .produkt-vorschlaege li > :first-child { min-width: 0; }
 
+/* Scanner-Fenster. Es nimmt bewusst viel Platz: Was zaehlt, ist das Kamerabild und der
+   Zielrahmen — alles andere ist Beiwerk. */
+.scanner-overlay { align-items: flex-start; }
+.scanner-box { background: var(--card-bg, #fff); border-radius: 12px; width: min(560px, 96vw);
+  margin: 2vh auto; padding: .9rem; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+.scanner-kopf { display: flex; justify-content: space-between; align-items: center; margin-bottom: .6rem; }
+.scanner-melde { font-size: .92rem; padding: .5rem .7rem; border-radius: 8px;
+  background: var(--bg); border-left: 4px solid #94a3b8; margin-bottom: .6rem; }
+.scanner-bild { position: relative; background: #000; border-radius: 8px; overflow: hidden; }
+.scanner-bild video { width: 100%; max-height: 62vh; display: block; object-fit: cover; }
+/* Zielrahmen: sagt ohne Worte, wo der Code hingehoert. Ohne ihn haelt jeder anders — und bei
+   schlechtem Licht entscheidet genau das ueber eine halbe oder zwoelf Sekunden. */
+.scanner-rahmen { position: absolute; left: 8%; right: 8%; top: 50%; height: 26%;
+  transform: translateY(-50%); border: 3px solid rgba(76,175,80,.95); border-radius: 10px;
+  box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); pointer-events: none; }
+.scanner-zoom { margin-top: .7rem; display: flex; gap: .6rem; align-items: center; font-size: .85rem; }
+.scanner-zoom input { flex: 1; }
+
 /* Auf dem Handy bekommen Produktfeld und Kategorie die VOLLE Breite. Nebeneinander bleiben bei
    390 px je gut 160 px übrig — die Namen brechen dann mitten im Wort um („Kabelbinder / 200 mm"),
    und die Vorschlagsliste ist so schmal, dass man nichts erkennt. Im Lager wird am Handy getippt,

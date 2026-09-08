@@ -159,6 +159,11 @@ function showOrderForm(editOrder, orders, manage) {
                unbedienbar. -->
           <ul id="of-vorschlaege" class="produkt-vorschlaege" style="display:none"></ul>
         </div>
+        <div class="form-group" style="width:auto">
+          <label>&nbsp;</label>
+          <button type="button" class="btn btn-outline" id="of-scan" title="Barcode scannen"
+                  style="white-space:nowrap">&#128247; Scannen</button>
+        </div>
         ${(S.produktKatalog && S.produktKatalog.kategorien.length) ? `
         <div class="form-group kategorie-gruppe" style="width:170px">
           <label>Kategorie</label>
@@ -199,6 +204,7 @@ function showOrderForm(editOrder, orders, manage) {
   document.getElementById('of-product').focus();
   document.getElementById('of-cancel').addEventListener('click', () => { area.innerHTML = ''; });
   produktSucheBinden();
+  document.getElementById('of-scan').addEventListener('click', scanInsFormular);
 
   const ofEntwurf = 'bestellung:' + (editOrder ? editOrder.id : 'neu');
   initDraftKeeper(document.getElementById('order-form'), ofEntwurf);
@@ -302,6 +308,174 @@ function produktSucheBinden() {
   document.addEventListener('click', (e) => {
     if (!liste.contains(e.target) && e.target !== feld) liste.style.display = 'none';
   });
+}
+
+/** Ein Katalogprodukt ins Formular übernehmen. */
+function produktUebernehmen(p) {
+  const feld = document.getElementById('of-product');
+  if (!feld) return;
+  feld.value = p.name;
+  feld.dataset.produktId = p.id;
+  const einheit = document.getElementById('of-unit');
+  if (einheit && !einheit.value.trim() && p.default_unit) einheit.value = p.default_unit;
+  const kat = document.getElementById('of-kategorie');
+  if (kat && p.category_id) kat.value = String(p.category_id);
+  const liste = document.getElementById('of-vorschlaege');
+  if (liste) { liste.innerHTML = ''; liste.style.display = 'none'; }
+}
+
+/**
+ * Scannen und ins Formular übernehmen.
+ *
+ * Bekannter Code → Produkt eingesetzt, es fehlen nur noch Anzahl und Ort.
+ * Unbekannter Code → Maske zum Anlegen, mit Live-Abgleich gegen bestehende Namen.
+ *
+ * Code eines GELÖSCHTEN Produkts → die App fragt. Still wiederherstellen wäre so falsch wie still
+ * ein Doppel anzulegen; beides ist eine Entscheidung, die dem Benutzer gehört.
+ */
+async function scanInsFormular() {
+  const code = await scannerOeffnen();
+  if (!code) return;
+  let antwort;
+  try { antwort = await api('GET', '/api/products/barcode/' + encodeURIComponent(code)); }
+  catch (e) { toast(e.message || 'Nachschlagen fehlgeschlagen', 'error'); return; }
+
+  if (antwort.gefunden) {
+    produktUebernehmen(antwort.produkt);
+    toast(`${antwort.produkt.name} übernommen.`, 'success');
+    return;
+  }
+  if (antwort.geloeschtes_produkt) {
+    const weiter = await confirmModal(
+      `Dieser Barcode gehörte zu „${antwort.geloeschtes_produkt.name}", das gelöscht wurde.\n\n`
+      + 'Soll er als NEUES Produkt angelegt werden?',
+      { title: 'Gelöschtes Produkt', okLabel: 'Neu anlegen', danger: false });
+    if (!weiter) return;
+  }
+  await produktAnlegenMaske(code);
+}
+
+/**
+ * Maske für einen unbekannten Barcode.
+ *
+ * Der Sorgfaltshinweis steht hier NICHT als Warnfarbe, sondern als Satz, der das WARUM erklärt —
+ * und daneben arbeitet ein Live-Abgleich: Wer tippt, sieht sofort ähnliche vorhandene Produkte und
+ * kann den Code an ein BESTEHENDES hängen, statt ein zweites anzulegen. Das ist der einzige
+ * Moment, in dem sich Doppel billig verhindern lassen; danach kostet es Aufräumarbeit.
+ */
+function produktAnlegenMaske(code) {
+  return new Promise((fertig) => {
+    const kategorien = ((S.produktKatalog || {}).kategorien) || [];
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay dialog-modal';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:520px">
+        <div class="modal-header"><h3>Neues Produkt anlegen</h3></div>
+        <div class="modal-body">
+          <p style="margin:0 0 .5rem">Barcode <code>${esc(code)}</code> ist noch niemandem zugeordnet.</p>
+          <p style="margin:0 0 .9rem;color:var(--text-light);font-size:.85rem">
+            Dieser Name steht künftig allen zur Auswahl. Bitte schau kurz, ob es das Produkt schon
+            gibt — die Liste unten sucht mit, während du tippst.</p>
+          <div class="form-group">
+            <label for="np-name">Produktname *</label>
+            <input type="text" id="np-name" class="form-control" autocomplete="off">
+          </div>
+          <div id="np-aehnlich" style="display:none;margin:-.4rem 0 .8rem"></div>
+          <div class="form-group">
+            <label for="np-kat">Kategorie</label>
+            <select id="np-kat" class="form-control">
+              <option value="">— keine —</option>
+              ${kategorien.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('')}
+              <option value="__neu">＋ neue Kategorie anlegen …</option>
+            </select>
+          </div>
+          <div class="form-group" id="np-katneu" style="display:none">
+            <label for="np-katname">Name der neuen Kategorie</label>
+            <input type="text" id="np-katname" class="form-control" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="np-einheit">Einheit (freiwillig)</label>
+            <input type="text" id="np-einheit" class="form-control" placeholder="Stk, Beutel, Rolle …">
+          </div>
+          <div id="np-fehler" style="color:#dc2626;font-size:.85rem;display:none"></div>
+        </div>
+        <div class="modal-footer" style="display:flex;gap:.5rem;justify-content:flex-end;padding:1rem">
+          <button class="btn btn-outline" data-act="ab">Abbrechen</button>
+          <button class="btn btn-primary" data-act="ok">Anlegen</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const aufraeumen = dialogBarrierefrei(overlay);
+    const $n = (id) => overlay.querySelector('#' + id);
+    const zu = (wert) => { document.removeEventListener('keydown', taste); overlay.remove(); aufraeumen(); fertig(wert); };
+    const taste = (e) => { if (e.key === 'Escape') zu(null); };
+    document.addEventListener('keydown', taste);
+    overlay.querySelector('[data-act="ab"]').addEventListener('click', () => zu(null));
+    $n('np-name').focus();
+
+    $n('np-kat').addEventListener('change', () => {
+      const neu = $n('np-kat').value === '__neu';
+      $n('np-katneu').style.display = neu ? '' : 'none';
+      if (neu) $n('np-katname').focus();
+    });
+
+    // Live-Abgleich: aehnliche Namen anbieten, damit der Code an ein BESTEHENDES Produkt geht.
+    $n('np-name').addEventListener('input', () => {
+      const q = vergleichsform($n('np-name').value);
+      const kasten = $n('np-aehnlich');
+      if (q.length < 2) { kasten.style.display = 'none'; kasten.innerHTML = ''; return; }
+      const treffer = (((S.produktKatalog || {}).produkte) || [])
+        .filter(p => vergleichsform(p.name).includes(q) || q.includes(vergleichsform(p.name)))
+        .slice(0, 5);
+      if (!treffer.length) { kasten.style.display = 'none'; kasten.innerHTML = ''; return; }
+      kasten.innerHTML =
+        `<div style="font-size:.82rem;color:var(--text-light);margin-bottom:.25rem">
+           Das gibt es vielleicht schon — dann den Barcode lieber dort anlernen:</div>`
+        + treffer.map(p => `<button type="button" class="btn btn-outline btn-sm" data-anlernen="${p.id}"
+             style="margin:0 .3rem .3rem 0">${esc(p.name)}</button>`).join('');
+      kasten.style.display = '';
+    });
+
+    $n('np-aehnlich').addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-anlernen]');
+      if (!b) return;
+      try {
+        const r = await api('POST', `/api/products/${b.dataset.anlernen}/barcodes`, { code });
+        toast(`Barcode an „${r.produkt.name}" angelernt.`, 'success');
+        await katalogAuffrischen();
+        produktUebernehmen(r.produkt);
+        zu(r.produkt);
+      } catch (err) { $n('np-fehler').textContent = err.message; $n('np-fehler').style.display = ''; }
+    });
+
+    overlay.querySelector('[data-act="ok"]').addEventListener('click', async () => {
+      const fehler = $n('np-fehler');
+      const name = $n('np-name').value.trim();
+      if (name.length < 2) { fehler.textContent = 'Bitte einen Namen mit mindestens 2 Zeichen angeben.'; fehler.style.display = ''; return; }
+      let katId = $n('np-kat').value;
+      try {
+        if (katId === '__neu') {
+          const katName = $n('np-katname').value.trim();
+          if (katName.length < 2) { fehler.textContent = 'Bitte einen Kategorienamen angeben.'; fehler.style.display = ''; return; }
+          const k = await api('POST', '/api/products/kategorien', { name: katName });
+          katId = k.kategorie.id;
+        }
+        const r = await api('POST', '/api/products', {
+          name, barcode: code,
+          category_id: katId ? Number(katId) : null,
+          default_unit: $n('np-einheit').value.trim() || null });
+        await katalogAuffrischen();
+        produktUebernehmen(r.produkt);
+        toast(`„${r.produkt.name}" angelegt und übernommen.`, 'success');
+        zu(r.produkt);
+      } catch (err) { fehler.textContent = err.message; fehler.style.display = ''; }
+    });
+  });
+}
+
+/** Den gespiegelten Katalog nachziehen — nach jeder Änderung, damit die Suche sofort mitkommt. */
+async function katalogAuffrischen() {
+  try { S.produktKatalog = await api('GET', '/api/products/katalog'); } catch (_) {}
 }
 
 function bindOrderEvents(orders, manage) {
