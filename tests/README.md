@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**210 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**211 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -180,6 +180,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `platznutzung-ui.js` | Scrollflächen nutzen den Platz, der wirklich da ist (Alex, 07.08.2026). |
 | `prodklon-daten-vollstaendig.js` | Übersteht der echte Datenbestand das Update unverändert? (Alex, 23.08.2026) |
 | `produktkatalog.js` | Produktverzeichnis: Kategorien, Produkte, Barcodes (1:n). |
+| `produktpflege.js` | Verzeichnis-Pflege und Großhändler (Alex, 08./09.09.2026). |
 | `produktsuche-ui.js` | Die Live-Suche im Produktfeld — geklickt und getippt, nicht behauptet. |
 | `project-csv.js` | API-Test CSV-Export der Projekt-Einträge: nach Datum sortiert, Netto (ohne Pause), Summe, Admin |
 | `project-due-ui.js` | UI-Test „Fällig bis" + Frist-Marker: Countdown-Badge (farbcodiert), Goal-Marker im Balken (Position), |

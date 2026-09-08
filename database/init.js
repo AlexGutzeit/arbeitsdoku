@@ -1365,6 +1365,47 @@ function ensureProduktSchema(targetDb) {
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       );
       CREATE INDEX IF NOT EXISTS idx_code_prod ON product_barcodes(product_id);
+
+      -- ── GROSSHAENDLER (Alex, 08.09.2026) ────────────────────────────────────────────────────────
+      -- Zwei Tabellen, weil es zwei verschiedene Dinge sind: der HAENDLER (existiert einmal, mit
+      -- Kundennummer und Ansprechpartner) und was DIESES PRODUKT bei DIESEM HAENDLER kostet an
+      -- Bestellnummer, Link und Kommentar.
+      CREATE TABLE IF NOT EXISTS suppliers (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        name            TEXT NOT NULL,
+        homepage        TEXT,
+        kundennummer    TEXT,
+        ansprechpartner TEXT,
+        telefon         TEXT,
+        email           TEXT,
+        notiz           TEXT,
+        created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        created_by      INTEGER,
+        deleted_at      TEXT
+      );
+      -- Wie bei den Kategorien: eindeutig nur unter den lebenden, damit ein geloeschter Name nicht
+      -- fuer immer blockiert ist.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_supplier_name
+        ON suppliers(name) WHERE deleted_at IS NULL;
+
+      CREATE TABLE IF NOT EXISTS product_suppliers (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id    INTEGER NOT NULL,
+        supplier_id   INTEGER NOT NULL,
+        bestellnummer TEXT,
+        link          TEXT,
+        kommentar     TEXT,
+        created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        created_by    INTEGER,
+        updated_at    TEXT,
+        updated_by    INTEGER,
+        -- EIN Eintrag je Paar. Zwei waeren nicht aufloesbar: welche Bestellnummer gilt dann?
+        -- Wer beim selben Haendler zwei Nummern hat (100er/500er Gebinde), hat zwei Produkte.
+        UNIQUE (product_id, supplier_id),
+        FOREIGN KEY (product_id)  REFERENCES products(id)  ON DELETE CASCADE,
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_ps_prod ON product_suppliers(product_id);
     `);
 
     // orders.product_id nachtragen — Altbestaende bekommen die Spalte, ohne dass etwas kaputtgeht.
