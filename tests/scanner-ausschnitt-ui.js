@@ -138,7 +138,22 @@ function req(m, p, t, b) {
     });
     await seite.click('#of-scan');
     await seite.waitForSelector('#sc-video', { timeout: 20000 });
-    await sleep(3000);
+    await sleep(2500);
+
+    // GEDRUECKT HALTEN (Alex, 09.09.2026): Vor dem Druck darf NICHTS gelesen werden. Sonst liest
+    // der Scanner schon, waehrend man das Handy hochfuehrt — womoeglich das Nachbaretikett.
+    ok('vor dem Drücken wird nicht gelesen',
+      await seite.evaluate(() => (window.__mitschrift || []).filter(m => m.art === 'detect').length === 0),
+      JSON.stringify(await seite.evaluate(() => (window.__mitschrift || []).length)));
+    ok('… der Halte-Knopf ist da und sagt, was zu tun ist',
+      await seite.evaluate(() => { const b = document.getElementById('sc-halten');
+        return !!b && b.checkVisibility() && /gedrückt halten/i.test(b.innerText); }));
+
+    await seite.evaluate(() => {
+      const b = document.getElementById('sc-halten');
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }));
+    });
+    await sleep(2000);
 
     const befund = await seite.evaluate(() => {
       const v = document.getElementById('sc-video'), r = document.getElementById('sc-rahmen');
@@ -191,6 +206,17 @@ function req(m, p, t, b) {
     ok('… und das ist deutlich kleiner als das ganze Bild',
       befund.letzte && befund.letzte.breite * befund.letzte.hoehe < befund.video.b * befund.video.h * 0.6,
       JSON.stringify({ ausschnitt: befund.letzte.breite * befund.letzte.hoehe, ganz: befund.video.b * befund.video.h }));
+
+    // Loslassen: Es darf danach nichts mehr gelesen werden.
+    await seite.evaluate(() => {
+      const b = document.getElementById('sc-halten');
+      b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+    });
+    const beimLoslassen = await seite.evaluate(() => (window.__mitschrift || []).filter(m => m.art === 'detect').length);
+    await sleep(1500);
+    const spaeterNachLoslassen = await seite.evaluate(() => (window.__mitschrift || []).filter(m => m.art === 'detect').length);
+    ok('nach dem Loslassen wird nicht weitergelesen', spaeterNachLoslassen === beimLoslassen,
+      `${beimLoslassen} → ${spaeterNachLoslassen}`);
 
     await seite.evaluate(() => { const b = document.querySelector('[data-act="zu"]'); if (b) b.click(); });
     await sleep(600);

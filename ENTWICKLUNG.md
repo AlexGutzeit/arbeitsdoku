@@ -14,6 +14,38 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Gedrückt halten — und ein Schalter, den nie jemand sah
+
+Alex: *„Das Problem mit dem über das Regal schwenken könnte man lösen, indem man ein touchbutton
+‚scannen' platziert und nur so lange der button gedrückt ist, wird gescannt."*
+
+Der Vorschlag löst mehr als das Prüfstand-Problem. Im Live-Scanner begann das Lesen bisher in dem
+Moment, in dem sich die Kamera öffnet — wer das Handy erst hochführt, liest womöglich schon das
+Nachbaretikett. Jetzt bestimmt der Mensch, **wann** gelesen wird. Und der zweite Gewinn ist der
+größere: **Die Zählung beginnt bei jedem Druck von vorn.** Damit ist jede Haltung genau eine
+Etikette, und Codes verschiedener Kartons können sich nicht mehr vermischen — genau das, was im
+Regal-Lauf als Verkettung sichtbar wurde.
+
+Im **Prüfstand** ist es ein Schalter, kein Zwang: Lange Messläufe über Minuten sollen möglich
+bleiben. Ist er an, gruppiert der Prüfstand nach **Haltung** statt nach Zeitabstand — er muss die
+Zusammengehörigkeit dann nicht mehr raten, er weiß sie.
+
+**Zwei eigene Fehler dabei, beide von Messungen aufgedeckt:**
+
+Erstens hellte mein Entwurf die Abdunklung beim Halten von 0,58 auf 0,45 auf — also genau in dem
+Moment, in dem der Rahmen am stärksten führen soll. Der Test meldete es (`… das Aussen ist
+abgedunkelt`).
+
+Zweitens, und schwerer: Der neue Schalter landete **innerhalb von `#zoombox`** — und die ist
+ausgeblendet, wenn ein Gerät keinen Zoom hergibt. Beim Nachmessen stellte sich heraus, dass der
+Schalter **„nur im Rahmen lesen"** von vorhin dort schon die ganze Zeit lag. Auf Alex' Android ist
+Zoom vorhanden, also war er sichtbar; auf einem iPhone ohne Zoom wäre er **nie** zu sehen gewesen.
+Gefunden nur, weil `checkVisibility()` „false" meldete und ich der Ursache nachgegangen bin statt
+sie zu übergehen. Beide Schalter stehen jetzt ausserhalb.
+
+Gegenprobe zum Halten: `!liest` entfernt → „vor dem Drücken wird nicht gelesen" und „nach dem
+Loslassen wird nicht weitergelesen" fallen beide.
+
 ### 2026-09-09 · Ausgezählt statt geschätzt: wie oft trifft es wirklich?
 
 Auf die Frage, ob solche Kartons häufig sind, Alex: *„kannst du doch selbst aus deinen Daten raus

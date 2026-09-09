@@ -469,6 +469,14 @@ async function scannerOeffnen() {
           <div class="scanner-hinweis">Nur was im Rahmen liegt, wird gelesen</div>
           <canvas id="sc-schnitt" style="display:none"></canvas>
         </div>
+        <!-- GEDRUECKT HALTEN statt Dauerlesen (Alex, 09.09.2026).
+             Zwei Dinge werden damit besser: Der Mensch bestimmt, WANN gelesen wird — wer das
+             Handy erst hochfuehrt, liest sonst womoeglich schon das Nachbaretikett. Und jede
+             Haltung ist genau EINE Etikette: Die Zaehlung beginnt bei jedem Druck von vorn,
+             also koennen sich Codes verschiedener Kartons nicht mehr vermischen. Genau das war
+             im Pruefstand beim Schwenken uebers Regal zu sehen. -->
+        <button type="button" class="scanner-halten" id="sc-halten">
+          Zum Scannen <strong>gedrückt halten</strong></button>
         <div id="sc-zoombox" class="scanner-zoom" style="display:none">
           <label for="sc-zoom">Zoom</label>
           <input type="range" id="sc-zoom">
@@ -483,6 +491,7 @@ async function scannerOeffnen() {
     const melde = (t) => { $s('sc-status').textContent = t; };
 
     let strom = null, laeuft = true, nativ = null, zxing = null, spur = null, licht = false;
+    let liest = false;          // wird NUR gelesen, solange der Knopf gedrueckt ist
     let zxingHinweise = null;   // Formatliste fuer den mitgelieferten Decoder
     const gezaehlt = new Map();
     // Nach der ersten Bestaetigung noch kurz weiterlesen, statt sofort zu schliessen. Eine halbe
@@ -500,6 +509,7 @@ async function scannerOeffnen() {
       nativ = null;
       if (strom) { strom.getTracks().forEach(t => t.stop()); strom = null; }
       document.removeEventListener('keydown', beiTaste);
+      document.removeEventListener('visibilitychange', lesenAus);
       overlay.remove(); aufraeumen();
       fertig(code || null);
     }
@@ -508,8 +518,49 @@ async function scannerOeffnen() {
     overlay.querySelector('[data-act="zu"]').addEventListener('click', () => schliessen(null));
     overlay.addEventListener('click', (e) => { if (e.target === overlay) schliessen(null); });
 
+    // ── Gedrueckt halten ────────────────────────────────────────────────────────────────────
+    const haltenKnopf = overlay.querySelector('#sc-halten');
+    const rahmenAktiv = (an) => {
+      const r = overlay.querySelector('#sc-rahmen');
+      if (r) r.classList.toggle('scanner-rahmen-aktiv', an);
+      haltenKnopf.classList.toggle('haelt', an);
+    };
+    function lesenAn() {
+      if (!laeuft || liest || nachlauf) return;
+      liest = true;
+      // Jede Haltung faengt bei null an — sonst wanderten Zaehlungen vom vorigen Karton mit.
+      gezaehlt.clear();
+      gs1Gemeldet = false;
+      rahmenAktiv(true);
+      melde('Wird gelesen — ruhig auf den Code halten …');
+    }
+    function lesenAus() {
+      if (!liest) return;
+      liest = false;
+      rahmenAktiv(false);
+      // Ein laufender Nachlauf darf zu Ende gehen: Der Treffer war schon bestaetigt.
+      if (!nachlauf) {
+        melde(gezaehlt.size
+          ? 'Losgelassen, bevor es sicher war — bitte noch einmal halten und ruhig zielen.'
+          : 'Nichts erkannt — halten, nicht tippen.');
+      }
+    }
+    haltenKnopf.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      // Zeiger einfangen, damit ein Abrutschen vom Knopf das Lesen nicht abbricht. Wirft bei
+      // einem kuenstlich erzeugten Ereignis (Tests) — das darf das Halten nicht verhindern.
+      try { haltenKnopf.setPointerCapture(e.pointerId); } catch (_) {}
+      lesenAn();
+    });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) haltenKnopf.addEventListener(ev, lesenAus);
+    // Tastatur: Leertaste/Enter halten. Ohne das waere der Scanner ohne Touch nicht bedienbar.
+    haltenKnopf.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); lesenAn(); } });
+    haltenKnopf.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') lesenAus(); });
+    // Wer die App wegwischt, laesst nicht los — das Lesen muss trotzdem enden.
+    document.addEventListener('visibilitychange', lesenAus);
+
     function treffer(rohCode, format) {
-      if (!laeuft || !rohCode) return;
+      if (!laeuft || !liest || !rohCode) return;
       // Erst die Artikelnummer herauslösen, DANN prüfen und zählen. Sonst zählte jede Packung
       // ihre eigene Seriennummer als eigenen Code.
       const norm = scannerCodeNormalisieren(rohCode);
@@ -607,7 +658,9 @@ async function scannerOeffnen() {
           const vr = v.getBoundingClientRect(), rr = rahmenEl.getBoundingClientRect();
           const aus = scannerAusschnittRechteck(v.videoWidth, v.videoHeight, vr.width, vr.height,
             { left: rr.left - vr.left, top: rr.top - vr.top, width: rr.width, height: rr.height });
-          if (aus) {
+          // Nur waehrend des Haltens ueberhaupt entschluesseln — das spart Strom und macht die
+          // Vorschau fluessiger, waehrend der Benutzer noch zielt.
+          if (aus && liest) {
             if (schnitt.width !== aus.sw || schnitt.height !== aus.sh) { schnitt.width = aus.sw; schnitt.height = aus.sh; }
             schnitt.getContext('2d').drawImage(v, aus.sx, aus.sy, aus.sw, aus.sh, 0, 0, aus.sw, aus.sh);
             if (nativ) {

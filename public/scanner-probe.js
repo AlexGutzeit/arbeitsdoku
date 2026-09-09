@@ -188,6 +188,14 @@
   // 8050124027874 aus dem Crafter-Lauf). Die Luecke ist also enger als zunaechst gedacht:
   // 1522 gegen 2081. 1800 ms liegt darin und haelt beide Seiten.
   const ZUSAMMEN_MS = 1800;
+  // HALTEMODUS (Alex, 09.09.2026): „nur so lange der button gedrückt ist, wird gescannt."
+  // Damit ist jede Haltung genau EINE Etikette — der Pruefstand muss die Zusammengehoerigkeit
+  // dann nicht mehr aus den Zeitabstaenden raten, er WEISS sie.
+  let liest = false, haltNr = 0;
+  // Im Haltemodus zaehlt die Haltung, sonst der Zeitabstand.
+  const zusammenGehoerig = (a, b) => (a.halt && b.halt)
+    ? a.halt === b.halt
+    : Math.abs(a.ersteMs - b.ersteMs) <= ZUSAMMEN_MS;
   const gemEnde = (a, b) => { let i = 0; while (i < a.length && i < b.length && a[a.length-1-i] === b[b.length-1-i]) i++; return i; };
   // Welche Codes wurden im selben Moment gelesen? Bei drei uebereinanderklebenden Barcodes sind
   // das die Geschwister EINER Etikette — und genau das muss man sehen, um zu beurteilen, welchen
@@ -195,7 +203,7 @@
   const gleichzeitigMit = (code, d, alle) => {
     const raus = [];
     for (const [x, xd] of alle) {
-      if (x !== code && Math.abs(xd.ersteMs - d.ersteMs) <= ZUSAMMEN_MS) raus.push(x);
+      if (x !== code && zusammenGehoerig(d, xd)) raus.push(x);
     }
     return raus;
   };
@@ -203,7 +211,7 @@
     for (const [x, xd] of alle) {
       if (x === code) continue;
       if (xd.n < d.n * 2) continue;                       // kein deutlich staerkerer Nachbar
-      if (Math.abs(xd.ersteMs - d.ersteMs) > ZUSAMMEN_MS) continue;  // nicht im selben Moment
+      if (!zusammenGehoerig(d, xd)) continue;   // nicht dieselbe Haltung bzw. nicht im selben Moment
       if (gemEnde(code, x) >= 6) return x;
     }
     return null;
@@ -288,7 +296,7 @@
     if (!laeuft) return;
     const neu = !gesehen.has(text);
     if (ersterTrefferMs === null) ersterTrefferMs = ms;
-    const e = gesehen.get(text) || { n: 0, format, weg, ersteMs: ms };
+    const e = gesehen.get(text) || { n: 0, format, weg, ersteMs: ms, halt: haltNr || 0 };
     e.n++; gesehen.set(text, e);
     const noetig = NOETIGE_LESUNGEN(format);
     const geradeBestaetigt = e.n === noetig;
@@ -464,7 +472,7 @@
   async function schleife() {
     if (!laeuft) return;
     const v = $('video');
-    if (v.readyState >= 2) {
+    if (v.readyState >= 2 && (!$('haltemodus').checked || liest)) {
       versuche++;
       const bild = leseBild();
       if (nativDetector) {
@@ -494,7 +502,22 @@
     return c;
   }
 
+  const haltenAn = () => { if (liest) return; liest = true; haltNr++;
+    $('halten').style.background = '#2e7d32'; melde('Wird gelesen — ruhig auf den Code halten …'); };
+  const haltenAus = () => { if (!liest) return; liest = false;
+    $('halten').style.background = '#4CAF50'; melde('Losgelassen.'); };
+  $('halten').addEventListener('pointerdown', (ev) => { ev.preventDefault();
+    try { $('halten').setPointerCapture(ev.pointerId); } catch (_) {} haltenAn(); });
+  for (const n of ['pointerup', 'pointercancel', 'pointerleave']) $('halten').addEventListener(n, haltenAus);
+  $('halten').addEventListener('keydown', (ev) => { if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); haltenAn(); } });
+  $('halten').addEventListener('keyup', (ev) => { if (ev.key === ' ' || ev.key === 'Enter') haltenAus(); });
+  document.addEventListener('visibilitychange', haltenAus);
+
   document.addEventListener('change', (ev) => {
+    if (ev.target && ev.target.id === 'haltemodus') {
+      $('halten').style.display = ev.target.checked ? '' : 'none';
+      if (!ev.target.checked) haltenAus();
+    }
     if (ev.target && ev.target.id === 'nurrahmen') {
       const an = ev.target.checked;
       $('rahmen').style.display = an ? '' : 'none';

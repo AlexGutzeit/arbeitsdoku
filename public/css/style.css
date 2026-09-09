@@ -2432,6 +2432,18 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .scanner-hinweis { position: absolute; left: 0; right: 0; bottom: 0; text-align: center;
   font-size: .82rem; color: #fff; background: rgba(0,0,0,.55); padding: .35rem .5rem;
   pointer-events: none; }
+/* GEDRUECKT HALTEN. Gross und unten, damit der Daumen ihn im Lager findet, ohne hinzusehen.
+   `touch-action: none` ist noetig, sonst scrollt die Seite beim Halten weg; `user-select: none`
+   verhindert, dass ein langer Druck den Text markiert (und auf Android das Kontextmenue oeffnet). */
+.scanner-halten { width: 100%; margin-top: .7rem; padding: .95rem 1rem; border-radius: 10px;
+  border: 2px solid var(--primary); background: var(--primary); color: #fff; font-size: 1.02rem;
+  cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent; }
+.scanner-halten.haelt { background: #2e7d32; border-color: #2e7d32; transform: scale(.99); }
+/* Solange gehalten wird, leuchtet der Rahmen — man sieht ohne Blick auf den Knopf, dass gelesen
+   wird. Die Abdunklung bleibt dabei UNVERAENDERT: Mein erster Entwurf hellte sie beim Halten auf,
+   also genau in dem Moment, in dem der Rahmen am staerksten fuehren soll. Der Test hat es gemeldet. */
+.scanner-rahmen-aktiv { border-color: rgba(255,255,255,.95) !important; }
 .scanner-zoom { margin-top: .7rem; display: flex; gap: .6rem; align-items: center; font-size: .85rem; }
 .scanner-zoom input { flex: 1; }
 

@@ -440,6 +440,13 @@ die erfüllt eine Prüfziffer. Grund: Auf einer Etikette standen die
 EAN (49 Lesungen) und ein Händler-QR (21) – die GTIN ist die Nummer, die *jeder* kennt, die Adresse
 eines Händlers nicht.
 
+**Gelesen wird nur, solange der Knopf gedrückt ist.** Unter dem Kamerabild sitzt „Zum Scannen
+gedrückt halten": Erst beim Drücken beginnt das Entziffern, beim Loslassen hört es auf. Das hat
+zwei Gründe – wer das Handy erst hochführt, liest sonst womöglich schon das Nachbaretikett, und
+**jede Haltung ist genau eine Etikette**: Die Zählung beginnt bei jedem Druck von vorn, Codes
+verschiedener Kartons können sich also nicht mehr vermischen. Der Rahmen leuchtet auf, solange
+gelesen wird; per Tastatur geht es mit gehaltener Leertaste.
+
 **Gelesen wird nur, was im grünen Rahmen liegt.** Der Rahmen war früher Dekoration – jetzt ist er
 die Zusage: Das Bild wird auf ihn zugeschnitten, alles daneben ignoriert der Scanner. Vier
 Eckwinkel, ein abgedunkeltes Umfeld und der Satz „Nur was im Rahmen liegt, wird gelesen" sagen
