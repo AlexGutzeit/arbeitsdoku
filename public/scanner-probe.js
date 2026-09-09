@@ -507,8 +507,17 @@
     zeilen.push('');
     zeilen.push('  ' + $('bilanz').textContent);
     zeilen.push('');
+    // `textContent` ignoriert <br> — dadurch klebten im kopierten Bericht Woerter aneinander
+    // („nativerstmals nach 24503 ms", „wird nicht uebernommengleichzeitig gelesen mit ..."). Erst
+    // die Umbrueche zu echten Zeilen machen, DANN den Text ziehen. Fortsetzungszeilen werden
+    // eingerueckt, damit ein Eintrag als Block lesbar bleibt.
     for (const li of $('treffer').querySelectorAll('li')) {
-      zeilen.push('  - ' + li.textContent.replace(/\s+/g, ' ').trim());
+      const k = li.cloneNode(true);
+      k.querySelectorAll('br').forEach(br => br.replaceWith(document.createTextNode('\n')));
+      const teile = k.textContent.split('\n').map(z => z.replace(/\s+/g, ' ').trim()).filter(Boolean);
+      if (!teile.length) continue;
+      zeilen.push('  - ' + teile.shift());
+      for (const t of teile) zeilen.push('      ' + t);
     }
     const text = zeilen.join('\n');
     try {
