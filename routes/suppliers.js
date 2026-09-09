@@ -150,6 +150,32 @@ router.delete('/:id', authenticate, nurPfleger, (req, res) => {
   res.json({ ok: true, eintraege: anzahl });
 });
 
+// ── Wiederherstellen ────────────────────────────────────────────────────────────────────────
+//
+// Das FEHLTE, obwohl die Loeschmeldung es ausdruecklich versprach („Die bleiben erhalten und
+// kommen zurueck, wenn der Haendler wiederhergestellt wird"). Gemessen am 09.09.2026: Der Aufruf
+// gab 404, und wer denselben Namen neu anlegte, bekam einen NEUEN Haendler — die alten
+// Bestellnummern blieben als verwaiste Zeilen in der Datenbank haengen, unsichtbar fuer alle.
+// Ein Versprechen, das die App nicht einloest, ist schlimmer als gar keins.
+router.post('/:id/wiederherstellen', authenticate, nurPfleger, (req, res) => {
+  const db = getDb();
+  const id = Number(req.params.id);
+  const h = db.prepare('SELECT id, name, deleted_at FROM suppliers WHERE id = ?').get(id);
+  if (!h || !h.deleted_at) return res.status(404).json({ error: 'Kein gelöschter Großhändler mit dieser Nummer' });
+  // Der Name kann inzwischen neu vergeben sein — dann muesste einer von beiden umbenannt werden.
+  // Das ist eine Entscheidung des Benutzers, keine des Programms.
+  const belegt = db.prepare('SELECT id, name FROM suppliers WHERE deleted_at IS NULL').all()
+    .find(x => vergleichsform(x.name) === vergleichsform(h.name));
+  if (belegt) return res.status(409).json({
+    error: `Es gibt inzwischen wieder einen Großhändler „${belegt.name}". Benenne einen von beiden `
+         + 'um, dann lässt sich dieser zurückholen.', haendler: belegt });
+  db.prepare('UPDATE suppliers SET deleted_at = NULL WHERE id = ?').run(id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'supplier_restore',
+    details: `Großhändler wiederhergestellt: ${h.name}`, ip: req.ip });
+  broadcast('produkte');
+  res.json({ haendler: db.prepare(`SELECT ${SPALTEN} FROM suppliers WHERE id = ?`).get(id) });
+});
+
 module.exports = router;
 module.exports.linkPruefen = linkPruefen;
 module.exports.vergleichsform = vergleichsform;

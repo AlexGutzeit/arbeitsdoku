@@ -928,6 +928,7 @@ const AUDIT_LABELS = {
   supplier_create: 'Großhändler angelegt',
   supplier_update: 'Großhändler geändert',
   supplier_delete: 'Großhändler gelöscht',
+  supplier_restore: 'Großhändler wiederhergestellt',
   product_supplier_add: 'Großhändler-Angaben hinterlegt',
   product_supplier_update: 'Großhändler-Angaben geändert',
   product_supplier_remove: 'Großhändler-Angaben entfernt',

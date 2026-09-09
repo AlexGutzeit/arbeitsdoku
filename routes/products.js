@@ -246,8 +246,12 @@ router.post('/', authenticate, (req, res) => {
     `SELECT b.code, p.id, p.name, p.deleted_at FROM product_barcodes b
        JOIN products p ON p.id = b.product_id WHERE b.code = ?`).get(code);
   if (belegt) {
+    // Ist das Produkt GELOESCHT, bleibt sein Code trotzdem belegt — und die Meldung muss sagen,
+    // wie man da herauskommt. Sonst steht man davor: anlegen geht nicht, anlernen auch nicht.
     return res.status(409).json({
-      error: `Dieser Barcode gehört bereits zu „${belegt.name}".`,
+      error: `Dieser Barcode gehört bereits zu „${belegt.name}"`
+           + (belegt.deleted_at ? ' — einem gelöschten Produkt. Hol es im Verzeichnis zurück, '
+              + 'dann ist der Code wieder benutzbar.' : '.'),
       produkt: { id: belegt.id, name: belegt.name, geloescht: !!belegt.deleted_at } });
   }
   if (katId && !db.prepare('SELECT id FROM product_categories WHERE id = ? AND deleted_at IS NULL').get(katId)) {
@@ -288,7 +292,14 @@ router.post('/:id/barcodes', authenticate, (req, res) => {
       WHERE b.code = ?`).get(code);
   if (belegt) {
     if (belegt.id === id) return res.status(409).json({ error: 'Dieser Barcode hängt bereits an diesem Produkt.' });
-    return res.status(409).json({ error: `Dieser Barcode gehört bereits zu „${belegt.name}".`, produkt: belegt });
+    // `geloescht` mitgeben — sonst kann die Oberflaeche nicht erklaeren, WARUM der Code belegt
+    // ist, obwohl das Produkt nirgends auftaucht. (Beim Anlegen steht es schon drin.)
+    const weg = db.prepare('SELECT deleted_at FROM products WHERE id = ?').get(belegt.id);
+    return res.status(409).json({
+      error: `Dieser Barcode gehört bereits zu „${belegt.name}"`
+           + (weg && weg.deleted_at ? ' — einem gelöschten Produkt. Hol es im Verzeichnis zurück, '
+              + 'dann ist der Code wieder benutzbar.' : '.'),
+      produkt: { ...belegt, geloescht: !!(weg && weg.deleted_at) } });
   }
   db.prepare('INSERT INTO product_barcodes (product_id, code, created_at, created_by) VALUES (?, ?, ?, ?)')
     .run(id, code, berlinNow(), req.user.id);
@@ -341,7 +352,14 @@ router.get('/verzeichnis', authenticate, nurPfleger, (req, res) => {
     SELECT p.id, p.name, p.deleted_at, p.merged_into, m.name AS aufgegangen_in
       FROM products p LEFT JOIN products m ON m.id = p.merged_into
      WHERE p.deleted_at IS NOT NULL ORDER BY p.deleted_at DESC`).all();
-  res.json({ kategorien, produkte, geloescht, dubletten: dublettenGruppen(db), stand: berlinNow() });
+  // Geloeschte Haendler gehoeren MIT in den Papierkorb — sonst waere das Wiederherstellen zwar
+  // moeglich, aber unerreichbar.
+  const geloeschteHaendler = db.prepare(`
+    SELECT s.id, s.name, s.deleted_at,
+           (SELECT COUNT(*) FROM product_suppliers ps WHERE ps.supplier_id = s.id) AS eintraege
+      FROM suppliers s WHERE s.deleted_at IS NOT NULL ORDER BY s.deleted_at DESC`).all();
+  res.json({ kategorien, produkte, geloescht, geloeschteHaendler,
+             dubletten: dublettenGruppen(db), stand: berlinNow() });
 });
 
 // ── Produkt aendern ─────────────────────────────────────────────────────────────────────────

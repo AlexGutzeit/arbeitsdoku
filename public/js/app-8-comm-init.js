@@ -579,12 +579,38 @@ async function scanInsFormular() {
       { title: 'Keine Verbindung', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
     return;
   }
+  // GELOESCHTES PRODUKT — hier lag eine Sackgasse (gefunden 09.09.2026).
+  //
+  // Vorher wurde gefragt „Soll er als NEUES Produkt angelegt werden?". Wer ja sagte, fuellte die
+  // Maske aus und bekam beim Speichern: „Dieser Barcode gehört bereits zu ‚Testartikel'." Denn
+  // der Code bleibt belegt, solange das geloeschte Produkt existiert — und ANLERNEN an ein
+  // anderes Produkt scheitert aus demselben Grund. Es gab keinen Weg vorwaerts.
+  //
+  // Der einzige richtige Ausweg ist das ZURUECKHOLEN. Wer das Recht dazu hat, bekommt es
+  // angeboten; wer nicht, erfaehrt wenigstens, warum es klemmt und wer helfen kann.
   if (antwort.geloeschtes_produkt) {
-    const weiter = await confirmModal(
-      `Dieser Barcode gehörte zu „${antwort.geloeschtes_produkt.name}", das gelöscht wurde.\n\n`
-      + 'Soll er als NEUES Produkt angelegt werden?',
-      { title: 'Gelöschtes Produkt', okLabel: 'Neu anlegen', danger: false });
-    if (!weiter) return;
+    const g = antwort.geloeschtes_produkt;
+    if (typeof darfProduktePflegen === 'function' && darfProduktePflegen()) {
+      const weiter = await confirmModal(
+        `Der Barcode gehört zu „${g.name}" — dieses Produkt wurde gelöscht.\n\n`
+        + 'Solange es im Papierkorb liegt, bleibt sein Barcode belegt: Ein neues Produkt lässt '
+        + 'sich damit nicht anlegen. Soll „' + g.name + '" zurückgeholt werden?',
+        { title: 'Gelöschtes Produkt', okLabel: 'Zurückholen', cancelLabel: 'Abbrechen', danger: false });
+      if (!weiter) return;
+      try {
+        const r = await api('POST', `/api/products/${g.id}/wiederherstellen`);
+        produktUebernehmen(r.produkt);
+        await katalogAuffrischen();
+        toast(`„${r.produkt.name}" zurückgeholt und übernommen.`, 'success');
+      } catch (e) { toast(e.message, 'error'); }
+      return;
+    }
+    await confirmModal(
+      `Der Barcode gehört zu „${g.name}" — dieses Produkt wurde gelöscht, und dadurch bleibt sein `
+      + 'Barcode belegt.\n\nEin neues Produkt lässt sich damit nicht anlegen. Wer das Recht '
+      + '„Lagerdaten pflegen" hat, kann es im Produktverzeichnis zurückholen.',
+      { title: 'Gelöschtes Produkt', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
+    return;
   }
   await produktAnlegenMaske(code);
 }

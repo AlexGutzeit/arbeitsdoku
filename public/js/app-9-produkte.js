@@ -266,15 +266,26 @@ function pvHaendlerFelder(h) {
 }
 
 function pvPapierkorbHtml(v) {
-  if (!v.geloescht.length) return '<p style="color:var(--text-lighter)">Nichts gelöscht.</p>';
-  return v.geloescht.map(p => `
+  const haendler = v.geloeschteHaendler || [];
+  if (!v.geloescht.length && !haendler.length) return '<p style="color:var(--text-lighter)">Nichts gelöscht.</p>';
+  return (haendler.length ? `<h3 style="font-size:.95rem;margin:.2rem 0 .4rem">Großhändler</h3>`
+    + haendler.map(h => `
+    <div style="display:flex;gap:.6rem;align-items:center;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid var(--border)">
+      <div><strong>${esc(h.name)}</strong>
+        <span style="font-size:.8rem;color:var(--text-light);margin-left:.4rem">
+          gelöscht am ${esc(String(h.deleted_at).slice(0, 10))}${h.eintraege ? ` · ${h.eintraege} hinterlegte Bestellnummer(n) warten` : ''}</span>
+      </div>
+      <button class="btn btn-sm pv-h-wieder" data-id="${h.id}">Wiederherstellen</button>
+    </div>`).join('')
+    + (v.geloescht.length ? `<h3 style="font-size:.95rem;margin:1rem 0 .4rem">Produkte</h3>` : '') : '')
+    + (v.geloescht.length ? v.geloescht.map(p => `
     <div style="display:flex;gap:.6rem;align-items:center;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid var(--border)">
       <div><strong>${esc(p.name)}</strong>
         <span style="font-size:.8rem;color:var(--text-light);margin-left:.4rem">
           ${p.merged_into ? 'aufgegangen in „' + esc(p.aufgegangen_in || '?') + '“' : 'gelöscht am ' + esc(String(p.deleted_at).slice(0, 10))}</span>
       </div>
       ${p.merged_into ? '' : `<button class="btn btn-sm pv-wieder" data-id="${p.id}">Wiederherstellen</button>`}
-    </div>`).join('');
+    </div>`).join('') : '');
 }
 
 /**
@@ -412,6 +423,11 @@ async function pvKlick(ev) {
     if (b.classList.contains('pv-wieder')) {
       await api('POST', `/api/products/${b.dataset.id}/wiederherstellen`);
       toast('Wiederhergestellt', 'success'); return renderProdukte();
+    }
+    if (b.classList.contains('pv-h-wieder')) {
+      await api('POST', `/api/suppliers/${b.dataset.id}/wiederherstellen`);
+      toast('Großhändler wiederhergestellt — die hinterlegten Bestellnummern sind wieder da.', 'success');
+      return renderProdukte();
     }
 
     if (b.classList.contains('pv-merge')) return pvMergeDialog(id);

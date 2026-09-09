@@ -14,6 +14,36 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Durchsucht nach Sackgassen — zwei gefunden
+
+Alex bat, das Barcode-Feature auf Logikfehler, Bugs, unmögliche Zustände und englische Meldungen
+durchzugehen. Gesucht wurde nicht durch Lesen, sondern durch **Ausprobieren**: ein Bosheits-Skript,
+das dem Server absichtlich Unfug vorsetzt.
+
+**Kein Befund** bei: englischen Meldungen (alle deutsch), Zusammenführen mit sich selbst, in ein
+bereits aufgegangenes Produkt oder aus einem heraus, Kategorien in gelöschte verschmelzen,
+Grenzwerten (leere Namen, zu lange Bestellnummern), Rechteprüfungen auf allen neuen Wegen, und
+Barcodes mit Schrägstrich (`https://qr.fischer.id/p/551442` — echte Hersteller-QRs werden ja
+gespeichert; Anlegen, Nachschlagen und Entfernen gehen sauber durch). Auch die **Kette**
+A→B→C führt den ältesten Barcode korrekt zum letzten Überlebenden.
+
+**Fund 1 — ein Versprechen, das die App nicht einlösen konnte.** Beim Löschen eines Großhändlers
+stand: „Die bleiben erhalten und kommen zurück, wenn der Händler wiederhergestellt wird." Es gab
+aber **kein Wiederherstellen** (404), und wer denselben Namen neu anlegte, bekam einen *neuen*
+Händler — die alten Bestellnummern blieben als unsichtbare, verwaiste Zeilen in der Datenbank
+liegen (gemessen: 1 Waise nach einem einzigen Durchgang). Jetzt gibt es
+`POST /api/suppliers/:id/wiederherstellen`, gelöschte Händler stehen im Papierkorb, und der
+Grenzfall „Name inzwischen neu vergeben" wird erklärt statt still zu scheitern.
+
+**Fund 2 — eine echte Sackgasse.** Der Barcode eines gelöschten Produkts bleibt belegt. Die App bot
+nach dem Scan an: „Soll er als NEUES Produkt angelegt werden?" — wer ja sagte, füllte die Maske aus
+und bekam beim Speichern „Dieser Barcode gehört bereits zu …". *Anlernen* an ein anderes Produkt
+scheiterte aus demselben Grund. **Es gab keinen Weg vorwärts.** Jetzt wird das Zurückholen
+angeboten (wer das Recht hat) beziehungsweise erklärt, wer helfen kann (wer es nicht hat). Und die
+409-Meldungen beider Wege sagen jetzt selbst, woran es liegt und wie man herauskommt.
+
+Beides in `tests/produktpflege.js` festgeschrieben.
+
 ### 2026-09-09 · „Failed to fetch" — einmal zentral übersetzt
 
 Alex: *„aber das macht auch keinen Sinn wenn ich offline dann nicht auf bestellen klicken kann."*

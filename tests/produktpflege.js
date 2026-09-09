@@ -99,6 +99,24 @@ function req(m, p, t, b) {
     ok('wiederhergestellt', (await req('POST', `/api/products/${p3.id}/wiederherstellen`, chef)).status === 200);
     ok('… und wieder auffindbar', (await req('GET', '/api/products/barcode/4003', max)).body.gefunden === true);
 
+    // SACKGASSE, gefunden am 09.09.2026: Der Barcode eines geloeschten Produkts bleibt belegt.
+    // Frueher bot die App an, damit ein NEUES Produkt anzulegen — das scheiterte dann. Und
+    // ANLERNEN an ein anderes Produkt scheitert aus demselben Grund. Der einzige Weg ist das
+    // Zurueckholen; die Meldung muss das sagen, sonst steht man davor.
+    await req('DELETE', `/api/products/${p3.id}`, chef);
+    const neuMitBelegtem = await req('POST', '/api/products', max, { name: 'Etwas anderes', barcode: '4003' });
+    ok('mit dem Code eines gelöschten Produkts lässt sich nichts Neues anlegen',
+      neuMitBelegtem.status === 409, String(neuMitBelegtem.status));
+    ok('… und die Meldung sagt WARUM und wie man herauskommt',
+      /gelöschten Produkt/.test(neuMitBelegtem.text) && /zurück/.test(neuMitBelegtem.text),
+      neuMitBelegtem.body && neuMitBelegtem.body.error);
+    const anlernenBelegt = await req('POST', `/api/products/${p1.id}/barcodes`, chef, { code: '4003' });
+    ok('… auch das Anlernen an ein anderes Produkt erklärt sich',
+      anlernenBelegt.status === 409 && /gelöschten Produkt/.test(anlernenBelegt.text),
+      anlernenBelegt.body && anlernenBelegt.body.error);
+    ok('… und der Ausweg funktioniert',
+      (await req('POST', `/api/products/${p3.id}/wiederherstellen`, chef)).status === 200);
+
     console.log('\n── Kategorien ──');
     const kA = (await req('POST', '/api/products/kategorien', max, { name: 'Elektro' })).body.kategorie;
     const kB = (await req('POST', '/api/products/kategorien', max, { name: 'Elektrik' })).body.kategorie;
@@ -187,6 +205,26 @@ function req(m, p, t, b) {
       JSON.stringify(db.prepare('SELECT COUNT(*) AS c FROM product_suppliers WHERE supplier_id = ?').get(sId)));
     ok('… und tauchen beim Produkt nicht mehr auf',
       (await req('GET', `/api/products/${p1.id}/haendler`, chef)).body.haendler.length === 0);
+
+    console.log('\n── Der gelöschte Händler kommt zurück ──');
+    // Die Loeschmeldung verspricht: „Die bleiben erhalten und kommen zurueck, wenn der Haendler
+    // wiederhergestellt wird." Das WAR nicht wahr — es gab kein Wiederherstellen, und wer denselben
+    // Namen neu anlegte, bekam einen neuen Haendler; die alten Bestellnummern blieben als
+    // unsichtbare Zeilen liegen. Gefunden am 09.09.2026.
+    const haendlerZurueck = await req('POST', `/api/suppliers/${sId}/wiederherstellen`, chef);
+    ok('der gelöschte Händler lässt sich zurückholen', haendlerZurueck.status === 200,
+      haendlerZurueck.status + ' ' + haendlerZurueck.text.slice(0, 80));
+    const wiederDa = (await req('GET', `/api/products/${p1.id}/haendler`, chef)).body.haendler;
+    ok('… und die hinterlegte Bestellnummer ist wieder da',
+      wiederDa.length === 1 && wiederDa[0].bestellnummer === '88123', JSON.stringify(wiederDa.map(h => h.bestellnummer)));
+    ok('… es liegen keine verwaisten Zeilen mehr herum',
+      db.prepare('SELECT COUNT(*) c FROM product_suppliers ps JOIN suppliers s ON s.id = ps.supplier_id WHERE s.deleted_at IS NOT NULL').get().c === 0);
+    // Und der Grenzfall: Name inzwischen neu vergeben.
+    await req('DELETE', `/api/suppliers/${sId}`, chef, { trotzdem: true });
+    await req('POST', '/api/suppliers', chef, { name: 'Sonepar' });
+    const kollision = await req('POST', `/api/suppliers/${sId}/wiederherstellen`, chef);
+    ok('… ist der Name inzwischen neu vergeben, wird das erklärt statt still zu scheitern',
+      kollision.status === 409 && /umbenennen|Benenne/.test(kollision.text), kollision.body && kollision.body.error);
 
     console.log('\n── Ansehen ist an das Bestellrecht geknüpft ──');
     // Max hat inzwischen das PFLEGE-Recht — deshalb ein Kollege ohne beides.

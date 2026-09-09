@@ -514,7 +514,7 @@ Eigener Menüpunkt, der nur erscheint, wenn man das Recht hat. Drei Reiter:
   stehen beim Produkt, nicht beim Händler. Sortiert wird alphabetisch – es gibt bewusst keinen
   „Hauptlieferanten". Ein Händler mit hinterlegten Produkten wird nicht ohne Rückfrage gelöscht,
   und seine Einträge bleiben erhalten, damit sie beim Wiederherstellen zurückkommen.
-* **Gelöscht** — Gelöschtes lässt sich zurückholen. Wer einen Barcode eines gelöschten Produkts
+* **Gelöscht** — Gelöschte **Produkte und Großhändler** lassen sich zurückholen; beim Händler kommen die hinterlegten Bestellnummern mit. Gelöschtes lässt sich zurückholen. Wer einen Barcode eines gelöschten Produkts
   scannt, bekommt „gehörte zu …" statt „unbekannt". **Zusammengeführte** Produkte lassen sich
   dagegen nicht als eigene zurückholen – ihre Barcodes hängen am Nachfolger.
 
