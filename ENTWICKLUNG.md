@@ -14,6 +14,30 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Charge statt Artikel
+
+Aus demselben Lauf: `*202511182 06/17/26` — Data-Matrix, **18×** gelesen, also grundsolide erkannt
+und trotzdem das Falsche. Chargennummer plus Verfallsdatum, bei jeder Lieferung anders. Als Barcode
+gespeichert wäre jede neue Charge ein „unbekanntes Produkt" — dieselbe Katalog-Verschmutzung, gegen
+die schon die GS1-Zerlegung gebaut wurde.
+
+Gefragt, ob Artikelnummern Schrägstriche tragen. Alex: *„ohne mir sicher zu sein, würde ich ein /
+in einer Artikelnummer bezweifeln."* **„Bezweifeln" ist nicht „ausschliessen"** — die Regel ist
+deshalb so eng wie möglich gefasst: Abgelehnt wird nur ein **Datum aus drei durch Schrägstrich
+getrennten Zahlengruppen**. Gemessen:
+
+```
+*202511182 06/17/26  → abgelehnt (Charge)      AEH-25-100   → Artikelcode
+1/1/26               → abgelehnt (Charge)      LOT/2026     → Artikelcode
+                                               4051/22      → Artikelcode
+```
+
+Werbe- und Chargencodes laufen jetzt durch **eine** Funktion (`scannerNichtUebernehmen`), die den
+Grund zurückgibt. Der Grund entscheidet über die Rangfolge *und* über den Text, der dem Benutzer
+gezeigt wird — sonst laufen die beiden auseinander, und wer scannt, sieht nichts passieren und
+scannt noch dreimal. Die Chargen-Meldung schliesst mit *„Sollte das doch eine gültige Artikelnummer
+sein, sag Alex Bescheid"*: Die Regel beruht auf einer Vermutung, und das soll sie auch zugeben.
+
 ### 2026-09-09 · Erster Lauf mit Zielrahmen — und eine umgekehrte Entscheidung
 
 39 Codes, 1774 Bilder. **Erster Treffer nach 6,5 s** statt 13–17 s, 6,5 Bilder/s statt 5,8 — der

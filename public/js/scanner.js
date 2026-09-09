@@ -181,6 +181,44 @@ function scannerAusCanvasLesen(canvas, hinweise) {
   return leser.decodeBitmap(bitmap);   // wirft NotFoundException, wenn nichts drin ist
 }
 
+/**
+ * Eine Charge mit Verfallsdatum — keine Artikelnummer.
+ *
+ * Im Lager gemessen (Alex, 09.09.2026, 10:54): Ein Data-Matrix enthielt
+ *
+ *   *202511182 06/17/26
+ *    ^^^^^^^^^ ^^^^^^^^
+ *    Chargennummer  Verfallsdatum
+ *
+ * 18-mal gelesen, also grundsolide erkannt — und trotzdem das Falsche. Diese Angabe ist PRO
+ * CHARGE verschieden: Bei jeder Lieferung waere es ein neues „unbekanntes Produkt", genau die
+ * Katalog-Verschmutzung, gegen die die GS1-Zerlegung gebaut wurde.
+ *
+ * BEWUSST ENG: Erkannt wird nur ein Datum aus DREI durch Schraegstrich getrennten Zahlengruppen.
+ * Alex dazu (09.09.2026): „ohne mir sicher zu sein, würde ich ein / in einer Artikelnummer
+ * bezweifeln." „Bezweifeln" ist nicht „ausschliessen" — deshalb faellt NICHT jeder Schraegstrich
+ * darunter, und Bindestriche oder Punkte schon gar nicht: `AEH-25-100` ist eine gaengige
+ * Artikelnummer. Wer eine echte Nummer mit Datum darin hat, sieht die Meldung und kann es sagen.
+ */
+const SCANNER_DATUM_MUSTER = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/;
+
+function scannerIstChargencode(code) {
+  return SCANNER_DATUM_MUSTER.test(String(code || ''));
+}
+
+/**
+ * Soll dieser Code NICHT als Barcode uebernommen werden? Gibt den Grund zurueck oder null.
+ *
+ * Eine Stelle fuer beide Faelle, damit Rangfolge und Erklaerung nicht auseinanderlaufen koennen:
+ * Was hier abgelehnt wird, muss dem Benutzer auch erklaert werden — sonst scannt er und es
+ * passiert scheinbar nichts.
+ */
+function scannerNichtUebernehmen(code) {
+  if (scannerIstWerbecode(code)) return 'werbung';
+  if (scannerIstChargencode(code)) return 'charge';
+  return null;
+}
+
 function scannerBesterTreffer(zaehlung) {
   // -Infinity, nicht -1: Ein Werbecode traegt ein negatives Gewicht und wuerde sonst gar nicht
   // zurueckgegeben — der Benutzer bekaeme „nichts erkannt", obwohl deutlich etwas gelesen wurde.
@@ -193,10 +231,10 @@ function scannerBesterTreffer(zaehlung) {
     // Ein 2D-Code schlaegt einen 1D-Code auch mit weniger Lesungen: Seine Fehlerkorrektur macht
     // ihn zur verlaesslicheren Angabe, und ein Hersteller-QR ist praeziser als eine EAN, die
     // daneben im Bild liegt.
-    // Ein Werbe-QR darf den 2D-Bonus NICHT bekommen — sonst schlaegt die Herstelleradresse
-    // (13x gelesen) den Strichcode des Artikels daneben (5x), und man scannt am Ziel vorbei.
-    // Er bleibt trotzdem waehlbar, damit unten erklaert werden kann, was da gelesen wurde.
-    const werbung = scannerIstWerbecode(code);
+    // Ein Werbe- oder Chargencode darf den 2D-Bonus NICHT bekommen — sonst schlaegt die
+    // Herstelleradresse (13x gelesen) den Strichcode des Artikels daneben (5x), und man scannt am
+    // Ziel vorbei. Er bleibt trotzdem waehlbar, damit unten erklaert werden kann, was gelesen wurde.
+    const werbung = !!scannerNichtUebernehmen(code);
 
     // RANGFOLGE IN KLASSEN, innerhalb der Klasse entscheidet die Trefferzahl:
     //

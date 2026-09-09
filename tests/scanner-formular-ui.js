@@ -226,6 +226,17 @@ function req(m, p, t, b) {
       // 13 Ziffern, aber falsche Prüfziffer: also keine GTIN, also unangetastet.
       falschePruef: scannerCodeNormalisieren('1234567890123,x'),
       werbung: scannerIstWerbecode('https://bauer-solar.de/solarmodule/'),
+      // Charge mit Verfallsdatum, im Lager gemessen: *202511182 06/17/26 (Data-Matrix, 18x).
+      // Bewusst ENG: nur DREI durch Schraegstrich getrennte Zahlengruppen. Alex war sich nicht
+      // sicher, ob Artikelnummern je einen Schraegstrich tragen — „bezweifeln" ist nicht
+      // „ausschliessen", also faellt nicht jeder Schraegstrich darunter.
+      charge:       scannerNichtUebernehmen('*202511182 06/17/26'),
+      chargeKurz:   scannerNichtUebernehmen('1/1/26'),
+      bindestrich:  scannerNichtUebernehmen('AEH-25-100'),
+      einSchraegstrich: scannerNichtUebernehmen('LOT/2026'),
+      jahrMitStrich:    scannerNichtUebernehmen('4051/22'),
+      echteEan:     scannerNichtUebernehmen('4003899947209'),
+      werbungGrund: scannerNichtUebernehmen('https://www.digitus.info/'),
       digital: scannerIstWerbecode(scannerCodeNormalisieren('https://herkunft.edeka.de/?01=04311501706954').code),
       // ROH, ohne vorherige Normalisierung: Die Antwort darf nicht davon abhaengen, in welcher
       // Reihenfolge die beiden Funktionen aufgerufen werden.
@@ -246,6 +257,13 @@ function req(m, p, t, b) {
     ok('… und dreizehn Ziffern mit falscher Prüfziffer auch',
       rund.falschePruef.code === '1234567890123,x', JSON.stringify(rund.falschePruef));
     ok('eine Hersteller-Adresse gilt als Werbecode', rund.werbung === true);
+    ok('eine Charge mit Verfallsdatum wird nicht übernommen', rund.charge === 'charge', JSON.stringify(rund.charge));
+    ok('… auch in kurzer Schreibweise', rund.chargeKurz === 'charge', JSON.stringify(rund.chargeKurz));
+    ok('… ein Bindestrich in der Artikelnummer bleibt unberührt', rund.bindestrich === null, JSON.stringify(rund.bindestrich));
+    ok('… EIN Schrägstrich reicht nicht als Merkmal', rund.einSchraegstrich === null && rund.jahrMitStrich === null,
+      JSON.stringify([rund.einSchraegstrich, rund.jahrMitStrich]));
+    ok('… und eine EAN erst recht nicht', rund.echteEan === null, JSON.stringify(rund.echteEan));
+    ok('… der Werbecode nennt seinen eigenen Grund', rund.werbungGrund === 'werbung', JSON.stringify(rund.werbungGrund));
     ok('… ein GS1 Digital Link dagegen NICHT (daraus wird die Artikelnummer)', rund.digital === false);
     ok('… auch roh, vor der Normalisierung', rund.digitalRoh === false);
     ok('… und Valentins Hersteller-QRs erst recht nicht (die BEZEICHNEN Artikel)',

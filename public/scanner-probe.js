@@ -225,6 +225,13 @@
     return c;
   }
 
+  // Eine Charge mit Verfallsdatum ist keine Artikelnummer — im Lager gemessen:
+  // *202511182 06/17/26 (Data-Matrix, 18x). Sie ist pro Charge verschieden. BEWUSST ENG: nur drei
+  // durch Schraegstrich getrennte Zahlengruppen; ein Bindestrich (AEH-25-100) faellt nicht darunter.
+  const istChargencode = (code) => /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(String(code || ''));
+  const nichtUebernehmen = (code) => istWerbecode(code) ? 'werbung'
+    : istChargencode(code) ? 'charge' : null;
+
   // WELCHEN Code wuerde die App nehmen? Der Pruefstand listet ALLE Treffer — die App nimmt
   // genau EINEN. Ohne diese Zeile liest man eine Liste und weiss nicht, was am Ende im
   // Bestellformular staende. Rangfolge wortgleich zu scannerBesterTreffer in js/scanner.js:
@@ -233,7 +240,7 @@
     let bester = null, beste = -Infinity;
     for (const [code, d] of gesehen) {
       if (d.n < NOETIGE_LESUNGEN(d.format)) continue;
-      const klasse = istWerbecode(code) ? 0
+      const klasse = nichtUebernehmen(code) ? 0
         : gtinGueltig(code) ? 3
         : (istZweiD(d.format) ? 2 : 1);
       const gewicht = klasse * 1000000 + d.n;
@@ -267,7 +274,9 @@
         + `<code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
         + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms · `
         + (gs1Erkannt.has(code) ? 'Artikelnummer aus GS1-Code · ' : '')
-        + (istWerbecode(code)
+        + (nichtUebernehmen(code) === 'charge'
+            ? `${d.n}× gelesen — <strong>Charge/Datum</strong> (pro Lieferung anders) – wird nicht übernommen`
+            : istWerbecode(code)
             ? `${d.n}× gelesen — <strong>Werbe-/Infocode</strong> (Seite, kein Artikel) – wird nicht übernommen`
             : stattdessen
             ? `${d.n}× gelesen — <strong>vermutlich Fehllesung von ${String(stattdessen).replace(/</g, '&lt;')}</strong>`

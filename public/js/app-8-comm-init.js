@@ -514,16 +514,32 @@ function produktUebernehmen(p) {
 async function scanInsFormular() {
   const code = await scannerOeffnen();
   if (!code) return;
-  // Ein Werbe-/Info-QR ist keine Artikelnummer. Er klebt auf ALLEN Produkten eines Herstellers —
-  // gespeichert wuerden zwei verschiedene Artikel auf denselben Eintrag zeigen, und der zweite
-  // bekaeme beim Anlegen „gehoert bereits zu …", ohne dass jemand versteht, warum.
-  // (Im Lager gemessen: bauer-solar.de/solarmodule/ 13x gelesen, Alex 09.09.2026.)
-  if (typeof scannerIstWerbecode === 'function' && scannerIstWerbecode(code)) {
+  // Zwei Sorten Code, die KEINE Artikelnummer sind — beide im Lager gemessen (Alex, 09.09.2026):
+  //
+  //   Werbe-/Infocode   bauer-solar.de/solarmodule/  13x — klebt auf ALLEN Produkten des
+  //                     Herstellers; gespeichert zeigten zwei Artikel auf denselben Eintrag.
+  //   Charge + Datum    *202511182 06/17/26          18x — pro Charge verschieden; bei jeder
+  //                     Lieferung waere es ein neues „unbekanntes Produkt".
+  //
+  // Beide werden ERKLAERT statt uebernommen. Wer scannt und nichts passieren sieht, scannt noch
+  // dreimal und tippt dann doch von Hand.
+  const abgelehnt = (typeof scannerNichtUebernehmen === 'function') ? scannerNichtUebernehmen(code) : null;
+  if (abgelehnt === 'werbung') {
     await confirmModal(
       `Gelesen wurde eine Internetadresse:\n${code}\n\n`
       + 'Das ist ein Werbe- oder Infocode des Herstellers, keine Artikelnummer — er steht meist auf '
       + 'allen seinen Produkten. Bitte den Strichcode auf der Verpackung scannen.',
       { title: 'Kein Artikelcode', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
+    return;
+  }
+  if (abgelehnt === 'charge') {
+    await confirmModal(
+      `Gelesen wurde:\n${code}\n\n`
+      + 'Darin steht ein Datum — das ist eine Chargen- oder Haltbarkeitsangabe, keine '
+      + 'Artikelnummer. Sie ist bei jeder Lieferung anders; als Barcode gespeichert wäre jede '
+      + 'neue Charge ein unbekanntes Produkt. Bitte den Artikel-Barcode scannen.\n\n'
+      + 'Sollte das doch eine gültige Artikelnummer sein, sag Alex Bescheid.',
+      { title: 'Charge statt Artikel', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
     return;
   }
 

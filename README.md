@@ -417,6 +417,12 @@ daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Auskla
 Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
 erraten würde still die falsche Bestellnummer anhängen.
 
+**Chargen- und Werbecodes werden erklärt statt gespeichert.** Ein Data-Matrix wie
+`*202511182 06/17/26` enthält Charge und Haltbarkeit – bei jeder Lieferung anders, als Barcode
+gespeichert wäre jede neue Charge ein unbekanntes Produkt. Erkannt wird bewusst **nur ein Datum aus
+drei durch Schrägstrich getrennten Zahlengruppen**; ein Bindestrich (`AEH-25-100`) oder ein
+einzelner Schrägstrich (`LOT/2026`) bleibt unberührt.
+
 **Unter mehreren gelesenen Codes gewinnt die Artikelnummer.** Rangfolge: eine inhaltlich gültige
 GTIN zuerst, dann ein 2D-Code (Fehlerkorrektur), dann Haus-/Bestellnummern, zuletzt Werbecodes;
 innerhalb einer Stufe entscheidet, wie oft gelesen wurde. Grund: Auf einer Etikette standen die
