@@ -136,6 +136,51 @@ function scannerIstWerbecode(code) {
   return !/\d/.test(letztes);                             // ohne eine einzige Ziffer: ein Seitenname
 }
 
+/**
+ * Welcher Bildausschnitt wird gelesen?
+ *
+ * Alex (09.09.2026): „Das Scanner Feld einzuschränken wäre auf jeden Fall eine gute Idee. Dann
+ * aber bitte auch optisch sichtbar, so dass man sieht wo man hinzielen muss."
+ *
+ * Der grüne Rahmen war bis dahin reine Dekoration — gelesen wurde das GANZE Bild. Damit gewann
+ * jeder Code, der zufällig mit im Bild hing: der QR `4311` wurde in beiden Läufen 16- bzw. 18-mal
+ * gelesen und hätte als 2D-Code jeden Strichcode geschlagen. Ein Rahmen, der etwas anderes
+ * verspricht als das Programm tut, ist schlimmer als kein Rahmen.
+ *
+ * Diese Funktion rechnet den sichtbaren Rahmen in Koordinaten des VIDEOBILDES um. Der Umweg ist
+ * nötig, weil das Video mit `object-fit: cover` angezeigt wird: Es wird so weit vergrössert, dass
+ * die Box gefüllt ist, und links/rechts oder oben/unten fällt etwas weg. Wer einfach die
+ * Prozentwerte des Rahmens auf videoWidth/videoHeight anwendet, liest den falschen Bereich —
+ * und zwar unbemerkt, weil trotzdem Codes gefunden werden.
+ *
+ * Alle Werte in derselben Einheit wie die Box (CSS-Pixel); zurück kommen Pixel des Videobildes.
+ */
+function scannerAusschnittRechteck(videoW, videoH, boxW, boxH, rahmen) {
+  if (!videoW || !videoH || !boxW || !boxH) return null;
+  const skala = Math.max(boxW / videoW, boxH / videoH);   // object-fit: cover
+  const versatzX = (videoW * skala - boxW) / 2;
+  const versatzY = (videoH * skala - boxH) / 2;
+  const sx = (rahmen.left + versatzX) / skala;
+  const sy = (rahmen.top + versatzY) / skala;
+  const sw = rahmen.width / skala;
+  const sh = rahmen.height / skala;
+  // Auf das Videobild begrenzen — ein Rahmen, der über den Rand ragt, darf keinen negativen
+  // Ausschnitt erzeugen (drawImage zeichnet dann nichts und der Scanner fände nie etwas).
+  const x = Math.max(0, Math.min(videoW - 1, Math.round(sx)));
+  const y = Math.max(0, Math.min(videoH - 1, Math.round(sy)));
+  return { sx: x, sy: y,
+           sw: Math.max(1, Math.min(videoW - x, Math.round(sw))),
+           sh: Math.max(1, Math.min(videoH - y, Math.round(sh))) };
+}
+
+/** Aus einem Canvas lesen — der Weg, über den beide Decoder denselben Ausschnitt bekommen. */
+function scannerAusCanvasLesen(canvas, hinweise) {
+  const quelle = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+  const bitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(quelle));
+  const leser = new ZXing.BrowserMultiFormatReader(hinweise);
+  return leser.decodeBitmap(bitmap);   // wirft NotFoundException, wenn nichts drin ist
+}
+
 function scannerBesterTreffer(zaehlung) {
   // -Infinity, nicht -1: Ein Werbecode traegt ein negatives Gewicht und wuerde sonst gar nicht
   // zurueckgegeben — der Benutzer bekaeme „nichts erkannt", obwohl deutlich etwas gelesen wurde.
@@ -321,9 +366,13 @@ async function scannerOeffnen() {
         <div class="scanner-melde" id="sc-status">Kamera wird geöffnet …</div>
         <div class="scanner-bild">
           <video id="sc-video" playsinline muted autoplay></video>
-          <!-- Zielrahmen: Er sagt ohne Worte, wo der Code hingehört. Ohne ihn hält jeder anders,
-               und bei schlechtem Licht entscheidet genau das über Erfolg oder zwölf Sekunden. -->
-          <div class="scanner-rahmen"></div>
+          <!-- Zielrahmen. Seit 09.09.2026 ist er KEINE Dekoration mehr: Genau dieser Bereich wird
+               gelesen, alles ausserhalb nicht (scannerAusschnittRechteck). Wer die Geometrie hier
+               oder im CSS aendert, aendert damit den gelesenen Bereich mit — das ist Absicht,
+               damit Anzeige und Wirkung nicht auseinanderlaufen koennen. -->
+          <div class="scanner-rahmen" id="sc-rahmen"><i class="ecke-or"></i><i class="ecke-ul"></i></div>
+          <div class="scanner-hinweis">Nur was im Rahmen liegt, wird gelesen</div>
+          <canvas id="sc-schnitt" style="display:none"></canvas>
         </div>
         <div id="sc-zoombox" class="scanner-zoom" style="display:none">
           <label for="sc-zoom">Zoom</label>
@@ -339,6 +388,7 @@ async function scannerOeffnen() {
     const melde = (t) => { $s('sc-status').textContent = t; };
 
     let strom = null, laeuft = true, nativ = null, zxing = null, spur = null, licht = false;
+    let zxingHinweise = null;   // Formatliste fuer den mitgelieferten Decoder
     const gezaehlt = new Map();
     // Nach der ersten Bestaetigung noch kurz weiterlesen, statt sofort zu schliessen. Eine halbe
     // Sekunde kostet nichts und entscheidet den Fall oben richtig.
@@ -349,7 +399,9 @@ async function scannerOeffnen() {
     function schliessen(code) {
       laeuft = false;
       if (nachlauf) { clearTimeout(nachlauf); nachlauf = null; }
-      if (zxing) { try { zxing.stopContinuousDecode(); } catch (_) {} try { zxing.reset(); } catch (_) {} zxing = null; }
+      // ZXing braucht kein Anhalten mehr: Seit dem Ausschnitt-Umbau laeuft KEINE fremde
+      // Dauerschleife mehr, sondern nur die eigene — und die endet mit `laeuft = false`.
+      zxing = null;
       nativ = null;
       if (strom) { strom.getTracks().forEach(t => t.stop()); strom = null; }
       document.removeEventListener('keydown', beiTaste);
@@ -438,23 +490,43 @@ async function scannerOeffnen() {
       }
       if (!nativ && typeof ZXing !== 'undefined') {
         try {
-          const hinweise = new Map();
-          hinweise.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,
+          zxingHinweise = new Map();
+          zxingHinweise.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,
             formate.map(f => ZXing.BarcodeFormat[f.toUpperCase()]).filter(x => x !== undefined));
-          zxing = new ZXing.BrowserMultiFormatReader(hinweise);
-          zxing.decodeFromVideoElementContinuously(v, (erg) => {
-            if (erg) treffer(erg.getText(), ZXing.BarcodeFormat[erg.getBarcodeFormat()] || '');
-          });
+          zxing = true;
         } catch (_) { zxing = null; }
       }
       if (!nativ && !zxing) { melde('Kein Decoder verfügbar. Bitte eintippen.'); setTimeout(() => schliessen(null), 3000); return; }
 
-      // Schleife nur fuer den nativen Weg; ZXing bringt seine eigene mit.
+      // EINE Schleife fuer beide Decoder, beide auf DEMSELBEN Ausschnitt.
+      //
+      // Frueher brachte ZXing seine eigene Dauerschleife mit (decodeFromVideoElementContinuously).
+      // Die las das ganze Bild — und sie liess sich schlecht anhalten; ueberlebende Schleifen
+      // waren schon einmal die Ursache dafuer, dass nach dem Stoppen weitergezaehlt wurde.
+      // Eine eigene Schleife loest beides auf einmal.
+      const schnitt = document.getElementById('sc-schnitt');
+      const rahmenEl = document.getElementById('sc-rahmen');
       (async function schleife() {
-        if (!laeuft || !nativ) return;
+        if (!laeuft) return;
         if (v.readyState >= 2) {
-          try { const r = await nativ.detect(v); if (r && r.length) treffer(r[0].rawValue, r[0].format); }
-          catch (_) { nativ = null; }
+          const vr = v.getBoundingClientRect(), rr = rahmenEl.getBoundingClientRect();
+          const aus = scannerAusschnittRechteck(v.videoWidth, v.videoHeight, vr.width, vr.height,
+            { left: rr.left - vr.left, top: rr.top - vr.top, width: rr.width, height: rr.height });
+          if (aus) {
+            if (schnitt.width !== aus.sw || schnitt.height !== aus.sh) { schnitt.width = aus.sw; schnitt.height = aus.sh; }
+            schnitt.getContext('2d').drawImage(v, aus.sx, aus.sy, aus.sw, aus.sh, 0, 0, aus.sw, aus.sh);
+            if (nativ) {
+              try { const r = await nativ.detect(schnitt); if (r && r.length) treffer(r[0].rawValue, r[0].format); }
+              catch (_) { nativ = null; }          // faellt auf ZXing zurueck
+            }
+            if (!nativ && zxing) {
+              // NotFoundException ist der Normalfall (kein Code im Ausschnitt) und darf nichts tun.
+              try {
+                const erg = scannerAusCanvasLesen(schnitt, zxingHinweise);
+                if (erg) treffer(erg.getText(), ZXing.BarcodeFormat[erg.getBarcodeFormat()] || '');
+              } catch (_) {}
+            }
+          }
         }
         if (laeuft) setTimeout(() => requestAnimationFrame(schleife), 120);
       })();

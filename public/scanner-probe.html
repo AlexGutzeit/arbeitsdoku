@@ -75,10 +75,25 @@
   <div id="zoombox" style="display:none;margin-top:.6rem">
     <label for="zoom" style="font-size:.85rem;font-weight:600">Zoom <span id="zoomwert"></span></label>
     <input type="range" id="zoom" style="width:100%">
-    <div class="hinweis">Bei wenig Licht oft wirksamer als eine Lampe: weiter weg halten, näher
+    <label style="display:flex;align-items:center;gap:.5rem;margin:.5rem 0">
+    <input type="checkbox" id="nurrahmen" checked>
+    <span>nur im Rahmen lesen (<strong>wie die App</strong>) — abschalten, um zu vergleichen</span>
+  </label>
+  <div class="hinweis">Bei wenig Licht oft wirksamer als eine Lampe: weiter weg halten, näher
       heranzoomen — die Kamera bekommt mehr Licht auf die Fläche und der Code bleibt scharf.</div>
   </div>
-  <video id="video" playsinline muted autoplay></video>
+  <div id="bildbox" style="position:relative">
+    <video id="video" playsinline muted autoplay></video>
+    <!-- Zielrahmen wie in der App: Genau dieser Bereich wird gelesen, solange der Schalter
+         „nur im Rahmen lesen" gesetzt ist. -->
+    <div id="rahmen" style="position:absolute;left:8%;right:8%;top:50%;height:26%;
+         transform:translateY(-50%);border:2px solid rgba(255,255,255,.55);border-radius:10px;
+         box-shadow:0 0 0 100vmax rgba(0,0,0,.58);pointer-events:none"></div>
+    <div id="rahmentext" style="position:absolute;left:0;right:0;bottom:0;text-align:center;
+         font-size:.8rem;color:#fff;background:rgba(0,0,0,.55);padding:.3rem;pointer-events:none">
+      Nur was im Rahmen liegt, wird gelesen</div>
+    <canvas id="schnitt" style="display:none"></canvas>
+  </div>
 </div>
 
 <div class="karte">
@@ -130,6 +145,6 @@
      Cache benutzt. Genau das ist am 09.09.2026 passiert: Der Pruefstand meldete achtstellige
      ITF-Codes als "bestaetigt", weil er aelter war als die ITF-14-Regel — die Messung sagte
      also etwas anderes als die App tut. Bei jeder Regelaenderung mit hochzaehlen. -->
-<script src="/scanner-probe.js?v=374"></script>
+<script src="/scanner-probe.js?v=375"></script>
 </body>
 </html>

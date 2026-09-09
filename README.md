@@ -417,6 +417,12 @@ daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Auskla
 Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
 erraten würde still die falsche Bestellnummer anhängen.
 
+**Gelesen wird nur, was im grünen Rahmen liegt.** Der Rahmen war früher Dekoration – jetzt ist er
+die Zusage: Das Bild wird auf ihn zugeschnitten, alles daneben ignoriert der Scanner. Vier
+Eckwinkel, ein abgedunkeltes Umfeld und der Satz „Nur was im Rahmen liegt, wird gelesen" sagen
+ohne Erklärung, wohin zu zielen ist. Anlass war ein QR-Code, der in zwei Läufen 16- bzw. 18-mal
+gelesen wurde und zu keinem Produkt gehörte: Als 2D-Code hätte er jeden Strichcode geschlagen.
+
 Kleben **mehrere Barcodes übereinander** (Großhändler-Etiketten tragen oft Artikelnummer,
 Bestellnummer und Charge), wird die **Artikelnummer bevorzugt**: Ein Code mit gültiger
 GTIN-Prüfziffer zählt doppelt. Die Zahl der Lesungen bleibt trotzdem ausschlaggebend, damit ein

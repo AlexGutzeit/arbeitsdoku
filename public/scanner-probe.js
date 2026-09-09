@@ -197,6 +197,34 @@
     return null;
   };
 
+  // Wortgleich mit scannerAusschnittRechteck aus js/scanner.js. Absichtlich verdoppelt und nicht
+  // importiert: Der Pruefstand ist eine eigenstaendige Seite ohne App-Code. Wer eines aendert,
+  // muss das andere mitaendern — deshalb steht es hier ausdruecklich.
+  function ausschnittRechteck(videoW, videoH, boxW, boxH, rahmen) {
+    if (!videoW || !videoH || !boxW || !boxH) return null;
+    const skala = Math.max(boxW / videoW, boxH / videoH);
+    const versatzX = (videoW * skala - boxW) / 2, versatzY = (videoH * skala - boxH) / 2;
+    const x = Math.max(0, Math.min(videoW - 1, Math.round((rahmen.left + versatzX) / skala)));
+    const y = Math.max(0, Math.min(videoH - 1, Math.round((rahmen.top + versatzY) / skala)));
+    return { sx: x, sy: y,
+             sw: Math.max(1, Math.min(videoW - x, Math.round(rahmen.width / skala))),
+             sh: Math.max(1, Math.min(videoH - y, Math.round(rahmen.height / skala))) };
+  }
+
+  // Liefert das Bild, das die Decoder bekommen: der Ausschnitt, oder das ganze Video.
+  function leseBild() {
+    const v = $('video');
+    if (!$('nurrahmen').checked) return v;
+    const r = $('rahmen'), c = $('schnitt');
+    const vr = v.getBoundingClientRect(), rr = r.getBoundingClientRect();
+    const aus = ausschnittRechteck(v.videoWidth, v.videoHeight, vr.width, vr.height,
+      { left: rr.left - vr.left, top: rr.top - vr.top, width: rr.width, height: rr.height });
+    if (!aus) return v;
+    if (c.width !== aus.sw || c.height !== aus.sh) { c.width = aus.sw; c.height = aus.sh; }
+    c.getContext('2d').drawImage(v, aus.sx, aus.sy, aus.sw, aus.sh, 0, 0, aus.sw, aus.sh);
+    return c;
+  }
+
   function treffer(rohText, format, weg, ms) {
     const nummer = gs1Nummer(rohText);
     const text = nummer || rohText;
@@ -358,41 +386,57 @@
         hinweise.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,
           formate.map(f => ZXing.BarcodeFormat[f.toUpperCase()]).filter(v => v !== undefined));
         zxingLeser = new ZXing.BrowserMultiFormatReader(hinweise);
-        // ZXing bringt seine EIGENE Dauerschleife mit. Eine Methode `decodeFromCanvas` gibt es in
-        // dieser Fassung NICHT — mein erster Entwurf rief sie auf und hätte auf dem Gerät gar
-        // nichts gelesen. Gefunden, weil ich die Schnittstelle des Bündels abgefragt habe,
-        // statt sie aus dem Gedächtnis zu schreiben.
-        zxingLeser.decodeFromVideoElementContinuously($('video'), (ergebnis) => {
-          if (ergebnis) {
-            treffer(ergebnis.getText(),
-              ZXing.BarcodeFormat[ergebnis.getBarcodeFormat()] || '?',
-              'mitgeliefert', performance.now() - beginn);
-          }
-        });
+        // Frueher lief hier ZXings eigene Dauerschleife (decodeFromVideoElementContinuously).
+        // Die liest immer das GANZE Bild und liesse sich nicht auf den Rahmen einschraenken.
+        // Stattdessen dieselbe Kette, die ZXing intern selbst benutzt — Canvas ->
+        // HTMLCanvasElementLuminanceSource -> BinaryBitmap -> decodeBitmap — mit unserem Bild.
+        // (`decodeFromCanvas` gibt es in dieser Fassung nicht; im Buendel nachgesehen.)
       } catch (e) { zxingLeser = null; melde('Decoder ließ sich nicht starten: ' + e.message); }
     }
     schleife();   // zaehlt Bilder in jedem Fall, entschluesselt nur mit nativem Detektor
   }
 
-  // Nur fuer den NATIVEN Weg: BarcodeDetector bekommt das Video-Element direkt.
-  // Laeuft NUR das Buendel (iPhone), zaehlt diese Schleife trotzdem die Bilder mit — sonst
-  // stuende dort „0 Bilder geprueft" und der Vergleich zwischen Aufloesungen waere blind.
+  // EINE Schleife fuer beide Decoder — beide bekommen dasselbe Bild (Rahmen oder Vollbild).
   async function schleife() {
     if (!laeuft) return;
-    if (!nativDetector) {
-      if ($('video').readyState >= 2) versuche++;
-      return setTimeout(() => requestAnimationFrame(schleife), 120);
-    }
     const v = $('video');
     if (v.readyState >= 2) {
       versuche++;
-      try {
-        const r = await nativDetector.detect(v);
-        if (r && r.length) treffer(r[0].rawValue, r[0].format, 'nativ', performance.now() - beginn);
-      } catch (_) { nativDetector = null; }
+      const bild = leseBild();
+      if (nativDetector) {
+        try {
+          const r = await nativDetector.detect(bild);
+          if (r && r.length) treffer(r[0].rawValue, r[0].format, 'nativ', performance.now() - beginn);
+        } catch (_) { nativDetector = null; }
+      }
+      if (!nativDetector && zxingLeser) {
+        try {
+          const quelle = new ZXing.HTMLCanvasElementLuminanceSource(
+            bild.tagName === 'CANVAS' ? bild : zeichneVoll(bild));
+          const erg = zxingLeser.decodeBitmap(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(quelle)));
+          if (erg) treffer(erg.getText(), ZXing.BarcodeFormat[erg.getBarcodeFormat()] || '?',
+            'mitgeliefert', performance.now() - beginn);
+        } catch (_) { /* NotFoundException ist der Normalfall */ }
+      }
     }
     setTimeout(() => requestAnimationFrame(schleife), 120);
   }
+
+  // Ohne Rahmen-Einschraenkung braucht ZXing das Vollbild trotzdem als Canvas.
+  function zeichneVoll(v) {
+    const c = $('schnitt');
+    if (c.width !== v.videoWidth || c.height !== v.videoHeight) { c.width = v.videoWidth; c.height = v.videoHeight; }
+    c.getContext('2d').drawImage(v, 0, 0);
+    return c;
+  }
+
+  document.addEventListener('change', (ev) => {
+    if (ev.target && ev.target.id === 'nurrahmen') {
+      const an = ev.target.checked;
+      $('rahmen').style.display = an ? '' : 'none';
+      $('rahmentext').style.display = an ? '' : 'none';
+    }
+  });
 
   function stop() {
     laeuft = false;

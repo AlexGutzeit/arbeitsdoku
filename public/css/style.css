@@ -2403,9 +2403,35 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .scanner-bild video { width: 100%; max-height: 62vh; display: block; object-fit: cover; }
 /* Zielrahmen: sagt ohne Worte, wo der Code hingehoert. Ohne ihn haelt jeder anders — und bei
    schlechtem Licht entscheidet genau das ueber eine halbe oder zwoelf Sekunden. */
+/* ZIELRAHMEN. Seit 09.09.2026 keine Dekoration mehr: Genau dieser Bereich wird gelesen
+   (scannerAusschnittRechteck in js/scanner.js). Wer die Werte hier aendert, aendert den
+   gelesenen Bereich mit — das ist Absicht, damit Anzeige und Wirkung nicht auseinanderlaufen.
+   Das Aussen ist deutlich abgedunkelt, damit auf einen Blick klar ist, wohin zu zielen ist. */
 .scanner-rahmen { position: absolute; left: 8%; right: 8%; top: 50%; height: 26%;
-  transform: translateY(-50%); border: 3px solid rgba(76,175,80,.95); border-radius: 10px;
-  box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); pointer-events: none; }
+  transform: translateY(-50%); border: 2px solid rgba(255,255,255,.55); border-radius: 10px;
+  box-shadow: 0 0 0 100vmax rgba(0,0,0,.58); pointer-events: none; }
+/* Vier Eckwinkel — eine Sucher-Optik, die man ohne Erklaerung versteht. Zwei Elemente,
+   je zwei Ecken: oben-links/unten-rechts und oben-rechts/unten-links. */
+.scanner-rahmen::before, .scanner-rahmen::after {
+  content: ''; position: absolute; width: 26px; height: 26px; pointer-events: none; }
+.scanner-rahmen::before {
+  left: -2px; top: -2px; border-left: 4px solid #4CAF50; border-top: 4px solid #4CAF50;
+  border-radius: 10px 0 0 0;
+  box-shadow: 0 0 0 0 transparent; }
+.scanner-rahmen::after {
+  right: -2px; bottom: -2px; border-right: 4px solid #4CAF50; border-bottom: 4px solid #4CAF50;
+  border-radius: 0 0 10px 0; }
+/* Die beiden uebrigen Ecken. Vier Winkel lesen sich als Sucher, zwei sehen aus wie ein Versehen. */
+.scanner-rahmen i { position: absolute; width: 26px; height: 26px; pointer-events: none; }
+.scanner-rahmen .ecke-or { right: -2px; top: -2px; border-right: 4px solid #4CAF50;
+  border-top: 4px solid #4CAF50; border-radius: 0 10px 0 0; }
+.scanner-rahmen .ecke-ul { left: -2px; bottom: -2px; border-left: 4px solid #4CAF50;
+  border-bottom: 4px solid #4CAF50; border-radius: 0 0 0 10px; }
+/* Der Satz sagt, was der Rahmen bedeutet. Ohne ihn haelt jeder das Handy anders — und niemand
+   kaeme auf die Idee, dass ein Code DANEBEN bewusst ignoriert wird. */
+.scanner-hinweis { position: absolute; left: 0; right: 0; bottom: 0; text-align: center;
+  font-size: .82rem; color: #fff; background: rgba(0,0,0,.55); padding: .35rem .5rem;
+  pointer-events: none; }
 .scanner-zoom { margin-top: .7rem; display: flex; gap: .6rem; align-items: center; font-size: .85rem; }
 .scanner-zoom input { flex: 1; }
 

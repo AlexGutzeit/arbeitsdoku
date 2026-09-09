@@ -14,6 +14,57 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Der Rahmen hört auf zu lügen
+
+Alex: „Das Scanner Feld einzuschränken wäre auf jeden Fall eine gute Idee. Dann aber bitte auch
+optisch sichtbar, so dass man sieht wo man hinzielen muss." Anlass war `4311` — ein QR, den niemand
+zuordnen konnte, 16- bzw. 18-mal gelesen, und als 2D-Code hätte er jeden Strichcode geschlagen.
+
+Den grünen Rahmen gab es schon — als **Dekoration**. Gelesen wurde das ganze Bild. Ein Rahmen, der
+etwas anderes verspricht als das Programm tut, ist schlimmer als kein Rahmen.
+
+**Die eigentliche Arbeit steckt in der Geometrie.** Das Video wird mit `object-fit: cover`
+angezeigt: Es wird vergrössert, bis die Box gefüllt ist, und links/rechts oder oben/unten fällt
+etwas weg. Wer die Prozentwerte des Rahmens einfach auf `videoWidth`/`videoHeight` anwendet, liest
+den falschen Bereich — **und merkt es nicht**, weil trotzdem Codes gefunden werden.
+`scannerAusschnittRechteck` rechnet deshalb über Maßstab und Versatz; nachgerechnet für ein
+1080×1920-Bild in einer 380×500-Box: Maßstab 0,352, Versatz oben 87,8 px, Ausschnitt 907×369.
+
+**Zwei Decoder, ein Bild.** Der native `BarcodeDetector` bekommt jetzt das Canvas statt des Videos.
+Für den mitgelieferten Decoder gibt es kein `decodeFromCanvas` — dafür habe ich im Bündel
+nachgesehen, wie ZXing selbst dekodiert:
+
+```
+createBinaryBitmap(t) { … t instanceof HTMLVideoElement ? drawFrameOnCanvas(t) : drawImageOnCanvas(t);
+                        const r = getCaptureCanvas(t); const n = new b(r, e, …)   // b = HTMLCanvasElementLuminanceSource
+decode(t)            { const e = this.createBinaryBitmap(t); return this.decodeBitmap(e) …
+```
+
+Also genau die Kette, die ich jetzt selbst aufbaue — nur mit meinem Ausschnitt. Nebeneffekt: ZXings
+eigene Dauerschleife (`decodeFromVideoElementContinuously`) entfällt, und damit eine Fehlerquelle,
+die schon einmal zugeschlagen hat (überlebende Schleifen zählten nach dem Stoppen weiter).
+
+**Was hier nicht beweisbar ist:** dass ein ECHTER Barcode aus dem Ausschnitt gelesen wird. Das
+Bündel enthält keine Encoder (`No encoder available for format 7`), es lässt sich also kein
+Testcode erzeugen, und Chromes Kamera-Attrappe liefert nur ein Rollmuster. Ein selbst gemalter
+Code-39 scheiterte an meiner Mustertabelle aus dem Gedächtnis — sie hatte vier breite Elemente
+statt drei, und „3 of 9" heißt genau das nicht. Statt zu raten: Der Beweis am Regal bleibt der
+Prüfstand.
+
+**Geprüft ist stattdessen** (`tests/scanner-ausschnitt-ui.js`, mit Chromes Kamera-Attrappe und
+einem mitschreibenden Ersatz-`BarcodeDetector`): die Umrechnung, dass der Ausschnitt wirklich
+abschneidet (mit Farben statt Barcodes), dass die ZXing-Kette richtig verdrahtet ist (leeres Bild →
+`NotFoundException`, kein `TypeError`), und der Kern: **der Decoder bekommt ein Canvas, dessen Maße
+genau der Rahmen sind.** Gegenprobe mit `detect(v)` statt `detect(schnitt)`: fällt.
+
+Ein Messfehler dabei war meiner: Ich zählte die Eckwinkel über `borderTopWidth || borderBottomWidth`
+— und `"0px"` ist eine *wahre* Zeichenkette, also kam für die untere Ecke die falsche Kante heraus
+und der Test meldete drei statt vier.
+
+Der **Prüfstand** hat denselben Ausschnitt bekommen, dazu einen Schalter „nur im Rahmen lesen" zum
+Vergleichen. Gemessen: mit Rahmen bekommt der Decoder ein Canvas 1613×223, ohne Rahmen das ganze
+Video.
+
 ### 2026-09-09 · Crafter-Lauf und gestapelte Etiketten — eine Annahme widerlegt
 
 Vier Treffer binnen 1,5 Sekunden im Fahrzeug:
