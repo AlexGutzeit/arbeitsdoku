@@ -93,10 +93,6 @@
     <span>nur scannen, <strong>solange der Knopf gedrückt ist</strong> — wie der echte Scanner.
       Jede Haltung gilt dann als EINE Etikette; ausgeschaltet läuft es durch (für lange Messungen).</span>
   </label>
-  <button id="halten" style="display:none;width:100%;padding:.95rem;border-radius:10px;
-          border:2px solid #4CAF50;background:#4CAF50;color:#fff;font-size:1.02rem;cursor:pointer;
-          touch-action:none;user-select:none;-webkit-user-select:none;margin:.2rem 0 .5rem">
-    Zum Scannen <strong>gedrückt halten</strong></button>
   <label style="display:flex;align-items:center;gap:.5rem;margin:.5rem 0">
     <input type="checkbox" id="nurrahmen" checked>
     <span>nur im Rahmen lesen (<strong>wie die App</strong>) — abschalten, um zu vergleichen</span>
@@ -119,6 +115,12 @@
       Nur was im Rahmen liegt, wird gelesen</div>
     <canvas id="schnitt" style="display:none"></canvas>
   </div>
+  <!-- Der Knopf gehoert UNTER das Kamerabild — dort liegt auf dem Handy der Daumen (Alex,
+       09.09.2026: „Das ist auf dem Smartphone intuitiver"). In der App steht er schon so. -->
+  <button id="halten" style="display:none;width:100%;padding:.95rem;border-radius:10px;
+          border:2px solid #4CAF50;background:#4CAF50;color:#fff;font-size:1.02rem;cursor:pointer;
+          touch-action:none;user-select:none;-webkit-user-select:none;margin:.2rem 0 .5rem">
+    Zum Scannen <strong>gedrückt halten</strong></button>
 </div>
 
 <div class="karte">
@@ -170,6 +172,6 @@
      Cache benutzt. Genau das ist am 09.09.2026 passiert: Der Pruefstand meldete achtstellige
      ITF-Codes als "bestaetigt", weil er aelter war als die ITF-14-Regel — die Messung sagte
      also etwas anderes als die App tut. Bei jeder Regelaenderung mit hochzaehlen. -->
-<script src="/scanner-probe.js?v=384"></script>
+<script src="/scanner-probe.js?v=385"></script>
 </body>
 </html>
