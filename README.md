@@ -417,6 +417,11 @@ daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Auskla
 Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
 erraten würde still die falsche Bestellnummer anhängen.
 
+Kleben **mehrere Barcodes übereinander** (Großhändler-Etiketten tragen oft Artikelnummer,
+Bestellnummer und Charge), wird die **Artikelnummer bevorzugt**: Ein Code mit gültiger
+GTIN-Prüfziffer zählt doppelt. Die Zahl der Lesungen bleibt trotzdem ausschlaggebend, damit ein
+schwach gelesener Code keinen deutlich sichereren verdrängt.
+
 **Zusammengesetzte Codes** (Data-Matrix mit Artikelnummer, Charge und Menge) werden auf die reine
 Artikelnummer zurückgeführt – aber nur, wenn deren Prüfziffer stimmt; ein Lageretikett mit Komma
 bleibt unangetastet. **Werbe- und Info-QRs** (eine Herstelleradresse, ein Merkblatt-PDF) werden

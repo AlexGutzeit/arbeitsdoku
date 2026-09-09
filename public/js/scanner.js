@@ -152,9 +152,27 @@ function scannerBesterTreffer(zaehlung) {
     // (13x gelesen) den Strichcode des Artikels daneben (5x), und man scannt am Ziel vorbei.
     // Er bleibt trotzdem waehlbar, damit unten erklaert werden kann, was da gelesen wurde.
     const werbung = scannerIstWerbecode(code);
+
+    // GESTAPELTE ETIKETTEN. Alex (09.09.2026): „ich habe auch teilweise 3 Barcodes direkt
+    // uebereinander." Auf einer Grosshaendler-Etikette stehen typisch die Artikelnummer, eine
+    // Bestell- oder Hausnummer und manchmal eine Charge. Alle drei werden im selben Moment
+    // gelesen — bisher entschied allein die Trefferzahl, welche ins Formular kommt.
+    //
+    // In seinem Crafter-Lauf lagen 225 ms auseinander:
+    //   2003145        Code-39, 5x   — keine gueltige GTIN (interne Nummer)
+    //   4251786213047  Code-39, 5x   — gueltige GTIN (die Artikelnummer)
+    // Gleichstand: reiner Zufall, welche gewinnt. Eine Charge- oder Hausnummer im Katalog waere
+    // schlimm — sie ist pro Packung verschieden, jede Packung erzeugte ein neues „unbekanntes
+    // Produkt".
+    //
+    // Deshalb: eine inhaltlich gueltige GTIN zaehlt DOPPELT. Bewusst ein Faktor und kein fester
+    // Bonus — die Trefferzahl bleibt damit ausschlaggebend. Eine schwach gelesene GTIN (die auch
+    // eine Fehllesung sein kann) schlaegt keinen deutlich oefter gelesenen anderen Code.
+    const artikelnummer = scannerGtinGueltig(code);
+    const grund = n * (artikelnummer ? 2 : 1);
     const gewicht = werbung
-      ? n - 1000
-      : n + (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D ? 1000 : 0);
+      ? grund - 1000
+      : grund + (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D ? 1000 : 0);
     if (gewicht > beste) { bester = code; beste = gewicht; }
   }
   return bester;

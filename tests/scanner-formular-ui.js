@@ -82,6 +82,14 @@ function req(m, p, t, b) {
         qrZweimal: f([q('https://qr.fischer.id/p/568010', 2)]),
         // Ein 2D-Code schlaegt einen 1D-Code auch mit weniger Lesungen.
         qrGegenEan: f([e('4011395319475', 10), q('https://id.abb/2CKA006800A3087', 1)]),
+        // GESTAPELTE ETIKETTEN (Alex, 09.09.2026: „teilweise 3 Barcodes direkt uebereinander").
+        // Aus seinem Crafter-Lauf, 225 ms auseinander und mit GLEICHER Trefferzahl: eine interne
+        // Nummer und die Artikelnummer. Ohne Vorzug entschiede der Zufall — und eine Charge- oder
+        // Hausnummer im Katalog waere pro Packung verschieden.
+        gestapelt: f([['2003145', { n: 5, format: 'CODE_39' }], ['4251786213047', { n: 5, format: 'CODE_39' }]]),
+        // Die Trefferzahl bleibt aber ausschlaggebend: Eine schwach gelesene GTIN kann selbst eine
+        // Fehllesung sein und darf einen deutlich oefter gelesenen Code NICHT verdraengen.
+        internOefter: f([['2003145', { n: 20, format: 'CODE_39' }], ['8050124027874', { n: 5, format: 'EAN_13' }]]),
       };
     });
     ok('der öfter gelesene 1D-Code gewinnt', wahl.lagerfall === '4003899923098', JSON.stringify(wahl));
@@ -160,6 +168,11 @@ function req(m, p, t, b) {
     ok('ein QR ohne Artikelnummer bleibt, wie er ist',
       gs1.schlichterQr.code === 'https://burti.de' && gs1.qrOhneGtin.code === 'https://qrfy.io/Jew6mKzNNF',
       JSON.stringify([gs1.schlichterQr.code, gs1.qrOhneGtin.code]));
+
+    ok('bei gestapelten Codes gewinnt die Artikelnummer, nicht die interne Nummer',
+      wahl.gestapelt === '4251786213047', JSON.stringify(wahl.gestapelt));
+    ok('… aber die Trefferzahl bleibt ausschlaggebend',
+      wahl.internOefter === '2003145', JSON.stringify(wahl.internOefter));
 
     console.log('\n── Rundgang vom 09.09.2026: zusammengesetzte Codes und Werbe-QR ──');
     // Zwei Funde aus einem Lager-Rundgang. Beide hätten still Doppel-Einträge erzeugt.

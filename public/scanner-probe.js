@@ -164,18 +164,35 @@
   // PARITAET der linken Haelfte — dem anfaelligsten Teil. Eine Fehllesung verdirbt deshalb den
   // KOPF, nicht das Ende.
   //
-  // Umgekehrt bei ECHTEN Nachbarartikeln (Rundgang 07:55): 4061975617484 und 4061975617460 teilen
-  // sich den ANFANG „40619756174" und unterscheiden sich am Ende. Deshalb reicht „aehnlich" nicht
-  // als Merkmal — es zaehlt zusaetzlich, dass ein deutlich staerker gelesener Nachbar existiert
-  // (mindestens doppelt so oft) und beide fast gleichzeitig auftauchten.
+  // NUR DAS ENDE ZAEHLT — der Anfang darf NICHT herangezogen werden. Alex (09.09.2026): „ich habe
+  // auch teilweise 3 Barcodes direkt uebereinander." Gestapelte Etiketten werden im SELBEN Moment
+  // gelesen, und Geschwister-Codes desselben Herstellers teilen sich den ANFANG:
+  //
+  //   4003899947247 / 4003899947209   gemeinsamer Anfang 11, gemeinsames Ende 0   → zwei ECHTE Artikel
+  //   4050821027874 / 050894027874    gemeinsamer Anfang  0, gemeinsames Ende 6   → Fehllesung
+  //
+  // Meine erste Fassung pruefte auch den Anfang und haette zwei echte Artikel als Fehllesung
+  // beschuldigt — genau dann, wenn sie uebereinanderkleben.
+  //
+  // Zusaetzlich muss ein deutlich staerker gelesener Nachbar (mindestens doppelt so oft) fast
+  // gleichzeitig aufgetaucht sein.
   const gemEnde = (a, b) => { let i = 0; while (i < a.length && i < b.length && a[a.length-1-i] === b[b.length-1-i]) i++; return i; };
-  const gemAnfang = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i++; return i; };
+  // Welche Codes wurden im selben Moment gelesen? Bei drei uebereinanderklebenden Barcodes sind
+  // das die Geschwister EINER Etikette — und genau das muss man sehen, um zu beurteilen, welchen
+  // die App nehmen wuerde.
+  const gleichzeitigMit = (code, d, alle) => {
+    const raus = [];
+    for (const [x, xd] of alle) {
+      if (x !== code && Math.abs(xd.ersteMs - d.ersteMs) <= 2500) raus.push(x);
+    }
+    return raus;
+  };
   const fehllesungVon = (code, d, alle) => {
     for (const [x, xd] of alle) {
       if (x === code) continue;
       if (xd.n < d.n * 2) continue;                       // kein deutlich staerkerer Nachbar
       if (Math.abs(xd.ersteMs - d.ersteMs) > 2500) continue;  // nicht im selben Moment
-      if (gemEnde(code, x) >= 6 || gemAnfang(code, x) >= 6) return x;
+      if (gemEnde(code, x) >= 6) return x;
     }
     return null;
   };
@@ -200,6 +217,7 @@
     ul.innerHTML = [...gesehen.entries()].map(([code, d]) => {
       const sicher = d.n >= NOETIGE_LESUNGEN(d.format);
       const stattdessen = fehllesungVon(code, d, gesehen);
+      const zusammen = gleichzeitigMit(code, d, gesehen);
       return `<li style="${sicher ? '' : 'opacity:.55'}">`
         + `<code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
         + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms · `
@@ -211,6 +229,11 @@
               + ` (gleiches Ende bzw. gleicher Anfang, im selben Moment, dort deutlich öfter gelesen)`
             : sicher ? `${d.n}× gelesen — bestätigt` + (istZweiD(d.format) ? ' (2D: Fehlerkorrektur, eine Lesung genügt)' : '')
                   : `nur ${d.n}× gelesen (nötig: ${NOETIGE_LESUNGEN(d.format)}) — vermutlich Fehllesung, wird nicht übernommen`)
+        + (zusammen.length
+            ? `<br><span style="color:var(--grau);font-size:.8em">gleichzeitig gelesen mit `
+              + zusammen.map(x => String(x).slice(0, 28).replace(/</g, '&lt;')).join(', ')
+              + ` — vermutlich dieselbe Etikette</span>`
+            : '')
         + '</span></li>';
     }).join('');
 

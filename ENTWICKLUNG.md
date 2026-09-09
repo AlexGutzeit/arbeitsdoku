@@ -14,6 +14,49 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Crafter-Lauf und gestapelte Etiketten — eine Annahme widerlegt
+
+Vier Treffer binnen 1,5 Sekunden im Fahrzeug:
+
+```
+4050821027874  ean_13  12×  bestätigt      das echte Etikett
+050894027874   upc_a    5×  bestätigt      Fehllesung — kam DURCH die Schwelle
+008970027874   upc_a    1×  verworfen
+8050124027874  ean_13   5×  bestätigt      Fehllesung — kam ebenfalls durch
+```
+
+Alle vier enden auf `027874`. Damit ist meine Aussage von der Straßenlaterne — „drei Lesungen
+trennen sauber" — **widerlegt**: Im Fahrzeug werden Fehllesungen stabil genug für fünf Treffer. Für
+die App ändert das nichts (sie nimmt den EINEN besten Treffer, hier 12×), für den Prüfstand schon:
+Er listet alle und suggerierte damit, drei Artikel gefunden zu haben.
+
+Alex' Nachsatz — **„ich habe auch teilweise 3 Barcodes direkt übereinander"** — erklärt den
+Mechanismus und entwertete zugleich meine erste Fassung der Erkennung. Bei gestapelten Symbolen
+kann eine Abtastlinie zwei Codes kreuzen: linke Hälfte vom einen, rechte vom anderen. Deshalb das
+gemeinsame Ende. Gemessen:
+
+| | gemeinsamer Anfang | gemeinsames Ende |
+|---|---|---|
+| `4003899947247` / `4003899947209` — zwei **echte** Artikel | **11** | 0 |
+| `4050821027874` / `050894027874` — Fehllesung | 0 | **6** |
+
+Meine erste Fassung prüfte **auch den Anfang** — und hätte damit genau die gestapelten
+Geschwister-Codes eines Herstellers als Fehllesung beschuldigt, denn die werden im selben Moment
+gelesen. Das Kriterium ist raus; es zählt nur noch das gemeinsame **Ende**. (Ausgeliefert war die
+falsche Fassung rund zwanzig Minuten.)
+
+**Folge für die App:** Auf einer Großhändler-Etikette stehen typisch Artikelnummer, Bestellnummer
+und Charge. Im Crafter-Lauf lagen `2003145` (keine GTIN) und `4251786213047` (gültige GTIN) 225 ms
+auseinander — mit **gleicher Trefferzahl**. Es war reiner Zufall, welche gewonnen hätte, und eine
+Charge im Katalog wäre pro Packung verschieden gewesen: jede Packung ein neues „unbekanntes
+Produkt". Eine inhaltlich gültige GTIN zählt jetzt **doppelt** — bewusst ein Faktor und kein fester
+Bonus, damit die Trefferzahl ausschlaggebend bleibt und eine schwach gelesene (möglicherweise
+falsch gelesene) GTIN keinen deutlich öfter gelesenen Code verdrängt.
+
+**Offen:** `4311`, ein QR mit 18 bzw. 16 Lesungen in beiden Läufen. Ein 2D-Code schlägt bislang
+jeden Strichcode. Hängt dieser Aufkleber im Fahrzeug oder am Regal, gewinnt er gegen den EAN des
+Produkts. Wartet auf Alex' Auskunft, was das ist.
+
 ### 2026-09-09 · Lager-Rundgang: zwei stille Doppel-Quellen
 
 39 Codes in vier Minuten, echte Ware. Der Lauf bestätigt die Drei-Lesungen-Schwelle eindrucksvoll
