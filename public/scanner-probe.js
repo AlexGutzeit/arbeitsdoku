@@ -151,6 +151,35 @@
     return !/\d/.test(letztes);
   };
 
+  // ── Fehllesungen derselben Etikette erkennen ────────────────────────────────────────────
+  //
+  // Im Crafter gemessen (Alex, 09.09.2026, 09:04) — vier Treffer binnen 1,5 Sekunden:
+  //
+  //   4050821027874  ean_13  12x     ← das echte Etikett
+  //   050894027874   upc_a    5x     ← Fehllesung, kam durch die Drei-Lesungen-Schwelle
+  //   008970027874   upc_a    1x
+  //   8050124027874  ean_13   5x     ← Fehllesung, kam ebenfalls durch
+  //
+  // Alle vier enden auf „027874". Das ist kein Zufall: Bei EAN-13 steckt die erste Ziffer in der
+  // PARITAET der linken Haelfte — dem anfaelligsten Teil. Eine Fehllesung verdirbt deshalb den
+  // KOPF, nicht das Ende.
+  //
+  // Umgekehrt bei ECHTEN Nachbarartikeln (Rundgang 07:55): 4061975617484 und 4061975617460 teilen
+  // sich den ANFANG „40619756174" und unterscheiden sich am Ende. Deshalb reicht „aehnlich" nicht
+  // als Merkmal — es zaehlt zusaetzlich, dass ein deutlich staerker gelesener Nachbar existiert
+  // (mindestens doppelt so oft) und beide fast gleichzeitig auftauchten.
+  const gemEnde = (a, b) => { let i = 0; while (i < a.length && i < b.length && a[a.length-1-i] === b[b.length-1-i]) i++; return i; };
+  const gemAnfang = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i++; return i; };
+  const fehllesungVon = (code, d, alle) => {
+    for (const [x, xd] of alle) {
+      if (x === code) continue;
+      if (xd.n < d.n * 2) continue;                       // kein deutlich staerkerer Nachbar
+      if (Math.abs(xd.ersteMs - d.ersteMs) > 2500) continue;  // nicht im selben Moment
+      if (gemEnde(code, x) >= 6 || gemAnfang(code, x) >= 6) return x;
+    }
+    return null;
+  };
+
   function treffer(rohText, format, weg, ms) {
     const nummer = gs1Nummer(rohText);
     const text = nummer || rohText;
@@ -170,12 +199,16 @@
     if (ul.dataset.leer !== '0') { ul.innerHTML = ''; ul.dataset.leer = '0'; }
     ul.innerHTML = [...gesehen.entries()].map(([code, d]) => {
       const sicher = d.n >= NOETIGE_LESUNGEN(d.format);
+      const stattdessen = fehllesungVon(code, d, gesehen);
       return `<li style="${sicher ? '' : 'opacity:.55'}">`
         + `<code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
         + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms · `
         + (gs1Erkannt.has(code) ? 'Artikelnummer aus GS1-Code · ' : '')
         + (istWerbecode(code)
             ? `${d.n}× gelesen — <strong>Werbe-/Infocode</strong> (Seite, kein Artikel) – wird nicht übernommen`
+            : stattdessen
+            ? `${d.n}× gelesen — <strong>vermutlich Fehllesung von ${String(stattdessen).replace(/</g, '&lt;')}</strong>`
+              + ` (gleiches Ende bzw. gleicher Anfang, im selben Moment, dort deutlich öfter gelesen)`
             : sicher ? `${d.n}× gelesen — bestätigt` + (istZweiD(d.format) ? ' (2D: Fehlerkorrektur, eine Lesung genügt)' : '')
                   : `nur ${d.n}× gelesen (nötig: ${NOETIGE_LESUNGEN(d.format)}) — vermutlich Fehllesung, wird nicht übernommen`)
         + '</span></li>';
