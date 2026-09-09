@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**215 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**216 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -87,6 +87,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `backup-empfaenger.js` | Wer darf Sicherungen öffnen? — die Liste in der Backup-Karte (Alex, 25.08.2026) |
 | `backup-entschluesseln-ui.js` | Das Hilfsprogramm für den Ernstfall — geöffnet wie durch einen Doppelklick. |
 | `backup-krypto.js` | Der Container für verschlüsselte Sicherungen (Alex, 24.08.2026). |
+| `backup-naechtlich.js` | Die nächtliche Sicherung: verschlüsselt sie, und was packt sie ein? |
 | `backup-restore.js` | Backup-Round-Trip + dynamisches Restore-Limit: Backup herunterladen → wieder einspielen (200), |
 | `backup-verschluesselt.js` | Die Sicherung verlässt den Server verschlüsselt — und der Server kann sie nicht öffnen. |
 | `badge-nachziehen-ui.js` | Der Coin zeigte eine offene Bestellung an, obwohl die Liste leer war (Alex, 29.07.2026, Handy). |
