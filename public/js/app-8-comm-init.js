@@ -514,6 +514,19 @@ function produktUebernehmen(p) {
 async function scanInsFormular() {
   const code = await scannerOeffnen();
   if (!code) return;
+  // Ein Werbe-/Info-QR ist keine Artikelnummer. Er klebt auf ALLEN Produkten eines Herstellers —
+  // gespeichert wuerden zwei verschiedene Artikel auf denselben Eintrag zeigen, und der zweite
+  // bekaeme beim Anlegen „gehoert bereits zu …", ohne dass jemand versteht, warum.
+  // (Im Lager gemessen: bauer-solar.de/solarmodule/ 13x gelesen, Alex 09.09.2026.)
+  if (typeof scannerIstWerbecode === 'function' && scannerIstWerbecode(code)) {
+    await confirmModal(
+      `Gelesen wurde eine Internetadresse:\n${code}\n\n`
+      + 'Das ist ein Werbe- oder Infocode des Herstellers, keine Artikelnummer — er steht meist auf '
+      + 'allen seinen Produkten. Bitte den Strichcode auf der Verpackung scannen.',
+      { title: 'Kein Artikelcode', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
+    return;
+  }
+
   let antwort;
   try { antwort = await barcodeNachschlagen(code); }
   catch (e) { toast(e.message || 'Nachschlagen fehlgeschlagen', 'error'); return; }

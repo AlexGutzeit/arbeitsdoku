@@ -161,6 +161,61 @@ function req(m, p, t, b) {
       gs1.schlichterQr.code === 'https://burti.de' && gs1.qrOhneGtin.code === 'https://qrfy.io/Jew6mKzNNF',
       JSON.stringify([gs1.schlichterQr.code, gs1.qrOhneGtin.code]));
 
+    console.log('\n── Rundgang vom 09.09.2026: zusammengesetzte Codes und Werbe-QR ──');
+    // Zwei Funde aus einem Lager-Rundgang. Beide hätten still Doppel-Einträge erzeugt.
+    const rund = await seite.evaluate(() => ({
+      // Auf DERSELBEN Packung: Data-Matrix mit Artikelnummer, Charge und Menge — und daneben der
+      // schlichte EAN-13/Code-128. Ungelöst wären das zwei Einträge für denselben Artikel.
+      matrixA: scannerCodeNormalisieren('4043377228871,22SL22118P0205002,100'),
+      eanA:    scannerCodeNormalisieren('4043377228871'),
+      matrixB: scannerCodeNormalisieren('4043377079275,21010589,50'),
+      eanB:    scannerCodeNormalisieren('4043377079275'),
+      // Ein Lageretikett mit Komma darf NICHT zerlegt werden — das erste Feld ist keine GTIN.
+      etikett: scannerCodeNormalisieren('A2026052700123,charge7'),
+      // 13 Ziffern, aber falsche Prüfziffer: also keine GTIN, also unangetastet.
+      falschePruef: scannerCodeNormalisieren('1234567890123,x'),
+      werbung: scannerIstWerbecode('https://bauer-solar.de/solarmodule/'),
+      digital: scannerIstWerbecode(scannerCodeNormalisieren('https://herkunft.edeka.de/?01=04311501706954').code),
+      // ROH, ohne vorherige Normalisierung: Die Antwort darf nicht davon abhaengen, in welcher
+      // Reihenfolge die beiden Funktionen aufgerufen werden.
+      digitalRoh: scannerIstWerbecode('https://herkunft.edeka.de/?01=04311501706954'),
+      // Valentins Hersteller-QRs bezeichnen ARTIKEL — die duerfen nicht als Werbung gelten.
+      abb: scannerIstWerbecode('https://id.abb/2CKA006800A3087'),
+      fischer: scannerIstWerbecode('https://qr.fischer.id/p/568010'),
+      merkblatt: scannerIstWerbecode('https://www.latrivenetacavi.com/download/environment_label.pdf'),
+      echterCode: scannerIstWerbecode('4043377228871'),
+    }));
+    ok('aus dem Data-Matrix wird die reine Artikelnummer',
+      rund.matrixA.code === '4043377228871', JSON.stringify(rund.matrixA));
+    ok('… genau die, die daneben als Strichcode klebt', rund.matrixA.code === rund.eanA.code);
+    ok('… ebenso beim zweiten Fund', rund.matrixB.code === '4043377079275' && rund.matrixB.code === rund.eanB.code,
+      JSON.stringify([rund.matrixB.code, rund.eanB.code]));
+    ok('ein Lageretikett mit Komma bleibt unangetastet',
+      rund.etikett.code === 'A2026052700123,charge7', JSON.stringify(rund.etikett));
+    ok('… und dreizehn Ziffern mit falscher Prüfziffer auch',
+      rund.falschePruef.code === '1234567890123,x', JSON.stringify(rund.falschePruef));
+    ok('eine Hersteller-Adresse gilt als Werbecode', rund.werbung === true);
+    ok('… ein GS1 Digital Link dagegen NICHT (daraus wird die Artikelnummer)', rund.digital === false);
+    ok('… auch roh, vor der Normalisierung', rund.digitalRoh === false);
+    ok('… und Valentins Hersteller-QRs erst recht nicht (die BEZEICHNEN Artikel)',
+      rund.abb === false && rund.fischer === false, JSON.stringify([rund.abb, rund.fischer]));
+    ok('ein Merkblatt-PDF gilt dagegen als Werbecode', rund.merkblatt === true);
+    ok('… und ein gewöhnlicher Code erst recht nicht', rund.echterCode === false);
+
+    // Die Rangfolge: Der Werbe-QR wurde 13x gelesen, der echte EAN daneben nur 5x. Ohne
+    // Sonderbehandlung gewaenne die Herstelleradresse — samt 2D-Bonus.
+    const rang = await seite.evaluate(() => ({
+      mitEan: scannerBesterTreffer(new Map([
+        ['https://bauer-solar.de/solarmodule/', { n: 13, format: 'qr_code' }],
+        ['4061975617484', { n: 5, format: 'ean_13' }]])),
+      allein: scannerBesterTreffer(new Map([
+        ['https://bauer-solar.de/solarmodule/', { n: 13, format: 'qr_code' }]])),
+    }));
+    ok('der echte Artikelcode schlägt den Werbe-QR, trotz weniger Lesungen',
+      rang.mitEan === '4061975617484', JSON.stringify(rang.mitEan));
+    ok('… allein gescannt wird er trotzdem zurückgegeben (um ihn zu erklären, nicht zu verschweigen)',
+      rang.allein === 'https://bauer-solar.de/solarmodule/', JSON.stringify(rang.allein));
+
     console.log('\n── Bekannter Code wird eingesetzt ──');
     await seite.click('#order-add-btn'); await sleep(500);
     ok('der Scan-Knopf ist da', await seite.$('#of-scan') !== null);

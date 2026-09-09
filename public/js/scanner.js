@@ -72,8 +72,75 @@ function scannerNoetigeLesungen(format) {
  * Als eigene Funktion, damit sie prüfbar ist — die Kamera lässt sich nicht nachstellen, diese
  * Entscheidung schon.
  */
+/**
+ * Stimmt die Prüfziffer einer GTIN? (EAN-8/UPC-A/EAN-13/GTIN-14)
+ *
+ * Gebraucht, um eine Artikelnummer aus einem zusammengesetzten Code SICHER zu erkennen. Ohne die
+ * Prüfziffer müsste man raten, ob das erste Feld vor dem Komma eine Artikelnummer ist oder
+ * irgendeine Hausnummer des Herstellers — und falsch geraten heisst: zwei Artikel auf einem
+ * Eintrag.
+ */
+function scannerGtinGueltig(nummer) {
+  const w = String(nummer || '');
+  if (!/^\d+$/.test(w) || ![8, 12, 13, 14].includes(w.length)) return false;
+  const ziffern = w.split('').map(Number);
+  const pruef = ziffern.pop();
+  let summe = 0;
+  // Von rechts nach links abwechselnd 3 und 1 — unabhaengig von der Laenge, deshalb rueckwaerts.
+  for (let i = ziffern.length - 1, f = 3; i >= 0; i--, f = (f === 3 ? 1 : 3)) summe += ziffern[i] * f;
+  return ((10 - (summe % 10)) % 10) === pruef;
+}
+
+/**
+ * Ein Werbe- oder Infocode: eine Internetadresse, die auf eine SEITE zeigt statt auf einen Artikel.
+ *
+ * Hier stehen sich zwei Feldbefunde gegenüber, und beide haben recht:
+ *
+ *   Valentin, 08.09.2026 — echte Hersteller-QRs, die ARTIKEL bezeichnen:
+ *     https://id.abb/2CKA006800A3087        (2CKA006800A3087 ist die ABB-Artikelnummer)
+ *     https://qr.fischer.id/p/568010
+ *
+ *   Alex im Lager, 09.09.2026 — QRs, die eine SEITE bezeichnen:
+ *     https://bauer-solar.de/solarmodule/                              (13× gelesen)
+ *     https://www.latrivenetacavi.com/download/environment_label.pdf   (9× gelesen)
+ *
+ * Der Unterschied steckt im letzten Pfadstück: Eine Artikelnummer enthält Ziffern, ein
+ * Seitenname nicht. Das ist eine FAUSTREGEL, keine Norm — deshalb ist sie bewusst vorsichtig
+ * gebaut: Im Zweifel gilt eine Adresse als Artikelcode. Ein zu Unrecht abgewiesener Code hält
+ * jemanden im Lager auf; ein zu Unrecht gespeicherter macht nur einen Eintrag, den man aufräumen
+ * kann.
+ *
+ * WARUM ES ÜBERHAUPT ZÄHLT: `bauer-solar.de/solarmodule/` klebt auf ALLEN Modulen des
+ * Herstellers. Als Barcode gespeichert zeigten zwei verschiedene Artikel auf denselben
+ * Katalogeintrag — und der zweite bekäme beim Anlegen „gehört bereits zu …", ohne dass jemand
+ * versteht, warum.
+ *
+ * Ein GS1 Digital Link ist nie ein Werbecode: Aus dem löst scannerCodeNormalisieren die GTIN
+ * heraus, und dann steht hier gar keine Adresse mehr.
+ */
+const SCANNER_DOKUMENT_ENDUNGEN = /\.(pdf|html?|php|aspx?|jpe?g|png)$/i;
+
+function scannerIstWerbecode(code) {
+  const w = String(code || '');
+  if (!/^https?:\/\//i.test(w)) return false;
+  // Erst durch die Normalisierung schicken: Ein GS1 Digital Link IST ein Artikelcode, auch wenn er
+  // wie eine Adresse aussieht. So ist die Antwort unabhaengig davon, ob vorher schon normalisiert
+  // wurde — sonst haette die Reihenfolge der Aufrufe stillen Einfluss auf das Ergebnis.
+  if (scannerCodeNormalisieren(w).artikelnummer) return false;
+  let pfad;
+  try { pfad = new URL(w).pathname; } catch (_) { return false; }
+  const stuecke = pfad.split('/').filter(Boolean);
+  const letztes = stuecke.length ? stuecke[stuecke.length - 1] : '';
+  if (!letztes) return true;                              // nur eine Startseite
+  if (SCANNER_DOKUMENT_ENDUNGEN.test(letztes)) return true;  // ein Merkblatt, kein Artikel
+  return !/\d/.test(letztes);                             // ohne eine einzige Ziffer: ein Seitenname
+}
+
 function scannerBesterTreffer(zaehlung) {
-  let bester = null, beste = -1;
+  // -Infinity, nicht -1: Ein Werbecode traegt ein negatives Gewicht und wuerde sonst gar nicht
+  // zurueckgegeben — der Benutzer bekaeme „nichts erkannt", obwohl deutlich etwas gelesen wurde.
+  // Zurueckgeben und ERKLAEREN ist besser als verschweigen.
+  let bester = null, beste = -Infinity;
   for (const [code, d] of zaehlung) {
     const n = typeof d === 'number' ? d : d.n;
     const format = typeof d === 'number' ? '' : d.format;
@@ -81,7 +148,13 @@ function scannerBesterTreffer(zaehlung) {
     // Ein 2D-Code schlaegt einen 1D-Code auch mit weniger Lesungen: Seine Fehlerkorrektur macht
     // ihn zur verlaesslicheren Angabe, und ein Hersteller-QR ist praeziser als eine EAN, die
     // daneben im Bild liegt.
-    const gewicht = n + (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D ? 1000 : 0);
+    // Ein Werbe-QR darf den 2D-Bonus NICHT bekommen — sonst schlaegt die Herstelleradresse
+    // (13x gelesen) den Strichcode des Artikels daneben (5x), und man scannt am Ziel vorbei.
+    // Er bleibt trotzdem waehlbar, damit unten erklaert werden kann, was da gelesen wurde.
+    const werbung = scannerIstWerbecode(code);
+    const gewicht = werbung
+      ? n - 1000
+      : n + (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D ? 1000 : 0);
     if (gewicht > beste) { bester = code; beste = gewicht; }
   }
   return bester;
@@ -145,8 +218,23 @@ function scannerCodeNormalisieren(code) {
 
   let gtin = null;
   const roh = w.match(/^01(\d{14})/);
+  // ZUSAMMENGESETZTER CODE mit Trennzeichen. Im Lager gemessen (Alex, 09.09.2026):
+  //
+  //   4043377228871,22SL22118P0205002,100   (Data-Matrix, 7x gelesen)
+  //   4043377228871                         (EAN-13 daneben auf derselben Packung, 8x gelesen)
+  //
+  //   4043377079275,21010589,50             (Data-Matrix, 3x)
+  //   4043377079275                         (Code-128 daneben, 5x)
+  //
+  // Beide Male steht vorn die Artikelnummer, dahinter Charge und Menge — pro Packung verschieden.
+  // Ungeloest waeren das ZWEI Eintraege fuer DENSELBEN Artikel, je nachdem, welches Etikett man
+  // erwischt. Genommen wird das erste Feld nur, wenn seine PRUEFZIFFER stimmt; sonst ist es keine
+  // GTIN und der Code bleibt, wie er ist.
+  const zerlegt = (!roh && /[,;|]/.test(w)) ? w.split(/[,;|]/)[0].trim() : null;
   if (roh) {
     gtin = roh[1];
+  } else if (zerlegt && /^\d{13,14}$/.test(zerlegt) && scannerGtinGueltig(zerlegt)) {
+    gtin = zerlegt.length === 13 ? '0' + zerlegt : zerlegt;
   } else if (/^https?:\/\//i.test(w)) {
     // GS1 DIGITAL LINK: Die Artikelnummer steckt in einer Internetadresse, entweder als
     // Pfadstück `/01/04311501706954` oder als Abfrage `?01=04311501706954`.

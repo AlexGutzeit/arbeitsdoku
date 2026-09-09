@@ -14,6 +14,52 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Lager-Rundgang: zwei stille Doppel-Quellen
+
+39 Codes in vier Minuten, echte Ware. Der Lauf bestätigt die Drei-Lesungen-Schwelle eindrucksvoll
+und fördert zwei Fehler zutage, die beide **keinen Fehler ausgelöst**, sondern nur den Katalog
+verschmutzt hätten.
+
+**1. Zusammengesetzte Data-Matrix.** Auf derselben Packung standen jeweils beide:
+
+```
+4043377228871,22SL22118P0205002,100   Data-Matrix, 7× gelesen
+4043377228871                          EAN-13 daneben, 8× gelesen
+4043377079275,21010589,50              Data-Matrix, 3×
+4043377079275                          Code-128 daneben, 5×
+```
+
+Vorn die Artikelnummer, dahinter Charge und Menge — pro Packung verschieden. Ungelöst wären das
+**zwei Einträge für denselben Artikel**, je nachdem, welches Etikett man erwischt. Die
+Normalisierung nimmt jetzt das erste Feld, aber **nur wenn dessen Prüfziffer stimmt**. Ein
+Lageretikett wie `A2026052700123,charge7` bleibt damit unangetastet, und `1234567890123,x` (13
+Ziffern, falsche Prüfziffer) auch.
+
+**2. Werbe-QRs.** `https://bauer-solar.de/solarmodule/` (13×) und
+`https://www.latrivenetacavi.com/download/environment_label.pdf` (9×). Solche Codes kleben auf
+*allen* Produkten eines Herstellers — gespeichert zeigten zwei verschiedene Artikel auf denselben
+Eintrag, und der zweite bekäme „gehört bereits zu …", ohne dass jemand versteht, warum.
+
+Mein erster Entwurf war **zu grob**: „jede http-Adresse ist Werbung". Das hätte Valentins Befund vom
+Vortag zerstört — `https://id.abb/2CKA006800A3087` und `https://qr.fischer.id/p/568010` *bezeichnen*
+Artikel. Der Bestandstest „ein QR schlägt eine EAN daneben im Bild" fiel prompt. Der Unterschied
+steckt im letzten Pfadstück: Eine Artikelnummer enthält Ziffern, ein Seitenname nicht. Eine
+Faustregel, bewusst vorsichtig: **im Zweifel Artikelcode**, denn ein zu Unrecht abgewiesener Code
+hält jemanden im Lager auf, ein zu Unrecht gespeicherter macht nur Aufräumarbeit.
+
+Dazu zwei Feinheiten: Der Werbe-QR verliert den 2D-Bonus (sonst schlüge die Herstelleradresse mit
+13 Lesungen den echten Strichcode mit 5), wird aber weiterhin **zurückgegeben** — die Auswahl
+beginnt jetzt bei `-Infinity` statt `-1`. Zurückgeben und erklären („Das ist ein Werbe- oder
+Infocode, keine Artikelnummer") ist besser als „nichts erkannt". Und `scannerIstWerbecode`
+normalisiert selbst, damit die Antwort nicht davon abhängt, in welcher Reihenfolge man die beiden
+Funktionen aufruft.
+
+**Was der Lauf NICHT zeigte, obwohl es so aussah:** Vier achtstellige ITF-Codes binnen 1,3 Sekunden
+(`16008366`, `00620061`, `11100466`, `00640061`) — ein Etikett, viermal verschieden gelesen, wie es
+für ITF ohne Prüfziffer typisch ist. Der Prüfstand auf dem Server meldete sie als „bestätigt", weil
+er **älter ist als die ITF-14-Regel**. Der aktuelle Code verwirft sie alle. Der Prüfstand wurde
+angeglichen — ein Messgerät, das anders urteilt als die App, ist schlechter als keines.
+
 ### 2026-09-09 · Katalog-Spiegel — und zwei Tests, die nichts gemessen haben
 
 Alex: „baue so lang doch schon einmal den offline Spiegel."

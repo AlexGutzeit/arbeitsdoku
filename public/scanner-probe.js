@@ -102,11 +102,29 @@
   // Dieselbe GS1-Zerlegung wie im echten Scanner: Aus 010979857524203121SA3AUXMS78F7POQ4CZ7Z
   // wird die Artikelnummer 9798575242031 — sonst zaehlte jede Packung ihre eigene Seriennummer
   // als eigenen Code, und der Katalog waere nach einer Woche unbrauchbar.
+  // Pruefziffer einer GTIN (EAN-8/UPC-A/EAN-13/GTIN-14) — gebraucht, um bei einem
+  // zusammengesetzten Code sicher zu erkennen, ob vorn eine Artikelnummer steht.
+  const gtinGueltig = (n) => {
+    const w = String(n || '');
+    if (!/^\d+$/.test(w) || ![8, 12, 13, 14].includes(w.length)) return false;
+    const z = w.split('').map(Number), pruef = z.pop();
+    let su = 0;
+    for (let i = z.length - 1, f = 3; i >= 0; i--, f = (f === 3 ? 1 : 3)) su += z[i] * f;
+    return ((10 - (su % 10)) % 10) === pruef;
+  };
+  const DOKUMENT_ENDUNGEN = /\.(pdf|html?|php|aspx?|jpe?g|png)$/i;
   const gs1Nummer = (w) => {
     const b = String(w || '').replace(/^\][A-Za-z]\d/, '').replace(/\x1d/g, '');
     let g = null;
     const roh = b.match(/^01(\d{14})/);
+    // Zusammengesetzt, z. B. 4043377228871,22SL22118P0205002,100 (Alex' Rundgang 09.09.2026):
+    // vorn die Artikelnummer, dahinter Charge und Menge. Nur uebernehmen, wenn die Pruefziffer
+    // stimmt — sonst ist es keine GTIN.
+    const zerlegt = (!roh && /[,;|]/.test(b)) ? b.split(/[,;|]/)[0].trim() : null;
     if (roh) g = roh[1];
+    else if (zerlegt && /^\d{13,14}$/.test(zerlegt) && gtinGueltig(zerlegt)) {
+      g = zerlegt.length === 13 ? '0' + zerlegt : zerlegt;
+    }
     else if (/^https?:\/\//i.test(b)) {
       // GS1 Digital Link: https://herkunft.edeka.de/?01=04311501706954 — im Feld gemessen,
       // derselbe Artikel wie der Strichcode daneben.
@@ -115,6 +133,22 @@
     }
     if (!g) return null;
     return g.startsWith('0') ? g.slice(1) : g;
+  };
+
+  // Eine Adresse, die auf eine SEITE zeigt statt auf einen Artikel — dieselbe Faustregel wie in
+  // js/scanner.js: entscheidend ist das letzte Pfadstueck. Valentins id.abb/2CKA006800A3087 ist
+  // ein Artikel, Alex' bauer-solar.de/solarmodule/ eine Seite.
+  const istWerbecode = (code) => {
+    const w = String(code || '');
+    if (!/^https?:\/\//i.test(w)) return false;
+    if (gs1Nummer(w)) return false;
+    let pfad;
+    try { pfad = new URL(w).pathname; } catch (_) { return false; }
+    const st = pfad.split('/').filter(Boolean);
+    const letztes = st.length ? st[st.length - 1] : '';
+    if (!letztes) return true;
+    if (DOKUMENT_ENDUNGEN.test(letztes)) return true;
+    return !/\d/.test(letztes);
   };
 
   function treffer(rohText, format, weg, ms) {
@@ -140,7 +174,9 @@
         + `<code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
         + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms · `
         + (gs1Erkannt.has(code) ? 'Artikelnummer aus GS1-Code · ' : '')
-        + (sicher ? `${d.n}× gelesen — bestätigt` + (istZweiD(d.format) ? ' (2D: Fehlerkorrektur, eine Lesung genügt)' : '')
+        + (istWerbecode(code)
+            ? `${d.n}× gelesen — <strong>Werbe-/Infocode</strong> (Seite, kein Artikel) – wird nicht übernommen`
+            : sicher ? `${d.n}× gelesen — bestätigt` + (istZweiD(d.format) ? ' (2D: Fehlerkorrektur, eine Lesung genügt)' : '')
                   : `nur ${d.n}× gelesen (nötig: ${NOETIGE_LESUNGEN(d.format)}) — vermutlich Fehllesung, wird nicht übernommen`)
         + '</span></li>';
     }).join('');

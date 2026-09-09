@@ -417,6 +417,13 @@ daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Auskla
 Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
 erraten würde still die falsche Bestellnummer anhängen.
 
+**Zusammengesetzte Codes** (Data-Matrix mit Artikelnummer, Charge und Menge) werden auf die reine
+Artikelnummer zurückgeführt – aber nur, wenn deren Prüfziffer stimmt; ein Lageretikett mit Komma
+bleibt unangetastet. **Werbe- und Info-QRs** (eine Herstelleradresse, ein Merkblatt-PDF) werden
+nicht als Barcode übernommen, sondern erklärt: Sie kleben auf allen Produkten eines Herstellers,
+zwei verschiedene Artikel zeigten sonst auf denselben Eintrag. Ein QR, dessen Adresse eine
+**Artikelnummer** enthält (`id.abb/2CKA006800A3087`), gilt dagegen als vollwertiger Code.
+
 **Der Katalog liegt gespiegelt auf dem Gerät.** Im Lager ist die Verbindung selten „da oder weg",
 sondern zäh — das Handy hängt im WLAN, aber nichts kommt durch. Die App benutzt deshalb sofort die
 Kopie im Gerätespeicher und holt die frische Fassung daneben; ist sie nach vier Sekunden nicht da,
