@@ -14,6 +14,48 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Die Sicherungen verschlüsseln — und die `.env` gehört hinein
+
+Alex: *„die .env Datei ist ja sehr wichtig. Wird die auch jede Nacht mit gespeichert? Sonst bringen
+mir die ganzen backups nicht so viel, oder?"* — Sie wurde nicht. Und seine begründete Annahme
+(*„sobald in der .env ein schlüssel liegt oooooder in den einstellungen bei backup, dann wird
+verschlüsselt"*) galt nur für den **Download** aus der App; die **nächtliche** Sicherung schrieb
+immer Klartext, weil sie ein eigenständiges Skript ohne jede Krypto-Abhängigkeit war.
+
+**Was ohne `.env` fehlt:** `TWOFA_KEY` verschlüsselt die Zwei-Faktor-Geheimnisse in der Datenbank —
+ohne ihn spielt man einen Bestand zurück, an dem sich niemand mehr anmelden kann (der Notausgang
+`TWOFA_AUS=1` existiert, aber alle müssten neu einrichten). Die `VAPID_`-Schlüssel: alle
+Push-Anmeldungen wertlos. `JWT_SECRET`: alle Sitzungen weg.
+
+**Der eigentliche Fund war aber die Kette.** Vier Stellen erwarteten fest `arbeitsdoku_backup_*.zip`:
+das Abhol-Skript des Mini-PCs (`--include`), die Morgenkontrolle, die Wiederherstellungs-Übung
+(entpackt mit Pythons `zipfile`) und der Erzeuger selbst. Hätte ich nur den Erzeuger umgestellt,
+wäre auf dem Mini-PC **nichts** mehr angekommen und die Morgenkontrolle hätte jeden Morgen Alarm
+geschlagen — beides still und erst am nächsten Tag sichtbar. Deshalb die Reihenfolge: **erst alle
+Leser auf beide Formate, dann den Erzeuger.** Jeder Leser wurde nach der Änderung einzeln laufen
+gelassen, nicht nur editiert.
+
+Die Übung schickt jetzt **jede** Sicherung durch `backup-entschluesseln.js` — das reicht
+Klartext-Zips unverändert durch. Dadurch braucht es keine Fallunterscheidung, und der
+Entschlüsselungsweg wird bei **jeder** wöchentlichen Übung mitgeprüft statt erst im Ernstfall.
+
+`make-backup.js` liegt jetzt **im Repo** (`scripts/`, wird von `deploy.sh` mitgeliefert). Vorher
+existierte es nur auf dem Server: unversioniert, ungetestet, im Ernstfall von Hand nachzubauen —
+für das Programm, das alles retten soll, der falsche Ort.
+
+**Die harte Regel** steht in `tests/backup-naechtlich.js` als verneinende Zusage: *ohne Empfänger
+keine `.env` im Archiv*. Lieber eine Sicherung ohne Schlüssel als Schlüssel im Klartext — die
+Archive liegen am Ende in 60 Versionen auf zwei Rechnern.
+
+**Schlüssel ohne Umweg:** Das Paar für den Mini-PC wurde **auf dem Mini-PC** erzeugt, der private
+Teil direkt in dessen `.env` geschrieben und nie ausgegeben. Nach aussen ging nur der öffentliche.
+So musste kein privater Schlüssel durch den Chat — und der Sitzungsmitschnitt wird ja selbst auf
+den Produktivserver gesichert.
+
+**Ende-zu-Ende belegt:** VPS erzeugt `.adbk` (minipc, offline) → Mini-PC holt sie → Morgenkontrolle
+meldet „Sicherung von heute da" → Übung entschlüsselt und stellt wieder her: 13 Nutzer, 1304
+Einträge, App startet.
+
 ### 2026-09-09 · Durchsucht nach Sackgassen — zwei gefunden
 
 Alex bat, das Barcode-Feature auf Logikfehler, Bugs, unmögliche Zustände und englische Meldungen
