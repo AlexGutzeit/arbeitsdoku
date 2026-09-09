@@ -14,6 +14,69 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Ausgezählt statt geschätzt: wie oft trifft es wirklich?
+
+Auf die Frage, ob solche Kartons häufig sind, Alex: *„kannst du doch selbst aus deinen Daten raus
+lesen. Ich würde sagen, nicht oft."* Zu Recht — fünf Feldläufe lagen vor, **64 verschiedene Codes**:
+
+```
+ 40  Artikelnummer (gültige GTIN)
+ 13  reine Zahl OHNE Prüfziffer
+  6  sonstiger Code (mit Buchstaben)
+  4  Werbe-/Infocode
+  1  Charge/Datum
+```
+
+Die 13 fraglichen zerfallen sauber in zwei Gruppen:
+
+```
+4311             in 4 von 5 Läufen, 121x gelesen   <- neben WECHSELNDEN Nachbarn
+801036998746     in 3 von 5 Läufen                 <- Etiketten-IDs derselben Familie
+801036963840     in 2 von 5 Läufen
+--- alle übrigen: je EIN Lauf ---
+2003145 · 2004922 · 912002870 · 4542265236 · 95583298 · 95599269 · 276848080010825 · …
+```
+
+**Das entscheidet die offene Frage.** Die zehn Einzelgänger sehen nach Haus- und Bestellnummern von
+Händlern aus und können ein Produkt sehr wohl bezeichnen — sie abzuweisen hiesse, jemanden vor
+einem Karton stehen zu lassen, dessen einziger Barcode nun mal so aussieht. Sie werden deshalb nur
+**zurückgestuft** und beim Anlegen mit einem Hinweis versehen.
+
+`4311` dagegen erscheint neben wechselnden Nachbarn, klebt also auf vielen Etiketten; gespeichert
+zeigten lauter verschiedene Artikel auf **denselben** Eintrag. Er wird **abgewiesen** und erklärt.
+Die Grenze liegt bei fünf Ziffern, und das ist mit Absicht knapp: Unter allen 64 gemessenen Codes
+ist er der **einzige** mit höchstens fünf. Die nächstkürzeren echten Nummern haben sieben und
+bleiben unberührt.
+
+So bleibt auf dem fotografierten Lieferschein-Etikett die Etiketten-ID `801036963840` übrig — samt
+Warnung, dass sie sich mit jeder Lieferung ändert. Mehr ist dort nicht zu holen: Ein Artikel-Barcode
+steht auf dem Karton schlicht nicht drauf.
+
+### 2026-09-09 · Das Etikett löst beide Rätsel
+
+Alex hat den Karton fotografiert. Damit ist klar, was die beiden unerklärten Codes sind:
+
+```
+Etiketten ID  801036963840      <- steht im Klartext direkt UNTER dem Data-Matrix
+Lieferdatum   07.09.2026           TRANS 801905 - TOUR WZ07 - BOX 8
+```
+
+Ein **Lieferschein-Etikett** des Großhändlers, kein Produktetikett. Die Artikelnummern stehen nur
+als **Text** darauf — `1010957292` beim Händler, `Schletter 973000-075` beim Hersteller. Die
+lesbaren Codes bezeichnen das **Etikett** und die Tour, nicht die Ware.
+
+**Die Regel daraus:** Eine rein numerische Angabe ist genau dann eine Artikelnummer, wenn sie die
+GTIN-Prüfziffer erfüllt. Sonst verliert sie den 2D-Bonus — ein Data-Matrix ist verlässlich
+*gelesen*, sein *Inhalt* ist deshalb noch keine Artikelnummer. Nur reine Ziffern; alles mit
+Buchstaben bleibt unberührt, dort ist keine Prüfziffer zu erwarten.
+
+Die Prüfziffer trifft nicht jeden Fall: `801037001516` — eine weitere Etiketten-ID aus demselben
+Lauf — erfüllt sie **zufällig**. Bei zwölfstelligen Zahlen passiert das in etwa einem von zehn
+Fällen. Mehr gibt der Inhalt nicht her.
+
+**Ein eigener Test fiel dabei** — er erwartete, `801036963840` gewinne gegen `4311`. Das war meine
+Annahme, es sei ein Artikelcode; das Foto widerlegt sie. Die Zusage sagt jetzt, was gilt.
+
 ### 2026-09-09 · „4311" verliert — und die Prüfstand-Zeile war irreführend
 
 Der Lauf um 11:45 zeigt die Wirkung: erster Treffer nach **5,5 s**, die Charge `*202511182 06/17/26`
