@@ -22,6 +22,12 @@
            background:#fff; cursor:pointer; margin-right:.4rem; margin-bottom:.4rem }
   button.haupt { background:var(--gruen); color:#fff; border-color:var(--gruen) }
   video { width:100%; max-height:55vh; background:#000; border-radius:8px; display:block }
+  /* Vier Eckwinkel wie in der App — zwei saehen aus wie ein Versehen. */
+  #rahmen .ecke { position:absolute; width:26px; height:26px; pointer-events:none }
+  #rahmen .ol { left:-2px; top:-2px; border-left:4px solid #4CAF50; border-top:4px solid #4CAF50; border-radius:10px 0 0 0 }
+  #rahmen .or { right:-2px; top:-2px; border-right:4px solid #4CAF50; border-top:4px solid #4CAF50; border-radius:0 10px 0 0 }
+  #rahmen .ul { left:-2px; bottom:-2px; border-left:4px solid #4CAF50; border-bottom:4px solid #4CAF50; border-radius:0 0 0 10px }
+  #rahmen .ur { right:-2px; bottom:-2px; border-right:4px solid #4CAF50; border-bottom:4px solid #4CAF50; border-radius:0 0 10px 0 }
   #treffer li { padding:.35rem 0; border-bottom:1px solid #e2e8f0; font-size:.9rem }
   #treffer li:last-child { border-bottom:none }
   code { background:#f1f5f9; padding:.1rem .3rem; border-radius:4px; font-size:.85em }
@@ -82,13 +88,19 @@
   <div class="hinweis">Bei wenig Licht oft wirksamer als eine Lampe: weiter weg halten, näher
       heranzoomen — die Kamera bekommt mehr Licht auf die Fläche und der Code bleibt scharf.</div>
   </div>
-  <div id="bildbox" style="position:relative">
+  <!-- overflow:hidden ist hier PFLICHT, nicht Kosmetik: Der Abdunkler des Rahmens ist ein
+       box-shadow mit 100vmax Ausbreitung. Ohne den Beschnitt legt er sich ueber die halbe
+       Seite (gemessen am 09.09.2026 auf Alex' Handy). In der App faellt das nicht auf, weil
+       .scanner-bild den Beschnitt schon hat. -->
+  <div id="bildbox" style="position:relative;overflow:hidden;border-radius:8px;background:#000">
     <video id="video" playsinline muted autoplay></video>
     <!-- Zielrahmen wie in der App: Genau dieser Bereich wird gelesen, solange der Schalter
          „nur im Rahmen lesen" gesetzt ist. -->
     <div id="rahmen" style="position:absolute;left:8%;right:8%;top:50%;height:26%;
          transform:translateY(-50%);border:2px solid rgba(255,255,255,.55);border-radius:10px;
-         box-shadow:0 0 0 100vmax rgba(0,0,0,.58);pointer-events:none"></div>
+         box-shadow:0 0 0 100vmax rgba(0,0,0,.58);pointer-events:none">
+      <i class="ecke ol"></i><i class="ecke or"></i><i class="ecke ul"></i><i class="ecke ur"></i>
+    </div>
     <div id="rahmentext" style="position:absolute;left:0;right:0;bottom:0;text-align:center;
          font-size:.8rem;color:#fff;background:rgba(0,0,0,.55);padding:.3rem;pointer-events:none">
       Nur was im Rahmen liegt, wird gelesen</div>
@@ -145,6 +157,6 @@
      Cache benutzt. Genau das ist am 09.09.2026 passiert: Der Pruefstand meldete achtstellige
      ITF-Codes als "bestaetigt", weil er aelter war als die ITF-14-Regel — die Messung sagte
      also etwas anderes als die App tut. Bei jeder Regelaenderung mit hochzaehlen. -->
-<script src="/scanner-probe.js?v=376"></script>
+<script src="/scanner-probe.js?v=377"></script>
 </body>
 </html>
