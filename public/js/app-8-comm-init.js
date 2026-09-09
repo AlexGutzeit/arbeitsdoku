@@ -159,7 +159,7 @@ async function renderOrders() {
         <a href="/scanner-probe.html" class="btn btn-outline btn-sm" style="text-decoration:none">
           &#128247; Scanner-Prüfstand</a>
         <span style="font-size:.78rem;color:var(--text-light);margin-left:.5rem">
-          vorübergehend — bitte ausprobieren und Alex sagen, wie es lief</span>
+          vorübergehend — bitte ausprobieren und dem Admin sagen, wie es lief</span>
       </div>
       <div style="margin-top:2rem">
         <button class="btn btn-outline" id="toggle-ordered" style="width:100%">Letzte Bestellungen anzeigen</button>
@@ -538,7 +538,7 @@ async function scanInsFormular() {
       + 'Darin steht ein Datum — das ist eine Chargen- oder Haltbarkeitsangabe, keine '
       + 'Artikelnummer. Sie ist bei jeder Lieferung anders; als Barcode gespeichert wäre jede '
       + 'neue Charge ein unbekanntes Produkt. Bitte den Artikel-Barcode scannen.\n\n'
-      + 'Sollte das doch eine gültige Artikelnummer sein, sag Alex Bescheid.',
+      + 'Sollte das doch eine gültige Artikelnummer sein, sag deinem Admin Bescheid.',
       { title: 'Charge statt Artikel', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
     return;
   }

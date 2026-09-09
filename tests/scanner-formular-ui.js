@@ -345,6 +345,21 @@ function req(m, p, t, b) {
     const imFeld = await seite.evaluate(() => document.getElementById('of-product').value);
     ok('… und steht gleich im Formular', imFeld === 'Schrauben-Sortiment', imFeld);
 
+    // KEIN PERSONENNAME IN SICHTBAREN TEXTEN.
+    //
+    // Die App liegt oeffentlich auf GitHub und laeuft auch in anderen Betrieben — dort gibt es
+    // keinen „Alex". Alex am 09.09.2026: „ist nicht richtig, da die app ja frei ab git liegt.
+    // Somit eher, sag deinem admin bescheid." Betroffen waren drei Stellen, die ich selbst
+    // geschrieben hatte; gefunden hat sie nicht der Test, sondern er.
+    //
+    // Geprueft wird der GERENDERTE Text (der Anmelde-Benutzer heisst hier „max", kein Grund fuer
+    // einen Fehlalarm), und zwar auf der Bestellseite mit geoeffnetem Formular — dort stehen die
+    // Hinweise, in denen es passiert ist.
+    const sichtbar = await seite.evaluate(() => document.querySelector('.main').innerText);
+    ok('kein Personenname in sichtbaren Texten (die App läuft auch anderswo)',
+      !/\bAlex\b/i.test(sichtbar),
+      (sichtbar.match(/.{0,50}[Aa]lex.{0,50}/) || [])[0]);
+
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.slice(0, 2).join(' | '));
   } catch (e) {
     ok('Durchlauf ohne Ausnahme', false, e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e.message);

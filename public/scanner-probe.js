@@ -550,7 +550,7 @@
     const text = zeilen.join('\n');
     try {
       await navigator.clipboard.writeText(text);
-      $('kopierinfo').textContent = 'Kopiert. Jetzt in eine Nachricht an Alex einfügen.';
+      $('kopierinfo').textContent = 'Kopiert. Jetzt in eine Nachricht an den Admin einfügen.';
     } catch (_) {
       // Ohne Zwischenablage-Recht (aeltere Browser, kein sicherer Kontext): zum Markieren anbieten.
       const ta = document.createElement('textarea');

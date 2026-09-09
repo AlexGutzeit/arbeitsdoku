@@ -14,6 +14,30 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Kein Personenname in der Oberfläche
+
+Alex zu meiner Chargen-Meldung („sag Alex Bescheid"): *„ist nicht richtig, da die app ja frei ab git
+liegt. Somit eher, sag deinem admin bescheid."*
+
+Er hat recht, und es traf mehr Stellen, als er genannt hatte — gesucht statt nur die zwei
+genannten geändert:
+
+```
+app-8-comm-init.js  „…und Alex sagen, wie es lief"                → dem Admin
+app-8-comm-init.js  „sag Alex Bescheid"                           → sag deinem Admin Bescheid
+scanner-probe.html  „Ergebnis kopieren — dann an Alex schicken"   → an den Admin
+scanner-probe.js    „Jetzt in eine Nachricht an Alex einfügen"    → an den Admin
+```
+
+Geprüft am **gerenderten** Text, nicht am Quelltext — inklusive des Chargen-Dialogs, der dafür
+wirklich ausgelöst wurde. Quelltext-**Kommentare** behalten den Namen: Dort ist er Herkunftsangabe
+(„im Lager gemessen, Alex, 09.09.2026") und erklärt, warum eine Regel so aussieht, wie sie aussieht.
+
+`tests/scanner-formular-ui.js` hält das jetzt fest: Der sichtbare Text der Bestellseite darf keinen
+Personennamen enthalten. Gegenprobe mit dem alten Wortlaut: fällt. Die Lehre gehört zur
+Grundausstattung dieses Projekts — die App liegt öffentlich und läuft auch in anderen Betrieben,
+und dort gibt es weder einen Alex noch dieselbe Firma. Siehe [[project_repo_public]].
+
 ### 2026-09-09 · Charge statt Artikel
 
 Aus demselben Lauf: `*202511182 06/17/26` — Data-Matrix, **18×** gelesen, also grundsolide erkannt
