@@ -175,6 +175,39 @@ function req(m, p, t, b) {
       await seite.evaluate(() => (S.produktKatalog.produkte || []).length > 0),
       await seite.evaluate(() => (S.produktKatalog.produkte || []).length));
 
+    console.log('\n── Ohne Empfang anlegen: was der Mensch zu sehen bekommt ──');
+    // Alex: „ich lerne einen neuen scan ein, gehe auf speichern und versetze mein Smartphone in
+    // standby. Wird das beim erneuten Empfang trotzdem synchronisiert?" — NEIN. Es gibt keine
+    // Warteschlange; Anlegen braucht den Server. Wichtig ist deshalb, dass die App das SAGT und
+    // die Eingabe nicht wegwirft. Die Rohmeldung des Browsers lautete „Failed to fetch".
+    await seite.goto(BASIS + '/#/orders', { waitUntil: 'domcontentloaded' });
+    await seite.waitForSelector('#order-add-btn'); await sleep(1000);
+    await seite.click('#order-add-btn'); await seite.waitForSelector('#of-product');
+    await seite.evaluate(() => { window.scannerOeffnen = async () => '4008888888888'; });
+    await seite.click('#of-scan'); await sleep(1500);
+    ok('die Anlege-Maske ist offen', await seite.evaluate(() => !!document.getElementById('np-name')));
+    await seite.type('#np-name', 'Testprodukt im Funkloch');
+    await seite.setOfflineMode(true);
+    await seite.evaluate(() => { const b = [...document.querySelectorAll('.modal button')].find(x => /Anlegen/.test(x.textContent)); if (b) b.click(); });
+    await sleep(2000);
+    const ohneEmpfang = await seite.evaluate(() => ({
+      offen: !!document.getElementById('np-name'),
+      eingabe: document.getElementById('np-name')?.value,
+      text: (document.querySelector('.modal') || {}).innerText || '',
+    }));
+    ok('die Eingabe bleibt stehen', ohneEmpfang.offen && ohneEmpfang.eingabe === 'Testprodukt im Funkloch',
+      JSON.stringify(ohneEmpfang.eingabe));
+    ok('… und die Meldung ist deutsch und ehrlich, nicht „Failed to fetch"',
+      /Keine Verbindung/.test(ohneEmpfang.text) && !/Failed to fetch/.test(ohneEmpfang.text),
+      ohneEmpfang.text.slice(0, 200));
+    ok('… sie sagt ausdrücklich, dass NICHTS nachgeholt wird',
+      /nicht nachgeholt/.test(ohneEmpfang.text), ohneEmpfang.text.slice(0, 240));
+    await seite.setOfflineMode(false);
+    await sleep(2000);
+    const nichtsAngelegt = (await req('GET', '/api/products?q=Funkloch', admin)).body.produkte;
+    ok('… und es liegt wirklich nichts an, das später auftaucht', nichtsAngelegt.length === 0,
+      JSON.stringify(nichtsAngelegt.map(p => p.name)));
+
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.slice(0, 3).join(' | '));
   } catch (e) {
     ok('Durchlauf ohne Ausnahme', false, e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e.message);

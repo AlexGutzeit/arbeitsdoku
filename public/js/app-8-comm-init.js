@@ -708,7 +708,17 @@ function produktAnlegenMaske(code) {
         produktUebernehmen(r.produkt);
         toast(`„${r.produkt.name}" angelegt und übernommen.`, 'success');
         zu(r.produkt);
-      } catch (err) { fehler.textContent = err.message; fehler.style.display = ''; }
+      } catch (err) {
+        // „Failed to fetch" ist die Rohmeldung des Browsers — englisch, technisch, und sie sagt
+        // dem Menschen im Lager nichts. Vor allem sagt sie NICHT das Wichtigste: dass nichts
+        // gespeichert wurde und nichts nachgeholt wird. Gemessen am 09.09.2026.
+        fehler.textContent = istVerbindungsfehler(err)
+          ? 'Keine Verbindung — das Produkt wurde NICHT angelegt und wird auch später nicht '
+            + 'nachgeholt. Deine Eingabe bleibt hier stehen: sobald wieder Empfang da ist, '
+            + 'noch einmal auf „Anlegen" tippen.'
+          : err.message;
+        fehler.style.display = '';
+      }
     });
   });
 }

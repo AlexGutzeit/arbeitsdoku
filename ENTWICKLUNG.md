@@ -14,6 +14,27 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Anlegen im Funkloch — gemessen, nicht abgeleitet
+
+Alex: *„angenommen im Lager wäre kein Empfang, ich lerne einen neuen scan ein, gehe auf speichern
+und versetze mein Smartphone in standby. Wird das beim erneuten Empfang trotzdem synchronisiert?
+Auch 30 Minuten später? Auch auf dem iphone?"*
+
+Statt aus dem Entwurf zu antworten, alle drei Fälle im Browser durchgespielt:
+
+* **Schon offline, unbekannten Code gescannt** → die Maske erscheint gar nicht erst. Die App sagt
+  vorher: „Ohne Verbindung lässt sich weder prüfen, ob es ihn inzwischen gibt, noch ein Produkt
+  anlegen."
+* **Maske offen, dann Verbindung weg, dann speichern** → die Eingabe bleibt stehen. Die Meldung
+  lautete allerdings **„Failed to fetch"** — die Rohmeldung des Browsers, englisch, technisch, und
+  sie verschweigt das Wichtigste: dass nichts gespeichert wurde *und nichts nachgeholt wird*.
+* **Verbindung kommt zurück** → nichts auf dem Server, nichts im Gerätespeicher. Es gibt keine
+  Warteschlange.
+
+Die Antwort ist also **nein**, und zwar unabhängig von 30 Minuten und unabhängig vom Gerät — es ist
+keine Plattformfrage, es liegt schlicht nichts vor. Behoben wurde die Meldung: Sie ist jetzt deutsch
+und sagt ausdrücklich, dass nichts nachgeholt wird und ein zweiter Druck genügt.
+
 ### 2026-09-09 · Drei Nachfragen — und eine vierte Lücke, die dabei auffiel
 
 Alex fragte nach: (1) Bekommt der Bearbeitende eine Meldung mit Knopf? (2) Kann MA b im Lager den

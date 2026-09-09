@@ -478,6 +478,12 @@ nicht.
 
 #### 📦 Produktverzeichnis (nur mit dem Recht „Lagerdaten pflegen")
 
+**Ohne Verbindung lässt sich nichts anlegen, und es wird auch nichts nachgeholt.** Es gibt keine
+Warteschlange: Wer im Funkloch auf „Anlegen" tippt, bekommt eine deutliche Meldung, die Eingabe
+bleibt im Formular stehen, und sobald wieder Empfang da ist, genügt ein zweiter Druck auf
+„Anlegen". Wer schon vor dem Scannen ohne Verbindung ist, kommt gar nicht erst in die Maske –
+die App sagt es vorher.
+
 **Ein Scan fragt immer den Server** – wer im Lager einen Code einlernt, dessen Kollege kann ihn
 **sofort** scannen, ohne irgendetwas zu aktualisieren. Die Gerätekopie ist nur der Rückfall ohne
 Verbindung. Nach einem Funkloch oder aus dem Standby wird sie beim Wiederverbinden nachgezogen –
