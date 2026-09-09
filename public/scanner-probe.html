@@ -126,6 +126,10 @@
 </div>
 
 <script src="/vendor/zxing.min.js"></script>
-<script src="/scanner-probe.js"></script>
+<!-- Versionskennung, damit ein Handy nach einer Regelaenderung nicht die alte Fassung aus dem
+     Cache benutzt. Genau das ist am 09.09.2026 passiert: Der Pruefstand meldete achtstellige
+     ITF-Codes als "bestaetigt", weil er aelter war als die ITF-14-Regel — die Messung sagte
+     also etwas anderes als die App tut. Bei jeder Regelaenderung mit hochzaehlen. -->
+<script src="/scanner-probe.js?v=372"></script>
 </body>
 </html>
