@@ -198,13 +198,22 @@ function req(m, p, t, b) {
         qrGegenSchwache: f([c('wmqr.eu/1422030000', 11, 'qr_code'), c('10501184', 1, 'upc_e')]),
         viervier:  f([c('4311', 30, 'qr_code'), c('4050118225723', 15, 'ean_13')]),
         werbungAllein: f([c('https://www.digitus.info/', 11, 'qr_code')]),
-        // Im Lager gemessen (11:45): Auf EINER Etikette lagen „4311" (QR, 57x) und ein
-        // Data-Matrix (11x). Beide 2D, keiner eine gueltige GTIN — also gewann die Trefferzahl,
-        // und die unerklaerte 4311 setzte sich durch. Eine reine Zahl mit weniger als acht
-        // Stellen kann aber keine Artikelnummer sein: Die kuerzeste waere eine EAN-8, und die
-        // erfuellt eine Pruefziffer, waere also ohnehin eine Klasse hoeher.
-        kurzzahlGegen2D: f([c('4311', 57, 'qr_code'), c('801036963840', 11, 'data_matrix')]),
+        // Die Etikette aus Alex' Foto (09.09.2026): ein QR „4311" (57x) und ein Data-Matrix
+        // „801036963840" (11x). Das Foto loeste es auf — es ist ein LIEFERSCHEIN-Etikett des
+        // Grosshaendlers: „Etiketten ID 801036963840" steht im Klartext darunter, daneben TOUR
+        // und BOX. Die Artikelnummern stehen nur als TEXT darauf.
+        //
+        // Also ist KEINER von beiden eine Artikelnummer, und die App kann hier nichts Richtiges
+        // waehlen — sie nimmt den oefter gelesenen und WARNT in der Anlege-Maske. Das ist der
+        // ehrliche Zustand; alles andere waere vorgetaeuschte Sicherheit.
+        beideKeineArtikelnummer: f([c('4311', 57, 'qr_code'), c('801036963840', 11, 'data_matrix')]),
         kurzzahlAllein:  f([c('4311', 57, 'qr_code')]),
+        // Gegen einen ECHTEN Artikelcode verlieren dagegen beide.
+        kurzzahlGegenEchten: f([c('4311', 57, 'qr_code'), c('https://qr.fischer.id/p/551442', 5, 'qr_code')]),
+        // Die Etiketten-ID aus dem Foto gegen einen echten Hersteller-QR mit VIEL weniger
+        // Lesungen: Ein Data-Matrix ist zwar verlaesslich GELESEN, sein INHALT ist deshalb noch
+        // keine Artikelnummer.
+        etikettIdGegenQr: f([c('801036963840', 20, 'data_matrix'), c('https://qr.fischer.id/p/551442', 5, 'qr_code')]),
       };
     });
     ok('die EAN schlägt den Händler-QR auf derselben Etikette',
@@ -218,10 +227,14 @@ function req(m, p, t, b) {
       rang2.viervier === '4050118225723', JSON.stringify(rang2.viervier));
     ok('ein Werbecode wird allein trotzdem zurückgegeben (um ihn zu erklären)',
       rang2.werbungAllein === 'https://www.digitus.info/', JSON.stringify(rang2.werbungAllein));
-    ok('eine zu kurze Zahl verliert gegen einen echten 2D-Code, trotz fünffacher Lesungen',
-      rang2.kurzzahlGegen2D === '801036963840', JSON.stringify(rang2.kurzzahlGegen2D));
+    ok('auf einem Lieferschein-Etikett ist keiner der Codes eine Artikelnummer — genommen wird der öfter gelesene',
+      rang2.beideKeineArtikelnummer === '4311', JSON.stringify(rang2.beideKeineArtikelnummer));
+    ok('… gegen einen echten Artikelcode verliert er aber, trotz elffacher Lesungen',
+      rang2.kurzzahlGegenEchten === 'https://qr.fischer.id/p/551442', JSON.stringify(rang2.kurzzahlGegenEchten));
     ok('… allein gelesen wird sie trotzdem genommen (sonst ginge gar nichts)',
       rang2.kurzzahlAllein === '4311', JSON.stringify(rang2.kurzzahlAllein));
+    ok('eine Etiketten-ID verliert gegen einen Hersteller-QR, trotz vierfacher Lesungen',
+      rang2.etikettIdGegenQr === 'https://qr.fischer.id/p/551442', JSON.stringify(rang2.etikettIdGegenQr));
 
     console.log('\n── Rundgang vom 09.09.2026: zusammengesetzte Codes und Werbe-QR ──');
     // Zwei Funde aus einem Lager-Rundgang. Beide hätten still Doppel-Einträge erzeugt.
@@ -248,6 +261,12 @@ function req(m, p, t, b) {
       jahrMitStrich:    scannerNichtUebernehmen('4051/22'),
       echteEan:     scannerNichtUebernehmen('4003899947209'),
       werbungGrund: scannerNichtUebernehmen('https://www.digitus.info/'),
+      // Reine Zahl ohne gueltige Pruefziffer — Etiketten-, Tour- oder Hausnummer.
+      etikettId:    scannerIstNummerOhnePruefziffer('801036963840'),
+      tourNummer:   scannerIstNummerOhnePruefziffer('4311'),
+      echteGtin:    scannerIstNummerOhnePruefziffer('4003899947209'),
+      mitBuchstabe: scannerIstNummerOhnePruefziffer('S78037524'),
+      adresse:      scannerIstNummerOhnePruefziffer('wmqr.eu/1422030000'),
       digital: scannerIstWerbecode(scannerCodeNormalisieren('https://herkunft.edeka.de/?01=04311501706954').code),
       // ROH, ohne vorherige Normalisierung: Die Antwort darf nicht davon abhaengen, in welcher
       // Reihenfolge die beiden Funktionen aufgerufen werden.
@@ -275,6 +294,11 @@ function req(m, p, t, b) {
       JSON.stringify([rund.einSchraegstrich, rund.jahrMitStrich]));
     ok('… und eine EAN erst recht nicht', rund.echteEan === null, JSON.stringify(rund.echteEan));
     ok('… der Werbecode nennt seinen eigenen Grund', rund.werbungGrund === 'werbung', JSON.stringify(rund.werbungGrund));
+    ok('eine Etiketten-ID gilt als Zahl ohne Prüfziffer', rund.etikettId === true, JSON.stringify(rund.etikettId));
+    ok('… „4311" ebenso', rund.tourNummer === true, JSON.stringify(rund.tourNummer));
+    ok('… eine echte EAN dagegen nicht', rund.echteGtin === false, JSON.stringify(rund.echteGtin));
+    ok('… und alles mit Buchstaben bleibt unberührt (dort ist keine Prüfziffer zu erwarten)',
+      rund.mitBuchstabe === false && rund.adresse === false, JSON.stringify([rund.mitBuchstabe, rund.adresse]));
     ok('… ein GS1 Digital Link dagegen NICHT (daraus wird die Artikelnummer)', rund.digital === false);
     ok('… auch roh, vor der Normalisierung', rund.digitalRoh === false);
     ok('… und Valentins Hersteller-QRs erst recht nicht (die BEZEICHNEN Artikel)',
@@ -319,6 +343,26 @@ function req(m, p, t, b) {
     const maske = await seite.evaluate(() => (document.querySelector('.modal') || document.body).innerText);
     ok('… sie nennt den Barcode', /4046281411223/.test(maske), maske.slice(0, 150));
     ok('… und bittet um Sorgfalt', /schon gibt|sucht mit/i.test(maske), maske.slice(0, 260));
+    ok('… ohne Sonderwarnung, denn das ist eine gültige Artikelnummer',
+      !/Prüfziffer/.test(maske), maske.slice(0, 200));
+
+    // Alex hat die Etikette fotografiert (09.09.2026): „Etiketten ID 801036963840" steht im
+    // Klartext unter dem Data-Matrix. Ein LIEFERSCHEIN-Etikett — die Artikelnummern stehen nur
+    // als Text darauf. Eine Etiketten-ID ist bei jeder Lieferung eine andere; als Barcode
+    // gespeichert waere das Produkt beim naechsten Mal wieder unbekannt.
+    await seite.evaluate(() => { const b = [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/.test(x.textContent)); if (b) b.click(); });
+    await sleep(500);
+    await scanVorgeben('801036963840');
+    await seite.click('#of-scan'); await sleep(1200);
+    const maskeEtikett = await seite.evaluate(() => (document.querySelector('.modal') || document.body).innerText);
+    ok('eine Zahl ohne gültige Prüfziffer wird eigens angesprochen',
+      /Prüfziffer/.test(maskeEtikett), maskeEtikett.slice(0, 200));
+    ok('… mit dem Hinweis auf Lieferschein-Etiketten',
+      /Lieferschein/.test(maskeEtikett) && /jeder Lieferung/.test(maskeEtikett), maskeEtikett.slice(0, 300));
+    await seite.evaluate(() => { const b = [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/.test(x.textContent)); if (b) b.click(); });
+    await sleep(500);
+    await scanVorgeben('4046281411223');
+    await seite.click('#of-scan'); await sleep(1200);
 
     console.log('\n── Live-Abgleich bietet das bestehende Produkt an ──');
     await seite.type('#np-name', 'kabelbinder', { delay: 20 });

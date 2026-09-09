@@ -241,6 +241,33 @@ function scannerIstKurzzahl(code) {
   return /^\d{1,7}$/.test(String(code || '').trim());
 }
 
+/**
+ * Eine reine Zahl, die KEINE Artikelnummer sein kann.
+ *
+ * Alex hat die Etikette fotografiert (09.09.2026). Sie loest beide Raetsel auf einmal:
+ *
+ *   Etiketten ID  801036963840   ← steht im Klartext direkt UNTER dem Data-Matrix
+ *   Lieferdatum   07.09.2026        TRANS 801905 · TOUR WZ07 · BOX 8
+ *
+ * Es ist ein LIEFERSCHEIN-Etikett des Grosshaendlers, kein Produktetikett. Die Artikelnummern
+ * stehen nur als TEXT darauf (1010957292 beim Haendler, Schletter 973000-075 beim Hersteller) —
+ * die beiden lesbaren Codes bezeichnen das ETIKETT und die Tour, nicht die Ware. Und eine
+ * Etiketten-ID ist bei jeder Lieferung eine andere.
+ *
+ * Regel: Eine rein numerische Angabe ist genau dann eine Artikelnummer, wenn sie die
+ * GTIN-Pruefziffer erfuellt. Tut sie das nicht, ist sie eine Haus-, Etiketten- oder Tournummer.
+ * Sie verliert damit den 2D-Bonus — ein Data-Matrix ist zwar verlaesslich GELESEN, aber sein
+ * INHALT ist deshalb noch keine Artikelnummer.
+ *
+ * Vorsichtig gefasst: Nur reine Ziffern. Alles mit Buchstaben oder Zeichen (`S78037524`,
+ * `A2026052700123`, `wmqr.eu/1422030000`) bleibt unberuehrt — dort ist keine Pruefziffer zu
+ * erwarten und die Regel haette keine Grundlage.
+ */
+function scannerIstNummerOhnePruefziffer(code) {
+  const w = String(code || '').trim();
+  return /^\d+$/.test(w) && !scannerGtinGueltig(w);
+}
+
 function scannerBesterTreffer(zaehlung) {
   // -Infinity, nicht -1: Ein Werbecode traegt ein negatives Gewicht und wuerde sonst gar nicht
   // zurueckgegeben — der Benutzer bekaeme „nichts erkannt", obwohl deutlich etwas gelesen wurde.
@@ -283,7 +310,8 @@ function scannerBesterTreffer(zaehlung) {
     // nicht bis hierher, auch keine einmal gelesene GTIN.
     const klasse = werbung ? 0
       : scannerGtinGueltig(code) ? 3
-      : (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D && !scannerIstKurzzahl(code)) ? 2
+      : (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D
+         && !scannerIstNummerOhnePruefziffer(code)) ? 2
       : 1;
     const gewicht = klasse * 1000000 + n;
     if (gewicht > beste) { bester = code; beste = gewicht; }

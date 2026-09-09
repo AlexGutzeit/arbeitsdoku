@@ -595,6 +595,14 @@ function produktAnlegenMaske(code) {
         <div class="modal-header"><h3>Neues Produkt anlegen</h3></div>
         <div class="modal-body">
           <p style="margin:0 0 .5rem">Barcode <code>${esc(code)}</code> ist noch niemandem zugeordnet.</p>
+          ${(typeof scannerIstNummerOhnePruefziffer === 'function' && scannerIstNummerOhnePruefziffer(code)) ? `
+          <p class="hinweis-box" style="margin:0 0 .6rem">
+            <strong>Prüf das bitte kurz.</strong> Diese Zahl erfüllt keine Artikelnummer-Prüfziffer.
+            Auf <em>Lieferschein-Etiketten</em> stehen Etiketten-, Tour- und Boxnummern, die sich mit
+            jeder Lieferung ändern – als Barcode gespeichert wäre das Produkt beim nächsten Mal
+            wieder unbekannt. Der Artikel-Barcode steht meist auf der Ware selbst, nicht auf dem
+            Versandkarton.
+          </p>` : ''}
           <p style="margin:0 0 .9rem;color:var(--text-light);font-size:.85rem">
             Dieser Name steht künftig allen zur Auswahl. Bitte schau kurz, ob es das Produkt schon
             gibt — die Liste unten sucht mit, während du tippst.</p>

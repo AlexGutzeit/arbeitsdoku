@@ -417,6 +417,11 @@ daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Auskla
 Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
 erraten würde still die falsche Bestellnummer anhängen.
 
+**Lieferschein-Etiketten** tragen oft gar keinen Artikel-Barcode, sondern Etiketten-, Tour- und
+Boxnummern. Eine rein numerische Angabe gilt deshalb nur dann als Artikelnummer, wenn sie die
+GTIN-Prüfziffer erfüllt; sonst verliert sie den Vorrang, und beim Anlegen erscheint ein Hinweis –
+solche Nummern ändern sich mit jeder Lieferung.
+
 **Chargen- und Werbecodes werden erklärt statt gespeichert.** Ein Data-Matrix wie
 `*202511182 06/17/26` enthält Charge und Haltbarkeit – bei jeder Lieferung anders, als Barcode
 gespeichert wäre jede neue Charge ein unbekanntes Produkt. Erkannt wird bewusst **nur ein Datum aus
