@@ -14,6 +14,28 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Drei Nachfragen — und eine vierte Lücke, die dabei auffiel
+
+Alex fragte nach: (1) Bekommt der Bearbeitende eine Meldung mit Knopf? (2) Kann MA b im Lager den
+Code sofort nutzen, den MA a eben eingelernt hat? (3) Wird eine Änderung aus der Pflege sofort zu
+beiden im Lager synchronisiert?
+
+Die Antworten, jede im Test festgeschrieben statt behauptet:
+
+1. **Ja** — Hinweisband mit „Neu laden", und die angefangene Eingabe bleibt stehen.
+2. **Ja, sofort.** Der Scan fragt den **Server** (`GET /api/products/barcode/:code`), nicht die
+   Gerätekopie. Um das zu *beweisen*, leert der Test die Kopie vorher absichtlich — findet der Scan
+   das Produkt trotzdem, kann es nur vom Server gekommen sein. Beim *Tippen* greift die
+   nachgezogene Kopie.
+3. **Ja** — die Pflege löst dasselbe Signal aus, beide Handys ziehen nach; ein Scan fragt ohnehin
+   den Server.
+
+**Die vierte Lücke, ungefragt gefunden:** `es.onopen` zog nach einem Verbindungsabbruch die *Zähler*
+nach, den *Katalog* aber nicht. Wer im Lager aus einem Funkloch kommt oder das Handy aus der Tasche
+holt, hätte eine Produktliste von vorhin gehabt — verpasste Signale sind weg. Das ist exakt der
+Fehler vom „eingefrorenen Coin": nur gesendet, nie geholt. Jetzt zieht sowohl `onopen` als auch der
+Wechsel zurück in die App den Katalog nach. Gegenprobe: die Zusage fällt.
+
 ### 2026-09-09 · Wächst das Verzeichnis live mit? Bisher nicht.
 
 Alex' Frage: *„wenn MA a am pc sitzt und Produkt Datenbank bearbeiten offen hat und in diesem

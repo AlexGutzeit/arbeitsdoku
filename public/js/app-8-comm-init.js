@@ -2203,5 +2203,10 @@ window.addEventListener('DOMContentLoaded', () => {
 // ausgeht; alles, was in dieser Zeit passiert, kommt nie an. Ohne dieses Nachziehen zeigte der Coin
 // noch eine offene Bestellung, die längst erledigt war.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && S.token) { refreshUser(); loadBadges(); }
+  if (document.visibilityState === 'visible' && S.token) {
+    refreshUser(); loadBadges();
+    // Auch den Katalog: Im Standby kommen keine Signale an, und im Lager wird das Handy
+    // zwischen zwei Kartons regelmaessig weggesteckt.
+    if (typeof katalogAuffrischen === 'function' && S.produktKatalog) katalogAuffrischen();
+  }
 });

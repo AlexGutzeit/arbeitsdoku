@@ -478,6 +478,11 @@ nicht.
 
 #### 📦 Produktverzeichnis (nur mit dem Recht „Lagerdaten pflegen")
 
+**Ein Scan fragt immer den Server** – wer im Lager einen Code einlernt, dessen Kollege kann ihn
+**sofort** scannen, ohne irgendetwas zu aktualisieren. Die Gerätekopie ist nur der Rückfall ohne
+Verbindung. Nach einem Funkloch oder aus dem Standby wird sie beim Wiederverbinden nachgezogen –
+verpasste Signale sind sonst verloren.
+
 **Live, aber ohne Datenverlust.** Ändert jemand das Verzeichnis, meldet der Server das sofort allen.
 In den **Bestellungen** wird die Produktliste daraufhin still nachgezogen – wer gerade tippt,
 findet das eben eingelernte Produkt beim nächsten Buchstaben, ohne dass ihm das Formular unter den

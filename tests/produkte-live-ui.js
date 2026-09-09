@@ -128,6 +128,53 @@ function req(m, p, t, b) {
       await seite.evaluate(() => document.getElementById('pv-liste').innerText.includes('Isolierband')));
     ok('… und der Hinweis ist weg', !(await seite.evaluate(() => !!document.getElementById('pv-frisch'))));
 
+    console.log('\n── MA b scannt sofort, was MA a eben eingelernt hat ──');
+    // Alex' Frage: „kann ma b sofort danach, ohne zu aktualisieren, sofort den code nutzen?"
+    // Der Scan fragt den SERVER (GET /api/products/barcode/:code), nicht die Gerätekopie. Um das
+    // zu BEWEISEN und nicht nur zu behaupten, wird die Kopie vorher absichtlich geleert: Findet
+    // der Scan das Produkt trotzdem, kann es nur vom Server gekommen sein.
+    await seite.goto(BASIS + '/#/orders', { waitUntil: 'domcontentloaded' });
+    await seite.waitForSelector('#order-add-btn'); await sleep(1000);
+    const frisch = await req('POST', '/api/products', tokenB, { name: 'Wago-Klemme 221', barcode: '4004444444444' });
+    ok('MA b legt an', frisch.status === 201, String(frisch.status));
+    await seite.click('#order-add-btn'); await seite.waitForSelector('#of-product');
+    await seite.evaluate(() => {
+      S.produktKatalog = { kategorien: [], produkte: [] };     // Gerätekopie absichtlich leeren
+      window.scannerOeffnen = async () => '4004444444444';
+    });
+    await seite.click('#of-scan'); await sleep(1500);
+    ok('der eben angelegte Code wird sofort gefunden — auch mit leerer Gerätekopie',
+      await seite.evaluate(() => document.getElementById('of-product').value === 'Wago-Klemme 221'),
+      await seite.evaluate(() => document.getElementById('of-product')?.value));
+
+    console.log('\n── MA a benennt um — MA b sieht es ohne Neuladen ──');
+    // Alex' dritte Frage: „wenn der ma im bearbeiten etwas ändert, wird dass dann sofort zu ma a
+    // und ma b im Lager synchronisiert?"
+    const zuAendern = (await req('GET', '/api/products?q=wago', admin)).body.produkte[0];
+    const umbenannt = await req('PUT', `/api/products/${zuAendern.id}`, admin,
+      { name: 'Wago-Klemme 221 (5-polig)', trotzdem: true });
+    ok('MA a benennt um', umbenannt.status === 200, umbenannt.status + ' ' + umbenannt.text.slice(0, 80));
+    await sleep(2500);   // SSE
+    await seite.evaluate(() => { const f = document.getElementById('of-product'); f.value = ''; f.dispatchEvent(new Event('input', { bubbles: true })); });
+    await seite.type('#of-product', 'wago');
+    await sleep(700);
+    const nachUmbenennen = await seite.evaluate(() => {
+      const ul = document.getElementById('of-vorschlaege');
+      return ul ? ul.innerText : '';
+    });
+    ok('MA b findet den NEUEN Namen, ohne neu zu laden',
+      /5-polig/.test(nachUmbenennen), JSON.stringify(nachUmbenennen).slice(0, 120));
+
+    console.log('\n── Nach einem Funkloch ──');
+    // Verpasste Signale sind verloren. Beim Wiederverbinden muss der Katalog nachgezogen werden —
+    // sonst haette, wer aus dem Funkloch kommt, eine Produktliste von vorhin.
+    await seite.evaluate(() => { S.produktKatalog = { kategorien: [], produkte: [] }; });
+    await seite.evaluate(() => { document.dispatchEvent(new Event('visibilitychange')); });
+    await sleep(2000);
+    ok('beim Zurückwechseln in die App wird der Katalog nachgezogen',
+      await seite.evaluate(() => (S.produktKatalog.produkte || []).length > 0),
+      await seite.evaluate(() => (S.produktKatalog.produkte || []).length));
+
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.slice(0, 3).join(' | '));
   } catch (e) {
     ok('Durchlauf ohne Ausnahme', false, e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e.message);

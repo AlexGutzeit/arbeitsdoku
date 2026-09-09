@@ -304,6 +304,10 @@ async function connectSSE() {
     // dann auf einem Stand stehen, den es nicht mehr gibt, bis jemand die Seite neu laedt. Nach jedem
     // Verbindungsaufbau also den echten Stand nachziehen.
     loadBadges();
+    // DASSELBE gilt fuer das Produktverzeichnis: Waehrend der Verbindungspause verpasste
+    // „produkte"-Signale sind weg. Wer im Lager aus dem Funkloch kommt, haette sonst eine
+    // Produktliste von vorhin — und faende ein eben eingelerntes Produkt nicht.
+    if (typeof katalogAuffrischen === 'function' && S.produktKatalog) katalogAuffrischen();
   };
   es.onmessage = _sseOnMessage;
   es.onerror = () => {                  // getrennt / Ticket abgelaufen / Server-Force-Close → frisch verbinden
