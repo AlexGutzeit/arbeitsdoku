@@ -219,6 +219,28 @@ function scannerNichtUebernehmen(code) {
   return null;
 }
 
+/**
+ * Eine zu kurze reine Zahl — das kann keine Artikelnummer sein.
+ *
+ * Im Lager gemessen (Alex, 09.09.2026, 11:45): Auf EINER Etikette lagen
+ *
+ *   4311          QR,          57x gelesen   ← niemand weiss, was das ist
+ *   801036963840  Data-Matrix, 11x gelesen
+ *
+ * Beide sind 2D, keiner ist eine gueltige GTIN — also entschied die Trefferzahl, und die
+ * unerklaerte `4311` gewann. Sie taucht seit dem ersten Rundgang in jedem Lauf auf; Alex kennt
+ * sie nicht („Evtl eine Kennung der Firma für die Großhändler?").
+ *
+ * Die KUERZESTE Artikelnummer dieser Welt ist eine EAN-8 — und die waere eine gueltige GTIN und
+ * damit schon eine Klasse hoeher. Eine reine Zahl mit weniger als acht Stellen, die keine
+ * Pruefziffer erfuellt, ist deshalb keine Artikelnummer, sondern eine Haus-, Regal- oder
+ * Lieferantenkennung. Sie faellt eine Klasse zurueck und verliert damit gegen jeden Code, der
+ * einen Artikel bezeichnet — bleibt aber waehlbar, falls sonst gar nichts da ist.
+ */
+function scannerIstKurzzahl(code) {
+  return /^\d{1,7}$/.test(String(code || '').trim());
+}
+
 function scannerBesterTreffer(zaehlung) {
   // -Infinity, nicht -1: Ein Werbecode traegt ein negatives Gewicht und wuerde sonst gar nicht
   // zurueckgegeben — der Benutzer bekaeme „nichts erkannt", obwohl deutlich etwas gelesen wurde.
@@ -261,7 +283,8 @@ function scannerBesterTreffer(zaehlung) {
     // nicht bis hierher, auch keine einmal gelesene GTIN.
     const klasse = werbung ? 0
       : scannerGtinGueltig(code) ? 3
-      : (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D ? 2 : 1);
+      : (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D && !scannerIstKurzzahl(code)) ? 2
+      : 1;
     const gewicht = klasse * 1000000 + n;
     if (gewicht > beste) { bester = code; beste = gewicht; }
   }

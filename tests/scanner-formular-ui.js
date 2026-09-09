@@ -198,6 +198,13 @@ function req(m, p, t, b) {
         qrGegenSchwache: f([c('wmqr.eu/1422030000', 11, 'qr_code'), c('10501184', 1, 'upc_e')]),
         viervier:  f([c('4311', 30, 'qr_code'), c('4050118225723', 15, 'ean_13')]),
         werbungAllein: f([c('https://www.digitus.info/', 11, 'qr_code')]),
+        // Im Lager gemessen (11:45): Auf EINER Etikette lagen „4311" (QR, 57x) und ein
+        // Data-Matrix (11x). Beide 2D, keiner eine gueltige GTIN — also gewann die Trefferzahl,
+        // und die unerklaerte 4311 setzte sich durch. Eine reine Zahl mit weniger als acht
+        // Stellen kann aber keine Artikelnummer sein: Die kuerzeste waere eine EAN-8, und die
+        // erfuellt eine Pruefziffer, waere also ohnehin eine Klasse hoeher.
+        kurzzahlGegen2D: f([c('4311', 57, 'qr_code'), c('801036963840', 11, 'data_matrix')]),
+        kurzzahlAllein:  f([c('4311', 57, 'qr_code')]),
       };
     });
     ok('die EAN schlägt den Händler-QR auf derselben Etikette',
@@ -211,6 +218,10 @@ function req(m, p, t, b) {
       rang2.viervier === '4050118225723', JSON.stringify(rang2.viervier));
     ok('ein Werbecode wird allein trotzdem zurückgegeben (um ihn zu erklären)',
       rang2.werbungAllein === 'https://www.digitus.info/', JSON.stringify(rang2.werbungAllein));
+    ok('eine zu kurze Zahl verliert gegen einen echten 2D-Code, trotz fünffacher Lesungen',
+      rang2.kurzzahlGegen2D === '801036963840', JSON.stringify(rang2.kurzzahlGegen2D));
+    ok('… allein gelesen wird sie trotzdem genommen (sonst ginge gar nichts)',
+      rang2.kurzzahlAllein === '4311', JSON.stringify(rang2.kurzzahlAllein));
 
     console.log('\n── Rundgang vom 09.09.2026: zusammengesetzte Codes und Werbe-QR ──');
     // Zwei Funde aus einem Lager-Rundgang. Beide hätten still Doppel-Einträge erzeugt.

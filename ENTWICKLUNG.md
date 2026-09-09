@@ -14,6 +14,32 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · „4311" verliert — und die Prüfstand-Zeile war irreführend
+
+Der Lauf um 11:45 zeigt die Wirkung: erster Treffer nach **5,5 s**, die Charge `*202511182 06/17/26`
+wird als solche abgewiesen, beide Fehllesungen namentlich benannt, und auf **jeder** Etikette nimmt
+die App das Richtige — bis auf eine.
+
+Bei 78–80 s lagen auf EINER Etikette:
+
+```
+4311          QR,          57× gelesen   ← kennt niemand
+801036963840  Data-Matrix, 11× gelesen
+```
+
+Beide 2D, keiner eine gültige GTIN — also entschied allein die Trefferzahl, und die unerklärte
+`4311` gewann. Die **kürzeste Artikelnummer** dieser Welt ist eine EAN-8, und die erfüllt eine
+Prüfziffer, wäre also ohnehin eine Klasse höher. Eine reine Zahl mit weniger als acht Stellen ist
+deshalb keine Artikelnummer, sondern eine Haus-, Regal- oder Lieferantenkennung: Sie fällt eine
+Klasse zurück. Allein gelesen wird sie weiterhin genommen — sonst ginge auf so einer Etikette gar
+nichts.
+
+**Und ein Fehler in meiner eigenen Zeile von vorhin.** „→ Die App würde nehmen: X" rechnete über den
+GANZEN Lauf. Der echte Scanner hört aber beim ersten bestätigten Treffer auf; er sieht nie alle 33
+Codes eines dreiminütigen Rundgangs. Die Zeile beantwortete damit eine Frage, die niemand hat — und
+las sich, als nähme die App immer nur diesen einen. Jetzt wird **innerhalb jeder Gruppe
+gleichzeitig gelesener Codes** markiert, und nur dort, wo es überhaupt eine Wahl gab.
+
 ### 2026-09-09 · Kein Personenname in der Oberfläche
 
 Alex zu meiner Chargen-Meldung („sag Alex Bescheid"): *„ist nicht richtig, da die app ja frei ab git

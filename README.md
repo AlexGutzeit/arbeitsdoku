@@ -424,8 +424,10 @@ drei durch Schrägstrich getrennten Zahlengruppen**; ein Bindestrich (`AEH-25-10
 einzelner Schrägstrich (`LOT/2026`) bleibt unberührt.
 
 **Unter mehreren gelesenen Codes gewinnt die Artikelnummer.** Rangfolge: eine inhaltlich gültige
-GTIN zuerst, dann ein 2D-Code (Fehlerkorrektur), dann Haus-/Bestellnummern, zuletzt Werbecodes;
-innerhalb einer Stufe entscheidet, wie oft gelesen wurde. Grund: Auf einer Etikette standen die
+GTIN zuerst, dann ein 2D-Code (Fehlerkorrektur), dann Haus-/Bestellnummern, zuletzt Werbe- und
+Chargencodes; innerhalb einer Stufe entscheidet, wie oft gelesen wurde. Eine **reine Zahl mit
+weniger als acht Stellen** gilt dabei nicht als Artikelnummer – die kürzeste wäre eine EAN-8, und
+die erfüllt eine Prüfziffer. Grund: Auf einer Etikette standen die
 EAN (49 Lesungen) und ein Händler-QR (21) – die GTIN ist die Nummer, die *jeder* kennt, die Adresse
 eines Händlers nicht.
 

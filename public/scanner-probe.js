@@ -229,6 +229,10 @@
   // *202511182 06/17/26 (Data-Matrix, 18x). Sie ist pro Charge verschieden. BEWUSST ENG: nur drei
   // durch Schraegstrich getrennte Zahlengruppen; ein Bindestrich (AEH-25-100) faellt nicht darunter.
   const istChargencode = (code) => /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(String(code || ''));
+  // Eine reine Zahl mit weniger als acht Stellen kann keine Artikelnummer sein (die kuerzeste
+  // waere eine EAN-8 — und die erfuellt eine Pruefziffer). Siehe scannerIstKurzzahl in
+  // js/scanner.js; Anlass war „4311", 57x gelesen und von niemandem zuzuordnen.
+  const istKurzzahl = (code) => /^\d{1,7}$/.test(String(code || '').trim());
   const nichtUebernehmen = (code) => istWerbecode(code) ? 'werbung'
     : istChargencode(code) ? 'charge' : null;
 
@@ -236,13 +240,22 @@
   // genau EINEN. Ohne diese Zeile liest man eine Liste und weiss nicht, was am Ende im
   // Bestellformular staende. Rangfolge wortgleich zu scannerBesterTreffer in js/scanner.js:
   //   3 gueltige GTIN · 2 2D-Code · 1 sonstige · 0 Werbecode; innerhalb der Klasse die Trefferzahl.
-  function appWuerdeNehmen() {
+  // WELCHEN Code naehme die App aus einer MENGE gelesener Codes?
+  //
+  // WICHTIG — und im ersten Anlauf falsch gemacht: Die Frage stellt sich immer nur JE ETIKETTE.
+  // Der echte Scanner hoert beim ersten bestaetigten Treffer auf; er sieht nie alle 33 Codes
+  // eines dreiminuetigen Rundgangs. Eine Zeile „die App wuerde nehmen: X" ueber den ganzen Lauf
+  // beantwortet eine Frage, die niemand hat — und liest sich, als naehme die App immer nur den
+  // einen. Deshalb wird jetzt innerhalb jeder GRUPPE gleichzeitig gelesener Codes markiert.
+  function besterAus(codes) {
     let bester = null, beste = -Infinity;
-    for (const [code, d] of gesehen) {
-      if (d.n < NOETIGE_LESUNGEN(d.format)) continue;
+    for (const code of codes) {
+      const d = gesehen.get(code);
+      if (!d || d.n < NOETIGE_LESUNGEN(d.format)) continue;
       const klasse = nichtUebernehmen(code) ? 0
         : gtinGueltig(code) ? 3
-        : (istZweiD(d.format) ? 2 : 1);
+        : (istZweiD(d.format) && !istKurzzahl(code)) ? 2
+        : 1;
       const gewicht = klasse * 1000000 + d.n;
       if (gewicht > beste) { bester = code; beste = gewicht; }
     }
@@ -270,6 +283,9 @@
       const sicher = d.n >= NOETIGE_LESUNGEN(d.format);
       const stattdessen = fehllesungVon(code, d, gesehen);
       const zusammen = gleichzeitigMit(code, d, gesehen);
+      // Nur markieren, wo es ueberhaupt eine Wahl gab — ein Code allein auf seiner Etikette
+      // wird ohnehin genommen, das muss nicht dranstehen.
+      const gewaehlt = zusammen.length ? (besterAus([code, ...zusammen]) === code) : false;
       return `<li style="${sicher ? '' : 'opacity:.55'}">`
         + `<code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
         + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms · `
@@ -283,6 +299,9 @@
               + ` (gleiches Ende bzw. gleicher Anfang, im selben Moment, dort deutlich öfter gelesen)`
             : sicher ? `${d.n}× gelesen — bestätigt` + (istZweiD(d.format) ? ' (2D: Fehlerkorrektur, eine Lesung genügt)' : '')
                   : `nur ${d.n}× gelesen (nötig: ${NOETIGE_LESUNGEN(d.format)}) — vermutlich Fehllesung, wird nicht übernommen`)
+        + (gewaehlt
+            ? `<br><span style="color:#2e7d32;font-size:.85em"><strong>→ diesen nähme die App von dieser Etikette</strong></span>`
+            : '')
         + (zusammen.length
             ? `<br><span style="color:var(--grau);font-size:.8em">gleichzeitig gelesen mit `
               + zusammen.map(x => String(x).slice(0, 28).replace(/</g, '&lt;')).join(', ')
@@ -301,8 +320,7 @@
       + (unplausibel.size ? ` · ${unplausibel.size} unplausibel (Format/Länge)` : '')
       + ` · ${versuche} Bilder geprüft`
       + (versuche > 5 ? ` (${(versuche / ((performance.now() - beginn) / 1000)).toFixed(1)}/s)` : '')
-      + (() => { const w = appWuerdeNehmen();
-                 return w ? `\n→ Die App würde nehmen: ${w}` : ''; })();
+      ;
 
     if (geradeBestaetigt && navigator.vibrate) navigator.vibrate(60);
     // So wird der echte Scanner arbeiten: lesen, BESTAETIGEN lassen, dann aufhoeren und das Feld
