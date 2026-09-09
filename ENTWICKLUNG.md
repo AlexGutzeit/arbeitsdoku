@@ -14,6 +14,30 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Ein Test, der sich selbst vergiftet hatte
+
+Nach dem Ausschnitt-Umbau meldete die Suite `browser-smoke` rot — „Aufräumen: BT-Shared gelöscht".
+Naheliegend wäre gewesen, das der frischen Änderung zuzuschreiben. Der Test lief aber auch auf dem
+Stand, auf dem die Suite eine Stunde vorher **grün** gemeldet hatte (geprüft in einem eigenen
+`git worktree`). Also keine Regression.
+
+Die Ursache: **`browser-smoke` startet als einziger Test keinen eigenen Server**, sondern arbeitet
+gegen den dauerhaft laufenden auf `localhost:3000` — mit **bleibender** Datenbank. Ich hatte kurz
+zuvor eine Suite abgebrochen; ein abgebrochener Lauf kommt nie zum Aufräumen und lässt seinen
+Ordner stehen. Der nächste Lauf legt einen eigenen an, löscht beim Aufräumen aber den **zuerst
+gefundenen** — also den alten — und lässt wieder einen zurück. Die Zahl bleibt bei eins, und der
+Test fällt von da an **für immer**, ohne dass sich am Programm etwas geändert hätte.
+
+Bestätigt durch Messung statt Vermutung: Ordnerliste des Dev-Servers abgefragt (genau ein
+`BT-Shared`, angelegt 10:48 vom letzten Lauf), Rest entfernt, Test wieder 42/42.
+
+Der Test räumt jetzt **zu Beginn** seine eigenen Reste weg. Gegenprobe: Rest künstlich angelegt →
+„(Rest eines früheren Laufs entfernt: BT-Shared)", danach grün.
+
+Die Lehre ist grösser als der Fall: Ein Test auf gemeinsamem, bleibendem Zustand meldet früher oder
+später etwas, das mit der Änderung nichts zu tun hat — und kostet genau dann Zeit, wenn man sie
+nicht hat. Siehe [[reference_messfallen_browser]].
+
 ### 2026-09-09 · Der Rahmen hört auf zu lügen
 
 Alex: „Das Scanner Feld einzuschränken wäre auf jeden Fall eine gute Idee. Dann aber bitte auch

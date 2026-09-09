@@ -164,6 +164,25 @@ async function deleteDocByName(adminPage, name) {
     const lg = await (await fetch(BASE + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'test' }) })).json();
     const us = await (await fetch(BASE + '/api/users', { headers: { authorization: 'Bearer ' + lg.token } })).json();
     maId = (us.users.find(u => u.username === 'alex') || {}).id;
+
+    // VORHER AUFRAEUMEN — der wichtigste Handgriff dieses Tests.
+    //
+    // Anders als alle uebrigen Tests startet dieser KEINEN eigenen Server, sondern arbeitet
+    // gegen den dauerhaft laufenden auf Port 3000 mit BLEIBENDER Datenbank. Ein abgebrochener
+    // Lauf kommt nie zum Aufraeumen und laesst seinen Ordner stehen. Der naechste Lauf legt
+    // seinen eigenen an, loescht beim Aufraeumen aber den ZUERST gefundenen — also den alten —
+    // und laesst wieder einen zurueck. Die Zahl bleibt bei eins, und der Test faellt von da an
+    // FUER IMMER, ohne dass sich am Programm etwas geaendert haette.
+    //
+    // Genau so passiert am 09.09.2026: eine Suite abgebrochen, danach war jeder Lauf rot.
+    // Deshalb raeumt der Test jetzt zuerst seine eigenen Reste weg.
+    const alt = await (await fetch(BASE + '/api/documents', { headers: { authorization: 'Bearer ' + lg.token } })).json();
+    for (const f of (alt.folders || [])) {
+      if (/^(BT-Shared|MA-Ziel)$/.test(f.name)) {
+        await fetch(BASE + '/api/documents/folders/' + f.id, { method: 'DELETE', headers: { authorization: 'Bearer ' + lg.token } });
+        console.log('  (Rest eines frueheren Laufs entfernt: ' + f.name + ')');
+      }
+    }
   } catch (e) {}
 
   const browser = await puppeteer.launch({
