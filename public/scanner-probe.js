@@ -176,6 +176,18 @@
   //
   // Zusaetzlich muss ein deutlich staerker gelesener Nachbar (mindestens doppelt so oft) fast
   // gleichzeitig aufgetaucht sein.
+  //
+  // DAS ZEITFENSTER, an den Daten gemessen (Alex, 16:06-Lauf durch das Regal). Es stand auf
+  // 2500 ms und hat beim Schwenken ganze Regalreihen zu EINER Etikette verkettet — sechs Codes
+  // von vier verschiedenen Kartons. Die Abstaende trennen aber eindeutig:
+  //
+  //   echte Paare (Fehllesung + Original):  154 · 167 · 178 · 193 · 205 · 329 · 839 · 1095 · 1522 ms
+  //   verschiedene Kartons beim Schwenken:  2081 · 2140 · 2257 · 2487 · 2488 ms
+  //
+  // Mein erster Ansatz war 1500 ms — dabei fiel der Fall bei 1522 ms heraus (die Fehllesung
+  // 8050124027874 aus dem Crafter-Lauf). Die Luecke ist also enger als zunaechst gedacht:
+  // 1522 gegen 2081. 1800 ms liegt darin und haelt beide Seiten.
+  const ZUSAMMEN_MS = 1800;
   const gemEnde = (a, b) => { let i = 0; while (i < a.length && i < b.length && a[a.length-1-i] === b[b.length-1-i]) i++; return i; };
   // Welche Codes wurden im selben Moment gelesen? Bei drei uebereinanderklebenden Barcodes sind
   // das die Geschwister EINER Etikette — und genau das muss man sehen, um zu beurteilen, welchen
@@ -183,7 +195,7 @@
   const gleichzeitigMit = (code, d, alle) => {
     const raus = [];
     for (const [x, xd] of alle) {
-      if (x !== code && Math.abs(xd.ersteMs - d.ersteMs) <= 2500) raus.push(x);
+      if (x !== code && Math.abs(xd.ersteMs - d.ersteMs) <= ZUSAMMEN_MS) raus.push(x);
     }
     return raus;
   };
@@ -191,7 +203,7 @@
     for (const [x, xd] of alle) {
       if (x === code) continue;
       if (xd.n < d.n * 2) continue;                       // kein deutlich staerkerer Nachbar
-      if (Math.abs(xd.ersteMs - d.ersteMs) > 2500) continue;  // nicht im selben Moment
+      if (Math.abs(xd.ersteMs - d.ersteMs) > ZUSAMMEN_MS) continue;  // nicht im selben Moment
       if (gemEnde(code, x) >= 6) return x;
     }
     return null;
