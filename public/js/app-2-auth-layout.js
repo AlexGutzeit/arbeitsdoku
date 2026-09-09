@@ -235,6 +235,28 @@ function _sseOnMessage(e) {
   // Das Projekt-Formular liegt INNERHALB der Hauptfläche (kein Overlay) und hat keine eigene Route — ohne
   // den Selektor würde es beim Speichern eines Kollegen weggerissen, sobald man gerade nicht tippt.
   if (p.type === 'projects' && route === '/projects' && !_editorBusy('#pf2-save')) renderProjects();
+
+  // ── Produktverzeichnis live (Alex, 09.09.2026) ────────────────────────────────────────────
+  //
+  // Der Server sendet bei JEDER Aenderung am Verzeichnis ein Signal — bisher hoerte niemand
+  // darauf. Wer am PC bestellte, waehrend ein Kollege im Lager ein Produkt einlernte, fand es
+  // erst nach einem Neuladen.
+  //
+  // ZWEI SEHR VERSCHIEDENE FAELLE, deshalb zwei Behandlungen:
+  //
+  //  1. BESTELLUNGEN — hier wird nur die Gerätekopie des Katalogs still nachgezogen. Kein
+  //     Neuaufbau: Die Vorschlagsliste liest bei jedem Tastendruck aus S.produktKatalog, das
+  //     neue Produkt ist also sofort auffindbar, ohne dass jemandem das Formular unter den
+  //     Fingern weggerissen wird.
+  //
+  //  2. VERZEICHNIS-PFLEGE — hier wird NICHT neu aufgebaut, sondern ein Hinweis eingeblendet.
+  //     Die Seite besteht fast nur aus Eingabefeldern; ein Neuaufbau vernichtete angefangene
+  //     Arbeit. Wer soweit ist, drueckt selbst auf „Neu laden". (Dieselbe Lehre wie beim
+  //     SSE-Formularschutz, nur ist hier praktisch ALLES ein Formular.)
+  if (p.type === 'produkte') {
+    if (typeof katalogAuffrischen === 'function' && S.produktKatalog) katalogAuffrischen();
+    if (route === '/produkte' && typeof produktverzeichnisHinweis === 'function') produktverzeichnisHinweis();
+  }
   if (p.type === 'entries') {
     if (route === '/statistics')                       renderStatistics();
     else if (route === '/' || route === '/dashboard')  renderDashboardContent();  // #1: Dashboard-Zeitliste live

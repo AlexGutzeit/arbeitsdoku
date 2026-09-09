@@ -478,6 +478,14 @@ nicht.
 
 #### 📦 Produktverzeichnis (nur mit dem Recht „Lagerdaten pflegen")
 
+**Live, aber ohne Datenverlust.** Ändert jemand das Verzeichnis, meldet der Server das sofort allen.
+In den **Bestellungen** wird die Produktliste daraufhin still nachgezogen – wer gerade tippt,
+findet das eben eingelernte Produkt beim nächsten Buchstaben, ohne dass ihm das Formular unter den
+Fingern neu aufgebaut wird. In der **Pflege-Ansicht** wird dagegen bewusst *nicht* neu geladen,
+sondern nur ein Hinweis eingeblendet („Ein Kollege hat das Verzeichnis geändert – Neu laden"):
+Diese Seite besteht fast nur aus Eingabefeldern, und ein Neuaufbau vernichtete angefangene Arbeit
+genau dann, wenn zwei Leute gleichzeitig aufräumen.
+
 Eigener Menüpunkt, der nur erscheint, wenn man das Recht hat. Drei Reiter:
 
 * **Produkte** — umbenennen, Kategorie und Einheit ändern, weitere **Barcodes** anlernen oder

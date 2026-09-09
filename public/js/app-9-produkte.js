@@ -277,6 +277,29 @@ function pvPapierkorbHtml(v) {
     </div>`).join('');
 }
 
+/**
+ * Ein Kollege hat das Verzeichnis geändert — sagen, nicht neu aufbauen.
+ *
+ * Diese Seite besteht fast nur aus Eingabefeldern: Produktname, Kategorie, Barcodes,
+ * Bestellnummern, Kommentare. Ein Neuaufbau mitten in der Arbeit vernichtete alles Angefangene —
+ * und zwar genau dann, wenn zwei Leute gleichzeitig aufräumen, also im Ernstfall.
+ *
+ * Deshalb nur ein Hinweisband mit einem Knopf. Wer nichts offen hat, drückt ihn sofort; wer
+ * gerade tippt, tippt zu Ende.
+ */
+function produktverzeichnisHinweis() {
+  const karte = document.querySelector('.main .card');
+  if (!karte || document.getElementById('pv-frisch')) return;   // steht schon da
+  const band = document.createElement('div');
+  band.id = 'pv-frisch';
+  band.className = 'hinweis-box';
+  band.style.cssText = 'margin:.6rem 0;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap';
+  band.innerHTML = '<span>Ein Kollege hat das Verzeichnis geändert.</span>'
+    + '<button class="btn btn-sm btn-primary" id="pv-frisch-btn">Neu laden</button>';
+  karte.insertBefore(band, karte.children[1] || null);
+  document.getElementById('pv-frisch-btn').addEventListener('click', () => renderProdukte());
+}
+
 // ── Verdrahtung ─────────────────────────────────────────────────────────────────────────────
 function pvBinden() {
   const karte = document.querySelector('.main .card');

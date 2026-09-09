@@ -14,6 +14,31 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Wächst das Verzeichnis live mit? Bisher nicht.
+
+Alex' Frage: *„wenn MA a am pc sitzt und Produkt Datenbank bearbeiten offen hat und in diesem
+Moment MA b einen Artikel einlernt, kann dann MA a live die Datenbank wachsen sehen?"*
+
+Nachgesehen statt aus der Absicht geantwortet: `routes/products.js` und `routes/suppliers.js` rufen
+an **16 Stellen** `broadcast('produkte')` — und im Frontend hörte **niemand** darauf. Das Signal
+ging ins Leere. Die ehrliche Antwort war also nein.
+
+Beim Nachrüsten sind es **zwei sehr verschiedene Fälle**, und sie brauchen entgegengesetzte
+Behandlung:
+
+* **Bestellungen** — die Gerätekopie des Katalogs wird still nachgezogen, **kein** Neuaufbau. Die
+  Vorschlagsliste liest bei jedem Tastendruck aus `S.produktKatalog`; das neue Produkt ist damit
+  beim nächsten Buchstaben da, ohne dass jemandem das Formular unter den Fingern weggerissen wird.
+* **Verzeichnis-Pflege** — hier wird **nicht** neu aufgebaut, sondern ein Hinweisband eingeblendet.
+  Diese Seite besteht fast nur aus Eingabefeldern: Name, Kategorie, Barcodes, Bestellnummern,
+  Kommentare. Ein Neuaufbau vernichtete angefangene Arbeit — und zwar genau dann, wenn zwei Leute
+  **gleichzeitig aufräumen**, also im Ernstfall. Wer soweit ist, drückt selbst auf „Neu laden".
+
+`tests/produkte-live-ui.js` fährt beide Fälle mit zwei Benutzern zugleich: MA a tippt im Formular,
+MA b legt über die Schnittstelle an. Geprüft wird nicht nur, dass das Produkt ankommt, sondern
+ausdrücklich auch, dass MA a' angefangene Eingabe **unversehrt** stehen bleibt. Gegenprobe ohne
+Empfänger: vier Zusagen fallen.
+
 ### 2026-09-09 · Gedrückt halten — und ein Schalter, den nie jemand sah
 
 Alex: *„Das Problem mit dem über das Regal schwenken könnte man lösen, indem man ein touchbutton
