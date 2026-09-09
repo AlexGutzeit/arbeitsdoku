@@ -229,12 +229,16 @@
   // *202511182 06/17/26 (Data-Matrix, 18x). Sie ist pro Charge verschieden. BEWUSST ENG: nur drei
   // durch Schraegstrich getrennte Zahlengruppen; ein Bindestrich (AEH-25-100) faellt nicht darunter.
   const istChargencode = (code) => /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(String(code || ''));
-  // Eine reine Zahl mit weniger als acht Stellen kann keine Artikelnummer sein (die kuerzeste
-  // waere eine EAN-8 — und die erfuellt eine Pruefziffer). Siehe scannerIstKurzzahl in
-  // js/scanner.js; Anlass war „4311", 57x gelesen und von niemandem zuzuordnen.
-  const istKurzzahl = (code) => /^\d{1,7}$/.test(String(code || '').trim());
+  // Sehr kurze reine Zahlen werden ABGEWIESEN: „4311" kam in 4 von 5 Feldlaeufen vor, insgesamt
+  // 121x, neben wechselnden Nachbarn — klebt also auf vielen Etiketten. Unter allen 64 gemessenen
+  // Codes ist er der einzige mit hoechstens fuenf Ziffern.
+  const istKurzzahl = (code) => /^\d{1,5}$/.test(String(code || '').trim());
+  // Eine reine Zahl ohne gueltige GTIN-Pruefziffer ist keine Artikelnummer, sondern eine Haus-,
+  // Etiketten- oder Tournummer — sie verliert den 2D-Bonus (siehe js/scanner.js).
+  const nummerOhnePruefziffer = (code) => /^\d+$/.test(String(code||'').trim()) && !gtinGueltig(String(code||'').trim());
   const nichtUebernehmen = (code) => istWerbecode(code) ? 'werbung'
-    : istChargencode(code) ? 'charge' : null;
+    : istChargencode(code) ? 'charge'
+    : istKurzzahl(code) ? 'kurzzahl' : null;
 
   // WELCHEN Code wuerde die App nehmen? Der Pruefstand listet ALLE Treffer — die App nimmt
   // genau EINEN. Ohne diese Zeile liest man eine Liste und weiss nicht, was am Ende im
@@ -254,7 +258,7 @@
       if (!d || d.n < NOETIGE_LESUNGEN(d.format)) continue;
       const klasse = nichtUebernehmen(code) ? 0
         : gtinGueltig(code) ? 3
-        : (istZweiD(d.format) && !istKurzzahl(code)) ? 2
+        : (istZweiD(d.format) && !nummerOhnePruefziffer(code)) ? 2
         : 1;
       const gewicht = klasse * 1000000 + d.n;
       if (gewicht > beste) { bester = code; beste = gewicht; }
@@ -290,7 +294,9 @@
         + `<code>${String(code).replace(/</g, '&lt;')}</code> — ${d.format}, ${d.weg}`
         + `<br><span style="color:var(--grau);font-size:.85em">erstmals nach ${Math.round(d.ersteMs)} ms · `
         + (gs1Erkannt.has(code) ? 'Artikelnummer aus GS1-Code · ' : '')
-        + (nichtUebernehmen(code) === 'charge'
+        + (nichtUebernehmen(code) === 'kurzzahl'
+            ? `${d.n}× gelesen — <strong>zu kurze Zahl</strong> (Fach/Tour, klebt auf vielen Etiketten) – wird nicht übernommen`
+            : nichtUebernehmen(code) === 'charge'
             ? `${d.n}× gelesen — <strong>Charge/Datum</strong> (pro Lieferung anders) – wird nicht übernommen`
             : istWerbecode(code)
             ? `${d.n}× gelesen — <strong>Werbe-/Infocode</strong> (Seite, kein Artikel) – wird nicht übernommen`

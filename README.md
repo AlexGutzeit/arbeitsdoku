@@ -417,6 +417,10 @@ daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Auskla
 Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
 erraten würde still die falsche Bestellnummer anhängen.
 
+**Sehr kurze Zahlen** (bis fünf Ziffern) werden abgewiesen und erklärt: Sie bezeichnen ein Fach,
+eine Tour oder eine Lieferung und kleben auf vielen Etiketten – gespeichert zeigten verschiedene
+Artikel auf denselben Eintrag.
+
 **Lieferschein-Etiketten** tragen oft gar keinen Artikel-Barcode, sondern Etiketten-, Tour- und
 Boxnummern. Eine rein numerische Angabe gilt deshalb nur dann als Artikelnummer, wenn sie die
 GTIN-Prüfziffer erfüllt; sonst verliert sie den Vorrang, und beim Anlegen erscheint ein Hinweis –

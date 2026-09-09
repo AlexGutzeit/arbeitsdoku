@@ -532,6 +532,15 @@ async function scanInsFormular() {
       { title: 'Kein Artikelcode', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
     return;
   }
+  if (abgelehnt === 'kurzzahl') {
+    await confirmModal(
+      `Gelesen wurde nur die Zahl ${code}.\n\n`
+      + 'So kurze Nummern bezeichnen keinen Artikel — sie stehen für ein Fach, eine Tour oder eine '
+      + 'Lieferung und kleben auf vielen verschiedenen Etiketten. Als Barcode gespeichert zeigten '
+      + 'lauter verschiedene Artikel auf denselben Eintrag. Bitte den Artikel-Barcode scannen.',
+      { title: 'Kein Artikelcode', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
+    return;
+  }
   if (abgelehnt === 'charge') {
     await confirmModal(
       `Gelesen wurde:\n${code}\n\n`

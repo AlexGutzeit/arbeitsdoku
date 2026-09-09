@@ -216,29 +216,28 @@ function scannerIstChargencode(code) {
 function scannerNichtUebernehmen(code) {
   if (scannerIstWerbecode(code)) return 'werbung';
   if (scannerIstChargencode(code)) return 'charge';
+  if (scannerIstKurzzahl(code)) return 'kurzzahl';
   return null;
 }
 
 /**
- * Eine zu kurze reine Zahl — das kann keine Artikelnummer sein.
+ * Eine sehr kurze reine Zahl — die wird ABGEWIESEN, nicht nur zurueckgestuft.
  *
- * Im Lager gemessen (Alex, 09.09.2026, 11:45): Auf EINER Etikette lagen
+ * Aus fuenf Feldlaeufen ausgezaehlt (Alex, 09.09.2026, 64 verschiedene Codes):
  *
- *   4311          QR,          57x gelesen   ← niemand weiss, was das ist
- *   801036963840  Data-Matrix, 11x gelesen
+ *   4311   qr_code   in 4 von 5 Laeufen, insgesamt 121x gelesen
  *
- * Beide sind 2D, keiner ist eine gueltige GTIN — also entschied die Trefferzahl, und die
- * unerklaerte `4311` gewann. Sie taucht seit dem ersten Rundgang in jedem Lauf auf; Alex kennt
- * sie nicht („Evtl eine Kennung der Firma für die Großhändler?").
+ * Er taucht neben WECHSELNDEN Nachbarn auf, klebt also auf vielen verschiedenen Etiketten. Als
+ * Barcode gespeichert zeigten damit lauter verschiedene Artikel auf DENSELBEN Katalogeintrag —
+ * derselbe Schaden wie beim Werbe-QR, nur unauffaelliger.
  *
- * Die KUERZESTE Artikelnummer dieser Welt ist eine EAN-8 — und die waere eine gueltige GTIN und
- * damit schon eine Klasse hoeher. Eine reine Zahl mit weniger als acht Stellen, die keine
- * Pruefziffer erfuellt, ist deshalb keine Artikelnummer, sondern eine Haus-, Regal- oder
- * Lieferantenkennung. Sie faellt eine Klasse zurueck und verliert damit gegen jeden Code, der
- * einen Artikel bezeichnet — bleibt aber waehlbar, falls sonst gar nichts da ist.
+ * Die Grenze liegt bei fuenf Stellen, und das ist mit Absicht knapp: Unter allen 64 gemessenen
+ * Codes ist `4311` der EINZIGE mit hoechstens fuenf Ziffern. Die naechstkuerzeren echten Nummern
+ * haben sieben (`2003145`, `2004922`) und bleiben unberuehrt — die sehen nach Haus- oder
+ * Bestellnummern eines Haendlers aus und koennen ein Produkt sehr wohl bezeichnen.
  */
 function scannerIstKurzzahl(code) {
-  return /^\d{1,7}$/.test(String(code || '').trim());
+  return /^\d{1,5}$/.test(String(code || '').trim());
 }
 
 /**

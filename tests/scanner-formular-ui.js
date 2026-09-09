@@ -208,6 +208,14 @@ function req(m, p, t, b) {
         // ehrliche Zustand; alles andere waere vorgetaeuschte Sicherheit.
         beideKeineArtikelnummer: f([c('4311', 57, 'qr_code'), c('801036963840', 11, 'data_matrix')]),
         kurzzahlAllein:  f([c('4311', 57, 'qr_code')]),
+        // Aus fuenf Feldlaeufen ausgezaehlt: `4311` kam in VIER davon vor, 121x insgesamt, neben
+        // wechselnden Nachbarn — klebt also auf vielen Etiketten. Unter allen 64 gemessenen Codes
+        // ist er der einzige mit hoechstens fuenf Ziffern; die naechstkuerzeren echten Nummern
+        // haben sieben (2003145, 2004922) und bleiben waehlbar.
+        kurzzahlAbgewiesen: scannerNichtUebernehmen('4311'),
+        siebenStellig1:     scannerNichtUebernehmen('2003145'),
+        siebenStellig2:     scannerNichtUebernehmen('2004922'),
+        etikettIdNichtAbgewiesen: scannerNichtUebernehmen('801036963840'),
         // Gegen einen ECHTEN Artikelcode verlieren dagegen beide.
         kurzzahlGegenEchten: f([c('4311', 57, 'qr_code'), c('https://qr.fischer.id/p/551442', 5, 'qr_code')]),
         // Die Etiketten-ID aus dem Foto gegen einen echten Hersteller-QR mit VIEL weniger
@@ -227,11 +235,18 @@ function req(m, p, t, b) {
       rang2.viervier === '4050118225723', JSON.stringify(rang2.viervier));
     ok('ein Werbecode wird allein trotzdem zurückgegeben (um ihn zu erklären)',
       rang2.werbungAllein === 'https://www.digitus.info/', JSON.stringify(rang2.werbungAllein));
-    ok('auf einem Lieferschein-Etikett ist keiner der Codes eine Artikelnummer — genommen wird der öfter gelesene',
-      rang2.beideKeineArtikelnummer === '4311', JSON.stringify(rang2.beideKeineArtikelnummer));
-    ok('… gegen einen echten Artikelcode verliert er aber, trotz elffacher Lesungen',
+    ok('auf dem Lieferschein-Etikett bleibt nur die Etiketten-ID übrig (die Tournummer wird abgewiesen)',
+      rang2.beideKeineArtikelnummer === '801036963840', JSON.stringify(rang2.beideKeineArtikelnummer));
+    ok('„4311" wird abgewiesen — er klebt auf vielen Etiketten',
+      rang2.kurzzahlAbgewiesen === 'kurzzahl', JSON.stringify(rang2.kurzzahlAbgewiesen));
+    ok('… siebenstellige Händlernummern dagegen NICHT (die können ein Produkt bezeichnen)',
+      rang2.siebenStellig1 === null && rang2.siebenStellig2 === null,
+      JSON.stringify([rang2.siebenStellig1, rang2.siebenStellig2]));
+    ok('… und eine Etiketten-ID wird nur zurückgestuft, nicht abgewiesen',
+      rang2.etikettIdNichtAbgewiesen === null, JSON.stringify(rang2.etikettIdNichtAbgewiesen));
+    ok('… gegen einen echten Artikelcode verliert er ohnehin, trotz elffacher Lesungen',
       rang2.kurzzahlGegenEchten === 'https://qr.fischer.id/p/551442', JSON.stringify(rang2.kurzzahlGegenEchten));
-    ok('… allein gelesen wird sie trotzdem genommen (sonst ginge gar nichts)',
+    ok('… allein gelesen wird sie trotzdem zurückgegeben (um sie zu erklären)',
       rang2.kurzzahlAllein === '4311', JSON.stringify(rang2.kurzzahlAllein));
     ok('eine Etiketten-ID verliert gegen einen Hersteller-QR, trotz vierfacher Lesungen',
       rang2.etikettIdGegenQr === 'https://qr.fischer.id/p/551442', JSON.stringify(rang2.etikettIdGegenQr));
