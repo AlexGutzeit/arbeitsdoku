@@ -417,6 +417,17 @@ daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Auskla
 Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
 erraten würde still die falsche Bestellnummer anhängen.
 
+**Der Katalog liegt gespiegelt auf dem Gerät.** Im Lager ist die Verbindung selten „da oder weg",
+sondern zäh — das Handy hängt im WLAN, aber nichts kommt durch. Die App benutzt deshalb sofort die
+Kopie im Gerätespeicher und holt die frische Fassung daneben; ist sie nach vier Sekunden nicht da,
+wird mit der Kopie weitergearbeitet. **Suchen und Barcode-Nachschlagen gehen damit ohne
+Verbindung**, und die Seite sagt es auch: „Katalog aus dem Gerätespeicher vom … – Absenden und
+Anlegen nicht". Denn das stimmt: Eine Bestellung **absenden** und ein Produkt **anlegen** brauchen
+den Server. Wer ohne Empfang einen unbekannten Code scannt, bekommt darum keine Anlegen-Maske
+vorgesetzt, die beim Speichern scheitert, sondern eine Auskunft samt Code zum Notieren. Antwortet
+der Server, gilt **immer seine Antwort** — er weiß zum Beispiel von gelöschten Produkten, die Kopie
+nicht.
+
 #### 📦 Produktverzeichnis (nur mit dem Recht „Lagerdaten pflegen")
 
 Eigener Menüpunkt, der nur erscheint, wenn man das Recht hat. Drei Reiter:

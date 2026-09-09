@@ -1,4 +1,110 @@
 // --- Bestellungen ---
+// ── Katalog-Spiegel auf dem Gerät ───────────────────────────────────────────────────────────
+//
+// Im Lager ist die Verbindung nicht „da oder weg", sondern zäh: Das Handy hängt im WLAN, aber
+// nichts kommt durch. Genau dann hilft ein „Fehler beim Laden" niemandem — und ein Katalog, der
+// 30 Sekunden lang leer ist, ebensowenig.
+//
+// Deshalb liegt eine Kopie des Katalogs im Gerätespeicher. Sie wird SOFORT benutzt, und die
+// frische Fassung holt die App daneben. Ist sie nicht binnen KATALOG_WARTEN_MS da, wird mit der
+// Kopie weitergearbeitet; kommt die Antwort später doch, ersetzt sie die Kopie im Hintergrund.
+//
+// WAS DER SPIEGEL NICHT KANN — und was man deshalb nicht versprechen darf: Eine Bestellung
+// ABSENDEN braucht den Server, ein Produkt ANLEGEN auch. Der Spiegel macht das Nachschlagen und
+// die Suche unabhängig von der Verbindung, mehr nicht. Wer ohne Empfang einen unbekannten Code
+// scannt, bekommt deshalb keine Anlegen-Maske vorgesetzt, die beim Speichern scheitert, sondern
+// eine ehrliche Auskunft samt Code zum Notieren.
+const KATALOG_SPEICHER = 'arbeitsdoku.katalog.v1';
+const KATALOG_WARTEN_MS = 4000;
+
+function katalogSpiegelLesen() {
+  try {
+    const roh = localStorage.getItem(KATALOG_SPEICHER);
+    if (!roh) return null;
+    const d = JSON.parse(roh);
+    if (!d || !Array.isArray(d.produkte) || !Array.isArray(d.kategorien)) return null;
+    return d;
+  } catch (_) { return null; }   // privater Modus, voller oder gesperrter Speicher
+}
+
+function katalogSpiegelSchreiben(kat) {
+  try {
+    localStorage.setItem(KATALOG_SPEICHER, JSON.stringify({
+      kategorien: kat.kategorien || [],
+      produkte: kat.produkte || [],
+      stand: kat.stand || null,       // Zeit vom SERVER, nicht vom Gerät — Handyuhren gehen falsch
+    }));
+  } catch (_) { /* Der Spiegel ist eine Zugabe. Ohne ihn läuft alles wie vorher. */ }
+}
+
+/**
+ * War das ein Verbindungsproblem — oder hat der Server geantwortet und Nein gesagt?
+ *
+ * Der Unterschied entscheidet, ob auf den Spiegel ausgewichen werden darf. `fetch` wirft bei
+ * fehlender Verbindung einen TypeError; eine fachliche Absage kommt dagegen als unser eigener
+ * Error mit Text vom Server. `navigator.onLine === false` ist ein sicheres Ja, aber `true` sagt
+ * nichts — genau das ist der Lagerfall: verbunden, aber ohne Route.
+ */
+function istVerbindungsfehler(e) {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  return (e instanceof TypeError) || /fetch|network|netzwerk|failed/i.test((e && e.message) || '');
+}
+
+async function katalogLaden() {
+  const spiegel = katalogSpiegelLesen();
+  if (spiegel) { S.produktKatalog = spiegel; S.katalogAusSpiegel = true; }
+  else if (!S.produktKatalog) S.produktKatalog = { kategorien: [], produkte: [] };
+
+  const holen = (async () => {
+    try {
+      const frisch = await api('GET', '/api/products/katalog');
+      if (frisch && Array.isArray(frisch.produkte)) {
+        S.produktKatalog = frisch;
+        S.katalogAusSpiegel = false;
+        katalogSpiegelSchreiben(frisch);
+      }
+    } catch (_) { /* bleibt beim Spiegel */ }
+  })();
+
+  // Ohne Kopie bleibt nur warten. Mit Kopie wird nicht länger als nötig gewartet.
+  if (!spiegel) { await holen; return; }
+  await Promise.race([holen, new Promise(r => setTimeout(r, KATALOG_WARTEN_MS))]);
+}
+
+/** Einen Barcode in der Gerätekopie nachschlagen. */
+function katalogTreffer(code) {
+  const produkte = ((S.produktKatalog || {}).produkte) || [];
+  return produkte.find(p => (p.barcodes || []).includes(code)) || null;
+}
+
+/**
+ * Nachschlagen: erst beim Server, bei Verbindungsproblemen in der Gerätekopie.
+ *
+ * Eine fachliche Antwort des Servers wird NIE durch den Spiegel überschrieben — er weiß zum
+ * Beispiel von gelöschten Produkten, die Kopie nicht.
+ */
+async function barcodeNachschlagen(code) {
+  try {
+    const a = await api('GET', '/api/products/barcode/' + encodeURIComponent(code));
+    return { ...a, ausSpiegel: false };
+  } catch (e) {
+    if (!istVerbindungsfehler(e)) throw e;
+    const p = katalogTreffer(code);
+    return p ? { gefunden: true, code, produkt: p, ausSpiegel: true }
+             : { gefunden: false, code, ausSpiegel: true };
+  }
+}
+
+/** Wie alt ist die Kopie? Leer, solange frisch geladen wurde. */
+function katalogStandHinweis() {
+  if (!S.katalogAusSpiegel) return '';
+  const stand = (S.produktKatalog || {}).stand;
+  return `<p class="push-hint" style="margin:.3rem 0 0">
+      &#9888;&#65039; Katalog aus dem Gerätespeicher${stand ? ' vom ' + esc(formatDateTimeDE(stand)) : ''} –
+      keine Verbindung zum Server. Suchen und Scannen gehen, <strong>Absenden und Anlegen nicht</strong>.
+    </p>`;
+}
+
 async function renderOrders() {
   $app().innerHTML = layout('<div class="loading">Laden…</div>', 'orders');
   bindLayout();
@@ -8,20 +114,26 @@ async function renderOrders() {
   // Produktverzeichnis mitladen — in EINEM Zug (Kategorien, Produkte, Barcodes). Ein Fehlschlag
   // darf die Bestellseite NICHT aufhalten: Der Katalog ist eine Hilfe, kein Voraussetzung. Wer
   // ihn nicht bekommt, tippt wie bisher.
-  try {
-    const kat = await api('GET', '/api/products/katalog');
-    S.produktKatalog = kat || { kategorien: [], produkte: [] };
-  } catch (_) { S.produktKatalog = S.produktKatalog || { kategorien: [], produkte: [] }; }
+  await katalogLaden();
+  // Ohne Verbindung darf die Seite NICHT leer bleiben. Vorher stand hier ein `return` — dann sah
+  // man im Lager weder den gespiegelten Katalog noch den Hinweis darauf, sondern gar nichts.
+  // Die Liste fehlt dann eben; Nachschlagen und Suchen gehen trotzdem.
   let orders = [];
+  let listeFehlt = false;
   try {
     const [oData, pData] = await Promise.all([
       api('GET', '/api/orders'),
       api('GET', '/api/projects')
     ]);
-    if (!oData) return;
+    if (!oData) return;                       // 401: die Abmeldung hat schon uebernommen
     orders = oData.orders;
     if (pData) S.projects = pData.projects;
-  } catch (e) { toast(e.message, 'error'); return; }
+  } catch (e) {
+    if (!istVerbindungsfehler(e)) { toast(e.message, 'error'); return; }
+    listeFehlt = true;
+    S.katalogAusSpiegel = true;               // die Verbindung ist weg, nicht nur der Katalog
+    S.projects = S.projects || [];
+  }
 
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
@@ -30,9 +142,12 @@ async function renderOrders() {
         <h2>Bestellungen</h2>
         <button class="btn btn-primary" id="order-add-btn">+ Hinzuf&uuml;gen</button>
       </div>
+      ${katalogStandHinweis()}
       <div id="order-form-area"></div>
       ${orders.length ? listenSucheHtml('bestellung', 'Produkt, Ort, Notiz oder Person suchen …') : ''}
-      <div id="order-list">${renderOrderList(orders, manage)}</div>
+      <div id="order-list">${listeFehlt
+        ? '<p style="color:var(--text-lighter);text-align:center">Die offenen Bestellungen konnten nicht geladen werden – keine Verbindung.</p>'
+        : renderOrderList(orders, manage)}</div>
       <!-- VORUEBERGEHEND: Zugang zum Scanner-Pruefstand. In der installierten App gibt es keine
            Adresszeile — ohne diesen Link kommt man dort gar nicht hin, und genau die installierte
            App ist der Fall, den wir pruefen muessen.
@@ -400,12 +515,27 @@ async function scanInsFormular() {
   const code = await scannerOeffnen();
   if (!code) return;
   let antwort;
-  try { antwort = await api('GET', '/api/products/barcode/' + encodeURIComponent(code)); }
+  try { antwort = await barcodeNachschlagen(code); }
   catch (e) { toast(e.message || 'Nachschlagen fehlgeschlagen', 'error'); return; }
 
   if (antwort.gefunden) {
     produktUebernehmen(antwort.produkt);
-    toast(`${antwort.produkt.name} übernommen.`, 'success');
+    toast(`${antwort.produkt.name} übernommen.`
+      + (antwort.ausSpiegel ? ' (aus dem Gerätespeicher)' : ''), 'success');
+    return;
+  }
+
+  // Unbekannt UND ohne Verbindung: Hier waere eine Anlegen-Maske eine Luege — das Anlegen braucht
+  // den Server. Ausserdem kann die Gerätekopie veraltet sein: Vielleicht hat ein Kollege das
+  // Produkt gestern eingetragen. Also sagen, was Sache ist, und den Code zum Notieren zeigen.
+  if (antwort.ausSpiegel) {
+    const stand = (S.produktKatalog || {}).stand;
+    await confirmModal(
+      `Der Barcode ${code} steht nicht im Katalog auf dem Gerät`
+      + (stand ? ` (Stand ${formatDateTimeDE(stand)})` : '') + '.\n\n'
+      + 'Ohne Verbindung lässt sich weder prüfen, ob es ihn inzwischen gibt, noch ein Produkt '
+      + 'anlegen. Notiere dir den Code und versuch es, sobald wieder Empfang da ist.',
+      { title: 'Keine Verbindung', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
     return;
   }
   if (antwort.geloeschtes_produkt) {
@@ -538,7 +668,10 @@ function produktAnlegenMaske(code) {
 
 /** Den gespiegelten Katalog nachziehen — nach jeder Änderung, damit die Suche sofort mitkommt. */
 async function katalogAuffrischen() {
-  try { S.produktKatalog = await api('GET', '/api/products/katalog'); } catch (_) {}
+  try {
+    const frisch = await api('GET', '/api/products/katalog');
+    if (frisch) { S.produktKatalog = frisch; S.katalogAusSpiegel = false; katalogSpiegelSchreiben(frisch); }
+  } catch (_) { /* die vorhandene Kopie bleibt gueltig */ }
 }
 
 function bindOrderEvents(orders, manage) {

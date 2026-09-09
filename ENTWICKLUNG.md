@@ -14,6 +14,37 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Katalog-Spiegel — und zwei Tests, die nichts gemessen haben
+
+Alex: „baue so lang doch schon einmal den offline Spiegel."
+
+Der Katalog liegt jetzt in `localStorage` (`arbeitsdoku.katalog.v1`), wird sofort benutzt und
+daneben aufgefrischt; nach vier Sekunden ohne Antwort läuft es mit der Kopie weiter. Der `stand`
+kommt vom **Server**, nicht vom Gerät — Handyuhren gehen falsch.
+
+**Was der Spiegel bewusst NICHT kann**, und was deshalb auch nicht behauptet wird: Absenden und
+Anlegen brauchen den Server. Ein unbekannter Code ohne Verbindung bekommt darum keine
+Anlegen-Maske, die beim Speichern scheitert, sondern eine Auskunft mit dem Code zum Notieren. Eine
+Antwort des Servers wird nie vom Spiegel überschrieben (er weiß nichts von gelöschten Produkten).
+
+**Der Fund, ohne den der Spiegel wertlos gewesen wäre:** `renderOrders` hatte im Fehlerfall ein
+`return`. Ohne Verbindung wäre also gar nichts erschienen — weder der gespiegelte Katalog noch der
+Hinweis darauf. Genau der Fall, für den gebaut wurde, war der einzige, in dem man nichts davon
+gesehen hätte. Jetzt steht die Seite, und die Liste fehlt eben mit einem Satz dazu.
+
+**Drei Anläufe, bis der Test wirklich etwas gemessen hat** — jeder war vorher grün:
+
+1. `page.setRequestInterception` schneidet mit einem **aktiven Service Worker** nichts ab; die
+   Anfragen laufen über dessen Ziel, nicht über das der Seite. Der Test hat also fröhlich eine
+   voll funktionierende Online-App geprüft. → `page.setOfflineMode()`.
+2. `goto()` auf **dieselbe** Adresse mit gleichem Hash lädt gar nichts neu. Nach dem Umschalten auf
+   offline stand weiterhin die online gerenderte Seite da. → `reload()`. Dieselbe Falle wie bei den
+   Auszahlungs-Tests; sie schnappt zuverlässig wieder zu.
+3. Dasselbe noch einmal beim Zurückschalten auf online.
+
+Gegenprobe zum Schluss: `katalogSpiegelLesen()` stillgelegt → Live-Suche, Kategorienliste und
+Barcode-Nachschlag fallen offline aus. Siehe [[reference_messfallen_browser]].
+
 ### 2026-09-09 · Verzeichnis-Pflege und Großhändler
 
 Alex: „Ich würde gerne (Groß)händler hinzufügen können und dann die Möglichkeit haben, jedem
