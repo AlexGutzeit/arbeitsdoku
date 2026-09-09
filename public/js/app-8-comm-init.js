@@ -46,6 +46,9 @@ function katalogSpiegelSchreiben(kat) {
  * nichts — genau das ist der Lagerfall: verbunden, aber ohne Route.
  */
 function istVerbindungsfehler(e) {
+  // api() kennzeichnet Verbindungsfehler seit 09.09.2026 selbst — das ist das verlaesslichste
+  // Merkmal. Die uebrigen Pruefungen bleiben fuer Aufrufe, die nicht ueber api() laufen.
+  if (e && e.verbindung === true) return true;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
   return (e instanceof TypeError) || /fetch|network|netzwerk|failed/i.test((e && e.message) || '');
 }

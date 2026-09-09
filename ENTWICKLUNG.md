@@ -14,6 +14,27 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · „Failed to fetch" — einmal zentral übersetzt
+
+Alex: *„aber das macht auch keinen Sinn wenn ich offline dann nicht auf bestellen klicken kann."*
+
+Der Einwand trifft: Der Katalog-Spiegel deckt **nur** Suchen und Nachschlagen ab. Sein Nutzen liegt
+weniger im *vollständig* Offline-Fall als bei **zäher** Verbindung — dort stünde die Bestellseite
+sonst minutenlang leer. Vollständig ohne Empfang bleibt vom Spiegel wenig übrig: Man kann
+nachsehen, was man in der Hand hält, mehr nicht.
+
+Umso wichtiger ist, dass das Absenden **ehrlich** scheitert. Nachgesehen: Es scheiterte mit
+`toast(err.message)` — und `err.message` war die Rohmeldung des Browsers, **„Failed to fetch"**.
+Dieselbe Stelle hatte ich eine Stunde vorher schon beim Produkt-Anlegen einzeln repariert. Zwei
+Vorkommen sind ein Muster: Die richtige Stelle ist `api()` selbst, nicht die dreißig Fangstellen.
+
+`api()` übersetzt jetzt **einmal zentral** und hängt `verbindung: true` an den Fehler. Dieses
+Merkmal ist zugleich das verlässlichste Unterscheidungszeichen für den Katalog-Spiegel: Er darf auf
+die Gerätekopie ausweichen, wenn die *Verbindung* fehlt — aber niemals, wenn der *Server*
+fachlich abgelehnt hat. `istVerbindungsfehler` fragt es zuerst ab.
+
+Gegenprobe: Übersetzung entfernt → „Failed to fetch" steht wieder da, zwei Zusagen fallen.
+
 ### 2026-09-09 · Anlegen im Funkloch — gemessen, nicht abgeleitet
 
 Alex: *„angenommen im Lager wäre kein Empfang, ich lerne einen neuen scan ein, gehe auf speichern

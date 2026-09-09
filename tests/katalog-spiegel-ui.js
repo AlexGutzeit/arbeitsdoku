@@ -132,6 +132,28 @@ async function offline(seite, an) { await seite.setOfflineMode(an); }
     ok('ein gelöschtes Produkt meldet der Server — der Spiegel weiß davon nichts',
       gel.gefunden === false && !!gel.geloeschtes_produkt && gel.ausSpiegel === false, JSON.stringify(gel));
 
+    console.log('\n── Ohne Verbindung bestellen: was der Mensch liest ──');
+    // Alex (09.09.2026): „das macht auch keinen Sinn wenn ich offline dann nicht auf bestellen
+    // klicken kann." Richtig — der Spiegel deckt nur Suchen und Nachschlagen ab. Umso wichtiger
+    // ist, dass das Absenden ehrlich scheitert. Vorher stand dort die Rohmeldung des Browsers,
+    // „Failed to fetch"; seit 09.09. uebersetzt api() das an EINER Stelle fuer alle Aufrufer.
+    await seite.reload({ waitUntil: 'domcontentloaded' });
+    await seite.waitForSelector('#order-add-btn'); await sleep(1200);
+    await seite.click('#order-add-btn');
+    await seite.waitForSelector('#of-product');
+    await seite.type('#of-product', 'Etwas ohne Empfang');
+    await offline(seite, true);
+    await seite.evaluate(() => { const f = document.getElementById('order-form'); f.querySelector('button[type="submit"]').click(); });
+    await sleep(2000);
+    const meldung = await seite.evaluate(() => (document.querySelector('.toast') || {}).innerText || '');
+    ok('die Meldung ist deutsch, nicht „Failed to fetch"',
+      /Keine Verbindung/.test(meldung) && !/Failed to fetch/i.test(meldung), JSON.stringify(meldung));
+    ok('… und sagt, dass nichts gespeichert wurde', /nichts gespeichert/.test(meldung), JSON.stringify(meldung));
+    ok('… die Eingabe steht noch im Formular',
+      await seite.evaluate(() => document.getElementById('of-product')?.value === 'Etwas ohne Empfang'),
+      await seite.evaluate(() => document.getElementById('of-product')?.value));
+    await offline(seite, false);
+
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.slice(0, 3).join(' | '));
   } catch (e) {
     ok('Durchlauf ohne Ausnahme', false, e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e.message);

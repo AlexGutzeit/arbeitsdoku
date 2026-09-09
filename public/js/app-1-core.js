@@ -89,7 +89,24 @@ async function api(method, url, body, isFormData) {
     } else if (body && isFormData) {
       opts.body = body;
     }
-    const res = await fetch(url, opts);
+    // `fetch` wirft ohne Verbindung einen TypeError mit „Failed to fetch" — englisch, technisch,
+    // und JEDE Stelle, die api() benutzt, zeigt diesen Text ungefiltert an (gemessen am
+    // 09.09.2026 beim Anlegen eines Produkts und beim Bestellen). Deshalb hier EINMAL zentral
+    // uebersetzen, statt an dreissig Fangstellen einzeln.
+    //
+    // `verbindung: true` bleibt als Merkmal dran: Der Katalog-Spiegel unterscheidet danach, ob
+    // er auf die Geraetekopie ausweichen darf — eine fachliche Absage des Servers darf er NICHT
+    // ueberschreiben.
+    let res;
+    try {
+      res = await fetch(url, opts);
+    } catch (netzFehler) {
+      const e = new Error('Keine Verbindung zum Server — es wurde nichts gespeichert. '
+        + 'Sobald wieder Empfang da ist, noch einmal versuchen.');
+      e.verbindung = true;
+      e.ursprung = netzFehler && netzFehler.message;
+      throw e;
+    }
     if (res.status === 401 && !url.includes('/auth/login')) { logout(); return null; }
     // Der Einrichtungs-Zwang meldet sich mit 403 und einer eigenen Kennung. Kein Abmelden — der
     // Nutzer soll ja gerade zur Einrichtung. Netz gegen einen veralteten Oberflaechen-Zustand.

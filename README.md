@@ -478,6 +478,10 @@ nicht.
 
 #### 📦 Produktverzeichnis (nur mit dem Recht „Lagerdaten pflegen")
 
+**Reißt die Verbindung ab, sagt die App das auf Deutsch** – an *jeder* Stelle, nicht nur beim
+Anlegen: „Keine Verbindung zum Server — es wurde nichts gespeichert. Sobald wieder Empfang da ist,
+noch einmal versuchen." Das Eingetippte bleibt dabei stehen.
+
 **Ohne Verbindung lässt sich nichts anlegen, und es wird auch nichts nachgeholt.** Es gibt keine
 Warteschlange: Wer im Funkloch auf „Anlegen" tippt, bekommt eine deutliche Meldung, die Eingabe
 bleibt im Formular stehen, und sobald wieder Empfang da ist, genügt ein zweiter Druck auf
