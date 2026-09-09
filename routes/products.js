@@ -236,15 +236,15 @@ router.post('/', authenticate, (req, res) => {
   const einheit = String(req.body.default_unit || '').trim() || null;
 
   if (name.length < 2) return res.status(400).json({ error: 'Bitte einen Produktnamen mit mindestens 2 Zeichen angeben.' });
-  // Die Regel, an der alles haengt: ohne Code kein Katalogeintrag.
-  if (!code) {
+  if (!code && !darfProduktePflegen(req.user)) {
     return res.status(400).json({
-      error: 'Ein Produkt kommt nur mit Barcode ins Verzeichnis. Ohne Code bestellst du wie bisher '
-           + 'mit freiem Text — das bleibt möglich und ändert am Verzeichnis nichts.' });
+      error: 'Ein Produkt kommt hier nur mit Barcode ins Verzeichnis. Ohne Code bestellst du wie '
+           + 'bisher mit freiem Text — das bleibt möglich und ändert am Verzeichnis nichts. '
+           + 'Wer „Lagerdaten pflegen" darf, kann im Produktverzeichnis auch ohne Barcode anlegen.' });
   }
-  const belegt = db.prepare(
+  const belegt = code ? db.prepare(
     `SELECT b.code, p.id, p.name, p.deleted_at FROM product_barcodes b
-       JOIN products p ON p.id = b.product_id WHERE b.code = ?`).get(code);
+       JOIN products p ON p.id = b.product_id WHERE b.code = ?`).get(code) : null;
   if (belegt) {
     // Ist das Produkt GELOESCHT, bleibt sein Code trotzdem belegt — und die Meldung muss sagen,
     // wie man da herauskommt. Sonst steht man davor: anlegen geht nicht, anlernen auch nicht.
@@ -262,11 +262,14 @@ router.post('/', authenticate, (req, res) => {
   const r = db.prepare(
     'INSERT INTO products (name, category_id, default_unit, created_at, created_by) VALUES (?, ?, ?, ?, ?)'
   ).run(name, katId, einheit, jetzt, req.user.id);
-  db.prepare('INSERT INTO product_barcodes (product_id, code, created_at, created_by) VALUES (?, ?, ?, ?)')
-    .run(r.lastInsertRowid, code, jetzt, req.user.id);
+  if (code) {
+    db.prepare('INSERT INTO product_barcodes (product_id, code, created_at, created_by) VALUES (?, ?, ?, ?)')
+      .run(r.lastInsertRowid, code, jetzt, req.user.id);
+  }
 
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'product_create',
-    details: `Produkt angelegt: ${name} (Barcode ${code})`, ip: req.ip });
+    details: `Produkt angelegt: ${name} (${code ? 'Barcode ' + code : 'OHNE Barcode — nur über die Suche findbar'})`,
+    ip: req.ip });
   broadcast('produkte');
 
   // Aehnliche Namen mitliefern — als HINWEIS, nicht als Verbot. Wer gleich sieht, dass es
@@ -320,10 +323,14 @@ router.delete('/:id/barcodes/:code', authenticate, (req, res) => {
 
   const codes = db.prepare('SELECT code FROM product_barcodes WHERE product_id = ?').all(id).map(r => r.code);
   if (!codes.includes(code)) return res.status(404).json({ error: 'Dieser Barcode gehört nicht zu diesem Produkt.' });
-  if (codes.length <= 1) {
+  // Frueher war das ein hartes Verbot („ein Produkt muss mindestens einen haben"). Seit
+  // barcodelose Produkte erlaubt sind, ist es keine Unmoeglichkeit mehr, sondern eine
+  // Entscheidung mit Folgen — also nachfragen statt verbieten.
+  const trotzdem = req.query.trotzdem || (req.body && req.body.trotzdem);
+  if (codes.length <= 1 && !trotzdem) {
     return res.status(409).json({
-      error: 'Das ist der letzte Barcode. Ein Produkt im Verzeichnis muss mindestens einen haben — '
-           + 'sonst wäre es weder scannbar noch auffindbar. Wenn es weg soll, lösche das Produkt.' });
+      error: 'Das ist der letzte Barcode. Ohne ihn lässt sich das Produkt nicht mehr scannen — '
+           + 'über die Suche im Bestellformular bleibt es findbar. Bestätige, wenn das so sein soll.' });
   }
   db.prepare('DELETE FROM product_barcodes WHERE product_id = ? AND code = ?').run(id, code);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'product_barcode_remove',

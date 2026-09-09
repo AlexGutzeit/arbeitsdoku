@@ -150,6 +150,26 @@ router.delete('/:id', authenticate, nurPfleger, (req, res) => {
   res.json({ ok: true, eintraege: anzahl });
 });
 
+// ── Was dieser Händler führt ────────────────────────────────────────────────────────────────
+//
+// Die Gegenrichtung zu /api/products/:id/haendler. Beide Wege sind nötig, weil es zwei
+// verschiedene Arbeitsweisen gibt: „Ich habe ein Produkt vor mir, wo bekomme ich es?" — und
+// „Ich habe die Preisliste von Sonepar vor mir und trage zwanzig Bestellnummern ein."
+// Der zweite Fall war über die Produktliste mühsam (zwanzigmal aufklappen).
+router.get('/:id/produkte', authenticate, nurLesen, (req, res) => {
+  const db = getDb();
+  const id = Number(req.params.id);
+  const h = db.prepare('SELECT id, name FROM suppliers WHERE id = ?').get(id);
+  if (!h) return res.status(404).json({ error: 'Großhändler nicht gefunden' });
+  const produkte = db.prepare(`
+    SELECT p.id, p.name, ps.bestellnummer, ps.link, ps.kommentar,
+           (SELECT COUNT(*) FROM product_barcodes b WHERE b.product_id = p.id) AS barcodes
+      FROM product_suppliers ps JOIN products p ON p.id = ps.product_id
+     WHERE ps.supplier_id = ? AND p.deleted_at IS NULL
+     ORDER BY p.name`).all(id);
+  res.json({ haendler: { id: h.id, name: h.name }, produkte });
+});
+
 // ── Wiederherstellen ────────────────────────────────────────────────────────────────────────
 //
 // Das FEHLTE, obwohl die Loeschmeldung es ausdruecklich versprach („Die bleiben erhalten und

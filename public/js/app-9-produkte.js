@@ -109,7 +109,9 @@ function pvProduktZeile(p) {
       <strong>${esc(p.name)}</strong>
       <span style="color:var(--text-light);font-size:.82rem;margin-left:.5rem">
         ${p.kategorie_name ? esc(p.kategorie_name) : '<em>ohne Kategorie</em>'}
-        · ${p.barcodes.length} Barcode${p.barcodes.length === 1 ? '' : 's'}
+        · ${p.barcodes.length
+             ? p.barcodes.length + ' Barcode' + (p.barcodes.length === 1 ? '' : 's')
+             : '<span class="pv-ohne-code">ohne Barcode — nur über die Suche</span>'}
         ${p.bestellungen ? ` · ${p.bestellungen} Bestellung${p.bestellungen === 1 ? '' : 'en'}` : ''}
       </span>
     </summary>
@@ -242,8 +244,50 @@ function pvHaendlerKarte(h) {
         <button class="btn btn-sm btn-danger pv-h-del">Löschen</button>
         ${h.homepage ? pLinkHtml(h.homepage, 'Webshop öffnen') : ''}
       </div>
+      <!-- Die Gegenrichtung: von HIER aus Produkte anhängen. Wer eine Preisliste vor sich hat,
+           trägt zwanzig Bestellnummern ein, ohne zwanzigmal ein Produkt aufzuklappen. -->
+      <div class="pv-h-produkte" data-geladen="0" style="margin-top:1rem">
+        <div class="loading">Laden…</div>
+      </div>
     </div>
   </details>`;
+}
+
+/** Was dieser Händler führt — Liste, Suchfeld zum Anhängen, und der Weg zu einem neuen Produkt. */
+function pvHaendlerProdukteHtml(hId, produkte) {
+  return `
+    <strong style="font-size:.9rem">Produkte bei diesem Händler (${produkte.length})</strong>
+    <div class="pv-hp-liste">${produkte.length ? produkte.map(p => `
+      <div class="pv-hp-zeile" data-pid="${p.id}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+          <strong>${esc(p.name)}</strong>
+          <span>
+            ${(p.barcodes && p.barcodes.length) ? '' : '<span class="pv-ohne-code">ohne Barcode</span>'}
+            <button class="btn btn-sm btn-danger pv-hp-weg" title="Zuordnung entfernen"
+                    aria-label="Zuordnung zu ${esc(p.name)} entfernen">&times;</button>
+          </span>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.3rem">
+          <label style="flex:1;min-width:140px;font-size:.82rem">Bestellnummer
+            <input type="text" class="form-control form-control-sm pv-hp-nr" value="${esc(p.bestellnummer || '')}"></label>
+          <label style="flex:2;min-width:180px;font-size:.82rem">Link
+            <input type="text" class="form-control form-control-sm pv-hp-link" value="${esc(p.link || '')}"
+                   placeholder="shop.example.de/artikel/123"></label>
+        </div>
+        <label style="display:block;font-size:.82rem;margin-top:.3rem">Kommentar
+          <input type="text" class="form-control form-control-sm pv-hp-kommentar"
+                 value="${esc(p.kommentar || '')}" placeholder="z. B. nur im 100er-Gebinde"></label>
+        <div style="margin-top:.3rem"><button class="btn btn-sm btn-primary pv-hp-save">Speichern</button></div>
+      </div>`).join('') : '<p style="color:var(--text-lighter);font-size:.85rem;margin:.3rem 0">Noch nichts zugeordnet.</p>'}
+    </div>
+    <div style="margin-top:.6rem">
+      <label style="font-size:.82rem;display:block">Produkt suchen und anhängen
+        <input type="search" class="form-control form-control-sm pv-hp-suche" data-hid="${hId}"
+               placeholder="Name eintippen …" autocomplete="off"></label>
+      <ul class="produkt-vorschlaege pv-hp-treffer" style="display:none;position:static;max-height:180px"></ul>
+      <button class="btn btn-sm btn-outline pv-hp-neu" data-hid="${hId}" style="margin-top:.4rem">
+        + Produkt anlegen, das es noch nicht gibt</button>
+    </div>`;
 }
 
 function pvHaendlerFelder(h) {
@@ -340,6 +384,10 @@ function pvBinden() {
   document.querySelectorAll('.pv-produkt').forEach(d => d.addEventListener('toggle', () => {
     if (d.open) pvDetailLaden(d);
   }));
+  document.querySelectorAll('.pv-haendler').forEach(d => d.addEventListener('toggle', () => {
+    if (d.open) pvHaendlerProdukteLaden(d);
+  }));
+  karte.addEventListener('input', pvSuchtippen);
 
   karte.addEventListener('click', pvKlick);
   karte.addEventListener('change', pvAenderung);
@@ -358,6 +406,40 @@ async function pvDetailLaden(details, erzwingen) {
   } catch (e) { ziel.innerHTML = `<p style="color:var(--danger)">${esc(e.message)}</p>`; }
 }
 
+async function pvHaendlerProdukteLaden(details, erzwingen) {
+  const ziel = details.querySelector('.pv-h-produkte');
+  if (!ziel || (!erzwingen && ziel.dataset.geladen === '1')) return;
+  try {
+    const r = await api('GET', `/api/suppliers/${details.dataset.id}/produkte`);
+    ziel.innerHTML = pvHaendlerProdukteHtml(details.dataset.id, (r && r.produkte) || []);
+    ziel.dataset.geladen = '1';
+  } catch (e) { ziel.innerHTML = `<p style="color:var(--danger)">${esc(e.message)}</p>`; }
+}
+
+/**
+ * Live-Suche im Händler-Bereich.
+ *
+ * Sie sucht in S.verzeichnis.produkte — die Liste liegt ohnehin schon da, also braucht es keine
+ * Abfrage je Tastendruck. Schon zugeordnete Produkte fallen raus: Ein zweites Mal anhängen ginge
+ * ohnehin nicht (ein Eintrag je Paar), und ein Treffer, der beim Klick nichts tut, ist ärgerlicher
+ * als gar keiner.
+ */
+function pvSuchtippen(ev) {
+  const feld = ev.target;
+  if (!feld.classList || !feld.classList.contains('pv-hp-suche')) return;
+  const liste = feld.parentElement.parentElement.querySelector('.pv-hp-treffer');
+  const q = vergleichsform(feld.value);
+  if (!q) { liste.style.display = 'none'; liste.innerHTML = ''; return; }
+  const schon = [...feld.closest('.pv-h-produkte').querySelectorAll('.pv-hp-zeile')].map(z => Number(z.dataset.pid));
+  const treffer = (S.verzeichnis.produkte || [])
+    .filter(p => !schon.includes(p.id) && vergleichsform(p.name).includes(q)).slice(0, 8);
+  if (!treffer.length) { liste.style.display = 'none'; liste.innerHTML = ''; return; }
+  liste.innerHTML = treffer.map(p => `<li class="pv-hp-treffer-zeile" data-pid="${p.id}">
+      ${esc(p.name)}${p.barcodes && p.barcodes.length ? '' : ' <span class="pv-ohne-code">ohne Barcode</span>'}
+    </li>`).join('');
+  liste.style.display = '';
+}
+
 function pvProduktOeffnen(id) {
   const d = document.querySelector(`.pv-produkt[data-id="${id}"]`);
   if (!d) { toast('Dieses Produkt steht nicht (mehr) im Verzeichnis.', 'error'); return; }
@@ -367,6 +449,18 @@ function pvProduktOeffnen(id) {
 }
 
 async function pvKlick(ev) {
+  // Treffer der Händler-Suche sind <li>, kein <button> — die muessen VOR der Button-Pruefung
+  // abgefangen werden, sonst passiert beim Klick nichts.
+  const treffer = ev.target.closest('.pv-hp-treffer-zeile');
+  if (treffer) {
+    const karte = treffer.closest('.pv-haendler');
+    try {
+      await api('PUT', `/api/products/${treffer.dataset.pid}/haendler/${karte.dataset.id}`, {});
+      toast('Angehängt — jetzt Bestellnummer eintragen.', 'success');
+      await pvHaendlerProdukteLaden(karte, true);
+    } catch (e) { toast(e.message, 'error'); }
+    return;
+  }
   const b = ev.target.closest('button');
   if (!b) return;
   const details = b.closest('.pv-produkt');
@@ -403,9 +497,17 @@ async function pvKlick(ev) {
     }
     if (b.classList.contains('pv-code-weg')) {
       const code = b.dataset.code;
-      if (!(await confirmModal(`Barcode ${code} von diesem Produkt entfernen?`,
+      const codes = (S.verzeichnis.produkte.find(x => x.id === id) || {}).barcodes || [];
+      const letzter = codes.length <= 1;
+      if (!(await confirmModal(letzter
+        ? `${code} ist der letzte Barcode. Ohne ihn lässt sich das Produkt nicht mehr scannen — `
+          + 'über die Suche im Bestellformular bleibt es findbar.'
+        : `Barcode ${code} von diesem Produkt entfernen?`,
         { title: 'Barcode entfernen', okLabel: 'Entfernen' }))) return;
-      await api('DELETE', `/api/products/${id}/barcodes/${encodeURIComponent(code)}`);
+      // Der Server fragt beim letzten Code selbst noch einmal nach (409). Weil der Benutzer die
+      // Folge hier schon schwarz auf weiss bestaetigt hat, geht die Bestaetigung gleich mit.
+      await api('DELETE', `/api/products/${id}/barcodes/${encodeURIComponent(code)}`
+        + (letzter ? '?trotzdem=1' : ''));
       toast('Barcode entfernt', 'success'); return neu();
     }
 
@@ -474,6 +576,28 @@ async function pvKlick(ev) {
       toast('Kategorie gelöscht', 'success'); return renderProdukte();
     }
 
+    // ── Produkte AM HÄNDLER (die Gegenrichtung) ──
+    const hKarte = b.closest('.pv-haendler');
+    if (hKarte && b.classList.contains('pv-hp-save')) {
+      const zeile = b.closest('.pv-hp-zeile');
+      await api('PUT', `/api/products/${zeile.dataset.pid}/haendler/${hKarte.dataset.id}`, {
+        bestellnummer: zeile.querySelector('.pv-hp-nr').value.trim(),
+        link: zeile.querySelector('.pv-hp-link').value.trim(),
+        kommentar: zeile.querySelector('.pv-hp-kommentar').value.trim(),
+      });
+      toast('Gespeichert', 'success');
+      return pvHaendlerProdukteLaden(hKarte, true);
+    }
+    if (hKarte && b.classList.contains('pv-hp-weg')) {
+      const zeile = b.closest('.pv-hp-zeile');
+      if (!(await confirmModal('Die Zuordnung zu diesem Händler entfernen? Das Produkt selbst bleibt.',
+        { title: 'Zuordnung entfernen', okLabel: 'Entfernen' }))) return;
+      await api('DELETE', `/api/products/${zeile.dataset.pid}/haendler/${hKarte.dataset.id}`);
+      toast('Entfernt', 'success');
+      return pvHaendlerProdukteLaden(hKarte, true);
+    }
+    if (b.classList.contains('pv-hp-neu')) return pvNeuesProduktDialog(hKarte);
+
     // ── Händler-Stammdaten ──
     if (b.classList.contains('pv-h-anlegen')) {
       const box = document.getElementById('pv-h-neu-form');
@@ -496,6 +620,72 @@ async function pvKlick(ev) {
       toast('Gelöscht', 'success'); return renderProdukte();
     }
   } catch (e) { toast(e.message, 'error'); }
+}
+
+/**
+ * Neues Produkt direkt am Händler anlegen — Barcode OPTIONAL.
+ *
+ * Alex (09.09.2026): „wenn kein Barcode verknüpft wird, kann man das Produkt zum Bestellen nicht
+ * scannen, aber über die Suche finden." Genau das steht auch im Dialog, damit niemand hinterher
+ * rätselt, warum das Scannen nichts findet.
+ */
+function pvNeuesProduktDialog(hKarte) {
+  const kats = S.verzeichnis.kategorien;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay dialog-modal';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header"><h3>Produkt anlegen</h3></div>
+      <div class="modal-body">
+        <p style="margin:0 0 .6rem;font-size:.88rem;color:var(--text-light)">
+          Der Name steht künftig allen zur Auswahl. Schau kurz, ob es das Produkt schon gibt.</p>
+        <label style="display:block;margin-bottom:.5rem">Produktname *
+          <input type="text" class="form-control" id="pnp-name" autocomplete="off"></label>
+        <label style="display:block;margin-bottom:.5rem">Kategorie
+          <select class="form-control" id="pnp-kat">
+            <option value="">— keine —</option>
+            ${kats.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('')}
+          </select></label>
+        <label style="display:block;margin-bottom:.3rem">Barcode <em>(freiwillig)</em>
+          <input type="text" class="form-control" id="pnp-code" autocomplete="off"
+                 placeholder="leer lassen, wenn der Artikel keinen trägt"></label>
+        <p class="hinweis-box" style="margin:.2rem 0 0;font-size:.85rem">
+          <strong>Ohne Barcode lässt sich das Produkt nicht scannen</strong> — im Bestellformular
+          ist es aber über die Suche zu finden. Nachträglich lässt sich jederzeit einer anlernen.</p>
+        <p id="pnp-fehler" style="display:none;color:var(--danger);margin:.5rem 0 0"></p>
+      </div>
+      <div class="modal-footer" style="display:flex;gap:.5rem;justify-content:flex-end;padding:1rem">
+        <button class="btn btn-outline" data-act="cancel">Abbrechen</button>
+        <button class="btn btn-primary" data-act="ok">Anlegen und anhängen</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  if (typeof dialogBarrierefrei === 'function') dialogBarrierefrei(overlay);
+  overlay.querySelector('#pnp-name').focus();
+
+  overlay.addEventListener('click', async (ev) => {
+    if (ev.target === overlay || ev.target.dataset.act === 'cancel') return overlay.remove();
+    if (ev.target.dataset.act !== 'ok') return;
+    const fehler = overlay.querySelector('#pnp-fehler');
+    try {
+      const r = await api('POST', '/api/products', {
+        name: overlay.querySelector('#pnp-name').value.trim(),
+        barcode: overlay.querySelector('#pnp-code').value.trim() || null,
+        category_id: overlay.querySelector('#pnp-kat').value || null,
+      });
+      await api('PUT', `/api/products/${r.produkt.id}/haendler/${hKarte.dataset.id}`, {});
+      overlay.remove();
+      toast(`„${r.produkt.name}" angelegt und angehängt.`, 'success');
+      // Kein Neuaufbau der Seite: Der wuerde die Haendlerkarte zuklappen, in der man gerade
+      // arbeitet. Stattdessen wandert das neue Produkt in die Liste im Speicher (damit die Suche
+      // es sofort kennt), und nur die eine Haendlerkarte laedt nach.
+      if (S.verzeichnis && Array.isArray(S.verzeichnis.produkte)) {
+        S.verzeichnis.produkte.push({ ...r.produkt, barcodes: r.produkt.barcodes || [] });
+        S.verzeichnis.produkte.sort((x, y) => x.name.localeCompare(y.name, 'de'));
+      }
+      await pvHaendlerProdukteLaden(hKarte, true);
+    } catch (e) { fehler.textContent = e.message; fehler.style.display = ''; }
+  });
 }
 
 function pvHaendlerLesen(box) {

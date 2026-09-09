@@ -697,11 +697,16 @@ function produktAnlegenMaske(code) {
         .filter(p => vergleichsform(p.name).includes(q) || q.includes(vergleichsform(p.name)))
         .slice(0, 5);
       if (!treffer.length) { kasten.style.display = 'none'; kasten.innerHTML = ''; return; }
+      // Produkte OHNE Barcode werden ausdruecklich als solche gezeigt: Genau die sind ueber die
+      // Haendler-Seite angelegt worden und warten darauf, dass beim ersten Scannen ihr Code
+      // dazukommt. Ohne diese Kennzeichnung sieht der Vorschlag aus wie eine Doppel-Warnung.
       kasten.innerHTML =
         `<div style="font-size:.82rem;color:var(--text-light);margin-bottom:.25rem">
            Das gibt es vielleicht schon — dann den Barcode lieber dort anlernen:</div>`
         + treffer.map(p => `<button type="button" class="btn btn-outline btn-sm" data-anlernen="${p.id}"
-             style="margin:0 .3rem .3rem 0">${esc(p.name)}</button>`).join('');
+             style="margin:0 .3rem .3rem 0">${esc(p.name)}${
+               (p.barcodes && p.barcodes.length) ? '' : ' <span class="pv-ohne-code">noch ohne Barcode</span>'
+             }</button>`).join('');
       kasten.style.display = '';
     });
 

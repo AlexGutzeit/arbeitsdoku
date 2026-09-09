@@ -70,6 +70,12 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     const prod = (await req('POST', '/api/products', lagerTok, { name: 'Kabelbinder 200 mm', barcode: '4001111111111' })).body.produkt;
     await req('POST', '/api/orders', lagerTok, { product: 'Kabelbinder 200 mm', quantity: 5, product_id: prod.id });
     await req('POST', '/api/orders', lagerTok, { product: '2 Rollen Klebeband', quantity: 2 });
+    // Ein zweites Produkt, das dem Händler NICHT zugeordnet ist — es muss über die Suche kommen.
+    // Es entsteht VOR dem ersten Aufbau der Seite: Die Verzeichnis-Ansicht baut sich bei fremden
+    // Änderungen mit Absicht nicht neu auf (sie ist voller Eingabefelder), sondern blendet nur
+    // einen Hinweis ein. Ein später angelegtes Produkt wäre also zu Recht noch nicht in der Liste.
+    const zweit = (await req('POST', '/api/products', admin,
+      { name: 'Aderendhülse 2,5', barcode: '4003333333333' })).body.produkt;
     const haendler = (await req('POST', '/api/suppliers', admin, {
       name: 'Sonepar', homepage: 'shop.sonepar.de', kundennummer: '4711', ansprechpartner: 'Frau Meier' })).body.haendler;
     await req('PUT', `/api/products/${prod.id}/haendler/${haendler.id}`, admin, {
@@ -153,6 +159,73 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     ok('… mit der Zahl der Produkte',
       /1 Produkt/.test(await l.seite.evaluate(() => document.querySelector('.pv-haendler summary').innerText)),
       await l.seite.evaluate(() => document.querySelector('.pv-haendler summary').innerText));
+
+    console.log('\n── Die Gegenrichtung: vom Händler aus zuordnen ──');
+    await l.seite.evaluate(() => { document.querySelector('.pv-haendler').open = true; });
+    await l.seite.waitForSelector('.pv-hp-suche');
+    await sleep(800);
+    ok('die Händlerkarte listet sein Produkt',
+      await l.seite.evaluate(() => document.querySelectorAll('.pv-hp-zeile').length === 1),
+      await l.seite.evaluate(() => document.querySelectorAll('.pv-hp-zeile').length));
+
+    await l.seite.type('.pv-hp-suche', 'aderend');
+    await sleep(500);
+    ok('die Suche findet das noch nicht zugeordnete Produkt',
+      await sichtbar(l.seite, '.pv-hp-treffer-zeile'),
+      await l.seite.evaluate(() => document.querySelector('.pv-hp-treffer').innerHTML.slice(0, 120)));
+    // Gegenprobe: Das SCHON zugeordnete Produkt darf nicht auftauchen — ein Treffer, der beim
+    // Klicken nichts bewirkt, ist schlimmer als keiner.
+    await l.seite.evaluate(() => { const f = document.querySelector('.pv-hp-suche'); f.value = 'kabelbinder';
+      f.dispatchEvent(new Event('input', { bubbles: true })); });
+    await sleep(400);
+    ok('… und bietet das bereits zugeordnete NICHT noch einmal an',
+      !(await sichtbar(l.seite, '.pv-hp-treffer-zeile')),
+      await l.seite.evaluate(() => document.querySelector('.pv-hp-treffer').innerHTML.slice(0, 120)));
+
+    await l.seite.evaluate(() => { const f = document.querySelector('.pv-hp-suche'); f.value = 'aderend';
+      f.dispatchEvent(new Event('input', { bubbles: true })); });
+    await sleep(400);
+    await l.seite.click('.pv-hp-treffer-zeile');
+    await sleep(1500);
+    const nachAnhaengen = (await req('GET', `/api/suppliers/${haendler.id}/produkte`, admin)).body.produkte;
+    ok('der Klick hängt es wirklich an', nachAnhaengen.some(x => x.id === zweit.id),
+      JSON.stringify(nachAnhaengen.map(x => x.name)));
+
+    // Bestellnummer und Kommentar an der neuen Zeile — der Kommentar prüft, dass Speichern die
+    // Felder nicht gegenseitig leert.
+    await l.seite.evaluate(id => {
+      const z = document.querySelector(`.pv-hp-zeile[data-pid="${id}"]`);
+      z.querySelector('.pv-hp-nr').value = 'AE25';
+      z.querySelector('.pv-hp-kommentar').value = 'nur im 100er-Beutel';
+      z.querySelector('.pv-hp-save').click();
+    }, zweit.id);
+    await sleep(1500);
+    const gespeichert = (await req('GET', `/api/suppliers/${haendler.id}/produkte`, admin))
+      .body.produkte.find(x => x.id === zweit.id);
+    ok('Bestellnummer und Kommentar stehen beide',
+      gespeichert.bestellnummer === 'AE25' && gespeichert.kommentar === 'nur im 100er-Beutel',
+      JSON.stringify(gespeichert));
+
+    console.log('\n── Ein Produkt OHNE Barcode, direkt am Händler ──');
+    await l.seite.click('.pv-hp-neu');
+    await l.seite.waitForSelector('#pnp-name');
+    await l.seite.type('#pnp-name', 'Erdungsband 30x3');
+    await l.seite.click('.dialog-modal [data-act="ok"]');
+    await sleep(2000);
+    const ohneCode = (await req('GET', '/api/products?q=erdungsband', admin)).body.produkte[0];
+    ok('es entsteht ohne Barcode', !!ohneCode, JSON.stringify(ohneCode));
+    const amHaendler = (await req('GET', `/api/suppliers/${haendler.id}/produkte`, admin)).body.produkte;
+    ok('… und hängt gleich am Händler', ohneCode && amHaendler.some(x => x.id === ohneCode.id),
+      JSON.stringify(amHaendler.map(x => x.name)));
+    const zeileText = await l.seite.evaluate(id => {
+      const z = document.querySelector(`.pv-hp-zeile[data-pid="${id}"]`);
+      return z ? z.innerText : null;
+    }, ohneCode.id);
+    ok('… seine Zeile am Händler ist als „ohne Barcode" gekennzeichnet',
+      zeileText && /ohne Barcode/.test(zeileText), JSON.stringify(zeileText));
+    // Und die Karte darf beim Anlegen NICHT zuklappen — sonst verliert man den Faden.
+    ok('… die Händlerkarte bleibt dabei offen',
+      await l.seite.evaluate(() => !!document.querySelector('.pv-haendler')?.open));
 
     ok('keine JavaScript-Fehler auf allen besuchten Seiten', jsFehler.length === 0, jsFehler.slice(0, 3).join(' | '));
   } catch (e) {

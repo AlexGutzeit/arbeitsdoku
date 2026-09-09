@@ -504,19 +504,36 @@ genau dann, wenn zwei Leute gleichzeitig aufräumen.
 Eigener Menüpunkt, der nur erscheint, wenn man das Recht hat. Drei Reiter:
 
 * **Produkte** — umbenennen, Kategorie und Einheit ändern, weitere **Barcodes** anlernen oder
-  entfernen (nie den letzten: ein Produkt ohne Code wäre weder scannbar noch auffindbar), Produkte
-  **zusammenführen** und löschen. Ganz oben meldet die Ansicht **mögliche Doppel-Eintragungen** –
+  entfernen, Produkte **zusammenführen** und löschen. Beim **letzten** Barcode fragt die App nach
+  und sagt, was danach gilt: nicht mehr scannbar, über die Suche im Bestellformular aber weiterhin
+  zu finden. Produkte ohne Code sind in der Liste als **„ohne Barcode — nur über die Suche"**
+  gekennzeichnet. Ganz oben meldet die Ansicht **mögliche Doppel-Eintragungen** –
   Namen, die sich nur in Schreibweise, Leerzeichen oder Bindestrich unterscheiden („Kabelbinder
   200 mm" = „kabel-binder 200mm") – mit einem Knopf direkt zum Zusammenführen. Suche und
   Kategoriefilter arbeiten zusammen.
 * **Großhändler** — Name, Homepage/Webshop, Kundennummer, Ansprechpartner mit Telefon und E-Mail,
   freie Notiz. Je **Produkt und Händler** kommen Bestellnummer, Link und Kommentar hinzu; sie
-  stehen beim Produkt, nicht beim Händler. Sortiert wird alphabetisch – es gibt bewusst keinen
+  stehen beim Produkt, nicht beim Händler. Zuordnen geht in **beide Richtungen**: beim Produkt der
+  Händler – oder in der Händlerkarte über eine **Suche** das Produkt (schon Zugeordnetes wird dort
+  nicht noch einmal angeboten). Was es noch gar nicht gibt, lässt sich gleich dort anlegen, und
+  zwar **auch ohne Barcode**. Sortiert wird alphabetisch – es gibt bewusst keinen
   „Hauptlieferanten". Ein Händler mit hinterlegten Produkten wird nicht ohne Rückfrage gelöscht,
   und seine Einträge bleiben erhalten, damit sie beim Wiederherstellen zurückkommen.
 * **Gelöscht** — Gelöschte **Produkte und Großhändler** lassen sich zurückholen; beim Händler kommen die hinterlegten Bestellnummern mit. Gelöschtes lässt sich zurückholen. Wer einen Barcode eines gelöschten Produkts
   scannt, bekommt „gehörte zu …" statt „unbekannt". **Zusammengeführte** Produkte lassen sich
   dagegen nicht als eigene zurückholen – ihre Barcodes hängen am Nachfolger.
+
+#### Produkte ohne Barcode
+
+Beim **Scannen** entsteht ein Katalogeintrag weiterhin nur mit Barcode – das ist der Schutz gegen
+Wildwuchs, und daran ändert sich nichts. Wer **„Lagerdaten pflegen"** darf, legt ein Produkt aber
+auch **ohne** Code an, etwa beim Zuordnen zu einem Großhändler. Die Folge steht im Dialog: **nicht
+scannbar, über die Suche im Bestellformular aber ganz normal bestellbar.**
+
+Der Code kommt nach, wenn der Artikel im Lager auftaucht: Beim Scannen eines unbekannten Barcodes
+schlägt die Anlege-Maske ähnliche Namen vor und kennzeichnet die codelosen als **„noch ohne
+Barcode"** – ein Klick hängt den gescannten Code dort an. Das darf **jeder Mitarbeiter**, nicht nur
+wer pflegen darf; sonst stünde er mit dem Karton in der Hand fest.
 
 **Beim Zusammenführen** wandern Barcodes, Bestell-Verknüpfungen und Großhändler-Angaben mit. Haben
 beide Produkte **denselben** Händler, wird die zweite Bestellnummer **an den Kommentar angehängt**

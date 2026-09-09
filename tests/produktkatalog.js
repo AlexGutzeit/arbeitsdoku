@@ -1,8 +1,12 @@
 // Produktverzeichnis: Kategorien, Produkte, Barcodes (1:n).
 //
-// Die Regel, an der alles hängt (Alex, 07.09.2026): In den Katalog kommt NUR, was einen Barcode
-// hat. Eine getippte Bestellung erzeugt keinen Eintrag. Daraus folgt die harte Zusicherung, dass
-// ein Produkt immer mindestens einen Barcode hat — den letzten zu entfernen wird abgewiesen.
+// Die Regel, an der alles hängt (Alex, 07.09.2026): In den Katalog kommt beim SCANNEN nur, was
+// einen Barcode hat. Eine getippte Bestellung erzeugt keinen Eintrag.
+//
+// Seit 09.09.2026 gibt es dazu eine Ausnahme mit Absicht: Wer „Lagerdaten pflegen" darf, legt ein
+// Produkt auch OHNE Barcode an — etwa beim Zuordnen zu einem Großhändler. Ein solches Produkt ist
+// nicht scannbar, aber über die Suche bestellbar, und beim ersten Scannen lernt es seinen Code
+// dazu. Der Schutz vor Wildwuchs sitzt damit am Recht, nicht mehr am Barcode-Zwang.
 //
 // Der gefährlichste Fehler wäre nicht ein kaputter Katalog, sondern eine BESTELLSTRECKE, die
 // vorher ging und jetzt hakt. Deshalb steht die Nullprobe am Anfang: ohne einen einzigen
@@ -65,6 +69,7 @@ function req(m, p, t, b) {
     const ohne = await req('POST', '/api/products', max, { name: 'Kabelbinder' });
     ok('Anlegen ohne Barcode wird abgewiesen', ohne.status === 400, ohne.status + ' ' + ohne.text.slice(0, 90));
     ok('… und erklärt, dass freier Text weiterhin geht', /freiem Text|freien Text/i.test(ohne.text), ohne.text.slice(0, 160));
+    ok('… und nennt den Weg über das Pflegerecht', /Lagerdaten pflegen/.test(ohne.text), ohne.text.slice(0, 200));
 
     console.log('\n── Jeder Mitarbeiter darf anlegen ──');
     const kat = await req('POST', '/api/products/kategorien', max, { name: 'Elektro' });
@@ -92,11 +97,12 @@ function req(m, p, t, b) {
     const anhaengen = await req('POST', `/api/products/${p1.body.produkt.id}/barcodes`, max, { code: '4050821808435' });
     ok('… auch beim Anlernen an dasselbe Produkt', anhaengen.status === 409, String(anhaengen.status));
 
-    console.log('\n── Der letzte Barcode lässt sich nicht entfernen ──');
+    console.log('\n── Der letzte Barcode geht nur mit Rückfrage ──');
     const p2 = (await req('POST', '/api/products', max, { name: 'Aderendhülse 2,5', barcode: '4046281411223' })).body.produkt;
     const letzter = await req('DELETE', `/api/products/${p2.id}/barcodes/4046281411223`, chef);
     ok('der letzte Code wird verteidigt', letzter.status === 409, letzter.status + ' ' + letzter.text.slice(0, 90));
-    ok('… mit Begründung', /mindestens einen/i.test(letzter.text), letzter.text.slice(0, 140));
+    ok('… und die Begründung sagt, was dann fehlt (Scannen) und was bleibt (Suche)',
+      /scannen/i.test(letzter.text) && /Suche/i.test(letzter.text), letzter.text.slice(0, 160));
     const einerVonDreien = await req('DELETE', `/api/products/${p1.body.produkt.id}/barcodes/4003899928864`, chef);
     ok('einer von dreien geht dagegen', einerVonDreien.status === 200, String(einerVonDreien.status));
     ok('… und es bleiben zwei', einerVonDreien.body.produkt.barcodes.length === 2, JSON.stringify(einerVonDreien.body.produkt.barcodes));
@@ -127,8 +133,43 @@ function req(m, p, t, b) {
     ok('Kategorien, Produkte und Codes zusammen',
       k.body.kategorien.length === 1 && k.body.produkte.length === 3 && k.body.produkte.every(p => Array.isArray(p.barcodes)),
       JSON.stringify({ kat: k.body.kategorien.length, prod: k.body.produkte.length }));
-    ok('… jedes Produkt hat mindestens einen Barcode',
+    ok('… jedes gescannte Produkt hat seinen Barcode',
       k.body.produkte.every(p => p.barcodes.length >= 1), JSON.stringify(k.body.produkte.map(p => p.barcodes.length)));
+
+    console.log('\n── Ein Produkt OHNE Barcode (nur mit Pflegerecht) ──');
+    const bcLos = await req('POST', '/api/products', chef, { name: 'Erdungsband 30x3' });
+    ok('mit Pflegerecht entsteht es', bcLos.status === 201, bcLos.status + ' ' + bcLos.text.slice(0, 80));
+    ok('… und es hat wirklich keinen Code', (bcLos.body.produkt.barcodes || []).length === 0,
+      JSON.stringify(bcLos.body.produkt.barcodes));
+    // Die Gegenprobe zur Zusicherung: Es ist da, aber NICHT scannbar.
+    const suchbar = await req('GET', '/api/products?q=erdungsband', max);
+    ok('über die Suche ist es zu finden',
+      suchbar.body.produkte.some(p => p.id === bcLos.body.produkt.id),
+      JSON.stringify(suchbar.body.produkte.map(p => p.name)));
+    const imSpiegel = await req('GET', '/api/products/katalog', max);
+    ok('… und es liegt im Offline-Spiegel (sonst fände die Anlern-Liste es nie)',
+      imSpiegel.body.produkte.some(p => p.id === bcLos.body.produkt.id && p.barcodes.length === 0),
+      JSON.stringify(imSpiegel.body.produkte.map(p => [p.name, p.barcodes.length])));
+    const nichtScannbar = await req('GET', '/api/products/barcode/4260000000017', max);
+    ok('gescannt findet es niemand', nichtScannbar.body.gefunden === false, JSON.stringify(nichtScannbar.body));
+
+    // Genau der Fall, den Alex beschrieben hat: Der Artikel taucht später mit Code auf.
+    const angelernt = await req('POST', `/api/products/${bcLos.body.produkt.id}/barcodes`, chef,
+      { code: '4260000000017' });
+    ok('beim ersten Scannen lernt es seinen Code dazu', angelernt.status === 200 || angelernt.status === 201,
+      angelernt.status + ' ' + angelernt.text.slice(0, 80));
+    const jetztScannbar = await req('GET', '/api/products/barcode/4260000000017', max);
+    ok('… und ab jetzt findet der Scanner es',
+      jetztScannbar.body.gefunden === true && jetztScannbar.body.produkt.id === bcLos.body.produkt.id,
+      JSON.stringify(jetztScannbar.body).slice(0, 100));
+
+    // Und zurück: Den letzten Code entfernen ist erlaubt, aber nur mit ausdrücklicher Bestätigung.
+    const letzterOhne = await req('DELETE', `/api/products/${bcLos.body.produkt.id}/barcodes/4260000000017`, chef);
+    ok('der letzte Code geht nicht versehentlich weg', letzterOhne.status === 409, String(letzterOhne.status));
+    const letzterMit = await req('DELETE',
+      `/api/products/${bcLos.body.produkt.id}/barcodes/4260000000017?trotzdem=1`, chef);
+    ok('… mit Bestätigung schon', letzterMit.status === 200,
+      letzterMit.status + ' ' + letzterMit.text.slice(0, 80));
 
     console.log('\n── Die Verknüpfung zur Bestellung ──');
     const mitProdukt = await req('POST', '/api/orders', max, {

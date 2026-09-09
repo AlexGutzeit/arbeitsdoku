@@ -409,6 +409,47 @@ function req(m, p, t, b) {
     ok('… und es gibt KEIN zweites Produkt', katalog.body.produkte.length === 1,
       JSON.stringify(katalog.body.produkte.map(p => p.name)));
 
+    // ── Ein Produkt OHNE Barcode bekommt im Lager seinen Code ───────────────────────────────
+    //
+    // Alex am 09.09.2026: „dem Produkt ohne Barcode soll später im Lager von einem MA beim Scannen
+    // ein Barcode zugeordnet werden können." Entscheidend ist das „von einem MA": max ist ein
+    // gewöhnlicher Mitarbeiter OHNE „Lagerdaten pflegen". Anlegen darf er nur mit Barcode —
+    // anlernen an ein bestehendes Produkt aber sehr wohl, sonst stünde er im Regal fest.
+    console.log('\n── Ein barcodeloses Produkt bekommt im Lager seinen Code ──');
+    const adminTok = (await req('POST', '/api/auth/login', null,
+      { username: 'admin', password: pw('admin') })).body.token;
+    const ohneCode = (await req('POST', '/api/products', adminTok, { name: 'Erdungsband 30x3' })).body.produkt;
+    ok('das barcodelose Produkt existiert', !!ohneCode && (ohneCode.barcodes || []).length === 0,
+      JSON.stringify(ohneCode));
+    await sleep(1200);   // die SSE-Meldung frischt den Spiegel im Browser auf
+    ok('… und ist im Spiegel des Browsers angekommen (ohne Neuladen)',
+      await seite.evaluate(n => ((S.produktKatalog || {}).produkte || []).some(p => p.name === n), 'Erdungsband 30x3'),
+      await seite.evaluate(() => JSON.stringify(((S.produktKatalog || {}).produkte || []).map(p => p.name))));
+
+    await scanVorgeben('4260999999996');
+    await seite.click('#of-scan'); await sleep(1200);
+    await seite.type('#np-name', 'erdungsband', { delay: 20 });
+    await sleep(400);
+    const vorschlag = await seite.evaluate(() => {
+      const k = document.getElementById('np-aehnlich');
+      return { sichtbar: k.style.display !== 'none', html: k.innerHTML,
+               knoepfe: [...k.querySelectorAll('[data-anlernen]')].map(b => b.textContent.trim()) };
+    });
+    ok('das barcodelose Produkt wird zum Anlernen angeboten',
+      vorschlag.sichtbar && vorschlag.knoepfe.some(t => /Erdungsband/.test(t)), JSON.stringify(vorschlag.knoepfe));
+    ok('… und ist als „noch ohne Barcode" gekennzeichnet',
+      /noch ohne Barcode/.test(vorschlag.html), vorschlag.html.slice(0, 200));
+    await seite.evaluate(() => {
+      const b = [...document.querySelectorAll('[data-anlernen]')].find(x => /Erdungsband/.test(x.textContent));
+      b.click();
+    });
+    await sleep(1500);
+    const angelernt = await req('GET', '/api/products/barcode/4260999999996', tok);
+    ok('ein Mitarbeiter ohne Pflegerecht darf den Code anlernen',
+      angelernt.body.gefunden && angelernt.body.produkt.id === ohneCode.id, JSON.stringify(angelernt.body).slice(0, 120));
+    const imFeldE = await seite.evaluate(() => document.getElementById('of-product').value);
+    ok('… und das Produkt steht danach im Bestellformular', imFeldE === 'Erdungsband 30x3', imFeldE);
+
     console.log('\n── Wirklich neues Produkt anlegen ──');
     await scanVorgeben('4104640010552');
     await seite.click('#of-scan'); await sleep(1200);

@@ -2478,6 +2478,13 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
   font-size: 1.05rem; line-height: 1; min-width: 32px; min-height: 32px; }
 .pv-code-weg:hover { color: var(--danger); }
 .pv-h-eintrag { border: 1px solid var(--border); border-radius: 5px; padding: .55rem; margin-top: .45rem; }
+.pv-hp-zeile { border: 1px solid var(--border); border-radius: 5px; padding: .55rem; margin-top: .45rem; }
+/* „ohne Barcode" ist keine Warnung, sondern eine Eigenschaft — deshalb ruhig, nicht rot. */
+.pv-ohne-code { font-size: .78rem; color: var(--text-lighter); font-style: italic; }
+.pv-hp-treffer { border: 1px solid var(--border); border-radius: 5px; margin: .3rem 0 0;
+  padding: 0; list-style: none; overflow-y: auto; }
+.pv-hp-treffer li { padding: .45rem .6rem; cursor: pointer; }
+.pv-hp-treffer li:hover, .pv-hp-treffer li:focus { background: var(--bg-alt, #f2f2f0); }
 
 /* ── Großhändler-Ausklapper in den Bestellungen (app-8-comm-init.js) ───────────────────────── */
 .order-hnd-inner { border-left: 3px solid var(--primary); padding: .4rem .7rem; margin-top: .4rem; }

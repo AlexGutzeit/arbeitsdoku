@@ -14,6 +14,45 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Produkte ohne Barcode — und wie die Gründungsregel dabei heil bleibt
+
+Alex wollte die **Gegenrichtung**: *„und das optional einem Produkt mit Barcode über eine suche
+zuordnen. wenn kein Barcode verknüpft wird kann man das Produkt zum bestellen nicht scannen aber
+über die suche finden."* Und kurz darauf die Ergänzung, die den Kreis schließt: *„dem Produkt ohne
+Barcode soll später im Lager von einem MA beim Scannen ein Barcode zugeordnet werden können."*
+
+Das kippt die Regel, auf der das ganze Verzeichnis gebaut war: **In den Katalog kommt nur, was
+einen Barcode hat.** Sie war kein Selbstzweck — sie war der Schutz davor, dass das Verzeichnis
+zumüllt, weil jede getippte Bestellung einen Eintrag erzeugt. Der Schutz sitzt jetzt woanders:
+
+* **Beim Scannen** gilt sie unverändert. Wer keinen Code hat, legt nichts an.
+* **Ohne Code anlegen** darf nur, wer **„Lagerdaten pflegen"** hat — dieselbe Handvoll Leute, die
+  auch zusammenführen und löschen darf. Wildwuchs entsteht nicht dort, sondern bei den 13 Leuten
+  mit dem Handy im Lager.
+
+Damit war auch das **harte Verbot, den letzten Barcode zu entfernen**, keine Unmöglichkeit mehr,
+sondern eine Entscheidung mit Folgen. Aus `403 „ein Produkt muss mindestens einen haben"` wurde ein
+`409` mit Rückfrage, das sagt, **was danach gilt**: nicht mehr scannbar, über die Suche findbar.
+
+**Zwei Fehler, die der Test gefunden hat und ich nicht:**
+
+1. `${p.barcodes ? … : 'ohne Barcode'}` — ein **leeres Array ist wahr**. Die Kennzeichnung wäre nie
+   erschienen, und zwar genau bei den Produkten, für die sie gedacht ist.
+2. Das Formular an der Händlerzeile hatte **Bestellnummer und Link, aber keinen Kommentar** — die
+   Route schreibt alle drei Felder, ein Klick auf *Speichern* hätte den Kommentar still geleert.
+   Der Test schreibt deshalb beide Felder und liest **beide** zurück.
+
+**Die Gegenprobe zur Anlern-Kette** (ein `.filter(p => p.barcodes.length)` in die Vorschlagsliste
+gesetzt) hat drei Zusicherungen rot gemacht — der Test misst also wirklich den Weg vom codelosen
+Produkt zum gescannten Code, und nicht nur, dass irgendein Dialog aufgeht.
+
+**Eine falsche Fährte unterwegs:** Der erste UI-Test war rot, weil das Suchziel-Produkt *nach* dem
+Seitenaufbau angelegt wurde. Das war kein Fehler der Suche — die Verzeichnis-Ansicht baut sich bei
+fremden Änderungen mit Absicht **nicht** neu auf (sie ist voller Eingabefelder) und blendet nur den
+Hinweis „Neu laden" ein. Gefährlich war dabei die **Gegenprobe daneben** („bietet Zugeordnetes
+nicht noch einmal an"), die grün war, weil überhaupt nichts gefunden wurde. Grün aus dem falschen
+Grund, wieder einmal.
+
 ### 2026-09-09 · Die Sicherungen verschlüsseln — und die `.env` gehört hinein
 
 Alex: *„die .env Datei ist ja sehr wichtig. Wird die auch jede Nacht mit gespeichert? Sonst bringen
