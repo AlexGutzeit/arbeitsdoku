@@ -225,6 +225,23 @@
     return c;
   }
 
+  // WELCHEN Code wuerde die App nehmen? Der Pruefstand listet ALLE Treffer — die App nimmt
+  // genau EINEN. Ohne diese Zeile liest man eine Liste und weiss nicht, was am Ende im
+  // Bestellformular staende. Rangfolge wortgleich zu scannerBesterTreffer in js/scanner.js:
+  //   3 gueltige GTIN · 2 2D-Code · 1 sonstige · 0 Werbecode; innerhalb der Klasse die Trefferzahl.
+  function appWuerdeNehmen() {
+    let bester = null, beste = -Infinity;
+    for (const [code, d] of gesehen) {
+      if (d.n < NOETIGE_LESUNGEN(d.format)) continue;
+      const klasse = istWerbecode(code) ? 0
+        : gtinGueltig(code) ? 3
+        : (istZweiD(d.format) ? 2 : 1);
+      const gewicht = klasse * 1000000 + d.n;
+      if (gewicht > beste) { bester = code; beste = gewicht; }
+    }
+    return bester;
+  }
+
   function treffer(rohText, format, weg, ms) {
     const nummer = gs1Nummer(rohText);
     const text = nummer || rohText;
@@ -274,7 +291,9 @@
       + (einzelne ? ` · ${einzelne} verworfen (zu selten gelesen)` : '')
       + (unplausibel.size ? ` · ${unplausibel.size} unplausibel (Format/Länge)` : '')
       + ` · ${versuche} Bilder geprüft`
-      + (versuche > 5 ? ` (${(versuche / ((performance.now() - beginn) / 1000)).toFixed(1)}/s)` : '');
+      + (versuche > 5 ? ` (${(versuche / ((performance.now() - beginn) / 1000)).toFixed(1)}/s)` : '')
+      + (() => { const w = appWuerdeNehmen();
+                 return w ? `\n→ Die App würde nehmen: ${w}` : ''; })();
 
     if (geradeBestaetigt && navigator.vibrate) navigator.vibrate(60);
     // So wird der echte Scanner arbeiten: lesen, BESTAETIGEN lassen, dann aufhoeren und das Feld

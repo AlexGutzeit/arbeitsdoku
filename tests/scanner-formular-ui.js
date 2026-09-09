@@ -80,16 +80,24 @@ function req(m, p, t, b) {
         // Valentins Fall: echte Hersteller-QRs, einmal bzw. zweimal gelesen.
         qrEinmal: f([q('https://id.abb/2CKA006800A3087', 1)]),
         qrZweimal: f([q('https://qr.fischer.id/p/568010', 2)]),
-        // Ein 2D-Code schlaegt einen 1D-Code auch mit weniger Lesungen.
-        qrGegenEan: f([e('4011395319475', 10), q('https://id.abb/2CKA006800A3087', 1)]),
+        // Ein 2D-Code schlaegt einen 1D-Code, SOLANGE der 1D-Code keine gueltige GTIN ist.
+        // („A" ist keine.) Fuer den umgekehrten Fall siehe „Rangfolge" weiter unten.
+        qrGegenAndere: f([['HAUSNUMMER-7', { n: 10, format: 'CODE_39' }], q('https://id.abb/2CKA006800A3087', 1)]),
         // GESTAPELTE ETIKETTEN (Alex, 09.09.2026: „teilweise 3 Barcodes direkt uebereinander").
         // Aus seinem Crafter-Lauf, 225 ms auseinander und mit GLEICHER Trefferzahl: eine interne
         // Nummer und die Artikelnummer. Ohne Vorzug entschiede der Zufall — und eine Charge- oder
         // Hausnummer im Katalog waere pro Packung verschieden.
         gestapelt: f([['2003145', { n: 5, format: 'CODE_39' }], ['4251786213047', { n: 5, format: 'CODE_39' }]]),
-        // Die Trefferzahl bleibt aber ausschlaggebend: Eine schwach gelesene GTIN kann selbst eine
-        // Fehllesung sein und darf einen deutlich oefter gelesenen Code NICHT verdraengen.
-        internOefter: f([['2003145', { n: 20, format: 'CODE_39' }], ['8050124027874', { n: 5, format: 'EAN_13' }]]),
+        // INNERHALB der Artikelnummern entscheidet die Trefferzahl — und genau das faengt die
+        // Fehllesungen ab. Der echte Fall aus dem Crafter-Lauf: die Fehllesung 8050124027874 (5x)
+        // trat GEMEINSAM mit der richtigen 4050821027874 (12x) auf.
+        //
+        // Frueher stand hier die Erwartung, ein oft gelesener Nicht-GTIN-Code muesse eine schwach
+        // gelesene GTIN schlagen. Das war ein konstruierter Fall: Ein Decoder meldet „ean_13" nur
+        // bei GUELTIGER Pruefziffer, eine solche Fehllesung setzt also eine echte EAN auf
+        // derselben Etikette voraus — und die wird zuverlaessig oefter gelesen. In Alex' Daten
+        // gilt das ausnahmslos fuer alle acht Fehllesungen mit gueltiger Pruefziffer.
+        zweiArtikelnummern: f([['8050124027874', { n: 5, format: 'EAN_13' }], ['4050821027874', { n: 12, format: 'EAN_13' }]]),
       };
     });
     ok('der öfter gelesene 1D-Code gewinnt', wahl.lagerfall === '4003899923098', JSON.stringify(wahl));
@@ -99,8 +107,8 @@ function req(m, p, t, b) {
     ok('ein QR gilt schon nach EINER Lesung (Fehlerkorrektur)',
       wahl.qrEinmal === 'https://id.abb/2CKA006800A3087', JSON.stringify(wahl.qrEinmal));
     ok('… auch der zweite echte Hersteller-QR', wahl.qrZweimal === 'https://qr.fischer.id/p/568010', JSON.stringify(wahl.qrZweimal));
-    ok('… und ein QR schlägt eine EAN daneben im Bild',
-      wahl.qrGegenEan === 'https://id.abb/2CKA006800A3087', JSON.stringify(wahl.qrGegenEan));
+    ok('… und ein QR schlägt eine Haus-/Bestellnummer daneben',
+      wahl.qrGegenAndere === 'https://id.abb/2CKA006800A3087', JSON.stringify(wahl.qrGegenAndere));
 
     console.log('\n── Plausibilität: was gar nicht erst gezählt wird ──');
     // Im Buecherregal las der Pruefstand ZWOELF achtstellige ITF-Codes, neun davon mit „00"
@@ -171,8 +179,38 @@ function req(m, p, t, b) {
 
     ok('bei gestapelten Codes gewinnt die Artikelnummer, nicht die interne Nummer',
       wahl.gestapelt === '4251786213047', JSON.stringify(wahl.gestapelt));
-    ok('… aber die Trefferzahl bleibt ausschlaggebend',
-      wahl.internOefter === '2003145', JSON.stringify(wahl.internOefter));
+    ok('… und unter zwei Artikelnummern gewinnt die öfter gelesene (so fallen Fehllesungen raus)',
+      wahl.zweiArtikelnummern === '4050821027874', JSON.stringify(wahl.zweiArtikelnummern));
+
+    console.log('\n── Rangfolge: Artikelnummer vor allem anderen (Lager 09.09.2026, 10:54) ──');
+    // Der Lauf mit eingeschraenktem Sichtfeld lieferte den entscheidenden Fall: Auf DERSELBEN
+    // Etikette standen die EAN (49x gelesen) und ein Haendler-QR (21x). Mit dem alten festen
+    // 2D-Bonus gewann die Haendler-Adresse — die bezeichnet den Artikel zwar auch, aber die GTIN
+    // ist die Nummer, die JEDER kennt. Das kehrt eine fruehere Entscheidung um: „2D schlaegt 1D
+    // immer" war damit begruendet, dass eine EAN ZUFAELLIG daneben im Bild liegen koenne. Mit dem
+    // Zielrahmen liegt nichts mehr zufaellig daneben.
+    const rang2 = await seite.evaluate(() => {
+      const c = (code, n, format) => [code, { n, format }];
+      const f = (paare) => scannerBesterTreffer(new Map(paare));
+      return {
+        eltropa:   f([c('4003899947209', 49, 'ean_13'), c('https://www.eltropa.de/produkt/2811369', 21, 'qr_code')]),
+        qrAllein:  f([c('https://qr.fischer.id/p/551442', 16, 'qr_code')]),
+        qrGegenSchwache: f([c('wmqr.eu/1422030000', 11, 'qr_code'), c('10501184', 1, 'upc_e')]),
+        viervier:  f([c('4311', 30, 'qr_code'), c('4050118225723', 15, 'ean_13')]),
+        werbungAllein: f([c('https://www.digitus.info/', 11, 'qr_code')]),
+      };
+    });
+    ok('die EAN schlägt den Händler-QR auf derselben Etikette',
+      rang2.eltropa === '4003899947209', JSON.stringify(rang2.eltropa));
+    ok('… ein QR allein gewinnt weiterhin (Valentins Fall)',
+      rang2.qrAllein === 'https://qr.fischer.id/p/551442', JSON.stringify(rang2.qrAllein));
+    ok('… gegen einen einmal gelesenen Strichcode ebenso (der erreicht die Schwelle nicht)',
+      rang2.qrGegenSchwache === 'wmqr.eu/1422030000', JSON.stringify(rang2.qrGegenSchwache));
+    // Der Fall, der die ganze Einschraenkung ausgeloest hat.
+    ok('… und „4311" verliert gegen eine Artikelnummer, trotz doppelt so vieler Lesungen',
+      rang2.viervier === '4050118225723', JSON.stringify(rang2.viervier));
+    ok('ein Werbecode wird allein trotzdem zurückgegeben (um ihn zu erklären)',
+      rang2.werbungAllein === 'https://www.digitus.info/', JSON.stringify(rang2.werbungAllein));
 
     console.log('\n── Rundgang vom 09.09.2026: zusammengesetzte Codes und Werbe-QR ──');
     // Zwei Funde aus einem Lager-Rundgang. Beide hätten still Doppel-Einträge erzeugt.

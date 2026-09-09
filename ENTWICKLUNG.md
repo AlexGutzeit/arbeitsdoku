@@ -14,6 +14,53 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-09 · Erster Lauf mit Zielrahmen — und eine umgekehrte Entscheidung
+
+39 Codes, 1774 Bilder. **Erster Treffer nach 6,5 s** statt 13–17 s, 6,5 Bilder/s statt 5,8 — der
+Zuschnitt kostet nichts, er hilft. Werbe-QRs (`lappkabel.de/cpr` 13×, `digitus.info` 11×) sauber
+abgewiesen, Hersteller-QRs (`qr.fischer.id/p/551442`) behalten, `054444116155` als Fehllesung von
+`4054433116155` benannt.
+
+**Der Fund:** Auf DERSELBEN Etikette standen
+
+```
+4003899947209                          EAN-13, 49× gelesen
+https://www.eltropa.de/produkt/2811369 QR,     21× gelesen
+```
+
+Mit dem festen 2D-Bonus (+1000) gewann die **Händler-Adresse**. Sie bezeichnet den Artikel zwar
+auch — aber die GTIN ist die Nummer, die *jeder* kennt: der Hersteller, der zweite Händler, das
+nächste System. Deshalb jetzt eine **Rangfolge in Klassen**, innerhalb der Klasse entscheidet die
+Trefferzahl:
+
+```
+3  gültige GTIN     2  2D-Code     1  sonstige     0  Werbecode
+```
+
+Das **kehrt eine frühere Entscheidung um**. „2D schlägt 1D immer" war damit begründet, dass eine EAN
+*zufällig daneben* im Bild liegen könne (Valentins Lauf). Mit dem Zielrahmen liegt nichts mehr
+zufällig daneben — die Begründung ist entfallen, also fällt auch die Regel. Ein QR als einzige
+Angabe gewinnt weiterhin.
+
+Nebenbei löst das den `4311`-Fall: Der unerklärte QR verliert jetzt gegen jede Artikelnummer auf
+derselben Etikette, auch mit doppelt so vielen Lesungen.
+
+**Ein selbst geschriebener Test fiel dabei** — „die Trefferzahl bleibt ausschlaggebend", vom selben
+Vormittag. Statt die Erwartung umzudrehen, erst geprüft, ob sein Fall real ist: Er paarte eine
+Fehllesung mit einem oft gelesenen Code von einer **anderen** Etikette. Ein Decoder meldet `ean_13`
+aber nur bei **gültiger Prüfziffer** — eine solche Fehllesung setzt also eine echte EAN auf
+derselben Etikette voraus, und die wird zuverlässig öfter gelesen. In Alex' Daten gilt das
+ausnahmslos für **alle acht** Fehllesungen mit gültiger Prüfziffer. Die Zusage prüft jetzt das, was
+wirklich trägt: Unter zwei Artikelnummern gewinnt die öfter gelesene.
+
+Der Prüfstand zeigt neuerdings auch **„→ Die App würde nehmen: …"**. Er listet alle Treffer, die App
+nimmt genau einen — ohne diese Zeile liest man eine Liste und weiß nicht, was am Ende im
+Bestellformular stünde.
+
+**Noch offen:** `*202511182 06/17/26` (Data-Matrix, 18×) ist eine Charge mit Verfallsdatum, keine
+Artikelnummer — pro Charge verschieden. Und `4311` bleibt unerklärt; neu ist nur, dass er *im
+Rahmen* lag, also auf einer Etikette klebt und nicht irgendwo im Fahrzeug.
+
 ### 2026-09-09 · Ein Test, der sich selbst vergiftet hatte
 
 Nach dem Ausschnitt-Umbau meldete die Suite `browser-smoke` rot — „Aufräumen: BT-Shared gelöscht".

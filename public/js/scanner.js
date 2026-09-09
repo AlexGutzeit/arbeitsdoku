@@ -198,26 +198,33 @@ function scannerBesterTreffer(zaehlung) {
     // Er bleibt trotzdem waehlbar, damit unten erklaert werden kann, was da gelesen wurde.
     const werbung = scannerIstWerbecode(code);
 
-    // GESTAPELTE ETIKETTEN. Alex (09.09.2026): „ich habe auch teilweise 3 Barcodes direkt
-    // uebereinander." Auf einer Grosshaendler-Etikette stehen typisch die Artikelnummer, eine
-    // Bestell- oder Hausnummer und manchmal eine Charge. Alle drei werden im selben Moment
-    // gelesen — bisher entschied allein die Trefferzahl, welche ins Formular kommt.
+    // RANGFOLGE IN KLASSEN, innerhalb der Klasse entscheidet die Trefferzahl:
     //
-    // In seinem Crafter-Lauf lagen 225 ms auseinander:
-    //   2003145        Code-39, 5x   — keine gueltige GTIN (interne Nummer)
-    //   4251786213047  Code-39, 5x   — gueltige GTIN (die Artikelnummer)
-    // Gleichstand: reiner Zufall, welche gewinnt. Eine Charge- oder Hausnummer im Katalog waere
-    // schlimm — sie ist pro Packung verschieden, jede Packung erzeugte ein neues „unbekanntes
-    // Produkt".
+    //   3  eine inhaltlich gueltige GTIN            — die Artikelnummer nach Norm
+    //   2  ein 2D-Code (Fehlerkorrektur)            — verlaesslich gelesen, aber irgendein Inhalt
+    //   1  alles Uebrige                            — Haus-, Bestell- oder Chargennummern
+    //   0  Werbe-/Infocode                          — nur, wenn sonst gar nichts da ist
     //
-    // Deshalb: eine inhaltlich gueltige GTIN zaehlt DOPPELT. Bewusst ein Faktor und kein fester
-    // Bonus — die Trefferzahl bleibt damit ausschlaggebend. Eine schwach gelesene GTIN (die auch
-    // eine Fehllesung sein kann) schlaegt keinen deutlich oefter gelesenen anderen Code.
-    const artikelnummer = scannerGtinGueltig(code);
-    const grund = n * (artikelnummer ? 2 : 1);
-    const gewicht = werbung
-      ? grund - 1000
-      : grund + (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D ? 1000 : 0);
+    // WARUM GTIN VOR 2D — und warum das eine fruehere Entscheidung umkehrt:
+    //
+    // Im Lager gemessen (Alex, 09.09.2026, 10:54), beide auf DERSELBEN Etikette:
+    //   4003899947209                          EAN-13, 49x gelesen
+    //   https://www.eltropa.de/produkt/2811369 QR,     21x gelesen
+    // Mit dem alten festen 2D-Bonus gewann die Haendler-Adresse. Sie bezeichnet den Artikel zwar
+    // auch, aber die GTIN ist die Nummer, die JEDER kennt — der Hersteller, der zweite Haendler,
+    // das naechste System. Die Adresse eines Haendlers ist es nicht.
+    //
+    // Frueher galt „2D schlaegt 1D immer", weil ein Hersteller-QR praeziser sei als eine EAN, die
+    // ZUFAELLIG DANEBEN im Bild liegt (Valentins Lauf). Diese Begruendung ist mit dem Zielrahmen
+    // entfallen: Es liegt nichts mehr zufaellig daneben, gelesen wird nur der Rahmen. Bleibt ein
+    // QR die einzige Angabe, gewinnt er weiterhin — Klasse 2 schlaegt Klasse 1.
+    //
+    // Die Schwelle greift VOR dieser Wertung (siehe oben): Ein einmal gelesener Code kommt gar
+    // nicht bis hierher, auch keine einmal gelesene GTIN.
+    const klasse = werbung ? 0
+      : scannerGtinGueltig(code) ? 3
+      : (scannerNoetigeLesungen(format) === SCANNER_LESUNGEN_2D ? 2 : 1);
+    const gewicht = klasse * 1000000 + n;
     if (gewicht > beste) { bester = code; beste = gewicht; }
   }
   return bester;

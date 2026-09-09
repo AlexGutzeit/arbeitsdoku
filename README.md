@@ -417,6 +417,12 @@ daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Auskla
 Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
 erraten würde still die falsche Bestellnummer anhängen.
 
+**Unter mehreren gelesenen Codes gewinnt die Artikelnummer.** Rangfolge: eine inhaltlich gültige
+GTIN zuerst, dann ein 2D-Code (Fehlerkorrektur), dann Haus-/Bestellnummern, zuletzt Werbecodes;
+innerhalb einer Stufe entscheidet, wie oft gelesen wurde. Grund: Auf einer Etikette standen die
+EAN (49 Lesungen) und ein Händler-QR (21) – die GTIN ist die Nummer, die *jeder* kennt, die Adresse
+eines Händlers nicht.
+
 **Gelesen wird nur, was im grünen Rahmen liegt.** Der Rahmen war früher Dekoration – jetzt ist er
 die Zusage: Das Bild wird auf ihn zugeschnitten, alles daneben ignoriert der Scanner. Vier
 Eckwinkel, ein abgedunkeltes Umfeld und der Satz „Nur was im Rahmen liegt, wird gelesen" sagen
