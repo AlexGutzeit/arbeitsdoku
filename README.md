@@ -424,7 +424,7 @@ Artikel auf denselben Eintrag.
 **Lieferschein-Etiketten** tragen oft gar keinen Artikel-Barcode, sondern Etiketten-, Tour- und
 Boxnummern. Eine rein numerische Angabe gilt deshalb nur dann als Artikelnummer, wenn sie die
 GTIN-Prüfziffer erfüllt; sonst verliert sie den Vorrang, und beim Anlegen erscheint ein Hinweis –
-solche Nummern ändern sich mit jeder Lieferung.
+solche Nummern ändern sich mit jeder Lieferung. Der Hinweis sagt auch, wo stattdessen zu suchen ist: meist auf einer anderen Seite des Kartons, auf dem Etikett des Herstellers.
 
 **Chargen- und Werbecodes werden erklärt statt gespeichert.** Ein Data-Matrix wie
 `*202511182 06/17/26` enthält Charge und Haltbarkeit – bei jeder Lieferung anders, als Barcode

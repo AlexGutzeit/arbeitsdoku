@@ -609,8 +609,9 @@ function produktAnlegenMaske(code) {
             <strong>Prüf das bitte kurz.</strong> Diese Zahl erfüllt keine Artikelnummer-Prüfziffer.
             Auf <em>Lieferschein-Etiketten</em> stehen Etiketten-, Tour- und Boxnummern, die sich mit
             jeder Lieferung ändern – als Barcode gespeichert wäre das Produkt beim nächsten Mal
-            wieder unbekannt. Der Artikel-Barcode steht meist auf der Ware selbst, nicht auf dem
-            Versandkarton.
+            wieder unbekannt.<br>
+            <strong>Dreh den Karton um:</strong> Der Artikel-Barcode steht meist auf einer anderen
+            Seite, auf dem Etikett des Herstellers – oder auf der Ware selbst.
           </p>` : ''}
           <p style="margin:0 0 .9rem;color:var(--text-light);font-size:.85rem">
             Dieser Name steht künftig allen zur Auswahl. Bitte schau kurz, ob es das Produkt schon

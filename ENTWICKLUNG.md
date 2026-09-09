@@ -49,8 +49,24 @@ ist er der **einzige** mit höchstens fünf. Die nächstkürzeren echten Nummern
 bleiben unberührt.
 
 So bleibt auf dem fotografierten Lieferschein-Etikett die Etiketten-ID `801036963840` übrig — samt
-Warnung, dass sie sich mit jeder Lieferung ändert. Mehr ist dort nicht zu holen: Ein Artikel-Barcode
-steht auf dem Karton schlicht nicht drauf.
+Warnung, dass sie sich mit jeder Lieferung ändert.
+
+**Nachtrag, und eine Korrektur an mir selbst:** Ich hatte geschrieben, auf diesem Karton gebe es
+gar keinen Artikel-Barcode. Alex hat **denselben Karton von der anderen Seite** fotografiert — dort
+klebt das Hersteller-Etikett von Schletter:
+
+```
+Unterlegplatte Dachhaken 2,5/5 mm      973000-075      100 Stk
+EAN-13  4262371512483   (Prüfziffer stimmt)   + ein QR
+```
+
+Die Aussage galt also nur für das **Lieferschein-Etikett**. Der Karton trägt sehr wohl eine gültige
+GTIN, nur eben auf einer anderen Seite — und die schlägt in der Rangfolge beide Logistikcodes, auch
+mit weit weniger Lesungen. In keinem der fünf Läufe kam sie vor; diese Seite wurde nie gescannt.
+
+Der Warntext sagte deshalb bisher etwas Irreführendes („steht meist auf der Ware selbst, nicht auf
+dem Versandkarton"). Er lautet jetzt: **„Dreh den Karton um: Der Artikel-Barcode steht meist auf
+einer anderen Seite, auf dem Etikett des Herstellers — oder auf der Ware selbst."*
 
 ### 2026-09-09 · Das Etikett löst beide Rätsel
 

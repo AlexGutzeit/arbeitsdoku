@@ -374,6 +374,13 @@ function req(m, p, t, b) {
       /Prüfziffer/.test(maskeEtikett), maskeEtikett.slice(0, 200));
     ok('… mit dem Hinweis auf Lieferschein-Etiketten',
       /Lieferschein/.test(maskeEtikett) && /jeder Lieferung/.test(maskeEtikett), maskeEtikett.slice(0, 300));
+    // Alex hat DENSELBEN Karton von der anderen Seite fotografiert: Dort klebt das
+    // Hersteller-Etikett von Schletter mit EAN-13 4262371512483 (gueltige Pruefziffer) zum
+    // Artikel 973000-075. Meine Aussage „auf diesem Karton gibt es gar keinen Artikel-Barcode"
+    // war also falsch — sie galt nur fuer das Lieferschein-Etikett. Der Hinweis sagt jetzt, wo
+    // man wirklich nachschauen muss.
+    ok('… und sagt, wo der Artikel-Barcode stattdessen steht',
+      /andere[nr]? Seite/.test(maskeEtikett) && /Hersteller/.test(maskeEtikett), maskeEtikett.slice(0, 400));
     await seite.evaluate(() => { const b = [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/.test(x.textContent)); if (b) b.click(); });
     await sleep(500);
     await scanVorgeben('4046281411223');
