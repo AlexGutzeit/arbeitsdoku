@@ -750,8 +750,14 @@ doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusamm
   - **alle** – darf alle Mitarbeiter verplanen und sieht in der **Planungsansicht** deren Abwesenheiten (Typ, **ohne** Kommentar). Schließt „sich" automatisch ein.
 - **Schwarzes Brett bearbeiten** – darf Aushänge verfassen
 - **Dokumente hochladen** – darf in der Dateiablage hochladen/verwalten
+- **Bestellungen abschließen** – darf offene Bestellungen auf *Bestellt* setzen und fremde Einträge
+  korrigieren (Vorarbeiter, Urlaubsvertretung). Zähler und Push-Meldung folgen dem Recht.
+- **Lagerdaten pflegen** – darf das Produktverzeichnis aufräumen: umbenennen, Kategorie wechseln,
+  Barcodes umhängen oder entfernen, Großhändler pflegen, zusammenführen, löschen – und als
+  einziger ein Produkt **ohne Barcode** anlegen. **Anlegen mit Barcode darf dagegen jeder**: Wer im
+  Lager vor einem unbekannten Code steht und nichts eintragen kann, umgeht die App.
 
-> Diese Einzelrechte gelten nur für **Mitarbeiter/Buchhalter**. **Chef und Admin** haben Planung, Schwarzes Brett und Datei-Upload ohnehin über ihre Rolle – im Bearbeiten-Formular werden die Checkboxen für sie darum ausgeblendet (und die Flags nicht gespeichert).
+> Diese Einzelrechte gelten nur für **Mitarbeiter/Buchhalter**. **Chef und Admin** haben Planung, Schwarzes Brett und Datei-Upload ohnehin über ihre Rolle – im Bearbeiten-Formular werden die Checkboxen für sie darum ausgeblendet (und die Flags nicht gespeichert). Beim **Buchhalter** laufen die beiden letzten Rechte auseinander: *Bestellungen abschließen* hat er über seine Rolle, *Lagerdaten pflegen* **nicht** – mit dem Lager hat er nichts zu tun, wer ihn trotzdem braucht, bekommt das Häkchen wie jeder andere.
 
 > Geänderte Rechte greifen für den betroffenen Nutzer **ohne Ab-/Anmelden** – ein Seiten-Reload (F5) bzw. das Zurückkehren zum Tab genügt.
 
@@ -861,7 +867,7 @@ Konfiguration über die Datei `.env` (Vorlage: `.env.example`).
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` | nein | – | Schlüsselpaar für **Push-Benachrichtigungen** (Web Push). Einmalig erzeugen mit `node -e "console.log(require('web-push').generateVAPIDKeys())"`. Fehlen sie, ist Push inaktiv. |
 | `VAPID_SUBJECT` | nein | `mailto:admin@example.com` | Kontaktangabe (`mailto:` oder `https:`) für den Push-Dienst. |
 | `TWOFA_KEY` | nein, **empfohlen** | aus `JWT_SECRET` abgeleitet | Schlüssel, mit dem die Authenticator-Geheimnisse in der Datenbank verschlüsselt werden. 32 Byte als hex oder base64 (`openssl rand -base64 32`). Ohne diesen Wert wird einer aus `JWT_SECRET` abgeleitet — dann gilt: **Wer `JWT_SECRET` austauscht, macht alle Authenticator-Einrichtungen ungültig.** Der Wert gehört auf **jede** Anlage (auch die Zweitanlage) und liegt **nicht** im Backup. |
-| `BACKUP_EMPFAENGER` | nein | leer → Klartext-ZIP | Öffentliche Schlüssel der Sicherungs-Empfänger, mit Komma getrennt (`minipc:MFkw…,offline:MFkw…`). Gesetzt ⇒ **sowohl Downloads als auch die nächtliche Sicherung** sind verschlüsselte `.adbk`-Dateien, die der Server selbst **nicht** lesen kann. Dasselbe bewirkt ein Eintrag unter *Einstellungen → Backup*. Nur dann wandert auch die **`.env`** mit ins Archiv – ohne Empfänger bleibt sie draussen, denn ein Klartext-Zip mit `TWOFA_KEY` läge am Ende in 60 Versionen auf zwei Rechnern. Paar erzeugen: `node scripts/backup-schluessel.js <name>`. |
+| `BACKUP_EMPFAENGER` | nein | leer → Klartext-ZIP | Öffentliche Schlüssel der Sicherungs-Empfänger, mit Komma getrennt (`minipc:MFkw…,offline:MFkw…`). Gesetzt ⇒ **sowohl Downloads als auch die nächtliche Sicherung** sind verschlüsselte `.adbk`-Dateien, die der Server selbst **nicht** lesen kann. Dasselbe bewirkt ein Eintrag unter *Einstellungen → Backup*. Nur dann wandert auch die **`.env`** mit – aber ausschliesslich in die **nächtliche** Sicherung, nicht in den Download über die Oberfläche (der landet im Browser eines Menschen). Ohne Empfänger bleibt sie überall draussen, denn ein Klartext-Zip mit `TWOFA_KEY` läge am Ende in 60 Versionen auf zwei Rechnern. Paar erzeugen: `node scripts/backup-schluessel.js <name>`. |
 | `BACKUP_SCHLUESSEL` | nein | leer | **Privater** Schlüssel dieser Maschine. Gehört **nicht** auf den Hauptserver (der soll nur verschlüsseln können), wohl aber auf die Zweitanlage, damit `notfall-umschalten.sh` ohne Menschen entschlüsselt. |
 | `TWOFA_AUS` | nein | – | **Notfall-Schalter.** Auf `1` gesetzt wird kein zweiter Faktor mehr verlangt: kein Code beim Anmelden, keine erzwungene Einrichtung. Es wird nichts gelöscht — Variable entfernen, Dienst neu starten, alles greift wie zuvor. |
 | `CHROME_BIN` | nein | – | Nur für die Browser-Tests (Puppeteer), nicht für den Betrieb. |
@@ -1066,6 +1072,24 @@ Empfänger einzeln per ECDH P-256 + HKDF-SHA256 verpackt ist.
 Landet ein `.adbk` doch einmal direkt beim Server, antwortet er mit dieser Erklärung statt mit
 einem Fehler.
 
+#### Die nächtliche Sicherung (Cron)
+
+`scripts/make-backup.js` erzeugt eine Sicherung ohne laufenden Server — es liest die Datenbank
+schreibgeschützt und verschlüsselt genauso, wie die Oberfläche es täte. Es schreibt zuerst nach
+`.part` und benennt erst am Ende um, sodass nie eine halbe Datei abgeholt wird; `BACKUP_KEEP`
+begrenzt die Zahl der Stände (`.zip` und `.adbk` zählen gemeinsam).
+
+```
+0 0,6,12,18 * * * /usr/bin/node /PFAD/ZUR/APP/scripts/make-backup.js >> ~/backup.log 2>&1
+```
+
+> **Die Falle beim Einrichten:** Cron startet im Heimatverzeichnis, nicht im App-Verzeichnis. Steht
+> in der `.env` ein **relativer** Pfad (`DB_PATH=./data/arbeitsdoku.db`), findet ein Programm, das
+> von woanders startet, die Datenbank nicht — die App selbst merkt nichts, weil systemd ihr
+> Arbeitsverzeichnis setzt. Das Skript löst `.env`-Pfade deshalb gegen das App-Verzeichnis auf.
+> Wer es **testet**, testet mit `cd ~ &&` und der Zeile aus dem crontab: Ein Probelauf aus dem
+> App-Verzeichnis beweist nur, dass man selbst am richtigen Ort steht.
+
 **Vorhandene Klartext-Sicherungen** stellt ein eigenes Skript um. Es verschlüsselt, entschlüsselt
 sofort wieder, vergleicht Byte für Byte — und löscht das Klartext-ZIP **erst danach**. Scheitert
 die Rückprobe, bleibt das ZIP unangetastet liegen. Ohne privaten Schlüssel (also auf dem Server)
@@ -1076,11 +1100,20 @@ node scripts/backup-altbestand-verschluesseln.js ~/arbeitsdoku-backups --trocken
 node scripts/backup-altbestand-verschluesseln.js ~/arbeitsdoku-backups
 ```
 
-**Die `.env` liegt nicht im Backup** — und das ist Absicht: Auf der Zweitanlage steht dort der
-*private* Sicherungsschlüssel, der sonst in der abgeschlossenen Kiste läge. Ein Restore bringt also
-die Daten zurück, nicht die Geheimnisse. Drei Werte gehören deshalb neben den Sicherungsschlüssel
-in die Passwortverwaltung: `JWT_SECRET`, `TWOFA_KEY` (ohne ihn ist jede Zwei-Faktor-Einrichtung
-wertlos) und auf der Zweitanlage `BACKUP_SCHLUESSEL`.
+**Die `.env` liegt in der nächtlichen Sicherung — aber nur in einer verschlüsselten.** Ohne sie
+bringt ein Restore die Daten zurück, aber nicht die Geheimnisse: `TWOFA_KEY` entschlüsselt die
+Zwei-Faktor-Geheimnisse in der Datenbank (ohne ihn kommt niemand mehr an einem zweiten Faktor
+vorbei), die `VAPID_`-Schlüssel machen alle Push-Anmeldungen wertlos, `JWT_SECRET` wirft alle
+Sitzungen weg. Ist **kein** Empfänger hinterlegt, bleibt die `.env` draußen — eine
+Klartext-Sicherung mit allen Schlüsseln darin wäre schlimmer als gar keine. Die Regel steht als
+verneinende Zusage in `tests/backup-naechtlich.js`.
+
+Der **Download über die Oberfläche** enthält die `.env` **nicht**, auch verschlüsselt nicht: Er
+landet im Browser eines Menschen, nicht in einer abgeschlossenen Kiste.
+
+Auf der Zweitanlage steht in der `.env` zusätzlich der *private* Sicherungsschlüssel
+(`BACKUP_SCHLUESSEL`). Er gehört trotzdem **auch** in die Passwortverwaltung — eine Sicherung, deren
+einziger Schlüssel nur in ihr selbst liegt, ist keine.
 
 > **Der eine wirklich gefährliche Punkt:** Wer *alle* privaten Schlüssel verliert, verliert die
 > gesamte Sicherungs-Historie — endgültig, ohne Hintertür. Der zweite Schlüssel gehört deshalb an
@@ -1158,11 +1191,14 @@ node tests/pause-beispiele.js
 Alle nacheinander (dauert etwa eine Dreiviertelstunde):
 
 ```bash
-for t in tests/*.js; do
-  printf '%-40s' "$(basename "$t")"
-  timeout 700 node "$t" >/dev/null 2>&1 && echo OK || echo FEHLER
-done
+scripts/suite.sh          # Protokoll: /tmp/arbeitsdoku-suite.log
 ```
+
+Das Skript nimmt zwei Erfahrungen vorweg. Es **sperrt** mit `flock` — zwei gleichzeitig laufende
+Suiten streiten sich um die festen Testports und schreiben in dasselbe Protokoll; einmal meldete
+das Ergebnis „248 von 151 durchgelaufen". Und sein **Rückgabecode kommt vom Testergebnis**, nicht
+vom letzten Befehl, sonst meldet ein erfolgreicher Lauf „fehlgeschlagen", nur weil die letzte Zeile
+eine nicht zutreffende Bedingung war.
 
 Browser-Tests brauchen einmalig `chrome-headless-shell` (Anleitung in
 [`tests/README.md`](tests/README.md)). Tests mit `-prodklon` im Namen arbeiten gegen eine **Kopie**
