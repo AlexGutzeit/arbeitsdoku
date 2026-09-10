@@ -36,9 +36,24 @@ require(path.join(APP, 'node_modules', 'dotenv')).config({ path: path.join(APP, 
 const archiver = require(path.join(APP, 'node_modules', 'archiver'));
 const krypto = require(path.join(APP, 'backup-krypto'));
 
-const DB_PATH = process.env.DB_PATH || path.join(APP, 'data', 'arbeitsdoku.db');
+// Pfade aus der `.env` sind RELATIV zur App, nicht zum Arbeitsverzeichnis.
+//
+// Am 10.09.2026 fielen zwei naechtliche Sicherungen aus: `DB_PATH=./data/arbeitsdoku.db` steht so
+// in der `.env`, und cron startet im Heimatverzeichnis — dort gibt es kein `./data`. Die App
+// selbst merkt davon nichts, weil systemd sie im App-Verzeichnis startet. Mein Handlauf am Abend
+// zuvor lief aus demselben Grund durch: Ich stand zufaellig im richtigen Verzeichnis.
+// Ein Sicherungsskript darf nicht davon abhaengen, WO es aufgerufen wird.
+const ausApp = (wert, ...standard) =>
+  wert ? (path.isAbsolute(wert) ? wert : path.resolve(APP, wert)) : path.join(APP, ...standard);
+
+const DB_PATH = ausApp(process.env.DB_PATH, 'data', 'arbeitsdoku.db');
 const ENV_PATH = path.join(APP, '.env');
-const OUT_DIR = process.argv[2] || process.env.BACKUP_OUT || path.join(path.dirname(APP), 'arbeitsdoku-backups');
+// Beim Aufrufargument bleibt das Arbeitsverzeichnis massgeblich — das erwartet man auf der
+// Kommandozeile. Nur der Wert aus der `.env` haengt an der App.
+const OUT_DIR = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : (process.env.BACKUP_OUT ? path.resolve(APP, process.env.BACKUP_OUT)
+                            : path.join(path.dirname(APP), 'arbeitsdoku-backups'));
 const KEEP = Number(process.env.BACKUP_KEEP || 60);   // 4x taeglich -> 15 Tage
 
 const teile = [
@@ -108,7 +123,12 @@ function altesEntfernen() {
 
 (async () => {
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  if (!fs.existsSync(DB_PATH)) { console.error('[backup] DB fehlt: ' + DB_PATH); process.exit(1); }
+  if (!fs.existsSync(DB_PATH)) {
+    // Den GEMEINTEN Pfad mitschreiben, nicht den geschriebenen: „DB fehlt: ./data/arbeitsdoku.db"
+    // sagt nicht, wo gesucht wurde, und genau daran lag es beim Ausfall am 10.09.2026.
+    console.error(`[backup] DB fehlt: ${DB_PATH} (App ${APP}, DB_PATH=${process.env.DB_PATH || '—'})`);
+    process.exit(1);
+  }
 
   const empfaenger = await empfaengerLesen();
   const verschluesselt = empfaenger.length > 0;

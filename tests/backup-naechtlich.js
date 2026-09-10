@@ -128,6 +128,41 @@ function aufbauen(empfaengerZeile) {
     const d5 = dateien();
     ok('alte Zips werden mitgezählt und weggeräumt', d5.length === 2, JSON.stringify(d5));
     ok('… die neue verschlüsselte ist dabei', d5.some(f => f.endsWith('.adbk')), JSON.stringify(d5));
+    // ── 6. Der Ausfall vom 10.09.2026: relativer DB_PATH, woanderses Arbeitsverzeichnis ─────────
+    //
+    // In der `.env` des Produktivservers steht `DB_PATH=./data/arbeitsdoku.db`. cron startet im
+    // Heimatverzeichnis — dort gibt es kein `./data`, und zwei Sicherungen fielen wortlos aus
+    // („DB fehlt: ./data/arbeitsdoku.db"). Die App merkte nichts, weil systemd sie im
+    // App-Verzeichnis startet. Genau diese Kombination wird hier nachgestellt.
+    console.log('\n── Relativer DB_PATH aus der .env, aufgerufen von woanders ──');
+    fs.rmSync(AUS, { recursive: true, force: true });
+    aufbauen(null);
+    fs.appendFileSync(path.join(APP, '.env'), 'DB_PATH=./data/arbeitsdoku.db\n');
+    fs.writeFileSync(path.join(APP, 'data', 'arbeitsdoku.db'), dbBauen([]));
+    // Ein Verzeichnis, in dem es garantiert kein „./data" gibt — wie das Heimatverzeichnis bei cron.
+    const woanders = path.join(WURZEL, 'woanders');
+    fs.mkdirSync(woanders, { recursive: true });
+    let ausgabe6 = '', fehler6 = null;
+    try {
+      ausgabe6 = execFileSync(process.execPath, [path.join(REPO, 'scripts', 'make-backup.js'), AUS],
+        { env: { ...process.env, ARBEITSDOKU_APP: APP }, cwd: woanders, encoding: 'utf8' });
+    } catch (e) { fehler6 = (e.stderr || '') + (e.stdout || ''); }
+    ok('die Sicherung läuft trotzdem durch', fehler6 === null, String(fehler6).slice(0, 200));
+    ok('… und es liegt wirklich eine Datei da', dateien().length === 1, JSON.stringify(dateien()));
+    ok('… und die Meldung bestätigt eine fertige Sicherung', /OK arbeitsdoku_backup_/.test(ausgabe6),
+      ausgabe6.slice(0, 200));
+    // Gegenprobe: Fehlt die DB WIRKLICH, muss die Meldung sagen, WO gesucht wurde — der alte Text
+    // nannte nur „./data/arbeitsdoku.db" und verschwieg damit das Entscheidende.
+    fs.unlinkSync(path.join(APP, 'data', 'arbeitsdoku.db'));
+    let meldung = '';
+    try {
+      execFileSync(process.execPath, [path.join(REPO, 'scripts', 'make-backup.js'), AUS],
+        { env: { ...process.env, ARBEITSDOKU_APP: APP }, cwd: woanders, encoding: 'utf8' });
+    } catch (e) { meldung = (e.stderr || '') + (e.stdout || ''); }
+    ok('fehlt die DB wirklich, nennt die Meldung den gesuchten Ort',
+      /DB fehlt/.test(meldung) && meldung.includes(path.join(APP, 'data', 'arbeitsdoku.db')),
+      meldung.slice(0, 200));
+
   } catch (e) {
     ok('Durchlauf ohne Ausnahme', false, e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e.message);
   } finally {

@@ -14,6 +14,42 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-10 · Zwei Sicherungen fielen aus — ein Punkt am falschen Bezugspunkt
+
+Die Morgenkontrolle meldete um 07:30: *„keine Sicherung von heute — VPS hat nicht gesichert oder
+das Abholen klemmt."* Im Protokoll des VPS standen zweimal drei Worte:
+
+```
+[backup] DB fehlt: ./data/arbeitsdoku.db
+```
+
+In der `.env` steht `DB_PATH=./data/arbeitsdoku.db` — **relativ**. cron startet im
+Heimatverzeichnis, dort gibt es kein `./data`. Betroffen waren die Läufe um 00:00 und 06:00, also
+beide seit der Umstellung auf das neue Skript am Vorabend.
+
+**Warum es vorher lief und warum ich es nicht gemerkt habe:**
+
+* Das **alte** Skript lag in einem eigenen Verzeichnis und hatte seinen Pfad fest verdrahtet.
+* Die **App** merkt davon nichts: systemd startet sie mit `WorkingDirectory` im App-Verzeichnis.
+* Mein **Handlauf am Abend** lief durch, weil ich zufällig im App-Verzeichnis stand. Ein Test, der
+  nur beweist, dass man selbst am richtigen Ort steht, beweist nichts über cron.
+
+**Die Lehre ist nicht „Pfad korrigieren", sondern:** Ein Sicherungsskript darf nicht davon
+abhängen, **wo** es aufgerufen wird. Pfade aus der `.env` beziehen sich jetzt auf das
+App-Verzeichnis (`ausApp()`), nicht auf das Arbeitsverzeichnis; nur ein Pfad, der als
+Kommandozeilen-Argument kommt, bleibt cwd-relativ — das erwartet man dort.
+
+**Die Fehlermeldung war mitschuldig.** `DB fehlt: ./data/arbeitsdoku.db` sagt nicht, **wo** gesucht
+wurde — genau die Angabe, die den Fall in einem Satz gelöst hätte. Sie nennt jetzt den aufgelösten
+Pfad, das App-Verzeichnis und den Rohwert aus der `.env`.
+
+Der Test (`tests/backup-naechtlich.js`, Abschnitt 6) stellt die Kombination nach: relativer
+`DB_PATH` in der `.env` **plus** Aufruf aus einem fremden Verzeichnis. Die Gegenprobe mit dem alten
+Code macht vier Zusicherungen rot und schreibt dabei wörtlich dieselbe Zeile wie der Produktivserver.
+
+**Nicht angefasst:** `database/init.js` löst `DB_PATH` ebenfalls gegen das Arbeitsverzeichnis auf.
+Dort ist es heute harmlos (systemd setzt das Verzeichnis), aber dieselbe Zerbrechlichkeit.
+
 ### 2026-09-09 · Produkte ohne Barcode — und wie die Gründungsregel dabei heil bleibt
 
 Alex wollte die **Gegenrichtung**: *„und das optional einem Produkt mit Barcode über eine suche
