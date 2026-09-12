@@ -14,6 +14,35 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-12 · Am Prüfstand war kein Knopf — zum zweiten Mal ein unsichtbares Bedienelement
+
+Alex: *„am Prüfstand ist gerade gar kein button zu sehen um das scannen zu aktivieren."*
+
+Der Halte-Knopf hing an einem Häkchen, das **aus** war — und seine Anfangsanzeige stand zusätzlich
+fest im HTML (`display:none`). Zwei Quellen für dieselbe Aussage „ist der Knopf sichtbar?", und sie
+liefen auseinander. Behoben an der Wurzel: Das `display:none` ist **raus**, das Häkchen ist
+**gesetzt** (der Prüfstand soll sich verhalten wie die App), und die Sichtbarkeit stellt beim Start
+dieselbe Funktion her, die auch das Umschalten bedient.
+
+**Das war der zweite Fall derselben Art.** Am 09.09. standen die beiden Schalter innerhalb von
+`#zoombox`, die ohne Kamera-Zoom ausgeblendet ist — auf Alex' Android war der Zoom da, auf einem
+iPhone ohne Zoom wären sie unsichtbar gewesen. Beide Male hat es **kein Test gemerkt**, und zwar
+aus einem simplen Grund: **Keiner hat die Seite je geladen.** Der Prüfstand war „nur ein Werkzeug".
+
+`tests/scanner-pruefstand-ui.js` holt das nach. Er läuft **ohne Kamera** — headless gibt es keine,
+und das ist genau der Punkt: Die Bedienelemente müssen schon vor dem Start sichtbar sein. Geprüft
+wird der Knopf vor jedem Start, das Aus- und Wiedereinschalten, die Lage **unter** dem Kamerabild
+(über die gemessenen Rechtecke, nicht über die Zeile im Quelltext) — und ausdrücklich, dass keiner
+der drei Schalter in `#zoombox` liegt, während die zugeklappt ist. Die Gegenprobe mit dem Zustand
+von heute Morgen macht drei Zusicherungen rot.
+
+**In der App ist der Knopf unbedingt** — kein Häkchen, kein `display:none`, ausserhalb der Zoom-Box,
+unter dem Bild. Dort kann derselbe Fehler nicht auftreten.
+
+**Beim Entfernen des Prüfstands mitnehmen:** `public/scanner-probe.html`, `public/scanner-probe.js`,
+der Link auf der Bestellseite **und** `tests/scanner-pruefstand-ui.js`. Das steht auch im Kopf der
+Testdatei.
+
 ### 2026-09-10 · Zwei Sicherungen fielen aus — ein Punkt am falschen Bezugspunkt
 
 Die Morgenkontrolle meldete um 07:30: *„keine Sicherung von heute — VPS hat nicht gesichert oder

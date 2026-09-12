@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**216 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**217 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -208,6 +208,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `robustheit-v6-ui.js` | Test der Robustheits-Runde (letzte offene Punkte der Bugliste v6): |
 | `scanner-ausschnitt-ui.js` | Der Scanner liest nur noch, was im Rahmen liegt (Alex, 09.09.2026). |
 | `scanner-formular-ui.js` | Der Scanner im Bestellformular — mit GESTELLTEM Decoder. |
+| `scanner-pruefstand-ui.js` | Der Prüfstand (public/scanner-probe.html) — ist überhaupt zu sehen, was man bedienen muss? |
 | `scenario-shared-planning.js` | Komplexer Szenario-Test gegen den PROD-KLON (data/local.db, anonymisiert → Passwort 'test'). |
 | `scheduler-tick.js` | In-Process-Test des Zusammenfassungs-Schedulers: reine Funktionen isDue()/buildSummaryText() + |
 | `scroll-ruckeln-prodklon.js` | Prod-Klon-Pruefung: Kein Zurueckspringen beim Scrollen — mit den ECHTEN Daten, |

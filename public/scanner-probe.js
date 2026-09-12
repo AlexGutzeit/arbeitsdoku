@@ -506,6 +506,12 @@
     $('halten').style.background = '#2e7d32'; melde('Wird gelesen — ruhig auf den Code halten …'); };
   const haltenAus = () => { if (!liest) return; liest = false;
     $('halten').style.background = '#4CAF50'; melde('Losgelassen.'); };
+  // Anfangszustand aus dem Haekchen herstellen — EINE Quelle fuer „Knopf sichtbar?".
+  const halteknopfZeigen = () => {
+    $('halten').style.display = $('haltemodus').checked ? '' : 'none';
+  };
+  halteknopfZeigen();
+
   $('halten').addEventListener('pointerdown', (ev) => { ev.preventDefault();
     try { $('halten').setPointerCapture(ev.pointerId); } catch (_) {} haltenAn(); });
   for (const n of ['pointerup', 'pointercancel', 'pointerleave']) $('halten').addEventListener(n, haltenAus);
@@ -515,7 +521,7 @@
 
   document.addEventListener('change', (ev) => {
     if (ev.target && ev.target.id === 'haltemodus') {
-      $('halten').style.display = ev.target.checked ? '' : 'none';
+      halteknopfZeigen();
       if (!ev.target.checked) haltenAus();
     }
     if (ev.target && ev.target.id === 'nurrahmen') {

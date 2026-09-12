@@ -89,8 +89,8 @@
        da, also fiel es nie auf; auf einem iPhone ohne Zoom waeren die Schalter unsichtbar
        gewesen. Sie gehoeren ausserhalb, denn mit dem Zoom haben sie nichts zu tun. -->
   <label style="display:flex;align-items:center;gap:.5rem;margin:.5rem 0">
-    <input type="checkbox" id="haltemodus">
-    <span>nur scannen, <strong>solange der Knopf gedrückt ist</strong> — wie der echte Scanner.
+    <input type="checkbox" id="haltemodus" checked>
+    <span>nur scannen, <strong>solange der Knopf gedrückt ist</strong> (<strong>wie die App</strong>).
       Jede Haltung gilt dann als EINE Etikette; ausgeschaltet läuft es durch (für lange Messungen).</span>
   </label>
   <label style="display:flex;align-items:center;gap:.5rem;margin:.5rem 0">
@@ -117,7 +117,11 @@
   </div>
   <!-- Der Knopf gehoert UNTER das Kamerabild — dort liegt auf dem Handy der Daumen (Alex,
        09.09.2026: „Das ist auf dem Smartphone intuitiver"). In der App steht er schon so. -->
-  <button id="halten" style="display:none;width:100%;padding:.95rem;border-radius:10px;
+  <!-- KEIN display:none hier. Ob der Knopf sichtbar ist, entscheidet allein das Häkchen
+       „gedrückt halten"; das Skript stellt das beim Start einmal her. Stand die Anfangsanzeige
+       im HTML, mussten zwei Stellen übereinstimmen — am 12.09.2026 taten sie es nicht, und der
+       Prüfstand hatte gar keinen Knopf mehr. -->
+  <button id="halten" style="width:100%;padding:.95rem;border-radius:10px;
           border:2px solid #4CAF50;background:#4CAF50;color:#fff;font-size:1.02rem;cursor:pointer;
           touch-action:none;user-select:none;-webkit-user-select:none;margin:.2rem 0 .5rem">
     Zum Scannen <strong>gedrückt halten</strong></button>
