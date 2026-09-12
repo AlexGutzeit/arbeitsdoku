@@ -115,6 +115,45 @@ function req(m, p) {
       ok(`„${name}" ist sichtbar`, await sichtbar(w));
     }
 
+    console.log('\n── Die Lesezeit zählt nur, solange wirklich gelesen wird ──');
+    // Der Lauf vom 12.09.2026 meldete „318 Bilder geprüft (1.3/s)" — der Scanner sah lahm aus.
+    // Er war es nicht: Geteilt wurde durch die ganze verstrichene Zeit, obwohl im Haltebetrieb
+    // nur beim Drücken überhaupt ein Bild angesehen wird (308 Lesungen aus 318 Bildern = 97 %).
+    const zeit = await seite.evaluate(async () => {
+      const P = window.__pruefstand;
+      const warte = (ms) => new Promise(r => setTimeout(r, ms));
+      P.lesenStop();                       // Ausgangslage: Uhr steht
+      const start = P.lesezeitMs();
+      P.lesenStart(); await warte(300); P.lesenStop();
+      const nachLesen = P.lesezeitMs();
+      await warte(300);                    // Pause — hier darf NICHTS dazukommen
+      const nachPause = P.lesezeitMs();
+      P.lesenStart(); await warte(200); P.lesenStop();
+      return { start, gelesen: nachLesen - start, waehrendPause: nachPause - nachLesen,
+               gesamt: P.lesezeitMs() - start };
+    });
+    ok('eine Haltung von 300 ms zählt als etwa 300 ms',
+      zeit.gelesen > 250 && zeit.gelesen < 450, JSON.stringify(zeit));
+    ok('… eine Pause von 300 ms zählt GAR NICHT',
+      zeit.waehrendPause < 20, JSON.stringify(zeit));
+    ok('… zwei Haltungen summieren sich (300 + 200)',
+      zeit.gesamt > 450 && zeit.gesamt < 750, JSON.stringify(zeit));
+
+    console.log('\n── Der Bericht sagt, wie gemessen wurde ──');
+    // Ohne die Stellung der beiden Schalter sind die Zahlen nicht deutbar — im Lauf vom
+    // 12.09.2026 fehlte sie, und damit war offen, ob Haltebetrieb oder Dauerlesen gemessen wurde.
+    // Die Zwischenablage ist headless nicht erreichbar — der Text entsteht aber davor, in einer
+    // eigenen Funktion. Genau deshalb ist sie aus dem Klick-Handler herausgelöst.
+    const bericht = () => seite.evaluate(() => window.__pruefstand.bericht());
+    let txt = await bericht();
+    ok('der Bericht nennt „gedrückt halten: an"', /gedrückt halten: an/.test(txt), txt.slice(0, 300));
+    ok('… und „nur im Rahmen lesen: an"', /nur im Rahmen lesen: an/.test(txt), txt.slice(0, 300));
+    await seite.evaluate(() => document.getElementById('nurrahmen').click());
+    await sleep(200);
+    txt = await bericht();
+    ok('… und er folgt dem Schalter (abgeschaltet steht es auch da)',
+      /nur im Rahmen lesen: AUS/.test(txt), txt.slice(0, 300));
+
     ok('am Ende immer noch keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.slice(0, 2).join(' | '));
   } catch (e) {
     ok('Durchlauf ohne Ausnahme', false, e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e.message);

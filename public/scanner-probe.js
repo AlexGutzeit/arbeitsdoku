@@ -83,6 +83,27 @@
   let strom = null, laeuft = false, nativDetector = null, zxingLeser = null;
   let aktuelleSpur = null;
   let versuche = 0, ersterTrefferMs = null, beginn = 0;
+
+  // LESEZEIT statt Uhrzeit — der Lauf vom 12.09.2026 hat gezeigt, warum das nötig ist.
+  //
+  // Der Bericht meldete „318 Bilder geprüft (1.3/s)". Das klang nach einem lahmen Scanner, war
+  // aber ein Rechenfehler: Seit „gedrückt halten" schaut die Schleife nur beim Drücken auf ein
+  // Bild — geteilt wurde aber durch die ganze verstrichene Zeit, Laufwege zum nächsten Regal
+  // eingerechnet. Die Gegenrechnung aus demselben Bericht: 308 Lesungen aus 318 geprüften
+  // Bildern, also 97 %. Fast jedes angesehene Bild war ein Treffer; langsam war nur der Mensch.
+  //
+  // Eine Zahl, die den Scanner schlechter aussehen lässt, als er ist, ist nicht bloss unschön:
+  // Nach ihr optimiert man an der falschen Stelle. Gemessen wird deshalb die Zeit, in der
+  // wirklich gelesen wurde.
+  let leseMsSumme = 0, leseSeit = null, ersterTrefferLeseMs = null;
+  const lesenStart = () => { if (leseSeit === null) leseSeit = performance.now(); };
+  const lesenStop = () => {
+    if (leseSeit !== null) { leseMsSumme += performance.now() - leseSeit; leseSeit = null; }
+  };
+  const lesezeitMs = () => leseMsSumme + (leseSeit === null ? 0 : performance.now() - leseSeit);
+  // Pruefhaken: Headless gibt es keine Kamera, also waere die Zeitnahme sonst nicht messbar.
+  // Bewusst nur auf dieser Diagnoseseite — sie verschwindet vor dem Produktivgang.
+  window.__pruefstand = { lesenStart, lesenStop, lesezeitMs, bericht: () => berichtText() };
   const gesehen = new Map();
   const unplausibel = new Set();
   const gs1Erkannt = new Map();
@@ -295,7 +316,7 @@
     // Drei Riegel statt einem, weil der Fehler genau daran lag, dass EINER nicht gehalten hat.
     if (!laeuft) return;
     const neu = !gesehen.has(text);
-    if (ersterTrefferMs === null) ersterTrefferMs = ms;
+    if (ersterTrefferMs === null) { ersterTrefferMs = ms; ersterTrefferLeseMs = lesezeitMs(); }
     const e = gesehen.get(text) || { n: 0, format, weg, ersteMs: ms, halt: haltNr || 0 };
     e.n++; gesehen.set(text, e);
     const noetig = NOETIGE_LESUNGEN(format);
@@ -339,13 +360,16 @@
     const bestaetigte = [...gesehen.values()].filter(d => d.n >= NOETIGE_LESUNGEN(d.format)).length;
     const einzelne = gesehen.size - bestaetigte;
     $('bilanz').className = 'bilanz' + (bestaetigte ? ' gut' : '');
+    const leseS = lesezeitMs() / 1000;
+    const haltemodus = $('haltemodus').checked;
     $('bilanz').textContent =
-      `Erster Treffer nach ${(ersterTrefferMs / 1000).toFixed(1)} Sekunden`
+      `Erster Treffer nach ${((ersterTrefferLeseMs === null ? ersterTrefferMs : ersterTrefferLeseMs) / 1000).toFixed(1)} s Lesezeit`
+      + (haltemodus ? ` (${(ersterTrefferMs / 1000).toFixed(1)} s nach dem Start)` : '')
       + ` · ${bestaetigte} bestätigt`
       + (einzelne ? ` · ${einzelne} verworfen (zu selten gelesen)` : '')
       + (unplausibel.size ? ` · ${unplausibel.size} unplausibel (Format/Länge)` : '')
-      + ` · ${versuche} Bilder geprüft`
-      + (versuche > 5 ? ` (${(versuche / ((performance.now() - beginn) / 1000)).toFixed(1)}/s)` : '')
+      + ` · ${versuche} Bilder in ${leseS.toFixed(1)} s Lesezeit geprüft`
+      + (versuche > 5 && leseS > 0.5 ? ` (${(versuche / leseS).toFixed(1)}/s)` : '')
       ;
 
     if (geradeBestaetigt && navigator.vibrate) navigator.vibrate(60);
@@ -364,6 +388,8 @@
     stop();
     await new Promise(r => setTimeout(r, 150));
     versuche = 0; ersterTrefferMs = null; beginn = performance.now();
+    leseMsSumme = 0; leseSeit = null; ersterTrefferLeseMs = null;
+    if (!$('haltemodus').checked) lesenStart();
     gesehen.clear(); unplausibel.clear(); gs1Erkannt.clear();
     $('treffer').dataset.leer = '1'; $('treffer').innerHTML = '<li>noch keiner</li>';
     $('bilanz').className = 'bilanz'; $('bilanz').textContent = 'Noch nichts gelesen.';
@@ -502,9 +528,9 @@
     return c;
   }
 
-  const haltenAn = () => { if (liest) return; liest = true; haltNr++;
+  const haltenAn = () => { if (liest) return; liest = true; haltNr++; lesenStart();
     $('halten').style.background = '#2e7d32'; melde('Wird gelesen — ruhig auf den Code halten …'); };
-  const haltenAus = () => { if (!liest) return; liest = false;
+  const haltenAus = () => { if (!liest) return; liest = false; lesenStop();
     $('halten').style.background = '#4CAF50'; melde('Losgelassen.'); };
   // Anfangszustand aus dem Haekchen herstellen — EINE Quelle fuer „Knopf sichtbar?".
   const halteknopfZeigen = () => {
@@ -522,6 +548,8 @@
   document.addEventListener('change', (ev) => {
     if (ev.target && ev.target.id === 'haltemodus') {
       halteknopfZeigen();
+      // Ohne Haltemodus liest die Schleife durchgehend — dann IST die Lesezeit die Laufzeit.
+      if (ev.target.checked) lesenStop(); else if (laeuft) lesenStart();
       if (!ev.target.checked) haltenAus();
     }
     if (ev.target && ev.target.id === 'nurrahmen') {
@@ -533,6 +561,7 @@
 
   function stop() {
     laeuft = false;
+    lesenStop();   // sonst liefe die Lesezeit nach dem Stoppen weiter
     nativDetector = null;
     if (zxingLeser) {
       // BEIDES: stopContinuousDecode beendet die Schleife, reset gibt die Kameraspur frei.
@@ -583,7 +612,7 @@
 
   // Bericht in die Zwischenablage — der einzige Weg, wie ein Ergebnis den Weg zu Alex findet.
   // Absichtlich manuell: Die Seite verspricht, nichts zu senden.
-  $('kopieren').addEventListener('click', async () => {
+  function berichtText() {
     const zeilen = [];
     zeilen.push('Scanner-Prüfstand — ' + new Date().toLocaleString('de-DE'));
     zeilen.push('');
@@ -595,6 +624,11 @@
     zeilen.push('  Auflösung gewählt: ' + $('aufloesung').value
       + ' · nötige Lesungen: ' + $('lesungen').value
       + ' · QR/2D: ' + ($('zweid').checked ? 'an' : 'aus'));
+    // Die beiden Schalter gehoeren in den Bericht: Sie veraendern die Messung staerker als alles
+    // andere. Im Lauf vom 12.09.2026 fehlten sie — danach war nicht mehr zu erkennen, ob die
+    // Zahlen aus dem Haltebetrieb oder aus dem Dauerlesen stammten.
+    zeilen.push('  gedrückt halten: ' + ($('haltemodus').checked ? 'an (wie die App)' : 'AUS — Dauerlesen')
+      + ' · nur im Rahmen lesen: ' + ($('nurrahmen').checked ? 'an (wie die App)' : 'AUS — ganzes Bild'));
     const zoom = $('zoombox').style.display !== 'none' ? $('zoomwert').textContent : '(nicht verfügbar)';
     zeilen.push('  Zoom: ' + zoom);
     zeilen.push('');
@@ -612,7 +646,11 @@
       zeilen.push('  - ' + teile.shift());
       for (const t of teile) zeilen.push('      ' + t);
     }
-    const text = zeilen.join('\n');
+    return zeilen.join('\n');
+  }
+
+  $('kopieren').addEventListener('click', async () => {
+    const text = berichtText();
     try {
       await navigator.clipboard.writeText(text);
       $('kopierinfo').textContent = 'Kopiert. Jetzt in eine Nachricht an den Admin einfügen.';

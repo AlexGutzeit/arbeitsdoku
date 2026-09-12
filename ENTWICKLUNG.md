@@ -14,6 +14,50 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-12 · Speisekammer-Lauf: 26 Codes — und eine Zahl, die den Scanner verleumdet hat
+
+Alex' Lauf über die eigene Speisekammer, 26 Codes in gut vier Minuten, 25 bestätigt. Inhaltlich ist
+**nichts schiefgegangen**: Jede Regel hat auf echten Handelsetiketten genau das getan, wofür sie
+gebaut wurde. Die Erkenntnisse stecken diesmal in den **Messwerten**, nicht in den Treffern.
+
+**1. „318 Bilder geprüft (1.3/s)" war eine Verleumdung des eigenen Scanners.** Das klang nach einem
+lahmen Decoder. Die Gegenrechnung aus demselben Bericht: Die Lesungen der 26 Einträge summieren
+sich auf **308** — aus **318** angesehenen Bildern. **97 % Trefferquote.** Fast jedes Bild, das die
+Schleife angesehen hat, war ein Treffer.
+
+Die Ursache ist der Haltebetrieb: Seit „gedrückt halten" schaut die Schleife nur beim Drücken auf
+ein Bild — geteilt wurde aber weiter durch die **ganze verstrichene Zeit**, Laufwege zum nächsten
+Regalbrett eingerechnet. Dasselbe galt für „Erster Treffer nach 14.6 Sekunden": gemessen ab
+Kamerastart, nicht ab dem ersten Druck.
+
+Das ist nicht bloss unschön. Nach so einer Zahl optimiert man an der **falschen Stelle** — etwa an
+der Auflösung oder am Decoder, während in Wahrheit nur der Mensch zwischen zwei Kartons unterwegs
+war. Gemessen wird jetzt die **Lesezeit**: die Zeit, in der wirklich gelesen wurde. Beide Zahlen
+stehen im Bericht („2.1 s Lesezeit (14.6 s nach dem Start)"), damit der Ablauf ablesbar bleibt.
+
+**2. Der Bericht verschwieg die zwei Schalter, die die Messung am stärksten verändern.** Ob
+„gedrückt halten" und „nur im Rahmen lesen" an waren, stand nirgends — ohne das sind die Zahlen
+nicht deutbar. Ich musste es aus dem Verhältnis 308/318 erschliessen. Beide stehen jetzt im Kopf.
+
+**3. Das Rätsel „4311" von vorletzter Woche ist gelöst.** Alex damals: *„4311 kenn ich nicht. Ist
+mir unbekannt."* In diesem Lauf tauchen **drei** EAN-13 auf, die mit 4311 beginnen
+(`4311536170300`, `4311501706381`, `4311501123591`) — ein deutscher GS1-Präfixbereich. Die nackte
+„4311" war also mit grosser Wahrscheinlichkeit ein **abgebrochener Lesevorgang** eines solchen
+Etiketts, und die Kurzzahl-Regel hat sie zu Recht abgewiesen. Eine Regel, die aus einem ungeklärten
+Fund entstand, ist damit nachträglich belegt.
+
+**4. Eine gültige Prüfziffer ist KEIN Beweis.** `8000070025400` (17 Lesungen) und `5009547125400`
+(1 Lesung) wurden 913 ms auseinander gelesen und als dieselbe Etikette gruppiert. Nachgerechnet:
+**beide erfüllen die EAN-13-Prüfziffer.** Der Decoder hat also eine formal einwandfreie, inhaltlich
+falsche Nummer geliefert. Gerettet haben allein die **Häufigkeit** (17 zu 1) und das gemeinsame
+Ende (`25400`, fünf Stellen) — genau die zwei Kriterien, die am 09.09. aus den Messdaten entstanden
+sind. Hätten wir nur die Prüfziffer geglaubt, läge jetzt ein Geisterprodukt im Katalog.
+
+**5. Offen, aber nicht gefährlich:** `T60020279303` (QR) wurde als Artikelcode übernommen. Er passt
+in keine der Ausschlussregeln, sieht aber auch nicht nach einer GTIN aus. Ob das eine Artikelnummer
+oder ein Chargencode ist, kann nur Alex am Produkt nachsehen — eine Regel auf Verdacht wäre genau
+der Fehler, der beim `id.abb`-Fall beinahe passiert wäre.
+
 ### 2026-09-12 · Am Prüfstand war kein Knopf — zum zweiten Mal ein unsichtbares Bedienelement
 
 Alex: *„am Prüfstand ist gerade gar kein button zu sehen um das scannen zu aktivieren."*
