@@ -282,6 +282,15 @@ function req(m, p, t, b) {
       echteGtin:    scannerIstNummerOhnePruefziffer('4003899947209'),
       mitBuchstabe: scannerIstNummerOhnePruefziffer('S78037524'),
       adresse:      scannerIstNummerOhnePruefziffer('wmqr.eu/1422030000'),
+      // Nachfragen beim Anlegen: alles, was KEINE gueltige GTIN ist (Alex' Zahnpasta-Tube,
+      // 12.09.2026 — der QR auf der Falz war die Chargennummer).
+      fragTube:     scannerNachfragenObArtikelnummer('T60020279303'),
+      fragHaus:     scannerNachfragenObArtikelnummer('S78037524'),
+      fragKurz:     scannerNachfragenObArtikelnummer('4311'),
+      fragEan13:    scannerNachfragenObArtikelnummer('8000070025400'),
+      fragEan8:     scannerNachfragenObArtikelnummer('42328872'),
+      fragUpcA:     scannerNachfragenObArtikelnummer('850033407075'),
+      fragLeer:     scannerNachfragenObArtikelnummer(''),
       digital: scannerIstWerbecode(scannerCodeNormalisieren('https://herkunft.edeka.de/?01=04311501706954').code),
       // ROH, ohne vorherige Normalisierung: Die Antwort darf nicht davon abhaengen, in welcher
       // Reihenfolge die beiden Funktionen aufgerufen werden.
@@ -292,6 +301,16 @@ function req(m, p, t, b) {
       merkblatt: scannerIstWerbecode('https://www.latrivenetacavi.com/download/environment_label.pdf'),
       echterCode: scannerIstWerbecode('4043377228871'),
     }));
+    ok('bei einer Tuben-Chargennummer wird nachgefragt', rund.fragTube === true, JSON.stringify(rund.fragTube));
+    ok('… ebenso bei Haus- und Kurznummern',
+      rund.fragHaus === true && rund.fragKurz === true, JSON.stringify([rund.fragHaus, rund.fragKurz]));
+    // Die Gegenprobe ist hier die wichtigere Haelfte: Bei einer echten Artikelnummer darf NICHT
+    // gefragt werden, sonst klickt sich jeder durch den Hinweis und liest ihn nie wieder.
+    ok('… aber NICHT bei gültigen GTINs (EAN-13, EAN-8, UPC-A)',
+      rund.fragEan13 === false && rund.fragEan8 === false && rund.fragUpcA === false,
+      JSON.stringify([rund.fragEan13, rund.fragEan8, rund.fragUpcA]));
+    ok('… und ein leerer Code löst gar nichts aus', rund.fragLeer === false, JSON.stringify(rund.fragLeer));
+
     ok('aus dem Data-Matrix wird die reine Artikelnummer',
       rund.matrixA.code === '4043377228871', JSON.stringify(rund.matrixA));
     ok('… genau die, die daneben als Strichcode klebt', rund.matrixA.code === rund.eanA.code);
@@ -381,6 +400,11 @@ function req(m, p, t, b) {
     // man wirklich nachschauen muss.
     ok('… und sagt, wo der Artikel-Barcode stattdessen steht',
       /andere[nr]? Seite/.test(maskeEtikett) && /Hersteller/.test(maskeEtikett), maskeEtikett.slice(0, 400));
+    // Alex' Zahnpasta (12.09.2026): Der QR `T60020279303` steht auf der FALZ der Tube, neben
+    // Fuellmenge und Oeffnungssymbol — die Stelle der Chargennummer. Der Hinweis muss diese
+    // zweite Quelle mitnennen, sonst sucht man nur auf Lieferscheinen.
+    ok('… und nennt auch Tube und Flasche als Quelle einer Chargennummer',
+      /Tube/i.test(maskeEtikett) && /Charge/i.test(maskeEtikett), maskeEtikett.slice(0, 500));
     await seite.evaluate(() => { const b = [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/.test(x.textContent)); if (b) b.click(); });
     await sleep(500);
     await scanVorgeben('4046281411223');

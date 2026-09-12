@@ -267,6 +267,29 @@ function scannerIstNummerOhnePruefziffer(code) {
   return /^\d+$/.test(w) && !scannerGtinGueltig(w);
 }
 
+/**
+ * Soll beim Anlegen nachgefragt werden — ist das ueberhaupt eine Artikelnummer?
+ *
+ * Anlass (Alex, 12.09.2026): Der QR `T60020279303` einer Zahnpastatube wurde uebernommen. Das Foto
+ * der Tube zeigt ihn auf der FALZ, neben Fuellmenge und Oeffnungssymbol — genau dort druckt die
+ * Abfuellmaschine die Chargennummer. Die naechste Tube derselben Sorte traegt eine andere; als
+ * Barcode gespeichert waere das Produkt beim naechsten Einkauf wieder unbekannt.
+ *
+ * WARUM KEINE VERBOTSREGEL. Aus dem Code allein ist das nicht zu entscheiden. „Buchstabe plus
+ * Ziffern" ist die Form einer voellig normalen Artikelnummer — `S78037524` und `A2026052700123`
+ * stehen bei scannerIstNummerOhnePruefziffer ausdruecklich als Beispiele, die unberuehrt bleiben
+ * SOLLEN. Der Unterschied steckt nicht in der Zeichenkette, sondern in der Stelle auf der
+ * Verpackung, und die sieht die App nicht. Wer hier ein Verbot baut, verliert echte Nummern.
+ *
+ * Also: nachfragen statt abweisen. Gefragt wird immer dann, wenn der Code KEINE gueltige GTIN ist
+ * — denn nur die ist nachweislich eine Artikelnummer. Kostet nichts, wenn alles stimmt.
+ */
+function scannerNachfragenObArtikelnummer(code) {
+  const w = String(code || '').trim();
+  if (!w) return false;
+  return !scannerGtinGueltig(w);
+}
+
 function scannerBesterTreffer(zaehlung) {
   // -Infinity, nicht -1: Ein Werbecode traegt ein negatives Gewicht und wuerde sonst gar nicht
   // zurueckgegeben — der Benutzer bekaeme „nichts erkannt", obwohl deutlich etwas gelesen wurde.

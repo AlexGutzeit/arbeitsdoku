@@ -423,8 +423,15 @@ Artikel auf denselben Eintrag.
 
 **Lieferschein-Etiketten** tragen oft gar keinen Artikel-Barcode, sondern Etiketten-, Tour- und
 Boxnummern. Eine rein numerische Angabe gilt deshalb nur dann als Artikelnummer, wenn sie die
-GTIN-Prüfziffer erfüllt; sonst verliert sie den Vorrang, und beim Anlegen erscheint ein Hinweis –
-solche Nummern ändern sich mit jeder Lieferung. Der Hinweis sagt auch, wo stattdessen zu suchen ist: meist auf einer anderen Seite des Kartons, auf dem Etikett des Herstellers.
+GTIN-Prüfziffer erfüllt; sonst verliert sie den Vorrang. Der Hinweis sagt auch, wo stattdessen zu suchen ist: meist auf einer anderen Seite des Kartons, auf dem Etikett des Herstellers.
+
+**Beim Anlegen wird nachgefragt, sobald der Code keine gültige GTIN ist** – abgewiesen wird er
+nicht. Genannt werden die zwei Stellen, die regelmäßig in die Irre führen, weil dort etwas steht,
+das sich mit jeder Lieferung ändert: Lieferschein-Etiketten (Etiketten-, Tour-, Boxnummer) und die
+**Falz von Tuben bzw. der Boden von Flaschen** (Chargennummer, meist neben Füllmenge oder
+Haltbarkeit). Eine Verbotsregel wäre hier falsch: „Buchstabe plus Ziffern" ist auch die Form
+völlig normaler Artikelnummern – der Unterschied steckt nicht in der Zeichenkette, sondern in der
+Stelle auf der Verpackung, und die sieht die App nicht.
 
 **Chargen- und Werbecodes werden erklärt statt gespeichert.** Ein Data-Matrix wie
 `*202511182 06/17/26` enthält Charge und Haltbarkeit – bei jeder Lieferung anders, als Barcode

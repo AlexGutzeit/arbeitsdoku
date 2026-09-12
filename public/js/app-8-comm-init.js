@@ -633,13 +633,16 @@ function produktAnlegenMaske(code) {
         <div class="modal-header"><h3>Neues Produkt anlegen</h3></div>
         <div class="modal-body">
           <p style="margin:0 0 .5rem">Barcode <code>${esc(code)}</code> ist noch niemandem zugeordnet.</p>
-          ${(typeof scannerIstNummerOhnePruefziffer === 'function' && scannerIstNummerOhnePruefziffer(code)) ? `
+          ${(typeof scannerNachfragenObArtikelnummer === 'function' && scannerNachfragenObArtikelnummer(code)) ? `
           <p class="hinweis-box" style="margin:0 0 .6rem">
-            <strong>Prüf das bitte kurz.</strong> Diese Zahl erfüllt keine Artikelnummer-Prüfziffer.
-            Auf <em>Lieferschein-Etiketten</em> stehen Etiketten-, Tour- und Boxnummern, die sich mit
-            jeder Lieferung ändern – als Barcode gespeichert wäre das Produkt beim nächsten Mal
-            wieder unbekannt.<br>
-            <strong>Dreh den Karton um:</strong> Der Artikel-Barcode steht meist auf einer anderen
+            <strong>Prüf das bitte kurz.</strong> Dieser Code erfüllt keine Artikelnummer-Prüfziffer
+            — er kann trotzdem richtig sein, muss aber nicht. Zwei Stellen führen regelmäßig in die
+            Irre, weil dort etwas steht, das sich mit <em>jeder Lieferung ändert</em>:<br>
+            • <strong>Lieferschein-Etiketten</strong> tragen Etiketten-, Tour- und Boxnummern.<br>
+            • <strong>Die Falz von Tuben und der Boden von Flaschen</strong> tragen die
+              Chargennummer — meist neben Füllmenge oder Haltbarkeit.<br>
+            Als Barcode gespeichert wäre das Produkt beim nächsten Mal wieder unbekannt.<br>
+            <strong>Dreh die Packung um:</strong> Der Artikel-Barcode steht meist auf einer anderen
             Seite, auf dem Etikett des Herstellers – oder auf der Ware selbst.
           </p>` : ''}
           <p style="margin:0 0 .9rem;color:var(--text-light);font-size:.85rem">

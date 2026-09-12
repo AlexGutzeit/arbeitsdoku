@@ -14,6 +14,34 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-12 · Die Zahnpasta-Tube: nachfragen, wo eine Regel falsch wäre
+
+Alex hat die Tube fotografiert. `T60020279303` steht **auf der Falz**, neben Füllmenge und
+Öffnungssymbol — genau dort druckt die Abfüllmaschine die **Chargennummer**. Die nächste Tube
+derselben Sorte trägt eine andere; als Barcode gespeichert wäre das Produkt beim nächsten Einkauf
+wieder unbekannt, und jemand legte ein Doppel an.
+
+**Trotzdem keine Verbotsregel — und das ist der Punkt dieses Eintrags.** Aus der Zeichenkette
+allein ist der Fall nicht zu entscheiden. „Buchstabe plus Ziffern" ist die Form einer völlig
+normalen Artikelnummer; `S78037524` und `A2026052700123` stehen im Code ausdrücklich als
+Beispiele, die unberührt bleiben SOLLEN. Der Unterschied steckt nicht im Code, sondern in der
+**Stelle auf der Verpackung** — und die sieht die App nicht.
+
+Also: **nachfragen statt abweisen.** `scannerNachfragenObArtikelnummer` ist bewusst stumpf — sie
+fragt immer, wenn der Code keine gültige GTIN ist, denn nur die ist nachweislich eine
+Artikelnummer. Der Hinweis nennt jetzt beide Quellen: Lieferschein-Etiketten **und** die Falz von
+Tuben / den Boden von Flaschen.
+
+**Die Gegenprobe war hier lehrreicher als der Test selbst.** Ich habe die naive Regel eingesetzt,
+die sich aufdrängt — „enthält einen Buchstaben ⇒ verdächtig". Ergebnis: **fünf** Zusicherungen rot,
+darunter der ganze Lieferschein-Hinweis. Denn `801036963840` ist eine reine Ziffernfolge; die
+naive Regel hätte die aus Felddaten gebaute Warnung stillschweigend abgeschaltet. Eine Regel, die
+den neuen Fall trifft und dabei den alten verliert, ist keine Verbesserung.
+
+**Die Gegenprobe, die zählt**, ist ohnehin die verneinende: Bei gültigen EAN-13, EAN-8 und UPC-A
+darf **nicht** gefragt werden. Wer bei jedem zweiten Scan einen Hinweis wegklickt, liest ihn nie
+wieder — dann ist die Warnung schlechter als keine.
+
 ### 2026-09-12 · Speisekammer-Lauf: 26 Codes — und eine Zahl, die den Scanner verleumdet hat
 
 Alex' Lauf über die eigene Speisekammer, 26 Codes in gut vier Minuten, 25 bestätigt. Inhaltlich ist
