@@ -14,6 +14,31 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-12 · Ich habe einen Rat gegeben, der gar nicht wirken konnte
+
+Alex' zweiter Lauf kam im ALTEN Berichtsformat zurück — ohne „Lesezeit", ohne die Zeile mit den
+Schaltern. Nachgesehen: Auf dem Produktivserver liegt der Prüfstand vom **9. September**
+(Häkchen aus, `display:none` am Knopf, `?v=385`). Meine Reparatur liegt auf `develop`, sein Handy
+holt die Seite aber vom Produktivserver.
+
+Mein Satz „lade die Seite einmal neu" **konnte also gar nichts bewirken** — neu geladen wird
+dieselbe alte Datei. Der Fehler dahinter ist nicht der Tippfehler, sondern die Annahme: Ich habe
+lokal repariert und stillschweigend unterstellt, das sei damit „draussen". Bei einer Änderung, die
+der Benutzer sehen soll, gehört die Frage „wo läuft das, was er benutzt?" **vor** die Antwort.
+
+**Zweiter Fund derselben Wurzel:** `scanner-probe.html` lud das Skript weiter als `?v=385`. Der
+Prüfstand liegt **nicht** im Service-Worker-Vorrat — dieser Parameter ist der einzige Hebel gegen
+eine alte Fassung im Browser. Selbst nach einem Deploy wäre die Änderung auf dem Handy nicht
+angekommen. Jetzt gleicht ein Test das `?v=` gegen `CACHE_VERSION` ab.
+
+**Wie ich trotzdem sicher sagen kann, dass der Haltebetrieb an war** — aus den Zahlen des Laufs,
+nicht aus Vermutung: 10 Bilder geprüft, Rate 1.0/s (also ≈ 10 s seit dem Kamerastart), erster
+Treffer nach 8.684 s, **9 Lesungen**. Liefe die Schleife durchgehend mit 1 Bild/s, lägen die Bilder
+im Sekundenabstand; nach dem ersten Treffer bei 8.7 s blieben höchstens zwei Bilder übrig — neun
+Lesungen sind dann unmöglich. Im Haltebetrieb passt es zwanglos: Die zehn Bilder entstehen alle
+während eines kurzen Drucks. Alex hat das Häkchen also selbst gesetzt, und die Zahl „1.0/s" misst
+wieder die Laufzeit statt der Lesezeit.
+
 ### 2026-09-12 · Die Zahnpasta-Tube: nachfragen, wo eine Regel falsch wäre
 
 Alex hat die Tube fotografiert. `T60020279303` steht **auf der Falz**, neben Füllmenge und

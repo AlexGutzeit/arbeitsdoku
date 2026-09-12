@@ -115,6 +115,19 @@ function req(m, p) {
       ok(`„${name}" ist sichtbar`, await sichtbar(w));
     }
 
+    console.log('\n── Der Browser bekommt auch wirklich die neue Fassung ──');
+    // Der Prüfstand liegt NICHT im Service-Worker-Vorrat; sein `?v=` ist der einzige Hebel gegen
+    // eine alte Fassung im Browser-Zwischenspeicher. Am 12.09.2026 stand dort noch 385, während
+    // die Datei längst geändert war — auf dem Handy wäre die Änderung nie angekommen.
+    const fassungen = await seite.evaluate(() => {
+      const sk = [...document.querySelectorAll('script[src*="scanner-probe.js"]')][0];
+      return { v: (sk && sk.getAttribute('src').match(/[?&]v=(\d+)/) || [])[1] || null };
+    });
+    const swText = fs.readFileSync(path.join(__dirname, '..', 'public', 'sw.js'), 'utf8');
+    const cacheV = (swText.match(/CACHE_VERSION\s*=\s*(\d+)/) || [])[1];
+    ok('das ?v= des Prüfstand-Skripts passt zur Cache-Nummer der App',
+      fassungen.v === cacheV, JSON.stringify({ pruefstand: fassungen.v, sw: cacheV }));
+
     console.log('\n── Die Lesezeit zählt nur, solange wirklich gelesen wird ──');
     // Der Lauf vom 12.09.2026 meldete „318 Bilder geprüft (1.3/s)" — der Scanner sah lahm aus.
     // Er war es nicht: Geteilt wurde durch die ganze verstrichene Zeit, obwohl im Haltebetrieb
