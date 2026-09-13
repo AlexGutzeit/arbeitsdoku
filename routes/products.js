@@ -98,6 +98,40 @@ function herstellerListe(db) {
   ).all().map(r => r.hersteller);
 }
 
+/**
+ * Taugt diese Zeichenkette ueberhaupt als Barcode? Gibt einen Fehlertext zurueck oder null.
+ *
+ * Gemessen am 14.09.2026, vorher fehlte beides:
+ *
+ *   * Ein 5000 Zeichen langer Code wurde angenommen. Er landet im Offline-Spiegel, den JEDES
+ *     Handy im Lager herunterlaedt — ein einziger versehentlich gescannter QR mit eingebettetem
+ *     Text blaeht den Katalog fuer alle auf.
+ *   * Ein Code mit Zeilenumbruch oder Tabulator wurde angenommen. Solche Inhalte sind vCards,
+ *     WLAN-Zugaenge oder Merkblatt-Texte — keine Artikelnummern. Als Barcode gespeichert stehen
+ *     sie mehrzeilig in Listen, im CSV-Export und im PDF.
+ *
+ * 200 Zeichen sind grosszuegig: Die laengste echte Angabe aus allen Feldlaeufen war eine
+ * GS1-Digital-Link-Adresse mit 62 Zeichen.
+ *
+ * Steuerzeichen werden ABGEWIESEN und nicht stillschweigend entfernt: Wer einen mehrzeiligen QR
+ * scannt, soll erfahren, dass das kein Artikelcode ist — nicht heimlich die erste Zeile
+ * gespeichert bekommen.
+ */
+const CODE_MAX = 200;
+const STEUERZEICHEN = new RegExp('[' + String.fromCharCode(0) + '-' + String.fromCharCode(31)
+                               + String.fromCharCode(127) + ']');
+function codePruefen(code) {
+  if (code.length > CODE_MAX) {
+    return `Dieser Code ist ${code.length} Zeichen lang — das ist keine Artikelnummer, sondern `
+         + `vermutlich ein QR mit Text oder einer langen Adresse. Erlaubt sind ${CODE_MAX} Zeichen.`;
+  }
+  if (STEUERZEICHEN.test(code)) {
+    return 'Dieser Code enthält Steuerzeichen (z. B. einen Zeilenumbruch). Solche Inhalte sind '
+         + 'meist Visitenkarten, WLAN-Zugänge oder Merkblatt-Texte — keine Artikelnummern.';
+  }
+  return null;
+}
+
 const nurPfleger = (req, res, next) =>
   darfProduktePflegen(req.user) ? next() : res.status(403).json({ error: 'Keine Berechtigung' });
 
@@ -291,6 +325,8 @@ router.post('/', authenticate, nurEinlerner, (req, res) => {
   const code = String(req.body.barcode || '').trim();
   const katId = req.body.category_id ? Number(req.body.category_id) : null;
   const einheit = String(req.body.default_unit || '').trim() || null;
+  const codeFehler = code ? codePruefen(code) : null;
+  if (codeFehler) return res.status(400).json({ error: codeFehler });
   const h = herstellerEinlesen(db, req.body.hersteller);
   if (h && h.fehler) return res.status(400).json({ error: h.fehler });
   const hersteller = h ? h.wert : null;
@@ -349,6 +385,8 @@ router.post('/:id/barcodes', authenticate, nurEinlerner, (req, res) => {
   const p = db.prepare('SELECT id, name FROM products WHERE id = ? AND deleted_at IS NULL').get(id);
   if (!p) return res.status(404).json({ error: 'Produkt nicht gefunden' });
   if (!code) return res.status(400).json({ error: 'Kein Code angegeben' });
+  const codeFehlerB = codePruefen(code);
+  if (codeFehlerB) return res.status(400).json({ error: codeFehlerB });
 
   const belegt = db.prepare(
     `SELECT p.id, p.name FROM product_barcodes b JOIN products p ON p.id = b.product_id

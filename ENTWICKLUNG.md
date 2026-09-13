@@ -14,6 +14,54 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-14 · „Beweise die Fehlerlosigkeit" — drei Funde statt eines Beweises
+
+Alex: *„Kannst du dir bitte noch einige Tests zusätzlich ausdenken, um die Fehlerlosigkeit des
+Barcodes zu beweisen."* Beweisen lässt sie sich nicht — ein Test zeigt Fehler, nie deren
+Abwesenheit. Was geht: gezielt dort suchen, wo bisher **nichts** misst. Erst messen, dann urteilen.
+
+Die Messung (ein Wegwerf-Skript gegen die echten Routen) fand drei Dinge, die durchgingen:
+
+**1. Ein 5000 Zeichen langer Code wurde angenommen.** Er landet im Offline-Spiegel, den JEDES Handy
+im Lager herunterlädt — ein versehentlich gescannter QR mit eingebettetem Text bläht den Katalog
+für alle auf. Jetzt 200 Zeichen; die längste echte Angabe aus allen Feldläufen war eine
+GS1-Digital-Link-Adresse mit 62.
+
+**2. Ein Code mit Zeilenumbruch oder Tabulator wurde als Artikelnummer gespeichert.** Das sind
+vCards, WLAN-Zugänge, Merkblatt-Texte. Abgewiesen wird jetzt, statt still die erste Zeile zu
+behalten: Wer eine Visitenkarte scannt, soll erfahren, dass das kein Artikelcode ist.
+
+**3. Der Restore-Pfad zog für `products` nur `hersteller` nach.** `tests/altdb-spalten.js` prüft
+seit dem 08.09. die Regel „was die Middleware aus `users` liest, muss der Restore-Pfad nachziehen"
+— für `products` gab es keine Entsprechung, und dort lesen die Routen `p.hersteller`,
+`p.deleted_at`, `p.merged_into` **namentlich**. Nach dem Einspielen einer alten Sicherung hätte der
+Server auf jede Produktabfrage mit „no such column" geantwortet.
+
+Praktisch getroffen hätte es nur eine Sicherung aus der Bauphase — das Verzeichnis ist nicht
+deployed. Der Punkt ist ein anderer: **Eine halb umgesetzte Regel ist gefährlicher als keine**, weil
+der Nächste sie für vollständig hält. Jetzt stehen alle gelesenen Spalten da, auch für
+`product_categories`, `product_barcodes`, `product_suppliers` und `suppliers`.
+
+**Der Test ruft den ECHTEN Restore-Pfad auf.** Dafür wird `ensureAuditSchema` aus
+`database/init.js` mitexportiert. Ein nachgebauter Pfad hätte sich selbst geprüft — meine erste
+Fassung tat genau das und war deshalb grün, wo sie hätte rot sein müssen.
+
+**Zwei Dinge sind ausdrücklich KEINE Fehler und stehen jetzt als Zusicherung fest:**
+
+* Ein Code aus lauter Leerzeichen heisst „kein Barcode" — mit Pflegerecht entsteht also ein
+  barcodeloses Produkt, ohne wird abgewiesen. Mein erster Testentwurf erwartete hier 400 und lag
+  falsch; gemessen schlägt vermutet.
+* Gross- und Kleinschreibung sind **verschiedene** Codes. `id.abb/X` ist nicht `ID.ABB/x`. Wer das
+  später „aufräumt", bricht die Hersteller-QRs — deshalb steht es als Zusicherung da, nicht nur als
+  Kommentar.
+
+**Was weiterhin ungeprüft bleibt** (ehrlich gesagt, nicht verschwiegen): das Verhalten echter
+Kameras, die Entzifferungsqualität bei schlechtem Licht, und das Zusammenspiel mehrerer Leute am
+selben Regal in derselben Sekunde. Das Erste misst nur der Prüfstand am echten Gerät, das Letzte
+kann in dieser App nicht auftreten (ein Prozess, Node arbeitet eine Anfrage nach der anderen ab —
+und die Eindeutigkeit hängt zusätzlich am UNIQUE-Index der Datenbank, nicht nur an der Prüfung im
+Code).
+
 ### 2026-09-13 · Hersteller je Produkt — und was daran nicht das Feld ist
 
 Alex: *„Generell soll es eine weitere Spalte für jedes Produkt geben. Nämlich Hersteller. Da jedes

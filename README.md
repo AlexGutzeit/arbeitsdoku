@@ -417,6 +417,13 @@ daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Auskla
 Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
 erraten würde still die falsche Bestellnummer anhängen.
 
+**Was gar nicht erst als Barcode gespeichert wird:** Codes über **200 Zeichen** (das ist keine
+Artikelnummer, sondern ein QR mit Text oder einer langen Adresse — und er läge auf jedem Handy im
+Offline-Spiegel) und Codes mit **Steuerzeichen** wie Zeilenumbruch oder Tabulator (Visitenkarten,
+WLAN-Zugänge, Merkblatt-Texte). Beides wird abgewiesen und erklärt, nicht stillschweigend
+abgeschnitten. Groß- und Kleinschreibung gelten dagegen als **verschiedene** Codes: Ein QR-Inhalt
+ist eine Zeichenkette, und `id.abb/X` ist nicht `ID.ABB/x`.
+
 **Sehr kurze Zahlen** (bis fünf Ziffern) werden abgewiesen und erklärt: Sie bezeichnen ein Fach,
 eine Tour oder eine Lieferung und kleben auf vielen Etiketten – gespeichert zeigten verschiedene
 Artikel auf denselben Eintrag.

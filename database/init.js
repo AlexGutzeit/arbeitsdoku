@@ -968,7 +968,25 @@ function ensureAuditSchema(targetDb) {
     addCol('users', 'can_order', 'INTEGER DEFAULT 0');
     addCol('users', 'can_products', 'INTEGER DEFAULT 0');
     addCol('users', 'can_barcode', 'INTEGER DEFAULT 0');
+    // ALLE Spalten, die routes/products.js namentlich liest — nicht nur die zuletzt dazugekommene.
+    // Der Barcode-Haertetest (tests/barcode-haerte.js) hat gezeigt, dass hier nur `hersteller`
+    // stand: Die Regel „was die Routen lesen, muss der Restore-Pfad nachziehen" war halb
+    // umgesetzt, und eine halb umgesetzte Regel ist gefaehrlicher als keine — der Naechste haelt
+    // sie fuer vollstaendig. Praktisch getroffen haette es nur eine Sicherung aus der Bauphase;
+    // billig ist es jetzt, teuer waere es beim Restore.
+    addCol('products', 'default_unit', 'TEXT');
+    addCol('products', 'created_at', 'TEXT');
+    addCol('products', 'created_by', 'INTEGER');
+    addCol('products', 'deleted_at', 'TEXT');
+    addCol('products', 'merged_into', 'INTEGER');
     addCol('products', 'hersteller', 'TEXT');
+    addCol('product_categories', 'deleted_at', 'TEXT');
+    addCol('product_barcodes', 'created_at', 'TEXT');
+    addCol('product_barcodes', 'created_by', 'INTEGER');
+    addCol('product_suppliers', 'bestellnummer', 'TEXT');
+    addCol('product_suppliers', 'link', 'TEXT');
+    addCol('product_suppliers', 'kommentar', 'TEXT');
+    addCol('suppliers', 'deleted_at', 'TEXT');
     addCol('users', 'start_overtime', 'REAL DEFAULT 0');
     addCol('users', 'target_hours_per_week', 'REAL DEFAULT 40');
     addCol('users', 'active', 'INTEGER DEFAULT 1');
@@ -1705,4 +1723,4 @@ function reloadFromFile(filePath) {
   ensureAuditSchema(db);
 }
 
-module.exports = { getDb, closeDb, setDb, initDatabase, saveToFile, reloadFromFile, writeFileAtomic, normalizeManagerRights, DB_PATH, get SQL() { return SQL; } };
+module.exports = { getDb, closeDb, setDb, initDatabase, saveToFile, reloadFromFile, writeFileAtomic, normalizeManagerRights, ensureAuditSchema, DB_PATH, get SQL() { return SQL; } };
