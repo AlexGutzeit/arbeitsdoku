@@ -1285,8 +1285,12 @@ async function showUserModal(user) {
             Datei-Upload-Recht (darf Dokumente hochladen &amp; verwalten)
           </label>
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:0.6rem;">
+            <input type="checkbox" id="um-can-barcode" ${user?.can_barcode ? 'checked' : ''}>
+            Artikel einlernen (unbekannten Barcode ins Verzeichnis aufnehmen)
+          </label>
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:0.3rem;">
             <input type="checkbox" id="um-can-products" ${user?.can_products ? 'checked' : ''}>
-            Lagerdaten pflegen (Produktverzeichnis aufräumen)
+            Lagerdaten pflegen (Produktverzeichnis aufräumen — schließt „Artikel einlernen" ein)
           </label>
           <p class="push-hint" style="margin:0.25rem 0 0;">
             Darf im Produktverzeichnis umbenennen, Kategorien ändern, Barcodes umhängen, doppelte
@@ -1542,6 +1546,7 @@ async function showUserModal(user) {
       can_order: document.getElementById('um-can-order').checked,
       can_upload: document.getElementById('um-can-upload').checked,
       can_products: document.getElementById('um-can-products').checked,
+      can_barcode: document.getElementById('um-can-barcode').checked,
     };
     // Bei neuem User Tages-Stunden setzen
     if (!isEdit) {

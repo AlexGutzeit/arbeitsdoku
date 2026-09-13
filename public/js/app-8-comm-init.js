@@ -612,6 +612,19 @@ async function scanInsFormular() {
       { title: 'Gelöschtes Produkt', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
     return;
   }
+  // OHNE EINLERNRECHT endet es hier — mit einer Auskunft, nicht mit einer Maske, die beim
+  // Speichern an einem 403 scheitert. Alex (13.09.2026) hat das Recht eingefuehrt, um die
+  // Datenhygiene hochzuhalten; dann muss die Meldung auch sagen, wie es OHNE das Recht weitergeht:
+  // bestellen kann er den Artikel trotzdem, nur eben als freien Text.
+  if (typeof darfArtikelEinlernen === 'function' && !darfArtikelEinlernen()) {
+    await confirmModal(
+      `Unbekannter Barcode: ${code}\n\nDieser Artikel steht noch nicht im Verzeichnis, und du `
+      + 'darfst keine neuen Artikel einlernen.\n\nSo geht es weiter: Schreib die Bestellung wie '
+      + 'bisher als freien Text — das geht unverändert. Und gib den Code deinem Admin durch, dann '
+      + 'wird der Artikel angelegt und ist beim nächsten Mal da.',
+      { title: 'Unbekannter Barcode', okLabel: 'Verstanden', cancelLabel: 'Schließen', danger: false });
+    return;
+  }
   await produktAnlegenMaske(code);
 }
 

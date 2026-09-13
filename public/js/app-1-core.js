@@ -987,10 +987,21 @@ function darfBestellen() {
 // bewusst NICHT dabei — anders als beim Bestellen. Gegenstueck zu produktrecht.js auf dem Server;
 // verboten wird dort, hier wird nur ein-/ausgeblendet.
 //
-// ANLEGEN darf jeder — das fragt diese Funktion nicht ab.
+// EINLERNEN ist ein eigenes, kleineres Recht — siehe darfArtikelEinlernen() darunter.
 function darfProduktePflegen() {
   if (!S.user) return false;
   return ['admin', 'chef'].includes(S.user.role) || !!S.user.can_products;
+}
+
+// Darf am Regal neue Artikel/Barcodes EINLERNEN. Gegenstueck zu barcoderecht.js; wie oben gilt:
+// verboten wird auf dem Server, hier wird nur ein-/ausgeblendet.
+//
+// Wer PFLEGEN darf, darf auch einlernen — sonst duerfte er im Produktverzeichnis Barcodes
+// anlernen, am Regal aber nicht. Der Buchhalter braucht auch hier das Haekchen.
+function darfArtikelEinlernen() {
+  if (!S.user) return false;
+  if (darfProduktePflegen()) return true;
+  return !!S.user.can_barcode;
 }
 
 function canManageProjects() {

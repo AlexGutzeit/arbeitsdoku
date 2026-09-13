@@ -55,7 +55,12 @@ function req(m, p, t, b) {
     const an = async n => (await req('POST', '/api/auth/login', null, { username: n, password: PW })).body.token;
     const admin = await an('admin'), chef = await an('chef'), max = await an('max'), buch = await an('buchhalter');
     const maxId = db.prepare("SELECT id FROM users WHERE username = 'max'").get().id;
+    // max ist hier der Lagerist: Er legt die Testdaten an, darf aber NICHT pflegen — genau die
+    // Trennung, um die es in dieser Datei geht. Seit 13.09.2026 braucht auch das Anlegen ein
+    // Recht (barcoderecht.js), also bekommt er es hier ausdrücklich. Das Pflegerecht NICHT.
     const neu = async (name, code) => (await req('POST', '/api/products', max, { name, barcode: code })).body.produkt;
+
+    await req('PUT', `/api/users/${maxId}`, admin, { can_barcode: true });
 
     console.log('── Ohne Recht kommt niemand an die Pflege ──');
     const p1 = await neu('Kabelbinder 200 mm', '4001');

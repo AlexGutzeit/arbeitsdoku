@@ -43,6 +43,13 @@ function req(m, p, t, b) {
     let log = ''; for (let i = 0; i < 150; i++) { log = fs.readFileSync(LOG, 'utf8'); if (/max\s+->\s+\S+/.test(log)) break; await sleep(200); }
     const pw = n => (log.match(new RegExp(n + '\\s+->\\s+(\\S+)')) || [])[1];
     const tok = (await req('POST', '/api/auth/login', null, { username: 'max', password: pw('max') })).body.token;
+    const adminTok = (await req('POST', '/api/auth/login', null,
+      { username: 'admin', password: pw('admin') })).body.token;
+    // Seit 13.09.2026 braucht das Einlernen ein Recht (barcoderecht.js). max ist in diesem Test
+    // der Lagerist am Regal, also bekommt er es — die Verweigerung hat unten einen eigenen
+    // Abschnitt, damit beide Seiten der Regel geprüft sind.
+    const maxId = (await req('GET', '/api/users', adminTok)).body.users.find(u => u.username === 'max').id;
+    await req('PUT', `/api/users/${maxId}`, adminTok, { can_barcode: true });
 
     const kat = (await req('POST', '/api/products/kategorien', tok, { name: 'Befestigung' })).body.kategorie;
     const bekannt = (await req('POST', '/api/products', tok, {
@@ -440,8 +447,6 @@ function req(m, p, t, b) {
     // gewöhnlicher Mitarbeiter OHNE „Lagerdaten pflegen". Anlegen darf er nur mit Barcode —
     // anlernen an ein bestehendes Produkt aber sehr wohl, sonst stünde er im Regal fest.
     console.log('\n── Ein barcodeloses Produkt bekommt im Lager seinen Code ──');
-    const adminTok = (await req('POST', '/api/auth/login', null,
-      { username: 'admin', password: pw('admin') })).body.token;
     const ohneCode = (await req('POST', '/api/products', adminTok, { name: 'Erdungsband 30x3' })).body.produkt;
     ok('das barcodelose Produkt existiert', !!ohneCode && (ohneCode.barcodes || []).length === 0,
       JSON.stringify(ohneCode));
@@ -486,6 +491,35 @@ function req(m, p, t, b) {
       neu.body.gefunden && neu.body.produkt.name === 'Schrauben-Sortiment', JSON.stringify(neu.body.produkt && neu.body.produkt.name));
     const imFeld = await seite.evaluate(() => document.getElementById('of-product').value);
     ok('… und steht gleich im Formular', imFeld === 'Schrauben-Sortiment', imFeld);
+
+    // ── OHNE EINLERNRECHT: Auskunft statt Maske ─────────────────────────────────────────────
+    //
+    // Alex (13.09.2026): „Wenn unbekannter Barcode gescannt wird bekommen die unberechtigten eine
+    // Meldung. Die berechtigten bekommen die Nachfrage ob ein neuer Artikel eingelernt werden
+    // soll." Entscheidend ist, dass die Maske gar nicht erst kommt — eine Eingabemaske, die beim
+    // Speichern an einem 403 scheitert, ist die schlechtere Variante von „darfst du nicht".
+    console.log('\n── Ohne Einlernrecht: Auskunft statt Anlege-Maske ──');
+    await req('PUT', `/api/users/${maxId}`, adminTok, { can_barcode: false });
+    await seite.reload({ waitUntil: 'domcontentloaded' });
+    await sleep(2500);
+    await seite.goto(BASIS + '/#/orders', { waitUntil: 'domcontentloaded' });
+    await sleep(2000);
+    await seite.click('#order-add-btn'); await sleep(700);
+    await scanVorgeben('4062679999992');
+    await seite.click('#of-scan'); await sleep(1500);
+    const gesperrt = await seite.evaluate(() => (document.querySelector('.modal') || document.body).innerText);
+    ok('es erscheint KEINE Anlege-Maske', await seite.$('#np-name') === null, gesperrt.slice(0, 120));
+    ok('… sondern „Unbekannter Barcode"', /Unbekannter Barcode/i.test(gesperrt), gesperrt.slice(0, 200));
+    ok('… mit dem Code zum Weitergeben', /4062679999992/.test(gesperrt), gesperrt.slice(0, 200));
+    ok('… und dem Weg, der weiterhin offensteht (freier Text)',
+      /freien? Text/i.test(gesperrt), gesperrt.slice(0, 300));
+    ok('… ohne Personennamen — „deinem Admin"', /Admin/.test(gesperrt) && !/\bAlex\b/i.test(gesperrt),
+      gesperrt.slice(0, 300));
+    await seite.evaluate(() => {
+      const b = [...document.querySelectorAll('.modal button')].find(x => /Verstanden|Schließen/.test(x.textContent));
+      if (b) b.click();
+    });
+    await sleep(500);
 
     // KEIN PERSONENNAME IN SICHTBAREN TEXTEN.
     //

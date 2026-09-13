@@ -21,6 +21,7 @@ const { authenticate } = require('../middleware/auth');
 const { logAudit, berlinNow } = require('../audit');
 const { broadcast } = require('../sse');
 const { darfProduktePflegen } = require('../produktrecht');
+const { darfBarcodeEinlernen } = require('../barcoderecht');
 const { darfBestellen } = require('../bestellrecht');
 const { linkPruefen } = require('../linkpruefung');
 
@@ -147,7 +148,7 @@ router.get('/kategorien', authenticate, (req, res) => {
   ).all() });
 });
 
-router.post('/kategorien', authenticate, (req, res) => {
+router.post('/kategorien', authenticate, nurEinlerner, (req, res) => {
   const db = getDb();
   const name = String(req.body.name || '').trim();
   if (name.length < 2) return res.status(400).json({ error: 'Bitte einen Namen mit mindestens 2 Zeichen angeben.' });
@@ -228,7 +229,19 @@ router.delete('/kategorien/:id', authenticate, nurPfleger, (req, res) => {
 });
 
 // ── Produkt anlegen — NUR MIT BARCODE ────────────────────────────────────────────────────────
-router.post('/', authenticate, (req, res) => {
+// Ein Riegel fuer beide Wege ins Verzeichnis (anlegen und an ein bestehendes Produkt anlernen).
+// EINE Stelle, damit Regel und Erklaerung nicht auseinanderlaufen — dieselbe Lehre wie beim
+// Bestellrecht, wo dieselbe Bedingung an fuenf Stellen stand und drei davon falsch waren.
+function nurEinlerner(req, res, next) {
+  if (darfBarcodeEinlernen(req.user)) return next();
+  return res.status(403).json({
+    error: 'Du darfst keine neuen Artikel ins Verzeichnis einlernen. Bestellen geht wie bisher mit '
+         + 'freiem Text — das bleibt unverändert. Sag deinem Admin Bescheid, dann wird der Artikel '
+         + 'angelegt und ist beim nächsten Mal da.',
+    einlernrecht: false });
+}
+
+router.post('/', authenticate, nurEinlerner, (req, res) => {
   const db = getDb();
   const name = String(req.body.name || '').trim();
   const code = String(req.body.barcode || '').trim();
@@ -282,7 +295,7 @@ router.post('/', authenticate, (req, res) => {
 });
 
 // ── Weiteren Barcode an ein bestehendes Produkt hängen (der Sinn von 1:n) ────────────────────
-router.post('/:id/barcodes', authenticate, (req, res) => {
+router.post('/:id/barcodes', authenticate, nurEinlerner, (req, res) => {
   const db = getDb();
   const id = Number(req.params.id);
   const code = String(req.body.code || '').trim();

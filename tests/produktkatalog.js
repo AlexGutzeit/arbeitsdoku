@@ -65,15 +65,50 @@ function req(m, p, t, b) {
     ok('… und legt NICHTS im Katalog an — die Regel, an der alles hängt',
       nachFrei.body.produkte.length === 0, JSON.stringify(nachFrei.body.produkte));
 
+    // ── Einlernen braucht seit 13.09.2026 ein Recht ─────────────────────────────────────────
+    //
+    // Vorher galt: „Anlegen darf jeder." Alex hat das umgedreht („um die datenhygiene hoch zu
+    // halten"), also ist die alte Zusicherung nicht kaputt, sondern ABGELÖST. Sie steht hier in
+    // der neuen Form — samt der Zusage, die die Fehlermeldung gibt: Bestellen geht weiter.
+    console.log('\n── Einlernen braucht ein Recht ──');
+    const ohneRecht = await req('POST', '/api/products', max, { name: 'Klebeband', barcode: '4001111111118' });
+    ok('ein Mitarbeiter ohne Recht darf NICHT einlernen', ohneRecht.status === 403, String(ohneRecht.status));
+    ok('… die Meldung spricht nicht vom Barcode (derselbe Riegel gilt auch ohne)',
+      !/Barcode/.test(ohneRecht.body.error || ''), ohneRecht.body.error);
+    ok('… sie nennt den Weg: freier Text und der Admin',
+      /freiem Text/.test(ohneRecht.body.error || '') && /Admin/.test(ohneRecht.body.error || ''),
+      ohneRecht.body.error);
+    ok('… auch eine Kategorie darf er nicht anlegen',
+      (await req('POST', '/api/products/kategorien', max, { name: 'Heimlich' })).status === 403);
+    ok('… und auch nicht an ein bestehendes Produkt anlernen (Route separat abgesichert)',
+      (await req('POST', '/api/products/1/barcodes', max, { code: '4001111111118' })).status === 403);
+    // DIE WICHTIGSTE ZUSICHERUNG: Die Fehlermeldung verspricht, dass Bestellen weitergeht.
+    // Ein Versprechen in einer Meldung ist eine Zusage wie jede andere.
+    ok('… aber bestellen kann er weiterhin mit freiem Text',
+      (await req('POST', '/api/orders', max, { product: 'Klebeband, breit', quantity: 3 })).status === 201);
+    ok('… der Buchhalter darf es auch nicht per Rolle (anders als beim Bestellen)',
+      (await req('POST', '/api/products', await an('buchhalter'), { name: 'X', barcode: '4001111111118' })).status === 403);
+    const durchGelassen = async (tok) =>
+      (await req('POST', '/api/products/999999/barcodes', tok, { code: '4001111111118' })).status;
+    ok('… Chef und Admin dürfen immer (404 statt 403 = am Riegel vorbei)',
+      (await durchGelassen(chef)) === 404 && (await durchGelassen(admin)) === 404,
+      JSON.stringify([await durchGelassen(chef), await durchGelassen(admin)]));
+
+    // Ab hier ist max der eingelernte Lagerist — so, wie Alex es in der Firma vergeben würde.
+    const maxIdFrueh = db.prepare("SELECT id FROM users WHERE username = 'max'").get().id;
+    await req('PUT', `/api/users/${maxIdFrueh}`, admin, { can_barcode: true });
+    ok('mit dem Häkchen darf er sofort', (await durchGelassen(max)) === 404,
+      String(await durchGelassen(max)));
+
     console.log('\n── Ohne Barcode kein Katalogeintrag ──');
     const ohne = await req('POST', '/api/products', max, { name: 'Kabelbinder' });
     ok('Anlegen ohne Barcode wird abgewiesen', ohne.status === 400, ohne.status + ' ' + ohne.text.slice(0, 90));
     ok('… und erklärt, dass freier Text weiterhin geht', /freiem Text|freien Text/i.test(ohne.text), ohne.text.slice(0, 160));
     ok('… und nennt den Weg über das Pflegerecht', /Lagerdaten pflegen/.test(ohne.text), ohne.text.slice(0, 200));
 
-    console.log('\n── Jeder Mitarbeiter darf anlegen ──');
+    console.log('\n── Mit dem Recht legt auch ein Mitarbeiter an ──');
     const kat = await req('POST', '/api/products/kategorien', max, { name: 'Elektro' });
-    ok('ein Mitarbeiter legt eine Kategorie an', kat.status === 201, kat.status + ' ' + kat.text.slice(0, 90));
+    ok('ein eingelernter Mitarbeiter legt eine Kategorie an', kat.status === 201, kat.status + ' ' + kat.text.slice(0, 90));
     const p1 = await req('POST', '/api/products', max, {
       name: 'Kabelbinder 200 mm', barcode: '4050821808435', category_id: kat.body.kategorie.id, default_unit: 'Beutel' });
     ok('… und ein Produkt mit Barcode', p1.status === 201, p1.status + ' ' + p1.text.slice(0, 110));

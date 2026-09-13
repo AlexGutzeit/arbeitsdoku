@@ -63,7 +63,7 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     const admin = (await req('POST', '/api/auth/login', null, { username: 'admin', password: pwAdmin })).body.token;
 
     const PW = 'Lagerist3!';
-    const lg1 = (await req('POST', '/api/users', admin, { username: 'lagerist', password: PW, name: 'Lena Lagerist', role: 'mitarbeiter', target_hours_per_week: 40, can_order: true })).body.user;
+    const lg1 = (await req('POST', '/api/users', admin, { username: 'lagerist', password: PW, name: 'Lena Lagerist', role: 'mitarbeiter', target_hours_per_week: 40, can_order: true, can_barcode: true })).body.user;
     const lagerTok = (await req('POST', '/api/auth/login', null, { username: 'lagerist', password: PW })).body.token;
 
     // Ausgangslage: ein Katalogprodukt, eine Bestellung darauf, ein Händler mit Angaben.

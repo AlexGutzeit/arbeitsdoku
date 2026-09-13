@@ -14,6 +14,53 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-13 · Einlernen wird ein Recht — eine Gründungsregel wird umgedreht
+
+Alex: *„ich würde da doch gerne eine Berechtigung vergeben um die datenhygiene hoch zu halten.
+Chef/Admin dürfen immer einlernen. Buchhalter und MA nur mit Berechtigung."*
+
+Damit fällt die Begründung, die seit dem ersten Tag im Code stand: *„Anlegen darf JEDER — wer im
+Lager vor einem unbekannten Barcode steht und nichts tun kann, umgeht die App."* Das war kein
+Fehler, sondern eine Abwägung; sie wird jetzt anders entschieden. Der Preis bleibt derselbe (wer
+den Karton in der Hand hat, muss fragen), der Gewinn ist, dass Einträge nur dort entstehen, wo
+jemand auf Schreibweise, Kategorie und Doppel achtet.
+
+**Ein eigenes Recht, nicht `can_products` mitbenutzt.** Sonst hätte „darf einen Barcode einlernen"
+automatisch „darf umbenennen, zusammenführen, löschen" bedeutet — gröber als gefragt. Umgekehrt
+**folgt** das kleine aus dem grossen: Wer pflegen darf, kann im Verzeichnis längst Barcodes
+anlernen und sogar Produkte ohne Code anlegen; ohne die Folgerung dürfte er es nur am Regal nicht.
+Die Folgerung steht **einmal** in `barcoderecht.js`, und das Häkchen wird geleert, sobald
+`can_products` gesetzt ist — zwei Quellen für dieselbe Aussage laufen sonst auseinander.
+
+**Drei Routen, ein Riegel.** `POST /api/products`, `POST /:id/barcodes` **und**
+`POST /kategorien` — letztere, weil die Anlege-Maske nebenbei eine Kategorie erzeugen kann; ohne
+sie hätte ein Unberechtigter zwar kein Produkt, aber Kategorien anlegen können. Alle drei hängen
+an derselben Middleware, damit Regel und Erklärung nicht auseinanderlaufen (die Lehre aus
+`bestellrecht.js`, wo dieselbe Bedingung an fünf Stellen stand und drei falsch waren).
+
+**Die Meldung durfte nicht vom Barcode sprechen.** Mein erster Entwurf begann mit „Unbekannter
+Barcode — …". Derselbe Riegel sitzt aber auch vor dem Anlegen *ohne* Code und vor einer neuen
+Kategorie; dort wäre der Satz schlicht falsch gewesen. Den Barcode nennt jetzt die Oberfläche, die
+ihn kennt. Ein Test hält das fest: Die Server-Meldung darf das Wort „Barcode" **nicht** enthalten.
+
+**Die wichtigste Zusicherung ist eine Zusage aus der Meldung selbst:** Sie verspricht, dass
+Bestellen mit freiem Text weitergeht. Also wird genau das geprüft — ein Versprechen in einer
+Fehlermeldung ist eine Zusage wie jede andere.
+
+**Rote Bestandstests, und was sie bedeuteten.** Nach dem Umbau waren fünf Testdateien rot. Zwei
+Sorten: eine Zusicherung „jeder Mitarbeiter darf anlegen", die **abgelöst** und nicht kaputt ist —
+sie steht jetzt in der neuen Form da; und Testaufbauten, die `max` als Anleger benutzen — die
+bekommen das Recht ausdrücklich, so wie Alex es in der Firma vergäbe. Keine wurde stillgelegt.
+
+**Gegenprobe:** `darfArtikelEinlernen()` fest auf `true` — dann erscheint die Anlege-Maske wieder,
+und die Zusicherung „es erscheint KEINE Anlege-Maske" fällt.
+
+**Nebenbei ein eigener Fehler:** Für die Startprobe habe ich `node -e "require('./server.js')"`
+laufen lassen — gegen die Datenbank aus der `.env`, während ein Dev-Server lief. Genau der zweite
+Prozess auf derselben Datei, vor dem meine eigene Notiz warnt. Es ist nichts passiert (beendet vor
+dem 5-Sekunden-Autosave, Zeitstempel unverändert), aber es war Glück, nicht Sorgfalt. Die Probe
+gehört mit eigenem `DB_PATH` und eigenem Port gefahren.
+
 ### 2026-09-12 · Ich habe einen Rat gegeben, der gar nicht wirken konnte
 
 Alex' zweiter Lauf kam im ALTEN Berichtsformat zurück — ohne „Lesezeit", ohne die Zeile mit den
