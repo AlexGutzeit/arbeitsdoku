@@ -162,7 +162,7 @@ router.get('/:id/produkte', authenticate, nurLesen, (req, res) => {
   const h = db.prepare('SELECT id, name FROM suppliers WHERE id = ?').get(id);
   if (!h) return res.status(404).json({ error: 'Großhändler nicht gefunden' });
   const produkte = db.prepare(`
-    SELECT p.id, p.name, ps.bestellnummer, ps.link, ps.kommentar,
+    SELECT p.id, p.name, p.hersteller, ps.bestellnummer, ps.link, ps.kommentar,
            (SELECT COUNT(*) FROM product_barcodes b WHERE b.product_id = p.id) AS barcodes
       FROM product_suppliers ps JOIN products p ON p.id = ps.product_id
      WHERE ps.supplier_id = ? AND p.deleted_at IS NULL

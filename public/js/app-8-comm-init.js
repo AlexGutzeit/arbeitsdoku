@@ -448,7 +448,9 @@ function produktSucheBinden() {
     const q = vergleichsform(feld.value);
     const kat = katFeld && katFeld.value ? Number(katFeld.value) : null;
     let treffer = katalog.filter(p => !kat || p.category_id === kat);
-    if (q) treffer = treffer.filter(p => vergleichsform(p.name).includes(q));
+    // Auch nach dem HERSTELLER suchen: "obo" soll die Kabelbinder von OBO finden.
+    if (q) treffer = treffer.filter(p => vergleichsform(p.name).includes(q)
+                                      || vergleichsform(p.hersteller || '').includes(q));
     // Ohne Eingabe die ganze (gefilterte) Liste zeigen — Alex wollte ausdruecklich auch
     // DURCHSCROLLEN koennen, nicht nur suchen.
     treffer = treffer.slice(0, 50);
@@ -459,9 +461,12 @@ function produktSucheBinden() {
       const k = ((S.produktKatalog || {}).kategorien || []).find(x => x.id === id);
       return k ? k.name : '';
     };
+    // Der Hersteller MUSS in der Vorschlagszeile stehen: Zwei gleichnamige Artikel verschiedener
+    // Hersteller waeren sonst nicht auseinanderzuhalten - und genau dafuer gibt es das Feld.
     liste.innerHTML = treffer.map(p =>
       `<li data-id="${p.id}" data-name="${esc(p.name)}" data-unit="${esc(p.default_unit || '')}">
-         ${esc(p.name)}${p.category_id ? `<span class="kat">${esc(katName(p.category_id))}</span>` : ''}
+         ${esc(p.name)}${p.hersteller ? ` <span class="hersteller">${esc(p.hersteller)}</span>` : ''}${
+           p.category_id ? `<span class="kat">${esc(katName(p.category_id))}</span>` : ''}
        </li>`).join('');
     liste.style.display = '';
   };
@@ -667,6 +672,14 @@ function produktAnlegenMaske(code) {
           </div>
           <div id="np-aehnlich" style="display:none;margin:-.4rem 0 .8rem"></div>
           <div class="form-group">
+            <label for="np-hersteller">Hersteller <em>(freiwillig)</em></label>
+            <input type="text" id="np-hersteller" class="form-control" list="np-hersteller-liste"
+                   autocomplete="off" placeholder="z. B. OBO">
+            <datalist id="np-hersteller-liste">${
+              (((S.produktKatalog || {}).hersteller) || []).map(h => `<option value="${esc(h)}">`).join('')
+            }</datalist>
+          </div>
+          <div class="form-group">
             <label for="np-kat">Kategorie</label>
             <select id="np-kat" class="form-control">
               <option value="">— keine —</option>
@@ -753,6 +766,7 @@ function produktAnlegenMaske(code) {
         const r = await api('POST', '/api/products', {
           name, barcode: code,
           category_id: katId ? Number(katId) : null,
+          hersteller: $n('np-hersteller').value.trim() || null,
           default_unit: $n('np-einheit').value.trim() || null });
         await katalogAuffrischen();
         produktUebernehmen(r.produkt);

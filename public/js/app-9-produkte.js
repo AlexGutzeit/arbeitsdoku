@@ -94,6 +94,7 @@ function pvProdukteHtml(v) {
         <option value="ohne">— ohne Kategorie —</option>
       </select>
     </div>
+    <datalist id="pv-hersteller-liste">${(v.hersteller || []).map(h => `<option value="${esc(h)}">`).join('')}</datalist>
     <div id="pv-liste">${v.produkte.map(pvProduktZeile).join('') || '<p style="color:var(--text-lighter);text-align:center">Noch keine Produkte im Verzeichnis. Sie entstehen beim Scannen eines unbekannten Barcodes.</p>'}</div>
     <details style="margin-top:1.4rem">
       <summary style="cursor:pointer;font-weight:600">Kategorien verwalten (${v.kategorien.length})</summary>
@@ -102,13 +103,14 @@ function pvProdukteHtml(v) {
 }
 
 function pvProduktZeile(p) {
-  const such = [p.name, p.kategorie_name, ...(p.barcodes || [])].filter(Boolean).join(' ');
+  const such = [p.name, p.hersteller, p.kategorie_name, ...(p.barcodes || [])].filter(Boolean).join(' ');
   return `<details class="pv-produkt" data-id="${p.id}" data-kat="${p.category_id || 'ohne'}"
                    data-suchtext="${esc(such.toLowerCase())}">
     <summary>
       <strong>${esc(p.name)}</strong>
       <span style="color:var(--text-light);font-size:.82rem;margin-left:.5rem">
         ${p.kategorie_name ? esc(p.kategorie_name) : '<em>ohne Kategorie</em>'}
+        ${p.hersteller ? '· <strong>' + esc(p.hersteller) + '</strong>' : ''}
         · ${p.barcodes.length
              ? p.barcodes.length + ' Barcode' + (p.barcodes.length === 1 ? '' : 's')
              : '<span class="pv-ohne-code">ohne Barcode — nur über die Suche</span>'}
@@ -131,6 +133,9 @@ function pvDetailHtml(p, haendlerEintraege) {
           <option value="">— ohne —</option>
           ${kats.map(k => `<option value="${k.id}"${k.id === p.category_id ? ' selected' : ''}>${esc(k.name)}</option>`).join('')}
         </select></label>
+      <label style="flex:1;min-width:150px">Hersteller
+        <input type="text" class="form-control pv-f-hersteller" list="pv-hersteller-liste"
+               value="${esc(p.hersteller || '')}" placeholder="z. B. OBO" autocomplete="off"></label>
       <label style="flex:0 0 110px">Einheit
         <input type="text" class="form-control pv-f-einheit" value="${esc(p.default_unit || '')}" placeholder="Stk"></label>
       <button class="btn btn-primary btn-sm pv-speichern">Speichern</button>
@@ -262,7 +267,7 @@ function pvHaendlerProdukteHtml(hId, produkte) {
         <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
           <strong>${esc(p.name)}</strong>
           <span>
-            ${(p.barcodes && p.barcodes.length) ? '' : '<span class="pv-ohne-code">ohne Barcode</span>'}
+            ${p.hersteller ? '<span class="pv-ohne-code">' + esc(p.hersteller) + '</span> ' : ''}${(p.barcodes && p.barcodes.length) ? '' : '<span class="pv-ohne-code">ohne Barcode</span>'}
             <button class="btn btn-sm btn-danger pv-hp-weg" title="Zuordnung entfernen"
                     aria-label="Zuordnung zu ${esc(p.name)} entfernen">&times;</button>
           </span>
@@ -474,6 +479,7 @@ async function pvKlick(ev) {
         name: details.querySelector('.pv-f-name').value.trim(),
         category_id: details.querySelector('.pv-f-kat').value || null,
         default_unit: details.querySelector('.pv-f-einheit').value.trim(),
+        hersteller: details.querySelector('.pv-f-hersteller').value.trim(),
       };
       try {
         await api('PUT', `/api/products/${id}`, rumpf);
@@ -641,6 +647,9 @@ function pvNeuesProduktDialog(hKarte) {
           Der Name steht künftig allen zur Auswahl. Schau kurz, ob es das Produkt schon gibt.</p>
         <label style="display:block;margin-bottom:.5rem">Produktname *
           <input type="text" class="form-control" id="pnp-name" autocomplete="off"></label>
+        <label style="display:block;margin-bottom:.5rem">Hersteller <em>(freiwillig)</em>
+          <input type="text" class="form-control" id="pnp-hersteller" list="pv-hersteller-liste"
+                 autocomplete="off" placeholder="z. B. OBO"></label>
         <label style="display:block;margin-bottom:.5rem">Kategorie
           <select class="form-control" id="pnp-kat">
             <option value="">— keine —</option>
@@ -671,6 +680,7 @@ function pvNeuesProduktDialog(hKarte) {
       const r = await api('POST', '/api/products', {
         name: overlay.querySelector('#pnp-name').value.trim(),
         barcode: overlay.querySelector('#pnp-code').value.trim() || null,
+        hersteller: overlay.querySelector('#pnp-hersteller').value.trim() || null,
         category_id: overlay.querySelector('#pnp-kat').value || null,
       });
       await api('PUT', `/api/products/${r.produkt.id}/haendler/${hKarte.dataset.id}`, {});

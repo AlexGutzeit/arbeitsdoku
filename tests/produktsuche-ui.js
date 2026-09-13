@@ -54,6 +54,10 @@ async function anmelden(browser, user, pw) {
     let log = ''; for (let i = 0; i < 150; i++) { log = fs.readFileSync(LOG, 'utf8'); if (/max\s+->\s+\S+/.test(log)) break; await sleep(200); }
     const pw = n => (log.match(new RegExp(n + '\\s+->\\s+(\\S+)')) || [])[1];
     const maxTok = (await req('POST', '/api/auth/login', null, { username: 'max', password: pw('max') })).body.token;
+    const adminTok = (await req('POST', '/api/auth/login', null, { username: 'admin', password: pw('admin') })).body.token;
+    // Seit 13.09.2026 braucht das Anlegen ein Recht (barcoderecht.js) — max ist hier der Lagerist.
+    const maxId = (await req('GET', '/api/users', adminTok)).body.users.find(u => u.username === 'max').id;
+    await req('PUT', `/api/users/${maxId}`, adminTok, { can_barcode: true });
 
     // Katalog vorbereiten
     const kElektro = (await req('POST', '/api/products/kategorien', maxTok, { name: 'Elektro' })).body.kategorie;
@@ -64,6 +68,13 @@ async function anmelden(browser, user, pw) {
       ['Aderendhülse 2,5',   '4046281411223', kElektro.id, 'Packung'],
       ['Schrauben-Sortiment','4104640010552', kBefest.id, 'Koffer'],
     ]) await req('POST', '/api/products', maxTok, { name, barcode: code, category_id: kat, default_unit: einheit });
+
+    // ZWEI GLEICHNAMIGE von verschiedenen Herstellern — der Fall, für den Alex das Feld wollte.
+    // Wenn die Vorschlagsliste sie nicht unterscheidet, ist das Feld wertlos: Man bestellt dann
+    // aufs Geratewohl einen der beiden.
+    for (const [h, code] of [['OBO Bettermann', '4062679000015'], ['HellermannTyton', '4062679000022']])
+      await req('POST', '/api/products', maxTok,
+        { name: 'Schelle 16 mm', barcode: code, category_id: kBefest.id, hersteller: h });
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const jsFehler = [];
@@ -78,13 +89,17 @@ async function anmelden(browser, user, pw) {
     await m.seite.type('#of-product', 'Irgendwas ganz Neues');
     await m.seite.evaluate(() => { document.getElementById('of-qty').value = '3'; });
     await m.seite.evaluate(() => document.querySelector('#order-form button[type="submit"]').click());
+    // VORHER zählen statt eine feste Zahl hinzuschreiben: Sonst bricht diese Zusicherung jedes
+    // Mal, wenn oben ein Testprodukt dazukommt — und man gewöhnt sich an, sie anzupassen, statt
+    // sie zu lesen. Gemessen wird die Veränderung, und die soll null sein.
+    const vorher = (await req('GET', '/api/products/katalog', maxTok)).body.produkte.length;
     await sleep(1800);
     const frei = await req('GET', '/api/orders', maxTok);
     ok('eine getippte Bestellung geht wie immer',
       frei.body.orders.some(o => o.product === 'Irgendwas ganz Neues'),
       JSON.stringify(frei.body.orders.map(o => o.product)));
     const katalogDanach = await req('GET', '/api/products/katalog', maxTok);
-    ok('… und legt NICHTS im Verzeichnis an', katalogDanach.body.produkte.length === 4,
+    ok('… und legt NICHTS im Verzeichnis an', katalogDanach.body.produkte.length === vorher,
       String(katalogDanach.body.produkte.length));
 
     console.log('\n── Live-Suche, Zeichen für Zeichen ──');
@@ -144,6 +159,26 @@ async function anmelden(browser, user, pw) {
     await sleep(250);
     const gelöst = await m.seite.evaluate(() => document.getElementById('of-product').dataset.produktId || null);
     ok('nach dem Weitertippen ist die Verknüpfung weg', gelöst === null, String(gelöst));
+
+    console.log('\n── Zwei gleichnamige Artikel, zwei Hersteller ──');
+    await m.seite.evaluate(() => { const f = document.getElementById('of-product'); f.value = ''; f.focus(); });
+    await m.seite.type('#of-product', 'schelle', { delay: 15 });
+    await sleep(350);
+    const zwei = await m.seite.evaluate(() => [...document.querySelectorAll('#of-vorschlaege li')]
+      .map(li => li.innerText.replace(/\s+/g, ' ').trim()));
+    ok('beide erscheinen in der Vorschlagsliste', zwei.length === 2, JSON.stringify(zwei));
+    ok('… und sind am Hersteller zu unterscheiden',
+      zwei.some(t => /OBO/.test(t)) && zwei.some(t => /HellermannTyton/.test(t)), JSON.stringify(zwei));
+
+    // Und der Hersteller ist selbst ein Suchbegriff — im Lager weiss man oft die Marke, nicht den
+    // genauen Artikelnamen.
+    await m.seite.evaluate(() => { const f = document.getElementById('of-product'); f.value = ''; f.focus(); });
+    await m.seite.type('#of-product', 'hellermann', { delay: 15 });
+    await sleep(350);
+    const ueberMarke = await m.seite.evaluate(() => [...document.querySelectorAll('#of-vorschlaege li')]
+      .map(li => li.innerText.replace(/\s+/g, ' ').trim()));
+    ok('die Suche nach der Marke findet den Artikel',
+      ueberMarke.length === 1 && /Schelle 16 mm/.test(ueberMarke[0]), JSON.stringify(ueberMarke));
 
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.slice(0, 2).join(' | '));
   } catch (e) {

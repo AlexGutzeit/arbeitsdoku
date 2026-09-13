@@ -67,15 +67,56 @@ function produktMitCodes(db, id) {
 // Zusammenfuehren wird deshalb die Verknuepfung umgehaengt und der Text nicht angefasst.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Hersteller einlesen — und die SCHREIBWEISE an vorhandene angleichen.
+ *
+ * Ein freies Textfeld erzeugt sonst „ABB", „abb" und „A.B.B." nebeneinander, und genau davor
+ * wollte Alex die Datenhygiene schuetzen. Deshalb: Wer etwas tippt, das in Vergleichsform einem
+ * bereits benutzten Hersteller entspricht, bekommt DESSEN Schreibweise gespeichert. Nur wirklich
+ * neue Namen kommen so ins Feld, wie sie getippt wurden.
+ *
+ * Bewusst NICHT abgewiesen: Wer einen neuen Hersteller braucht, soll ihn anlegen koennen, ohne
+ * vorher irgendwo eine Liste zu pflegen.
+ */
+function herstellerEinlesen(db, wert) {
+  const roh = String(wert == null ? '' : wert).trim();
+  if (!roh) return null;
+  if (roh.length > 80) return { fehler: 'Der Herstellername ist zu lang (höchstens 80 Zeichen).' };
+  const v = vergleichsform(roh);
+  const treffer = db.prepare(
+    "SELECT DISTINCT hersteller FROM products WHERE hersteller IS NOT NULL AND hersteller != ''"
+  ).all().map(r => r.hersteller).find(h => vergleichsform(h) === v);
+  return { wert: treffer || roh };
+}
+
+/** Die vorhandenen Hersteller — Vorschlagsliste fuer die Eingabefelder. */
+function herstellerListe(db) {
+  return db.prepare(
+    `SELECT DISTINCT hersteller FROM products
+      WHERE deleted_at IS NULL AND hersteller IS NOT NULL AND hersteller != ''
+      ORDER BY hersteller COLLATE NOCASE`
+  ).all().map(r => r.hersteller);
+}
+
 const nurPfleger = (req, res, next) =>
   darfProduktePflegen(req.user) ? next() : res.status(403).json({ error: 'Keine Berechtigung' });
 
-/** Findet Namensgleiche (nach Vergleichsform) unter den lebenden Produkten. */
+/**
+ * Findet Namensgleiche (nach Vergleichsform) unter den lebenden Produkten.
+ *
+ * SEIT DEM HERSTELLER-FELD gehoert er zum Schluessel. „Kabelbinder 200 mm" von OBO und derselbe
+ * Name von HellermannTyton sind ZWEI Artikel mit zwei EANs — genau der Fall, fuer den Alex das
+ * Feld wollte („jedes Produkt kann von mehreren Herstellern auf Lager sein"). Als Doppel gemeldet
+ * waere die Warnung dauerhaft an und damit wertlos.
+ *
+ * Ein LEERER Hersteller zaehlt dabei als eigener Wert: „Kabelbinder" ohne Angabe neben
+ * „Kabelbinder / OBO" ist sehr wohl verdaechtig — vermutlich fehlt beim einen nur die Angabe.
+ */
 function dublettenGruppen(db) {
-  const alle = db.prepare('SELECT id, name FROM products WHERE deleted_at IS NULL ORDER BY name').all();
+  const alle = db.prepare('SELECT id, name, hersteller FROM products WHERE deleted_at IS NULL ORDER BY name').all();
   const nach = new Map();
   for (const p of alle) {
-    const k = vergleichsform(p.name);
+    const k = vergleichsform(p.name) + '\u0000' + vergleichsform(p.hersteller || '');
     if (!nach.has(k)) nach.set(k, []);
     nach.get(k).push(p);
   }
@@ -91,7 +132,7 @@ router.get('/katalog', authenticate, (req, res) => {
     `SELECT ${KAT_FELDER} FROM product_categories WHERE deleted_at IS NULL ORDER BY name`
   ).all();
   const produkte = db.prepare(
-    `SELECT p.id, p.name, p.category_id, p.default_unit
+    `SELECT p.id, p.name, p.category_id, p.default_unit, p.hersteller
        FROM products p WHERE p.deleted_at IS NULL ORDER BY p.name`
   ).all();
   const codes = db.prepare(
@@ -101,7 +142,9 @@ router.get('/katalog', authenticate, (req, res) => {
   const nach = {};
   for (const c of codes) (nach[c.product_id] = nach[c.product_id] || []).push(c.code);
   for (const p of produkte) p.barcodes = nach[p.id] || [];
-  res.json({ kategorien, produkte, stand: berlinNow() });
+  // Die Herstellerliste faehrt mit: Die Anlege-Maske beim Scannen braucht ihre Vorschlaege auch
+  // dann, wenn im Lager gerade nichts durchkommt (Offline-Spiegel).
+  res.json({ kategorien, produkte, hersteller: herstellerListe(db), stand: berlinNow() });
 });
 
 // ── Einen Barcode nachschlagen ───────────────────────────────────────────────────────────────
@@ -127,7 +170,7 @@ router.get('/', authenticate, (req, res) => {
   const db = getDb();
   const q = vergleichsform(req.query.q);
   const kat = req.query.category_id ? Number(req.query.category_id) : null;
-  let sql = `SELECT p.id, p.name, p.category_id, p.default_unit, k.name AS kategorie_name
+  let sql = `SELECT p.id, p.name, p.category_id, p.default_unit, p.hersteller, k.name AS kategorie_name
                FROM products p LEFT JOIN product_categories k ON k.id = p.category_id
               WHERE p.deleted_at IS NULL`;
   const werte = [];
@@ -136,7 +179,8 @@ router.get('/', authenticate, (req, res) => {
   let produkte = db.prepare(sql).all(...werte);
   // Gefiltert wird in JS ueber die Vergleichsform — SQL LIKE kaeme mit Bindestrichen und
   // Grossschreibung nicht zurecht, und genau daran entstehen die Doppel.
-  if (q) produkte = produkte.filter(p => vergleichsform(p.name).includes(q));
+  if (q) produkte = produkte.filter(p =>
+    vergleichsform(p.name).includes(q) || vergleichsform(p.hersteller || '').includes(q));
   res.json({ produkte });
 });
 
@@ -247,6 +291,9 @@ router.post('/', authenticate, nurEinlerner, (req, res) => {
   const code = String(req.body.barcode || '').trim();
   const katId = req.body.category_id ? Number(req.body.category_id) : null;
   const einheit = String(req.body.default_unit || '').trim() || null;
+  const h = herstellerEinlesen(db, req.body.hersteller);
+  if (h && h.fehler) return res.status(400).json({ error: h.fehler });
+  const hersteller = h ? h.wert : null;
 
   if (name.length < 2) return res.status(400).json({ error: 'Bitte einen Produktnamen mit mindestens 2 Zeichen angeben.' });
   if (!code && !darfProduktePflegen(req.user)) {
@@ -273,8 +320,8 @@ router.post('/', authenticate, nurEinlerner, (req, res) => {
 
   const jetzt = berlinNow();
   const r = db.prepare(
-    'INSERT INTO products (name, category_id, default_unit, created_at, created_by) VALUES (?, ?, ?, ?, ?)'
-  ).run(name, katId, einheit, jetzt, req.user.id);
+    'INSERT INTO products (name, category_id, default_unit, hersteller, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(name, katId, einheit, hersteller, jetzt, req.user.id);
   if (code) {
     db.prepare('INSERT INTO product_barcodes (product_id, code, created_at, created_by) VALUES (?, ?, ?, ?)')
       .run(r.lastInsertRowid, code, jetzt, req.user.id);
@@ -360,7 +407,7 @@ router.get('/verzeichnis', authenticate, nurPfleger, (req, res) => {
            (SELECT COUNT(*) FROM products p WHERE p.category_id = k.id AND p.deleted_at IS NULL) AS anzahl
       FROM product_categories k WHERE k.deleted_at IS NULL ORDER BY k.name`).all();
   const produkte = db.prepare(`
-    SELECT p.id, p.name, p.category_id, p.default_unit, p.created_at, k.name AS kategorie_name,
+    SELECT p.id, p.name, p.category_id, p.default_unit, p.hersteller, p.created_at, k.name AS kategorie_name,
            (SELECT COUNT(*) FROM orders o WHERE o.product_id = p.id) AS bestellungen
       FROM products p LEFT JOIN product_categories k ON k.id = p.category_id
      WHERE p.deleted_at IS NULL ORDER BY p.name`).all();
@@ -378,7 +425,7 @@ router.get('/verzeichnis', authenticate, nurPfleger, (req, res) => {
     SELECT s.id, s.name, s.deleted_at,
            (SELECT COUNT(*) FROM product_suppliers ps WHERE ps.supplier_id = s.id) AS eintraege
       FROM suppliers s WHERE s.deleted_at IS NOT NULL ORDER BY s.deleted_at DESC`).all();
-  res.json({ kategorien, produkte, geloescht, geloeschteHaendler,
+  res.json({ kategorien, produkte, geloescht, geloeschteHaendler, hersteller: herstellerListe(db),
              dubletten: dublettenGruppen(db), stand: berlinNow() });
 });
 
@@ -397,6 +444,12 @@ router.put('/:id', authenticate, nurPfleger, (req, res) => {
     return res.status(400).json({ error: 'Kategorie nicht gefunden' });
   const einheit = req.body.default_unit !== undefined
     ? (String(req.body.default_unit).trim() || null) : p.default_unit;
+  let hersteller = p.hersteller || null;
+  if (req.body.hersteller !== undefined) {
+    const h = herstellerEinlesen(db, req.body.hersteller);
+    if (h && h.fehler) return res.status(400).json({ error: h.fehler });
+    hersteller = h ? h.wert : null;
+  }
 
   // Umbenennen auf einen vorhandenen Namen ist ein WARNSIGNAL, kein Verbot — wer wirklich
   // zusammenfuehren will, nimmt den eigenen Weg dafuer; wer zwei aehnliche Produkte fuehren
@@ -406,18 +459,20 @@ router.put('/:id', authenticate, nurPfleger, (req, res) => {
   // gewesen, wenn sie gebraucht wird — beim Angleichen zweier Schreibweisen. Zeichengenau heisst:
   // Wer nur die Kategorie speichert, wird nicht behelligt; wer den Namen anfasst, schon.
   if (!req.body.trotzdem && name !== p.name) {
-    const gleich = db.prepare('SELECT id, name FROM products WHERE deleted_at IS NULL AND id != ?')
-      .all(id).filter(x => vergleichsform(x.name) === vergleichsform(name));
+    const gleich = db.prepare('SELECT id, name, hersteller FROM products WHERE deleted_at IS NULL AND id != ?')
+      .all(id).filter(x => vergleichsform(x.name) === vergleichsform(name)
+                        && vergleichsform(x.hersteller || '') === vergleichsform(hersteller || ''));
     if (gleich.length) return res.status(409).json({
       error: `Es gibt bereits „${gleich[0].name}". Zusammenführen oder trotzdem so benennen?`,
       aehnliche: gleich });
   }
 
-  db.prepare('UPDATE products SET name = ?, category_id = ?, default_unit = ? WHERE id = ?')
-    .run(name, katId, einheit, id);
+  db.prepare('UPDATE products SET name = ?, category_id = ?, default_unit = ?, hersteller = ? WHERE id = ?')
+    .run(name, katId, einheit, hersteller, id);
   const teile = [];
   if (name !== p.name) teile.push(`Name „${p.name}" → „${name}"`);
   if (katId !== p.category_id) teile.push('Kategorie geändert');
+  if ((hersteller || '') !== (p.hersteller || '')) teile.push(`Hersteller „${p.hersteller || '—'}" → „${hersteller || '—'}"`);
   if (einheit !== p.default_unit) teile.push(`Einheit „${p.default_unit || '—'}" → „${einheit || '—'}"`);
   if (teile.length) logAudit(db, { userId: req.user.id, username: req.user.username,
     action: 'product_update', details: teile.join('; '), ip: req.ip });
@@ -467,12 +522,20 @@ router.post('/:id/zusammenfuehren', authenticate, nurPfleger, (req, res) => {
   const id = Number(req.params.id);
   const vonId = Number(req.body.von_id);
   if (!vonId || vonId === id) return res.status(400).json({ error: 'Bitte zwei verschiedene Produkte angeben.' });
-  const ziel = db.prepare('SELECT id, name FROM products WHERE id = ? AND deleted_at IS NULL').get(id);
-  const quelle = db.prepare('SELECT id, name FROM products WHERE id = ? AND deleted_at IS NULL').get(vonId);
+  const ziel = db.prepare('SELECT id, name, hersteller FROM products WHERE id = ? AND deleted_at IS NULL').get(id);
+  const quelle = db.prepare('SELECT id, name, hersteller FROM products WHERE id = ? AND deleted_at IS NULL').get(vonId);
   if (!ziel || !quelle) return res.status(404).json({ error: 'Produkt nicht gefunden' });
 
   const neuerName = req.body.name !== undefined ? String(req.body.name).trim() : ziel.name;
   if (neuerName.length < 2) return res.status(400).json({ error: 'Bitte einen Produktnamen mit mindestens 2 Zeichen angeben.' });
+
+  // Hat das Ziel keinen Hersteller und die Quelle einen, wandert er mit — sonst ginge die Angabe
+  // beim Aufraeumen verloren. Hat das Ziel schon einen, bleibt er stehen: Beim Zusammenfuehren
+  // entscheidet, was das Ziel sagt, und ein abweichender Hersteller waere ohnehin ein Zeichen,
+  // dass hier zwei verschiedene Artikel zusammengelegt werden.
+  if (!ziel.hersteller && quelle.hersteller) {
+    db.prepare('UPDATE products SET hersteller = ? WHERE id = ?').run(quelle.hersteller, id);
+  }
 
   const codes = db.prepare('SELECT code FROM product_barcodes WHERE product_id = ?').all(vonId).map(r => r.code);
   db.prepare('UPDATE product_barcodes SET product_id = ? WHERE product_id = ?').run(id, vonId);

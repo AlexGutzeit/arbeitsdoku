@@ -14,6 +14,40 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-13 · Hersteller je Produkt — und was daran nicht das Feld ist
+
+Alex: *„Generell soll es eine weitere Spalte für jedes Produkt geben. Nämlich Hersteller. Da jedes
+Produkt von mehreren Herstellern auf Lager sein kann."* Der zweite Satz liest sich zunächst wie ein
+Widerspruch zum ersten — eine Spalte kann keine mehreren Hersteller halten. Er ist die Begründung:
+Weil derselbe Artikel von mehreren Herstellern im Regal liegt, braucht **jeder Eintrag** die
+Angabe, um sie auseinanderzuhalten. Ein Hersteller je Produkt, derselbe Name mehrfach erlaubt.
+
+Das ist auch die einzige Lesart, die zum Barcode-Modell passt: Jeder Hersteller hat seine eigene
+EAN, also sind es ohnehin zwei Artikel. Eine n:m-Zuordnung hätte die Frage aufgeworfen, welcher
+der hinterlegten Barcodes zu welchem Hersteller gehört — unbeantwortbar.
+
+**Die eigentliche Arbeit war nicht das Feld, sondern die Folgen:**
+
+* **Die Doppel-Warnung** hätte ab sofort dauerhaft angeschlagen — „Kabelbinder 200 mm" von OBO und
+  von HellermannTyton wären zwei Namensgleiche. Eine Warnung, die immer an ist, liest niemand mehr.
+  Der Hersteller gehört also in den Vergleichsschlüssel. Ein **leerer** Hersteller zählt dabei als
+  eigener Wert: „Kabelbinder" ohne Angabe neben „Kabelbinder / OBO" ist sehr wohl verdächtig.
+* **Die Bestell-Vorschlagsliste** musste ihn anzeigen. Ohne das stünden dort zwei identische
+  Zeilen, und man bestellt aufs Geratewohl eine davon — das Feld wäre wertlos gewesen.
+* **Suchen** geht auch über den Hersteller: Im Lager weiss man oft die Marke, nicht den Artikelnamen.
+* **Zusammenführen** nimmt ihn mit, wenn das Ziel keinen hat.
+
+**Freitext, aber nicht beliebig.** Alex wollte gerade eben die Datenhygiene erhöhen — ein freies
+Feld, das „ABB", „abb" und „A.B.B." nebeneinander entstehen lässt, wäre das Gegenteil gewesen. Wer
+etwas tippt, das in Vergleichsform einem vorhandenen Hersteller entspricht, bekommt **dessen**
+Schreibweise gespeichert; nur wirklich neue Namen kommen so ins Feld, wie sie getippt wurden. Eine
+gepflegte Stammdatenliste wäre die strengere Lösung gewesen — sie kostet einen eigenen Reiter mit
+Papierkorb und Zusammenführen, und dafür ist der Nutzen zu klein.
+
+**Ein Bestandstest zählte fest 4 Produkte** und wurde durch die zwei neuen Testartikel rot. Statt
+die Zahl auf 6 zu setzen, misst er jetzt die **Veränderung** (vorher/nachher) — die soll null sein.
+Eine feste Zahl in einer Zusicherung erzieht dazu, sie anzupassen statt sie zu lesen.
+
 ### 2026-09-13 · Einlernen wird ein Recht — eine Gründungsregel wird umgedreht
 
 Alex: *„ich würde da doch gerne eine Berechtigung vergeben um die datenhygiene hoch zu halten.

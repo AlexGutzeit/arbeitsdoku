@@ -2481,6 +2481,8 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .pv-hp-zeile { border: 1px solid var(--border); border-radius: 5px; padding: .55rem; margin-top: .45rem; }
 /* „ohne Barcode" ist keine Warnung, sondern eine Eigenschaft — deshalb ruhig, nicht rot. */
 .pv-ohne-code { font-size: .78rem; color: var(--text-lighter); font-style: italic; }
+/* Hersteller in der Bestell-Vorschlagsliste: erkennbar, aber dem Produktnamen untergeordnet. */
+.produkt-vorschlaege .hersteller { font-size: .8rem; color: var(--text-light); font-weight: 600; }
 .pv-hp-treffer { border: 1px solid var(--border); border-radius: 5px; margin: .3rem 0 0;
   padding: 0; list-style: none; overflow-y: auto; }
 .pv-hp-treffer li { padding: .45rem .6rem; cursor: pointer; }

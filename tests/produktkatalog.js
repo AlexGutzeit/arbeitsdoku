@@ -206,6 +206,52 @@ function req(m, p, t, b) {
     ok('… mit Bestätigung schon', letzterMit.status === 200,
       letzterMit.status + ' ' + letzterMit.text.slice(0, 80));
 
+    // ── Hersteller je Produkt ────────────────────────────────────────────────────────────────
+    //
+    // Alex (13.09.2026): „eine weitere Spalte für jedes Produkt, nämlich Hersteller. Da jedes
+    // Produkt von mehreren Herstellern auf Lager sein kann." Genau darum EIN Hersteller je
+    // Eintrag: Derselbe Artikelname darf mehrfach vorkommen, solange der Hersteller sich
+    // unterscheidet — jeder Hersteller hat ohnehin seine eigene EAN.
+    console.log('\n── Hersteller je Produkt ──');
+    const hOBO = await req('POST', '/api/products', chef,
+      { name: 'Schelle 16 mm', barcode: '4062679000015', hersteller: 'OBO Bettermann' });
+    ok('ein Produkt mit Hersteller entsteht', hOBO.status === 201 && hOBO.body.produkt.hersteller === 'OBO Bettermann',
+      JSON.stringify(hOBO.body.produkt && hOBO.body.produkt.hersteller));
+
+    // DER FALL, UM DEN ES GEHT: gleicher Name, anderer Hersteller.
+    const hHel = await req('POST', '/api/products', chef,
+      { name: 'Schelle 16 mm', barcode: '4062679000022', hersteller: 'HellermannTyton' });
+    ok('derselbe Name mit anderem Hersteller geht', hHel.status === 201, hHel.status + ' ' + hHel.text.slice(0, 90));
+    const dubl = (await req('GET', '/api/products/verzeichnis', chef)).body.dubletten;
+    ok('… und wird NICHT als Doppel gemeldet',
+      !dubl.some(g => g.some(x => x.id === hOBO.body.produkt.id)),
+      JSON.stringify(dubl.map(g => g.map(x => x.name + '/' + (x.hersteller || '—')))));
+
+    // Gegenprobe: gleicher Name, GLEICHER Hersteller — das ist sehr wohl ein Doppel.
+    const hDop = await req('POST', '/api/products', chef,
+      { name: 'schelle-16mm', barcode: '4062679000039', hersteller: 'obo bettermann' });
+    ok('gleiche Schreibweise-Variante beim selben Hersteller wird als Doppel erkannt',
+      (await req('GET', '/api/products/verzeichnis', chef)).body.dubletten
+        .some(g => g.some(x => x.id === hDop.body.produkt.id)),
+      JSON.stringify(hDop.body.produkt));
+    // … und dabei ist die SCHREIBWEISE angeglichen worden.
+    ok('… weil „obo bettermann" auf die vorhandene Schreibweise gezogen wurde',
+      hDop.body.produkt.hersteller === 'OBO Bettermann', JSON.stringify(hDop.body.produkt.hersteller));
+    await req('DELETE', `/api/products/${hDop.body.produkt.id}`, chef);
+
+    const liste = (await req('GET', '/api/products/verzeichnis', chef)).body.hersteller;
+    ok('die Vorschlagsliste kennt beide Hersteller',
+      liste.includes('OBO Bettermann') && liste.includes('HellermannTyton'), JSON.stringify(liste));
+    ok('… und der Offline-Spiegel liefert sie mit',
+      ((await req('GET', '/api/products/katalog', max)).body.hersteller || []).includes('OBO Bettermann'),
+      JSON.stringify((await req('GET', '/api/products/katalog', max)).body.hersteller));
+    ok('die Suche findet ein Produkt über seinen Hersteller',
+      (await req('GET', '/api/products?q=hellermann', max)).body.produkte.some(x => x.id === hHel.body.produkt.id),
+      JSON.stringify((await req('GET', '/api/products?q=hellermann', max)).body.produkte.map(x => x.name)));
+    const zuLang = await req('POST', '/api/products', chef,
+      { name: 'Zu lang', barcode: '4062679000046', hersteller: 'H'.repeat(81) });
+    ok('ein zu langer Herstellername wird abgewiesen', zuLang.status === 400, String(zuLang.status));
+
     console.log('\n── Die Verknüpfung zur Bestellung ──');
     const mitProdukt = await req('POST', '/api/orders', max, {
       product: 'Kabelbinder 200 mm', quantity: 5, product_id: p1.body.produkt.id });

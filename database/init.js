@@ -506,6 +506,15 @@ async function initDatabase() {
     // DEFAULT 0: Ein Altbestand zieht damit KEINEM das Recht zu, aber Chef und Admin haben es
     // ohnehin per Rolle, und wer „Lagerdaten pflegen" hat, bekommt es über die Folgerung in
     // barcoderecht.js. Es steht also niemand ploetzlich ohne Weg da.
+    // Hersteller je Produkt (Alex, 13.09.2026): „jedes Produkt kann von mehreren Herstellern auf
+    // Lager sein" — also EIN Hersteller je Eintrag, und derselbe Artikelname darf mehrfach
+    // vorkommen, solange sich der Hersteller unterscheidet. Jeder Hersteller hat ohnehin seine
+    // eigene EAN, das Barcode-Modell bleibt damit unberuehrt.
+    const colsPr = db.prepare("PRAGMA table_info(products)").all();
+    if (colsPr.length && !colsPr.some(c => c.name === 'hersteller')) {
+      db.exec("ALTER TABLE products ADD COLUMN hersteller TEXT");
+      console.log('Migration: hersteller Spalte in products hinzugefuegt.');
+    }
     if (!colsProd.some(c => c.name === 'can_barcode')) {
       db.exec("ALTER TABLE users ADD COLUMN can_barcode INTEGER DEFAULT 0");
       console.log('Migration: can_barcode Spalte hinzugefügt.');
@@ -959,6 +968,7 @@ function ensureAuditSchema(targetDb) {
     addCol('users', 'can_order', 'INTEGER DEFAULT 0');
     addCol('users', 'can_products', 'INTEGER DEFAULT 0');
     addCol('users', 'can_barcode', 'INTEGER DEFAULT 0');
+    addCol('products', 'hersteller', 'TEXT');
     addCol('users', 'start_overtime', 'REAL DEFAULT 0');
     addCol('users', 'target_hours_per_week', 'REAL DEFAULT 40');
     addCol('users', 'active', 'INTEGER DEFAULT 1');

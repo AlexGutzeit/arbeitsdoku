@@ -530,6 +530,25 @@ Eigener Menüpunkt, der nur erscheint, wenn man das Recht hat. Drei Reiter:
   scannt, bekommt „gehörte zu …" statt „unbekannt". **Zusammengeführte** Produkte lassen sich
   dagegen nicht als eigene zurückholen – ihre Barcodes hängen am Nachfolger.
 
+#### Hersteller je Produkt
+
+Jedes Produkt hat ein Feld **Hersteller**. Der Grund ist der Lageralltag: *Kabelbinder 200 mm* liegt
+von zwei Herstellern im Regal, und das sind **zwei Artikel mit zwei EANs** – kein Doppel. Deshalb
+darf derselbe Name mehrfach vorkommen, solange der Hersteller sich unterscheidet; die
+**Doppel-Warnung** nimmt ihn in den Vergleich auf. Fehlt die Angabe bei einem der beiden, gilt das
+sehr wohl als verdächtig – vermutlich wurde sie nur vergessen.
+
+Das Feld ist **freiwillig** und ein Textfeld mit **Vorschlagsliste** aus den bereits benutzten
+Namen. Wer etwas tippt, das einem vorhandenen Hersteller entspricht (Schreibweise, Leerzeichen,
+Bindestrich), bekommt **dessen** Schreibweise gespeichert – so entstehen nicht „ABB", „abb" und
+„A.B.B." nebeneinander. Neue Namen sind trotzdem jederzeit möglich, ohne vorher eine Liste zu
+pflegen.
+
+Der Hersteller steht **in der Produktliste, in der Bestell-Vorschlagsliste** (sonst wären zwei
+gleichnamige Artikel dort nicht zu unterscheiden) und ist **selbst ein Suchbegriff** – im Lager
+weiß man oft die Marke, nicht den genauen Artikelnamen. Beim **Zusammenführen** wandert er mit,
+falls das Ziel keinen hat.
+
 #### Produkte ohne Barcode
 
 Beim **Scannen** entsteht ein Katalogeintrag nur mit Barcode und nur durch jemanden mit dem Recht

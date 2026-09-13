@@ -152,6 +152,24 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     const codes = (await req('GET', '/api/products/verzeichnis', admin)).body.produkte.find(p => p.id === prod.id).barcodes;
     ok('ein zweiter Barcode ist angelernt', codes.length === 2 && codes.includes('4002222222222'), JSON.stringify(codes));
 
+    console.log('\n── Hersteller pflegen ──');
+    await l.seite.evaluate(id => { document.querySelector(`.pv-produkt[data-id="${id}"]`).open = true; }, prod.id);
+    await l.seite.waitForSelector('.pv-f-hersteller');
+    ok('das Feld hat eine Vorschlagsliste (gegen ABB/abb/A.B.B.)',
+      await l.seite.evaluate(() => document.querySelector('.pv-f-hersteller').getAttribute('list') === 'pv-hersteller-liste'
+        && !!document.getElementById('pv-hersteller-liste')));
+    await l.seite.evaluate(() => { document.querySelector('.pv-f-hersteller').value = 'OBO Bettermann'; });
+    await l.seite.click('.pv-speichern');
+    await sleep(1800);
+    const mitH = (await req('GET', '/api/products/verzeichnis', admin)).body.produkte.find(p => p.id === prod.id);
+    ok('der Hersteller ist gespeichert', mitH.hersteller === 'OBO Bettermann', JSON.stringify(mitH.hersteller));
+    ok('… und steht in der Liste', /OBO Bettermann/.test(
+      await l.seite.evaluate(id => document.querySelector(`.pv-produkt[data-id="${id}"] summary`).innerText, prod.id)),
+      await l.seite.evaluate(id => document.querySelector(`.pv-produkt[data-id="${id}"] summary`).innerText, prod.id));
+    ok('… und die Suche im Verzeichnis findet ihn',
+      await l.seite.evaluate(id => document.querySelector(`.pv-produkt[data-id="${id}"]`).dataset.suchtext.includes('obo'), prod.id),
+      await l.seite.evaluate(id => document.querySelector(`.pv-produkt[data-id="${id}"]`).dataset.suchtext, prod.id));
+
     console.log('\n── Der Reiter „Großhändler" ──');
     await l.seite.evaluate(() => document.querySelectorAll('#pv-tabs .pv-tab-btn')[1].click());
     await sleep(600);
