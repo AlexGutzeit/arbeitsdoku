@@ -151,19 +151,6 @@ async function renderOrders() {
       <div id="order-list">${listeFehlt
         ? '<p style="color:var(--text-lighter);text-align:center">Die offenen Bestellungen konnten nicht geladen werden – keine Verbindung.</p>'
         : renderOrderList(orders, manage)}</div>
-      <!-- VORUEBERGEHEND: Zugang zum Scanner-Pruefstand. In der installierten App gibt es keine
-           Adresszeile — ohne diesen Link kommt man dort gar nicht hin, und genau die installierte
-           App ist der Fall, den wir pruefen muessen.
-           Fuer ALLE sichtbar (Alex, 07.09.2026): Die Kollegen sollen mittesten. Genau darum geht
-           es ja — verschiedene Geraete, verschiedenes Licht, verschiedene Etiketten. Ein Test nur
-           auf zwei Chef-Handys saehe rosiger aus, als der Alltag im Lager ist.
-           Faellt mit dem Pruefstand wieder weg. -->
-      <div style="margin-top:1.2rem;padding-top:.8rem;border-top:1px dashed var(--border)">
-        <a href="/scanner-probe.html" class="btn btn-outline btn-sm" style="text-decoration:none">
-          &#128247; Scanner-Prüfstand</a>
-        <span style="font-size:.78rem;color:var(--text-light);margin-left:.5rem">
-          vorübergehend — bitte ausprobieren und dem Admin sagen, wie es lief</span>
-      </div>
       <div style="margin-top:2rem">
         <button class="btn btn-outline" id="toggle-ordered" style="width:100%">Letzte Bestellungen anzeigen</button>
         <div id="ordered-list" style="display:none;margin-top:1rem"></div>

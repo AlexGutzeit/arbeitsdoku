@@ -1,7 +1,8 @@
 // Barcode-Scanner für die Bestellungen.
 //
 // Alles hier ist im Prüfstand auf echten Geräten gemessen worden, nicht angenommen
-// (public/scanner-probe.html, 07.09.2026):
+// (im Scanner-Pruefstand, 07.09.2026 — eine eigene Diagnoseseite, die es bis zum Produktivgang
+//  am 14.09.2026 gab; ihre Messwerte stehen in ENTWICKLUNG.md):
 //
 //  * ZWEI WEGE. `BarcodeDetector` gibt es nur in Chrome/Android. Im Betrieb sind auch iPhones und
 //    Firefox — dort liefert das mitgelieferte Bündel. Gemessen: nativ 6,1 Bilder/s auf Android,

@@ -14,6 +14,31 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-14 · Der Prüfstand geht von Bord
+
+Alex: *„ich habe auch das Gefühl, dass das weitere durchs Lager laufen nur mäßig sinnvoll ist."*
+Dieselbe Einschätzung von beiden Seiten — die Art der Funde hatte sich gedreht: Die ersten Läufe
+fanden echte Regelfehler, die letzten Formulierungen und einen Rangfolge-Fall. Das ist die Kurve,
+an der man aufhört.
+
+Entfernt: `public/scanner-probe.html`, `public/scanner-probe.js`, der Link auf der Bestellseite und
+`tests/scanner-pruefstand-ui.js` — so, wie es im Kopf jener Testdatei angekündigt war. `deploy.sh`
+rsynct `public/` mit `--delete`, die Dateien verschwinden beim nächsten Deploy also von selbst vom
+Server; es bleibt nichts Erreichbares zurück.
+
+**Was vom Prüfstand bleibt, ist das Wichtigere:** Jede Scanner-Regel in `public/js/scanner.js` trägt
+die Messung im Kommentar, die sie begründet — die Zeitfenster-Auszählung, die sechs Fehllesungen mit
+gültiger Prüfziffer, die 62 echten Codes ohne Endstellen-Kollision. Wer eine Regel ändern will,
+findet dort, was er widerlegen muss. Ein Werkzeug, das verschwindet, aber seine Zahlen hinterlässt,
+war seinen Aufwand wert.
+
+Zwei Quellkommentare verwiesen noch auf die verschwundene Datei; sie sagen jetzt, dass es den
+Prüfstand gab und wo seine Ergebnisse stehen — ein Verweis ins Leere ist schlimmer als keiner.
+
+**Der verbleibende Test ist keiner mehr, sondern der Betrieb:** Das Einlern-Recht bekommt zunächst
+nur Alex. Für alle anderen ändert sich nichts — der Katalog ist leer, bestellt wird mit freiem Text
+wie immer (die „Nullprobe" in `tests/produktkatalog.js` sichert genau das zu).
+
 ### 2026-09-14 · Sechs Fehllesungen, sechs gültige Prüfziffern — und eine Schwelle, die der Test korrigiert hat
 
 Alex' vierter Lauf. Die neue Begründung tut, was sie soll — drei Fehllesungen, jede mit ihren

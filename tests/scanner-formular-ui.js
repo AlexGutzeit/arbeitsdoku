@@ -8,7 +8,8 @@
 //   * Code eines gelöschten Produkts → die App FRAGT, statt still zu entscheiden
 //
 // `scannerOeffnen` wird dafür ersetzt. Das ist ehrlich: Die Kamera selbst wurde auf echten
-// Geräten geprüft (public/scanner-probe.html); hier geht es um die Logik dahinter.
+// Geräten geprüft — mit dem Scanner-Prüfstand, einer eigenen Diagnoseseite, die bis zum
+// Produktivgang am 14.09.2026 mitlief. Hier geht es um die Logik dahinter.
 //
 //   node tests/scanner-formular-ui.js
 const { spawn } = require('child_process');
