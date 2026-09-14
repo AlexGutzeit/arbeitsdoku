@@ -14,6 +14,35 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-14 · Zwei verschiedene Knöpfe — der Unterschied war echt, aber stumm
+
+Alex vor der Produktansicht: *„So ganz versteh ich nicht, warum ich bei 2 Großhändlern 2
+verschiedene Buttons habe?"* Bei Sonepar stand **„Artikel öffnen"**, bei Rexel **„Händler
+öffnen"** — weil nur bei Sonepar ein Artikel-Link hinterlegt war; ohne ihn fällt der Knopf auf die
+Startseite des Händlers zurück.
+
+Der Unterschied ist **richtig und nützlich**: Das eine landet beim Artikel, das andere auf einer
+Startseite, wo man von vorn sucht. Er erklärte sich nur nicht — man sah eine Inkonsequenz. Jetzt
+steht daneben leise *„kein Artikel-Link hinterlegt"*: Damit erklärt sich die Asymmetrie selbst und
+sagt gleich, was zu tun ist, um sie aufzulösen.
+
+**Beim Nachsehen fiel eine zweite Sache auf, die niemand gemeldet hatte:** Dieselbe Situation hiess
+in den Bestellungen **„Webshop öffnen"** und im Verzeichnis **„Händler öffnen"** — zwei Wörter für
+dieselbe Sache, an zwei Stellen gepflegt. Beide benutzen jetzt `pHaendlerZiel()`; damit können sie
+nicht mehr auseinanderlaufen.
+
+**Und die Anschlussfrage** (*„öffnen sich die Links im Standardbrowser?"*): Ja —
+`target="_blank"` mit `rel="noopener noreferrer"`. In der installierten App übernimmt der Browser
+des Geräts, die Arbeitsdoku bleibt im Hintergrund stehen. Bisher prüfte der Test nur `rel`; das
+`target` las er aus, ohne es zuzusichern. Ohne `target` würde der Webshop **innerhalb** der App
+geöffnet — mit der Anmeldung daneben und ohne Weg zurück ausser Neuladen. Jetzt ist es zugesichert.
+
+**Nebenbei aufgeräumt:** Nach dem Abbruch der Suite liefen drei verwaiste Testserver weiter (Ports
+3131, 3308, 3135) — die Testprozesse hatte ich beendet, die von ihnen gestarteten Server nicht.
+Deshalb war `produktpflege-ui` zweimal rot, ohne dass am Code etwas fehlte. Identifiziert über
+`/proc/<pid>/environ` (DB_PATH) statt über ein Namensmuster, und einzeln beendet — der 18 Tage alte
+Entwicklungsserver auf Port 3000 blieb unangetastet.
+
 ### 2026-09-14 · Ein Bildschirmfoto deckt einen echten Fehler auf
 
 Alex zum Bild „zwei gleichnamige Artikel": *„Ich vermute, hier sind die Vorschläge nicht mehr zu

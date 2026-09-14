@@ -243,7 +243,7 @@ function haendlerBoxHtml(r, pid) {
           ${h.ansprechpartner ? ' · ' + esc(h.ansprechpartner) : ''}
           ${h.telefon ? ' · ' + esc(h.telefon) : ''}
         </div>
-        <div style="margin-top:.3rem">${pLinkHtml(h.link || h.homepage, h.link ? 'Artikel öffnen' : 'Webshop öffnen')}</div>
+        <div style="margin-top:.3rem">${pHaendlerZiel(h)}</div>
       </div>`).join('')}
     ${pflegen}
   </div>`;

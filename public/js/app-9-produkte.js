@@ -18,6 +18,28 @@ function pDomain(url) {
 }
 
 /** Ein Knopf, der eine hinterlegte Adresse öffnet — samt sichtbarer Domain. */
+/**
+ * Ein Knopf zum Haendler — und WOHIN er fuehrt.
+ *
+ * Alex am 14.09.2026 vor der Produktansicht: „So ganz versteh ich nicht, warum ich bei 2
+ * Grosshaendlern 2 verschiedene Buttons habe?" Bei Sonepar stand „Artikel oeffnen", bei Rexel
+ * „Haendler oeffnen" — weil nur bei Sonepar ein Artikel-Link hinterlegt war und der Knopf sonst
+ * auf die Startseite zurueckfaellt.
+ *
+ * Der Unterschied ist ECHT und nuetzlich: Das eine landet beim Artikel, das andere auf der
+ * Startseite eines Webshops, wo man von vorn suchen darf. Er erklaerte sich nur nicht. Jetzt sagt
+ * eine leise Zeile daneben, warum — und damit gleich, was zu tun ist, um es besser zu machen.
+ *
+ * DIESELBE Entscheidung gilt in den Bestellungen (app-8). Dort hiess derselbe Fall „Webshop
+ * oeffnen" — zwei Woerter fuer dieselbe Sache. Beide benutzen jetzt diese Funktion.
+ */
+function pHaendlerZiel(eintrag) {
+  if (eintrag.link) return pLinkHtml(eintrag.link, 'Artikel öffnen');
+  if (!eintrag.homepage) return '';
+  return pLinkHtml(eintrag.homepage, 'Händler öffnen')
+       + '<span class="pv-kein-artikellink">kein Artikel-Link hinterlegt</span>';
+}
+
 function pLinkHtml(url, beschriftung) {
   if (!url) return '';
   return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer"
@@ -208,8 +230,8 @@ function pvEintraegeHtml(eintraege) {
 
 function pvLinkKnopf(e) {
   const teile = [];
-  if (e.link) teile.push(pLinkHtml(e.link, 'Artikel öffnen'));
-  else if (e.homepage) teile.push(pLinkHtml(e.homepage, 'Händler öffnen'));
+  const ziel = pHaendlerZiel(e);
+  if (ziel) teile.push(ziel);
   if (e.kundennummer) teile.push(`<span style="font-size:.78rem;color:var(--text-light)">Kd.-Nr. ${esc(e.kundennummer)}</span>`);
   return teile.join(' ');
 }

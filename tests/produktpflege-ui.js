@@ -110,6 +110,12 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     ok('… der Link zeigt auf den Artikel', link && link.href === 'https://shop.sonepar.de/artikel/88123', JSON.stringify(link));
     ok('… mit rel="noopener" (sonst kann die Zielseite die App-Seite umleiten)',
       link && /noopener/.test(link.rel), JSON.stringify(link && link.rel));
+    // target="_blank" ist das, was den Link aus der App HINAUS fuehrt: in der installierten App
+    // uebernimmt der Browser des Geraets, die Arbeitsdoku bleibt im Hintergrund stehen. Ohne das
+    // waere der Webshop IN der App geoeffnet worden — mit der Anmeldung daneben und ohne Weg
+    // zurueck ausser neu laden (Alex, 14.09.2026: „öffnen sich dann im Standardbrowser?").
+    ok('… und mit target="_blank" — der Webshop öffnet ausserhalb der App',
+      link && link.target === '_blank', JSON.stringify(link && link.target));
     ok('… und die Domain steht sichtbar daneben', link && /shop\.sonepar\.de/.test(link.text), JSON.stringify(link && link.text));
     ok('ohne Pflegerecht KEIN Bearbeiten-Knopf',
       !(await l.seite.evaluate(() => !!document.querySelector('.order-hnd a[href^="#/produkte/"]'))));

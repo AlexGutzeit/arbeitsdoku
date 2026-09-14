@@ -2394,6 +2394,10 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
    Hersteller-Span, und ein langer Name ohne Trennmoeglichkeit („HellermannTyton") lief auf dem
    Handy in die Kategorie hinein (Alex, 14.09.2026). */
 .produkt-vorschlaege .vs-artikel { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+/* Warum zwei verschiedene Knoepfe? Weil bei dem einen Haendler kein Artikel-Link hinterlegt ist
+   und der Knopf dann auf die Startseite faellt. Diese Zeile sagt es (Alex, 14.09.2026). */
+.pv-kein-artikellink { font-size: .74rem; color: var(--text-lighter); font-style: italic;
+  margin-left: .45rem; }
 
 /* Scanner-Fenster. Es nimmt bewusst viel Platz: Was zaehlt, ist das Kamerabild und der
    Zielrahmen — alles andere ist Beiwerk. */
