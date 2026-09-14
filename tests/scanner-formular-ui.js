@@ -383,7 +383,9 @@ function req(m, p, t, b) {
     await seite.click('#of-scan'); await sleep(1200);
     ok('die Anlege-Maske erscheint', await seite.$('#np-name') !== null);
     const maske = await seite.evaluate(() => (document.querySelector('.modal') || document.body).innerText);
-    ok('… sie nennt den Barcode', /4046281411223/.test(maske), maske.slice(0, 150));
+    ok('… sie zeigt den gescannten Barcode im Eingabefeld',
+      await seite.evaluate(() => (document.getElementById('np-code') || {}).value === '4046281411223'),
+      await seite.evaluate(() => (document.getElementById('np-code') || {}).value));
     ok('… und bittet um Sorgfalt', /schon gibt|sucht mit/i.test(maske), maske.slice(0, 260));
     ok('… ohne Sonderwarnung, denn das ist eine gültige Artikelnummer',
       !/Prüfziffer/.test(maske), maske.slice(0, 200));
@@ -569,6 +571,36 @@ function req(m, p, t, b) {
       await seite.evaluate(() => window.scannerKnappVerfehlt === null));
     await seite.evaluate(() => { const b = [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/.test(x.textContent)); if (b) b.click(); });
     await sleep(500);
+
+    // ── Eine Fehllesung von Hand ausbessern ─────────────────────────────────────────────────
+    //
+    // Alex (14.09.2026): „Angenommen ich scanne einen Barcode zum Einlernen und stelle fest, er
+    // wurde falsch gescannt. Kann ich dann per Hand korrigieren?" Vorher: nein — der Code stand
+    // als reiner Text da, es half nur Abbrechen und neu scannen.
+    console.log('\n── Gescannten Code in der Maske ausbessern ──');
+    await scanVorgeben('4062679000016');            // eine Ziffer daneben: Prüfziffer stimmt nicht
+    await seite.click('#of-scan'); await sleep(1300);
+    ok('der Code steht in einem Eingabefeld, nicht als Text',
+      await seite.evaluate(() => { const f = document.getElementById('np-code');
+        return !!f && f.tagName === 'INPUT' && f.value === '4062679000016'; }));
+    ok('… und die Maske mahnt zur Prüfung',
+      /Prüf das bitte kurz/.test(await seite.evaluate(() => document.querySelector('.modal').innerText)));
+    // Ausbessern: die richtige Prüfziffer eintippen — die Warnung muss LIVE verschwinden.
+    await seite.evaluate(() => { const f = document.getElementById('np-code');
+      f.value = '4062679000015'; f.dispatchEvent(new Event('input', { bubbles: true })); });
+    await sleep(250);
+    const nachKorrektur = await seite.evaluate(() => document.querySelector('.modal').innerText);
+    ok('nach der Korrektur bestätigt die Maske die Prüfziffer',
+      /Prüfziffer stimmt/.test(nachKorrektur), nachKorrektur.slice(0, 200));
+    ok('… und die Mahnung ist weg', !/Prüf das bitte kurz/.test(nachKorrektur), nachKorrektur.slice(0, 200));
+    await seite.type('#np-name', 'Ausgebessert');
+    await seite.evaluate(() => document.querySelector('[data-act="ok"]').click());
+    await sleep(1800);
+    // DIE ENTSCHEIDENDE PRÜFUNG: Gespeichert werden muss der KORRIGIERTE Code, nicht der gescannte.
+    ok('gespeichert ist der korrigierte Code',
+      (await req('GET', '/api/products/barcode/4062679000015', tok)).body.gefunden === true);
+    ok('… und der falsch gescannte gehört niemandem',
+      (await req('GET', '/api/products/barcode/4062679000016', tok)).body.gefunden === false);
 
     console.log('\n── Wirklich neues Produkt anlegen ──');
     await scanVorgeben('4104640010552');

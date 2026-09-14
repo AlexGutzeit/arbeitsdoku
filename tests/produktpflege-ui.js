@@ -152,6 +152,43 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     const codes = (await req('GET', '/api/products/verzeichnis', admin)).body.produkte.find(p => p.id === prod.id).barcodes;
     ok('ein zweiter Barcode ist angelernt', codes.length === 2 && codes.includes('4002222222222'), JSON.stringify(codes));
 
+    console.log('\n── Von Hand anlegen, ohne zu scannen ──');
+    // Alex (14.09.2026): „könnte ich im Katalog auch komplett wie im Supermarkt die Artikel mit
+    // ihren Nummern anlegen?" Vorher ging das nur über eine Händlerkarte — im Reiter „Produkte"
+    // gab es keinen Knopf.
+    ok('im Reiter „Produkte" gibt es einen Anlegen-Knopf', await sichtbar(l.seite, '#pv-neu'));
+    await l.seite.click('#pv-neu');
+    await l.seite.waitForSelector('#pnp-name');
+    await l.seite.type('#pnp-name', 'Aufputzdose 1-fach');
+    await l.seite.type('#pnp-hersteller', 'OBO Bettermann');
+    await l.seite.type('#pnp-code', '4062679000015');
+    await sleep(250);
+    ok('… die Prüfziffer wird beim Tippen nachgerechnet',
+      /Prüfziffer stimmt/.test(await l.seite.evaluate(() => document.getElementById('pnp-pruef').textContent)),
+      await l.seite.evaluate(() => document.getElementById('pnp-pruef').textContent));
+    // Gegenprobe: eine Ziffer verdreht — die Bestätigung muss verschwinden.
+    await l.seite.evaluate(() => {
+      const f = document.getElementById('pnp-code');
+      f.value = '4062679000016';
+      f.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await sleep(200);
+    ok('… und meldet sich, sobald eine Ziffer nicht stimmt',
+      /Keine gültige/.test(await l.seite.evaluate(() => document.getElementById('pnp-pruef').textContent)),
+      await l.seite.evaluate(() => document.getElementById('pnp-pruef').textContent));
+    await l.seite.evaluate(() => {
+      const f = document.getElementById('pnp-code');
+      f.value = '4062679000015';
+      f.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await l.seite.click('.dialog-modal [data-act="ok"]');
+    await sleep(2200);
+    const vonHand = (await req('GET', '/api/products/verzeichnis', admin)).body.produkte
+      .find(p => p.name === 'Aufputzdose 1-fach');
+    ok('das Produkt ist da — ohne Großhändler, ohne Scanner',
+      !!vonHand && vonHand.hersteller === 'OBO Bettermann'
+      && (vonHand.barcodes || []).includes('4062679000015'), JSON.stringify(vonHand));
+
     console.log('\n── Hersteller pflegen ──');
     await l.seite.evaluate(id => { document.querySelector(`.pv-produkt[data-id="${id}"]`).open = true; }, prod.id);
     await l.seite.waitForSelector('.pv-f-hersteller');

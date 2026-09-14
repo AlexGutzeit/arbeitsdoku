@@ -14,6 +14,33 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-14 · Zwei Fragen, zwei Lücken: ausbessern und von Hand anlegen
+
+Alex fragte nach dem Prüfstand-Ausbau zwei Dinge, und beide Antworten waren „nur teilweise".
+
+**„Kann ich einen falsch gescannten Code per Hand korrigieren?"** Im Verzeichnis ja (tippen,
+alten entfernen) — in der **Anlege-Maske** nein: Dort stand der Code als starres `<code>`-Element.
+Wer die Fehllesung genau in dem Moment bemerkte, in dem er sie noch am billigsten beheben konnte,
+musste abbrechen und neu scannen. Jetzt ist es ein Eingabefeld, und der korrigierte Wert geht
+sowohl beim Anlegen als auch beim **Anlernen an ein bestehendes Produkt** mit — sonst hinge dort am
+Ende die Fehllesung, die man gerade ausgebessert hat.
+
+**Die Prüfziffer rechnet dabei live mit.** Das ist der eigentliche Gewinn: Beim Abtippen von
+dreizehn Ziffern gibt es sonst keine Kontrolle ausser einem zweiten Paar Augen. Verschwindet die
+Warnung beim Tippen, stimmt die Prüfziffer. Dieselbe Anzeige steht jetzt auch im
+Produktverzeichnis. Passend zu Alex' eigener Ansage zum Rollout: *„verantwortungsvoll einlernen und
+die Ziffern per Hand nachlesen und kontrollieren."*
+
+**„Könnte ich den Katalog auch komplett von Hand anlegen, wie im Supermarkt?"** Der Server konnte
+es längst, die Oberfläche nicht: Ein Anlegen-Knopf existierte **nur in der Händlerkarte**. Im
+Reiter „Produkte" gab es keinen — wer ohne Großhändler arbeiten wollte, kam nicht hin. Jetzt steht
+er dort, und `pvNeuesProduktDialog(null)` legt ohne Zuordnung an.
+
+**Ein Bestandstest wurde dabei rot, aus dem richtigen Grund:** „… sie nennt den Barcode" las den
+`innerText` der Maske — Feldwerte stehen dort nicht drin. Das Ziel („die Maske zeigt den gescannten
+Code") gilt unverändert, nur der Messpunkt war der alte. Genau die Frage, die bei jedem roten
+Bestandstest zuerst zu stellen ist: misst er das Ziel oder den alten Weg?
+
 ### 2026-09-14 · Der Prüfstand geht von Bord
 
 Alex: *„ich habe auch das Gefühl, dass das weitere durchs Lager laufen nur mäßig sinnvoll ist."*

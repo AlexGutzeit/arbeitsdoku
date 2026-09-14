@@ -642,7 +642,19 @@ function produktAnlegenMaske(code) {
       <div class="modal" style="max-width:520px">
         <div class="modal-header"><h3>Neues Produkt anlegen</h3></div>
         <div class="modal-body">
-          <p style="margin:0 0 .5rem">Barcode <code>${esc(code)}</code> ist noch niemandem zugeordnet.</p>
+          <p style="margin:0 0 .4rem">Dieser Barcode ist noch niemandem zugeordnet.</p>
+          <!-- AENDERBAR, nicht nur angezeigt (Alex, 14.09.2026: „stelle fest, er wurde falsch
+               gescannt. Kann ich dann per Hand korrigieren?").
+               Vorher stand hier ein <code>-Element: Wer eine Fehllesung erkannte, musste
+               abbrechen und neu scannen. Jetzt vergleicht man die Ziffern mit der Zahl unter dem
+               Strichcode und bessert aus — genau der Ablauf, den Alex fuer das Einlernen
+               vorgesehen hat. Der Hinweis darunter rechnet die Pruefziffer LIVE nach, das Feld
+               wird damit zur Korrekturhilfe. -->
+          <div class="form-group">
+            <label for="np-code">Barcode <em>(gescannt — bitte mit der Zahl unter dem Strichcode vergleichen)</em></label>
+            <input type="text" id="np-code" class="form-control" value="${esc(code)}"
+                   autocomplete="off" inputmode="text" style="font-family:monospace;font-size:1.05rem">
+          </div>
           ${knapp ? `
           <p class="hinweis-box" style="margin:0 0 .6rem;border-left:4px solid #dc2626">
             <strong>Halt lieber noch einmal drauf.</strong> Auf derselben Etikette lag
@@ -653,7 +665,7 @@ function produktAnlegenMaske(code) {
             <strong>Abbrechen, ruhig auf den Strichcode halten, neu scannen</strong> — dann steht
             die richtige Nummer drin.
           </p>` : ''}
-          ${(typeof scannerNachfragenObArtikelnummer === 'function' && scannerNachfragenObArtikelnummer(code)) ? `
+          <div id="np-codehinweis">${(typeof scannerNachfragenObArtikelnummer === 'function' && scannerNachfragenObArtikelnummer(code)) ? `
           <p class="hinweis-box" style="margin:0 0 .6rem">
             <strong>Prüf das bitte kurz.</strong> Dieser Code erfüllt keine Artikelnummer-Prüfziffer
             — er kann trotzdem richtig sein, muss aber nicht. Zwei Stellen führen regelmäßig in die
@@ -664,7 +676,7 @@ function produktAnlegenMaske(code) {
             Als Barcode gespeichert wäre das Produkt beim nächsten Mal wieder unbekannt.<br>
             <strong>Dreh die Packung um:</strong> Der Artikel-Barcode steht meist auf einer anderen
             Seite, auf dem Etikett des Herstellers – oder auf der Ware selbst.
-          </p>` : ''}
+          </p>` : ''}</div>
           <p style="margin:0 0 .9rem;color:var(--text-light);font-size:.85rem">
             Dieser Name steht künftig allen zur Auswahl. Bitte schau kurz, ob es das Produkt schon
             gibt — die Liste unten sucht mit, während du tippst.</p>
@@ -713,6 +725,35 @@ function produktAnlegenMaske(code) {
     overlay.querySelector('[data-act="ab"]').addEventListener('click', () => zu(null));
     $n('np-name').focus();
 
+    // Die Pruefziffer LIVE nachrechnen, waehrend jemand den Code ausbessert. Verschwindet die
+    // Warnung beim Tippen, stimmt die Pruefziffer — das ist die beste Rueckmeldung, die es beim
+    // Abtippen von Ziffern gibt, und sie kostet nichts.
+    const codeHinweisPruefen = () => {
+      const w = $n('np-code').value.trim();
+      const kasten = $n('np-codehinweis');
+      const noetig = typeof scannerNachfragenObArtikelnummer === 'function'
+        && scannerNachfragenObArtikelnummer(w);
+      if (!noetig) {
+        kasten.innerHTML = w && typeof scannerGtinGueltig === 'function' && scannerGtinGueltig(w)
+          ? `<p class="hinweis-box" style="margin:0 0 .6rem;border-left:4px solid #16a34a">
+               <strong>Prüfziffer stimmt.</strong> ${esc(w)} ist eine gültige Artikelnummer nach
+               GS1-Norm — abgetippte Ziffern sind damit sehr wahrscheinlich richtig.</p>`
+          : '';
+        return;
+      }
+      kasten.innerHTML = `<p class="hinweis-box" style="margin:0 0 .6rem">
+          <strong>Prüf das bitte kurz.</strong> Dieser Code erfüllt keine
+          Artikelnummer-Prüfziffer — er kann trotzdem richtig sein, muss aber nicht. Zwei Stellen
+          führen regelmäßig in die Irre, weil dort etwas steht, das sich mit <em>jeder Lieferung
+          ändert</em>:<br>
+          • <strong>Lieferschein-Etiketten</strong> tragen Etiketten-, Tour- und Boxnummern.<br>
+          • <strong>Die Falz von Tuben und der Boden von Flaschen</strong> tragen die
+            Chargennummer — meist neben Füllmenge oder Haltbarkeit.<br>
+          <strong>Dreh die Packung um:</strong> Der Artikel-Barcode steht meist auf einer anderen
+          Seite, auf dem Etikett des Herstellers – oder auf der Ware selbst.</p>`;
+    };
+    $n('np-code').addEventListener('input', codeHinweisPruefen);
+
     $n('np-kat').addEventListener('change', () => {
       const neu = $n('np-kat').value === '__neu';
       $n('np-katneu').style.display = neu ? '' : 'none';
@@ -745,7 +786,10 @@ function produktAnlegenMaske(code) {
       const b = e.target.closest('[data-anlernen]');
       if (!b) return;
       try {
-        const r = await api('POST', `/api/products/${b.dataset.anlernen}/barcodes`, { code });
+        // Den KORRIGIERTEN Code anlernen, nicht den gescannten — sonst haengt am bestehenden
+        // Produkt am Ende die Fehllesung, die man gerade ausgebessert hat.
+        const r = await api('POST', `/api/products/${b.dataset.anlernen}/barcodes`,
+          { code: $n('np-code').value.trim() || code });
         toast(`Barcode an „${r.produkt.name}" angelernt.`, 'success');
         await katalogAuffrischen();
         produktUebernehmen(r.produkt);
@@ -765,8 +809,14 @@ function produktAnlegenMaske(code) {
           const k = await api('POST', '/api/products/kategorien', { name: katName });
           katId = k.kategorie.id;
         }
+        const codeJetzt = $n('np-code').value.trim();
+        if (!codeJetzt) {
+          fehler.textContent = 'Ohne Barcode geht es hier nicht. Im Produktverzeichnis lässt sich '
+            + 'ein Produkt auch ohne anlegen — es ist dann nur über die Suche zu finden.';
+          fehler.style.display = ''; return;
+        }
         const r = await api('POST', '/api/products', {
-          name, barcode: code,
+          name, barcode: codeJetzt,
           category_id: katId ? Number(katId) : null,
           hersteller: $n('np-hersteller').value.trim() || null,
           default_unit: $n('np-einheit').value.trim() || null });

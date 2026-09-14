@@ -94,8 +94,11 @@ function pvProdukteHtml(v) {
         <option value="ohne">— ohne Kategorie —</option>
       </select>
     </div>
+    <div style="display:flex;justify-content:flex-end;margin:.2rem 0 .6rem">
+      <button class="btn btn-primary btn-sm" id="pv-neu">+ Produkt anlegen</button>
+    </div>
     <datalist id="pv-hersteller-liste">${(v.hersteller || []).map(h => `<option value="${esc(h)}">`).join('')}</datalist>
-    <div id="pv-liste">${v.produkte.map(pvProduktZeile).join('') || '<p style="color:var(--text-lighter);text-align:center">Noch keine Produkte im Verzeichnis. Sie entstehen beim Scannen eines unbekannten Barcodes.</p>'}</div>
+    <div id="pv-liste">${v.produkte.map(pvProduktZeile).join('') || '<p style="color:var(--text-lighter);text-align:center">Noch keine Produkte im Verzeichnis. Sie entstehen beim Scannen eines unbekannten Barcodes — oder hier über „+ Produkt anlegen".</p>'}</div>
     <details style="margin-top:1.4rem">
       <summary style="cursor:pointer;font-weight:600">Kategorien verwalten (${v.kategorien.length})</summary>
       <div id="pv-kats" style="margin-top:.6rem">${pvKategorienHtml(v.kategorien)}</div>
@@ -603,6 +606,8 @@ async function pvKlick(ev) {
       return pvHaendlerProdukteLaden(hKarte, true);
     }
     if (b.classList.contains('pv-hp-neu')) return pvNeuesProduktDialog(hKarte);
+    // Ohne Händlerkarte: von Hand ins Verzeichnis, wie im Supermarkt-Büro.
+    if (b.id === 'pv-neu') return pvNeuesProduktDialog(null);
 
     // ── Händler-Stammdaten ──
     if (b.classList.contains('pv-h-anlegen')) {
@@ -635,6 +640,9 @@ async function pvKlick(ev) {
  * scannen, aber über die Suche finden." Genau das steht auch im Dialog, damit niemand hinterher
  * rätselt, warum das Scannen nichts findet.
  */
+// hKarte darf NULL sein: Dann entsteht das Produkt einfach im Verzeichnis, ohne Zuordnung.
+// Alex (14.09.2026): „könnte ich im Katalog auch komplett wie im Supermarkt die Artikel mit ihren
+// Nummern anlegen?" — Ja, und dafür braucht es keinen Großhändler.
 function pvNeuesProduktDialog(hKarte) {
   const kats = S.verzeichnis.kategorien;
   const overlay = document.createElement('div');
@@ -660,7 +668,9 @@ function pvNeuesProduktDialog(hKarte) {
                  placeholder="leer lassen, wenn der Artikel keinen trägt"></label>
         <p class="hinweis-box" style="margin:.2rem 0 0;font-size:.85rem">
           <strong>Ohne Barcode lässt sich das Produkt nicht scannen</strong> — im Bestellformular
-          ist es aber über die Suche zu finden. Nachträglich lässt sich jederzeit einer anlernen.</p>
+          ist es aber über die Suche zu finden. Nachträglich lässt sich jederzeit einer anlernen.<br>
+          Abgetippt? Dann steht hier, ob die Prüfziffer stimmt.</p>
+        <p id="pnp-pruef" style="margin:.35rem 0 0;font-size:.85rem"></p>
         <p id="pnp-fehler" style="display:none;color:var(--danger);margin:.5rem 0 0"></p>
       </div>
       <div class="modal-footer" style="display:flex;gap:.5rem;justify-content:flex-end;padding:1rem">
@@ -671,6 +681,20 @@ function pvNeuesProduktDialog(hKarte) {
   document.body.appendChild(overlay);
   if (typeof dialogBarrierefrei === 'function') dialogBarrierefrei(overlay);
   overlay.querySelector('#pnp-name').focus();
+
+  // Abgetippte Ziffern gegen die Pruefziffer halten — dieselbe Hilfe wie in der Scan-Maske.
+  // Beim Abtippen von 13 Stellen ist das die einzige Kontrolle, die ohne zweites Paar Augen geht.
+  const pruefAnzeigen = () => {
+    const w = overlay.querySelector('#pnp-code').value.trim();
+    const feld = overlay.querySelector('#pnp-pruef');
+    if (!w) { feld.textContent = ''; return; }
+    const gut = typeof scannerGtinGueltig === 'function' && scannerGtinGueltig(w);
+    feld.textContent = gut
+      ? '✓ Prüfziffer stimmt — gültige Artikelnummer nach GS1-Norm.'
+      : '⚠ Keine gültige GTIN-Prüfziffer. Kann eine Hausnummer sein — oder ein Tippfehler.';
+    feld.style.color = gut ? '#16a34a' : 'var(--text-light)';
+  };
+  overlay.querySelector('#pnp-code').addEventListener('input', pruefAnzeigen);
 
   overlay.addEventListener('click', async (ev) => {
     if (ev.target === overlay || ev.target.dataset.act === 'cancel') return overlay.remove();
@@ -683,9 +707,10 @@ function pvNeuesProduktDialog(hKarte) {
         hersteller: overlay.querySelector('#pnp-hersteller').value.trim() || null,
         category_id: overlay.querySelector('#pnp-kat').value || null,
       });
-      await api('PUT', `/api/products/${r.produkt.id}/haendler/${hKarte.dataset.id}`, {});
+      if (hKarte) await api('PUT', `/api/products/${r.produkt.id}/haendler/${hKarte.dataset.id}`, {});
       overlay.remove();
-      toast(`„${r.produkt.name}" angelegt und angehängt.`, 'success');
+      toast(hKarte ? `„${r.produkt.name}" angelegt und angehängt.` : `„${r.produkt.name}" angelegt.`,
+        'success');
       // Kein Neuaufbau der Seite: Der wuerde die Haendlerkarte zuklappen, in der man gerade
       // arbeitet. Stattdessen wandert das neue Produkt in die Liste im Speicher (damit die Suche
       // es sofort kennt), und nur die eine Haendlerkarte laedt nach.
@@ -693,7 +718,8 @@ function pvNeuesProduktDialog(hKarte) {
         S.verzeichnis.produkte.push({ ...r.produkt, barcodes: r.produkt.barcodes || [] });
         S.verzeichnis.produkte.sort((x, y) => x.name.localeCompare(y.name, 'de'));
       }
-      await pvHaendlerProdukteLaden(hKarte, true);
+      if (hKarte) await pvHaendlerProdukteLaden(hKarte, true);
+      else await renderProdukte();   // ohne Händlerkarte gibt es nichts, das offen bleiben müsste
     } catch (e) { fehler.textContent = e.message; fehler.style.display = ''; }
   });
 }

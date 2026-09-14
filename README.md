@@ -545,6 +545,21 @@ Eigener Menüpunkt, der nur erscheint, wenn man das Recht hat. Drei Reiter:
   scannt, bekommt „gehörte zu …" statt „unbekannt". **Zusammengeführte** Produkte lassen sich
   dagegen nicht als eigene zurückholen – ihre Barcodes hängen am Nachfolger.
 
+#### Von Hand anlegen und ausbessern
+
+**Der gescannte Code lässt sich in der Anlege-Maske ändern.** Er steht dort in einem Eingabefeld,
+nicht als starrer Text: Wer merkt, dass sich der Scanner verlesen hat, vergleicht mit der Zahl
+unter dem Strichcode und bessert die Ziffer aus — abbrechen und neu scannen ist nicht nötig.
+Gespeichert wird der korrigierte Wert, auch beim Anlernen an ein bestehendes Produkt.
+
+**Die Prüfziffer wird dabei live nachgerechnet.** Verschwindet die Warnung beim Tippen, stimmt die
+GTIN-Prüfziffer — beim Abtippen von dreizehn Ziffern ist das die beste Kontrolle, die ohne ein
+zweites Paar Augen zu haben ist. Dieselbe Anzeige gibt es im Produktverzeichnis.
+
+**Ein Katalog lässt sich auch komplett von Hand anlegen**, ganz ohne Scanner — im Produktverzeichnis
+über **„+ Produkt anlegen"**: Name, Hersteller, Kategorie und Barcode eintippen. Das entspricht dem
+Weg im Supermarkt, wo Artikel im Büro angelegt werden und die Kasse nur noch nachschlägt.
+
 #### Hersteller je Produkt
 
 Jedes Produkt hat ein Feld **Hersteller**. Der Grund ist der Lageralltag: *Kabelbinder 200 mm* liegt
