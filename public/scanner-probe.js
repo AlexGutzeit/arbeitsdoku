@@ -103,7 +103,8 @@
   const lesezeitMs = () => leseMsSumme + (leseSeit === null ? 0 : performance.now() - leseSeit);
   // Pruefhaken: Headless gibt es keine Kamera, also waere die Zeitnahme sonst nicht messbar.
   // Bewusst nur auf dieser Diagnoseseite — sie verschwindet vor dem Produktivgang.
-  window.__pruefstand = { lesenStart, lesenStop, lesezeitMs, bericht: () => berichtText() };
+  window.__pruefstand = { lesenStart, lesenStop, lesezeitMs, bericht: () => berichtText(),
+                          fehllesungsgrund: (c, d, alle) => fehllesungVon(c, d, alle) };
   const gesehen = new Map();
   const unplausibel = new Set();
   const gs1Erkannt = new Map();
@@ -228,12 +229,28 @@
     }
     return raus;
   };
+  // Gibt nicht nur DASS, sondern WORAN — die drei Messwerte, auf denen das Urteil beruht.
+  // Vorher stand im Bericht nur „gleiches Ende bzw. gleicher Anfang, im selben Moment, dort
+  // deutlich oefter gelesen". Zwei Probleme damit, beide am 14.09.2026 aufgefallen:
+  //
+  //   * Der ANFANG ist seit dem 09.09. gar nicht mehr Teil der Regel — ein gemeinsamer Anfang ist
+  //     das Kennzeichen ECHTER Geschwisterartikel (11 Faelle gegen 0 ausgezaehlt). Der Bericht
+  //     behauptete ein Kriterium, das es nicht gibt.
+  //   * Ohne Zahlen musste ich den Fall aus dem Bericht von Hand nachrechnen, um ihn zu beurteilen.
+  //
+  // Jetzt steht da, was gemessen wurde. Ein Bericht soll seine eigene Begruendung mitliefern.
   const fehllesungVon = (code, d, alle) => {
     for (const [x, xd] of alle) {
       if (x === code) continue;
       if (xd.n < d.n * 2) continue;                       // kein deutlich staerkerer Nachbar
       if (!zusammenGehoerig(d, xd)) continue;   // nicht dieselbe Haltung bzw. nicht im selben Moment
-      if (gemEnde(code, x) >= 6) return x;
+      const ende = gemEnde(code, x);
+      if (ende >= 6) {
+        const naehe = (d.halt && xd.halt)
+          ? 'in derselben Haltung'
+          : `${(Math.abs(d.ersteMs - xd.ersteMs) / 1000).toFixed(1)} s auseinander`;
+        return { code: x, grund: `gleiche letzte ${ende} Stellen, ${naehe}, dort ${xd.n}× statt ${d.n}× gelesen` };
+      }
     }
     return null;
   };
@@ -342,8 +359,8 @@
             : istWerbecode(code)
             ? `${d.n}× gelesen — <strong>Werbe-/Infocode</strong> (Seite, kein Artikel) – wird nicht übernommen`
             : stattdessen
-            ? `${d.n}× gelesen — <strong>vermutlich Fehllesung von ${String(stattdessen).replace(/</g, '&lt;')}</strong>`
-              + ` (gleiches Ende bzw. gleicher Anfang, im selben Moment, dort deutlich öfter gelesen)`
+            ? `${d.n}× gelesen — <strong>vermutlich Fehllesung von ${String(stattdessen.code).replace(/</g, '&lt;')}</strong>`
+              + ` (${stattdessen.grund})`
             : sicher ? `${d.n}× gelesen — bestätigt` + (istZweiD(d.format) ? ' (2D: Fehlerkorrektur, eine Lesung genügt)' : '')
                   : `nur ${d.n}× gelesen (nötig: ${NOETIGE_LESUNGEN(d.format)}) — vermutlich Fehllesung, wird nicht übernommen`)
         + (gewaehlt

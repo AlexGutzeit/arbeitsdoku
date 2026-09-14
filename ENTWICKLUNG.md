@@ -14,6 +14,42 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-14 · Lauf mit den neuen Zahlen — und ein Bericht, der ein Kriterium erfand
+
+Alex' erster Lauf mit der reparierten Messung. Die Zahlen stehen jetzt richtig da:
+
+| | vorher (12.09.) | jetzt |
+|---|---|---|
+| Rate | „1.0/s" (Laufzeit) | **6,1/s** (Lesezeit) |
+| Erster Treffer | „8,7 s" | **0,8 s Lesezeit** (6,7 s nach dem Start) |
+| Schalterstellung | fehlte | „gedrückt halten: an · nur im Rahmen lesen: an" |
+
+124 Lesungen aus 133 angesehenen Bildern — **93 %**, praktisch dasselbe wie beim Speisekammer-Lauf
+(97 %). Die Behauptung „der Scanner ist schnell, langsam ist der Weg zum nächsten Regal" ist damit
+zweimal unabhängig belegt.
+
+**Der Fund steckte in der Begründung, nicht in den Daten.** Eine UPC-A `034754431490` (1 Lesung)
+wurde als Fehllesung der EAN-13 `4044773431490` (6 Lesungen) eingestuft — richtig: gemeinsames Ende
+`431490`, 1,1 s auseinander. Beide erfüllen ihre Prüfziffer, es ist also wieder ein Fall, in dem
+allein die Häufigkeit und das gemeinsame Ende retten.
+
+Der Bericht schrieb dazu: *„gleiches Ende bzw. gleicher Anfang, im selben Moment, dort deutlich
+öfter gelesen."* Der **Anfang ist seit dem 09.09. gar nicht mehr Teil der Regel** — er flog raus,
+weil ein gemeinsamer Anfang das Kennzeichen *echter* Geschwisterartikel ist (11 Fälle gegen 0
+ausgezählt). Der Bericht behauptete also ein Kriterium, das es nicht gibt.
+
+Das ist mehr als ein Schreibfehler: Ich musste den Fall von Hand nachrechnen, um ihn zu beurteilen.
+Jetzt liefert der Bericht seine eigene Begründung mit — *„gleiche letzte 6 Stellen, 1,1 s
+auseinander, dort 6× statt 1× gelesen"*. Im Haltebetrieb steht dort „in derselben Haltung", weil
+dann nicht die Zeit das Kriterium ist.
+
+Der Test prüft die Begründung selbst, samt Gegenprobe: Zwei Artikel mit gemeinsamem **Anfang**
+dürfen nicht als Fehllesung gelten.
+
+**Offen für Alex:** `4542265236` (Code 128, 10 Stellen) ist keine GTIN-Länge und erfüllt keine
+Prüfziffer. Beim Anlegen erscheint deshalb die Nachfrage — vermutlich zu Recht eine
+Großhändler-Artikelnummer, aber das weiss nur, wer die Packung in der Hand hat.
+
 ### 2026-09-14 · „Beweise die Fehlerlosigkeit" — drei Funde statt eines Beweises
 
 Alex: *„Kannst du dir bitte noch einige Tests zusätzlich ausdenken, um die Fehlerlosigkeit des

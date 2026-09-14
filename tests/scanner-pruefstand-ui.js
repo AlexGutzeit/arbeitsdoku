@@ -152,6 +152,36 @@ function req(m, p) {
     ok('… zwei Haltungen summieren sich (300 + 200)',
       zeit.gesamt > 450 && zeit.gesamt < 750, JSON.stringify(zeit));
 
+    console.log('\n── Die Fehllesungs-Begründung nennt ihre Messwerte ──');
+    // Alex' Lauf vom 14.09.2026: 4044773431490 (6×) und 034754431490 (1×), 1,1 s auseinander,
+    // gemeinsames Ende 431490. Der Bericht sagte nur „gleiches Ende bzw. gleicher Anfang" — der
+    // ANFANG ist seit dem 09.09. gar nicht mehr Teil der Regel, und ohne Zahlen musste ich den
+    // Fall von Hand nachrechnen. Hier wird die Begründung selbst geprüft.
+    const begruendung = await seite.evaluate(() => {
+      const P = window.__pruefstand;
+      return P.fehllesungsgrund
+        ? P.fehllesungsgrund('034754431490', { n: 1, ersteMs: 12890, halt: 0 },
+            new Map([['4044773431490', { n: 6, ersteMs: 11745, halt: 0 }]]))
+        : null;
+    });
+    ok('die Fehllesung wird als solche erkannt', begruendung && begruendung.code === '4044773431490',
+      JSON.stringify(begruendung));
+    ok('… und die Begründung nennt die Zahl der gemeinsamen Endstellen',
+      begruendung && /letzte 6 Stellen/.test(begruendung.grund), JSON.stringify(begruendung));
+    ok('… den Zeitabstand', begruendung && /1\.1 s auseinander/.test(begruendung.grund),
+      JSON.stringify(begruendung));
+    ok('… und das Lesungs-Verhältnis', begruendung && /6× statt 1×/.test(begruendung.grund),
+      JSON.stringify(begruendung));
+    ok('… und behauptet KEINEN gemeinsamen Anfang (den prüft die Regel nicht)',
+      begruendung && !/Anfang/.test(begruendung.grund), JSON.stringify(begruendung));
+    // Gegenprobe: zwei echte Geschwisterartikel mit gemeinsamem ANFANG dürfen NICHT als
+    // Fehllesung gelten — genau daran scheiterte der erste Entwurf am 09.09.
+    const geschwister = await seite.evaluate(() => window.__pruefstand.fehllesungsgrund(
+      '4043377228871', { n: 2, ersteMs: 1000, halt: 0 },
+      new Map([['4043377079275', { n: 9, ersteMs: 1200, halt: 0 }]])));
+    ok('zwei Artikel mit gemeinsamem ANFANG gelten nicht als Fehllesung', geschwister === null,
+      JSON.stringify(geschwister));
+
     console.log('\n── Der Bericht sagt, wie gemessen wurde ──');
     // Ohne die Stellung der beiden Schalter sind die Zahlen nicht deutbar — im Lauf vom
     // 12.09.2026 fehlte sie, und damit war offen, ob Haltebetrieb oder Dauerlesen gemessen wurde.
