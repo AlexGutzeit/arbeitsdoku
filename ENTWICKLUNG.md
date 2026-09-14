@@ -14,6 +14,35 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-14 · Ein Bildschirmfoto deckt einen echten Fehler auf
+
+Alex zum Bild „zwei gleichnamige Artikel": *„Ich vermute, hier sind die Vorschläge nicht mehr zu
+sehen?"* — Stimmt. Und die Ursache lag nicht in der Aufnahme, sondern in der App.
+
+**Das Kategorie-Feld ist beides**: Angabe für die Bestellung **und** Filter für die
+Vorschlagsliste. Nach einem Scan ist es gefüllt, ohne dass jemand es angefasst hätte — im Bild
+stand dort „Installationsmaterial" von der zuvor gescannten Verbindungsklemme. Wer dann
+„kabelbinder" tippt, bekommt **nichts**: Die liegen in „Befestigung".
+
+Die Folge wäre genau der Fehler, gegen den das ganze Verzeichnis gebaut ist: *„gibt es nicht"* →
+neu anlegen → Doppel. Ein Filter, der stillschweigend Treffer verschluckt, ist schlimmer als kein
+Filter.
+
+**Jetzt sucht die Liste ausserhalb der Kategorie weiter und sagt es:** „Nichts in dieser Kategorie
+— 2 Treffer in anderen:". Die Hinweiszeile ist kein Produkt und lässt sich nicht anklicken (ohne
+den Riegel setzte ein Klick den Produktnamen auf `undefined`). Drei Zusicherungen halten das fest,
+darunter die Gegenprobe, dass der Hinweis bei passender Kategorie **nicht** erscheint.
+
+**Im selben Bild steckte noch ein zweiter Fehler**, den ich beim Nachbauen sah: „HellermannTyton"
+und „Befestigung" klebten aneinander. Der Produktname war ein nackter Textknoten im Flex-Layout —
+`li > :first-child { min-width: 0 }` traf damit den *Hersteller*-Span statt des Namens, und ein
+langer Herstellername ohne Trennmöglichkeit lief in die Kategorie hinein. Name und Hersteller
+stehen jetzt in einer gemeinsamen Gruppe: Sie bezeichnen den Artikel, die Kategorie ist
+Nebenangabe.
+
+**Beides fand ein Mensch, der ein Bild anschaute** — kein Test. Screenshots aus der echten App sind
+deshalb nicht nur Illustration; sie sind eine Prüfung, die kein Testlauf ersetzt.
+
 ### 2026-09-14 · Zwei Blicke auf einen Screenshot — zwei Umbauten
 
 Beim Zusammenstellen der Bildschirmfotos hat Alex zweimal hingesehen und zweimal etwas gefunden,

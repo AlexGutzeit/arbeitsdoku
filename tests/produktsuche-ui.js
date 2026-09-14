@@ -160,6 +160,60 @@ async function anmelden(browser, user, pw) {
     const gelöst = await m.seite.evaluate(() => document.getElementById('of-product').dataset.produktId || null);
     ok('nach dem Weitertippen ist die Verknüpfung weg', gelöst === null, String(gelöst));
 
+    // ── Der Kategoriefilter darf nichts verschweigen ────────────────────────────────────────
+    //
+    // Alex hat das am 14.09.2026 an einem Bildschirmfoto gesehen: Er tippte „kabelbinder" und
+    // bekam KEINEN Vorschlag, weil im Kategorie-Feld noch die Kategorie des zuvor gescannten
+    // Artikels stand. Das Feld ist beides — Angabe für die Bestellung UND Filter für die Liste —
+    // und nach einem Scan ist es gefüllt, ohne dass man es angefasst hat.
+    //
+    // Die Folge wäre genau der Fehler, gegen den das Verzeichnis gebaut ist: „gibt es nicht" →
+    // neu anlegen → Doppel.
+    console.log('\n── Kategoriefilter verschweigt keine Treffer ──');
+    await m.seite.evaluate((kid) => {
+      const k = document.getElementById('of-kategorie');
+      k.value = String(kid); k.dispatchEvent(new Event('change', { bubbles: true }));
+      const f = document.getElementById('of-product'); f.value = ''; f.focus();
+    }, kElektro.id);
+    await m.seite.type('#of-product', 'kabelbinder', { delay: 15 });
+    await sleep(400);
+    const trotzFilter = await m.seite.evaluate(() => ({
+      sichtbar: document.getElementById('of-vorschlaege').style.display !== 'none',
+      zeilen: [...document.querySelectorAll('#of-vorschlaege li')].map(li => li.innerText.replace(/\s+/g, ' ').trim()),
+      hinweis: !!document.querySelector('#of-vorschlaege .vorschlag-hinweis'),
+    }));
+    ok('der Kabelbinder wird trotz fremder Kategorie gefunden',
+      trotzFilter.sichtbar && trotzFilter.zeilen.some(t => /Kabelbinder/.test(t)), JSON.stringify(trotzFilter));
+    ok('… und die Liste sagt, dass die Treffer woanders liegen',
+      trotzFilter.hinweis && trotzFilter.zeilen.some(t => /anderen/.test(t)), JSON.stringify(trotzFilter.zeilen));
+    // Gegenprobe: Passt die Kategorie, bleibt der Hinweis weg — sonst stünde er immer da.
+    await m.seite.evaluate((kid) => {
+      const k = document.getElementById('of-kategorie');
+      k.value = String(kid); k.dispatchEvent(new Event('change', { bubbles: true }));
+      const f = document.getElementById('of-product');
+      f.value = 'kabelbinder'; f.dispatchEvent(new Event('input', { bubbles: true }));
+    }, kBefest.id);
+    await sleep(400);
+    ok('… bei passender Kategorie erscheint der Hinweis NICHT',
+      !(await m.seite.evaluate(() => !!document.querySelector('#of-vorschlaege .vorschlag-hinweis'))));
+    // Und die Hinweiszeile darf nicht als Produkt anklickbar sein.
+    await m.seite.evaluate((kid) => {
+      const k = document.getElementById('of-kategorie');
+      k.value = String(kid); k.dispatchEvent(new Event('change', { bubbles: true }));
+      const f = document.getElementById('of-product');
+      f.value = 'kabelbinder'; f.dispatchEvent(new Event('input', { bubbles: true }));
+    }, kElektro.id);
+    await sleep(400);
+    await m.seite.evaluate(() => document.querySelector('#of-vorschlaege .vorschlag-hinweis').click());
+    await sleep(250);
+    ok('… ein Klick auf die Hinweiszeile setzt kein Produkt',
+      await m.seite.evaluate(() => document.getElementById('of-product').value === 'kabelbinder'),
+      await m.seite.evaluate(() => document.getElementById('of-product').value));
+    await m.seite.evaluate(() => {
+      const k = document.getElementById('of-kategorie'); k.value = '';
+      k.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
     console.log('\n── Zwei gleichnamige Artikel, zwei Hersteller ──');
     await m.seite.evaluate(() => { const f = document.getElementById('of-product'); f.value = ''; f.focus(); });
     await m.seite.type('#of-product', 'schelle', { delay: 15 });

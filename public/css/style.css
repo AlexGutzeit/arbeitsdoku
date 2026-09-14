@@ -2387,9 +2387,13 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .produkt-vorschlaege li:last-child { border-bottom: none; }
 .produkt-vorschlaege li:hover,
 .produkt-vorschlaege li:focus { background: var(--bg); }
-.produkt-vorschlaege .kat { color: var(--text-light); font-size: .78rem; white-space: nowrap; }
-/* Der Produktname darf nicht mitten im Wort umbrechen; lieber die Kategorie schrumpfen lassen. */
-.produkt-vorschlaege li > :first-child { min-width: 0; }
+.produkt-vorschlaege .kat { color: var(--text-light); font-size: .78rem; white-space: nowrap;
+  flex: 0 0 auto; }
+/* Name und Hersteller gehoeren zusammen — sie bezeichnen den Artikel; die Kategorie ist
+   Nebenangabe und steht rechts. min-width:0 gehoert an DIESE Gruppe: Vorher traf die Regel den
+   Hersteller-Span, und ein langer Name ohne Trennmoeglichkeit („HellermannTyton") lief auf dem
+   Handy in die Kategorie hinein (Alex, 14.09.2026). */
+.produkt-vorschlaege .vs-artikel { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 
 /* Scanner-Fenster. Es nimmt bewusst viel Platz: Was zaehlt, ist das Kamerabild und der
    Zielrahmen — alles andere ist Beiwerk. */
@@ -2490,6 +2494,11 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .pv-ohne-code { font-size: .78rem; color: var(--text-lighter); font-style: italic; }
 /* Hersteller in der Bestell-Vorschlagsliste: erkennbar, aber dem Produktnamen untergeordnet. */
 .produkt-vorschlaege .hersteller { font-size: .8rem; color: var(--text-light); font-weight: 600; }
+/* Der Kategoriefilter darf nichts verschweigen: Statt einer leeren Liste die Treffer aus anderen
+   Kategorien zeigen — mit dieser Zeile als Erklaerung (Alex, 14.09.2026). */
+.produkt-vorschlaege .vorschlag-hinweis { font-size: .8rem; color: var(--text-light);
+  background: var(--bg-alt, #f4f5f2); cursor: default; font-style: italic; }
+.produkt-vorschlaege .vorschlag-hinweis:hover { background: var(--bg-alt, #f4f5f2); }
 .pv-hp-treffer { border: 1px solid var(--border); border-radius: 5px; margin: .3rem 0 0;
   padding: 0; list-style: none; overflow-y: auto; }
 .pv-hp-treffer li { padding: .45rem .6rem; cursor: pointer; }

@@ -434,10 +434,26 @@ function produktSucheBinden() {
     const katalog = (S.produktKatalog && S.produktKatalog.produkte) || [];
     const q = vergleichsform(feld.value);
     const kat = katFeld && katFeld.value ? Number(katFeld.value) : null;
-    let treffer = katalog.filter(p => !kat || p.category_id === kat);
-    // Auch nach dem HERSTELLER suchen: "obo" soll die Kabelbinder von OBO finden.
-    if (q) treffer = treffer.filter(p => vergleichsform(p.name).includes(q)
-                                      || vergleichsform(p.hersteller || '').includes(q));
+    const passtZurSuche = (p) => !q || vergleichsform(p.name).includes(q)
+                                    || vergleichsform(p.hersteller || '').includes(q);
+    let treffer = katalog.filter(p => (!kat || p.category_id === kat) && passtZurSuche(p));
+
+    // DER KATEGORIEFILTER DARF NICHTS VERSCHWEIGEN.
+    //
+    // Gefunden von Alex am 14.09.2026 an einem Bildschirmfoto: Er tippte „kabelbinder" und bekam
+    // KEINEN Vorschlag — weil im Kategorie-Feld noch „Installationsmaterial" vom vorherigen Scan
+    // stand und Kabelbinder in „Befestigung" liegen. Das Feld ist beides: Angabe fuer die
+    // Bestellung UND Filter fuer die Liste. Nach einem Scan ist es gefuellt, ohne dass man es
+    // angefasst hat.
+    //
+    // Die Folge waere genau der Fehler, gegen den das ganze Verzeichnis gebaut ist: „gibt es
+    // nicht" -> neu anlegen -> Doppel. Deshalb wird jetzt ausserhalb der Kategorie weitergesucht
+    // und GESAGT, dass die Treffer woanders liegen. Verschweigen ist die schlechteste Variante.
+    let andereKategorie = 0;
+    if (q && kat && !treffer.length) {
+      treffer = katalog.filter(passtZurSuche);
+      andereKategorie = treffer.length;
+    }
     // Ohne Eingabe die ganze (gefilterte) Liste zeigen — Alex wollte ausdruecklich auch
     // DURCHSCROLLEN koennen, nicht nur suchen.
     treffer = treffer.slice(0, 50);
@@ -450,9 +466,13 @@ function produktSucheBinden() {
     };
     // Der Hersteller MUSS in der Vorschlagszeile stehen: Zwei gleichnamige Artikel verschiedener
     // Hersteller waeren sonst nicht auseinanderzuhalten - und genau dafuer gibt es das Feld.
-    liste.innerHTML = treffer.map(p =>
+    liste.innerHTML = (andereKategorie
+      ? `<li class="vorschlag-hinweis" aria-hidden="true">Nichts in dieser Kategorie —
+           ${andereKategorie} Treffer in anderen:</li>`
+      : '') + treffer.map(p =>
       `<li data-id="${p.id}" data-name="${esc(p.name)}" data-unit="${esc(p.default_unit || '')}">
-         ${esc(p.name)}${p.hersteller ? ` <span class="hersteller">${esc(p.hersteller)}</span>` : ''}${
+         <span class="vs-artikel">${esc(p.name)}${
+           p.hersteller ? ` <span class="hersteller">${esc(p.hersteller)}</span>` : ''}</span>${
            p.category_id ? `<span class="kat">${esc(katName(p.category_id))}</span>` : ''}
        </li>`).join('');
     liste.style.display = '';
@@ -464,7 +484,9 @@ function produktSucheBinden() {
 
   liste.addEventListener('click', (e) => {
     const li = e.target.closest('li');
-    if (!li) return;
+    // Die Hinweiszeile („Treffer in anderen Kategorien") ist kein Produkt. Ohne diesen Riegel
+    // setzte ein Klick darauf den Produktnamen auf „undefined".
+    if (!li || li.classList.contains('vorschlag-hinweis')) return;
     feld.value = li.dataset.name;
     liste.innerHTML = '';
     const einheit = document.getElementById('of-unit');
