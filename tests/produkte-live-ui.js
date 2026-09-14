@@ -51,7 +51,7 @@ function req(m, p, t, b) {
 
     // MA b arbeitet über die Schnittstelle — er steht ja im Lager am Handy.
     const PW = 'Lager!12345';
-    const b = (await req('POST', '/api/users', admin, { username: 'lagerb', password: PW, name: 'Bea Lager', role: 'mitarbeiter', target_hours_per_week: 40, can_products: true })).body.user;
+    const b = (await req('POST', '/api/users', admin, { username: 'lagerb', password: PW, name: 'Bea Lager', role: 'mitarbeiter', target_hours_per_week: 40, can_products_edit: true })).body.user;
     const tokenB = (await req('POST', '/api/auth/login', null, { username: 'lagerb', password: PW })).body.token;
     await req('POST', '/api/products', admin, { name: 'Kabelbinder 200 mm', barcode: '4001111111111' });
 

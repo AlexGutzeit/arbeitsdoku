@@ -31,19 +31,19 @@ const { darfProduktePflegen } = require('./produktrecht');
 
 const ROLLEN_MIT_EINLERNRECHT = ['admin', 'chef'];
 
-/** user: { role, can_barcode, can_products } — genau das, was middleware/auth.js anhängt. */
+/** user: { role, can_products_add, can_products_edit } — genau das, was middleware/auth.js anhängt. */
 function darfBarcodeEinlernen(user) {
   if (!user) return false;
   if (ROLLEN_MIT_EINLERNRECHT.includes(user.role)) return true;
   if (darfProduktePflegen(user)) return true;   // das grössere Recht schliesst das kleinere ein
-  return Number(user.can_barcode) === 1;
+  return Number(user.can_products_add) === 1;
 }
 
 // DIESELBE Regel als SQL — für den Fall, dass die LISTE der Berechtigten gebraucht wird.
 // Aus der Rollenliste gebaut und nicht hingeschrieben, damit beides nicht auseinanderläuft.
-// `can_products` steht mit drin, weil die Folgerung oben sonst hier fehlte.
+// `can_products_edit` steht mit drin, weil die Folgerung oben sonst hier fehlte.
 const SQL_EINLERNBERECHTIGT =
-  `(role IN (${ROLLEN_MIT_EINLERNRECHT.map(() => '?').join(', ')}) OR can_barcode = 1 OR can_products = 1)`;
+  `(role IN (${ROLLEN_MIT_EINLERNRECHT.map(() => '?').join(', ')}) OR can_products_add = 1 OR can_products_edit = 1)`;
 const SQL_EINLERNROLLEN = ROLLEN_MIT_EINLERNRECHT.slice();
 
 module.exports = { ROLLEN_MIT_EINLERNRECHT, darfBarcodeEinlernen,

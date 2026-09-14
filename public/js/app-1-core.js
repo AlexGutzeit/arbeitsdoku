@@ -990,7 +990,7 @@ function darfBestellen() {
 // EINLERNEN ist ein eigenes, kleineres Recht — siehe darfArtikelEinlernen() darunter.
 function darfProduktePflegen() {
   if (!S.user) return false;
-  return ['admin', 'chef'].includes(S.user.role) || !!S.user.can_products;
+  return ['admin', 'chef'].includes(S.user.role) || !!S.user.can_products_edit;
 }
 
 // Darf am Regal neue Artikel/Barcodes EINLERNEN. Gegenstueck zu barcoderecht.js; wie oben gilt:
@@ -1001,7 +1001,7 @@ function darfProduktePflegen() {
 function darfArtikelEinlernen() {
   if (!S.user) return false;
   if (darfProduktePflegen()) return true;
-  return !!S.user.can_barcode;
+  return !!S.user.can_products_add;
 }
 
 function canManageProjects() {

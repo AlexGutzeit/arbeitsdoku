@@ -9,7 +9,7 @@
 // muss der Restore-Pfad nachziehen. Die Liste wird aus middleware/auth.js HERAUSGELESEN, nicht
 // abgeschrieben — sonst wäre der Test beim nächsten neuen Recht still veraltet.
 //
-// Anlass: can_products (Recht „Lagerdaten pflegen", 08.09.2026). Der Test gilt aber für jedes
+// Anlass: can_products_edit (Recht „Lagerdaten pflegen", 08.09.2026). Der Test gilt aber für jedes
 // weitere Recht, das noch kommt.
 //
 //   node tests/altdb-spalten.js
@@ -82,8 +82,8 @@ function spaltenDerMiddleware() {
 
   // Und die Rechte stehen auf „nein" statt auf undefiniert — sonst waere `!!undefined` zwar auch
   // falsch, aber ein spaeteres `=== 0` still nicht mehr.
-  ok('can_products steht auf 0, nicht auf NULL',
-    gelesen && Number(gelesen.can_products) === 0, JSON.stringify(gelesen));
+  ok('can_products_edit steht auf 0, nicht auf NULL',
+    gelesen && Number(gelesen.can_products_edit) === 0, JSON.stringify(gelesen));
   ok('can_order ebenso', gelesen && Number(gelesen.can_order) === 0, JSON.stringify(gelesen));
 
   console.log(`\nAlter Stand: ${pass} bestanden, ${fail} fehlgeschlagen`);

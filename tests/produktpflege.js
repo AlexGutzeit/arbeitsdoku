@@ -2,7 +2,7 @@
 //
 // Zwei Dinge stehen hier auf dem Spiel, und beide sind still:
 //
-//  1. RECHTE. Pflegen darf nur, wer can_products hat (oder Chef/Admin ist). Ansehen der
+//  1. RECHTE. Pflegen darf nur, wer can_products_edit hat (oder Chef/Admin ist). Ansehen der
 //     Händler-Angaben darf zusätzlich, wer bestellen darf — das ist der ganze Zweck. Eine Route,
 //     die den Riegel vergisst, fällt niemandem auf: Es geht ja etwas, es geht nur zu viel.
 //
@@ -60,7 +60,7 @@ function req(m, p, t, b) {
     // Recht (barcoderecht.js), also bekommt er es hier ausdrücklich. Das Pflegerecht NICHT.
     const neu = async (name, code) => (await req('POST', '/api/products', max, { name, barcode: code })).body.produkt;
 
-    await req('PUT', `/api/users/${maxId}`, admin, { can_barcode: true });
+    await req('PUT', `/api/users/${maxId}`, admin, { can_products_add: true });
 
     console.log('── Ohne Recht kommt niemand an die Pflege ──');
     const p1 = await neu('Kabelbinder 200 mm', '4001');
@@ -87,7 +87,7 @@ function req(m, p, t, b) {
     await req('PUT', `/api/products/${p1.id}`, chef, { name: 'Kabelbinder 200 mm', trotzdem: true });
 
     console.log('\n── Der Pfleger darf, sobald er das Häkchen hat ──');
-    await req('PUT', `/api/users/${maxId}`, admin, { can_products: true });
+    await req('PUT', `/api/users/${maxId}`, admin, { can_products_edit: true });
     const jetzt = await req('GET', '/api/products/verzeichnis', max);
     ok('das Verzeichnis öffnet sich', jetzt.status === 200, String(jetzt.status));
     ok('… und meldet die beiden Namensgleichen als Dublette',

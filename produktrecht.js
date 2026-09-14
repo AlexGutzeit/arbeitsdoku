@@ -27,17 +27,17 @@
 
 const ROLLEN_MIT_PRODUKTRECHT = ['admin', 'chef'];
 
-/** user: { role, can_products } — genau das, was middleware/auth.js an jede Anfrage hängt. */
+/** user: { role, can_products_edit } — genau das, was middleware/auth.js an jede Anfrage hängt. */
 function darfProduktePflegen(user) {
   if (!user) return false;
   if (ROLLEN_MIT_PRODUKTRECHT.includes(user.role)) return true;
-  return Number(user.can_products) === 1;
+  return Number(user.can_products_edit) === 1;
 }
 
 // DIESELBE Regel als SQL — für den Fall, dass die LISTE der Berechtigten gebraucht wird.
 // Aus der Rollenliste gebaut und nicht hingeschrieben, damit beides nicht auseinanderläuft.
 const SQL_PRODUKTBERECHTIGT =
-  `(role IN (${ROLLEN_MIT_PRODUKTRECHT.map(() => '?').join(', ')}) OR can_products = 1)`;
+  `(role IN (${ROLLEN_MIT_PRODUKTRECHT.map(() => '?').join(', ')}) OR can_products_edit = 1)`;
 const SQL_PRODUKTROLLEN = ROLLEN_MIT_PRODUKTRECHT.slice();
 
 module.exports = { ROLLEN_MIT_PRODUKTRECHT, darfProduktePflegen,

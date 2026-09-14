@@ -1285,11 +1285,11 @@ async function showUserModal(user) {
             Datei-Upload-Recht (darf Dokumente hochladen &amp; verwalten)
           </label>
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:0.6rem;">
-            <input type="checkbox" id="um-can-barcode" ${user?.can_barcode ? 'checked' : ''}>
+            <input type="checkbox" id="um-can-products-add" ${user?.can_products_add ? 'checked' : ''}>
             Artikel einlernen (unbekannten Barcode ins Verzeichnis aufnehmen)
           </label>
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:0.3rem;">
-            <input type="checkbox" id="um-can-products" ${user?.can_products ? 'checked' : ''}>
+            <input type="checkbox" id="um-can-products-edit" ${user?.can_products_edit ? 'checked' : ''}>
             Lagerdaten pflegen (Produktverzeichnis aufräumen — schließt „Artikel einlernen" ein)
           </label>
           <p class="push-hint" style="margin:0.25rem 0 0;">
@@ -1545,8 +1545,8 @@ async function showUserModal(user) {
       can_bulletin: document.getElementById('um-can-bulletin').checked,
       can_order: document.getElementById('um-can-order').checked,
       can_upload: document.getElementById('um-can-upload').checked,
-      can_products: document.getElementById('um-can-products').checked,
-      can_barcode: document.getElementById('um-can-barcode').checked,
+      can_products_edit: document.getElementById('um-can-products-edit').checked,
+      can_products_add: document.getElementById('um-can-products-add').checked,
     };
     // Bei neuem User Tages-Stunden setzen
     if (!isEdit) {

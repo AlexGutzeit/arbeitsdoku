@@ -96,7 +96,7 @@ function req(m, p, t, b) {
 
     // Ab hier ist max der eingelernte Lagerist — so, wie Alex es in der Firma vergeben würde.
     const maxIdFrueh = db.prepare("SELECT id FROM users WHERE username = 'max'").get().id;
-    await req('PUT', `/api/users/${maxIdFrueh}`, admin, { can_barcode: true });
+    await req('PUT', `/api/users/${maxIdFrueh}`, admin, { can_products_add: true });
     ok('mit dem Häkchen darf er sofort', (await durchGelassen(max)) === 404,
       String(await durchGelassen(max)));
 
@@ -275,7 +275,7 @@ function req(m, p, t, b) {
     // ─────────────────────────────────────────────────────────────────────────────────────────
     // Wer darf PFLEGEN? (Alex, 08.09.2026)
     //
-    // Bis hierher hing das an der Rolle. Jetzt gibt es das Einzelrecht can_products — dieselbe
+    // Bis hierher hing das an der Rolle. Jetzt gibt es das Einzelrecht can_products_edit — dieselbe
     // Idee wie beim Bestellrecht, wo Urlaub und Krankheit sonst die ganze Firma ausbremsen.
     //
     // Die Falle, gegen die dieser Abschnitt geschrieben ist: Beim Bestellrecht stand dieselbe
@@ -298,12 +298,12 @@ function req(m, p, t, b) {
     const maLegtAn = await req('POST', '/api/products', max, { name: 'Isolierband schwarz', barcode: '4008196000119' });
     ok('anlegen darf weiterhin jeder, auch ohne Recht', maLegtAn.status === 201, maLegtAn.status + ' ' + maLegtAn.text.slice(0, 80));
 
-    const setzen = async (id, wert, token) => req('PUT', `/api/users/${id}`, token, { can_products: wert });
+    const setzen = async (id, wert, token) => req('PUT', `/api/users/${id}`, token, { can_products_edit: wert });
     const gesetzt = await setzen(maxId, true, admin);
     ok('das Häkchen lässt sich setzen', gesetzt.status === 200, gesetzt.status + ' ' + gesetzt.text.slice(0, 90));
     ok('… und steht in der Datenbank',
-      db.prepare('SELECT can_products FROM users WHERE id = ?').get(maxId).can_products === 1,
-      JSON.stringify(db.prepare('SELECT can_products FROM users WHERE id = ?').get(maxId)));
+      db.prepare('SELECT can_products_edit FROM users WHERE id = ?').get(maxId).can_products_edit === 1,
+      JSON.stringify(db.prepare('SELECT can_products_edit FROM users WHERE id = ?').get(maxId)));
 
     // Ohne neues Anmelden: die Middleware liest das Recht bei JEDER Anfrage frisch. Haenge es an
     // der Sitzung, muesste sich Max erst ab- und wieder anmelden — das wuerde niemand verstehen.
@@ -327,8 +327,8 @@ function req(m, p, t, b) {
     // Quellen dasselbe behaupten (und eine spaeter still veraltet).
     await setzen(chefId, true, admin);
     ok('beim Chef bleibt das Häkchen leer (er hat es per Rolle)',
-      db.prepare('SELECT can_products FROM users WHERE id = ?').get(chefId).can_products === 0,
-      JSON.stringify(db.prepare('SELECT can_products FROM users WHERE id = ?').get(chefId)));
+      db.prepare('SELECT can_products_edit FROM users WHERE id = ?').get(chefId).can_products_edit === 0,
+      JSON.stringify(db.prepare('SELECT can_products_edit FROM users WHERE id = ?').get(chefId)));
     const chefDarfWeiter = await req('DELETE', `/api/products/${p1.body.produkt.id}/barcodes/${codeB}`, chef);
     ok('… und er darf trotzdem', chefDarfWeiter.status === 409 || chefDarfWeiter.status === 200,
       String(chefDarfWeiter.status));

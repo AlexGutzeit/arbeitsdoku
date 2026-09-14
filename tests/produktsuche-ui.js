@@ -57,7 +57,7 @@ async function anmelden(browser, user, pw) {
     const adminTok = (await req('POST', '/api/auth/login', null, { username: 'admin', password: pw('admin') })).body.token;
     // Seit 13.09.2026 braucht das Anlegen ein Recht (barcoderecht.js) — max ist hier der Lagerist.
     const maxId = (await req('GET', '/api/users', adminTok)).body.users.find(u => u.username === 'max').id;
-    await req('PUT', `/api/users/${maxId}`, adminTok, { can_barcode: true });
+    await req('PUT', `/api/users/${maxId}`, adminTok, { can_products_add: true });
 
     // Katalog vorbereiten
     const kElektro = (await req('POST', '/api/products/kategorien', maxTok, { name: 'Elektro' })).body.kategorie;

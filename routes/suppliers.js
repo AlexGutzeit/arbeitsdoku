@@ -7,7 +7,7 @@
 //
 // RECHTE, bewusst ohne ein viertes Recht:
 //   ANSEHEN   — wer bestellen darf (der Sinn der Sache: der Chef klickt den Link) ODER wer pflegt.
-//   AENDERN   — nur can_products („Lagerdaten pflegen", produktrecht.js).
+//   AENDERN   — nur can_products_edit („Lagerdaten pflegen", produktrecht.js).
 //
 // Der Ansprechpartner ist eine echte Person bei einer Fremdfirma. Das ist für einen
 // Geschäftskontakt unproblematisch, gehört aber ins Verarbeitungsverzeichnis — deshalb steht es

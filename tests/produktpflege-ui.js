@@ -63,7 +63,7 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     const admin = (await req('POST', '/api/auth/login', null, { username: 'admin', password: pwAdmin })).body.token;
 
     const PW = 'Lagerist3!';
-    const lg1 = (await req('POST', '/api/users', admin, { username: 'lagerist', password: PW, name: 'Lena Lagerist', role: 'mitarbeiter', target_hours_per_week: 40, can_order: true, can_barcode: true })).body.user;
+    const lg1 = (await req('POST', '/api/users', admin, { username: 'lagerist', password: PW, name: 'Lena Lagerist', role: 'mitarbeiter', target_hours_per_week: 40, can_order: true, can_products_add: true })).body.user;
     const lagerTok = (await req('POST', '/api/auth/login', null, { username: 'lagerist', password: PW })).body.token;
     // Ein Monteur, der Material ANFORDERT, aber keine Bestellungen abschliesst — die Mehrheit.
     await req('POST', '/api/users', admin, { username: 'monteur', password: PW, name: 'Mia Monteurin',
@@ -147,7 +147,7 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     await m.seite.close(); await m.ktx.close();
 
     console.log('\n── Mit dem Recht: Menüpunkt, Sprung, Pflege ──');
-    await req('PUT', `/api/users/${lg1.id}`, admin, { can_products: true });
+    await req('PUT', `/api/users/${lg1.id}`, admin, { can_products_edit: true });
     await l.seite.close(); await l.ktx.close();
     l = await anmelden(browser, 'lagerist', PW);
     l.seite.on('pageerror', e => jsFehler.push('pageerror: ' + e.message));

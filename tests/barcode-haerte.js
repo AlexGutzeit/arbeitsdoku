@@ -113,11 +113,11 @@ function spaltenDerProduktRouten() {
     ok('lauter Leerzeichen heisst „kein Barcode" — mit Pflegerecht also erlaubt',
       leerChef.status === 201 && (leerChef.body.produkt.barcodes || []).length === 0,
       leerChef.status + ' ' + JSON.stringify(leerChef.body.produkt && leerChef.body.produkt.barcodes));
-    await req('PUT', `/api/users/${maxId}`, admin, { can_barcode: true });
+    await req('PUT', `/api/users/${maxId}`, admin, { can_products_add: true });
     const leerMax = await req('POST', '/api/products', max, { name: 'Leer als MA', barcode: '   ' });
     ok('… und ohne Pflegerecht wird genau das abgewiesen', leerMax.status === 400,
       leerMax.status + ' ' + leerMax.text.slice(0, 80));
-    await req('PUT', `/api/users/${maxId}`, admin, { can_barcode: false });
+    await req('PUT', `/api/users/${maxId}`, admin, { can_products_add: false });
     ok('beim Anlernen an ein bestehendes Produkt ist ein leerer Code immer ein Fehler',
       (await req('POST', `/api/products/${getrimmt.body.produkt.id}/barcodes`, chef, { code: '  ' })).status === 400);
 
@@ -139,23 +139,23 @@ function spaltenDerProduktRouten() {
 
     // ── 2. Das Recht ──────────────────────────────────────────────────────────────────────────
     console.log('\n── Das Einlernrecht, entzogen und zurückgegeben ──');
-    await req('PUT', `/api/users/${maxId}`, admin, { can_barcode: true });
+    await req('PUT', `/api/users/${maxId}`, admin, { can_products_add: true });
     ok('mit Recht darf max anlernen',
       (await req('POST', '/api/products', max, { name: 'Von Max', barcode: '4062679100015' })).status === 201);
-    await req('PUT', `/api/users/${maxId}`, admin, { can_barcode: false });
+    await req('PUT', `/api/users/${maxId}`, admin, { can_products_add: false });
     ok('der Entzug wirkt SOFORT, ohne neue Anmeldung',
       (await req('POST', '/api/products', max, { name: 'Danach', barcode: '4062679100022' })).status === 403);
     ok('… und das eben angelegte Produkt steht unverändert da',
       (await req('GET', '/api/products/barcode/4062679100015', max)).body.gefunden === true);
     // Das Pflegerecht schliesst das Einlernen ein — sonst dürfte ein Pfleger im Verzeichnis
     // Barcodes anlernen, am Regal aber nicht. Diese Folgerung ist leicht zu übersehen.
-    await req('PUT', `/api/users/${maxId}`, admin, { can_products: true });
+    await req('PUT', `/api/users/${maxId}`, admin, { can_products_edit: true });
     ok('wer pflegen darf, darf auch einlernen (ohne eigenes Häkchen)',
       (await req('POST', '/api/products', max, { name: 'Über Pflegerecht', barcode: '4062679100039' })).status === 201);
     ok('… und das Einlern-Häkchen bleibt dabei leer (eine Quelle, nicht zwei)',
-      db.prepare('SELECT can_barcode FROM users WHERE id = ?').get(maxId).can_barcode === 0,
-      JSON.stringify(db.prepare('SELECT can_barcode, can_products FROM users WHERE id = ?').get(maxId)));
-    await req('PUT', `/api/users/${maxId}`, admin, { can_products: false });
+      db.prepare('SELECT can_products_add FROM users WHERE id = ?').get(maxId).can_products_add === 0,
+      JSON.stringify(db.prepare('SELECT can_products_add, can_products_edit FROM users WHERE id = ?').get(maxId)));
+    await req('PUT', `/api/users/${maxId}`, admin, { can_products_edit: false });
 
     // ── 3. Der Spiegel zeigt Vergangenheit ────────────────────────────────────────────────────
     console.log('\n── Wenn der Offline-Spiegel veraltet ist ──');

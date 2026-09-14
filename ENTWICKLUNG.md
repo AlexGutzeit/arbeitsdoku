@@ -14,6 +14,40 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-14 · Zwei Rechte, zwei schlechte Namen — beide vor dem Deploy geradegezogen
+
+Alex kurz vor dem Deploy: *„Für was ist can_barcode die Bezeichnung? Das eine Recht? Oder das
+gesamte Feature? Das verwirrt nicht etwas."* Berechtigt. Die übrigen Rechte sagen, was man **darf**
+(`can_order` = Bestellungen abschliessen); `can_barcode` sagte nur, **worum es geht** — und las sich
+damit wie „darf Barcodes benutzen", also wie das ganze Feature.
+
+Auf die Anschlussfrage („und die Bearbeitung vom Produktkatalog?") kam der eigentliche Fund:
+**`can_products` leidet am selben Fehler** — und, beim Nachsehen in der rohen Produktivkopie,
+**existiert dort noch gar nicht**. Auf Produktion stehen nur `can_plan`, `can_bulletin`,
+`can_upload`, `can_plan_all`, `can_order`. Beide Namen waren also reine Entwicklungsstände; die
+Umbenennung kostete nichts, nach dem Deploy wäre sie eine Migration auf Echtdaten gewesen.
+
+```
+can_products  ->  can_products_edit   Lagerdaten pflegen
+can_barcode   ->  can_products_add    Artikel einlernen
+```
+
+Damit steht das Verhältnis im Namen: **add** ist das kleinere Recht, **edit** schliesst es ein —
+genau die Regel aus `barcoderecht.js`.
+
+**Die Reihenfolge war die einzige Falle.** Erst `can_barcode` umzubenennen und dann `can_products`
+hätte aus dem frischen `can_products_add` ein `can_products_edit_add` gemacht. Also andersherum,
+mit Wortgrenzen, und hinterher gezielt nach genau diesem Doppelnamen gesucht.
+
+**107 Ersetzungen in 19 Dateien.** Dass nichts vergessen wurde, beweist nicht die Textsuche,
+sondern `tests/altdb-spalten.js`: Er liest die Spaltenliste **aus `middleware/auth.js` heraus** und
+prüft, ob der Restore-Pfad sie nachzieht. Eine halb durchgezogene Umbenennung fiele ihm sofort auf
+— das ist derselbe Wächter, der schon bei `can_products` selbst gegriffen hat.
+
+**Nicht gebaut:** eine Migration, die Werte aus den alten Spalten übernimmt. Die gibt es nur in
+Entwicklungsdatenbanken; auf Produktion existiert keine von beiden. Eine Migration für eine Spalte
+zu schreiben, die nie ausgeliefert wurde, wäre Ballast mit eigenem Fehlerrisiko.
+
 ### 2026-09-14 · Zwei verschiedene Knöpfe — der Unterschied war echt, aber stumm
 
 Alex vor der Produktansicht: *„So ganz versteh ich nicht, warum ich bei 2 Großhändlern 2
@@ -368,12 +402,12 @@ Fehler, sondern eine Abwägung; sie wird jetzt anders entschieden. Der Preis ble
 den Karton in der Hand hat, muss fragen), der Gewinn ist, dass Einträge nur dort entstehen, wo
 jemand auf Schreibweise, Kategorie und Doppel achtet.
 
-**Ein eigenes Recht, nicht `can_products` mitbenutzt.** Sonst hätte „darf einen Barcode einlernen"
+**Ein eigenes Recht, nicht `can_products_edit` mitbenutzt.** Sonst hätte „darf einen Barcode einlernen"
 automatisch „darf umbenennen, zusammenführen, löschen" bedeutet — gröber als gefragt. Umgekehrt
 **folgt** das kleine aus dem grossen: Wer pflegen darf, kann im Verzeichnis längst Barcodes
 anlernen und sogar Produkte ohne Code anlegen; ohne die Folgerung dürfte er es nur am Regal nicht.
 Die Folgerung steht **einmal** in `barcoderecht.js`, und das Häkchen wird geleert, sobald
-`can_products` gesetzt ist — zwei Quellen für dieselbe Aussage laufen sonst auseinander.
+`can_products_edit` gesetzt ist — zwei Quellen für dieselbe Aussage laufen sonst auseinander.
 
 **Drei Routen, ein Riegel.** `POST /api/products`, `POST /:id/barcodes` **und**
 `POST /kategorien` — letztere, weil die Anlege-Maske nebenbei eine Kategorie erzeugen kann; ohne

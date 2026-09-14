@@ -494,13 +494,13 @@ async function initDatabase() {
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
-  // Migration: can_products Spalte (Recht, das Produktverzeichnis zu pflegen).
+  // Migration: can_products_edit Spalte (Recht, das Produktverzeichnis zu pflegen).
   // Regel und Begruendung stehen in produktrecht.js — hier nur die Spalte.
   try {
     const colsProd = db.prepare("PRAGMA table_info(users)").all();
-    if (!colsProd.some(c => c.name === 'can_products')) {
-      db.exec("ALTER TABLE users ADD COLUMN can_products INTEGER DEFAULT 0");
-      console.log('Migration: can_products Spalte hinzugefügt.');
+    if (!colsProd.some(c => c.name === 'can_products_edit')) {
+      db.exec("ALTER TABLE users ADD COLUMN can_products_edit INTEGER DEFAULT 0");
+      console.log('Migration: can_products_edit Spalte hinzugefügt.');
     }
     // Recht, am Regal neue Artikel/Barcodes EINZULERNEN (Alex, 13.09.2026 — Datenhygiene).
     // DEFAULT 0: Ein Altbestand zieht damit KEINEM das Recht zu, aber Chef und Admin haben es
@@ -515,9 +515,9 @@ async function initDatabase() {
       db.exec("ALTER TABLE products ADD COLUMN hersteller TEXT");
       console.log('Migration: hersteller Spalte in products hinzugefuegt.');
     }
-    if (!colsProd.some(c => c.name === 'can_barcode')) {
-      db.exec("ALTER TABLE users ADD COLUMN can_barcode INTEGER DEFAULT 0");
-      console.log('Migration: can_barcode Spalte hinzugefügt.');
+    if (!colsProd.some(c => c.name === 'can_products_add')) {
+      db.exec("ALTER TABLE users ADD COLUMN can_products_add INTEGER DEFAULT 0");
+      console.log('Migration: can_products_add Spalte hinzugefügt.');
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile fuer Kontext):', e.message); }
 
@@ -966,8 +966,8 @@ function ensureAuditSchema(targetDb) {
     addCol('users', 'can_bulletin', 'INTEGER DEFAULT 0');
     addCol('users', 'can_upload', 'INTEGER DEFAULT 0');
     addCol('users', 'can_order', 'INTEGER DEFAULT 0');
-    addCol('users', 'can_products', 'INTEGER DEFAULT 0');
-    addCol('users', 'can_barcode', 'INTEGER DEFAULT 0');
+    addCol('users', 'can_products_edit', 'INTEGER DEFAULT 0');
+    addCol('users', 'can_products_add', 'INTEGER DEFAULT 0');
     // ALLE Spalten, die routes/products.js namentlich liest — nicht nur die zuletzt dazugekommene.
     // Der Barcode-Haertetest (tests/barcode-haerte.js) hat gezeigt, dass hier nur `hersteller`
     // stand: Die Regel „was die Routen lesen, muss der Restore-Pfad nachziehen" war halb
@@ -1043,10 +1043,10 @@ function ensurePlanAll(targetDb) {
 function normalizeManagerRights(targetDb) {
   try {
     const n = targetDb.prepare(
-      "SELECT COUNT(*) AS c FROM users WHERE role IN ('chef','admin') AND (can_plan=1 OR can_plan_all=1 OR can_bulletin=1 OR can_upload=1 OR can_products=1 OR can_barcode=1)"
+      "SELECT COUNT(*) AS c FROM users WHERE role IN ('chef','admin') AND (can_plan=1 OR can_plan_all=1 OR can_bulletin=1 OR can_upload=1 OR can_products_edit=1 OR can_products_add=1)"
     ).get().c;
     if (n > 0) {
-      targetDb.exec("UPDATE users SET can_plan=0, can_plan_all=0, can_bulletin=0, can_upload=0, can_products=0, can_barcode=0 WHERE role IN ('chef','admin')");
+      targetDb.exec("UPDATE users SET can_plan=0, can_plan_all=0, can_bulletin=0, can_upload=0, can_products_edit=0, can_products_add=0 WHERE role IN ('chef','admin')");
       console.log(`Normalisierung: ${n} Chef/Admin-Konto/-Konten von redundanten Einzelrechten bereinigt (#9).`);
     }
     // can_order EXTRA, weil hier auch der Buchhalter das Recht per Rolle hat. Die Zeile oben darf

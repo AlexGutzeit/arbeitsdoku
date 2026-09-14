@@ -50,7 +50,7 @@ function req(m, p, t, b) {
     // der Lagerist am Regal, also bekommt er es — die Verweigerung hat unten einen eigenen
     // Abschnitt, damit beide Seiten der Regel geprüft sind.
     const maxId = (await req('GET', '/api/users', adminTok)).body.users.find(u => u.username === 'max').id;
-    await req('PUT', `/api/users/${maxId}`, adminTok, { can_barcode: true });
+    await req('PUT', `/api/users/${maxId}`, adminTok, { can_products_add: true });
 
     const kat = (await req('POST', '/api/products/kategorien', tok, { name: 'Befestigung' })).body.kategorie;
     const bekannt = (await req('POST', '/api/products', tok, {
@@ -622,7 +622,7 @@ function req(m, p, t, b) {
     // soll." Entscheidend ist, dass die Maske gar nicht erst kommt — eine Eingabemaske, die beim
     // Speichern an einem 403 scheitert, ist die schlechtere Variante von „darfst du nicht".
     console.log('\n── Ohne Einlernrecht: Auskunft statt Anlege-Maske ──');
-    await req('PUT', `/api/users/${maxId}`, adminTok, { can_barcode: false });
+    await req('PUT', `/api/users/${maxId}`, adminTok, { can_products_add: false });
     await seite.reload({ waitUntil: 'domcontentloaded' });
     await sleep(2500);
     await seite.goto(BASIS + '/#/orders', { waitUntil: 'domcontentloaded' });
