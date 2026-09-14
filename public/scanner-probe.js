@@ -245,7 +245,18 @@
       if (xd.n < d.n * 2) continue;                       // kein deutlich staerkerer Nachbar
       if (!zusammenGehoerig(d, xd)) continue;   // nicht dieselbe Haltung bzw. nicht im selben Moment
       const ende = gemEnde(code, x);
-      if (ende >= 6) {
+      // FUENF, nicht sechs — am 14.09.2026 an den Daten nachgemessen.
+      //
+      // Bei sechs fiel eine echte Fehllesung durch: 5009547125400 gegen 8000070025400 teilt nur
+      // `25400`, fuenf Stellen. Im Bericht vom 12.09. stand deshalb bloss „zu selten gelesen",
+      // und ich musste den Fall von Hand nachrechnen.
+      //
+      // Die Gegenprobe, bevor ich die Schwelle gesenkt habe: 62 verschiedene ECHTE Codes aus drei
+      // Laeufen, alle Paare durchgerechnet — bei fuenf gemeinsamen Endstellen KEIN einziger
+      // Fehlalarm. Das ist kein Zufall: Geschwisterartikel eines Herstellers teilen den ANFANG
+      // (4013728120680 / 4013728120512: neun Stellen vorn, null hinten). Fehllesungen teilen das
+      // Ende. Genau darum ist das Ende das Kriterium und der Anfang nicht.
+      if (ende >= 5) {
         const naehe = (d.halt && xd.halt)
           ? 'in derselben Haltung'
           : `${(Math.abs(d.ersteMs - xd.ersteMs) / 1000).toFixed(1)} s auseinander`;

@@ -50,6 +50,27 @@ const SCANNER_FORMATE_2D = ['qr_code', 'data_matrix'];
  * Elektrobetriebs. Eine Regel, die richtige Daten wegwirft, ist genauso falsch wie eine, die
  * falsche durchlässt.
  */
+/*
+ * DIE ZAHL, DIE DIESE SCHWELLE RECHTFERTIGT — ausgezaehlt aus Alex' Feldlaeufen bis 14.09.2026:
+ *
+ *   SECHS Fehllesungen, und ALLE SECHS erfuellten ihre Pruefziffer einwandfrei.
+ *
+ *     5009547125400 (1x) <- 8000070025400 (17x)     Speisekammer, 12.09.
+ *     034754431490  (1x) <- 4044773431490 (6x)      Lager, 14.09. 16:25
+ *     043899941092  (1x) <- 4003899941092 (8x)      Lager, 14.09. 17:08
+ *     6014150120680 (1x) <- 4013728120680 (6x)      Lager, 14.09. 17:19
+ *     9014720120512 (2x) <- 4013728120512 (6x)      Lager, 14.09. 17:19
+ *     4000120297157 (1x) <- 4001110297157 (5x)      Lager, 14.09. 17:19
+ *
+ * Die Pruefziffer hat also KEIN EINZIGES MAL gewarnt. Das ist kein Zufall: Der native
+ * BarcodeDetector gibt nur pruefzifferngueltige Ergebnisse heraus — jede Fehllesung, die bei uns
+ * ankommt, ist per Konstruktion gueltig. Eine Pruefziffer faengt zufaellige Fehler ab, nicht die
+ * systematischen eines Decoders.
+ *
+ * Damit bleibt die WIEDERHOLUNG der einzige wirksame Schutz. Wer diese Schwelle senken will —
+ * etwa mit dem Argument, eine gueltige GTIN sei ja schon gesichert —, muss diese sechs Zeilen
+ * widerlegen. Das engste gemessene Verhaeltnis war 2 zu 6.
+ */
 const SCANNER_LESUNGEN_1D = 3;
 const SCANNER_LESUNGEN_2D = 1;
 function scannerNoetigeLesungen(format) {

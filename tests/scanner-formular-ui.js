@@ -485,6 +485,38 @@ function req(m, p, t, b) {
     //   4061975605740    EAN-13, gültige Prüfziffer   2× gelesen (nötig 3)
     //   D23232512002001  Data Matrix                  4× gelesen → die App nähme DIESEN
     // Der D-Code ist eine Serien-/Chargennummer. Die richtige Nummer lag daneben.
+    // Die sechs gemessenen Fehllesungen — alle mit GUELTIGER Pruefziffer. Der Test haelt die
+    // Grundlage der Schwelle fest: Waere die Pruefziffer ein Schutz, duerfte keine davon gueltig
+    // sein. Wer die Schwelle senken will, sieht hier, was er widerlegen muss.
+    console.log('\n── Jede gemessene Fehllesung war prüfziffern-GÜLTIG ──');
+    const echt = await seite.evaluate(() => [
+      ['5009547125400', '8000070025400'], ['034754431490', '4044773431490'],
+      ['043899941092', '4003899941092'], ['6014150120680', '4013728120680'],
+      ['9014720120512', '4013728120512'], ['4000120297157', '4001110297157'],
+    ].map(([falsch, richtig]) => ({
+      falsch, richtig,
+      falschGueltig: scannerGtinGueltig(falsch), richtigGueltig: scannerGtinGueltig(richtig),
+      gemeinsamesEnde: (() => { let i = 0;
+        while (i < falsch.length && i < richtig.length
+               && falsch[falsch.length - 1 - i] === richtig[richtig.length - 1 - i]) i++;
+        return i; })(),
+    })));
+    ok('alle sechs Fehllesungen erfüllen ihre Prüfziffer (die Prüfziffer schützt NICHT)',
+      echt.every(x => x.falschGueltig === true), JSON.stringify(echt.filter(x => !x.falschGueltig)));
+    ok('… die echten Codes natürlich auch', echt.every(x => x.richtigGueltig === true));
+    // FUENF, nicht sechs: Das erste Paar teilt nur `25400`. Bei sechs fiel es durch — gemessen
+    // am 14.09.2026, nachdem dieser Test genau das rot gemeldet hat.
+    ok('… und jedes Paar teilt mindestens 5 Endstellen (darauf beruht die Erkennung)',
+      echt.every(x => x.gemeinsamesEnde >= 5), JSON.stringify(echt.map(x => x.gemeinsamesEnde)));
+    ok('… echte Geschwisterartikel teilen dagegen den ANFANG, nicht das Ende',
+      await seite.evaluate(() => {
+        const ende = (a, b) => { let i = 0;
+          while (i < a.length && i < b.length && a[a.length-1-i] === b[b.length-1-i]) i++; return i; };
+        // Beide aus Alex' Lauf vom 14.09., beide echt und bestätigt.
+        return ende('4013728120680', '4013728120512') === 0
+            && ende('3250616411265', '3250616411241') === 0;
+      }));
+
     console.log('\n── Knapp verfehlte Artikelnummer wird benannt ──');
     const knapp = await seite.evaluate(() => {
       const z = new Map([

@@ -14,6 +14,44 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-14 · Sechs Fehllesungen, sechs gültige Prüfziffern — und eine Schwelle, die der Test korrigiert hat
+
+Alex' vierter Lauf. Die neue Begründung tut, was sie soll — drei Fehllesungen, jede mit ihren
+Messwerten benannt, alle drei richtig erkannt. Das Wichtigere ist aber die **Summe über alle
+Läufe**:
+
+```
+5009547125400 (1×) <- 8000070025400 (17×)   Speisekammer 12.09.
+034754431490  (1×) <- 4044773431490 (6×)    Lager 14.09. 16:25
+043899941092  (1×) <- 4003899941092 (8×)    Lager 14.09. 17:08
+6014150120680 (1×) <- 4013728120680 (6×)    Lager 14.09. 17:19
+9014720120512 (2×) <- 4013728120512 (6×)    Lager 14.09. 17:19
+4000120297157 (1×) <- 4001110297157 (5×)    Lager 14.09. 17:19
+```
+
+**Alle sechs erfüllen ihre Prüfziffer einwandfrei.** Die Prüfziffer hat kein einziges Mal gewarnt —
+und das ist kein Zufall: Der native BarcodeDetector gibt nur prüfzifferngültige Ergebnisse heraus.
+Jede Fehllesung, die bei uns ankommt, ist per Konstruktion gültig. Damit ist die **Wiederholung der
+einzige wirksame Schutz**, und die Entscheidung von gestern, die Schwelle NICHT für gültige GTINs
+zu senken, ist nachträglich hart belegt. Die sechs Zeilen stehen jetzt als Kommentar an der
+Schwelle selbst — wer sie senken will, sieht sofort, was er widerlegen muss.
+
+**Der Test hat mich dabei korrigiert.** Ich schrieb die Zusicherung „jedes Paar teilt mindestens 6
+Endstellen" — sie wurde rot: Das erste Paar teilt nur `25400`, **fünf** Stellen. Die Erkennung
+verlangte sechs, also fiel dieser echte Fall am 12.09. durch, und ich musste ihn von Hand
+nachrechnen. Ohne den Test hätte ich die Lücke nie bemerkt, weil die Folge harmlos aussah.
+
+**Bevor ich die Schwelle gesenkt habe, die Gegenprobe:** 62 verschiedene *echte* Codes aus drei
+Läufen, alle Paare durchgerechnet — bei fünf gemeinsamen Endstellen **kein einziger Fehlalarm**.
+Das hat einen Grund: Geschwisterartikel eines Herstellers teilen den **Anfang**
+(`4013728120680` / `4013728120512`: neun Stellen vorn, null hinten; `3250616411265` /
+`3250616411241` ebenso). Fehllesungen teilen das **Ende**. Genau darum ist das Ende das Kriterium
+und der Anfang nicht — jetzt mit Zahlen statt mit Plausibilität.
+
+**Was die Rangfolge richtig gemacht hat:** `VA48CN3` (Code 128, 4×) und `3250616411265` (EAN-13,
+11×) auf derselben Etikette — die App nimmt die EAN. Eine gültige GTIN ist Klasse 3, ein
+Code-128-Typenschlüssel Klasse 1; die Zahl der Lesungen entscheidet gar nicht erst mit.
+
 ### 2026-09-14 · Die richtige Nummer lag daneben — und die App hätte die falsche genommen
 
 Alex' dritter Lauf. 145 Lesungen aus 156 Bildern (93 %), 18 bestätigt. Darin ein Fall, der schwerer
