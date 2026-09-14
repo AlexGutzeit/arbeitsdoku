@@ -94,15 +94,19 @@ function pvProdukteHtml(v) {
         <option value="ohne">— ohne Kategorie —</option>
       </select>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin:.2rem 0 .6rem">
+    <!-- Verwaltung gehoert NACH OBEN. Alex (14.09.2026): „Was wenn mal mehrere 100 Artikel
+         hinterlegt sind? Steht das dann ganz unten?" — Ja, und dann scrollt man sich tot. Die
+         beiden Verwaltungs-Aktionen stehen jetzt in einer Zeile ueber der Liste, also immer
+         erreichbar, egal wie lang der Katalog wird. -->
+    <div class="pv-aktionen">
+      <button class="btn btn-outline btn-sm" id="pv-kat-btn" aria-expanded="false"
+              aria-controls="pv-kats-box">Kategorien verwalten (${v.kategorien.length})</button>
       <button class="btn btn-primary btn-sm" id="pv-neu">+ Produkt anlegen</button>
     </div>
+    <div id="pv-kats-box" hidden><div id="pv-kats">${pvKategorienHtml(v.kategorien)}</div></div>
     <datalist id="pv-hersteller-liste">${(v.hersteller || []).map(h => `<option value="${esc(h)}">`).join('')}</datalist>
     <div id="pv-liste">${v.produkte.map(pvProduktZeile).join('') || '<p style="color:var(--text-lighter);text-align:center">Noch keine Produkte im Verzeichnis. Sie entstehen beim Scannen eines unbekannten Barcodes — oder hier über „+ Produkt anlegen".</p>'}</div>
-    <details style="margin-top:1.4rem">
-      <summary style="cursor:pointer;font-weight:600">Kategorien verwalten (${v.kategorien.length})</summary>
-      <div id="pv-kats" style="margin-top:.6rem">${pvKategorienHtml(v.kategorien)}</div>
-    </details>`;
+`;
 }
 
 function pvProduktZeile(p) {
@@ -608,6 +612,13 @@ async function pvKlick(ev) {
     if (b.classList.contains('pv-hp-neu')) return pvNeuesProduktDialog(hKarte);
     // Ohne Händlerkarte: von Hand ins Verzeichnis, wie im Supermarkt-Büro.
     if (b.id === 'pv-neu') return pvNeuesProduktDialog(null);
+    if (b.id === 'pv-kat-btn') {
+      const box = document.getElementById('pv-kats-box');
+      const auf = box.hasAttribute('hidden');
+      box.toggleAttribute('hidden', !auf);
+      b.setAttribute('aria-expanded', auf ? 'true' : 'false');
+      return;
+    }
 
     // ── Händler-Stammdaten ──
     if (b.classList.contains('pv-h-anlegen')) {

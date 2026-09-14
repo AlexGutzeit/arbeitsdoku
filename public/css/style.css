@@ -2479,6 +2479,13 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .pv-code-weg:hover { color: var(--danger); }
 .pv-h-eintrag { border: 1px solid var(--border); border-radius: 5px; padding: .55rem; margin-top: .45rem; }
 .pv-hp-zeile { border: 1px solid var(--border); border-radius: 5px; padding: .55rem; margin-top: .45rem; }
+/* Verwaltung ist KEIN Katalogeintrag und gehoert nicht ans Listenende (Alex, 14.09.2026: erst
+   „las sich wie ein weiteres Produkt", dann „was bei mehreren 100 Artikeln?"). Beide Aktionen
+   stehen deshalb in EINER Zeile ueber der Liste — immer erreichbar, unabhaengig von der Laenge. */
+.pv-aktionen { display: flex; justify-content: flex-end; gap: .5rem; flex-wrap: wrap;
+  margin: .2rem 0 .6rem; }
+#pv-kats-box { border: 1px solid var(--border); border-radius: 8px; padding: .8rem 1rem;
+  background: var(--bg-alt, #f4f5f2); margin-bottom: .9rem; }
 /* „ohne Barcode" ist keine Warnung, sondern eine Eigenschaft — deshalb ruhig, nicht rot. */
 .pv-ohne-code { font-size: .78rem; color: var(--text-lighter); font-style: italic; }
 /* Hersteller in der Bestell-Vorschlagsliste: erkennbar, aber dem Produktnamen untergeordnet. */

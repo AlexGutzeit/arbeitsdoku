@@ -14,6 +14,34 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-14 · Zwei Blicke auf einen Screenshot — zwei Umbauten
+
+Beim Zusammenstellen der Bildschirmfotos hat Alex zweimal hingesehen und zweimal etwas gefunden,
+das mir beim Bauen nicht aufgefallen war. Beide Male ging es um **dieselbe Stelle**.
+
+**„Warum steht Kategorien direkt unter den Produkten? Unübersichtlich, oder?"** — „Kategorien
+verwalten" war ein `<details>` mit derselben Schriftstärke wie eine Produktzeile, direkt an die
+Liste geklebt. Es las sich wie ein achtes Produkt.
+
+**Und gleich danach der schärfere Einwand:** „Was, wenn mal mehrere 100 Artikel hinterlegt sind?
+Steht das dann ganz unten?" — Ja. Meine erste Reparatur (abgesetzter Kasten mit Überschrift
+„Verwaltung") löste nur das Aussehen, nicht die Erreichbarkeit. Bei 300 Artikeln hätte man sich zu
+einer Verwaltungsfunktion **durch den ganzen Katalog scrollen** müssen.
+
+Jetzt stehen beide Verwaltungs-Aktionen — „Kategorien verwalten" und „+ Produkt anlegen" — in
+**einer Zeile über der Liste**, also immer erreichbar, unabhängig von der Länge. Die Kategorien
+klappen darunter auf.
+
+**Die Lehre ist nicht die Anordnung, sondern die Reihenfolge der Fragen.** Ich habe zuerst gefragt
+„sieht das falsch aus?" und erst auf Nachfrage „trägt das bei 300 Artikeln?". Die zweite Frage ist
+die, die zählt — ein Layout, das mit acht Testartikeln gut aussieht, sagt nichts über den Alltag.
+
+**Ein Screenshot war ausserdem falsch aufgebaut:** Für die Detailansicht hatte ich das erste
+Produkt der Liste aufgeklappt — ausgerechnet eines ohne Großhändler. Alex: „Ich sehe gerade noch
+nicht, wie und wo Produkte mit den Großhändlern verknüpft sind." Das Bild zeigte einen leeren
+Block und beantwortete die Frage nicht. Das Aufnahmeskript sucht jetzt gezielt das Produkt mit
+hinterlegten Händlern.
+
 ### 2026-09-14 · Zwei Fragen, zwei Lücken: ausbessern und von Hand anlegen
 
 Alex fragte nach dem Prüfstand-Ausbau zwei Dinge, und beide Antworten waren „nur teilweise".
