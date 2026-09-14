@@ -65,6 +65,10 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     const PW = 'Lagerist3!';
     const lg1 = (await req('POST', '/api/users', admin, { username: 'lagerist', password: PW, name: 'Lena Lagerist', role: 'mitarbeiter', target_hours_per_week: 40, can_order: true, can_barcode: true })).body.user;
     const lagerTok = (await req('POST', '/api/auth/login', null, { username: 'lagerist', password: PW })).body.token;
+    // Ein Monteur, der Material ANFORDERT, aber keine Bestellungen abschliesst — die Mehrheit.
+    await req('POST', '/api/users', admin, { username: 'monteur', password: PW, name: 'Mia Monteurin',
+      role: 'mitarbeiter', target_hours_per_week: 40 });
+    const monteurTok = (await req('POST', '/api/auth/login', null, { username: 'monteur', password: PW })).body.token;
 
     // Ausgangslage: ein Katalogprodukt, eine Bestellung darauf, ein Händler mit Angaben.
     const prod = (await req('POST', '/api/products', lagerTok, { name: 'Kabelbinder 200 mm', barcode: '4001111111111' })).body.produkt;
@@ -119,6 +123,28 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     ok('… und die Domain steht sichtbar daneben', link && /shop\.sonepar\.de/.test(link.text), JSON.stringify(link && link.text));
     ok('ohne Pflegerecht KEIN Bearbeiten-Knopf',
       !(await l.seite.evaluate(() => !!document.querySelector('.order-hnd a[href^="#/produkte/"]'))));
+
+    // ── Wer sieht die Großhändler-Angaben? ───────────────────────────────────────────────────
+    //
+    // Alex am 14.09.2026: „ist nur für Bestellberechtigte zu sehen oder für alle?" Antwort: nur
+    // mit dem Recht „Bestellungen abschliessen". Wer bloss Material anfordert, braucht Kunden-
+    // und Bestellnummer des Großhändlers nicht — und sie sind Geschäftsdaten.
+    //
+    // Geprüft wird BEIDES: dass der Knopf fehlt UND dass der Server die Daten verweigert. Eine
+    // nur ausgeblendete Anzeige ist kein Schutz; die Abfrage steht jedem offen, der sie kennt.
+    console.log('\n── Ohne Bestellrecht bleiben die Händler-Angaben zu ──');
+    const m = await anmelden(browser, 'monteur', PW);
+    m.seite.on('pageerror', e => jsFehler.push('pageerror: ' + e.message));
+    await m.seite.goto(BASIS + '/#/orders', { waitUntil: 'domcontentloaded' });
+    await sleep(2000);
+    ok('die Bestellseite ist da (anfordern darf jeder)',
+      await m.seite.evaluate(() => !!document.getElementById('order-add-btn')));
+    ok('… aber KEIN Großhändler-Knopf', !(await sichtbar(m.seite, '.order-hnd-btn')),
+      await m.seite.evaluate(() => document.querySelectorAll('.order-hnd-btn').length));
+    const verweigert = await req('GET', `/api/products/${prod.id}/haendler`, monteurTok);
+    ok('… und der Server verweigert die Angaben auch direkt', verweigert.status === 403,
+      verweigert.status + ' ' + verweigert.text.slice(0, 80));
+    await m.seite.close(); await m.ktx.close();
 
     console.log('\n── Mit dem Recht: Menüpunkt, Sprung, Pflege ──');
     await req('PUT', `/api/users/${lg1.id}`, admin, { can_products: true });

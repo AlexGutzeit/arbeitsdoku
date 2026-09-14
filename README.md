@@ -411,8 +411,11 @@ Material-/Bestellanforderungen der Mitarbeiter; Chef sieht offene Bestellungen (
 Zeigt eine Bestellung auf ein **Produkt aus dem Verzeichnis**, steht darunter der Knopf
 **„📦 Großhändler"**: Er klappt Bestellnummer, Kommentar, Kundennummer und Ansprechpartner je
 Händler auf, und der Link führt mit einem Klick zum Artikel im Webshop. Die **Domain steht sichtbar
-daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Ausklapper für alle, die
-**bestellen** dürfen; wer zusätzlich **Lagerdaten pflegen** darf, findet darin
+daneben**, damit man vor dem Klick sieht, wohin es geht. Sichtbar ist der Ausklapper nur für die mit dem Recht
+**„Bestellungen abschließen"** (Chef, Admin, Buchhalter per Rolle; sonst per Häkchen) — wer bloß
+Material anfordert, braucht Kunden- und Bestellnummer des Händlers nicht, und das sind
+Geschäftsdaten. Der Server verweigert sie ebenso, nicht nur die Anzeige. Wer zusätzlich
+**Lagerdaten pflegen** darf, findet darin
 **„✎ Großhändler-Infos bearbeiten"** und landet damit direkt bei diesem Produkt im Verzeichnis.
 Eine **frei getippte** Bestellung hat kein Produkt und deshalb auch keinen Knopf — den Namen zu
 erraten würde still die falsche Bestellnummer anhängen.

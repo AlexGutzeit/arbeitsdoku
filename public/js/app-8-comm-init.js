@@ -196,7 +196,10 @@ async function renderOrders() {
  *
  * Nur bei Bestellungen, die auf ein KATALOGPRODUKT zeigen — eine frei getippte Bestellung hat
  * kein Produkt, und Namen zu raten würde still die falsche Bestellnummer anhängen.
- * Sichtbar für alle, die bestellen dürfen; der Knopf zum Bearbeiten nur mit Pflegerecht.
+ * Sichtbar nur mit dem Recht „Bestellungen abschliessen" (darfBestellen) — ANFORDERN darf
+ * jeder, aber Kunden- und Bestellnummer des Haendlers braucht nur, wer die Bestellung wirklich
+ * aufgibt. Der Server verweigert sie ebenso (routes/products.js), nicht nur die Anzeige.
+ * Der Knopf zum Bearbeiten darin: nur mit Pflegerecht.
  */
 function bindHaendlerAusklapper() {
   const liste = document.querySelector('.main .card');
