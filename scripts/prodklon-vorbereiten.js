@@ -34,13 +34,33 @@ const PW = 'test';
   // wirklich jemand 2FA eingerichtet hat, brachte eine rohe Kopie einen echten Eintrag mit —
   // `POST /2fa/setup` lieferte dann keinen Schluessel mehr und der Test starb an
   // "Leerer Base32-Schluessel". Das ist kein Fehler in der App, sondern eine unpassende Vorlage.
-  let zwei = 0;
+  // GEZAEHLT WIRD NACH KONTEN, nicht nach Zeilen. Die alte Meldung addierte einfach beide
+  // Tabellen und sagte „2 Zwei-Faktor-Eintraege entfernt" — bei EINEM Menschen mit einem
+  // Geheimnis und einem vertrauten Geraet. Alex hat prompt gefragt, wer der zweite sei (Alex,
+  // 14.09.2026). Bei zehn Leuten mit je einem Geraet staende dort „20", und man raetselt.
+  const zaehl = (t) => {
+    try { return db.exec(`SELECT COUNT(*) FROM ${t}`)[0].values[0][0]; }
+    catch (_) { return null; }   // Tabelle gibt es in sehr alten Staenden noch nicht
+  };
+  const konten = (() => {
+    const ids = new Set();
+    for (const t of ['twofa_secrets', 'twofa_devices']) {
+      try { for (const z of (db.exec(`SELECT DISTINCT user_id FROM ${t}`)[0] || { values: [] }).values) ids.add(z[0]); }
+      catch (_) { /* s. o. */ }
+    }
+    return ids.size;
+  })();
+  const geheim = zaehl('twofa_secrets'), geraete = zaehl('twofa_devices');
   for (const t of ['twofa_secrets', 'twofa_devices']) {
-    try { zwei += db.exec(`SELECT COUNT(*) FROM ${t}`)[0].values[0][0]; db.run(`DELETE FROM ${t}`); }
-    catch (_) { /* Tabelle gibt es in sehr alten Staenden noch nicht */ }
+    try { db.run(`DELETE FROM ${t}`); } catch (_) { /* s. o. */ }
   }
   const n = db.exec('SELECT COUNT(*) FROM users')[0].values[0][0];
   fs.writeFileSync(ZIEL, Buffer.from(db.export()));
   db.close();
-  console.log(`${ZIEL} gebaut: ${n} Konten, Passwort ueberall "${PW}", ${zwei} Zwei-Faktor-Eintraege entfernt.`);
+  const zweiText = konten === 0
+    ? 'Zwei-Faktor: niemand eingerichtet'
+    : `Zwei-Faktor geleert: ${konten} ${konten === 1 ? 'Konto' : 'Konten'} `
+      + `(${geheim ?? 0} ${geheim === 1 ? 'Geheimnis' : 'Geheimnisse'}, `
+      + `${geraete ?? 0} ${geraete === 1 ? 'vertrautes Gerät' : 'vertraute Geräte'})`;
+  console.log(`${ZIEL} gebaut: ${n} Konten, Passwort überall "${PW}", ${zweiText}.`);
 })();
