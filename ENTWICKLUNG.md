@@ -14,6 +14,55 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-14 · Die richtige Nummer lag daneben — und die App hätte die falsche genommen
+
+Alex' dritter Lauf. 145 Lesungen aus 156 Bildern (93 %), 18 bestätigt. Darin ein Fall, der schwerer
+wiegt als alles bisher Gefundene — beide Codes in **derselben Haltung**, also nachweislich auf
+demselben Etikett:
+
+```
+4061975605740    EAN-13, gültige Prüfziffer     2× gelesen  (nötig: 3)
+D23232512002001  Data Matrix                    4× gelesen  → diesen nähme die App
+```
+
+`D23232512002001` ist ein Buchstabe und 14 Ziffern ohne Prüfziffer — eine Serien- oder
+Chargennummer. Die nächste Packung desselben Artikels trägt eine andere; gespeichert entstünde
+jedes Mal ein neues „unbekanntes Produkt". **Die richtige Nummer lag daneben, sie wurde nur einmal
+zu selten gelesen.**
+
+Die Ursache ist kein Fehler in der Rangfolge: Eine gültige GTIN ist Klasse 3 und schlägt einen
+2D-Code (Klasse 2) — aber die **Schwelle greift davor**. Mit 2 von 3 Lesungen kam die EAN gar nicht
+bis zur Wertung.
+
+**Die naheliegende Reparatur wäre falsch gewesen.** „Eine gültige Prüfziffer ist schon eine
+Sicherung, also reicht bei GTINs eine Lesung weniger" — im selben Bericht steht der Gegenbeweis:
+
+```
+043899941092     UPC-A, gültige Prüfziffer      1× gelesen
+4003899941092    EAN-13, gültige Prüfziffer     8× gelesen   (10 gemeinsame Endstellen)
+```
+
+Die einmal gelesene UPC-A erfüllt ihre Prüfziffer **einwandfrei** und ist trotzdem eine Fehllesung.
+Eine Prüfziffer fängt zufällige Fehler ab, nicht die systematischen eines Decoders — das war schon
+die Lehre aus der Speisekammer, hier bestätigt sie sich ein zweites Mal.
+
+Also nicht die Schwelle senken, sondern **sagen, was passiert ist**: Die Anlege-Maske nennt die
+knapp verfehlte Artikelnummer und rät, noch einmal ruhig draufzuhalten. Dieselbe Haltung wie
+überall sonst — erklären statt still entscheiden. Drei Gegenproben halten den Hinweis leise: nicht
+wenn die GTIN ohnehin gewinnt, nicht bei nur EINER Lesung, nicht wenn gar keine GTIN dabei war.
+
+**Und das LAPP-Etikett klärt `4542265236`.** Alex hat es fotografiert: Der Karton trägt links die
+EAN `4 044774 701721` und rechts einen Code-128 `4542265236` — die **Art. Nr. steht im Klartext
+daneben und lautet 4520014**. Der Code-128 ist also weder Artikelnummer noch GTIN; er ist die
+zehnstellige Nummer, die in beiden Läufen allein auftauchte. Die Nachfrage beim Anlegen („Prüf das
+bitte kurz") greift bei ihm also zu Recht. Wer diesen Karton scannt, sollte den **linken**
+Strichcode in den Rahmen nehmen.
+
+**Ein Fall, der KEIN Fehler ist:** `043899941092` wurde nicht als „Fehllesung von …" markiert,
+obwohl die Merkmale passen — die beiden lagen in verschiedenen Haltungen, und im Haltebetrieb ist
+die Haltung das Kriterium, nicht der Zeitabstand. In der App ist das folgenlos: Dort beginnt die
+Zählung bei jedem Druck von vorn, eine einzelne Lesung erreicht die Schwelle nie.
+
 ### 2026-09-14 · Lauf mit den neuen Zahlen — und ein Bericht, der ein Kriterium erfand
 
 Alex' erster Lauf mit der reparierten Messung. Die Zahlen stehen jetzt richtig da:

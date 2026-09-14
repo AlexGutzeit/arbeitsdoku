@@ -446,6 +446,14 @@ gespeichert wäre jede neue Charge ein unbekanntes Produkt. Erkannt wird bewusst
 drei durch Schrägstrich getrennten Zahlengruppen**; ein Bindestrich (`AEH-25-100`) oder ein
 einzelner Schrägstrich (`LOT/2026`) bleibt unberührt.
 
+**Wurde eine gültige Artikelnummer knapp zu selten gelesen, sagt die App es.** Gemessen an einem
+WAGO-Etikett: eine EAN-13 mit gültiger Prüfziffer 2× (nötig: 3) und daneben ein Data-Matrix
+`D23232512002001` 4× — die App nähme den Data-Matrix, also eine Serien- oder Chargennummer, die auf
+der nächsten Packung anders lautet. Die Anlege-Maske nennt deshalb die knapp verfehlte Nummer und
+rät, noch einmal ruhig draufzuhalten. **Die Schwelle wird dafür nicht gesenkt**: Im selben Lauf
+erfüllte eine einmal gelesene Fehllesung (`043899941092`) ihre Prüfziffer einwandfrei – eine
+Prüfziffer fängt zufällige Fehler ab, nicht die systematischen eines Decoders.
+
 **Unter mehreren gelesenen Codes gewinnt die Artikelnummer.** Rangfolge: eine inhaltlich gültige
 GTIN zuerst, dann ein 2D-Code (Fehlerkorrektur), dann Haus-/Bestellnummern, zuletzt Werbe- und
 Chargencodes; innerhalb einer Stufe entscheidet, wie oft gelesen wurde. Eine **reine Zahl mit

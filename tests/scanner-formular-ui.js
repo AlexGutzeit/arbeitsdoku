@@ -479,6 +479,64 @@ function req(m, p, t, b) {
     const imFeldE = await seite.evaluate(() => document.getElementById('of-product').value);
     ok('… und das Produkt steht danach im Bestellformular', imFeldE === 'Erdungsband 30x3', imFeldE);
 
+    // ── Eine gültige Artikelnummer, die knapp zu selten gelesen wurde ───────────────────────
+    //
+    // GEMESSEN (Alex, 14.09.2026, 17:08), beide in DERSELBEN Haltung:
+    //   4061975605740    EAN-13, gültige Prüfziffer   2× gelesen (nötig 3)
+    //   D23232512002001  Data Matrix                  4× gelesen → die App nähme DIESEN
+    // Der D-Code ist eine Serien-/Chargennummer. Die richtige Nummer lag daneben.
+    console.log('\n── Knapp verfehlte Artikelnummer wird benannt ──');
+    const knapp = await seite.evaluate(() => {
+      const z = new Map([
+        ['D23232512002001', { n: 4, format: 'data_matrix' }],
+        ['4061975605740', { n: 2, format: 'ean_13' }],
+      ]);
+      const gewinner = scannerBesterTreffer(z);
+      return { gewinner, hinweis: scannerKnappVerfehlteGtin(z, gewinner) };
+    });
+    ok('der Data-Matrix gewinnt (die EAN ist unter der Schwelle)',
+      knapp.gewinner === 'D23232512002001', JSON.stringify(knapp));
+    ok('… aber die knapp verfehlte EAN wird benannt',
+      knapp.hinweis && knapp.hinweis.code === '4061975605740' && knapp.hinweis.n === 2,
+      JSON.stringify(knapp.hinweis));
+
+    // DREI GEGENPROBEN — ohne sie wäre der Hinweis Lärm:
+    const gegen = await seite.evaluate(() => {
+      const f = (paare) => {
+        const z = new Map(paare);
+        return scannerKnappVerfehlteGtin(z, scannerBesterTreffer(z));
+      };
+      return {
+        // 1. Gewinnt die GTIN selbst, gibt es nichts zu melden.
+        gtinGewinnt: f([['4061975605740', { n: 5, format: 'ean_13' }],
+                        ['D23232512002001', { n: 4, format: 'data_matrix' }]]),
+        // 2. EINE einzige Lesung sagt zu wenig — und genau so entsteht eine Fehllesung mit
+        //    gültiger Prüfziffer (043899941092 aus demselben Lauf).
+        nurEinmal: f([['D23232512002001', { n: 4, format: 'data_matrix' }],
+                      ['043899941092', { n: 1, format: 'upc_a' }]]),
+        // 3. Kein GTIN-Kandidat da → kein Hinweis.
+        keineGtin: f([['D23232512002001', { n: 4, format: 'data_matrix' }],
+                      ['4542265236', { n: 9, format: 'code_128' }]]),
+      };
+    });
+    ok('… kein Hinweis, wenn die GTIN ohnehin gewinnt', gegen.gtinGewinnt === null, JSON.stringify(gegen.gtinGewinnt));
+    ok('… kein Hinweis bei nur EINER Lesung (das wäre die typische Fehllesung)',
+      gegen.nurEinmal === null, JSON.stringify(gegen.nurEinmal));
+    ok('… und kein Hinweis, wenn gar keine gültige Artikelnummer dabei war',
+      gegen.keineGtin === null, JSON.stringify(gegen.keineGtin));
+
+    // Und in der Maske muss der Satz wirklich stehen.
+    await seite.evaluate(() => { window.scannerKnappVerfehlt = { code: '4061975605740', n: 2, noetig: 3 }; });
+    await scanVorgeben('D23232512002001');
+    await seite.click('#of-scan'); await sleep(1200);
+    const maskeKnapp = await seite.evaluate(() => (document.querySelector('.modal') || document.body).innerText);
+    ok('die Maske nennt die knapp verfehlte Nummer', /4061975605740/.test(maskeKnapp), maskeKnapp.slice(0, 250));
+    ok('… und sagt, was zu tun ist', /noch einmal drauf|neu scannen/i.test(maskeKnapp), maskeKnapp.slice(0, 250));
+    ok('… und der Hinweis ist danach verbraucht (steht beim nächsten Scan nicht mehr da)',
+      await seite.evaluate(() => window.scannerKnappVerfehlt === null));
+    await seite.evaluate(() => { const b = [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/.test(x.textContent)); if (b) b.click(); });
+    await sleep(500);
+
     console.log('\n── Wirklich neues Produkt anlegen ──');
     await scanVorgeben('4104640010552');
     await seite.click('#of-scan'); await sleep(1200);

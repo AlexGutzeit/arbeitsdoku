@@ -642,6 +642,11 @@ async function scanInsFormular() {
  * Moment, in dem sich Doppel billig verhindern lassen; danach kostet es Aufräumarbeit.
  */
 function produktAnlegenMaske(code) {
+  // Wurde auf derselben Etikette eine gueltige Artikelnummer knapp zu selten gelesen? Dann ist
+  // das der wichtigste Satz auf dieser Maske — wichtiger als jeder andere Hinweis. Der Wert wird
+  // beim Lesen geleert, damit er nicht beim naechsten Scan noch dasteht.
+  const knapp = window.scannerKnappVerfehlt || null;
+  window.scannerKnappVerfehlt = null;
   return new Promise((fertig) => {
     const kategorien = ((S.produktKatalog || {}).kategorien) || [];
     const overlay = document.createElement('div');
@@ -651,6 +656,16 @@ function produktAnlegenMaske(code) {
         <div class="modal-header"><h3>Neues Produkt anlegen</h3></div>
         <div class="modal-body">
           <p style="margin:0 0 .5rem">Barcode <code>${esc(code)}</code> ist noch niemandem zugeordnet.</p>
+          ${knapp ? `
+          <p class="hinweis-box" style="margin:0 0 .6rem;border-left:4px solid #dc2626">
+            <strong>Halt lieber noch einmal drauf.</strong> Auf derselben Etikette lag
+            <code>${esc(knapp.code)}</code> — eine <em>gültige Artikelnummer</em> —, sie wurde aber
+            nur ${knapp.n}× gelesen (nötig: ${knapp.noetig}). Der Code oben ist keine Artikelnummer
+            nach Norm; oft ist das eine Serien- oder Chargennummer, die auf der nächsten Packung
+            anders lautet.<br>
+            <strong>Abbrechen, ruhig auf den Strichcode halten, neu scannen</strong> — dann steht
+            die richtige Nummer drin.
+          </p>` : ''}
           ${(typeof scannerNachfragenObArtikelnummer === 'function' && scannerNachfragenObArtikelnummer(code)) ? `
           <p class="hinweis-box" style="margin:0 0 .6rem">
             <strong>Prüf das bitte kurz.</strong> Dieser Code erfüllt keine Artikelnummer-Prüfziffer

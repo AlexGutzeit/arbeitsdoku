@@ -342,6 +342,45 @@ function scannerBesterTreffer(zaehlung) {
 }
 
 /**
+ * Lag auf DERSELBEN Etikette eine gueltige Artikelnummer, die die Schwelle knapp verfehlt hat —
+ * waehrend der Gewinner gar keine ist?
+ *
+ * GEMESSEN (Alex, 14.09.2026, 17:08), beide in derselben Haltung:
+ *
+ *   4061975605740    EAN-13, gueltige Pruefziffer      2x gelesen  (noetig: 3)
+ *   D23232512002001  Data Matrix                       4x gelesen  -> die App naehme DIESEN
+ *
+ * Der D-Code ist ein Buchstabe und 14 Ziffern ohne Pruefziffer — eine Serien- oder Chargennummer.
+ * Die naechste Packung desselben Artikels traegt eine andere; gespeichert entstuende jedes Mal
+ * ein neues „unbekanntes Produkt". Die richtige Nummer lag danebe, sie wurde nur einmal zu
+ * selten gelesen.
+ *
+ * WARUM DIE SCHWELLE TROTZDEM BLEIBT: Die naheliegende Reparatur waere, einer gueltigen GTIN
+ * weniger Lesungen zu erlauben — die Pruefziffer sei ja schon eine Sicherung. Im selben Lauf
+ * steht der Gegenbeweis: `043899941092` (UPC-A, 1x gelesen) erfuellt seine Pruefziffer
+ * einwandfrei und ist trotzdem eine Fehllesung von `4003899941092` (10 gemeinsame Endstellen).
+ * Eine Pruefziffer faengt zufaellige Fehler ab, nicht die systematischen eines Decoders.
+ *
+ * Also nicht die Schwelle senken, sondern SAGEN, was passiert ist: Wer weiss, dass die echte
+ * Artikelnummer knapp danebenlag, haelt einfach noch einmal drauf. Das ist dieselbe Haltung wie
+ * ueberall sonst in dieser App — erklaeren statt still entscheiden.
+ */
+function scannerKnappVerfehlteGtin(zaehlung, gewinner) {
+  if (!gewinner || scannerGtinGueltig(gewinner)) return null;
+  let kandidat = null;
+  for (const [code, d] of zaehlung) {
+    if (code === gewinner) continue;
+    const n = typeof d === 'number' ? d : d.n;
+    const format = typeof d === 'number' ? '' : d.format;
+    if (!scannerGtinGueltig(code)) continue;
+    if (n >= scannerNoetigeLesungen(format)) continue;   // die haette ohnehin gewonnen
+    if (n < 2) continue;                                 // eine einzige Lesung sagt zu wenig
+    if (!kandidat || n > kandidat.n) kandidat = { code, n, noetig: scannerNoetigeLesungen(format) };
+  }
+  return kandidat;
+}
+
+/**
  * Ist der gelesene Wert für sein Format überhaupt plausibel?
  *
  * ITF (Interleaved 2 of 5) ist das einzige Format ohne Prüfziffer-Pflicht — und Scanner lesen
@@ -606,6 +645,10 @@ async function scannerOeffnen() {
       melde('Erkannt — einen Moment …');
       nachlauf = setTimeout(() => {
         const bester = scannerBesterTreffer(gezaehlt) || code;
+        // Der Hinweis reist ueber eine globale Ablage, nicht ueber den Rueckgabewert: Der ist ein
+        // blosser Code-String, auf den sich Aufrufer UND Tests verlassen. Wer ihn liest, raeumt
+        // ihn weg — ein stehengebliebener Hinweis waere schlimmer als keiner.
+        window.scannerKnappVerfehlt = scannerKnappVerfehlteGtin(gezaehlt, bester);
         melde('Gelesen: ' + bester);
         schliessen(bester);
       }, NACHLAUF_MS);
