@@ -14,6 +14,54 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-15 · „Jetzt aktualisieren" tat nichts — eine zu grobe Bedingung
+
+Alex nach dem Deploy: *„Der 'jetzt aktualisieren' Button funktioniert nicht mehr."* Und kurz
+darauf die Beobachtung, die den Fall löste: *„Ich hab auch schon beim Bestellen den Scanner. Nur
+der Button hängt und geht nicht weg."* Die App war also längst aktuell — **nur das Banner blieb
+stehen**.
+
+**Nachgestellt, nicht geraten.** `tests/sw-aktualisieren-ui.js` fährt die ganze Kette mit einem
+echten Browser: registrieren → neue Fassung → Banner → Knopf → Übernahme → Neuladen. Damit sich
+`sw.js` zwischen zwei Abrufen ändern kann (das tut ein Deploy), liefert ein Mini-Server die
+**echten** Dateien aus und tauscht nur die Versionsnummer — die Datei im Repo anzufassen wäre ein
+Test, der seinen Prüfling verbiegt. Der erste Lauf zeigte Alex' Symptom sofort: Der neue Worker
+übernimmt, aber die Seite lädt nicht neu und das Banner bleibt.
+
+**Die Ursache war eine Bedingung, die etwas Richtiges wollte:**
+
+```js
+const hadController = !!navigator.serviceWorker.controller;   // beim Laden ausgewertet
+navigator.serviceWorker.addEventListener('controllerchange', () => {
+  if (!hadController || refreshing) return;
+  location.reload();
+});
+```
+
+Sie sollte verhindern, dass beim **allerersten** Besuch neu geladen wird: Dort übernimmt der
+Service Worker die offene Seite per `clients.claim()`, was ebenfalls einen `controllerchange`
+auslöst — ein Reload würde dort eine gerade getippte Anmeldung verwerfen. Richtig gedacht.
+
+Zu grob war sie trotzdem: `hadController` wird **einmal beim Laden** bestimmt und gilt dann für die
+ganze Sitzung. Wer die App zum ersten Mal öffnete und **in derselben Sitzung** auf „Jetzt
+aktualisieren" drückte, fiel unter dieselbe Ausnahme — der Wechsel, den er selbst ausgelöst hatte,
+wurde verworfen.
+
+Jetzt sind es zwei getrennte Gründe zum Neuladen: ein echter Controller-Wechsel **oder** ein Klick
+auf den Knopf. Dazu zwei Dinge, die ein Knopf schuldig ist: Er zeigt „Wird geladen …", und wenn
+binnen zwei Sekunden nichts passiert, lädt er eben selbst neu. **Ein Knopf, der stillschweigend
+nichts tut, ist schlimmer als einer, der zu viel tut.**
+
+**Die Gegenprobe legte eine Schwäche des Tests offen.** Mit der alten Bedingung blieb er zunächst
+grün — der Notnagel sprang ein und verdeckte den Fehler. Der Test misst deshalb jetzt die **Zeit**
+zwischen Klick und Neuladen: über den Controller-Wechsel sind es ~1,1 s, über den Notnagel ~2,1 s.
+Damit trennt er Reparatur und Notbremse. Eine Notbremse, die den Test grün macht, ist genau die
+Sorte Sicherheitsnetz, die man später für die Lösung hält.
+
+**Und der Grund für die ursprüngliche Bedingung ist jetzt selbst zugesichert:** Der Test zählt die
+Navigationen und verlangt, dass der erste Besuch **nicht** neu lädt. Ohne diese Zusicherung nähme
+der Nächste die Bedingung ganz heraus und bräche die Anmeldung.
+
 ### 2026-09-14 · Zwei Rechte, zwei schlechte Namen — beide vor dem Deploy geradegezogen
 
 Alex kurz vor dem Deploy: *„Für was ist can_barcode die Bezeichnung? Das eine Recht? Oder das

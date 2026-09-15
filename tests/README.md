@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**217 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**218 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -218,6 +218,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `shot-notifications.js` | Einmal-Screenshot der Benachrichtigungen-Seite — ein Werkzeug, kein Test. |
 | `sse-live-schutz-ui.js` | Zwei-BROWSER-Test (echtes SSE): Was passiert bei mir, wenn ein KOLLEGE in seinem eigenen Browser |
 | `stunden-vorher-nachher.js` | BEWEIS: Die ausgewiesenen Stunden und Überstunden ändern sich durch die Zusammenlegung der |
+| `sw-aktualisieren-ui.js` | „Jetzt aktualisieren" — der Weg auf eine neue Fassung, einmal wirklich durchgespielt. |
 | `targets-date-guard.js` | API-Test: Soll-Stunden-Routen validieren valid_from (Nachzug zu B4, gleiche Lösung wie beim Urlaubsanspruch). |
 | `testliste-vollstaendigkeit.js` | Wächter über die Testliste in tests/README.md. |
 | `token-haertung.js` | Sonder-Token dürfen keine Zugangs-Token sein — und was heute funktioniert, muss weiter gehen. |
