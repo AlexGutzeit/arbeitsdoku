@@ -632,12 +632,19 @@ async function pvKlick(ev) {
       toast('Umbenannt', 'success'); return renderProdukte();
     }
     if (kat && b.classList.contains('pv-k-weg')) {
+      const kName = (kat.querySelector('.pv-k-name')?.value || '').trim() || 'diese Kategorie';
+      if (!(await confirmModal(
+        `„${kName}" löschen?\n\nKategorien liegen NICHT im Papierkorb — anders als Produkte und `
+        + 'Großhändler lässt sich das nicht zurückholen. Die Produkte selbst bleiben erhalten und '
+        + 'stehen danach ohne Kategorie da.',
+        { title: 'Kategorie löschen', okLabel: 'Löschen', danger: true }))) return;
       try {
         await api('DELETE', `/api/products/kategorien/${kat.dataset.id}`);
       } catch (e) {
         if (!/hängen noch/i.test(e.message)) throw e;
+        // Zweite Frage nur, wenn wirklich Produkte betroffen sind — dann nennt sie die Zahl.
         if (!(await confirmModal(e.message + '\n\nDie Produkte bleiben dann ohne Kategorie.',
-          { title: 'Kategorie löschen', okLabel: 'Trotzdem löschen' }))) return;
+          { title: 'Kategorie löschen', okLabel: 'Trotzdem löschen', danger: true }))) return;
         await api('DELETE', `/api/products/kategorien/${kat.dataset.id}`, { loesen: true });
       }
       toast('Kategorie gelöscht', 'success'); return renderProdukte();

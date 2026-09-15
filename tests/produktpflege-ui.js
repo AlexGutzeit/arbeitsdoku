@@ -286,6 +286,42 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     // Alex (15.09.2026): „Im Reiter Gelöscht werden nur Produkte gezählt, aber keine Großhändler."
     // Und: „Im Gelöscht-Unterpunkt hätte ich gerne die Möglichkeit, einen Eintrag endgültig zu
     // löschen."
+    // ── Kategorie löschen fragt nach ─────────────────────────────────────────────────────────
+    //
+    // Alex (15.09.2026): „Kategorie bearbeiten → Kategorie löschen muss auch eine Rückfrage dazu."
+    // Wie beim Händler fragte bisher nur der Server, und nur bei belegten Kategorien. Der Text
+    // sagt ausdrücklich, dass es KEINEN Weg zurück gibt — Kategorien liegen nicht im Papierkorb.
+    console.log('\n── Kategorie löschen fragt nach ──');
+    const leereKat = (await req('POST', '/api/products/kategorien', admin, { name: 'Leerlauf' })).body.kategorie;
+    await l.seite.evaluate(() => renderProdukte());
+    await sleep(2200);
+    await l.seite.evaluate(() => document.getElementById('pv-kat-btn').click());
+    await sleep(400);
+    const katAnzahl = async () => (await req('GET', '/api/products/verzeichnis', admin)).body.kategorien.length;
+    const vorKat = await katAnzahl();
+    await l.seite.evaluate((id) => {
+      document.querySelector(`[data-id="${id}"] .pv-k-weg`).click();
+    }, leereKat.id);
+    await sleep(700);
+    const katFrage = await l.seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || '');
+    ok('auch eine LEERE Kategorie fragt nach', /Leerlauf/.test(katFrage), katFrage.slice(0, 140));
+    ok('… und sagt, dass es keinen Weg zurück gibt',
+      /nicht im Papierkorb|nicht zurückholen/i.test(katFrage), katFrage.slice(0, 220));
+    await l.seite.evaluate(() => {
+      [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/i.test(x.textContent)).click();
+    });
+    await sleep(1000);
+    ok('… Abbrechen löscht NICHT', (await katAnzahl()) === vorKat, String(await katAnzahl()));
+    await l.seite.evaluate((id) => {
+      document.querySelector(`[data-id="${id}"] .pv-k-weg`).click();
+    }, leereKat.id);
+    await sleep(700);
+    await l.seite.evaluate(() => {
+      [...document.querySelectorAll('.modal button')].find(x => /^Löschen$/i.test(x.textContent.trim())).click();
+    });
+    await sleep(2200);
+    ok('… mit Bestätigung schon', (await katAnzahl()) === vorKat - 1, String(await katAnzahl()));
+
     console.log('\n── Papierkorb: Zählung und endgültiges Löschen ──');
     const wegH = (await req('POST', '/api/suppliers', admin, { name: 'Papierkorb-Händler' })).body.haendler;
     await req('DELETE', `/api/suppliers/${wegH.id}`, admin);
