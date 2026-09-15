@@ -221,6 +221,48 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
       !!vonHand && vonHand.hersteller === 'OBO Bettermann'
       && (vonHand.barcodes || []).includes('4062679000015'), JSON.stringify(vonHand));
 
+    // ── Neue Kategorie mitten im Anlegen ─────────────────────────────────────────────────────
+    //
+    // Alex (15.09.2026): „Beim manuellen Produkt anlegen gibt es keinen '+ neue Kategorie
+    // anlegen' Button." Die Scan-Maske hatte ihn, dieser Dialog nicht — und er ist modal: ohne
+    // die Auswahl müsste man abbrechen, im Reiter eine Kategorie anlegen und von vorn beginnen.
+    console.log('\n── Neue Kategorie direkt im Anlege-Dialog ──');
+    await l.seite.click('#pv-neu');
+    await l.seite.waitForSelector('#pnp-name');
+    ok('die Auswahl bietet „neue Kategorie anlegen" an',
+      await l.seite.evaluate(() => [...document.querySelectorAll('#pnp-kat option')]
+        .some(o => o.value === '__neu')));
+    ok('… das Namensfeld ist zunächst verborgen',
+      !(await sichtbar(l.seite, '#pnp-katneu-feld')));
+    await l.seite.evaluate(() => {
+      const k = document.getElementById('pnp-kat');
+      k.value = '__neu'; k.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await sleep(300);
+    ok('… und erscheint, sobald man sie wählt', await sichtbar(l.seite, '#pnp-katneu-feld'));
+    // Gegenprobe: ohne Namen darf nichts entstehen — weder Kategorie noch Produkt.
+    await l.seite.type('#pnp-name', 'Dübel 8 mm');
+    await l.seite.click('.dialog-modal [data-act="ok"]');
+    await sleep(900);
+    ok('… ohne Kategorienamen wird abgewiesen',
+      /Namen für die neue Kategorie/.test(
+        await l.seite.evaluate(() => document.getElementById('pnp-fehler').textContent)),
+      await l.seite.evaluate(() => document.getElementById('pnp-fehler').textContent));
+    const vorher = (await req('GET', '/api/products/verzeichnis', admin)).body;
+    ok('… und es ist WIRKLICH nichts entstanden',
+      !vorher.produkte.some(p => p.name === 'Dübel 8 mm') && !vorher.kategorien.some(k => k.name === 'Montage'),
+      JSON.stringify({ k: vorher.kategorien.map(k => k.name) }));
+
+    await l.seite.type('#pnp-katname', 'Montage');
+    await l.seite.click('.dialog-modal [data-act="ok"]');
+    await sleep(2200);
+    const nachher = (await req('GET', '/api/products/verzeichnis', admin)).body;
+    const neueKat = nachher.kategorien.find(k => k.name === 'Montage');
+    const neuesProd = nachher.produkte.find(p => p.name === 'Dübel 8 mm');
+    ok('die Kategorie ist angelegt', !!neueKat, JSON.stringify(nachher.kategorien.map(k => k.name)));
+    ok('… und das Produkt hängt daran',
+      !!neuesProd && neueKat && neuesProd.category_id === neueKat.id, JSON.stringify(neuesProd));
+
     console.log('\n── Hersteller pflegen ──');
     await l.seite.evaluate(id => { document.querySelector(`.pv-produkt[data-id="${id}"]`).open = true; }, prod.id);
     await l.seite.waitForSelector('.pv-f-hersteller');

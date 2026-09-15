@@ -691,11 +691,19 @@ function pvNeuesProduktDialog(hKarte) {
         <label style="display:block;margin-bottom:.5rem">Hersteller <em>(freiwillig)</em>
           <input type="text" class="form-control" id="pnp-hersteller" list="pv-hersteller-liste"
                  autocomplete="off" placeholder="z. B. OBO"></label>
+        <!-- „Neue Kategorie" gehoert HIERHER, nicht nur in die Scan-Maske (Alex, 15.09.2026).
+             Dieser Dialog ist modal: Ohne die Auswahl muesste man abbrechen, im Reiter
+             „Kategorien verwalten" eine anlegen und von vorn beginnen — mitsamt dem schon
+             getippten Namen. -->
         <label style="display:block;margin-bottom:.5rem">Kategorie
           <select class="form-control" id="pnp-kat">
             <option value="">— keine —</option>
             ${kats.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('')}
+            <option value="__neu">＋ neue Kategorie anlegen …</option>
           </select></label>
+        <label style="display:none;margin-bottom:.5rem" id="pnp-katneu-feld">Name der neuen Kategorie
+          <input type="text" class="form-control" id="pnp-katname" autocomplete="off"
+                 placeholder="z. B. Befestigung"></label>
         <label style="display:block;margin-bottom:.3rem">Barcode <em>(freiwillig)</em>
           <input type="text" class="form-control" id="pnp-code" autocomplete="off"
                  placeholder="leer lassen, wenn der Artikel keinen trägt"></label>
@@ -729,16 +737,36 @@ function pvNeuesProduktDialog(hKarte) {
   };
   overlay.querySelector('#pnp-code').addEventListener('input', pruefAnzeigen);
 
+  overlay.querySelector('#pnp-kat').addEventListener('change', (ev) => {
+    const neu = ev.target.value === '__neu';
+    overlay.querySelector('#pnp-katneu-feld').style.display = neu ? 'block' : 'none';
+    if (neu) overlay.querySelector('#pnp-katname').focus();
+  });
+
   overlay.addEventListener('click', async (ev) => {
     if (ev.target === overlay || ev.target.dataset.act === 'cancel') return overlay.remove();
     if (ev.target.dataset.act !== 'ok') return;
     const fehler = overlay.querySelector('#pnp-fehler');
     try {
+      // Erst die Kategorie, dann das Produkt — sonst haette es keine, an die es kann.
+      let katId = overlay.querySelector('#pnp-kat').value;
+      if (katId === '__neu') {
+        const katName = overlay.querySelector('#pnp-katname').value.trim();
+        if (katName.length < 2) {
+          fehler.textContent = 'Bitte einen Namen für die neue Kategorie angeben (mindestens 2 Zeichen).';
+          fehler.style.display = ''; return;
+        }
+        const k = await api('POST', '/api/products/kategorien', { name: katName });
+        katId = k.kategorie.id;
+        if (S.verzeichnis && Array.isArray(S.verzeichnis.kategorien)) {
+          S.verzeichnis.kategorien.push({ id: k.kategorie.id, name: k.kategorie.name, anzahl: 0 });
+        }
+      }
       const r = await api('POST', '/api/products', {
         name: overlay.querySelector('#pnp-name').value.trim(),
         barcode: overlay.querySelector('#pnp-code').value.trim() || null,
         hersteller: overlay.querySelector('#pnp-hersteller').value.trim() || null,
-        category_id: overlay.querySelector('#pnp-kat').value || null,
+        category_id: katId || null,
       });
       if (hKarte) await api('PUT', `/api/products/${r.produkt.id}/haendler/${hKarte.dataset.id}`, {});
       overlay.remove();

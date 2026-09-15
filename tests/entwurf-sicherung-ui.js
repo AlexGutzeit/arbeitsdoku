@@ -248,6 +248,38 @@ async function inDenHintergrund(p) {
       }
     }
 
+    // ── Das Update-Neuladen: reicht `pagehide`? ───────────────────────────
+    //
+    // Alex am 15.09.2026, bevor die Update-Reparatur aufs Feld geht: „Automatisch neu geladen
+    // wird, waehrend ich aktiv in der App bin und evtl. ein Formular ausfuelle, trotzdem nicht,
+    // oder?" Die Antwort hat zwei Teile, und der zweite war bisher UNGEPRUEFT:
+    //
+    //   1. Von selbst laedt nichts neu — ein wartender Service Worker uebernimmt erst auf
+    //      Knopfdruck (oder beim naechsten App-Start).
+    //   2. Wenn doch neu geladen wird — per Knopf, oder in einem ZWEITEN offenen Fenster, das
+    //      der Controller-Wechsel mitnimmt —, muss die Eingabe ueberleben. Dafuer gibt es
+    //      `pagehide`; der Test simulierte aber bisher nur `visibilitychange`.
+    //
+    // Hier wird deshalb WIRKLICH neu geladen, mit location.reload().
+    console.log('Neuladen (Update-Knopf, zweites Fenster):');
+    await formularOeffnen({ hash: '#/orders', feld: 'of-product', knopf: '#order-add-btn' });
+    if (await leisteDa(p)) { await p.click('#entwurf-verwerfen'); await sleep(300); }
+    await setVal(p, 'of-product', 'Aderendhülse 2,5 mm²');
+    await sleep(800);
+    await Promise.all([
+      p.waitForNavigation({ timeout: 20000 }).catch(() => {}),
+      p.evaluate(() => location.reload()),
+    ]);
+    await sleep(2000);
+    await formularOeffnen({ hash: '#/orders', feld: 'of-product', knopf: '#order-add-btn' });
+    const nachReload = await leisteDa(p);
+    ok('ein echtes Neuladen rettet die Eingabe (pagehide)', nachReload, 'keine Entwurfs-Leiste');
+    if (nachReload) {
+      await p.click('#entwurf-uebernehmen'); await sleep(500);
+      ok('… und sie steht wieder im Feld',
+        (await getVal(p, 'of-product')) === 'Aderendhülse 2,5 mm²', JSON.stringify(await getVal(p, 'of-product')));
+    }
+
     // ── Abmelden raeumt auf (geteilte Geraete) ────────────────────────────
     console.log('Abmelden:');
     ok('vor dem Abmelden liegt ein Entwurf vor', (await entwuerfe(p)).length >= 1, JSON.stringify(await entwuerfe(p)));

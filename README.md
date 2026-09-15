@@ -560,7 +560,9 @@ GTIN-Prüfziffer — beim Abtippen von dreizehn Ziffern ist das die beste Kontro
 zweites Paar Augen zu haben ist. Dieselbe Anzeige gibt es im Produktverzeichnis.
 
 **Ein Katalog lässt sich auch komplett von Hand anlegen**, ganz ohne Scanner — im Produktverzeichnis
-über **„+ Produkt anlegen"**: Name, Hersteller, Kategorie und Barcode eintippen. Das entspricht dem
+über **„+ Produkt anlegen"**: Name, Hersteller, Kategorie und Barcode eintippen. Fehlt die passende
+Kategorie, legt die Auswahl **„＋ neue Kategorie anlegen …"** sie gleich mit an — ohne den Dialog zu
+verlassen. Das entspricht dem
 Weg im Supermarkt, wo Artikel im Büro angelegt werden und die Kasse nur noch nachschlägt.
 
 #### Hersteller je Produkt
