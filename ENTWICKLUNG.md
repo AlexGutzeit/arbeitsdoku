@@ -2722,3 +2722,25 @@ etwas?", die Auswahlliste „wem darf ich noch etwas geben?". `tests/board-ausge
 sie getrennt — und zwar in **je einer frischen Sitzung**, weil `_boardUsers` eine Modulvariable ist,
 die nur nachlädt, wenn sie leer ist. Eine Messung in derselben Sitzung misst den Stand von vorher.
 
+### Die Stelle halten (15.09.2026)
+
+Alex fragte, ob Scroll-Stelle und Reiter das Bearbeiten eines Auftrags überleben. **Erst gemessen,
+dann gebaut** — vier der fünf Fälle taten es schon (Kachel aufklappen, Bearbeiten + Speichern,
+Bearbeiten + Zurück, anderer Menüpunkt und zurück). Gefehlt hat nur der App-Neustart: `_boardAnsicht`
+ist eine Modulvariable und stirbt mit dem Seiten-Neuaufbau.
+
+Die Wahl liegt jetzt im `localStorage` unter `board_ansicht` — **geräte-, nicht kontobezogen**. Am
+Rechner arbeitet man nach Mitarbeitern, am Handy im Lieferwagen eher nach Kategorien; eine
+kontoweite Einstellung würde die eine Gewohnheit über die andere stülpen.
+
+Zwei Dinge sind Absicht und stehen als Gegenproben im Test:
+* Ein **unbekannter** gemerkter Wert (alte Version, von Hand verändert) fällt still auf
+  „Mitarbeiter" zurück, statt eine leere Spaltenliste zu erzeugen.
+* Lesen **und** Schreiben stehen in `try/catch`: in einem privaten Fenster wirft `localStorage`,
+  und daran darf das Board nicht hängenbleiben.
+
+`tests/board-stelle-halten-ui.js` misst in einem **schmalen** Fenster (900 px), damit das Board
+überhaupt scrollen MUSS — in einem breiten Fenster ist `scrollLeft` immer 0 und jede Zusicherung
+wäre aus dem falschen Grund grün. Die erste Zusicherung prüft deshalb, dass es eine waagerechte
+Scrollleiste überhaupt gibt.
+

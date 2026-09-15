@@ -1766,7 +1766,21 @@ let _boardUsers = [];
 // arbeitet, soll nach jeder Aenderung dort stehen bleiben (dieselbe Lehre wie beim
 // Produktverzeichnis, Alex 15.09.2026).
 // Voreinstellung „mitarbeiter": Das ist die Ansicht, die es vorher schon gab.
-let _boardAnsicht = 'mitarbeiter';
+//
+// Die Wahl ueberlebt auch das Schliessen der App: sie liegt im localStorage des Geraets. Das ist
+// bewusst GERAETEBEZOGEN und nicht am Konto — am Rechner arbeitet man anders als am Handy im
+// Lieferwagen. Kaputte oder unbekannte Werte (alte Version, von Hand veraendert) fallen still auf
+// die Voreinstellung zurueck, und ein gesperrter localStorage (privates Fenster) darf die Seite
+// nicht anhalten — deshalb beides in try/catch.
+const BOARD_ANSICHT_KEY = 'board_ansicht';
+const BOARD_ANSICHTEN = ['alle', 'mitarbeiter', 'kategorien'];
+let _boardAnsicht = (() => {
+  try {
+    const g = localStorage.getItem(BOARD_ANSICHT_KEY);
+    if (BOARD_ANSICHTEN.includes(g)) return g;
+  } catch (_) {}
+  return 'mitarbeiter';
+})();
 let _boardKategorien = [];
 let _expandedProjects = new Set(); // aufgeklappte Kacheln (überlebt Re-Render/SSE)
 let _statsOpen = new Set(); // Projekt-Kacheln mit geöffnetem Statistik-Reiter (Manager)
@@ -2100,6 +2114,7 @@ async function renderProjects() {
   mainEl.querySelectorAll('.board-ansicht-btn').forEach(b => b.addEventListener('click', () => {
     if (_boardAnsicht === b.dataset.ansicht) return;
     _boardAnsicht = b.dataset.ansicht;
+    try { localStorage.setItem(BOARD_ANSICHT_KEY, _boardAnsicht); } catch (_) {}
     renderProjects();
   }));
 

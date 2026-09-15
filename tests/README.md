@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**221 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**222 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -106,6 +106,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `board-live-ui.js` | Multi-Client-Live-Test (mehrere Puppeteer-Clients gleichzeitig): Chef legt/erledigt/öffnet einen Auftrag, |
 | `board-mobile-ui.js` | Mobile-Ansicht des Boards (390×844): Spalten horizontal wischbar, vertikal scrollbar, Kachel/Detail, |
 | `board-permissions-workflow.js` | Umfassender Rechte-/Workflow-Test (Puppeteer + API) rund um das Auftrags-Board: |
+| `board-stelle-halten-ui.js` | Bleibt die Stelle, an der ich arbeite? (Alex, 15.09.2026) |
 | `browser-absences.js` | Headless-Browser-Test (Puppeteer) für die Abwesenheits-Logik — echte UI-Klicks. |
 | `browser-smoke.js` | Headless-Browser-Smoke-Test (Puppeteer) — klickt echte UI-Abläufe durch, rollenbasiert. |
 | `bugliste-v6-api.js` | API-Test Bugliste v6: |
