@@ -281,6 +281,57 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
       await l.seite.evaluate(id => document.querySelector(`.pv-produkt[data-id="${id}"]`).dataset.suchtext.includes('obo'), prod.id),
       await l.seite.evaluate(id => document.querySelector(`.pv-produkt[data-id="${id}"]`).dataset.suchtext, prod.id));
 
+    // ── Der Papierkorb zählt beides und kann endgültig löschen ───────────────────────────────
+    //
+    // Alex (15.09.2026): „Im Reiter Gelöscht werden nur Produkte gezählt, aber keine Großhändler."
+    // Und: „Im Gelöscht-Unterpunkt hätte ich gerne die Möglichkeit, einen Eintrag endgültig zu
+    // löschen."
+    console.log('\n── Papierkorb: Zählung und endgültiges Löschen ──');
+    const wegH = (await req('POST', '/api/suppliers', admin, { name: 'Papierkorb-Händler' })).body.haendler;
+    await req('DELETE', `/api/suppliers/${wegH.id}`, admin);
+    const wegP = (await req('POST', '/api/products', admin,
+      { name: 'Papierkorb-Produkt', barcode: '4062679500026' })).body.produkt;
+    await req('DELETE', `/api/products/${wegP.id}`, admin);
+    await l.seite.evaluate(() => renderProdukte());
+    await sleep(2200);
+    const zaehler = await l.seite.evaluate(() =>
+      [...document.querySelectorAll('#pv-tabs .pv-tab-btn')].find(x => /Gelöscht/.test(x.textContent)).textContent);
+    ok('der Reiter zählt Produkte UND Großhändler', /Gelöscht \(2\)/.test(zaehler), zaehler);
+
+    await l.seite.evaluate(() => {
+      const b = [...document.querySelectorAll('#pv-tabs .pv-tab-btn')].find(x => /Gelöscht/.test(x.textContent));
+      b.click();
+    });
+    await sleep(600);
+    ok('… und bietet „Endgültig löschen" an',
+      await l.seite.evaluate(() => document.querySelectorAll('.pv-purge, .pv-h-purge').length === 2),
+      await l.seite.evaluate(() => document.querySelectorAll('.pv-purge, .pv-h-purge').length));
+
+    // Gegenprobe zuerst: Abbrechen darf nichts tun.
+    await l.seite.evaluate((id) => document.querySelector(`.pv-purge[data-id="${id}"]`).click(), wegP.id);
+    await sleep(700);
+    const warnung = await l.seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || '');
+    ok('… mit Warnung, dass Bestellungen ihren Text behalten',
+      /Text/.test(warnung) && /Verknüpfung/.test(warnung), warnung.slice(0, 180));
+    await l.seite.evaluate(() => {
+      [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/i.test(x.textContent)).click();
+    });
+    await sleep(1000);
+    ok('… Abbrechen löscht NICHT',
+      (await req('GET', '/api/products/verzeichnis', admin)).body.geloescht.some(p => p.id === wegP.id));
+
+    await l.seite.evaluate((id) => document.querySelector(`.pv-purge[data-id="${id}"]`).click(), wegP.id);
+    await sleep(700);
+    await l.seite.evaluate(() => {
+      [...document.querySelectorAll('.modal button')].find(x => /Endgültig löschen/i.test(x.textContent)).click();
+    });
+    await sleep(2200);
+    const danachV = (await req('GET', '/api/products/verzeichnis', admin)).body;
+    ok('… mit Bestätigung ist das Produkt endgültig fort',
+      !danachV.geloescht.some(p => p.id === wegP.id) && !danachV.produkte.some(p => p.id === wegP.id));
+    ok('… der Großhändler liegt noch im Papierkorb',
+      danachV.geloeschteHaendler.some(h => h.id === wegH.id));
+
     console.log('\n── Der Reiter „Großhändler" ──');
     await l.seite.evaluate(() => document.querySelectorAll('#pv-tabs .pv-tab-btn')[1].click());
     await sleep(600);
@@ -288,6 +339,75 @@ const sichtbar = (seite, wahl) => seite.evaluate(w => {
     ok('… mit der Zahl der Produkte',
       /1 Produkt/.test(await l.seite.evaluate(() => document.querySelector('.pv-haendler summary').innerText)),
       await l.seite.evaluate(() => document.querySelector('.pv-haendler summary').innerText));
+
+    // ── Nach dem Speichern bleibt man, wo man war ────────────────────────────────────────────
+    //
+    // Alex (15.09.2026): „Wenn ich im Unterpunkt Großhändler auf Speichern drücke, springt die
+    // Ansicht sofort wieder auf Produkte, so dass ich beim Bearbeiten immer wieder hin und her
+    // hüpfen muss." Jede Händler-Aktion baut die Seite neu auf — dabei ging der Reiter verloren.
+    console.log('\n── Speichern wirft einen nicht aus dem Reiter ──');
+    const reiterName = () => l.seite.evaluate(() =>
+      (document.querySelector('#pv-tabs .pv-tab-btn.active') || {}).dataset?.tab || null);
+    await l.seite.evaluate(() => {
+      const b = [...document.querySelectorAll('#pv-tabs .pv-tab-btn')].find(x => /händler/i.test(x.textContent));
+      b.click();
+    });
+    await sleep(500);
+    await l.seite.evaluate(() => { document.querySelector('.pv-haendler').open = true; });
+    await sleep(900);
+    ok('wir stehen im Reiter „Großhändler"', (await reiterName()) === 'haendler', await reiterName());
+    await l.seite.evaluate(() => {
+      const k = document.querySelector('.pv-haendler');
+      k.querySelector('.pv-hf-ansprechpartner').value = 'Herr Wagner';
+      k.querySelector('.pv-h-save').click();
+    });
+    await sleep(2200);
+    ok('nach dem Speichern immer noch im Reiter „Großhändler"',
+      (await reiterName()) === 'haendler', await reiterName());
+    ok('… und die bearbeitete Karte ist noch offen',
+      await l.seite.evaluate(() => !!document.querySelector('.pv-haendler[open]')));
+    ok('… gespeichert wurde auch wirklich',
+      (await req('GET', '/api/suppliers', admin)).body.haendler.some(h => h.ansprechpartner === 'Herr Wagner'),
+      JSON.stringify((await req('GET', '/api/suppliers', admin)).body.haendler.map(h => h.ansprechpartner)));
+
+    // ── Löschen fragt nach ───────────────────────────────────────────────────────────────────
+    //
+    // Alex (15.09.2026): „Wenn ich auf Großhändler löschen klicke, hätte ich gerne eine
+    // Sicherheitsabfrage." Bisher fragte nur der SERVER zurück, und auch nur dann, wenn Produkte
+    // daranhingen — ein Händler ohne Zuordnungen verschwand auf einen Klick. Der rote Knopf sitzt
+    // direkt neben „Speichern".
+    console.log('\n── Löschen fragt nach ──');
+    const hAnzahl = async () => (await req('GET', '/api/suppliers', admin)).body.haendler.length;
+    const vorLoeschen = await hAnzahl();
+    const wegwerf = (await req('POST', '/api/suppliers', admin, { name: 'Testhändler zum Löschen' })).body.haendler;
+    await l.seite.evaluate(() => renderProdukte());
+    await sleep(2000);
+    await l.seite.evaluate((id) => {
+      document.querySelector(`.pv-haendler[data-id="${id}"] .pv-h-del`).click();
+    }, wegwerf.id);
+    await sleep(700);
+    const frage = await l.seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || '');
+    ok('eine Rückfrage erscheint', /löschen\?/i.test(frage), frage.slice(0, 140));
+    ok('… sie nennt den Namen', /Testhändler zum Löschen/.test(frage), frage.slice(0, 140));
+    ok('… und sagt, dass es einen Weg zurück gibt', /Gelöscht|Wiederherstell/i.test(frage), frage.slice(0, 200));
+    // ABBRECHEN muss wirklich nichts tun — die wichtigere Hälfte.
+    await l.seite.evaluate(() => {
+      const b = [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/i.test(x.textContent));
+      b.click();
+    });
+    await sleep(1200);
+    ok('Abbrechen löscht NICHT', (await hAnzahl()) === vorLoeschen + 1, String(await hAnzahl()));
+    // Und mit Bestätigung verschwindet er.
+    await l.seite.evaluate((id) => {
+      document.querySelector(`.pv-haendler[data-id="${id}"] .pv-h-del`).click();
+    }, wegwerf.id);
+    await sleep(700);
+    await l.seite.evaluate(() => {
+      const b = [...document.querySelectorAll('.modal button')].find(x => /^Löschen$/i.test(x.textContent.trim()));
+      b.click();
+    });
+    await sleep(2000);
+    ok('… mit Bestätigung schon', (await hAnzahl()) === vorLoeschen, String(await hAnzahl()));
 
     console.log('\n── Die Gegenrichtung: vom Händler aus zuordnen ──');
     await l.seite.evaluate(() => { document.querySelector('.pv-haendler').open = true; });

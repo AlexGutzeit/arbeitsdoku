@@ -544,7 +544,12 @@ Eigener Menüpunkt, der nur erscheint, wenn man das Recht hat. Drei Reiter:
   zwar **auch ohne Barcode**. Sortiert wird alphabetisch – es gibt bewusst keinen
   „Hauptlieferanten". Ein Händler mit hinterlegten Produkten wird nicht ohne Rückfrage gelöscht,
   und seine Einträge bleiben erhalten, damit sie beim Wiederherstellen zurückkommen.
-* **Gelöscht** — Gelöschte **Produkte und Großhändler** lassen sich zurückholen; beim Händler kommen die hinterlegten Bestellnummern mit. Gelöschtes lässt sich zurückholen. Wer einen Barcode eines gelöschten Produkts
+* **Gelöscht** — der Zähler im Reiter nennt Produkte **und** Großhändler. Beides lässt sich
+  zurückholen oder **endgültig löschen** (mit Rückfrage, die die Folge benennt: bei einem Produkt
+  behalten geschriebene Bestellungen ihren Text und verlieren nur die Verknüpfung, die Barcodes
+  werden wieder frei; bei einem Großhändler verschwinden auch seine Bestellnummern und Links).
+  Endgültig löschen geht **nur aus dem Papierkorb** — ein lebender Eintrag lässt sich nicht in
+  einem Schritt auslöschen. Jeder Vorgang steht im Protokoll. Gelöschte Produkte und Großhändler lassen sich zurückholen; beim Händler kommen die hinterlegten Bestellnummern mit. Gelöschtes lässt sich zurückholen. Wer einen Barcode eines gelöschten Produkts
   scannt, bekommt „gehörte zu …" statt „unbekannt". **Zusammengeführte** Produkte lassen sich
   dagegen nicht als eigene zurückholen – ihre Barcodes hängen am Nachfolger.
 

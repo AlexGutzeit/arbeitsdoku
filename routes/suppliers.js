@@ -177,6 +177,33 @@ router.get('/:id/produkte', authenticate, nurLesen, (req, res) => {
 // gab 404, und wer denselben Namen neu anlegte, bekam einen NEUEN Haendler — die alten
 // Bestellnummern blieben als verwaiste Zeilen in der Datenbank haengen, unsichtbar fuer alle.
 // Ein Versprechen, das die App nicht einloest, ist schlimmer als gar keins.
+/**
+ * Endgueltig loeschen — nur aus dem Papierkorb (Alex, 15.09.2026).
+ *
+ * Mit dem Haendler verschwinden auch seine Bestellnummern, Links und Kommentare zu den Produkten.
+ * Genau das ist der Unterschied zum normalen Loeschen, bei dem sie liegen bleiben und beim
+ * Wiederherstellen zurueckkommen. Die Zahl steht deshalb in der Antwort — und im Protokoll.
+ */
+router.delete('/:id/endgueltig', authenticate, nurPfleger, (req, res) => {
+  const db = getDb();
+  const id = Number(req.params.id);
+  const h = db.prepare('SELECT id, name, deleted_at FROM suppliers WHERE id = ?').get(id);
+  if (!h) return res.status(404).json({ error: 'Großhändler nicht gefunden' });
+  if (!h.deleted_at) {
+    return res.status(400).json({
+      error: 'Endgültig löschen geht nur aus dem Papierkorb. Lösch den Großhändler zuerst normal.' });
+  }
+  const eintraege = db.prepare('SELECT COUNT(*) AS c FROM product_suppliers WHERE supplier_id = ?').get(id).c;
+  db.prepare('DELETE FROM product_suppliers WHERE supplier_id = ?').run(id);
+  db.prepare('DELETE FROM suppliers WHERE id = ?').run(id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'supplier_purge',
+    details: `Großhändler „${h.name}" endgültig gelöscht`
+           + (eintraege ? ` — ${eintraege} hinterlegte Bestellnummer(n)/Link(s) mit entfernt` : ''),
+    ip: req.ip });
+  broadcast('produkte');
+  res.json({ geloescht: true, eintraege });
+});
+
 router.post('/:id/wiederherstellen', authenticate, nurPfleger, (req, res) => {
   const db = getDb();
   const id = Number(req.params.id);

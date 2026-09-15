@@ -40,6 +40,19 @@ function pHaendlerZiel(eintrag) {
        + '<span class="pv-kein-artikellink">kein Artikel-Link hinterlegt</span>';
 }
 
+// WELCHER REITER OFFEN WAR — und welche Händlerkarte.
+//
+// Alex (15.09.2026): „Wenn ich im Unterpunkt Großhändler auf Speichern drücke, springt die Ansicht
+// sofort wieder auf Produkte, so dass ich beim Bearbeiten immer wieder hin und her hüpfen muss."
+// Ursache: Jede Händler-Aktion ruft renderProdukte(), und das baut die Seite von vorn auf — mit
+// dem ersten Reiter. Wer drei Händler nacheinander pflegt, klickt sich dreimal zurück.
+//
+// Dieselbe Lehre wie bei B10 („Ansicht und Scrollstand bleiben erhalten, app-weit"): Nach einer
+// Aktion steht man dort, wo man war. Gemerkt wird ausserhalb der Funktion, weil sie die Seite
+// komplett ersetzt.
+let pvReiter = 'produkte';
+let pvOffenerHaendler = null;
+
 function pLinkHtml(url, beschriftung) {
   if (!url) return '';
   return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer"
@@ -82,7 +95,7 @@ async function renderProdukte(fokusId) {
       <div class="pv-tabs" id="pv-tabs" role="tablist">
         <button class="pv-tab-btn active" data-tab="produkte" role="tab">Produkte (${v.produkte.length})</button>
         <button class="pv-tab-btn" data-tab="haendler" role="tab">Großhändler (${hl.length})</button>
-        <button class="pv-tab-btn" data-tab="papierkorb" role="tab">Gelöscht (${v.geloescht.length})</button>
+        <button class="pv-tab-btn" data-tab="papierkorb" role="tab">Gelöscht (${v.geloescht.length + (v.geloeschteHaendler || []).length})</button>
       </div>
       <div id="pv-produkte" class="pv-tab">${pvProdukteHtml(v)}</div>
       <div id="pv-haendler" class="pv-tab" style="display:none">${pvHaendlerHtml(hl)}</div>
@@ -353,7 +366,11 @@ function pvPapierkorbHtml(v) {
         <span style="font-size:.8rem;color:var(--text-light);margin-left:.4rem">
           gelöscht am ${esc(String(h.deleted_at).slice(0, 10))}${h.eintraege ? ` · ${h.eintraege} hinterlegte Bestellnummer(n) warten` : ''}</span>
       </div>
-      <button class="btn btn-sm pv-h-wieder" data-id="${h.id}">Wiederherstellen</button>
+      <div style="display:flex;gap:.4rem;flex-shrink:0">
+        <button class="btn btn-sm pv-h-wieder" data-id="${h.id}">Wiederherstellen</button>
+        <button class="btn btn-sm btn-danger pv-h-purge" data-id="${h.id}"
+                data-name="${esc(h.name)}" data-eintraege="${h.eintraege || 0}">Endgültig löschen</button>
+      </div>
     </div>`).join('')
     + (v.geloescht.length ? `<h3 style="font-size:.95rem;margin:1rem 0 .4rem">Produkte</h3>` : '') : '')
     + (v.geloescht.length ? v.geloescht.map(p => `
@@ -362,7 +379,10 @@ function pvPapierkorbHtml(v) {
         <span style="font-size:.8rem;color:var(--text-light);margin-left:.4rem">
           ${p.merged_into ? 'aufgegangen in „' + esc(p.aufgegangen_in || '?') + '“' : 'gelöscht am ' + esc(String(p.deleted_at).slice(0, 10))}</span>
       </div>
-      ${p.merged_into ? '' : `<button class="btn btn-sm pv-wieder" data-id="${p.id}">Wiederherstellen</button>`}
+      <div style="display:flex;gap:.4rem;flex-shrink:0">
+        ${p.merged_into ? '' : `<button class="btn btn-sm pv-wieder" data-id="${p.id}">Wiederherstellen</button>`}
+        <button class="btn btn-sm btn-danger pv-purge" data-id="${p.id}" data-name="${esc(p.name)}">Endgültig löschen</button>
+      </div>
     </div>`).join('') : '');
 }
 
@@ -394,11 +414,21 @@ function pvBinden() {
   const karte = document.querySelector('.main .card');
 
   // Reiter
-  karte.querySelectorAll('#pv-tabs .pv-tab-btn').forEach(b => b.addEventListener('click', () => {
-    karte.querySelectorAll('#pv-tabs .pv-tab-btn').forEach(x => x.classList.toggle('active', x === b));
+  const reiterZeigen = (tab) => {
+    karte.querySelectorAll('#pv-tabs .pv-tab-btn')
+      .forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
     for (const t of ['produkte', 'haendler', 'papierkorb'])
-      document.getElementById('pv-' + t).style.display = (t === b.dataset.tab) ? '' : 'none';
-  }));
+      document.getElementById('pv-' + t).style.display = (t === tab) ? '' : 'none';
+    pvReiter = tab;
+  };
+  karte.querySelectorAll('#pv-tabs .pv-tab-btn').forEach(b =>
+    b.addEventListener('click', () => reiterZeigen(b.dataset.tab)));
+  // Nach einem Neuaufbau dorthin zurueck, wo gearbeitet wurde.
+  if (pvReiter !== 'produkte') reiterZeigen(pvReiter);
+  if (pvOffenerHaendler) {
+    const d = karte.querySelector(`.pv-haendler[data-id="${pvOffenerHaendler}"]`);
+    if (d) { d.open = true; pvHaendlerProdukteLaden(d); } else { pvOffenerHaendler = null; }
+  }
 
   // Suche + Kategoriefilter: beide wirken auf dieselbe Liste, deshalb EINE Funktion.
   const filtern = () => {
@@ -419,6 +449,8 @@ function pvBinden() {
     if (d.open) pvDetailLaden(d);
   }));
   document.querySelectorAll('.pv-haendler').forEach(d => d.addEventListener('toggle', () => {
+    // Merken, welche Karte offen ist — damit sie es nach einem Neuaufbau bleibt.
+    pvOffenerHaendler = d.open ? d.dataset.id : (pvOffenerHaendler === d.dataset.id ? null : pvOffenerHaendler);
     if (d.open) pvHaendlerProdukteLaden(d);
   }));
   karte.addEventListener('input', pvSuchtippen);
@@ -642,6 +674,37 @@ async function pvKlick(ev) {
       return;
     }
 
+    // ── Endgültig löschen (nur aus dem Papierkorb) ──
+    //
+    // Zwei Rückfragen wären zu viel, eine zu wenig: Der Text nennt deshalb die FOLGE, nicht bloss
+    // die Frage — bei einem Produkt die Bestellungen, die ihre Verknüpfung verlieren, beim
+    // Händler die Bestellnummern, die mitgehen.
+    if (b.classList.contains('pv-purge')) {
+      if (!(await confirmModal(
+        `„${b.dataset.name}" ENDGÜLTIG löschen? Das lässt sich nicht rückgängig machen.\n\n`
+        + 'Bereits geschriebene Bestellungen behalten ihren Text, verlieren aber die Verknüpfung '
+        + 'zum Katalog. Die Barcodes werden frei und lassen sich danach neu vergeben.',
+        { title: 'Endgültig löschen', okLabel: 'Endgültig löschen', danger: true }))) return;
+      const r = await api('DELETE', `/api/products/${b.dataset.id}/endgueltig`);
+      toast(r && r.bestellungen
+        ? `Endgültig gelöscht — ${r.bestellungen} Bestellung(en) behalten ihren Text.`
+        : 'Endgültig gelöscht', 'success');
+      return renderProdukte();
+    }
+    if (b.classList.contains('pv-h-purge')) {
+      const n = Number(b.dataset.eintraege) || 0;
+      if (!(await confirmModal(
+        `„${b.dataset.name}" ENDGÜLTIG löschen? Das lässt sich nicht rückgängig machen.\n\n`
+        + (n ? `Die ${n} hinterlegte(n) Bestellnummer(n) und Link(s) verschwinden damit ebenfalls — `
+             + 'beim Wiederherstellen kämen sie zurück, danach nicht mehr.'
+             : 'Es hängen keine Bestellnummern daran.'),
+        { title: 'Endgültig löschen', okLabel: 'Endgültig löschen', danger: true }))) return;
+      await api('DELETE', `/api/suppliers/${b.dataset.id}/endgueltig`);
+      if (pvOffenerHaendler === b.dataset.id) pvOffenerHaendler = null;
+      toast('Endgültig gelöscht', 'success');
+      return renderProdukte();
+    }
+
     // ── Händler-Stammdaten ──
     if (b.classList.contains('pv-h-anlegen')) {
       const box = document.getElementById('pv-h-neu-form');
@@ -654,13 +717,22 @@ async function pvKlick(ev) {
       toast('Gespeichert', 'success'); return renderProdukte();
     }
     if (hk && b.classList.contains('pv-h-del')) {
+      // IMMER fragen, nicht nur wenn Produkte daranhaengen. Vorher verschwand ein Haendler ohne
+      // Zuordnungen auf einen einzigen Klick — und der rote Knopf sitzt direkt neben „Speichern".
+      // Zurueckholen ginge zwar (Papierkorb), aber das muss man erst einmal wissen.
+      const name = (hk.querySelector('.pv-hf-name')?.value || '').trim() || 'dieser Großhändler';
+      if (!(await confirmModal(
+        `„${name}" löschen? Die hinterlegten Bestellnummern und Links bleiben erhalten und kommen `
+        + 'beim Wiederherstellen zurück — im Reiter „Gelöscht".',
+        { title: 'Großhändler löschen', okLabel: 'Löschen', danger: true }))) return;
       try {
         await api('DELETE', `/api/suppliers/${hk.dataset.id}`);
       } catch (e) {
         if (!/hängen/i.test(e.message)) throw e;
-        if (!(await confirmModal(e.message, { title: 'Großhändler löschen', okLabel: 'Löschen' }))) return;
+        if (!(await confirmModal(e.message, { title: 'Großhändler löschen', okLabel: 'Trotzdem löschen', danger: true }))) return;
         await api('DELETE', `/api/suppliers/${hk.dataset.id}`, { trotzdem: true });
       }
+      if (pvOffenerHaendler === hk.dataset.id) pvOffenerHaendler = null;
       toast('Gelöscht', 'success'); return renderProdukte();
     }
   } catch (e) { toast(e.message, 'error'); }

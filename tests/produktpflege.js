@@ -240,6 +240,42 @@ function req(m, p, t, b) {
       (await req('GET', `/api/products/${p1.id}/haendler`, lager)).status === 403);
     ok('… kommt auch nicht an die Händlerliste',
       (await req('GET', '/api/suppliers', lager)).status === 403);
+
+    // ── Endgültig löschen (Alex, 15.09.2026) ────────────────────────────────────────────────
+    console.log('\n── Endgültig löschen ──');
+    const lebend = (await req('POST', '/api/products', admin, { name: 'Lebt noch', barcode: '4062679500019' })).body.produkt;
+    const direkt = await req('DELETE', `/api/products/${lebend.id}/endgueltig`, admin);
+    ok('ein LEBENDES Produkt lässt sich nicht endgültig löschen', direkt.status === 400, String(direkt.status));
+    ok('… und die Meldung nennt den Weg über den Papierkorb',
+      /Papierkorb/.test(direkt.body.error || ''), direkt.body.error);
+
+    // Eine Bestellung darauf — ihr TEXT muss das Löschen überleben.
+    await req('POST', '/api/orders', admin, { product: 'Lebt noch', quantity: 3, product_id: lebend.id });
+    await req('DELETE', `/api/products/${lebend.id}`, admin);            // erst in den Papierkorb
+    const weg = await req('DELETE', `/api/products/${lebend.id}/endgueltig`, admin);
+    ok('aus dem Papierkorb heraus geht es', weg.status === 200, weg.status + ' ' + weg.text.slice(0, 80));
+    ok('… das Produkt ist wirklich fort',
+      db.prepare('SELECT COUNT(*) AS c FROM products WHERE id = ?').get(lebend.id).c === 0);
+    ok('… sein Barcode ist frei',
+      db.prepare('SELECT COUNT(*) AS c FROM product_barcodes WHERE code = ?').get('4062679500019').c === 0);
+    const bestLebt = db.prepare("SELECT product, product_id FROM orders WHERE product = 'Lebt noch'").get();
+    ok('… die Bestellung behält ihren TEXT', bestLebt && bestLebt.product === 'Lebt noch', JSON.stringify(bestLebt));
+    ok('… verliert aber die Verknüpfung (statt ins Leere zu zeigen)', bestLebt && bestLebt.product_id === null,
+      JSON.stringify(bestLebt));
+    ok('… und der Vorgang steht im Protokoll',
+      db.prepare("SELECT COUNT(*) AS c FROM audit_logs WHERE action = 'product_purge'").get().c === 1);
+
+    const hWeg = (await req('POST', '/api/suppliers', admin, { name: 'Endgültig weg' })).body.haendler;
+    ok('ein lebender Großhändler ebenso wenig',
+      (await req('DELETE', `/api/suppliers/${hWeg.id}/endgueltig`, admin)).status === 400);
+    await req('DELETE', `/api/suppliers/${hWeg.id}`, admin);
+    ok('… nach dem Papierkorb schon',
+      (await req('DELETE', `/api/suppliers/${hWeg.id}/endgueltig`, admin)).status === 200);
+    await req('PUT', `/api/users/${maxId}`, admin, { can_products_edit: false, can_products_add: false });
+    const ohneRecht = await req('DELETE', `/api/products/999999/endgueltig`, max);
+    ok('… und ohne Pflegerecht darf das niemand (403, nicht erst 404)',
+      ohneRecht.status === 403, ohneRecht.status + ' ' + ohneRecht.text.slice(0, 60));
+
   } catch (e) {
     ok('Durchlauf ohne Ausnahme', false, e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e.message);
   } finally { server.close(); }

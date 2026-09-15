@@ -437,6 +437,44 @@ router.delete('/:id/barcodes/:code', authenticate, (req, res) => {
   res.json({ produkt: produktMitCodes(db, id) });
 });
 
+/**
+ * Endgueltig loeschen — nur aus dem Papierkorb heraus (Alex, 15.09.2026).
+ *
+ * Bewusst zweistufig: Was hier verschwindet, ist weg. Deshalb muss der Eintrag vorher im
+ * Papierkorb liegen; ein lebendes Produkt laesst sich nicht in einem Schritt ausloeschen.
+ *
+ * WAS MIT DEN BESTELLUNGEN PASSIERT: Der TEXT einer geschriebenen Bestellung bleibt unangetastet
+ * — er ist das, was ein Mensch geschrieben hat, und das gilt in dieser App durchgehend. Nur die
+ * VERKNUEPFUNG wird geloest (product_id = NULL). Ohne diesen Schritt zeigten alte Bestellungen
+ * auf eine Zeile, die es nicht mehr gibt.
+ *
+ * Ebenso geloest: `merged_into` anderer Produkte, die in dieses aufgegangen sind — sonst zeigte
+ * ihr Hinweis „aufgegangen in …" ins Leere.
+ */
+router.delete('/:id/endgueltig', authenticate, nurPfleger, (req, res) => {
+  const db = getDb();
+  const id = Number(req.params.id);
+  const p = db.prepare('SELECT id, name, deleted_at FROM products WHERE id = ?').get(id);
+  if (!p) return res.status(404).json({ error: 'Produkt nicht gefunden' });
+  if (!p.deleted_at) {
+    return res.status(400).json({
+      error: 'Endgültig löschen geht nur aus dem Papierkorb. Lösch das Produkt zuerst normal — '
+           + 'dann kannst du es dort endgültig entfernen.' });
+  }
+  const bestellungen = db.prepare('SELECT COUNT(*) AS c FROM orders WHERE product_id = ?').get(id).c;
+  db.prepare('UPDATE orders SET product_id = NULL WHERE product_id = ?').run(id);
+  db.prepare('UPDATE products SET merged_into = NULL WHERE merged_into = ?').run(id);
+  db.prepare('DELETE FROM product_suppliers WHERE product_id = ?').run(id);
+  db.prepare('DELETE FROM product_barcodes WHERE product_id = ?').run(id);
+  db.prepare('DELETE FROM products WHERE id = ?').run(id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'product_purge',
+    details: `„${p.name}" endgültig gelöscht`
+           + (bestellungen ? ` — ${bestellungen} Bestellung(en) behalten ihren Text, verlieren aber die Verknüpfung` : ''),
+    ip: req.ip });
+  broadcast('produkte');
+  res.json({ geloescht: true, bestellungen });
+});
+
 // ── Alles fuer die Pflege-Ansicht in einem Zug ───────────────────────────────────────────────
 router.get('/verzeichnis', authenticate, nurPfleger, (req, res) => {
   const db = getDb();
