@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**218 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**221 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -67,6 +67,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `arbeitszeitrecht-regeln.js` | Die Gesetzesregeln selbst: ArbZG und JArbSchG als Falltabelle (Alex, 26.08.2026) |
 | `audit-beschriftungen.js` | Jede protokollierte Aktion braucht eine Beschriftung (Alex, 26.08.2026) |
 | `audit-events.js` | Audit-Events-Test: prüft, dass login_success, logout (manuell), session_expired (abgelaufenes |
+| `auftrags-kategorien-ui.js` | Die drei Board-Ansichten: Alle · Mitarbeiter · Kategorien (Alex, 15.09.2026). |
+| `auftrags-kategorien.js` | Auftrags-Kategorien: „Kleinarbeiten", „PV", „Zählerschrank" … (Alex, 15.09.2026) |
 | `aushang-mitternacht-ui.js` | Ein Aushang, der kurz nach Mitternacht geschrieben wurde, muss auf der Willkommensseite stehen. |
 | `aushang-sprung-ui.js` | Aushänge auf der Willkommensseite sind anklickbar (Alex, 07.08.2026). |
 | `aussperren-prodklon.js` | Kann sich jemand aussperren? Gegen eine KOPIE der echten Produktivdaten (Alex, 23.08.2026). |
@@ -99,6 +101,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `bestellrecht.js` | Bestellen, wenn Chef und Chefin im Urlaub sind (Alex, 25.08.2026) |
 | `board-archive-ampel-ui.js` | Archiv/Reopen + Dringlichkeitsampel (Chef/Admin). MA hat weder Ampel noch Archiv-Zugriff. |
 | `board-assign-all-ui.js` | Zuteilbarkeit: ALLE Nutzer außer Admin (Chef, Buchhalter, Mitarbeiter) sind im Projekt-Formular auswählbar |
+| `board-ausgeschieden-ui.js` | Was wird aus den Aufträgen, wenn jemand die Firma verlässt? |
 | `board-live-buffer-ui.js` | Live-Test (3 Browser): ändert Client A einen Zielstatus, müssen Client B und C OHNE Reload |
 | `board-live-ui.js` | Multi-Client-Live-Test (mehrere Puppeteer-Clients gleichzeitig): Chef legt/erledigt/öffnet einen Auftrag, |
 | `board-mobile-ui.js` | Mobile-Ansicht des Boards (390×844): Spalten horizontal wischbar, vertikal scrollbar, Kachel/Detail, |

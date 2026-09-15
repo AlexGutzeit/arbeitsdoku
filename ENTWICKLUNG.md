@@ -2647,3 +2647,78 @@ Tagesverlauf am Handy: `node tests/handy-verlauf-ui.js` (unter der Schwelle scro
 Verlauf hat keine Begrenzung mehr; das Raster passt sich dem Tag an — normaler Tag, sehr langer Tag,
 einzelner Termin mit Mindestbreite; die Blockpositionen stimmen relativ zum verschobenen
 Rasteranfang; am Rechner und in Woche/Monat bleibt alles unverändert).
+
+## Auftrags-Kategorien und die drei Board-Ansichten (15.09.2026)
+
+Ein Auftrag kann Mitarbeitern zugeordnet sein **und** Kategorien („Kleinarbeiten", „PV",
+„Zählerschrank"). Beides unabhängig voneinander, beides mehrfach. Über dem Board stehen drei
+Knöpfe: **Alle · Mitarbeiter · Kategorien**.
+
+### Die Rest-Spalte bedeutet in jeder Ansicht etwas anderes
+
+Das ist die Stelle, an der man sich beim Bauen vertut, weil „Nicht zugewiesen" so aussieht, als
+wäre es immer dasselbe:
+
+| Ansicht | Rest-Spalte | enthält |
+|---|---|---|
+| Mitarbeiter | „Nicht zugewiesen" | kein Mitarbeiter |
+| Kategorien | „Ohne Kategorie" | keine Kategorie |
+| Alle | „Nicht zugewiesen" | **weder noch** |
+
+Der dritte Fall ist der Sinn der Sache. Ein Auftrag mit Kategorie, aber ohne Mitarbeiter, ist
+**nicht** heimatlos — er steht unter seiner Kategorie. Stünde er zusätzlich im Rest, sähe das Board
+mehr offene Arbeit vor, als es gibt. Deshalb ist die Bedingung in „Alle" `restlos = kein MA UND
+keine Kategorie`, nicht `kein MA`.
+
+Die Kehrseite: **dieselbe Kachel erscheint mehrfach** — einmal bei jedem Mitarbeiter, einmal bei
+jeder Kategorie. Das ist gewollt, nicht ein Fehler beim Gruppieren. Jede Spalte soll für sich
+vollständig sein; wer auf „PV" schaut, will alle PV-Aufträge sehen, auch die, die Max schon hat.
+`tests/auftrags-kategorien-ui.js` sichert beides ab: die Mehrfach-Anzeige und die Gegenprobe, dass
+in „Alle" **kein** Auftrag durchs Raster fällt.
+
+**Leere Kategorien bleiben stehen.** Eine Spalte nur zu zeigen, wenn etwas drinsteht, wäre der
+naheliegende Filter — und der Weg, auf dem „PV" zum zweiten Mal angelegt wird, weil es unsichtbar
+war.
+
+### Ein PUT ohne `category_ids` darf nichts löschen
+
+`setCategories` läuft in `PUT /api/projects/:id` nur, wenn `req.body.category_ids !== undefined`.
+Ohne diese Abfrage räumte jedes Umschalten der Dringlichkeit (das schickt nur `{ urgency }`) still
+die Kategorien ab. Dieselbe Falle wie seinerzeit bei den Zuweisungen; `tests/auftrags-kategorien.js`
+prüft sie ausdrücklich, zusammen mit der Gegenprobe, dass eine **leere Liste** sehr wohl löscht.
+
+### Zwei Tabellen, die gleich heißen
+
+`project_categories` (Art der Arbeit) und `product_categories` (Art der Ware) haben nichts
+miteinander zu tun. Der naheliegende und falsche Schritt wäre ein gemeinsamer Topf, weil beide
+„Kategorie" heißen. „Zählerschrank" darf in beiden Welten stehen, und das Löschen der einen lässt
+die andere unberührt — auch das steht als Zusicherung im Test, damit es niemand später
+zusammenlegt.
+
+Aus demselben Grund hat `routes/projects.js` seine **eigene** `vergleichsform` und importiert sie
+nicht aus `products.js`: Die beiden Listen dürfen ihre Namensregeln unabhängig voneinander ändern.
+
+### Löschen fragt zweimal
+
+Die erste Rückfrage sagt, **was** passiert („die Aufträge selbst bleiben"). Erst wenn die Kategorie
+belegt ist, antwortet der Server mit **409 und der Zahl** der betroffenen Aufträge, und die zweite
+Rückfrage nennt sie. `DELETE` löscht nur mit `{ loesen: true }` im Rumpf — ein versehentlicher
+Aufruf ohne Rumpf kann nichts kaputt machen.
+
+### Wer die Firma verlässt, behält seine Aufträge
+
+Entschieden am 15.09.2026: Ein Auftrag fällt beim Ausstellen **nicht** still auf „Nicht zugewiesen"
+zurück — sonst verschwände die Information, wer ihn zuletzt hatte. Stattdessen:
+
+* Die Spalte bleibt, solange ihr etwas zugewiesen ist, trägt den Vermerk **„ausgeschieden"** und
+  sortiert **ans Ende**. Ist der letzte Auftrag weg, verschwindet sie von selbst — die Spalten
+  entstehen aus `aktive Mitarbeiter ∪ irgendwo zugewiesene`.
+* In der **Auswahl** beim Anlegen und Bearbeiten stehen nur **aktive** Mitarbeiter. Ein bereits
+  gesetztes Häkchen bleibt aber sichtbar und angehakt, sonst nähme ein bloßes Speichern die
+  Zuweisung weg, ohne dass es jemand wollte.
+
+Die beiden Regeln widersprechen sich nur scheinbar: Die Spaltenliste beantwortet „wer hat noch
+etwas?", die Auswahlliste „wem darf ich noch etwas geben?". `tests/board-ausgeschieden-ui.js` misst
+sie getrennt — und zwar in **je einer frischen Sitzung**, weil `_boardUsers` eine Modulvariable ist,
+die nur nachlädt, wenn sie leer ist. Eine Messung in derselben Sitzung misst den Stand von vorher.
+

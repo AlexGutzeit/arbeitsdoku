@@ -1327,6 +1327,32 @@ function ensureProjectSchema(targetDb) {
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       );
     `);
+    // Auftrags-Kategorien (Alex, 15.09.2026): „Kleinarbeiten", „PV", „Zaehlerschrank" …
+    //
+    // BEWUSST GETRENNT von den Produkt-Kategorien im Lager (product_categories). Gleicher Name,
+    // andere Sache: Hier geht es um die Art der ARBEIT, dort um die Art der WARE. Sie in eine
+    // Tabelle zu legen waere der naheliegende und falsche Schritt — spaetestens beim ersten
+    // „Kleinarbeiten"-Produkt faellt es auf.
+    //
+    // n:m wie bei den Mitarbeitern: Ein Auftrag kann mehreren Kategorien angehoeren, eine
+    // Kategorie hat viele Auftraege. Soft-Delete, damit ein Verschreiber keine Zuordnung zerstoert.
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS project_categories (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT NOT NULL,
+        created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        created_by INTEGER,
+        deleted_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS project_category_links (
+        project_id  INTEGER NOT NULL,
+        category_id INTEGER NOT NULL,
+        PRIMARY KEY (project_id, category_id),
+        FOREIGN KEY (project_id)  REFERENCES projects(id)           ON DELETE CASCADE,
+        FOREIGN KEY (category_id) REFERENCES project_categories(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_pcl_cat ON project_category_links(category_id);
+    `);
   } catch (e) {
     console.error('ensureProjectSchema fehlgeschlagen:', e.message);
   }

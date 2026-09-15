@@ -2,8 +2,25 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
+const { logAudit, berlinNow } = require('../audit');
 
 const { csvZelle, csvDatei } = require('../csv');
+
+/**
+ * Vergleichsform eines Namens — klein, ohne Leerzeichen und Satzzeichen.
+ *
+ * Absichtlich hier verdoppelt statt aus routes/products.js importiert: Die beiden Kategorie-Arten
+ * haben NICHTS miteinander zu tun (Ware vs. Arbeit), und ein gemeinsamer Import waere die
+ * Einladung, sie spaeter auch sonst zu vermengen. Wer eine aendert, soll die andere nicht
+ * versehentlich mitaendern.
+ *
+ * Verwendet wird sie hier als DOPPEL-SPERRE (409), nicht als Warnung: Zwei Kategorien „PV" und
+ * „p.v." waeren zwei Spalten fuer dieselbe Sache — anders als bei Produkten, wo zwei aehnlich
+ * benannte Artikel wirklich verschieden sein koennen.
+ */
+function vergleichsform(name) {
+  return String(name || '').toLowerCase().replace(/[\s\-_.,/()]/g, '');
+}
 
 const router = express.Router();
 
@@ -30,7 +47,8 @@ function assignmentsOf(db, projectId) {
 function milestonesOf(db, projectId) {
   return db.prepare('SELECT id, title, est_days, status, sort_order FROM project_milestones WHERE project_id = ? ORDER BY sort_order, id').all(projectId);
 }
-const withDetails = (db, project) => ({ ...project, assigned_users: assignmentsOf(db, project.id), milestones: milestonesOf(db, project.id) });
+const withDetails = (db, project) => ({ ...project, assigned_users: assignmentsOf(db, project.id),
+  categories: categoriesOf(db, project.id), milestones: milestonesOf(db, project.id) });
 
 function isAssigned(db, projectId, userId) {
   return !!db.prepare('SELECT 1 FROM project_assignments WHERE project_id = ? AND user_id = ?').get(projectId, userId);
@@ -59,6 +77,29 @@ function setMilestones(db, projectId, arr) {
     order++;
   }
   for (const id of existing) if (!keep.has(id)) db.prepare('DELETE FROM project_milestones WHERE id = ?').run(id);
+}
+
+// Kategorien eines Auftrags
+function categoriesOf(db, projectId) {
+  return db.prepare(`
+    SELECT c.id, c.name FROM project_category_links l JOIN project_categories c ON c.id = l.category_id
+    WHERE l.project_id = ? AND c.deleted_at IS NULL ORDER BY c.name
+  `).all(projectId);
+}
+
+function setCategories(db, projectId, catIds) {
+  db.prepare('DELETE FROM project_category_links WHERE project_id = ?').run(projectId);
+  const ins = db.prepare('INSERT OR IGNORE INTO project_category_links (project_id, category_id) VALUES (?, ?)');
+  const seen = new Set();
+  for (const cid of (Array.isArray(catIds) ? catIds : [])) {
+    const n = Number(cid);
+    // Nur bestehende, nicht geloeschte Kategorien — eine erfundene ID wuerde sonst eine
+    // Verknuepfung ins Leere anlegen, die erst beim Anzeigen auffaellt.
+    if (n > 0 && !seen.has(n)
+        && db.prepare('SELECT 1 FROM project_categories WHERE id = ? AND deleted_at IS NULL').get(n)) {
+      seen.add(n); ins.run(projectId, n);
+    }
+  }
 }
 
 function setAssignments(db, projectId, userIds) {
@@ -92,6 +133,76 @@ router.get('/deleted', authenticate, authorize('chef'), (req, res) => {
 });
 
 // Einzelnes Projekt (für Übernehmen-Vorbefüllung) — nur aktive.
+// ── Auftrags-Kategorien ─────────────────────────────────────────────────────────────────────
+// VOR '/:id' eingehaengt: sonst faengt '/:id' das Wort „kategorien" ab und sucht einen Auftrag
+// mit der ID „kategorien".
+router.get('/kategorien', authenticate, (req, res) => {
+  const db = getDb();
+  const kategorien = db.prepare(`
+    SELECT c.id, c.name,
+           (SELECT COUNT(*) FROM project_category_links l JOIN projects p ON p.id = l.project_id
+             WHERE l.category_id = c.id AND p.deleted_at IS NULL AND COALESCE(p.done,0) = 0) AS anzahl
+      FROM project_categories c WHERE c.deleted_at IS NULL ORDER BY c.name
+  `).all();
+  res.json({ kategorien });
+});
+
+router.post('/kategorien', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const name = String(req.body.name || '').trim();
+  if (name.length < 2) return res.status(400).json({ error: 'Bitte einen Namen mit mindestens 2 Zeichen angeben.' });
+  // Doppel verhindern — verglichen wird in Vergleichsform, sonst stehen „PV" und „p.v." nebeneinander.
+  const gleich = db.prepare('SELECT id, name FROM project_categories WHERE deleted_at IS NULL').all()
+    .find(k => vergleichsform(k.name) === vergleichsform(name));
+  if (gleich) return res.status(409).json({ error: `„${gleich.name}" gibt es schon.`, kategorie: gleich });
+  const r = db.prepare('INSERT INTO project_categories (name, created_by) VALUES (?, ?)').run(name, req.user.id);
+  const kategorie = { id: r.lastInsertRowid, name, anzahl: 0 };
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'project_category_create',
+    details: `Auftrags-Kategorie angelegt: ${name}`, ip: req.ip });
+  broadcast('projects');
+  res.status(201).json({ kategorie });
+});
+
+router.put('/kategorien/:id', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const id = Number(req.params.id);
+  const k = db.prepare('SELECT id, name FROM project_categories WHERE id = ? AND deleted_at IS NULL').get(id);
+  if (!k) return res.status(404).json({ error: 'Kategorie nicht gefunden' });
+  const name = String(req.body.name || '').trim();
+  if (name.length < 2) return res.status(400).json({ error: 'Bitte einen Namen mit mindestens 2 Zeichen angeben.' });
+  const gleich = db.prepare('SELECT id, name FROM project_categories WHERE deleted_at IS NULL AND id != ?').all(id)
+    .find(x => vergleichsform(x.name) === vergleichsform(name));
+  if (gleich) return res.status(409).json({ error: `„${gleich.name}" gibt es schon.`, kategorie: gleich });
+  db.prepare('UPDATE project_categories SET name = ? WHERE id = ?').run(name, id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'project_category_rename',
+    details: `Auftrags-Kategorie „${k.name}" → „${name}"`, ip: req.ip });
+  broadcast('projects');
+  res.json({ kategorie: { id, name } });
+});
+
+router.delete('/kategorien/:id', authenticate, authorize('chef'), (req, res) => {
+  const db = getDb();
+  const id = Number(req.params.id);
+  const k = db.prepare('SELECT id, name FROM project_categories WHERE id = ? AND deleted_at IS NULL').get(id);
+  if (!k) return res.status(404).json({ error: 'Kategorie nicht gefunden' });
+  const anzahl = db.prepare(`
+    SELECT COUNT(*) AS c FROM project_category_links l JOIN projects p ON p.id = l.project_id
+     WHERE l.category_id = ? AND p.deleted_at IS NULL`).get(id).c;
+  const auftragWort = n => n === 1 ? '1 Auftrag' : `${n} Aufträge`;
+  if (anzahl > 0 && !req.body.loesen) return res.status(409).json({
+    error: `An dieser Kategorie ${anzahl === 1 ? 'hängt' : 'hängen'} noch ${auftragWort(anzahl)}. `
+         + `Bestätige, dass ${anzahl === 1 ? 'er' : 'sie'} ohne diese Kategorie bleiben ${anzahl === 1 ? 'soll' : 'sollen'}.`,
+    anzahl });
+  // Die Auftraege selbst bleiben unberuehrt — nur die Zuordnung faellt weg.
+  db.prepare('DELETE FROM project_category_links WHERE category_id = ?').run(id);
+  db.prepare('UPDATE project_categories SET deleted_at = ? WHERE id = ?').run(berlinNow(), id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'project_category_delete',
+    details: `Auftrags-Kategorie gelöscht: ${k.name}` + (anzahl ? ` (${auftragWort(anzahl)} ohne diese Kategorie)` : ''),
+    ip: req.ip });
+  broadcast('projects');
+  res.json({ ok: true, ohne_kategorie: anzahl });
+});
+
 router.get('/:id', authenticate, (req, res) => {
   const db = getDb();
   const project = db.prepare('SELECT * FROM projects WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
@@ -110,6 +221,7 @@ router.post('/', authenticate, authorize('chef'), (req, res) => {
     "INSERT INTO projects (name, client, address, note, urgency, done, created_by, due_date) VALUES (?, ?, ?, ?, ?, 0, ?, ?)"
   ).run(name.trim(), (client || '').trim(), (address || '').trim(), (note || '').trim(), normUrgency(urgency), req.user.id, normDue(due_date));
   setAssignments(db, r.lastInsertRowid, assigned_user_ids);
+  setCategories(db, r.lastInsertRowid, req.body.category_ids);
   setMilestones(db, r.lastInsertRowid, req.body.milestones);
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(r.lastInsertRowid);
   broadcast('projects', req.headers['x-tab-id']);
@@ -136,6 +248,7 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     project.id
   );
   if (assigned_user_ids !== undefined) setAssignments(db, project.id, assigned_user_ids);
+  if (req.body.category_ids !== undefined) setCategories(db, project.id, req.body.category_ids);
   if (req.body.milestones !== undefined) setMilestones(db, project.id, req.body.milestones);
   const updated = db.prepare('SELECT * FROM projects WHERE id = ?').get(project.id);
   broadcast('projects', req.headers['x-tab-id']);

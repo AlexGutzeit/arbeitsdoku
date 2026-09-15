@@ -1485,6 +1485,9 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .planning-actions { display: flex; gap: 0.4rem; margin-top: 0.75rem; }
 .planning-user-checkboxes { display: flex; flex-direction: column; gap: 0.4rem; }
 .planning-user-checkboxes label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer; }
+/* .push-hint ist sonst ein eigener Absatz (margin 0.25/0.75). Im Label ist es eine Beilaeufigkeit
+   hinter dem Namen — die Absatz-Abstaende blaehen die Zeile sonst um 1 rem auf. */
+.planning-user-checkboxes label .push-hint { margin: 0; line-height: inherit; }
 /* Planning Timeline Entries */
 .color-picker-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.25rem; }
 .color-picker-input { width: 40px; height: 36px; border: none; padding: 2px; cursor: pointer; border-radius: 6px; background: none; }
@@ -1635,7 +1638,9 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .urg-picker { display: inline-flex; gap: 4px; margin-left: 4px; }
 .urg-opt { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.25); cursor: pointer; padding: 0; }
 .proj-tile-done { opacity: 0.82; }
-.board-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.board-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem 0.75rem; flex-wrap: wrap; }
+.board-head h2 { flex: 1 0 auto; }            /* nie schmaler als der Titel — sonst dreizeilig */
+.board-head > :not(h2) { flex: 0 0 auto; }    /* Knoepfe rutschen lieber in die naechste Zeile */
 /* Farb-Legende (Dringlichkeit + Fortschritt) */
 .board-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 1.4rem; font-size: 0.78rem; color: var(--text-light); padding: 0 0.25rem 0.6rem; }
 .legend-group { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0.2rem; }
@@ -2398,6 +2403,35 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
    und der Knopf dann auf die Startseite faellt. Diese Zeile sagt es (Alex, 14.09.2026). */
 .pv-kein-artikellink { font-size: .74rem; color: var(--text-lighter); font-style: italic;
   margin-left: .45rem; }
+
+/* Spalte eines Ausgeschiedenen: erkennbar, aber nicht alarmierend. Sie steht ohnehin am Ende
+   (Alex, 15.09.2026) — dort liegt Arbeit, die niemand mehr macht. */
+.board-col-head.board-col-aus { color: var(--text-light); }
+.board-aus { font-size: .7rem; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-lighter); border: 1px solid var(--border); border-radius: 99px;
+  padding: .05rem .4rem; margin-left: .3rem; white-space: nowrap; }
+
+/* ── Board-Ansichten: Alle / Mitarbeiter / Kategorien (Alex, 15.09.2026) ────────────────────── */
+.board-ansicht { display: inline-flex; border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; }
+.board-ansicht-btn { border: none; border-radius: 0; background: var(--card-bg, #fff);
+  color: var(--text); padding: .32rem .8rem; }
+.board-ansicht-btn + .board-ansicht-btn { border-left: 1px solid var(--border); }
+.board-ansicht-btn.active { background: var(--primary, #4CAF50); color: #fff; }
+.board-ansicht-btn:focus-visible { outline: 2px solid var(--primary, #4CAF50); outline-offset: -2px; }
+
+/* Kategorie-Spalten sind keine Personen — kein Avatar, dafuer ein Zeichen und die Werkzeuge. */
+.board-col-head.board-col-kat { display: flex; align-items: center; gap: .35rem; }
+.board-kat-zeichen { color: var(--text-lighter); }
+.board-kat-tools { margin-left: auto; display: inline-flex; gap: .15rem; opacity: 0; transition: opacity .15s; }
+.board-col-head.board-col-kat:hover .board-kat-tools,
+.board-kat-tools:focus-within { opacity: 1; }
+@media (hover: none) { .board-kat-tools { opacity: 1; } }   /* auf dem Handy gibt es kein Hovern */
+
+/* Kategorie-Marken auf der Kachel */
+.proj-kats { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .3rem; }
+.proj-kat { font-size: .7rem; padding: .05rem .4rem; border-radius: 99px;
+  background: var(--bg-alt, #f4f5f2); color: var(--text-light); border: 1px solid var(--border); }
 
 /* Scanner-Fenster. Es nimmt bewusst viel Platz: Was zaehlt, ist das Kamerabild und der
    Zielrahmen — alles andere ist Beiwerk. */

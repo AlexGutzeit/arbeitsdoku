@@ -1762,6 +1762,12 @@ const PROJECT_URGENCY = [
 ];
 const projUrg = (key) => PROJECT_URGENCY.find(u => u.key === key) || PROJECT_URGENCY[2];
 let _boardUsers = [];
+// Welche Board-Ansicht zuletzt gewaehlt war. Ueberlebt Neuaufbau und SSE — wer in „Kategorien"
+// arbeitet, soll nach jeder Aenderung dort stehen bleiben (dieselbe Lehre wie beim
+// Produktverzeichnis, Alex 15.09.2026).
+// Voreinstellung „mitarbeiter": Das ist die Ansicht, die es vorher schon gab.
+let _boardAnsicht = 'mitarbeiter';
+let _boardKategorien = [];
 let _expandedProjects = new Set(); // aufgeklappte Kacheln (überlebt Re-Render/SSE)
 let _statsOpen = new Set(); // Projekt-Kacheln mit geöffnetem Statistik-Reiter (Manager)
 
@@ -1882,10 +1888,20 @@ async function renderProjects() {
 
   let projects = [];
   try {
-    const [pData, uData] = await Promise.all([api('GET', '/api/projects' + (showDone ? '?done=1' : '')), api('GET', '/api/users/list')]);
+    // ?all=1 — die Liste MUSS Ausgestellte enthalten. Zwei Dinge haengen daran:
+    //   * die Spalte eines Ausgeschiedenen wird als solche gekennzeichnet (sonst sieht sie aus
+    //     wie jede andere, und man uebersieht herrenlose Auftraege);
+    //   * im Bearbeiten-Formular bleibt sein Haken stehen (siehe projektFormular2).
+    // Die Spalten filtern weiterhin selbst auf aktiv, es kommt also keine leere Spalte dazu.
+    const [pData, uData, kData] = await Promise.all([
+      api('GET', '/api/projects' + (showDone ? '?done=1' : '')),
+      api('GET', '/api/users/list?all=1'),
+      api('GET', '/api/projects/kategorien'),
+    ]);
     if (!pData) return;
     projects = pData.projects || [];
     _boardUsers = (uData && uData.users) || [];
+    _boardKategorien = (kData && kData.kategorien) || [];
   } catch (e) { toast(e.message, 'error'); return; }
   S.projects = projects;
 
@@ -1904,24 +1920,65 @@ async function renderProjects() {
     } catch (_) { /* Feiertage optional — ohne sie zählen nur Sa/So nicht */ }
   }
 
-  // Gruppieren: unter jedem zugewiesenen User; ohne Zuweisung → „Nicht zugewiesen"
-  const byUser = {}; const unassigned = [];
+  // ── Gruppieren, je nach Ansicht ──────────────────────────────────────────────────────────
+  //
+  // Drei Ansichten (Alex, 15.09.2026): „Mitarbeiter" ist das, was es vorher gab. „Kategorien"
+  // zeigt dieselben Auftraege nach Art der Arbeit. „Alle" zeigt beides nebeneinander.
+  //
+  // Die REST-SPALTE bedeutet in jeder Ansicht etwas anderes, und das ist Absicht:
+  //   Mitarbeiter → „Nicht zugewiesen"  = kein Mitarbeiter
+  //   Kategorien  → „Ohne Kategorie"    = keine Kategorie
+  //   Alle        → „Nicht zugewiesen"  = WEDER noch (alles andere steht in seiner Spalte)
+  // So faellt kein Auftrag durchs Raster: Wer irgendwo zugeordnet ist, ist auch irgendwo zu sehen.
+  //
+  // Eine Kachel darf in MEHREREN Spalten stehen (zwei Mitarbeiter, oder MA und Kategorie). Das
+  // ist dasselbe Verhalten wie bisher bei zwei zugewiesenen Leuten — jede Spalte ist damit
+  // vollstaendig, und genau das will man beim Blick auf „alle PV-Auftraege".
+  const zeigtMA = _boardAnsicht === 'mitarbeiter' || _boardAnsicht === 'alle';
+  const zeigtKat = _boardAnsicht === 'kategorien' || _boardAnsicht === 'alle';
+  const byUser = {}; const byKat = {}; const unassigned = [];
+  const hatMA = (p) => !!(p.assigned_users && p.assigned_users.length);
+  const hatKat = (p) => !!(p.categories && p.categories.length);
   for (const p of projects) {
-    if (!p.assigned_users || !p.assigned_users.length) unassigned.push(p);
-    else for (const u of p.assigned_users) (byUser[u.user_id] || (byUser[u.user_id] = [])).push(p);
+    const restlos = _boardAnsicht === 'alle' ? (!hatMA(p) && !hatKat(p))
+                  : _boardAnsicht === 'kategorien' ? !hatKat(p)
+                  : !hatMA(p);
+    if (restlos) unassigned.push(p);
+    if (zeigtMA) for (const u of (p.assigned_users || [])) (byUser[u.user_id] || (byUser[u.user_id] = [])).push(p);
+    if (zeigtKat) for (const k of (p.categories || [])) (byKat[k.id] || (byKat[k.id] = [])).push(p);
   }
   // Basis-Spalten: immer alle aktiven Mitarbeiter. Chef/Buchhalter (Nicht-MA) erscheinen wie in der Planung
   // NUR, wenn ihnen wirklich ein Auftrag zugewiesen ist (über die „extra zugewiesene"-Ergänzung unten).
-  const cols = _boardUsers.filter(u => u.role === 'mitarbeiter' && u.active !== 0).map(u => ({ id: u.id, name: u.name }));
+  const cols = zeigtMA
+    ? _boardUsers.filter(u => u.role === 'mitarbeiter' && u.active !== 0)
+        .map(u => ({ id: u.id, name: u.name, aus: false }))
+    : [];
   const seen = new Set(cols.map(c => c.id));
-  for (const p of projects) for (const u of (p.assigned_users || [])) if (!seen.has(u.user_id)) { seen.add(u.user_id); cols.push({ id: u.user_id, name: u.name }); }
-  cols.sort((a, b) => a.name.localeCompare(b.name));
+  // Wer zugewiesen ist, bekommt eine Spalte — auch Chef/Buchhalter und auch AUSGESCHIEDENE.
+  // Ohne das verschwaende ein Auftrag, der nur an einem Ausgeschiedenen haengt, spurlos vom Board
+  // (die Zuweisung bliebe in der Datenbank, nur saehe sie niemand mehr).
+  if (zeigtMA) for (const p of projects) for (const u of (p.assigned_users || [])) if (!seen.has(u.user_id)) {
+    seen.add(u.user_id);
+    const bekannt = _boardUsers.find(x => x.id === u.user_id);
+    cols.push({ id: u.user_id, name: u.name, aus: !!(bekannt && bekannt.active === 0) });
+  }
+  // Ausgeschiedene ans ENDE (Alex, 15.09.2026): Ihre Spalte sieht sonst aus wie jede andere, und
+  // man uebersieht, dass dort Arbeit liegt, die niemand mehr macht.
+  cols.sort((a, b) => (a.aus === b.aus ? a.name.localeCompare(b.name) : (a.aus ? 1 : -1)));
 
   const sortTiles = (list) => [...list].sort((a, b) =>
     (projUrg(a.urgency).rank - projUrg(b.urgency).rank) ||
     (String(a.created_at) < String(b.created_at) ? -1 : (String(a.created_at) > String(b.created_at) ? 1 : 0)));
-  const columns = [{ id: 'unassigned', name: 'Nicht zugewiesen', list: sortTiles(unassigned) },
-    ...cols.map(c => ({ id: c.id, name: c.name, list: sortTiles(byUser[c.id] || []) }))];
+  // Kategorie-Spalten: ALLE angelegten, auch leere — sonst sieht man nicht, dass es sie gibt,
+  // und legt sie ein zweites Mal an.
+  const katCols = zeigtKat
+    ? _boardKategorien.map(k => ({ id: 'k' + k.id, katId: k.id, name: k.name, kat: true,
+                                   list: sortTiles(byKat[k.id] || []) }))
+    : [];
+  const restName = _boardAnsicht === 'kategorien' ? 'Ohne Kategorie' : 'Nicht zugewiesen';
+  const columns = [{ id: 'unassigned', name: restName, list: sortTiles(unassigned) },
+    ...cols.map(c => ({ id: c.id, name: c.name, aus: c.aus, list: sortTiles(byUser[c.id] || []) })),
+    ...katCols];
 
   const canPlanTake = canEditPlanning();
   const urgOpts = (p) => PROJECT_URGENCY.map(o => `<button type="button" class="urg-opt" data-id="${p.id}" data-urg="${o.key}" style="background:${o.color}" title="${o.label}"></button>`).join('');
@@ -1959,6 +2016,8 @@ async function renderProjects() {
     return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}${expanded ? ' expanded' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
       <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${flag}</div>
       ${p.client ? `<div class="proj-client">${esc(p.client)}</div>` : ''}
+      ${(p.categories && p.categories.length)
+        ? `<div class="proj-kats">${p.categories.map(k => `<span class="proj-kat">${esc(k.name)}</span>`).join('')}</div>` : ''}
       ${sched ? `<div class="proj-due" style="color:${sched.color}">&#128197; ${sched.label}</div>` : ''}
       ${prog ? msBar(prog, 'ms-bar-slim', goal, fill) : ''}
       <div class="proj-detail" style="display:${expanded ? 'block' : 'none'}">
@@ -1976,7 +2035,16 @@ async function renderProjects() {
 
   const colsHtml = columns.map(c => `
     <div class="board-col">
-      <div class="board-col-head">${c.id ? avatarHtml({ id: c.id, name: c.name }, 20) + ' ' : ''}${esc(c.name)}${c.list.length ? ` <span class="board-count">${c.list.length}</span>` : ''}</div>
+      <div class="board-col-head${c.aus ? ' board-col-aus' : ''}${c.kat ? ' board-col-kat' : ''}">${
+        c.kat ? '<span class="board-kat-zeichen" aria-hidden="true">▦</span> '
+              : (c.id ? avatarHtml({ id: c.id, name: c.name }, 20) + ' ' : '')
+      }${esc(c.name)}${c.aus ? ' <span class="board-aus">ausgeschieden</span>' : ''}${
+        c.list.length ? ` <span class="board-count">${c.list.length}</span>` : ''
+      }${c.kat && manage ? `
+        <span class="board-kat-tools">
+          <button class="btn-icon kat-um" data-id="${c.katId}" data-name="${esc(c.name)}" title="Umbenennen" aria-label="${esc(c.name)} umbenennen">&#9998;</button>
+          <button class="btn-icon kat-weg" data-id="${c.katId}" data-name="${esc(c.name)}" title="Löschen" aria-label="${esc(c.name)} löschen">&times;</button>
+        </span>` : ''}</div>
       <div class="board-col-body">${c.list.map(tileHtml).join('') || '<div class="board-empty">–</div>'}</div>
     </div>`).join('');
 
@@ -1997,6 +2065,12 @@ async function renderProjects() {
     <div class="board-wrap">
       <div class="board-head">
         <h2>${showDone ? 'Erledigte Aufträge' : 'Projekte / Aufträge'}</h2>
+        <div class="board-ansicht" role="group" aria-label="Ansicht">
+          ${[['alle', 'Alle'], ['mitarbeiter', 'Mitarbeiter'], ['kategorien', 'Kategorien']].map(([k, t]) =>
+            `<button class="btn btn-sm board-ansicht-btn${_boardAnsicht === k ? ' active' : ''}"
+                     data-ansicht="${k}" aria-pressed="${_boardAnsicht === k}">${t}</button>`).join('')}
+        </div>
+        ${zeigtKat && manage ? '<button class="btn btn-sm btn-outline" id="kat-neu">+ Kategorie</button>' : ''}
         ${manage ? `<button class="btn btn-sm btn-outline" id="board-archive-toggle">${showDone ? '← Offene Aufträge' : 'Erledigte anzeigen'}</button>` : ''}
       </div>
       ${legendHtml}
@@ -2021,6 +2095,51 @@ async function renderProjects() {
   const pid = (b) => b.dataset.id;
   const at = document.getElementById('board-archive-toggle');
   if (at) at.addEventListener('click', () => { _boardShowDone = !_boardShowDone; renderProjects(); });
+
+  // ── Ansicht umschalten ──
+  mainEl.querySelectorAll('.board-ansicht-btn').forEach(b => b.addEventListener('click', () => {
+    if (_boardAnsicht === b.dataset.ansicht) return;
+    _boardAnsicht = b.dataset.ansicht;
+    renderProjects();
+  }));
+
+  // ── Kategorien verwalten (Chef/Admin) ──
+  const katNeu = document.getElementById('kat-neu');
+  if (katNeu) katNeu.addEventListener('click', async () => {
+    const name = await promptModal('Wie soll die Kategorie heißen?',
+      { title: 'Kategorie anlegen', okLabel: 'Anlegen', placeholder: 'z. B. Zählerschrank', multiline: false });
+    if (!name || !name.trim()) return;
+    try { await api('POST', '/api/projects/kategorien', { name: name.trim() });
+      toast('Kategorie angelegt', 'success'); renderProjects();
+    } catch (e) { toast(e.message, 'error'); }
+  });
+  mainEl.querySelectorAll('.kat-um').forEach(b => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const name = await promptModal('Neuer Name für „' + b.dataset.name + '":',
+      { title: 'Kategorie umbenennen', okLabel: 'Speichern', defaultValue: b.dataset.name, multiline: false });
+    if (!name || !name.trim() || name.trim() === b.dataset.name) return;
+    try { await api('PUT', '/api/projects/kategorien/' + b.dataset.id, { name: name.trim() });
+      toast('Umbenannt', 'success'); renderProjects();
+    } catch (err) { toast(err.message, 'error'); }
+  }));
+  mainEl.querySelectorAll('.kat-weg').forEach(b => b.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    // Immer fragen — auch bei leeren Kategorien. Und sagen, was mit den Auftraegen passiert:
+    // Sie bleiben, nur diese Zuordnung faellt weg.
+    if (!(await confirmModal(
+      `„${b.dataset.name}" löschen?\n\nDie Aufträge selbst bleiben erhalten — sie haben danach `
+      + 'nur diese Kategorie nicht mehr.',
+      { title: 'Kategorie löschen', okLabel: 'Löschen', danger: true }))) return;
+    try {
+      await api('DELETE', '/api/projects/kategorien/' + b.dataset.id);
+    } catch (err) {
+      if (!/hängen noch/i.test(err.message)) { toast(err.message, 'error'); return; }
+      if (!(await confirmModal(err.message, { title: 'Kategorie löschen', okLabel: 'Trotzdem löschen', danger: true }))) return;
+      try { await api('DELETE', '/api/projects/kategorien/' + b.dataset.id, { loesen: true }); }
+      catch (e2) { toast(e2.message, 'error'); return; }
+    }
+    toast('Kategorie gelöscht', 'success'); renderProjects();
+  }));
   mainEl.querySelectorAll('.proj-nav').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); openNav(b.dataset.addr); }));
   mainEl.querySelectorAll('.proj-plan').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); navigate('/planning/from-project/' + pid(b)); }));
   mainEl.querySelectorAll('.proj-entry').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); navigate('/entry/from-project/' + pid(b)); }));
@@ -2070,10 +2189,16 @@ async function renderProjects() {
 // Projekt-Formular (Chef/Admin) — via FAB (neu) oder „Bearbeiten" (mit Projekt).
 async function renderProjectForm(project) {
   if (!isChefOrAdmin()) { navigate('/projects'); return; }
-  if (!_boardUsers.length) { try { const uData = await api('GET', '/api/users/list'); _boardUsers = (uData && uData.users) || []; } catch (_) {} }
+  if (!_boardUsers.length) { try { const uData = await api('GET', '/api/users/list?all=1'); _boardUsers = (uData && uData.users) || []; } catch (_) {} }
   const isEdit = !!(project && project.id);
   const p = project || { name: '', client: '', address: '', note: '', urgency: 'gelb', assigned_users: [] };
   const assignedIds = new Set((p.assigned_users || []).map(u => u.user_id));
+  const katIds = new Set((p.categories || []).map(k => k.id));
+  // Die Kategorienliste kann fehlen, wenn das Formular ohne vorherigen Board-Aufbau geoeffnet
+  // wird (Direktaufruf per Adresse) — dann nachladen, sonst stuende dort faelschlich „keine".
+  if (!_boardKategorien.length) {
+    try { const kD = await api('GET', '/api/projects/kategorien'); _boardKategorien = (kD && kD.kategorien) || []; } catch (_) {}
+  }
   // Alle Nutzer außer Admin sind zuteilbar (Chef/Buchhalter können sich auch Arbeit zuweisen).
   const workers = _boardUsers.filter(u => u.role !== 'admin' && (u.active !== 0 || assignedIds.has(u.id)));
 
@@ -2102,7 +2227,11 @@ async function renderProjectForm(project) {
       <div class="form-group"><label>Fällig bis (optional)</label>
         <input type="date" class="form-control" id="pf2-due" value="${esc(p.due_date || '')}"></div>
       <div class="form-group"><label>Zugedachte Mitarbeiter</label>
-        <div class="planning-user-checkboxes">${workers.map(u => `<label><input type="checkbox" class="pf2-assignee" value="${u.id}" ${assignedIds.has(u.id) ? 'checked' : ''}> ${esc(u.name)}${u.role !== 'mitarbeiter' ? ` <span class="push-hint">(${esc(roleName(u.role))})</span>` : ''}</label>`).join('') || '<span class="push-hint">Keine Nutzer vorhanden</span>'}</div></div>
+        <div class="planning-user-checkboxes">${workers.map(u => `<label><input type="checkbox" class="pf2-assignee" value="${u.id}" ${assignedIds.has(u.id) ? 'checked' : ''}> ${esc(u.name)}${u.active === 0 ? ' <span class="push-hint">(ausgeschieden — Haken bleibt, bis du ihn entfernst)</span>' : (u.role !== 'mitarbeiter' ? ` <span class="push-hint">(${esc(roleName(u.role))})</span>` : '')}</label>`).join('') || '<span class="push-hint">Keine Nutzer vorhanden</span>'}</div></div>
+      <div class="form-group"><label>Kategorien</label>
+        <div class="planning-user-checkboxes">${_boardKategorien.length
+          ? _boardKategorien.map(k => `<label><input type="checkbox" class="pf2-kat" value="${k.id}" ${katIds.has(k.id) ? 'checked' : ''}> ${esc(k.name)}</label>`).join('')
+          : '<span class="push-hint">Noch keine Kategorien — im Board unter „Kategorien" anlegen.</span>'}</div></div>
       <div class="form-group"><label>Zwischenziele (für den Fortschrittsbalken)</label>
         <div id="pf2-ms-list"></div>
         <button type="button" class="btn btn-outline btn-sm" id="pf2-ms-add" style="margin-top:0.4rem">+ Zwischenziel</button>
@@ -2167,6 +2296,7 @@ async function renderProjectForm(project) {
       urgency: document.getElementById('pf2-urgency').value,
       due_date: document.getElementById('pf2-due').value || null,
       assigned_user_ids: [...document.querySelectorAll('.pf2-assignee:checked')].map(cb => Number(cb.value)),
+      category_ids: [...document.querySelectorAll('.pf2-kat:checked')].map(cb => Number(cb.value)),
       milestones: msParsed,
     };
     if (!body.name) { toast('Projektname ist erforderlich', 'error'); return; }
