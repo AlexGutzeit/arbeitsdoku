@@ -529,7 +529,10 @@ genau dann, wenn zwei Leute gleichzeitig aufräumen.
 Eigener Menüpunkt, der nur erscheint, wenn man das Recht hat. Drei Reiter:
 
 * **Produkte** — umbenennen, Kategorie und Einheit ändern, weitere **Barcodes** anlernen oder
-  entfernen, Produkte **zusammenführen** und löschen. Beim **letzten** Barcode fragt die App nach
+  entfernen, Produkte **zusammenführen** und löschen — **jedes Löschen fragt vorher nach**, auch bei
+  leeren Einträgen, und die Rückfrage nennt die Folge: Produkte und Großhändler landen im
+  Papierkorb, **Kategorien nicht** (die Produkte bleiben, stehen danach aber ohne Kategorie da).
+  Beim **letzten** Barcode fragt die App nach
   und sagt, was danach gilt: nicht mehr scannbar, über die Suche im Bestellformular aber weiterhin
   zu finden. Produkte ohne Code sind in der Liste als **„ohne Barcode — nur über die Suche"**
   gekennzeichnet. Ganz oben meldet die Ansicht **mögliche Doppel-Eintragungen** –
@@ -1216,6 +1219,33 @@ hartkodiert, white-label-tauglich): *Einstellungen → Rechtliches (Impressum & 
   (kein Rich-Text, XSS-sicher).
 - **Hinweis:** Die App stellt nur die technische Möglichkeit bereit. Inhalte (v. a. wegen der Beschäftigten-
   und Krankheitsdaten) sollte der/die Datenschutzbeauftragte bzw. eine Rechtsberatung prüfen und einfügen.
+
+---
+
+## Wie eine neue Fassung bei den Leuten ankommt
+
+Die App ist eine PWA mit Service Worker. Nach einem Deploy erscheint bei den Benutzern das Band
+**„Neue Version verfügbar"** mit dem Knopf **„Jetzt aktualisieren"**.
+
+**Von selbst lädt nichts neu.** Ein neuer Service Worker installiert sich still und *wartet*; er
+übernimmt erst auf Knopfdruck — oder beim nächsten Start der App. Wer gerade ein Formular ausfüllt,
+wird nicht unterbrochen.
+
+**Und wenn doch geladen wird, überlebt die Eingabe.** Beim Neuladen feuert `pagehide`, und daran
+hängt die Entwurfs-Sicherung: Offene Formulare wandern in den Gerätespeicher und werden beim
+nächsten Öffnen wieder angeboten. (Ein Fall, in dem das greift: Die App ist zweimal offen —
+installiert *und* im Browser — und der Knopf wird in einem der beiden gedrückt; dann lädt auch das
+andere Fenster neu.)
+
+**Der Knopf tut in jedem Fall etwas Sichtbares.** Er zeigt „Wird geladen …" und lädt notfalls nach
+zwei Sekunden selbst neu. Grund: Vorher konnte er stillschweigend wirkungslos bleiben, wenn der
+Controller-Wechsel ausblieb — und ein Knopf, der nichts tut, ist schlimmer als einer, der zu viel
+tut. Geprüft wird der ganze Weg in `tests/sw-aktualisieren-ui.js`.
+
+> **Beim Ändern dieser Strecke aufpassen:** Der erste Besuch darf **nicht** neu laden. Dort
+> übernimmt der Service Worker die offene Seite per `clients.claim()`, was ebenfalls einen
+> `controllerchange` auslöst — ein Reload würde dort eine gerade getippte Anmeldung verwerfen.
+> Beide Seiten sind zugesichert.
 
 ---
 

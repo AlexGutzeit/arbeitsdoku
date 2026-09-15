@@ -14,6 +14,65 @@ Datei nicht.
 Nur Punkte, bei denen das **Warum** später noch von Belang ist. Der vollständige Verlauf steht in
 der Git-Historie (`git log`).
 
+### 2026-09-15 · Vier Beobachtungen aus dem Benutzen — und ein Wächter, der mich erwischt hat
+
+Alex hat das Verzeichnis zum ersten Mal wirklich benutzt. Vier Meldungen in einer halben Stunde,
+alle vom selben Schlag: Dinge, die beim Bauen richtig aussehen und beim *Arbeiten* stören.
+
+**1. „Speichern im Unterpunkt Großhändler springt auf Produkte zurück."** Jede Händler-Aktion ruft
+`renderProdukte()`, und das baut die Seite von vorn auf — mit dem ersten Reiter. Wer drei Händler
+nacheinander pflegt, klickt sich dreimal zurück. Jetzt werden **Reiter und offene Händlerkarte**
+gemerkt und nach dem Neuaufbau wiederhergestellt. Dieselbe Lehre wie B10, nur an einer Stelle, an
+die damals niemand dachte.
+
+**2. „Beim manuellen Anlegen fehlt ＋ neue Kategorie."** Die Scan-Maske hatte es, der Dialog im
+Verzeichnis nicht — und der ist **modal**: Man hätte abbrechen, im Reiter eine Kategorie anlegen
+und den schon getippten Namen neu eingeben müssen. Die Gegenprobe im Test ist die eigentliche
+Zusicherung: Ohne Kategorienamen entsteht **weder Kategorie noch Produkt**. Sonst hätte man am Ende
+ein Produkt ohne die Kategorie, die man wollte.
+
+**3. „Löschen ohne Sicherheitsabfrage"** — erst beim Großhändler, dann bei der Kategorie. Beide
+Male dasselbe Muster: Es fragte nur der **Server** zurück, und auch nur, wenn etwas daranhing. Ein
+leerer Eintrag verschwand auf einen Klick, und der rote Knopf sitzt direkt neben „Speichern".
+
+Wichtig war die **Wahrheit im Text**: Beim Händler steht, dass die Bestellnummern beim
+Wiederherstellen zurückkommen. Bei der Kategorie steht, dass es **keinen Weg zurück gibt** —
+Kategorien liegen nicht im Papierkorb. Ein Dialog, der eine Wiederherstellung andeutet, die es
+nicht gibt, wäre schlimmer als gar keiner.
+
+**4. „Im Reiter Gelöscht werden nur Produkte gezählt."** Stimmte — und daraus wurde gleich das
+endgültige Löschen, nur aus dem Papierkorb heraus. Die Arbeit lag nicht im Knopf, sondern in den
+Folgen: Ein endgültig gelöschtes Produkt **löst** die Verknüpfung seiner Bestellungen (der Text
+bleibt, das gilt in dieser App durchgehend), gibt seine Barcodes frei und räumt die
+„aufgegangen in …"-Verweise anderer Produkte weg. Ohne das zeigten alte Einträge ins Leere.
+
+**Und dann hat mich ein Bestandstest erwischt.** `tests/audit-beschriftungen.js` wurde rot, während
+die Suite lief: Ich hatte zwei neue Protokoll-Aktionen eingeführt (`product_purge`,
+`supplier_purge`) und **keine Beschriftungen** dafür. Sie wären im Audit-Log als roher Schlüssel
+erschienen und nicht filterbar gewesen. Genau dafür gibt es diesen Test — er vergleicht die
+protokollierten Aktionen mit der Liste in `app-6-admin.js`, **in beide Richtungen**. Eine Lücke, an
+die man beim Bauen nicht denkt, weil das Feature ohne sie funktioniert.
+
+### 2026-09-15 · Der Deploy selbst — drei Dinge, die ich mir gemerkt habe
+
+**Ein `git checkout main` reisst einer laufenden Suite die Dateien weg.** Beim zweiten Deploy lief
+die Suite noch. Der übliche Weg (`checkout main` → merge → deploy → `checkout develop`) hätte ihr
+Ergebnis wertlos gemacht. Stattdessen `git worktree add /tmp/deploy-main main`, dort gemerged und
+deployt, danach `git worktree remove`. `.env.deploy` muss mit (nicht eingecheckt). Das
+Arbeitsverzeichnis blieb unverändert auf `develop`.
+
+**Ein 404 ist hier kein Beweis fürs Entfernen.** Nach dem Ausbau des Prüfstands prüfte ich
+`/scanner-probe.html` und bekam **200** — Alarm. Die App liefert aber für JEDE unbekannte Adresse
+`index.html` aus (SPA-Weiche). Der Beweis war der Vergleich: byte-gleich mit `index.html`, null
+Treffer für „Prüfstand", und eine frei erfundene Adresse verhält sich genauso. Auf dem Server lag
+wirklich keine Datei mehr.
+
+**Ein Testlauf, während man ändert, misst nichts.** Der Lauf endete mit zwei Roten: einer war ein
+echter Fund (die Audit-Beschriftungen), der andere — `touch-ux-ui` — lief standalone grün. Das
+liess sich nur *behaupten*, nicht beweisen. Der saubere Durchlauf danach, auf einem Stand, an dem
+ich nichts mehr anfasste, gab die Antwort: **218 von 218, nichts übersprungen.** Deshalb ist der
+saubere Lauf kein Ritual, sondern die einzige Messung, die zählt.
+
 ### 2026-09-15 · „Jetzt aktualisieren" tat nichts — eine zu grobe Bedingung
 
 Alex nach dem Deploy: *„Der 'jetzt aktualisieren' Button funktioniert nicht mehr."* Und kurz
