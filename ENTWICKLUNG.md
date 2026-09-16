@@ -2751,14 +2751,24 @@ Eine Wiederholung dessen, worunter man ohnehin steht — und kein Hinweis darauf
 hat.
 
 Die Plaketten beantworten eine einzige Frage: *Wo taucht dieser Auftrag sonst noch auf?* Daraus
-folgt die Regel, und sie hängt an der **Spalte**, nicht an der Ansicht:
+folgt die Regel in einem Satz — sie hängt an der **Spalte**, nicht an der Ansicht:
+
+> **Alles, woran der Auftrag hängt, minus die Spalte, in der man gerade steht.**
+
+Mein erster Entwurf war die halbe Regel (Mitarbeiter-Spalte → nur Kategorien). Alex hat sie zu Ende
+gedacht: Ein Auftrag an **Max und Anna** in **PV und Zählerschrank** zeigt
 
 | Spalte | Plaketten |
 |---|---|
-| Mitarbeiter | die Kategorien |
-| Kategorie | die zugewiesenen Mitarbeiter **+ die anderen** Kategorien |
-| „Ohne Kategorie" | die Mitarbeiter (Kategorien gibt es dort per Definition keine) |
-| „Nicht zugewiesen" | die Kategorien (Mitarbeiter gibt es dort per Definition keine) |
+| Max | Anna · PV · Zählerschrank |
+| Anna | Max · PV · Zählerschrank |
+| PV | Max · Anna · Zählerschrank |
+| Zählerschrank | Max · Anna · PV |
+
+Damit sieht man in der Mitarbeiter-Spalte auch, **mit wem** man einen Auftrag teilt — das war
+vorher nirgends auf der Kachel zu sehen. Die Rest-Spalten brauchen keinen Sonderfall: In
+„Nicht zugewiesen" gibt es keine Mitarbeiter, in „Ohne Kategorie" keine Kategorien, da fällt die
+jeweilige Hälfte von selbst weg. Der Code wurde dadurch kürzer statt länger.
 
 Deshalb bekommt `tileHtml(p, spalte)` seine Spalte übergeben. In „Alle" ergibt sich das Verhalten
 von selbst, weil dort beide Spaltenarten nebeneinanderstehen.
