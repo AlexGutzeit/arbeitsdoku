@@ -58,6 +58,12 @@ function req(m, p, t, b) {
     await req('POST', '/api/projects', admin, { name: 'Dach Süd',     category_ids: [pv.id, zs.id] });   // nur Kategorie
     await req('POST', '/api/projects', admin, { name: 'Kabel ziehen', assigned_user_ids: [maxId] });      // nur MA
     await req('POST', '/api/projects', admin, { name: 'Nichts davon' });                                  // weder noch
+    // Alex' Beispiel (16.09.2026): ZWEI Zugeteilte, ZWEI Kategorien — der Fall, an dem sich die
+    // Plaketten-Regel vollstaendig zeigt.
+    const erikaId = (await req('POST', '/api/users', admin, { username: 'erika', password: 'Monteur1!',
+      name: 'Erika Musterfrau', role: 'mitarbeiter', target_hours_per_week: 40 })).body.user.id;
+    await req('POST', '/api/projects', admin, { name: 'Wallbox Carport',
+      assigned_user_ids: [maxId, erikaId], category_ids: [pv.id, zs.id] });
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell',
       args: ['--no-sandbox', '--disable-setuid-sandbox'] });
@@ -169,6 +175,9 @@ function req(m, p, t, b) {
     halle = maSp.find(x => x.name === 'Halle 3 Dach');
     ok('in der Mitarbeiter-Spalte stehen weiterhin die Kategorien', halle.kat.join('|') === 'PV', JSON.stringify(halle));
     ok('… und NICHT der Mitarbeiter, in dessen Spalte man steht', halle.ma.length === 0, JSON.stringify(halle));
+    ok('… wohl aber die ANDEREN Zugeteilten',
+      (maSp.find(x => x.name === 'Wallbox Carport') || {}).ma.join('|') === 'Erika Musterfrau',
+      JSON.stringify(maSp.find(x => x.name === 'Wallbox Carport')));
     const rest = await plaketten('Nicht zugewiesen');
     ok('in „Nicht zugewiesen" stehen die Kategorien',
       (rest.find(x => x.name === 'Dach Süd') || {}).kat.sort().join('|') === 'PV|Zählerschrank',
@@ -179,6 +188,23 @@ function req(m, p, t, b) {
       (await plaketten('PV')).find(x => x.name === 'Halle 3 Dach').ma.join('|') === 'Max Mustermann');
     ok('… und die Mitarbeiter-Spalte die Kategorie',
       (await plaketten('Max Mustermann')).find(x => x.name === 'Halle 3 Dach').kat.join('|') === 'PV');
+
+    console.log('\n── Alex\' Beispiel: zwei Zugeteilte, zwei Kategorien, alle vier Spalten ──');
+    // „Wallbox Carport" haengt an Max UND Erika sowie an PV UND Zaehlerschrank.
+    // Erwartet ist in jeder der vier Spalten: ALLES ausser der Spalte selbst.
+    await umschalten('alle');
+    const wallbox = async (sp) => {
+      const z = (await plaketten(sp)).find(x => x.name === 'Wallbox Carport');
+      return z ? [...z.ma, ...z.kat].sort().join(' · ') : '(nicht in der Spalte)';
+    };
+    ok('unter Max:            Erika · PV · Zählerschrank',
+      await wallbox('Max Mustermann') === 'Erika Musterfrau · PV · Zählerschrank', await wallbox('Max Mustermann'));
+    ok('unter Erika:          Max · PV · Zählerschrank',
+      await wallbox('Erika Musterfrau') === 'Max Mustermann · PV · Zählerschrank', await wallbox('Erika Musterfrau'));
+    ok('unter PV:             Erika · Max · Zählerschrank',
+      await wallbox('PV') === 'Erika Musterfrau · Max Mustermann · Zählerschrank', await wallbox('PV'));
+    ok('unter Zählerschrank:  Erika · Max · PV',
+      await wallbox('Zählerschrank') === 'Erika Musterfrau · Max Mustermann · PV', await wallbox('Zählerschrank'));
 
     console.log('\n── Die Ansicht bleibt stehen ──');
     await seite.evaluate(() => renderProjects());

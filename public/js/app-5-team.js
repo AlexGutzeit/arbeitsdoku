@@ -2002,18 +2002,21 @@ async function renderProjects() {
   // Spalte „Test" stand bisher auf jeder Kachel die Plakette „Test": eine Wiederholung dessen,
   // worunter man ohnehin steht, und kein Hinweis darauf, WER den Auftrag hat (Alex, 16.09.2026).
   //
-  //   Mitarbeiter-Spalte → die Kategorien (Art der Arbeit)
-  //   Kategorie-Spalte   → die zugewiesenen Mitarbeiter + die ANDEREN Kategorien
-  //   „Ohne Kategorie"   → die Mitarbeiter (Kategorien gibt es dort per Definition keine)
-  //   „Nicht zugewiesen" → die Kategorien (Mitarbeiter gibt es dort per Definition keine)
+  // Die Regel ist genau EIN Satz: ALLES, woran der Auftrag haengt, MINUS die Spalte, in der man
+  // gerade steht. Damit steht ein Auftrag von Max+Anna in PV+Zaehlerschrank
+  //
+  //   unter Max           → Anna · PV · Zaehlerschrank
+  //   unter Anna          → Max · PV · Zaehlerschrank
+  //   unter PV            → Max · Anna · Zaehlerschrank
+  //   unter Zaehlerschrank→ Max · Anna · PV
+  //
+  // Die Rest-Spalten ergeben sich von selbst: in „Nicht zugewiesen" gibt es keine Mitarbeiter, in
+  // „Ohne Kategorie" keine Kategorien — da faellt die jeweilige Haelfte ohne Sonderfall weg.
   const tileHtml = (p, spalte) => {
-    const istKatSpalte = !!(spalte && spalte.kat);
-    const istRest = !!(spalte && spalte.id === 'unassigned');
-    const zeigeMA = istKatSpalte || (istRest && _boardAnsicht === 'kategorien');
-    const plakKats = istKatSpalte
-      ? (p.categories || []).filter(k => k.id !== spalte.katId)
-      : (p.categories || []);
-    const plakMA = zeigeMA ? (p.assigned_users || []) : [];
+    const eigenerMA = (spalte && !spalte.kat && spalte.id !== 'unassigned') ? spalte.id : null;
+    const eigeneKat = (spalte && spalte.kat) ? spalte.katId : null;
+    const plakMA = (p.assigned_users || []).filter(x => x.user_id !== eigenerMA);
+    const plakKats = (p.categories || []).filter(k => k.id !== eigeneKat);
     const u = projUrg(p.urgency);
     const ms = p.milestones || [];
     const prog = ms.length ? projectProgress(ms) : null;
