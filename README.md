@@ -138,7 +138,11 @@ Geburtstag. Die zweite Stufe gibt es, weil „das Team darf gratulieren" nicht d
 nichts geändert.
 
 **Meine Daten:** Soll-Stunden, Urlaubsanspruch, Eintritt, Personalnummer, Arbeitsbeginn und
-zusätzliche Rechte — nur lesend, „so hat die Verwaltung dich hinterlegt".
+zusätzliche Rechte — nur lesend, „so hat die Verwaltung dich hinterlegt". Bei den Rechten stehen
+**alle** hinterlegten Zusatzrechte (Planung, Schwarzes Brett, Dateien hochladen, Bestellungen
+abschließen, Lagerdaten pflegen, Artikel einlernen). Wo ein Recht ein kleineres einschließt, wird
+nur das größere genannt — „Planung für alle" statt zusätzlich „eigene Planung", und „Lagerdaten
+pflegen (schließt Einlernen ein)".
 
 **Zeitnachweis als PDF** *(nur Mitarbeiter)*: Die eigenen erfassten Zeiten als druckfertiges PDF,
 gefiltert nach Zeitraum und Projekt. Es ist dasselbe Formular wie unter [🧾 Abrechnung](#-abrechnung),

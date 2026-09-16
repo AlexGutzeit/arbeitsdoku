@@ -3010,11 +3010,36 @@ async function kontoStammdatenKarte() {
   const anstellung = (d.anstellung || []).map(a =>
     datum(a.start_date) + (a.end_date ? ' – ' + datum(a.end_date) : ' – heute')).join('<br>');
 
-  const rechte = [
-    d.rechte.planen_alle ? 'Planung für alle' : (d.rechte.planen ? 'eigene Planung' : null),
-    d.rechte.schwarzes_brett ? 'Schwarzes Brett' : null,
-    d.rechte.dateien_hochladen ? 'Dateien hochladen' : null,
-  ].filter(Boolean).join(', ');
+  // Zusatzrechte. Diese Liste war lange nur halb so lang wie das, was der Server schickt, und
+  // verschwieg drei Rechte stillschweigend (Alex, 16.09.2026: „Ich habe inzwischen definitiv mehr
+  // Rechte"). Deshalb wird jetzt ueber das gelaufen, WAS ANKOMMT — ein Schluessel ohne Beschriftung
+  // erscheint mit seinem rohen Namen. Lieber haesslich als unsichtbar: So faellt beim naechsten
+  // neuen Recht sofort auf, dass hier eine Zeile fehlt, statt dass es niemand merkt.
+  const RECHTE_NAMEN = {
+    planen: 'eigene Planung',
+    planen_alle: 'Planung für alle',
+    schwarzes_brett: 'Schwarzes Brett',
+    dateien_hochladen: 'Dateien hochladen',
+    bestellungen_abschliessen: 'Bestellungen abschließen',
+    produktverzeichnis_pflegen: 'Lagerdaten pflegen',
+    artikel_einlernen: 'Artikel einlernen',
+  };
+  // Zwei Rechte schliessen jeweils ein kleineres ein (barcoderecht.js: „das groessere Recht
+  // schliesst das kleinere ein"). Beide nebeneinander zu nennen liest sich wie zwei Dinge, obwohl
+  // es eine Stufe ist — also nur die groessere nennen. Wo der Name das nicht schon verraet, steht
+  // es dabei, damit niemand glaubt, ihm fehle etwas.
+  const UMFASST = {
+    planen_alle: { klein: 'planen', zusatz: '' },                       // „für alle" sagt es selbst
+    produktverzeichnis_pflegen: { klein: 'artikel_einlernen', zusatz: ' (schließt Einlernen ein)' },
+  };
+  const rechteRoh = d.rechte || {};
+  const verdeckt = new Set(Object.entries(UMFASST)
+    .filter(([gross]) => rechteRoh[gross]).map(([, v]) => v.klein));
+  const rechte = Object.keys(rechteRoh)
+    .filter(k => rechteRoh[k] && !verdeckt.has(k))
+    .map(k => (RECHTE_NAMEN[k] || k)
+      + (UMFASST[k] && rechteRoh[UMFASST[k].klein] === false ? UMFASST[k].zusatz : ''))
+    .join(', ');
 
   k.innerHTML = `
     <h3>&#128203; Meine Daten</h3>

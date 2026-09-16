@@ -2790,3 +2790,29 @@ hinterlegt hat, bekommt aber `.avatar--leer` — und das ist `display: none`. Di
 nach Konto unterschiedlich aus. Stattdessen ein 7-px-Punkt in `colorFor(user_id)`: immer da, und
 dieselbe Personenfarbe wie im Spaltenkopf und in der Planung.
 
+### Eine kurze Liste neben einer langen (16.09.2026)
+
+Alex, mit Screenshot: *„Das aktualisiert sich nicht. Ich habe inzwischen definitiv mehr Rechte."*
+Auf „Mein Konto" standen weiter nur „Schwarzes Brett, Dateien hochladen" — obwohl er sich
+Bestell-, Lagerdaten- und Einlernrecht gegeben hatte.
+
+Der Server schickte in `rechte` längst **alle sieben** Schalter. Die Anzeige in `app-5-team.js`
+zählte **drei** davon auf, hartkodiert. Zwei handgepflegte Listen nebeneinander, und niemand merkt,
+wenn die kürzere zurückbleibt: Wer ein Recht ergänzt, fasst die Route an — die Anzeige liegt in
+einer anderen Datei und schweigt einfach weiter.
+
+**Die Reparatur ist nicht „drei Zeilen nachtragen"**, sondern die Richtung umdrehen: Es wird über das
+gelaufen, **was ankommt**. Ein Schlüssel ohne Beschriftung erscheint mit seinem **rohen Namen**
+(`bestellungen_abschliessen`) statt zu verschwinden. Hässlich — und genau deshalb richtig: Beim
+nächsten neuen Recht sieht man sofort, dass eine Zeile fehlt.
+
+Zwei Rechte schließen ein kleineres ein (`barcoderecht.js`: *das größere Recht schließt das kleinere
+ein*). Beide nebeneinander zu nennen läse sich wie zwei Dinge, obwohl es eine Stufe ist — also nur
+das größere, und wo der Name es nicht verrät, mit Zusatz: „Lagerdaten pflegen (schließt Einlernen
+ein)".
+
+`tests/konto-rechte-ui.js` (14) prüft das Entscheidende **ohne eigene Liste**: Es holt die Schlüssel
+vom Server und verlangt für jeden eine Beschriftung im Quelltext. Eine Aufzählung im Test wäre die
+dritte Liste, die zurückbleiben kann. Dazu eine Gegenprobe mit einem erfundenen Schlüssel — sonst
+prüfte die Zusicherung womöglich gar nichts.
+
