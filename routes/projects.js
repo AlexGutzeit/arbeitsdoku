@@ -140,8 +140,11 @@ router.get('/kategorien', authenticate, (req, res) => {
   const db = getDb();
   const kategorien = db.prepare(`
     SELECT c.id, c.name,
+           -- Zaehlt dasselbe wie der Riegel in DELETE: ALLE nicht geloeschten Auftraege, auch
+           -- erledigte. Sie verlieren die Kategorie schliesslich genauso. Zaehlte die Liste nur
+           -- die offenen, naennte der Loesch-Dialog eine andere Zahl als die Sicherung dahinter.
            (SELECT COUNT(*) FROM project_category_links l JOIN projects p ON p.id = l.project_id
-             WHERE l.category_id = c.id AND p.deleted_at IS NULL AND COALESCE(p.done,0) = 0) AS anzahl
+             WHERE l.category_id = c.id AND p.deleted_at IS NULL) AS anzahl
       FROM project_categories c WHERE c.deleted_at IS NULL ORDER BY c.name
   `).all();
   res.json({ kategorien });

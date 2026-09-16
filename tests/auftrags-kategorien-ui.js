@@ -221,25 +221,71 @@ function req(m, p, t, b) {
       await seite.evaluate(() => document.querySelectorAll('.kat-um').length === 3
                               && document.querySelectorAll('.kat-weg').length === 3),
       await seite.evaluate(() => document.querySelectorAll('.kat-um').length));
-    // Löschen einer BELEGTEN Kategorie: zwei Rückfragen, und die Aufträge bleiben.
+    // Löschen einer BELEGTEN Kategorie: EINE Rückfrage, sie nennt die Zahl, die Aufträge bleiben.
     const pvVorher = (await board()).find(c => c.name.startsWith('PV')).auftraege.length;
     const auftraegeVorher = (await req('GET', '/api/projects', admin)).body.projects.length;
     await seite.evaluate((id) => document.querySelector(`.kat-weg[data-id="${id}"]`).click(), pv.id);
-    await sleep(700);
+    await sleep(800);
     const frage1 = await seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || '');
-    ok('die erste Rückfrage sagt, dass die Aufträge bleiben', /Aufträge selbst bleiben/.test(frage1), frage1.slice(0, 160));
-    await seite.evaluate(() => [...document.querySelectorAll('.modal button')].find(x => /Löschen/i.test(x.textContent)).click());
-    await sleep(900);
-    const frage2 = await seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || '');
-    ok(`… die zweite nennt die Zahl der betroffenen Aufträge (${pvVorher})`,
-      new RegExp('noch ' + pvVorher + ' Auftr').test(frage2), frage2.slice(0, 160));
-    await seite.evaluate(() => [...document.querySelectorAll('.modal button')].find(x => /Trotzdem/i.test(x.textContent)).click());
-    await sleep(2200);
+    ok(`die Rückfrage nennt die Zahl der betroffenen Aufträge (${pvVorher})`,
+      new RegExp('noch ' + pvVorher + ' Auftr').test(frage1), frage1.slice(0, 200));
+    ok('… und sagt, dass die Aufträge bleiben', /bleiben erhalten|bleibt erhalten/.test(frage1), frage1.slice(0, 200));
+    ok('… es gibt genau EINEN Knopf zum Löschen, keine Doppelfrage',
+      await seite.evaluate(() => [...document.querySelectorAll('.modal button')].map(x => x.textContent.trim()).join('|')) === 'Abbrechen|Löschen',
+      await seite.evaluate(() => [...document.querySelectorAll('.modal button')].map(x => x.textContent.trim()).join('|')));
+    await seite.evaluate(() => [...document.querySelectorAll('.modal button')].find(x => /^Löschen$/i.test(x.textContent.trim())).click());
+    await sleep(2400);
+    ok('… und danach kommt KEINE zweite Rückfrage mehr',
+      await seite.evaluate(() => !document.querySelector('.modal')),
+      await seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || ''));
     b = await board();
     ok('… PV ist weg', !spalte(b, 'PV'), JSON.stringify(b.map(c => c.name)));
     ok('… die Aufträge nicht',
       (await req('GET', '/api/projects', admin)).body.projects.length === auftraegeVorher,
       (await req('GET', '/api/projects', admin)).body.projects.length + ' statt ' + auftraegeVorher);
+
+    console.log('\n── Eine LEERE Kategorie ──');
+    // Auch sie fragt — aber ohne von Aufträgen zu reden, die es nicht gibt.
+    await seite.evaluate((id) => document.querySelector(`.kat-weg[data-id="${id}"]`).click(),
+      (await req('GET', '/api/projects/kategorien', admin)).body.kategorien.find(k => k.name === 'Kleinarbeiten').id);
+    await sleep(800);
+    const leer = await seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || '');
+    ok('sie fragt trotzdem', /löschen\?/i.test(leer), leer.slice(0, 160));
+    ok('… und sagt „hängt kein Auftrag" statt einer Zahl', /hängt kein Auftrag/.test(leer), leer.slice(0, 160));
+    await seite.evaluate(() => [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/i.test(x.textContent)).click());
+    await sleep(600);
+
+    console.log('\n── Wenn der Schirm veraltet ist ──');
+    // DAS ist der Fall, für den es überhaupt eine zweite Frage geben muss: Auf dem Board steht
+    // eine Zahl, die nicht mehr stimmt. Im Betrieb räumt das Live-Ereignis (SSE) das meist von
+    // selbst auf — aber nicht in einem Tab, der gerade offline war oder das Ereignis verpasst hat.
+    // Deshalb wird der veraltete Stand hier AUSDRÜCKLICH hergestellt (der gemerkte Zähler wird auf
+    // 0 zurückgedreht), statt auf ein Wettrennen zu hoffen, das der Test nicht in der Hand hat.
+    const spaet = (await req('POST', '/api/projects/kategorien', admin, { name: 'Spätzuordnung' })).body.kategorie;
+    await req('POST', '/api/projects', admin, { name: 'Heimlich dazu', category_ids: [spaet.id] });
+    await seite.goto(BASIS + '/#/projects', { waitUntil: 'domcontentloaded' }); await sleep(2600);
+    await seite.waitForSelector('.kat-weg', { timeout: 15000 });
+    ok('die Oberfläche kennt den Auftrag zunächst',
+      await seite.evaluate((id) => (_boardKategorien.find(k => k.id === id) || {}).anzahl, spaet.id) === 1,
+      String(await seite.evaluate((id) => (_boardKategorien.find(k => k.id === id) || {}).anzahl, spaet.id)));
+    await seite.evaluate((id) => { const k = _boardKategorien.find(x => x.id === id); if (k) k.anzahl = 0; }, spaet.id);
+
+    await seite.evaluate((id) => document.querySelector(`.kat-weg[data-id="${id}"]`).click(), spaet.id);
+    await sleep(900);
+    ok('die erste Frage nennt den (veralteten) Stand vom Schirm',
+      /hängt kein Auftrag/.test(await seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || '')),
+      await seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || ''));
+    await seite.evaluate(() => [...document.querySelectorAll('.modal button')].find(x => /^Löschen$/i.test(x.textContent.trim())).click());
+    await sleep(1600);
+    const zweite = await seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || '');
+    ok('… und WEIL die Zahl abweicht, wird noch einmal gefragt', /noch 1 Auftrag/.test(zweite), zweite.slice(0, 200));
+    await seite.evaluate(() => [...document.querySelectorAll('.modal button')].find(x => /Abbrechen/i.test(x.textContent)).click());
+    await sleep(1400);
+    ok('… und „Abbrechen" lässt die Kategorie stehen',
+      (await req('GET', '/api/projects/kategorien', admin)).body.kategorien.some(k => k.name === 'Spätzuordnung'));
+    ok('… der heimlich zugeordnete Auftrag ist ebenfalls unangetastet',
+      (await req('GET', '/api/projects', admin)).body.projects.some(p => p.name === 'Heimlich dazu'
+        && (p.categories || []).some(k => k.id === spaet.id)));
 
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.slice(0, 2).join(' | '));
   } catch (e) {

@@ -2162,17 +2162,29 @@ async function renderProjects() {
   }));
   mainEl.querySelectorAll('.kat-weg').forEach(b => b.addEventListener('click', async (e) => {
     e.stopPropagation();
-    // Immer fragen — auch bei leeren Kategorien. Und sagen, was mit den Auftraegen passiert:
-    // Sie bleiben, nur diese Zuordnung faellt weg.
-    if (!(await confirmModal(
-      `„${b.dataset.name}" löschen?\n\nDie Aufträge selbst bleiben erhalten — sie haben danach `
-      + 'nur diese Kategorie nicht mehr.',
+    // EINE Frage, und sie nennt die Zahl (Alex, 16.09.2026). Vorher kam zuerst ein Dialog, der
+    // nur MITTEILTE, dass die Auftraege bleiben, und danach einer, der genau das bestaetigen
+    // liess — im ersten gab es also nichts zu entscheiden. Die Zahl steht in _boardKategorien und
+    // wird bei jedem Aufbau des Boards frisch geholt.
+    const katWeg = _boardKategorien.find(k => String(k.id) === String(b.dataset.id));
+    const gezeigt = katWeg ? (Number(katWeg.anzahl) || 0) : 0;
+    const satz = (n) => n === 0
+      ? 'An dieser Kategorie hängt kein Auftrag.'
+      : (n === 1
+        ? 'An dieser Kategorie hängt noch 1 Auftrag. Der Auftrag selbst bleibt erhalten — er hat danach nur diese Kategorie nicht mehr.'
+        : `An dieser Kategorie hängen noch ${n} Aufträge. Die Aufträge selbst bleiben erhalten — sie haben danach nur diese Kategorie nicht mehr.`);
+    if (!(await confirmModal(`„${b.dataset.name}" löschen?\n\n${satz(gezeigt)}`,
       { title: 'Kategorie löschen', okLabel: 'Löschen', danger: true }))) return;
     try {
+      // Bewusst OHNE `loesen`: Der Riegel im Server ist die Gegenprobe zu dem, was auf dem Schirm
+      // stand. Stimmt die Zahl, wird stillschweigend durchgereicht; weicht sie ab (jemand hat
+      // inzwischen zugeordnet), wird noch einmal gefragt — mit der richtigen Zahl.
       await api('DELETE', '/api/projects/kategorien/' + b.dataset.id);
     } catch (err) {
-      if (!/hängen noch/i.test(err.message)) { toast(err.message, 'error'); return; }
-      if (!(await confirmModal(err.message, { title: 'Kategorie löschen', okLabel: 'Trotzdem löschen', danger: true }))) return;
+      const m = /noch (\d+) Auftr/.exec(err.message || '');
+      if (!m) { toast(err.message, 'error'); return; }
+      if (Number(m[1]) !== gezeigt
+          && !(await confirmModal(err.message, { title: 'Kategorie löschen', okLabel: 'Trotzdem löschen', danger: true }))) return;
       try { await api('DELETE', '/api/projects/kategorien/' + b.dataset.id, { loesen: true }); }
       catch (e2) { toast(e2.message, 'error'); return; }
     }

@@ -2698,12 +2698,24 @@ zusammenlegt.
 Aus demselben Grund hat `routes/projects.js` seine **eigene** `vergleichsform` und importiert sie
 nicht aus `products.js`: Die beiden Listen dürfen ihre Namensregeln unabhängig voneinander ändern.
 
-### Löschen fragt zweimal
+### Löschen fragt einmal — und nennt die Zahl
 
-Die erste Rückfrage sagt, **was** passiert („die Aufträge selbst bleiben"). Erst wenn die Kategorie
-belegt ist, antwortet der Server mit **409 und der Zahl** der betroffenen Aufträge, und die zweite
-Rückfrage nennt sie. `DELETE` löscht nur mit `{ loesen: true }` im Rumpf — ein versehentlicher
-Aufruf ohne Rumpf kann nichts kaputt machen.
+Erster Entwurf: ein Dialog, der MITTEILTE, dass die Aufträge bleiben, danach einer, der genau das
+bestätigen ließ. Alex am lebenden Objekt: *„Wo kann ich bestätigen, dass der Auftrag ohne diese
+Kategorie bleiben soll?"* — im ersten Dialog gab es nämlich nichts zu entscheiden.
+
+Jetzt **eine** Frage, und sie nennt die Zahl selbst. Die Oberfläche kennt sie: `_boardKategorien`
+trägt `anzahl` und wird bei jedem Aufbau des Boards frisch geholt.
+
+**Der Riegel im Server bleibt — als Gegenprobe, nicht als zweite Frage.** Der Klick schickt `DELETE`
+bewusst OHNE `loesen`. Stimmt die Zahl aus der 409-Antwort mit der überein, die im Dialog stand,
+wird stillschweigend mit `{ loesen: true }` durchgereicht. Weicht sie ab — jemand hat in der
+Zwischenzeit zugeordnet, und das Live-Ereignis kam nicht an —, wird noch einmal gefragt, mit der
+richtigen Zahl. So bestätigt man nie eine Zahl und löscht dann eine andere.
+
+`anzahl` in `GET /kategorien` zählt seitdem **dasselbe wie der Riegel**: alle nicht gelöschten
+Aufträge, auch erledigte. Vorher zählte die Liste nur die offenen — der Dialog hätte eine andere
+Zahl genannt als die Sicherung dahinter.
 
 ### Wer die Firma verlässt, behält seine Aufträge
 
