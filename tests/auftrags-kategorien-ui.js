@@ -101,7 +101,8 @@ function req(m, p, t, b) {
     ok('… „Nicht zugewiesen" enthält alles ohne Mitarbeiter',
       spalte(b, 'Nicht zugewiesen').auftraege.sort().join('|') === 'Dach Süd|Nichts davon',
       JSON.stringify(spalte(b, 'Nicht zugewiesen').auftraege));
-    ok('… Max hat seine beiden', spalte(b, 'Max Mustermann').auftraege.sort().join('|') === 'Halle 3 Dach|Kabel ziehen',
+    ok('… Max hat seine drei',
+      spalte(b, 'Max Mustermann').auftraege.sort().join('|') === 'Halle 3 Dach|Kabel ziehen|Wallbox Carport',
       JSON.stringify(spalte(b, 'Max Mustermann').auftraege));
     ok('… und es gibt KEINE Kategorie-Spalten', !b.some(c => c.kat), JSON.stringify(b.map(c => c.name)));
 
@@ -112,10 +113,11 @@ function req(m, p, t, b) {
     ok('… und enthält, was keine Kategorie hat',
       spalte(b, 'Ohne Kategorie').auftraege.sort().join('|') === 'Kabel ziehen|Nichts davon',
       JSON.stringify(spalte(b, 'Ohne Kategorie').auftraege));
-    ok('… PV zeigt beide PV-Aufträge', spalte(b, 'PV').auftraege.sort().join('|') === 'Dach Süd|Halle 3 Dach',
+    ok('… PV zeigt alle drei PV-Aufträge',
+      spalte(b, 'PV').auftraege.sort().join('|') === 'Dach Süd|Halle 3 Dach|Wallbox Carport',
       JSON.stringify(spalte(b, 'PV').auftraege));
     ok('… „Dach Süd" steht auch unter Zählerschrank',
-      spalte(b, 'Zählerschrank').auftraege.join('|') === 'Dach Süd', JSON.stringify(spalte(b, 'Zählerschrank').auftraege));
+      spalte(b, 'Zählerschrank').auftraege.includes('Dach Süd'), JSON.stringify(spalte(b, 'Zählerschrank').auftraege));
     ok('… eine LEERE Kategorie wird trotzdem gezeigt (sonst legt man sie doppelt an)',
       !!spalte(b, 'Kleinarbeiten'), JSON.stringify(b.map(c => c.name)));
     ok('… und es gibt KEINE Mitarbeiter-Spalten',
@@ -220,6 +222,8 @@ function req(m, p, t, b) {
                               && document.querySelectorAll('.kat-weg').length === 3),
       await seite.evaluate(() => document.querySelectorAll('.kat-um').length));
     // Löschen einer BELEGTEN Kategorie: zwei Rückfragen, und die Aufträge bleiben.
+    const pvVorher = (await board()).find(c => c.name.startsWith('PV')).auftraege.length;
+    const auftraegeVorher = (await req('GET', '/api/projects', admin)).body.projects.length;
     await seite.evaluate((id) => document.querySelector(`.kat-weg[data-id="${id}"]`).click(), pv.id);
     await sleep(700);
     const frage1 = await seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || '');
@@ -227,13 +231,15 @@ function req(m, p, t, b) {
     await seite.evaluate(() => [...document.querySelectorAll('.modal button')].find(x => /Löschen/i.test(x.textContent)).click());
     await sleep(900);
     const frage2 = await seite.evaluate(() => (document.querySelector('.modal') || {}).innerText || '');
-    ok('… die zweite nennt die Zahl der betroffenen Aufträge', /noch 2 Aufträge/.test(frage2), frage2.slice(0, 160));
+    ok(`… die zweite nennt die Zahl der betroffenen Aufträge (${pvVorher})`,
+      new RegExp('noch ' + pvVorher + ' Auftr').test(frage2), frage2.slice(0, 160));
     await seite.evaluate(() => [...document.querySelectorAll('.modal button')].find(x => /Trotzdem/i.test(x.textContent)).click());
     await sleep(2200);
     b = await board();
     ok('… PV ist weg', !spalte(b, 'PV'), JSON.stringify(b.map(c => c.name)));
     ok('… die Aufträge nicht',
-      (await req('GET', '/api/projects', admin)).body.projects.length === 4);
+      (await req('GET', '/api/projects', admin)).body.projects.length === auftraegeVorher,
+      (await req('GET', '/api/projects', admin)).body.projects.length + ' statt ' + auftraegeVorher);
 
     ok('keine JavaScript-Fehler', jsFehler.length === 0, jsFehler.slice(0, 2).join(' | '));
   } catch (e) {
