@@ -1997,7 +1997,23 @@ async function renderProjects() {
   const canPlanTake = canEditPlanning();
   const urgOpts = (p) => PROJECT_URGENCY.map(o => `<button type="button" class="urg-opt" data-id="${p.id}" data-urg="${o.key}" style="background:${o.color}" title="${o.label}"></button>`).join('');
   const myId = S.user && S.user.id;
-  const tileHtml = (p) => {
+  // Die Plaketten unter dem Kundennamen beantworten: „Wo taucht dieser Auftrag SONST noch auf?"
+  // Deshalb kennt tileHtml seine Spalte — sie darf nie sich selbst anzeigen. In der Kategorie-
+  // Spalte „Test" stand bisher auf jeder Kachel die Plakette „Test": eine Wiederholung dessen,
+  // worunter man ohnehin steht, und kein Hinweis darauf, WER den Auftrag hat (Alex, 16.09.2026).
+  //
+  //   Mitarbeiter-Spalte → die Kategorien (Art der Arbeit)
+  //   Kategorie-Spalte   → die zugewiesenen Mitarbeiter + die ANDEREN Kategorien
+  //   „Ohne Kategorie"   → die Mitarbeiter (Kategorien gibt es dort per Definition keine)
+  //   „Nicht zugewiesen" → die Kategorien (Mitarbeiter gibt es dort per Definition keine)
+  const tileHtml = (p, spalte) => {
+    const istKatSpalte = !!(spalte && spalte.kat);
+    const istRest = !!(spalte && spalte.id === 'unassigned');
+    const zeigeMA = istKatSpalte || (istRest && _boardAnsicht === 'kategorien');
+    const plakKats = istKatSpalte
+      ? (p.categories || []).filter(k => k.id !== spalte.katId)
+      : (p.categories || []);
+    const plakMA = zeigeMA ? (p.assigned_users || []) : [];
     const u = projUrg(p.urgency);
     const ms = p.milestones || [];
     const prog = ms.length ? projectProgress(ms) : null;
@@ -2030,8 +2046,12 @@ async function renderProjects() {
     return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}${expanded ? ' expanded' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
       <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${flag}</div>
       ${p.client ? `<div class="proj-client">${esc(p.client)}</div>` : ''}
-      ${(p.categories && p.categories.length)
-        ? `<div class="proj-kats">${p.categories.map(k => `<span class="proj-kat">${esc(k.name)}</span>`).join('')}</div>` : ''}
+      ${(plakMA.length || plakKats.length)
+        ? `<div class="proj-kats">${
+            plakMA.map(x => `<span class="proj-kat proj-kat-ma" title="zugewiesen: ${esc(x.name)}"><span class="proj-kat-punkt" style="background:${colorFor(x.user_id)}"></span>${esc(x.name)}</span>`).join('')
+          }${
+            plakKats.map(k => `<span class="proj-kat" title="Kategorie: ${esc(k.name)}">${esc(k.name)}</span>`).join('')
+          }</div>` : ''}
       ${sched ? `<div class="proj-due" style="color:${sched.color}">&#128197; ${sched.label}</div>` : ''}
       ${prog ? msBar(prog, 'ms-bar-slim', goal, fill) : ''}
       <div class="proj-detail" style="display:${expanded ? 'block' : 'none'}">
@@ -2059,7 +2079,7 @@ async function renderProjects() {
           <button class="btn-icon kat-um" data-id="${c.katId}" data-name="${esc(c.name)}" title="Umbenennen" aria-label="${esc(c.name)} umbenennen">&#9998;</button>
           <button class="btn-icon kat-weg" data-id="${c.katId}" data-name="${esc(c.name)}" title="Löschen" aria-label="${esc(c.name)} löschen">&times;</button>
         </span>` : ''}</div>
-      <div class="board-col-body">${c.list.map(tileHtml).join('') || '<div class="board-empty">–</div>'}</div>
+      <div class="board-col-body">${c.list.map(t => tileHtml(t, c)).join('') || '<div class="board-empty">–</div>'}</div>
     </div>`).join('');
 
   // Farb-Legende — getrennt für Dringlichkeit (Flagge/Ampel) und Fortschritt (Ziele/Balken),

@@ -136,6 +136,50 @@ function req(m, p, t, b) {
       ['Halle 3 Dach', 'Dach Süd', 'Kabel ziehen', 'Nichts davon'].every(n => alleSichtbar.has(n)),
       JSON.stringify([...alleSichtbar]));
 
+    console.log('\n── Die Plaketten zeigen die ANDERE Richtung ──');
+    // Alex' Fall (16.09.2026): In der Kategorie-Spalte „PV" stand auf jeder Kachel die Plakette
+    // „PV" — eine Wiederholung der Spalte, unter der man ohnehin steht. Nuetzlich ist dort, WER
+    // den Auftrag hat.
+    const plaketten = (spaltenName) => seite.evaluate((n) => {
+      const sp = [...document.querySelectorAll('.board-col')].find(c =>
+        c.querySelector('.board-col-head').textContent.replace(/[▦✎×]/g, ' ').replace(/\s+/g, ' ').trim().startsWith(n));
+      if (!sp) return null;
+      return [...sp.querySelectorAll('.proj-tile')].map(t => ({
+        name: t.querySelector('.proj-name').textContent.trim(),
+        ma: [...t.querySelectorAll('.proj-kat-ma')].map(x => x.textContent.trim()),
+        kat: [...t.querySelectorAll('.proj-kat:not(.proj-kat-ma)')].map(x => x.textContent.trim()),
+      }));
+    }, spaltenName);
+
+    await umschalten('kategorien');
+    let pvSp = await plaketten('PV');
+    let halle = pvSp.find(x => x.name === 'Halle 3 Dach');
+    ok('in der Spalte „PV" steht NICHT noch einmal „PV"', !halle.kat.includes('PV'), JSON.stringify(halle));
+    ok('… sondern wer den Auftrag hat', halle.ma.join('|') === 'Max Mustermann', JSON.stringify(halle));
+    const dach = pvSp.find(x => x.name === 'Dach Süd');
+    ok('… und die ANDERE Kategorie bleibt stehen', dach.kat.join('|') === 'Zählerschrank', JSON.stringify(dach));
+    ok('… ein Auftrag ohne Mitarbeiter zeigt dort auch keinen', dach.ma.length === 0, JSON.stringify(dach));
+    const ohne = await plaketten('Ohne Kategorie');
+    ok('in „Ohne Kategorie" stehen die Mitarbeiter',
+      (ohne.find(x => x.name === 'Kabel ziehen') || {}).ma.join('|') === 'Max Mustermann',
+      JSON.stringify(ohne));
+
+    await umschalten('mitarbeiter');
+    const maSp = await plaketten('Max Mustermann');
+    halle = maSp.find(x => x.name === 'Halle 3 Dach');
+    ok('in der Mitarbeiter-Spalte stehen weiterhin die Kategorien', halle.kat.join('|') === 'PV', JSON.stringify(halle));
+    ok('… und NICHT der Mitarbeiter, in dessen Spalte man steht', halle.ma.length === 0, JSON.stringify(halle));
+    const rest = await plaketten('Nicht zugewiesen');
+    ok('in „Nicht zugewiesen" stehen die Kategorien',
+      (rest.find(x => x.name === 'Dach Süd') || {}).kat.sort().join('|') === 'PV|Zählerschrank',
+      JSON.stringify(rest));
+
+    await umschalten('alle');
+    ok('in „Alle" gilt dieselbe Regel je Spalte: Kategorie-Spalte zeigt den Mitarbeiter …',
+      (await plaketten('PV')).find(x => x.name === 'Halle 3 Dach').ma.join('|') === 'Max Mustermann');
+    ok('… und die Mitarbeiter-Spalte die Kategorie',
+      (await plaketten('Max Mustermann')).find(x => x.name === 'Halle 3 Dach').kat.join('|') === 'PV');
+
     console.log('\n── Die Ansicht bleibt stehen ──');
     await seite.evaluate(() => renderProjects());
     await sleep(2200);

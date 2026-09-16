@@ -2744,3 +2744,27 @@ Zwei Dinge sind Absicht und stehen als Gegenproben im Test:
 wäre aus dem falschen Grund grün. Die erste Zusicherung prüft deshalb, dass es eine waagerechte
 Scrollleiste überhaupt gibt.
 
+### Die Plakette zeigt nie ihre eigene Spalte (16.09.2026)
+
+Alex im echten Betrieb: In der Kategorie-Spalte „Test" stand auf der Kachel die Plakette „Test".
+Eine Wiederholung dessen, worunter man ohnehin steht — und kein Hinweis darauf, **wer** den Auftrag
+hat.
+
+Die Plaketten beantworten eine einzige Frage: *Wo taucht dieser Auftrag sonst noch auf?* Daraus
+folgt die Regel, und sie hängt an der **Spalte**, nicht an der Ansicht:
+
+| Spalte | Plaketten |
+|---|---|
+| Mitarbeiter | die Kategorien |
+| Kategorie | die zugewiesenen Mitarbeiter **+ die anderen** Kategorien |
+| „Ohne Kategorie" | die Mitarbeiter (Kategorien gibt es dort per Definition keine) |
+| „Nicht zugewiesen" | die Kategorien (Mitarbeiter gibt es dort per Definition keine) |
+
+Deshalb bekommt `tileHtml(p, spalte)` seine Spalte übergeben. In „Alle" ergibt sich das Verhalten
+von selbst, weil dort beide Spaltenarten nebeneinanderstehen.
+
+**Kein Avatar in der Plakette.** Der erste Entwurf setzte `avatarHtml(…, 14)` davor. Wer kein Bild
+hinterlegt hat, bekommt aber `.avatar--leer` — und das ist `display: none`. Die Plaketten sähen je
+nach Konto unterschiedlich aus. Stattdessen ein 7-px-Punkt in `colorFor(user_id)`: immer da, und
+dieselbe Personenfarbe wie im Spaltenkopf und in der Planung.
+
