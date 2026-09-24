@@ -19,7 +19,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 
 ## Hoch — echte Auswirkungen im Alltag
 
-### [~] R1 · Automatisches Abmelden löscht getippte Entwürfe (Datenverlust)
+### [x] R1 · Automatisches Abmelden löscht getippte Entwürfe (Datenverlust) — erledigt in `5b9105d`
 - **Wo:** `public/js/app-2-auth-layout.js:158` (`logout()` → `entwurfAllesLoeschen()`), Sitzungsdauer `routes/auth.js:108` (`expiresIn: '24h'`, keine Verlängerung)
 - **Was passiert:** Die Sitzung gilt fest 24 Stunden ab Anmeldung. Läuft sie ab, führt der nächste
   Serveraufruf zu 401 → `logout()` → **alle** Formular-Entwürfe werden gelöscht. Ausgerechnet die
