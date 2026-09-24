@@ -2917,6 +2917,21 @@ Stunde Arbeit, die im Überstundenkonto fehlte. Zwei Lücken griffen ineinander:
 Einträge ohne Dauer (07:00–07:00) **und** ohne Pause bleiben erlaubt; im Bestand liegen davon welche,
 die sind aber ein eigenes Thema (leer gespeicherte Formulare), nicht dieses.
 
+**Mein Denkfehler in der ersten Fassung — gefunden, weil die Suite nachts lief.** Die Begrenzung griff
+auch bei Dauer 0. Aber Dauer 0 beim *Öffnen* heißt „Zeiten noch nicht eingegeben": Nachts steht das
+Formular z. B. auf 16:00–16:00, weil „Bis" (= jetzt) nie vor „Von" liegen darf. Daraus wurde Pause 0
+statt der Firmenpause. Tagsüber sieht das Formular 07:00–10:00 und alles stimmt — deshalb fielen
+zwei Bestandstests (`restpause-ui`, `restpause-firmenwert-ui`) erst um 1 Uhr nachts auf. Jetzt gilt die
+Begrenzung nur bei echter Dauer; wer 07:00–07:00 mit Pause speichert, wird beim Absenden aufgehalten.
+Die Zusicherung „Von = Bis zeigt die volle Firmenpause" steht jetzt ausdrücklich in `pause-zu-lang-ui`.
+
+Lehre: **Ein Formular, dessen Vorbelegung von der Uhrzeit abhängt, hat nachts andere Ausgangswerte.**
+Eine Regel, die an Dauern hängt, muss den Fall „noch nichts eingegeben" von „sehr kurz" unterscheiden.
+
+Dieselbe Nacht brachte noch eine Zeitfalle ans Licht, diesmal nur im Test: `board-ausgeschieden-ui`
+bildete „heute" mit `toISOString()` — UTC. Zwischen 0 und 2 Uhr ist das „gestern"; der Server legte
+Anna mit dem Berliner Datum an, und der Austritt zum UTC-„heute" lag vor ihrem Eintritt.
+
 Eine Testfalle unterwegs: Der Testnutzer hatte kein Geburtsdatum, die App rechnete deshalb korrekt mit
 „unter 18" und schlug für 8 Stunden 60 statt 30 Minuten vor. Der Test setzt jetzt ein Geburtsdatum —
 er soll den gewöhnlichen Fall messen, nicht zufällig den Jugendschutz.

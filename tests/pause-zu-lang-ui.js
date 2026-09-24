@@ -78,7 +78,16 @@ function req(m, p, t, b) {
     const pause = () => seite.$eval('#ef-break', el => el.value);
     const hinweis = () => seite.$eval('#ef-break-hinweis', el => el.style.display === 'none' ? '' : el.textContent);
 
-    console.log('── Kurzer erster Einsatz des Tages ──');
+    console.log('── Zeiten noch nicht eingegeben (Von = Bis) ──');
+    // Dauer 0 beim Oeffnen heisst „noch nichts eingetragen", NICHT „kurzer Einsatz". Nachts steht das
+    // Formular z. B. auf 16:00–16:00 (Bis nie vor Von). Die erste Fassung von R6 machte daraus Pause 0
+    // — gefunden von tests/restpause-ui.js und restpause-firmenwert-ui.js, die um 1 Uhr nachts liefen.
+    await formular();
+    await zeiten('09:00', '09:00');
+    ok('Von = Bis: die volle Firmenpause steht da (30), wie vor R6', await pause() === '30', await pause());
+    ok('… ohne den Kurz-Hinweis', !/passt nicht/.test(await hinweis()), await hinweis());
+
+    console.log('\n── Kurzer erster Einsatz des Tages ──');
     await formular();
     await zeiten('08:00', '08:30');
     ok('08:00–08:30: vorgeschlagen wird 0 statt 30', await pause() === '0', await pause());

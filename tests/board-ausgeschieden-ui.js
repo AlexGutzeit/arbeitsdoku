@@ -47,7 +47,10 @@ function req(m, p, t, b) {
     let log = ''; for (let i = 0; i < 200; i++) { log = fs.readFileSync(LOG, 'utf8'); if (/admin\s+->\s+\S+/.test(log)) break; await sleep(200); }
     const pw = n => (log.match(new RegExp(n + '\\s+->\\s+(\\S+)')) || [])[1];
     const admin = (await req('POST', '/api/auth/login', null, { username: 'admin', password: pw('admin') })).body.token;
-    const heute = new Date().toISOString().slice(0, 10);
+    // Berliner Datum, nicht UTC: Zwischen 0 und 2 Uhr ist `toISOString()` noch „gestern" — der Server
+    // legt Anna aber mit dem Berliner Datum an, und ein Austritt VOR dem Eintritt wird abgewiesen.
+    // Genau so gescheitert in der Nacht auf den 25.09.2026, 00:1x Uhr.
+    const heute = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
 
     const PW = 'Monteur1!';
     const anna = (await req('POST', '/api/users', admin, { username: 'anna', password: PW,

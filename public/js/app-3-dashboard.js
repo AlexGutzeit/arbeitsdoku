@@ -1090,8 +1090,12 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     const voll = pausenVorschlag(info, planungsPause);
     const a = azMinuten(von), b = azMinuten(bis);
     const dauer = (a === null || b === null) ? null : b - a;
-    if (dauer !== null && voll > 0 && voll >= dauer) {
-      return { wert: 0, passtNicht: dauer > 0 ? { pause: voll, dauer } : null };
+    // Nur bei ECHTER Dauer. Dauer 0 heisst „Zeiten noch nicht eingegeben" (nachts z. B. 16:00–16:00,
+    // weil Bis nie vor Von steht) — dort bleibt der volle Vorschlag wie vor R6. Wer so speichert, wird
+    // beim Absenden aufgehalten. Die erste Fassung machte daraus 0; gefunden von zwei Bestandstests,
+    // die um 1 Uhr nachts liefen.
+    if (dauer !== null && dauer > 0 && voll > 0 && voll >= dauer) {
+      return { wert: 0, passtNicht: { pause: voll, dauer } };
     }
     return { wert: voll, passtNicht: null };
   };
