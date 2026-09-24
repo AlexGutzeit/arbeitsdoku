@@ -1082,6 +1082,19 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     if (planungsPause != null) return Math.max(Number(planungsPause) || 0, info.gesetzlich || 0);
     return info.rest;
   };
+  // R6 (24.09.2026): Der Vorschlag darf nie die ganze Arbeitszeit schlucken. Vorher bekam ein kurzer
+  // erster Einsatz (z. B. 08:00–08:30) die volle Tagespause von 30 min — gespeichert wurden still
+  // 0 Stunden, im Betrieb zweimal passiert. Passt die Pause nicht hinein, wird 0 vorgeschlagen; der
+  // naechste Eintrag des Tages rechnet die noch fehlende Pause ohnehin ein (restPause).
+  const pausenVorschlagFuer = (info, planungsPause, von, bis) => {
+    const voll = pausenVorschlag(info, planungsPause);
+    const a = azMinuten(von), b = azMinuten(bis);
+    const dauer = (a === null || b === null) ? null : b - a;
+    if (dauer !== null && voll > 0 && voll >= dauer) {
+      return { wert: 0, passtNicht: dauer > 0 ? { pause: voll, dauer } : null };
+    }
+    return { wert: voll, passtNicht: null };
+  };
 
   // Ohne Tagesbezug (Admin, noch kein Mitarbeiter gewählt): Es ist nichts erfasst, also steht die
   // VOLLE Firmenpause offen. `rest: 0` wäre falsch — das Feld zeigte dann 0 statt 30.
@@ -1091,6 +1104,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   };
   let pausenInfo = leerePausenInfo();
   let breakMin;
+  let pausenPasstNicht = null;
   if (isEdit) {
     breakMin = entry.break_minutes;
   } else {
@@ -1101,12 +1115,18 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
       pausenInfo = restPause(await tagesEintraege(date, uidFuerTag), timeFrom, timeTo,
         istJugendlich(uidFuerTag, date), !!geburtsdatumVon(uidFuerTag));
     }
-    breakMin = pausenVorschlag(pausenInfo, planningEntry ? planningEntry.break_minutes : null);
+    const v = pausenVorschlagFuer(pausenInfo, planningEntry ? planningEntry.break_minutes : null, timeFrom, timeTo);
+    breakMin = v.wert;
+    pausenPasstNicht = v.passtNicht;
   }
   // Der Text erklärt die Zahl im Feld. Ohne ihn wirkt eine 0 wie ein Fehler und ein Nachschlag
   // von 15 min wie Willkür.
   const STUNDEN = stundenText;   // dieselbe Formatierung wie im Regelmodul, nur der alte Name
-  const pausenHinweis = (info) => {
+  const pausenHinweis = (info, passtNicht) => {
+    if (passtNicht) {
+      return `Die Tagespause (${passtNicht.pause} min) passt nicht in diesen kurzen Einsatz `
+        + `(${passtNicht.dauer} min) — sie wird beim nächsten Eintrag des Tages vorgeschlagen.`;
+    }
     if (info.gesetzGreift) {
       const schwelle = info.jugendlich ? (info.gesetzlich === 60 ? 6 : '4½') : (info.gesetzlich === 45 ? 9 : 6);
       // Die App kennt das Alter jetzt selbst und nennt deshalb das ZUTREFFENDE Gesetz.
@@ -1193,7 +1213,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
         <div class="form-group">
           <label>Pause (Minuten)</label>
           <input type="number" class="form-control" id="ef-break" value="${breakMin}" min="0" step="5">
-          <small class="push-hint" id="ef-break-hinweis" ${pausenHinweis(pausenInfo) ? '' : 'style="display:none"'}>${esc(pausenHinweis(pausenInfo))}</small>
+          <small class="push-hint" id="ef-break-hinweis" ${pausenHinweis(pausenInfo, pausenPasstNicht) ? '' : 'style="display:none"'}>${esc(pausenHinweis(pausenInfo, pausenPasstNicht))}</small>
         </div>
         <div class="net-hours-display" id="ef-net">Netto: ${fmtH(netHours)}</div>
         <div class="warning-box" id="ef-zeit-warnung" role="status" style="display:none"></div>
@@ -1375,14 +1395,15 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
         const info = uid
           ? restPause(liste, vonJetzt, bisJetzt, istJugendlich(uid, d), !!geburtsdatumVon(uid))
           : leerePausenInfo();
-        const neu = pausenVorschlag(info, planningEntry ? planningEntry.break_minutes : null);
+        const v = pausenVorschlagFuer(info, planningEntry ? planningEntry.break_minutes : null, vonJetzt, bisJetzt);
+        const neu = v.wert;
         if (breakEl.value === letztePause) {
           breakEl.value = String(neu);
           letztePause = String(neu);
         }
         const hinweisEl = document.getElementById('ef-break-hinweis');
         if (hinweisEl) {
-          const txt = pausenHinweis(info);
+          const txt = pausenHinweis(info, v.passtNicht);
           hinweisEl.textContent = txt;
           hinweisEl.style.display = txt ? '' : 'none';
         }
@@ -1469,6 +1490,20 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     // beim Bearbeiten seines Eintrags stillschweigend gelöscht.
     const noteEl = document.getElementById('ef-note');
     if (noteEl) body.personal_note = noteEl.value;
+    // R6: dieselbe Pruefung wie der Server — hier sofort und mit dem Fokus auf der Pause.
+    {
+      const a = azMinuten(body.time_from), b = azMinuten(body.time_to);
+      const dauer = (a === null || b === null) ? null : b - a;
+      const p = body.break_minutes;
+      if (dauer !== null && dauer >= 0 && p > 0 && p >= dauer) {
+        toast(dauer === 0
+          ? `Von und Bis sind gleich (${body.time_from}) — dieser Eintrag enthält keine Arbeitszeit, die Pause (${p} min) passt nicht hinein. Bitte die Zeiten prüfen.`
+          : `Die Pause (${p} min) ist ${p === dauer ? 'so lang wie' : 'länger als'} die Arbeitszeit (${dauer} min) — von diesem Eintrag bliebe nichts übrig. Bitte die Pause verkürzen oder die Zeiten prüfen.`,
+          'error', 7000);
+        const bf = document.getElementById('ef-break'); if (bf) bf.focus();
+        return;
+      }
+    }
     // Admin muss Mitarbeiter auswählen
     const userSelect = document.getElementById('ef-user');
     if (userSelect) {

@@ -2899,3 +2899,25 @@ Gezeigte vom heutigen Tag abhängt. Deshalb steht daneben jetzt eine Zusicherung
 hängt — die Position muss für die *jetzige* Breite gerechnet sein. Die Gegenprobe (Reparatur
 ausgebaut) macht beide rot: 527 statt 779.
 
+## Die Pause schluckt die Arbeitszeit (R6, 24.09.2026)
+
+Gemessen im Bestand: zwei 30-Minuten-Einsätze mit 30 min Pause, gespeichert als **0 Stunden** — eine
+Stunde Arbeit, die im Überstundenkonto fehlte. Zwei Lücken griffen ineinander:
+
+1. **Der Vorschlag.** `restPause` rechnet die offene Tagespause, und die kam beim ersten Eintrag des
+   Tages voll ins Feld — unabhängig davon, wie lang der Einsatz war. `pausenVorschlagFuer()` begrenzt
+   das jetzt: Passt die Pause nicht hinein, wird 0 vorgeschlagen und im Hinweis gesagt, dass sie beim
+   nächsten Eintrag kommt. Das Versprechen stimmt, weil `restPause` beim nächsten Eintrag die noch
+   fehlende Pause einrechnet — der Test prüft genau das. `restPause` selbst ist unverändert; es wird
+   auch anderswo gebraucht, deshalb die Begrenzung eine Ebene darüber.
+2. **Keine Prüfung.** `calculateNetHours` klemmt auf 0 und schweigt. Jetzt weisen Server (`POST`
+   *und* `PUT`) und Oberfläche „Pause ≥ Arbeitszeit" ab. Beim `PUT` mit den **zusammengeführten**
+   Werten — wer an einem Altfall nur die Beschreibung ändert, wird auf die Pause aufmerksam.
+
+Einträge ohne Dauer (07:00–07:00) **und** ohne Pause bleiben erlaubt; im Bestand liegen davon welche,
+die sind aber ein eigenes Thema (leer gespeicherte Formulare), nicht dieses.
+
+Eine Testfalle unterwegs: Der Testnutzer hatte kein Geburtsdatum, die App rechnete deshalb korrekt mit
+„unter 18" und schlug für 8 Stunden 60 statt 30 Minuten vor. Der Test setzt jetzt ein Geburtsdatum —
+er soll den gewöhnlichen Fall messen, nicht zufällig den Jugendschutz.
+

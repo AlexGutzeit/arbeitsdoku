@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**225 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**227 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -163,6 +163,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `pause-gesetz-ui.js` | Gesetzliche Mindestpause (§ 4 ArbZG) in der Vorbelegung. |
 | `pause-jugendschutz-ui.js` | Zwei Alterstabellen: § 4 ArbZG ab 18, § 11 JArbSchG darunter. |
 | `pause-parallel-ui.js` | Zwei ZEITGLEICHE Aufträge und der Pausenvorschlag (Alex, 30.07.2026). |
+| `pause-zu-lang-ui.js` | Pause schluckt die Arbeitszeit — die Oberflaeche (R6, Alex 24.09.2026). |
+| `pause-zu-lang.js` | Pause schluckt die Arbeitszeit (R6, Alex 24.09.2026). |
 | `pdf-projektfilter.js` | Arbeitsnachweis-PDF mit Projektfilter: Soll, Differenz und die Ist-Spalte je Mitarbeiter müssen |
 | `permission-refresh.js` | Rechte-Aktualisierung ohne Re-Login: Gibt/Entzieht ein Admin das Planungsrecht, muss sich das |
 | `planner-absences.js` | Planer-Sichtbarkeit-Test: Mitarbeiter mit „alle"-Planungsrecht (can_plan_all) sehen im Planungskontext |

@@ -33,6 +33,26 @@ const ENTRY_LIMITS = {
   address: 300, client: 200, project_text: 200, description: 2000, personal_note: 2000
 };
 
+// R6 (24.09.2026): Eine Pause, die die ganze Arbeitszeit schluckt, ist kein Eintrag, sondern ein
+// Versehen. Vorher wurde sie still gespeichert und `calculateNetHours` klemmte das Ergebnis auf 0 —
+// gemessen im Betrieb: zwei 30-Minuten-Einsaetze mit 30 min Pause, zusammen eine Stunde Arbeit, die
+// als 0 Stunden im Ueberstundenkonto landete. Ausgeloest hatte das der Pausenvorschlag, der die
+// volle Tagespause auch in einen kurzen ersten Einsatz schrieb.
+// Eintraege ohne Dauer UND ohne Pause bleiben erlaubt — daran aendert sich nichts.
+function pausenFehler(von, bis, pause) {
+  const [fh, fm] = String(von).split(':').map(Number);
+  const [th, tm] = String(bis).split(':').map(Number);
+  const dauer = (th * 60 + tm) - (fh * 60 + fm);
+  const p = Number(pause) || 0;
+  if (!(p > 0) || p < dauer) return null;
+  if (dauer === 0) {
+    return `Von und Bis sind gleich (${von}) — dieser Eintrag enthält keine Arbeitszeit, die Pause (${p} min) `
+      + 'passt nicht hinein. Bitte die Zeiten prüfen.';
+  }
+  return `Die Pause (${p} min) ist ${p === dauer ? 'so lang wie' : 'länger als'} die Arbeitszeit (${dauer} min) — `
+    + 'von diesem Eintrag bliebe nichts übrig. Bitte die Pause verkürzen oder die Zeiten prüfen.';
+}
+
 // Nettostunden berechnen
 function calculateNetHours(timeFrom, timeTo, breakMinutes) {
   const [fh, fm] = timeFrom.split(':').map(Number);
@@ -181,6 +201,8 @@ router.post('/', authenticate, (req, res) => {
   if (break_minutes !== undefined && break_minutes !== null && !isValidBreak(break_minutes)) {
     return res.status(400).json({ error: 'Pause muss eine ganze Zahl zwischen 0 und 600 Minuten sein' });
   }
+  const pauseZuLang = pausenFehler(time_from, time_to, break_minutes);
+  if (pauseZuLang) return res.status(400).json({ error: pauseZuLang });
   const lenErr = validateLengths(req.body, ENTRY_LIMITS);
   if (lenErr) return res.status(400).json({ error: lenErr });
 
@@ -248,6 +270,10 @@ router.put('/:id', authenticate, (req, res) => {
   if (!isValidBreak(newBreak)) {
     return res.status(400).json({ error: 'Pause muss eine ganze Zahl zwischen 0 und 600 Minuten sein' });
   }
+  // Mit den ZUSAMMENGEFUEHRTEN Werten: Auch wer nur die Beschreibung aendert, speichert den ganzen
+  // Eintrag — ein Eintrag, dessen Pause die Arbeitszeit schluckt, soll dabei auffallen.
+  const pauseZuLang = pausenFehler(newFrom, newTo, newBreak);
+  if (pauseZuLang) return res.status(400).json({ error: pauseZuLang });
   const lenErr = validateLengths(req.body, ENTRY_LIMITS);
   if (lenErr) return res.status(400).json({ error: lenErr });
   if (date && !isValidDate(date)) {
