@@ -212,7 +212,7 @@ scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
 `app-1-core.js:1266` (`promptModal`) — ärgerlich bei längeren Begründungen (z. B. Ablehnungsgrund).
 → Klick daneben nur schließen, wenn das Feld leer ist, sonst nachfragen.
 
-### [ ] R21 · Abwesenheitskalender merkt sich die eigene Scrollposition als Benutzer-Wischen
+### [x] R21 · Abwesenheitskalender merkt sich die eigene Scrollposition als Benutzer-Wischen — erledigt in `e6c34e4`
 - **Wo:** `public/js/abwesenheitskalender.js:303–313`
 - **Was passiert:** Beim ersten Öffnen scrollt der Kalender so, dass „heute" im Bild steht. Das
   `scroll`-Ereignis dieser *eigenen* Bewegung wird als gemerkte Position gespeichert, als hätte der
@@ -223,7 +223,7 @@ scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
   Datumswechsel rot ist: Am 16.09. lag „heute" noch 7 px weiter links und damit zufällig im Bild.
 - **Vorschlag:** nur echtes Wischen merken (die selbst ausgelöste Bewegung nicht speichern).
 
-### [ ] R22 · Test-Zeitfalle in `tests/auszahlung-gesamtbild.js`
+### [x] R22 · Test-Zeitfalle in `tests/auszahlung-gesamtbild.js` — erledigt in `e6c34e4`
 - **Wo:** `werktage(40, 39)` — „die Werktage zwischen vor 40 und vor 39 Tagen"
 - **Was passiert:** Fallen beide Tage auf ein Wochenende (am 24.09.: 15./16.08.), ist die Liste leer,
   der Test legt einen Urlaub ohne Datum an und bricht ab. Die App verhält sich korrekt.
