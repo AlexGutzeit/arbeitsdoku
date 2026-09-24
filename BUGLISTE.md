@@ -19,7 +19,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 
 ## Hoch — echte Auswirkungen im Alltag
 
-### [ ] R1 · Automatisches Abmelden löscht getippte Entwürfe (Datenverlust)
+### [~] R1 · Automatisches Abmelden löscht getippte Entwürfe (Datenverlust)
 - **Wo:** `public/js/app-2-auth-layout.js:158` (`logout()` → `entwurfAllesLoeschen()`), Sitzungsdauer `routes/auth.js:108` (`expiresIn: '24h'`, keine Verlängerung)
 - **Was passiert:** Die Sitzung gilt fest 24 Stunden ab Anmeldung. Läuft sie ab, führt der nächste
   Serveraufruf zu 401 → `logout()` → **alle** Formular-Entwürfe werden gelöscht. Ausgerechnet die
@@ -27,6 +27,15 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   Erklärung — man landet einfach auf der Anmeldeseite.
 - **Beispiel:** gestern 16:30 angemeldet, heute 16:25 Tagesbericht angefangen, 16:35 „Speichern"
   → Anmeldeseite, Text weg.
+- **Nachtrag beim Umsetzen (24.09.):** Es ist schlimmer — `api()` gibt nach dem Abmelden `null`
+  zurück statt zu werfen. Das Eintragsformular (`app-3-dashboard.js:1502–1508`) hält das für Erfolg:
+  zeigt **„Eintrag erstellt"**, löscht den Entwurf und springt weiter — gespeichert wurde nichts.
+  Dasselbe Muster (Ergebnis ungeprüft) steckt in 136 schreibenden Aufrufen.
+- **Gemessen (Prod-Kopie, 24.09.):** 218 Ablauf-Abmeldungen in 30 Tagen bei 11 Personen, über den
+  ganzen Arbeitstag verteilt; **197 davon mit Neuanmeldung binnen 3 Minuten** — die Leute fliegen
+  mitten in der Nutzung raus. Rund 90 % aller Anmeldungen sind erzwungene Neuanmeldungen.
+- **Entscheidung (Alex, 24.09.):** gleitende Sitzung — abgemeldet nach **3 Tagen ohne Aktivität**,
+  spätestens nach **30 Tagen** neu anmelden.
 - **Vorschlag:** Entwürfe nur beim *bewussten* Abmelden löschen, beim automatischen behalten und
   nach der Neuanmeldung wieder anbieten. Meldung „Sitzung abgelaufen — bitte neu anmelden, deine
   Eingaben sind noch da". Zusätzlich gleitende Sitzung: Server erneuert das Token, wenn nur noch
