@@ -41,7 +41,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   Eingaben sind noch da". Zusätzlich gleitende Sitzung: Server erneuert das Token, wenn nur noch
   wenige Stunden übrig sind.
 
-### [ ] R2 · Server kann bei bestimmten Fehlern komplett abstürzen
+### [ ] R2 · Server kann bei bestimmten Fehlern komplett abstürzen *(herabgestuft, s. Neubewertung)*
 - **Wo:**
   - `scheduler.js:314` — die minütliche Aufgabe `tick()` ist async, wird aber **ohne `await`** in
     `try/catch` gesetzt; das Fangnetz fängt dadurch nichts.
@@ -54,6 +54,13 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   gespeicherter Änderungen gehen verloren (Autosave-Takt).
 - **Vorschlag:** `tick(…).catch(…)`; async-Routen in einen Fehler-Wrapper; globaler
   `unhandledRejection`-Wächter, der protokolliert und `saveToFile()` aufruft statt zu beenden.
+- **Neubewertung (24.09., nachgemessen):** Kein Auslöser ist im Betrieb tatsächlich erreichbar.
+  Der Nutzer-Wettlauf lässt sich **nicht** nachstellen: 5 gleichzeitige Anlagen desselben Namens →
+  1× 201, 4× 409, Server läuft weiter. Grund: `bcryptjs` hasht praktisch **blockierend** (die
+  anderen Anfragen warten ~80 ms und prüfen danach) — der Kommentar „blockiert den Event-Loop
+  nicht" in `routes/users.js:493` stimmt nicht. Die beiden anderen Stellen bräuchten einen Fehler,
+  der sich nicht herbeiführen lässt. Bleibt eine **Absicherung gegen künftige Fehler** — sinnvoll,
+  aber keine akute Gefahr. Herabgestuft auf **Mittel**.
 
 ### [ ] R3 · Sicherung zurückspielen: halber Abbruch hinterlässt unbestimmten Zustand
 - **Wo:** `routes/backup.js:484–533`, Sicherheitskopie `:486`, Rotation `scripts/make-backup.js:117`
@@ -98,6 +105,10 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Wo:** `public/js/arbeitszeitrecht.js:127` (`restPause` nicht auf Eintragsdauer begrenzt),
   `routes/entries.js:37` (`calculateNetHours` klemmt auf 0), keine Prüfung in Oberfläche/Server
 - **Beispiel:** 15:00–15:20 als erster Eintrag des Tages → 30 min Pause vorgeschlagen → **0 h**.
+- **Gemessen (Prod-Kopie, 24.09.):** 2 Einträge, bei denen die Pause die ganze Arbeitszeit
+  geschluckt hat — Eintrag 1139 (06.08., 13:15–13:45) und 1185 (14.08., 08:00–08:30), beide mit
+  30 min Pause, beide als **0 h** gezählt: **1 Stunde Arbeit fehlt im Überstundenkonto.** August ist
+  noch nicht abgerechnet (Abschluss bis 30.06.), die Einträge lassen sich also noch korrigieren.
 - **Vorschlag:** Vorschlag auf Eintragsdauer begrenzen; „Die Pause ist länger als die Arbeitszeit"
   abweisen oder bewusst bestätigen lassen (Oberfläche und Server).
 
@@ -200,6 +211,23 @@ scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
 ### [ ] R20 · Eingabedialog verwirft Text bei Klick daneben
 `app-1-core.js:1266` (`promptModal`) — ärgerlich bei längeren Begründungen (z. B. Ablehnungsgrund).
 → Klick daneben nur schließen, wenn das Feld leer ist, sonst nachfragen.
+
+### [ ] R21 · Abwesenheitskalender merkt sich die eigene Scrollposition als Benutzer-Wischen
+- **Wo:** `public/js/abwesenheitskalender.js:303–313`
+- **Was passiert:** Beim ersten Öffnen scrollt der Kalender so, dass „heute" im Bild steht. Das
+  `scroll`-Ereignis dieser *eigenen* Bewegung wird als gemerkte Position gespeichert, als hätte der
+  Benutzer gewischt. Öffnet man dieselbe Ansicht in anderer Breite (Handy gedreht, Fenster
+  verkleinert), gilt die alte Pixelposition — „heute" kann außerhalb des Bildes liegen.
+- **Gemessen:** „heute" bei 902 px, sichtbar bis 390 px, Stand 527 statt 779 — die 527 stammen aus
+  der Desktop-Breite (902 − 1125/3). Gefunden, weil `tests/abwesenheitskalender-ui.js` seit dem
+  Datumswechsel rot ist: Am 16.09. lag „heute" noch 7 px weiter links und damit zufällig im Bild.
+- **Vorschlag:** nur echtes Wischen merken (die selbst ausgelöste Bewegung nicht speichern).
+
+### [ ] R22 · Test-Zeitfalle in `tests/auszahlung-gesamtbild.js`
+- **Wo:** `werktage(40, 39)` — „die Werktage zwischen vor 40 und vor 39 Tagen"
+- **Was passiert:** Fallen beide Tage auf ein Wochenende (am 24.09.: 15./16.08.), ist die Liste leer,
+  der Test legt einen Urlaub ohne Datum an und bricht ab. Die App verhält sich korrekt.
+- **Vorschlag:** ein Fenster wählen, das garantiert Werktage enthält.
 
 ---
 
