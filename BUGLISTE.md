@@ -114,6 +114,9 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   `can_products_add`
 - **Was passiert:** Nach einer Rechtevergabe baut sich die Oberfläche nicht neu auf. Dasselbe
   Muster wie „Mein Konto" (zwei parallele Listen).
+- **Nachtrag (24.09., beim Umsetzen von R1):** Auch die Anmelde-Antwort (`routes/auth.js`,
+  `anmeldeAntwort`) zählt die Rechte einzeln auf — `can_products_add` fehlt. Bis `refreshUser()`
+  antwortet, kennt die Oberfläche das Einlernrecht nicht.
 - **Vorschlag:** alle `can_*`-Felder aus dem Objekt ableiten statt aufzählen; Test holt die
   Schlüssel von der Quelle (wie `tests/konto-rechte-ui.js`).
 

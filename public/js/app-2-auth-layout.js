@@ -5,6 +5,7 @@ function renderLogin() {
       <div class="login-card">
         <h1>Arbeitsdoku</h1>
         <p class="subtitle">Melden Sie sich an</p>
+        ${S.anmeldeHinweis ? `<div class="login-hinweis" role="status">${esc(S.anmeldeHinweis)}</div>` : ''}
         <div class="error-msg" id="login-error"></div>
         <form id="login-form">
           <div class="form-group">
@@ -77,7 +78,13 @@ function anmeldungAbschliessen(data) {
   S.user = data.user;
   localStorage.setItem('token', data.token);
   localStorage.setItem('user', JSON.stringify(data.user));
-  navigate('/welcome');
+  // R1: Entwuerfe eines ANDEREN, der vorher auf diesem Geraet angemeldet war, entsorgen — die
+  // eigenen bleiben. Und zurueck dorthin, wo die Sitzung abgelaufen ist: Dort bietet das Formular
+  // den gesicherten Entwurf sofort an.
+  entwuerfeFremderLoeschen(data.user.id);
+  const ziel = rueckkehrZiel(data.user.id);
+  S.anmeldeHinweis = null;
+  navigate(ziel || '/welcome');
   initSSE();
   loadBadges();
   syncPushSubscription();
@@ -145,17 +152,46 @@ async function handleLogin(e) {
   }
 }
 
-async function logout(manual) {
+// Was der Anmeldeseite nach einem AUTOMATISCHEN Abmelden gesagt wird — je nach Grund.
+function _abmeldeHinweis(grund, gesichert) {
+  if (grund === 'SITZUNG_ABGELAUFEN') {
+    return 'Deine Sitzung ist abgelaufen. Bitte melde dich neu an.'
+      + (gesichert ? ' Deine nicht gespeicherten Eingaben sind gesichert und werden dir danach wieder angeboten.' : '');
+  }
+  if (grund === 'SITZUNG_BEENDET') return 'Diese Anmeldung wurde auf allen Geräten beendet. Bitte melde dich neu an.';
+  if (grund === 'KONTO_AUSGESTELLT') return 'Dieses Konto ist ausgestellt. Bitte wende dich an die Verwaltung.';
+  if (grund === 'KONTO_GELOESCHT') return 'Dieses Konto gibt es nicht mehr.';
+  return 'Bitte melde dich neu an.';
+}
+
+// manual = bewusster Klick auf „Abmelden". grund = Code des Servers beim automatischen Abmelden
+// (siehe middleware/auth.js, GRUND). Ohne grund (z. B. nach dem Einspielen einer Sicherung) wird
+// wie bisher alles geloescht.
+async function logout(manual, grund) {
+  // Mehrere gleichzeitige Anfragen (Promise.all) melden dasselbe 401 — nur das ERSTE zaehlt,
+  // sonst saehe der zweite Durchlauf schon die Anmeldeseite und merkte sich die falsche Stelle.
+  if (!manual && !S.token) return;
   // Nur der bewusste „Abmelden"-Klick: Push-Abo dieses Geraets abmelden (wichtig auf geteilten
   // Geraeten) und serverseitig fuers Audit-Log abmelden — beides MUSS passieren, solange das Token
-  // noch gueltig ist, daher VOR dem Loeschen. Der automatische Logout (401/abgelaufenes Token) ruft
-  // logout() ohne Argument — dort wird serverseitig bereits 'session_expired' protokolliert.
+  // noch gueltig ist, daher VOR dem Loeschen. Der automatische Logout (401) ruft logout(false, grund)
+  // — dort protokolliert der Server ein Ablaufen bereits selbst als 'session_expired'.
   if (manual && S.token) {
     try { await disablePush(); } catch (_) { /* Push bleibt zur Not aktiv — kein Logout-Blocker */ }
     api('POST', '/api/auth/logout').catch(() => {});
   }
   stopSSE();
-  entwurfAllesLoeschen();   // Entwuerfe enthalten Kunde/Adresse/Notiz — auf geteilten Geraeten nichts stehen lassen
+  // R1: Nur eine ABGELAUFENE Sitzung behaelt die Entwuerfe — derselbe Mensch meldet sich gleich
+  // wieder an. Bewusstes Abmelden, „auf allen Geraeten beendet" (typisch: Handy verloren),
+  // Ausstellen, Loeschen: Entwuerfe enthalten Kunde/Adresse/Notiz und muessen weg.
+  if (!manual && grund === 'SITZUNG_ABGELAUFEN') {
+    const gesichert = entwuerfeFuerNeuanmeldungSichern();   // VOR dem Leeren von S.user
+    rueckkehrMerken(S.user && S.user.id, getRoute());
+    S.anmeldeHinweis = _abmeldeHinweis(grund, gesichert);
+  } else {
+    entwurfAllesLoeschen();
+    rueckkehrVergessen();
+    S.anmeldeHinweis = manual ? null : _abmeldeHinweis(grund, 0);
+  }
   S.token = null;
   S.user = null;
   localStorage.removeItem('token');

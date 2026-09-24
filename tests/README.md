@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**223 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**225 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -221,6 +221,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `self-planning-ui.js` | UI-Smoke (Puppeteer) für das zweistufige Planungsrecht: |
 | `self-planning.js` | Self-Planung-Test: Planungsrecht-Stufen „sich" (can_plan) vs. „alle" (can_plan_all). |
 | `shot-notifications.js` | Einmal-Screenshot der Benachrichtigungen-Seite — ein Werkzeug, kein Test. |
+| `sitzung-entwurf-ui.js` | Abgelaufene Sitzung mitten im Formular (R1, Alex 24.09.2026). |
+| `sitzung-gleitend.js` | Gleitende Sitzung (R1, Alex 24.09.2026): 3 Tage ohne Aktivitaet, hoechstens 30 Tage. |
 | `sse-live-schutz-ui.js` | Zwei-BROWSER-Test (echtes SSE): Was passiert bei mir, wenn ein KOLLEGE in seinem eigenen Browser |
 | `stunden-vorher-nachher.js` | BEWEIS: Die ausgewiesenen Stunden und Überstunden ändern sich durch die Zusammenlegung der |
 | `sw-aktualisieren-ui.js` | „Jetzt aktualisieren" — der Weg auf eine neue Fassung, einmal wirklich durchgespielt. |

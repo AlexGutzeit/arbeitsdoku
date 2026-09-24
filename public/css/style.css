@@ -93,6 +93,17 @@ body {
   font-size: 0.875rem;
   margin-bottom: 1.5rem;
 }
+/* Warum bin ich hier? — nach einem automatischen Abmelden (R1). Eine Auskunft, kein Fehler. */
+.login-card .login-hinweis {
+  background: var(--primary-light, #e8f5e9);
+  color: var(--text);
+  border-left: 3px solid var(--primary, #4CAF50);
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  margin-bottom: 1rem;
+}
 .login-card .error-msg {
   background: var(--danger-light);
   color: var(--danger);

@@ -2816,3 +2816,66 @@ vom Server und verlangt für jeden eine Beschriftung im Quelltext. Eine Aufzähl
 dritte Liste, die zurückbleiben kann. Dazu eine Gegenprobe mit einem erfundenen Schlüssel — sonst
 prüfte die Zusicherung womöglich gar nichts.
 
+## Gleitende Sitzung und die falsche Erfolgsmeldung (R1, 24.09.2026)
+
+### Was gemessen wurde
+
+Eine Anmeldung galt fest 24 Stunden ab dem Anmelden. Die Prod-Kopie zeigte, was das bedeutet:
+**218 Ablauf-Abmeldungen in 30 Tagen bei 11 Personen, 197 davon mit Neuanmeldung binnen 3 Minuten.**
+Die Leute flogen nicht nachts im Hintergrund heraus, sondern mitten in der Arbeit. Rund 90 % aller
+Anmeldungen waren erzwungen. Ohne diese Zahl hätte die Entscheidung über die Sitzungsdauer auf
+Vermutung beruht.
+
+### Der eigentliche Fehler: `null` sieht aus wie Erfolg
+
+Bei 401 rief `api()` `logout()` auf und gab **`null`** zurück. 136 schreibende Aufrufe prüfen ihr
+Ergebnis nicht — das Eintragsformular etwa macht `await api('POST', …); toast('Eintrag erstellt');
+entwurfLoeschen(…)`. Nach Ablauf der Sitzung zeigte es also **„Eintrag erstellt"**, löschte den Entwurf
+und sprang weiter; gespeichert war nichts. Obendrein löschte `logout()` beim automatischen Abmelden
+alle Entwürfe — die Sicherung, die genau diesen Verlust verhindern sollte.
+
+Die Reparatur sitzt an der zentralen Stelle, nicht in 136 Formularen: Ein **schreibender** Aufruf
+**wirft** nach dem Abmelden einen Fehler („NICHT gespeichert"), und damit landen alle in ihrem ohnehin
+vorhandenen `catch`. Lesende Aufrufe geben weiter `null` zurück — dort prüfen die Aufrufer darauf, und
+ein Fehler würde nur zusätzliche Meldungen erzeugen.
+
+### Warum der Server jetzt einen Grund mitschickt
+
+Ob Entwürfe bleiben dürfen, hängt am **Grund** des 401. Nur bei `SITZUNG_ABGELAUFEN` meldet sich gleich
+derselbe Mensch wieder an. Bei `SITZUNG_BEENDET` („auf allen Geräten abmelden" — typisch: Handy
+verloren), `KONTO_AUSGESTELLT` und `KONTO_GELOESCHT` müssen Kunde, Adresse und Notiz vom Gerät. Vorher
+sahen alle fünf Fälle gleich aus. Die Codes stehen in `middleware/auth.js` (`GRUND`).
+
+Entwürfe waren schon vorher **pro Nutzer** abgelegt (`entwurf:<id>:<formular>`); ein anderer bekam sie nie
+angeboten. Meldet sich jetzt ein anderer an, werden sie zusätzlich gelöscht (`entwuerfeFremderLoeschen`).
+
+**Reihenfolge in `logout()`:** erst `entwuerfeFuerNeuanmeldungSichern()` — solange `S.user` noch steht,
+sonst landen die Entwürfe unter `anon` —, dann leeren. Die Liste offener Formulare wird dabei geleert,
+damit das `hashchange` beim Sprung zur Anmeldeseite nichts mehr nachsichert. Und `logout()` ist für
+den automatischen Fall **einmalig**: Mehrere gleichzeitige 401 (Promise.all) würden sonst die
+Rückkehr-Seite mit `/login` überschreiben.
+
+### Gleitend — und wo es nicht gleiten darf
+
+`tokenAusstellen()` ist die einzige Stelle, die Zugangs-Token baut; `anmeldung` im Token hält den
+Zeitpunkt der echten Anmeldung fest und wandert beim Erneuern **nicht** mit. Erneuert wird höchstens
+stündlich (Kopfzeile `X-Neues-Token`), und zwar **nach** allen Sperr-Prüfungen — ein widerrufenes oder
+ausgestelltes Token bekommt nie ein neues. Im Browser übernimmt `tokenUebernehmen()` es nur, solange
+noch jemand angemeldet ist, und nur für **denselben** Nutzer; sonst könnte eine verspätete Antwort nach
+dem Abmelden oder nach einem Nutzerwechsel eine Sitzung wiederbeleben.
+
+Token von vor der Änderung tragen kein `anmeldung`; dann zählt ihr Ausstellungszeitpunkt. So fliegt
+beim Deploy niemand heraus.
+
+### Der zweite Faktor hätte sich still verabschiedet
+
+Der Code wird nur **beim Anmelden** gefragt. Mit einer 30-Tage-Sitzung hätte „wöchentlich" nur noch
+monatlich gefragt — im Betrieb ist genau das eingestellt (eigene Stufe eines freiwillig eingerichteten
+Authenticators). Deshalb begrenzt die Stufe die Sitzung (`zweifaktor.js`, `sitzungsGrenzeTage`):
+„bei jeder Anmeldung" und „täglich" 1 Tag — so oft wie mit der alten 24-Stunden-Sitzung —, „wöchentlich"
+7, „monatlich" 30. Ist eine Sitzung älter, gilt sie **sofort** als abgelaufen und nicht erst beim
+nächsten Token-Ablauf: Stellt der Chef eine Rolle strenger, soll das nicht drei Tage verschlafen werden.
+
+Tests: `tests/sitzung-gleitend.js` (29, in-process) und `tests/sitzung-entwurf-ui.js` (29, geklickt),
+dazu Gegenproben für jeden Baustein — jeweils zurückgenommen, jeweils an der richtigen Stelle rot.
+

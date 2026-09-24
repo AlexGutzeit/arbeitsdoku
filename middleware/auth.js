@@ -9,7 +9,56 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
   process.exit(1);
 }
 
-// Abgelaufenes Token (24h-Timeout) → automatischer Logout. Einmal pro Nutzer als 'session_expired'
+// ── Sitzungsdauer (Alex, 24.09.2026) ───────────────────────────────────────────────────────────
+// Frueher galt jede Anmeldung fest 24 Stunden ab dem Anmelden. Gemessen im Betrieb (Prod-Kopie,
+// 30 Tage): 218 Ablauf-Abmeldungen bei 11 Personen, 197 davon mit Neuanmeldung binnen 3 Minuten —
+// die Leute flogen MITTEN in der Arbeit heraus, rund 90 % aller Anmeldungen waren erzwungen.
+//
+// Jetzt gleitend: Wer die App benutzt, bekommt unterwegs still ein frisches Token (Kopfzeile
+// `X-Neues-Token`). Abgemeldet wird erst nach LEERLAUF ohne jede Aktivitaet, und spaetestens nach
+// HOECHSTDAUER seit dem Anmelden ist das Passwort wieder faellig — sonst liesse sich ein einmal
+// erbeutetes Token durch blosses Benutzen endlos verlaengern.
+//
+// Unveraendert und weiterhin SOFORT wirksam: „Auf allen Geraeten abmelden" (user_sitzung) und das
+// Ausstellen. Ein widerrufenes Token wird nie erneuert — die Pruefung laeuft VOR dem Erneuern.
+const LEERLAUF_S = 3 * 24 * 3600;
+const HOECHSTDAUER_S = 30 * 24 * 3600;
+const ERNEUERN_NACH_S = 3600;   // hoechstens stuendlich ein neues Token, nicht bei jedem Klick
+
+/**
+ * Wie lange darf DIESE Sitzung hoechstens laufen (Sekunden)? 30 Tage — oder kuerzer, wenn die Stufe
+ * des zweiten Faktors oefter nach dem Code fragt (zweifaktor.js, sitzungsGrenzeTage).
+ */
+function hoechstdauerFuer(db, user) {
+  let tage = null;
+  try { tage = zweiFaktor.sitzungsGrenzeTage(db, user); } catch (_) {}
+  return Math.min(HOECHSTDAUER_S, tage ? tage * 24 * 3600 : Infinity);
+}
+
+/** Das einzige Zugangs-Token der App. `anmeldung` = Zeitpunkt der echten Anmeldung (Sekunden). */
+function tokenAusstellen({ userId, role, sitzung, anmeldung, hoechstS }) {
+  const jetzt = Math.floor(Date.now() / 1000);
+  const seit = Number(anmeldung) || jetzt;
+  const bis = Math.min(jetzt + LEERLAUF_S, seit + (Number(hoechstS) || HOECHSTDAUER_S));
+  return jwt.sign({ userId, role, sitzung: Number(sitzung) || 0, anmeldung: seit },
+    JWT_SECRET, { expiresIn: Math.max(1, bis - jetzt) });
+}
+
+// Warum ein 401? Die Oberflaeche braucht den GRUND, nicht nur die Tatsache: Ist die Sitzung bloss
+// abgelaufen, meldet sich gleich derselbe Mensch wieder an — seine ungespeicherten Eingaben bleiben
+// dann erhalten. Wurde sie dagegen auf allen Geraeten beendet (typisch: Handy verloren) oder das
+// Konto ausgestellt, muss alles weg. Vorher sahen alle Faelle gleich aus.
+const GRUND = {
+  NICHT_ANGEMELDET: 'NICHT_ANGEMELDET',
+  ABGELAUFEN: 'SITZUNG_ABGELAUFEN',
+  BEENDET: 'SITZUNG_BEENDET',
+  AUSGESTELLT: 'KONTO_AUSGESTELLT',
+  GELOESCHT: 'KONTO_GELOESCHT',
+  UNGUELTIG: 'TOKEN_UNGUELTIG',
+};
+const abweisen = (res, code, error) => res.status(401).json({ error, code });
+
+// Abgelaufenes Token → automatischer Logout. Einmal pro Nutzer als 'session_expired'
 // protokollieren, mit kurzer Sperre (5 Min), damit mehrere Folge-Requests/SSE-Reconnects mit
 // demselben abgelaufenen Token das Audit-Log nicht zuspammen.
 const _expiredLoggedAt = new Map();
@@ -23,7 +72,7 @@ function logSessionExpired(token, ip) {
     _expiredLoggedAt.set(userId, now);
     const db = getDb();
     const u = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
-    logAudit(db, { userId, username: u ? u.username : '', action: 'session_expired', details: 'Token abgelaufen (24h-Timeout)', ip });
+    logAudit(db, { userId, username: u ? u.username : '', action: 'session_expired', details: 'Sitzung abgelaufen (3 Tage ohne Aktivität oder 30 Tage seit Anmeldung)', ip });
   } catch (_) { /* Audit darf den Request nie stoeren */ }
 }
 
@@ -52,7 +101,7 @@ function gateFrei(url) {
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Nicht authentifiziert' });
+    return abweisen(res, GRUND.NICHT_ANGEMELDET, 'Nicht angemeldet');
   }
 
   const token = authHeader.split(' ')[1];
@@ -69,16 +118,16 @@ function authenticate(req, res, next) {
     // ACHTUNG bei Erweiterungen: Das ist eine Verbotsliste. Wer kuenftig einen weiteren
     // Sonder-Token einfuehrt und ihn hier NICHT eintraegt, reisst die Luecke wieder auf.
     if (decoded.sse || decoded.pending2fa) {
-      return res.status(401).json({ error: 'Ungültiger Token' });
+      return abweisen(res, GRUND.UNGUELTIG, 'Ungültige Anmeldung');
     }
 
     const db = getDb();
     const user = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, work_start, birth_date, COALESCE(active,1) AS active FROM users WHERE id = ?").get(decoded.userId);
-    if (!user) return res.status(401).json({ error: 'Benutzer nicht gefunden' });
+    if (!user) return abweisen(res, GRUND.GELOESCHT, 'Dieses Konto gibt es nicht mehr.');
     // Ausgestellte (active=0) Nutzer werden sofort ausgesperrt — auch wenn ihr Token noch nicht abgelaufen ist.
     // Prüfung läuft live gegen die DB: Wiedereinstellen (active=1) lässt dasselbe Token wieder greifen.
     // COALESCE(active,1): alte DBs ohne gesetztes Flag gelten als aktiv ([[feedback_abwaertskompatibilitaet]]).
-    if (user.active === 0) return res.status(401).json({ error: 'Account ausgestellt' });
+    if (user.active === 0) return abweisen(res, GRUND.AUSGESTELLT, 'Dieses Konto ist ausgestellt. Bitte wende dich an die Verwaltung.');
 
     // „Ueberall abmelden": Passt der Sitzungs-Stand im Token nicht mehr zum gespeicherten, ist das
     // Token widerrufen. Fehlender Anspruch gilt als 0 — Token aus der Zeit vor dieser Aenderung
@@ -87,11 +136,35 @@ function authenticate(req, res, next) {
     try {
       const stand = db.prepare('SELECT stand FROM user_sitzung WHERE user_id = ?').get(user.id);
       if (stand && Number(stand.stand) > Number(decoded.sitzung || 0)) {
-        return res.status(401).json({ error: 'Diese Anmeldung wurde beendet. Bitte neu anmelden.' });
+        return abweisen(res, GRUND.BEENDET, 'Diese Anmeldung wurde beendet. Bitte neu anmelden.');
       }
     } catch (_) { /* Tabelle fehlt (Altstand) → nichts widerrufen */ }
 
     req.user = user;
+
+    // Hoechstdauer — 30 Tage oder kuerzer, wenn die Stufe des zweiten Faktors oefter fragt. Ist die
+    // Sitzung aelter, gilt sie als ABGELAUFEN (Entwuerfe bleiben, bei der Neuanmeldung kommt der
+    // Code). Sofort und nicht erst beim naechsten Token-Ablauf: Stellt der Chef eine Rolle von
+    // „monatlich" auf „taeglich", soll das nicht bis zu drei Tage lang verschlafen werden.
+    // Tokens von vor dieser Aenderung tragen kein `anmeldung`; dann zaehlt ihr Ausstellungszeitpunkt
+    // — so fliegt nach dem Deploy niemand heraus.
+    const jetzt = Math.floor(Date.now() / 1000);
+    const seit = Number(decoded.anmeldung) || Number(decoded.iat) || jetzt;
+    const hoechstS = hoechstdauerFuer(db, user);
+    if (jetzt - seit >= hoechstS) {
+      logSessionExpired(token, req.ip);
+      return abweisen(res, GRUND.ABGELAUFEN, 'Deine Sitzung ist abgelaufen. Bitte melde dich neu an.');
+    }
+
+    // Gleitende Sitzung: aelter als eine Stunde → frisches Token mitgeben.
+    // Ein Fehler hier darf niemals den Zugang kosten.
+    try {
+      if (jetzt - Number(decoded.iat || 0) >= ERNEUERN_NACH_S) {
+        res.setHeader('X-Neues-Token', tokenAusstellen({
+          userId: user.id, role: user.role, sitzung: decoded.sitzung, anmeldung: seit, hoechstS,
+        }));
+      }
+    } catch (_) { /* ohne Erneuerung weiter — das alte Token gilt ja noch */ }
 
     // Einrichtungs-Zwang: Verlangt die Rolle einen zweiten Faktor und ist noch keiner eingerichtet,
     // geht ausser den Konto-Endpunkten nichts mehr. Das Frontend leitet zwar auch um, aber das ist
@@ -114,8 +187,11 @@ function authenticate(req, res, next) {
 
     next();
   } catch (err) {
-    if (err && err.name === 'TokenExpiredError') logSessionExpired(token, req.ip);
-    return res.status(401).json({ error: 'Ungültiger Token' });
+    if (err && err.name === 'TokenExpiredError') {
+      logSessionExpired(token, req.ip);
+      return abweisen(res, GRUND.ABGELAUFEN, 'Deine Sitzung ist abgelaufen. Bitte melde dich neu an.');
+    }
+    return abweisen(res, GRUND.UNGUELTIG, 'Ungültige Anmeldung');
   }
 }
 
@@ -129,4 +205,5 @@ function authorize(...roles) {
   };
 }
 
-module.exports = { authenticate, authorize, JWT_SECRET, GATE_FREI, gateFrei };
+module.exports = { authenticate, authorize, JWT_SECRET, GATE_FREI, gateFrei,
+  tokenAusstellen, hoechstdauerFuer, GRUND, LEERLAUF_S, HOECHSTDAUER_S, ERNEUERN_NACH_S };

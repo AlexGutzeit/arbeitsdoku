@@ -150,8 +150,10 @@ nur ohne die Mitarbeiter-Auswahl — hier gibt es ausschließlich die eigenen Ze
 die Abrechnung hat, findet es weiterhin dort: Neben Lohn-Export und Monatsabschluss hätte es auf
 einer persönlichen Seite nichts zu suchen.
 
+**Wie lange man angemeldet bleibt:** Solange man die App benutzt. Die Anmeldung erneuert sich dabei still im Hintergrund; abgemeldet wird erst, wer **3 Tage lang gar nicht** aktiv war — ein Wochenende überbrückt das also. Spätestens nach **30 Tagen** ist das Passwort wieder fällig. Wer den zweiten Faktor eingerichtet hat, wird öfter gefragt, wenn seine Stufe das verlangt (siehe **Zwei-Faktor-Anmeldung** weiter unten). Läuft eine Anmeldung ab, sagt die Anmeldeseite das ausdrücklich — und **nicht gespeicherte Eingaben bleiben erhalten**: Nach der Neuanmeldung landet man wieder im Formular, das den Entwurf zum Wiederherstellen anbietet. Ein Speichern, das in diesem Moment scheitert, meldet klar **„NICHT gespeichert"** — nie einen Erfolg.
+
 **Sitzungen und Daten:** **„Auf allen Geräten abmelden"** macht jede andere Anmeldung sofort
-ungültig — der Weg für ein verlorenes Handy, ohne auf jemanden warten zu müssen.
+ungültig — der Weg für ein verlorenes Handy, ohne auf jemanden warten zu müssen. Auf den anderen Geräten werden dabei auch die nicht gespeicherten Entwürfe gelöscht.
 
 *Auf dem Gerät, von dem aus du klickst, bleibst du angemeldet.* Technisch wird auch dein eigenes
 Anmelde-Zeichen entwertet; die Antwort liefert deshalb sofort ein frisches, das die App übernimmt —
@@ -669,8 +671,7 @@ landet **jeder** in dieser Rolle, der noch keinen Authenticator hat, beim nächs
 Die Pflicht für **Administratoren** kann nur ein Administrator ändern — sonst könnte ein Chef
 ausgerechnet die Absicherung des stärksten Kontos abschalten.
 
-Zur Häufigkeit: Eine Anmeldung gilt 24 Stunden. „Bei jeder Anmeldung" heißt deshalb in der Praxis
-höchstens einmal täglich — und sofort wieder, wenn sich jemand abmeldet.
+Zur Häufigkeit: Der Code wird beim **Anmelden** abgefragt, und eine Anmeldung bleibt bestehen, solange man die App benutzt. Damit die gewählte Stufe trotzdem gilt, **begrenzt sie die Anmeldung**: bei „bei jeder Anmeldung" und „täglich" nach spätestens einem Tag, bei „wöchentlich" nach 7, bei „monatlich" nach 30 Tagen — dann meldet man sich neu an und gibt den Code ein. „Einmal pro Gerät" begrenzt nichts. Stellt der Chef eine Rolle strenger, gilt das sofort, nicht erst nach Ablauf der laufenden Anmeldung.
 
 **Arbeitszeiten** (Arbeitsbeginn, Arbeitszeit pro Tag, Pause pro Tag — Vorgabe 07:00 / 8 h / 30 min): dienen als **Vorbelegung** für die Planung (von/bis/Pause) und für den ersten Zeiteintrag eines Tages. Eine Vorschauzeile zeigt beim Tippen, was die drei Werte zusammen ergeben. **Erfasste Zeiten und Soll-Stunden bleiben davon unberührt.** White-Label-Branding (Logo + App-Icon; **max. Bild-Dateigröße admin-einstellbar, Default 5 MB**), **Impressum & Datenschutz** (konfigurierbare Rechtstexte, erscheinen als Links auf Login-Seite + Menü), Dokumenten-Speicherlimit (Gesamt + pro Datei), Datenbank-Backup/Restore. *(Chef/Admin; Größenlimits nur Admin)*
 
@@ -708,7 +709,7 @@ Darauf ist sie ausgelegt:
   14:32 gefunden – Wiederherstellen / Verwerfen"**. Nichts wird heimlich eingesetzt. Gilt für **alle**
   Formulare (Zeiteintrag, Planung, Aushang, Notiz, Bestellung, Auftrag, Abwesenheit) – bei der Planung
   inklusive der Mehrtages-Auswahl. Entwürfe verfallen nach 24 Stunden, verschwinden nach dem Speichern
-  und werden **beim Abmelden gelöscht** (geteilte Geräte). Wer ein Formular versehentlich verlässt, sieht
+  und werden beim **bewussten Abmelden** gelöscht (geteilte Geräte). Läuft dagegen nur die Anmeldung ab, bleiben sie erhalten und werden nach der Neuanmeldung angeboten — meldet sich auf dem Gerät stattdessen jemand anderes an, werden sie gelöscht. Wer ein Formular versehentlich verlässt, sieht
   kurz **„Entwurf gesichert"** statt eines blockierenden Dialogs.
 * **Details ohne Umweg ansehen:** Einen Eintrag im Zeitnachweis oder einen Termin in der Planung
   **gedrückt halten** zeigt Kunde, Ort, Beschreibung und Pause als Sprechblase – am Rechner erscheinen

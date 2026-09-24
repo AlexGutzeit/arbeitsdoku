@@ -130,6 +130,26 @@ function zustandLesen(db, userId) {
 // Sperre, wenn die Rolle es verlangt.
 const EIGENE_MODI = MODI.filter(m => m !== 'aus');
 
+// Wie viele Tage darf eine Sitzung dieses Nutzers hoechstens laufen? null = keine Grenze von hier.
+//
+// Der Code wird nur beim ANMELDEN abgefragt. Seit die Sitzung gleitet (R1, 24.09.2026) haelt sie
+// bis zu 30 Tage — ohne diese Grenze fragte „woechentlich" dann nur noch monatlich und die
+// gewaehlte Stufe waere still ausgehebelt. Also begrenzt die Stufe die Sitzung.
+// „Bei jeder Anmeldung" bleibt bei einem Tag: So oft kam die Frage auch mit der alten
+// 24-Stunden-Sitzung. „Einmal pro Geraet" braucht keine Grenze.
+// Gleiche Wirksamkeits-Regel wie codeNoetig(): Schreibt die Rolle etwas vor, gewinnt sie.
+const SITZUNG_TAGE = { immer: 1, taeglich: 1, woechentlich: 7, monatlich: 30 };
+function sitzungsGrenzeTage(db, user) {
+  try {
+    if (notabschaltung() || !user) return null;
+    const z = zustandLesen(db, user.id);
+    if (!z.aktiv) return null;                          // ohne Authenticator wird nie ein Code gefragt
+    const modus = modusFuerRolle(db, user.role);
+    const wirksam = (modus === 'aus') ? (EIGENE_MODI.includes(z.eigen_modus) ? z.eigen_modus : 'geraet') : modus;
+    return SITZUNG_TAGE[wirksam] || null;
+  } catch (_) { return null; }                          // im Zweifel keine zusaetzliche Grenze
+}
+
 function eigenenModusSetzen(db, userId, modus) {
   if (!EIGENE_MODI.includes(modus)) return false;
   try {
@@ -258,7 +278,7 @@ module.exports = {
   MODI, MODUS_TEXT, FENSTER_TAGE, ROLLEN, schluesselFuer,
   modusFuerRolle, alleModi, cacheVergessen,
   einrichtungNoetig, geraetGueltig, codeNoetig,
-  zustandLesen, eingerichtet, stillgelegt, EIGENE_MODI, eigenenModusSetzen,
+  zustandLesen, eingerichtet, stillgelegt, EIGENE_MODI, eigenenModusSetzen, sitzungsGrenzeTage,
   geheimnisLesen, wartendesGeheimnisLesen, wartendesGeheimnisAnlegen, wartendesUebernehmen,
   stilllegen, wiederAktivieren, schrittVerbrauchen, zuruecksetzen,
   geraetKennungErzeugen, geraetHash, geraetFinden, geraetMerken, geraetBenutzt, geraeteAlleLoeschen,

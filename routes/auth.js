@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const { getDb } = require('../database/init');
-const { authenticate, JWT_SECRET } = require('../middleware/auth');
+const { authenticate, JWT_SECRET, tokenAusstellen, hoechstdauerFuer } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { passwordPolicyError } = require('./users');
 const zf = require('../zweifaktor');
@@ -104,8 +104,9 @@ function anmeldeAntwort(db, user) {
   return {
     // `sitzung` ist der Stand aus user_sitzung. Wer „ueberall abmelden" drueckt, erhoeht ihn —
     // alle Token mit kleinerem Stand sind damit in derselben Sekunde wertlos.
-    token: jwt.sign({ userId: user.id, role: user.role, sitzung: sitzungsStand(db, user.id) },
-      JWT_SECRET, { expiresIn: '24h' }),
+    // Dauer und Erneuerung regelt middleware/auth.js (tokenAusstellen) — nirgends sonst.
+    token: tokenAusstellen({ userId: user.id, role: user.role, sitzung: sitzungsStand(db, user.id),
+      hoechstS: hoechstdauerFuer(db, user) }),
     user: {
       id: user.id,
       username: user.username,

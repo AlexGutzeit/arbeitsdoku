@@ -67,6 +67,23 @@ window.addEventListener('storage', (e) => {
   S.token = e.newValue;
 });
 
+// Frisches Token vom Server uebernehmen (gleitende Sitzung, R1). Zwei Riegel:
+//  * Nur, solange hier noch jemand angemeldet ist. Eine Antwort, die erst NACH dem Abmelden
+//    eintrifft, darf die Sitzung nicht wiederbeleben.
+//  * Nur fuer DENSELBEN Nutzer — sonst koennte eine verspaetete Antwort nach einem
+//    Nutzerwechsel auf einem geteilten Geraet das Token des Vorgaengers einsetzen.
+// Das storage-Ereignis oben reicht das neue Token an die anderen Tabs weiter.
+function tokenUebernehmen(neu) {
+  if (!S.token || !S.user || !neu || neu === S.token) return;
+  try {
+    let teil = String(neu).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    teil += '==='.slice((teil.length + 3) % 4);
+    if (Number(JSON.parse(atob(teil)).userId) !== Number(S.user.id)) return;
+  } catch (_) { return; }
+  S.token = neu;
+  try { localStorage.setItem('token', neu); } catch (_) {}
+}
+
 // --- API Helper ---
 // Doppel-Submit-Schutz (app-weit): identische, GLEICHZEITIG laufende Schreib-Anfragen werden zu EINER
 // zusammengefasst. Klickt jemand bei wackeligem Netz 5× auf „Speichern", startet nur der erste Klick einen
@@ -107,7 +124,29 @@ async function api(method, url, body, isFormData) {
       e.ursprung = netzFehler && netzFehler.message;
       throw e;
     }
-    if (res.status === 401 && !url.includes('/auth/login')) { logout(); return null; }
+    // Gleitende Sitzung (R1): Der Server legt unterwegs ein frisches Token bei.
+    const neuesToken = res.headers.get('X-Neues-Token');
+    if (neuesToken) tokenUebernehmen(neuesToken);
+    if (res.status === 401 && !url.includes('/auth/login')) {
+      // Der GRUND entscheidet, ob ungespeicherte Eingaben bleiben duerfen (nur bei „abgelaufen").
+      let grund = null;
+      try { const d = await res.clone().json(); grund = d && d.code; } catch (_) {}
+      logout(false, grund);
+      // Ein SCHREIBENDER Aufruf darf nach dem Abmelden nie wie ein Erfolg aussehen. Frueher kam hier
+      // `null` zurueck, und die Formulare hielten das fuer gelungen: Das Eintragsformular zeigte
+      // „Eintrag erstellt", loeschte den Entwurf und sprang weiter — gespeichert war nichts
+      // (R1, 24.09.2026; 136 Aufrufer pruefen das Ergebnis nicht). Mit dem Fehler landen sie alle
+      // in ihrem ohnehin vorhandenen catch-Zweig. Lesende Aufrufe bleiben bei `null` — dort
+      // pruefen die Aufrufer darauf, und ein Fehler wuerde nur zusaetzliche Meldungen erzeugen.
+      if (mutating) {
+        const e = new Error(grund === 'SITZUNG_ABGELAUFEN'
+          ? 'Deine Sitzung war abgelaufen — das wurde NICHT gespeichert. Bitte melde dich neu an.'
+          : 'Du bist nicht mehr angemeldet — das wurde NICHT gespeichert.');
+        e.sitzung = true;
+        throw e;
+      }
+      return null;
+    }
     // Der Einrichtungs-Zwang meldet sich mit 403 und einer eigenen Kennung. Kein Abmelden — der
     // Nutzer soll ja gerade zur Einrichtung. Netz gegen einen veralteten Oberflaechen-Zustand.
     if (res.status === 403) {
@@ -1493,6 +1532,44 @@ function entwurfAllesLoeschen() {   // beim Abmelden: auf geteilten Geraeten dar
   } catch (_) {}
   _entwuerfe = [];
 }
+// ── Abgelaufene Sitzung (R1) ──
+// Laeuft nur die Sitzung ab, meldet sich gleich DERSELBE Mensch wieder an (gemessen: 197 von 218
+// Faellen binnen 3 Minuten). Seine ungespeicherten Eingaben gehoeren ihm und bleiben liegen —
+// die Schluessel tragen ohnehin seine Nutzer-ID (_entwurfSchluessel), ein anderer bekommt sie nie
+// angeboten. Sichern MUSS vor dem Leeren von S.user passieren, sonst landen sie unter 'anon'.
+// Rueckgabe: Anzahl gesicherter Formulare.
+function entwuerfeFuerNeuanmeldungSichern() {
+  const n = entwuerfeSichern();
+  _entwuerfe = [];   // die Formulare verschwinden gleich; danach nichts mehr (unter 'anon') sichern
+  return n;
+}
+// Meldet sich auf dem Geraet ein ANDERER an, haben die Entwuerfe des Vorgaengers hier nichts mehr
+// verloren (geteilte Geraete: Kunde, Adresse, Notiz). Die eigenen bleiben.
+function entwuerfeFremderLoeschen(userId) {
+  const eigen = ENTWURF_PRAEFIX + userId + ':';
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(ENTWURF_PRAEFIX) && !k.startsWith(eigen))
+      .forEach(k => localStorage.removeItem(k));
+  } catch (_) {}
+}
+// Wohin nach der Neuanmeldung? Dorthin, wo man war — dort bietet das Formular den Entwurf an.
+const RUECKKEHR_KEY = 'nach_anmeldung';
+function rueckkehrMerken(userId, route) {
+  if (!userId || !route || route === '/login' || route === '/impressum' || route === '/datenschutz') return;
+  try { localStorage.setItem(RUECKKEHR_KEY, JSON.stringify({ uid: userId, route, t: Date.now() })); } catch (_) {}
+}
+function rueckkehrVergessen() { try { localStorage.removeItem(RUECKKEHR_KEY); } catch (_) {} }
+// Liefert die gemerkte Seite nur fuer DENSELBEN Nutzer und nur, solange sie frisch ist. Einmalig.
+function rueckkehrZiel(userId) {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(RUECKKEHR_KEY) || 'null'); } catch (_) {}
+  rueckkehrVergessen();
+  if (!d || Number(d.uid) !== Number(userId) || !d.route || !String(d.route).startsWith('/')) return null;
+  if (Date.now() - (d.t || 0) > ENTWURF_MAX_ALTER_MS) return null;
+  return d.route;
+}
+
 function _entwurfAufraeumen() {     // abgelaufene Entwuerfe stillschweigend entsorgen
   try {
     Object.keys(localStorage).filter(k => k.startsWith(ENTWURF_PRAEFIX)).forEach(k => {
