@@ -1,0 +1,220 @@
+# Bugliste — Code-Durchsicht vom 24.09.2026
+
+Stand der Durchsicht: `ddae438` (Cache 413). Nur gelesen, nichts geändert.
+Jeder Befund wurde im Code nachgeprüft; Verdachtsfälle, die sich nicht bestätigt haben, stehen
+unten unter „Geprüft und in Ordnung".
+
+**So wird die Liste geführt:** Kennungen (R1 …) bleiben fest, auch wenn Punkte erledigt sind —
+sie tauchen in Commit-Nachrichten auf. Erledigt heißt: Häkchen setzen, Commit dahinterschreiben.
+Neue Funde kommen unten mit der nächsten freien Nummer dazu.
+
+| Status | Bedeutung |
+|---|---|
+| `[ ]` | offen |
+| `[~]` | in Arbeit |
+| `[x]` | erledigt (mit Commit) |
+| `[-]` | bewusst verworfen (mit Begründung) |
+
+---
+
+## Hoch — echte Auswirkungen im Alltag
+
+### [ ] R1 · Automatisches Abmelden löscht getippte Entwürfe (Datenverlust)
+- **Wo:** `public/js/app-2-auth-layout.js:158` (`logout()` → `entwurfAllesLoeschen()`), Sitzungsdauer `routes/auth.js:108` (`expiresIn: '24h'`, keine Verlängerung)
+- **Was passiert:** Die Sitzung gilt fest 24 Stunden ab Anmeldung. Läuft sie ab, führt der nächste
+  Serveraufruf zu 401 → `logout()` → **alle** Formular-Entwürfe werden gelöscht. Ausgerechnet die
+  Entwurfs-Sicherung, die Datenverlust verhindern soll, wird dabei geleert. Es erscheint auch keine
+  Erklärung — man landet einfach auf der Anmeldeseite.
+- **Beispiel:** gestern 16:30 angemeldet, heute 16:25 Tagesbericht angefangen, 16:35 „Speichern"
+  → Anmeldeseite, Text weg.
+- **Vorschlag:** Entwürfe nur beim *bewussten* Abmelden löschen, beim automatischen behalten und
+  nach der Neuanmeldung wieder anbieten. Meldung „Sitzung abgelaufen — bitte neu anmelden, deine
+  Eingaben sind noch da". Zusätzlich gleitende Sitzung: Server erneuert das Token, wenn nur noch
+  wenige Stunden übrig sind.
+
+### [ ] R2 · Server kann bei bestimmten Fehlern komplett abstürzen
+- **Wo:**
+  - `scheduler.js:314` — die minütliche Aufgabe `tick()` ist async, wird aber **ohne `await`** in
+    `try/catch` gesetzt; das Fangnetz fängt dadurch nichts.
+  - `routes/backup.js:207` — `await krypto.verschluesselnPuffer(…)` ohne Fehlerfang.
+  - `routes/users.js:480 → 497` — Benutzername wird *vor* `await bcrypt.hash` geprüft, eingefügt
+    *danach*. Legen zwei Leute gleichzeitig denselben Namen an, wirft der zweite Insert (UNIQUE).
+- **Was passiert:** Express 4 fängt keine Fehler aus async-Routen, und es gibt keinen globalen
+  `process.on('unhandledRejection')`. Node 22 beendet sich. systemd startet nach 5 s neu
+  (`Restart=always`, geprüft) — aber alle Verbindungen brechen ab und bis zu 5 s noch nicht
+  gespeicherter Änderungen gehen verloren (Autosave-Takt).
+- **Vorschlag:** `tick(…).catch(…)`; async-Routen in einen Fehler-Wrapper; globaler
+  `unhandledRejection`-Wächter, der protokolliert und `saveToFile()` aufruft statt zu beenden.
+
+### [ ] R3 · Sicherung zurückspielen: halber Abbruch hinterlässt unbestimmten Zustand
+- **Wo:** `routes/backup.js:484–533`, Sicherheitskopie `:486`, Rotation `scripts/make-backup.js:117`
+- **Was passiert:** Erst wird die DB-Datei ersetzt, dann werden Dateien geschrieben, erst am Ende
+  wird die DB neu geladen. Scheitert etwas dazwischen (z. B. volle Platte): Meldung
+  „fehlgeschlagen", auf der Platte liegt die *neue* DB, im Speicher die *alte*. Das nächste
+  Autospeichern überschreibt die neue wieder — startet der Server vorher neu, gilt die neue.
+  Welche Daten gelten, ist Zufall.
+- **Außerdem die Sicherheitskopie vor dem Zurückspielen:**
+  - **unverschlüsselt** (`.zip`) — entgegen der Regel seit 09.09.2026
+  - **unvollständig** — ohne Dokumente, Profilbilder, App-Icons
+  - **wird nie aufgeräumt** — das Rotationsmuster erfasst nur `arbeitsdoku_backup_*`
+- **Stand:** latent — auf dem VPS gibt es noch keine solche Kopie (über die Oberfläche wurde nie
+  zurückgespielt).
+- **Vorschlag:** Bei Fehler aus der Sicherheitskopie zurückspielen, oder Reihenfolge: Dateien →
+  DB → sofort neu laden. Sicherheitskopie als `.adbk` verschlüsseln, vollständig machen, mitrotieren.
+
+---
+
+## Mittel — Sackgassen und irreführende Zustände
+
+### [ ] R4 · Ewiger Lade-Kreisel auf 9 Seiten
+- **Wo:** Mitarbeiter `app-5-team.js:1004`, Projekte `app-5-team.js:1919`, Notizen
+  `app-8-comm-init.js:944`, Dokumente `app-6-admin.js:1432`, Papierkorb-Reiter
+  `app-6-admin.js:1075 / 1138 / 1191 / 1270`
+- **Was passiert:** Scheitert das Laden (Baustelle ohne Empfang), verschwindet die Meldung nach
+  3 s, der Kreisel dreht weiter, kein „Erneut versuchen".
+- **Vorschlag:** die vorhandene `renderLoadError()` verwenden (Dashboard, Planung, Statistik
+  nutzen sie schon). Siehe auch R5 — beides über eine gemeinsame Seiten-Hülle lösen.
+
+### [ ] R5 · Ältere, langsame Seite überschreibt die gerade geöffnete
+- **Wo:** Wächter `renderToken()/renderStale()` in `app-1-core.js:347` — genutzt nur von
+  Dashboard, Planung, Statistik, Abwesenheiten. **17 Seiten ohne Wächter:** `renderEntryForm`,
+  `renderPlanningForm`, `renderProjectForm`, `renderPdfExport`, `renderTools`, `renderSettings`,
+  `renderDeletedEntries/Projects/Absences/Users`, `renderDocuments`, `renderVacationOverview`,
+  `renderWelcome`, `renderBulletin`, `renderBulletinForm`, `renderUsers`, `renderProjects`
+- **Was passiert:** Bei langsamem Netz sagt die Adresse „Planung", zu sehen ist das Auftrags-Board.
+- **Vorschlag:** Wächter überall; am besten eine gemeinsame Seiten-Hülle (Laden + Fehleranzeige +
+  Veraltet-Wächter), damit neue Seiten nicht wieder ohne gebaut werden.
+
+### [ ] R6 · Pause länger als Arbeitszeit → still ein 0-Stunden-Eintrag
+- **Wo:** `public/js/arbeitszeitrecht.js:127` (`restPause` nicht auf Eintragsdauer begrenzt),
+  `routes/entries.js:37` (`calculateNetHours` klemmt auf 0), keine Prüfung in Oberfläche/Server
+- **Beispiel:** 15:00–15:20 als erster Eintrag des Tages → 30 min Pause vorgeschlagen → **0 h**.
+- **Vorschlag:** Vorschlag auf Eintragsdauer begrenzen; „Die Pause ist länger als die Arbeitszeit"
+  abweisen oder bewusst bestätigen lassen (Oberfläche und Server).
+
+### [ ] R7 · „Abmelden" und „Benachrichtigungen an/aus" können endlos hängen
+- **Wo:** `app-5-team.js:163` (`await navigator.serviceWorker.ready` ohne Zeitgrenze) →
+  `disablePush()` `:191` → `logout()` `app-2-auth-layout.js:154`; ebenso `enablePush()` `:173`
+- **Was passiert:** Ohne aktiven Service Worker (z. B. privates Firefox-Fenster) löst das Warten
+  nie auf — der Knopf wirkt **funktionslos**.
+- **Vorschlag:** `Promise.race` mit 3 s Zeitgrenze; beim Abmelden den Push-Abbau nicht abwarten.
+
+### [ ] R8 · Neue Rechte greifen erst nach Seitenwechsel
+- **Wo:** `app-2-auth-layout.js:185` — `refreshUser()` vergleicht nur `role, can_plan,
+  can_plan_all, can_bulletin, can_upload`; es fehlen `can_order`, `can_products_edit`,
+  `can_products_add`
+- **Was passiert:** Nach einer Rechtevergabe baut sich die Oberfläche nicht neu auf. Dasselbe
+  Muster wie „Mein Konto" (zwei parallele Listen).
+- **Vorschlag:** alle `can_*`-Felder aus dem Objekt ableiten statt aufzählen; Test holt die
+  Schlüssel von der Quelle (wie `tests/konto-rechte-ui.js`).
+
+### [ ] R9 · Englische und technische Fehlermeldungen
+- **Upload-Fehler** wörtlich durchgereicht: `routes/documents.js:251`, `routes/settings.js:60`,
+  `routes/settings.js:344` — z. B. bei voller Platte „ENOSPC: no space left on device, open
+  '/home/…'" (englisch **und** mit Serverpfad), oder „Unexpected field".
+- **Push aktivieren:** Browserfehler englisch, z. B. „Registration failed – push service error"
+  (Brave) — `app-5-team.js:174`, angezeigt ab `:311`.
+- **Interne Feldnamen:** „Feld 'personal_note' ist zu lang" — `routes/entries.js:27`.
+- **Globaler Fehlerbehandler** `server.js:192` macht aus allem „Interner Serverfehler" (500), auch
+  aus „Anfrage zu groß" (Express-Grenze 100 kB) und „ungültige Anfrage" (400).
+- **Während Deploy/Neustart** (502/503) zeigt die App nur „Fehler" — `app-1-core.js:129`.
+  Besser: „Server startet gerade neu — bitte gleich noch einmal".
+- **Nach abgelaufener Sitzung** liefert `api()` `null`, einige Stellen greifen trotzdem zu
+  (`app-4-planning-tools.js:1312 / 1345 / 1380`, `app-5-team.js:494`) → „Cannot read properties
+  of null" kann aufblitzen.
+- „User nicht gefunden" — `routes/statistics.js:461`.
+- **Vorschlag:** zentrale Fehler-Übersetzung in der Oberfläche (JS-interne Fehler →
+  „Unerwarteter Fehler — bitte Seite neu laden", echte Meldung in die Konsole); auf dem Server
+  `err.type` / `err.code` auswerten.
+
+### [ ] R10 · Fehlende Umlaute in sichtbaren Texten (~20 Stellen)
+- `routes/notes.js` 225, 308, 312, 342, 358, 405, 409 („Eigentuemer", „geloescht", „Empfaenger", „gehoert")
+- `routes/push.js` 26, 84, **87** (auch der Text der Test-Benachrichtigung: „…auf diesem Geraet")
+- `routes/settings.js` 374 („Bild ungueltig")
+- `public/js/app-6-admin.js` 569, 581, 584 („auswaehlen", „zuruecksetzen")
+- Protokolltexte: `ausstellen.js` 101, 113; `routes/users.js` 651, 671, 834
+- **Vorschlag:** korrigieren; Prüfskript als Test, das Umlaut-Ersatz in sichtbaren Texten meldet.
+
+### [ ] R11 · Notiz-Sperre läuft nach 15 Minuten ab, ohne Verlängerung
+- **Wo:** `routes/notes.js:8` (`LOCK_TIMEOUT_MINUTES = 15`), kein Herzschlag im Client
+  (`app-8-comm-init.js:1181`), Freigabe per synchronem XHR in `beforeunload` (`:2336`)
+- **Was passiert:** Wer länger schreibt, kann von einem Kollegen überholt werden und bekommt beim
+  Speichern „gesperrt" — ohne Weg, die Sperre neu zu holen. Die Meldung nennt nicht, *wer* sperrt
+  (Server liefert `editing_by_name`, Client zeigt ihn nicht). Chrome blockiert synchrones XHR beim
+  Schließen — die Sperre bleibt dann 15 min stehen.
+- **Vorschlag:** Sperre beim Tippen alle paar Minuten erneuern; Namen anzeigen;
+  `fetch(…, { keepalive: true })` statt synchronem XHR.
+
+### [ ] R12 · „Bestellt" ohne Rückfrage und ohne Rückweg
+- **Wo:** `routes/orders.js:177`, Oberfläche `app-8-comm-init.js:895`; Ändern: `routes/orders.js:120`
+- **Was passiert:** Ein Fehltipp am Handy verschiebt die Bestellung endgültig. Zurücknehmen geht
+  nicht, löschen nur Admin — ein Chef sitzt fest. Außerdem erlaubt der Server, bereits bestellte
+  Einträge nachträglich zu ändern (`ordered_at` wird nicht geprüft; die Oberfläche bietet es nicht an).
+- **Vorschlag:** „Rückgängig"-Hinweis oder Rückfrage; Route „doch nicht bestellt" für Chef/Admin;
+  Ändern bestellter Einträge für Nicht-Manager sperren.
+
+---
+
+## Niedrig — Feinschliff
+
+### [ ] R13 · Zwei-Faktor-Code abgelaufen
+Nach 5 Minuten scheitert jeder weitere Code mit „abgelaufen", raus nur über „Abbrechen"
+(`routes/auth.js:158`, `app-2-auth-layout.js:57`). → Bei Ablauf automatisch zur Passworteingabe.
+
+### [ ] R14 · Meldungen stehen immer nur 3 Sekunden
+`app-1-core.js:1091` — zweizeilige Fehler kaum lesbar. → Fehler länger bzw. bis zum Antippen,
+Dauer nach Textlänge.
+
+### [ ] R15 · Auszahlungen: Name und Datumsprüfung uneinheitlich
+Beim Anlegen wird der Anzeigename gespeichert, beim Bestätigen/Ablehnen/Zurückziehen der
+Benutzername (`routes/payouts.js:207, 239`) — der Kommentar bei `:138` will genau das vermeiden.
+„Wirksam ab" nur per Muster geprüft (`:117`), „2026-02-31" wird angenommen.
+
+### [ ] R16 · Urlaubsübersicht „Stand:" zeigt nachts den Vortag
+`routes/absences.js:262` (`toISOString`) — zwischen 0 und 2 Uhr. Die Berechnung selbst nutzt
+korrekt Ortszeit (`berlinHeute`).
+
+### [ ] R17 · Löschen ohne Protokolleintrag
+Schwarzes Brett (`routes/bulletin.js:141`) und Bestellungen (`routes/orders.js:156`) löschen hart,
+ohne Eintrag im Protokoll.
+
+### [ ] R18 · PDF-Download kann in Safari/iOS abbrechen
+`app-8-comm-init.js:2298` — `URL.revokeObjectURL` direkt nach dem Klick. → verzögert freigeben.
+
+### [ ] R19 · Mitarbeiter anlegen ohne Transaktion
+`routes/users.js:495–505` — drei Inserts (Nutzer, Soll-Stunden, Anstellung) ohne Transaktion;
+scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
+
+### [ ] R20 · Eingabedialog verwirft Text bei Klick daneben
+`app-1-core.js:1266` (`promptModal`) — ärgerlich bei längeren Begründungen (z. B. Ablehnungsgrund).
+→ Klick daneben nur schließen, wenn das Feld leer ist, sonst nachfragen.
+
+---
+
+## Geprüft und in Ordnung
+
+Damit diese Punkte nicht ein zweites Mal untersucht werden:
+
+- **Knöpfe ohne Funktion: keine.** Alle 297 Knöpfe in den Vorlagen per Skript gegen die
+  Klick-Handler abgeglichen; die 3 Treffer waren Scheintreffer (dynamische Kennung beim
+  „Erneut versuchen", eigener Hilfsbaustein `$s()` im Scanner, ein Kommentar). Keine eingebetteten
+  `onclick` (die Sicherheitsrichtlinie `script-src 'self'` würde sie blockieren).
+- **Datumsrechnung** sommerzeitsicher — Server und Oberfläche rechnen mit 12:00 Uhr bzw. UTC.
+- **Restore-Pfad** zieht alle Migrationen hoch (`ensureAuditSchema` ruft alle `ensure*Schema`).
+- **Letzter Admin** kann weder herabgestuft noch ausgestellt werden (`routes/users.js:540, 691`).
+- **Push-Versand ohne `await`** ist sicher — `notifyUsers` fängt alles selbst ab.
+- **Planungsrechte:** `can_plan_all` setzt `can_plan` immer mit (`routes/users.js:446, 560`).
+- **Auszahlungen, Werkzeug-Ausleihe, Abwesenheits-Genehmigung:** kein hängender Zustand.
+- **Kein XSS-Fund** — die verdächtigen Stellen sind Texte für Rückfrage-Dialoge, die selbst escapen.
+- **Knopfsperren** (`disabled = true`) werden im Fehlerfall überall wieder aufgehoben.
+- **Dienst auf dem VPS** startet nach einem Absturz selbst neu (`Restart=always`, 5 s).
+
+---
+
+## Vorgeschlagene Reihenfolge
+
+1. **R1** — Datenverlust
+2. **R2** — Absturz
+3. **R4 + R5** gemeinsam über eine Seiten-Hülle
+4. **R9 + R10** — Meldungen (lässt sich gut bündeln)
+5. Rest nach Belieben
