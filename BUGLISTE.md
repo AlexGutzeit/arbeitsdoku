@@ -101,7 +101,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Vorschlag:** Wächter überall; am besten eine gemeinsame Seiten-Hülle (Laden + Fehleranzeige +
   Veraltet-Wächter), damit neue Seiten nicht wieder ohne gebaut werden.
 
-### [ ] R6 · Pause länger als Arbeitszeit → still ein 0-Stunden-Eintrag
+### [x] R6 · Pause länger als Arbeitszeit → still ein 0-Stunden-Eintrag — erledigt in `0f03d56`
 - **Wo:** `public/js/arbeitszeitrecht.js:127` (`restPause` nicht auf Eintragsdauer begrenzt),
   `routes/entries.js:37` (`calculateNetHours` klemmt auf 0), keine Prüfung in Oberfläche/Server
 - **Beispiel:** 15:00–15:20 als erster Eintrag des Tages → 30 min Pause vorgeschlagen → **0 h**.
