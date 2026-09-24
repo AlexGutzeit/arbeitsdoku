@@ -303,14 +303,29 @@
     if (flaeche) {
       const schluessel = wischSchluessel();
       const gemerkt = zustand.wisch[schluessel];
+      let automatisch = null;
       if (gemerkt != null) {
         flaeche.scrollLeft = gemerkt;                 // dieselbe Ansicht: Position halten
       } else {
         const h = heuteIso();
         const spalte = (h >= von && h <= bis) ? ziel.querySelector('.abscal-spalte--heute') : null;
         flaeche.scrollLeft = spalte ? Math.max(0, spalte.offsetLeft - flaeche.clientWidth / 3) : 0;
+        automatisch = flaeche.scrollLeft;             // der TATSAECHLICHE Wert (evtl. am Rand geklemmt)
       }
-      flaeche.addEventListener('scroll', () => { zustand.wisch[schluessel] = flaeche.scrollLeft; }, { passive: true });
+      // Nur echtes Wischen merken (R21). Auch die eigene Sprung-zu-heute-Bewegung loest ein
+      // scroll-Ereignis aus. Frueher wurde sie gespeichert, als haette jemand gewischt — als
+      // Pixelwert DIESER Breite. Nach dem Drehen des Handys oeffnete dieselbe Ansicht dann an der
+      // alten Stelle, und „heute" lag ausserhalb des Bildes (gemessen: heute bei 902 px, sichtbar
+      // bis 390 px, Stand 527 aus der Desktop-Breite statt 779).
+      // Steht man (wieder) auf der automatischen Stelle, gibt es nichts zu merken — dann wird beim
+      // naechsten Oeffnen neu fuer die dann gueltige Breite gerechnet.
+      flaeche.addEventListener('scroll', () => {
+        if (automatisch != null && Math.abs(flaeche.scrollLeft - automatisch) < 2) {
+          delete zustand.wisch[schluessel];
+          return;
+        }
+        zustand.wisch[schluessel] = flaeche.scrollLeft;
+      }, { passive: true });
     }
 
     ziel.querySelectorAll('.abscal-modus-btn').forEach(b => b.addEventListener('click', () => {

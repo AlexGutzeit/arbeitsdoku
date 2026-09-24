@@ -2879,3 +2879,23 @@ nächsten Token-Ablauf: Stellt der Chef eine Rolle strenger, soll das nicht drei
 Tests: `tests/sitzung-gleitend.js` (29, in-process) und `tests/sitzung-entwurf-ui.js` (29, geklickt),
 dazu Gegenproben für jeden Baustein — jeweils zurückgenommen, jeweils an der richtigen Stelle rot.
 
+## Zwei Tests, die nur durch Datumsglück grün waren (R21, R22 — 24.09.2026)
+
+Nach einem Datumswechsel kippten zwei Tests, beide auch auf dem Stand vor der jeweils letzten
+Änderung — also nicht durch Code, sondern durch den Kalender.
+
+**R22 war nur der Test.** `auszahlung-gesamtbild.js` suchte Werktage in einem Fenster von zwei
+Kalendertagen; am 24.09. fiel es auf Samstag/Sonntag. Jetzt fünf Kalendertage (immer mindestens drei
+Werktage), plus ein Abbruch mit klarer Meldung, falls die Liste doch leer ist.
+
+**R21 war ein echter Fehler in der App**, den der Test nur zufällig bisher nicht sah. Der
+Abwesenheitskalender springt beim Öffnen zu „heute" — und das `scroll`-Ereignis dieser *eigenen*
+Bewegung wurde als Benutzer-Wischen gespeichert, als Pixelwert der damaligen Breite. Dieselbe Ansicht
+in anderer Breite (Handy gedreht) öffnete dann an der alten Stelle. Jetzt wird nur echtes Wischen
+gemerkt; wer auf der automatischen Stelle steht, hat keine gemerkte Position.
+
+Die Lehre für Tests mit Bildschirmlage: **„ist im Bild" ist eine datumsabhängige Aussage**, wenn das
+Gezeigte vom heutigen Tag abhängt. Deshalb steht daneben jetzt eine Zusicherung, die nicht am Datum
+hängt — die Position muss für die *jetzige* Breite gerechnet sein. Die Gegenprobe (Reparatur
+ausgebaut) macht beide rot: 527 statt 779.
+

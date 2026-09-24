@@ -330,6 +330,19 @@ const kalenderOeffnen = async (seite, anker, modus) => {
     });
     ok('„heute" ist markiert', start.markerDa, JSON.stringify(start));
     ok('… und steht beim Öffnen im Bild, ohne dass man wischt', start.imBild, JSON.stringify(start));
+    // R21 (24.09.2026): „im Bild" allein war Datumsglueck. Dieselbe Jahresansicht wurde weiter oben
+    // schon einmal in DESKTOP-Breite geoeffnet; die App hatte ihre eigene Sprung-zu-heute-Bewegung
+    // als Wischen gespeichert und hier die Desktop-Position uebernommen. Am 16.09. lag „heute" noch
+    // 7 px weiter links und damit zufaellig im Bild, am 24.09. nicht mehr.
+    // Diese Zusicherung haengt nicht am Datum: Die Position muss fuer die JETZIGE Breite gerechnet sein.
+    const lage = await a.seite.evaluate(() => {
+      const sc = document.querySelector('.abscal-scroll');
+      const hs = document.querySelector('.abscal-spalte--heute');
+      const soll = Math.min(Math.max(0, hs.offsetLeft - sc.clientWidth / 3), sc.scrollWidth - sc.clientWidth);
+      return { ist: Math.round(sc.scrollLeft), soll: Math.round(soll) };
+    });
+    ok('… und zwar für die jetzige Breite gerechnet, nicht aus einer früheren übernommen',
+      Math.abs(lage.ist - lage.soll) <= 2, JSON.stringify(lage));
     // Und der Wechsel ins Monatsraster landet im aktuellen Monat, nicht stur im Januar.
     await a.seite.evaluate(() => {
       [...document.querySelectorAll('.abscal-modus-btn')].find(b => b.dataset.modus === 'monat').click();

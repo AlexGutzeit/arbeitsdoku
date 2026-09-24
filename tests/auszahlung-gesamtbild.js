@@ -127,7 +127,7 @@ function werktage(vonZurueck, bisZurueck) {
     const ot2 = nachFza;
 
     console.log('\n── Phase 3: wieder aufbauen ──');
-    const p3 = werktage(60, 41);
+    const p3 = werktage(60, 44);
     await buchen(p3, 12);
     const ot3 = await stand(p3[p3.length - 1]);
     ok(`Phase 3: ${p3.length} Tage à 12 h → +${p3.length * 4} h`, rund(ot3 - ot2) === p3.length * 4,
@@ -140,10 +140,15 @@ function werktage(vonZurueck, bisZurueck) {
     ok('25 h ausgezahlt → genau 25 h weniger', rund(ot4) === rund(ot3 - 25), `${rund(ot3)} → ${rund(ot4)}`);
 
     console.log('\n── Urlaub zum Vergleich: dort geht das Soll auf 0 ──');
-    // Zwei unbebuchte Tage — dieselbe Ausgangslage wie bei den FZA-Tagen. Der Unterschied liegt
+    // Unbebuchte Werktage — dieselbe Ausgangslage wie bei den FZA-Tagen. Der Unterschied liegt
     // allein in der Soll-Regel: Freizeitausgleich BEHAELT das Soll (die Tage zehren vom Konto,
     // das ist "abfeiern"), Urlaub setzt es auf 0 (der Stand bleibt unberuehrt).
-    const urlaubTage = werktage(40, 39);
+    //
+    // Fenster von FUENF Kalendertagen, damit garantiert Werktage darin liegen (R22): Das fruehere
+    // Zwei-Tage-Fenster (vor 40 bis vor 39 Tagen) fiel am 24.09.2026 auf Samstag und Sonntag — die
+    // Liste war leer, der Test legte einen Urlaub ohne Datum an und brach ab.
+    const urlaubTage = werktage(43, 39);
+    if (!urlaubTage.length) throw new Error('Testaufbau: keine Werktage im Urlaubsfenster');
     const vorUrlaub = await stand(urlaubTage[urlaubTage.length - 1]);
     const ua = await req('POST', '/api/absences', chef, { type: 'urlaub',
       date_from: urlaubTage[0], date_to: urlaubTage[urlaubTage.length - 1], target_user_id: u.id });
