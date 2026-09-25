@@ -114,12 +114,10 @@ function anmeldeAntwort(db, user) {
       role: user.role,
       target_hours_per_week: user.target_hours_per_week,
       start_overtime: user.start_overtime || 0,
-      can_plan: !!user.can_plan,
-      can_plan_all: !!user.can_plan_all,
-      can_bulletin: !!user.can_bulletin,
-      can_upload: !!user.can_upload,
-      can_order: !!user.can_order,
-      can_products_edit: !!user.can_products_edit,
+      // Alle Rechte (can_*) aus der Zeile — NICHT aufgezählt (R8). Aufgezählt fehlte can_products_add,
+      // und bis refreshUser() antwortete, kannte die Oberfläche das Einlernrecht nicht. Ein neues
+      // Recht kommt so von selbst mit (Muster „parallele Listen").
+      ...Object.fromEntries(Object.keys(user).filter(k => k.startsWith('can_')).map(k => [k, !!user[k]])),
       work_start: user.work_start || null,  // leer = Firmenwert aus den Einstellungen
       birth_date: user.birth_date || null   // leer = Alter unbekannt -> strengerer Jugendschutz
     },
