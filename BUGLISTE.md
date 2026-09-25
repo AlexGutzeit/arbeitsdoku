@@ -302,7 +302,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   die Maus auf dem Zeichen oder auf der Sprechblase ist, mit kurzer Kulanz beim Hinübergleiten.
 - **Gelöst (25.09.):** so umgesetzt; gilt am Handy auch für die Detail-Sprechblasen der Einträge.
 
-### [x] R25 · Zeitfeld am Handy öffnet die Uhr nicht mehr beim Antippen — erledigt in `R25-COMMIT`
+### [x] R25 · Zeitfeld am Handy öffnet die Uhr nicht mehr beim Antippen — erledigt in `5356b8b`
 *(Hinweis Alex, 25.09.2026)*
 - **Was passiert:** Antippen von „Von"/„Bis" markiert nur Stunde oder Minute; die Uhr öffnet nur noch
   das Symbol rechts. Früher öffnete Antippen sofort die Uhr.
