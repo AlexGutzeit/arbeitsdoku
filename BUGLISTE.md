@@ -83,6 +83,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 ## Mittel — Sackgassen und irreführende Zustände
 
 ### [x] R4 · Ewiger Lade-Kreisel auf 9 Seiten — erledigt in `8fcafa1`
+- **Deployt:** Prod 25.09.2026 (`00ed4a3`, Cache 418).
 - **Wo:** Mitarbeiter `app-5-team.js:1004`, Projekte `app-5-team.js:1919`, Notizen
   `app-8-comm-init.js:944`, Dokumente `app-6-admin.js:1432`, Papierkorb-Reiter
   `app-6-admin.js:1075 / 1138 / 1191 / 1270`
@@ -98,6 +99,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   „es wurde nichts gespeichert". Test `tests/seite-laden-ui.js`.
 
 ### [x] R5 · Ältere, langsame Seite überschreibt die gerade geöffnete — erledigt in `8fcafa1`
+- **Deployt:** Prod 25.09.2026 (`00ed4a3`, Cache 418).
 - **Wo:** Wächter `renderToken()/renderStale()` in `app-1-core.js:347` — genutzt nur von
   Dashboard, Planung, Statistik, Abwesenheiten. **17 Seiten ohne Wächter:** `renderEntryForm`,
   `renderPlanningForm`, `renderProjectForm`, `renderPdfExport`, `renderTools`, `renderSettings`,
