@@ -421,7 +421,7 @@ Werkzeug-Inventar mit Ausleihe/Rückgabe: wer hat was wann entnommen, inkl. Hist
 Material-/Bestellanforderungen der Mitarbeiter; Chef sieht offene Bestellungen (Badge).
 
 **„Bestellt" hat einen Rückweg.** Ein Tipp setzt die Position auf bestellt — ohne Rückfrage, damit
-man zehn Positionen zügig abhaken kann. Die Meldung unten in der Mitte nennt Menge und Produkt
+man zehn Positionen zügig abhaken kann. Die Meldung oben unter der Kopfleiste nennt Menge und Produkt
 (*„50 Stk Wago 221-413 als bestellt markiert"*) und trägt 8 Sekunden lang den Knopf
 **„Rückgängig"** — sie blockiert nichts, die nächste Position lässt sich sofort abhaken, und
 „Rückgängig" gilt dann für diese. In den *letzten Bestellungen* trägt jede Position dauerhaft den Knopf
@@ -733,8 +733,9 @@ Darauf ist sie ausgelegt:
   gilt auch für die Erklärung am **„!"** eines Eintrags (zu lange gearbeitet, Pause oder Ruhezeit zu
   kurz); am Rechner bleibt diese Erklärung offen, solange die Maus auf dem Zeichen **oder auf der
   Sprechblase** ist.
-* **Meldungen lassen sich lesen:** Wie lange eine Meldung steht, richtet sich nach ihrer Länge –
-  Fehler mindestens 6, höchstens 15 Sekunden. **Antippen** schließt sie sofort.
+* **Meldungen lassen sich lesen:** Sie erscheinen **oben unter der Kopfleiste**, wo sie keine Knöpfe
+  am unteren Rand verdecken. Wie lange eine Meldung steht, richtet sich nach ihrer Länge – Fehler
+  mindestens 6, höchstens 15 Sekunden. **Antippen** schließt sie sofort.
 * **Nichts Eingetipptes geht durch einen Fehltipp verloren:** Ein Tipp neben ein Fenster schließt es
   nur, solange darin noch nichts eingegeben wurde. Sonst bleibt es offen – verworfen wird mit
   „Abbrechen".

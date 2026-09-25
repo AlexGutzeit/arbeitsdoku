@@ -3230,3 +3230,11 @@ der Eintragsblock (nachgemessen mit `elementFromPoint`).
 `tests/lesbar-und-sicher-ui.js` (19 Prüfungen). **Gegenproben:** alter Code (9 rot), feste 3 s,
 Antippen schließt nicht, Klick daneben trotz Eingabe, 4-s-Ausblenden, Antippen irgendwo schließt
 nicht, sofortiges Schließen am Rechner, Sprechblase nimmt die Maus nicht an — jede an ihrer Stelle rot.
+
+**Nachtrag — Meldungen oben (Entscheidung Alex).** Die volle Suite fiel an `abschluss-ui-knoepfe`: Nach
+„Speichern abgelehnt" klickte der Test „Löschen", aber der Knopf lag nach dem Scrollen am unteren
+Rand — genau unter der Fehlermeldung, die jetzt länger steht. Der Klick schloss nur die Meldung
+(gemessen: Knopf bei y 1246, Meldung y 862–918 im 950 hohen Fenster). Kein Testfehler, sondern eine
+echte Folge von R14. Alex hat entschieden: Meldungen erscheinen **oben unter der Kopfleiste**. Der
+Test ist damit ohne Änderung grün; `lesbar-und-sicher-ui` prüft die Lage ausdrücklich (Gegenprobe:
+Meldung unten → rot). Am Handy verdeckt sie oben keinen Knopf in der Mitte (gemessen).

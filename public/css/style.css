@@ -691,11 +691,14 @@ table.data-table .actions button { margin-left: 0.25rem; }
 .empty-state p { font-size: 0.95rem; }
 
 /* === Toast === */
+/* Oben unter der Kopfleiste, nicht mehr unten (Alex, 25.09.2026): Seit Fehler länger stehen (R14),
+   verdeckte eine Meldung unten sekundenlang Knöpfe am unteren Rand — Speichern, Löschen — und der
+   erste Tipp schloss nur die Meldung. Oben steht meist nur die Überschrift der Seite. */
 .toast {
   position: fixed;
-  bottom: 2rem;
+  top: calc(56px + 0.75rem + env(safe-area-inset-top, 0px));
   left: 50%;
-  transform: translateX(-50%) translateY(100px);
+  transform: translateX(-50%) translateY(-150%);
   background: var(--text);
   color: white;
   padding: 0.75rem 1.5rem;

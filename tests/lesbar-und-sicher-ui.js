@@ -107,6 +107,10 @@ const meldung = p => p.evaluate(() => { const t = document.querySelector('.toast
     ok('… und geht nach Textlänge von selbst (spätestens 15 s)', await meldung(p) === '');
     await p.evaluate(() => toast('Etwas ging schief — bitte noch einmal.', 'error'));
     await sleep(400);
+    const meldungsLage = await p.evaluate(() => { const r = document.querySelector('.toast').getBoundingClientRect(); return { oben: Math.round(r.top), unten: Math.round(r.bottom), hoehe: innerHeight }; });
+    // Oben unter der Kopfleiste (Alex): unten verdeckte eine länger stehende Meldung Knöpfe am Rand
+    ok('die Meldung steht oben unter der Kopfleiste, nicht über Knöpfen am unteren Rand',
+      meldungsLage.oben >= 56 && meldungsLage.unten < meldungsLage.hoehe / 3, JSON.stringify(meldungsLage));
     await p.click('.toast'); await sleep(150);
     ok('Antippen schließt die Meldung sofort', await meldung(p) === '');
 
