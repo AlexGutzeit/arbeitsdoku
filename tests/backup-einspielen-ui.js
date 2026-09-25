@@ -46,6 +46,7 @@ const KUNDE = 'Sonnenhof Zapfendorf GmbH';
   const lg = fs.openSync('/tmp/backup-einspielen-srv.log', 'w');
   const srv = spawn('node', ['server.js'], { cwd: path.join(__dirname, '..'),
     env: { ...process.env, PORT: String(PORT), DB_PATH: DB, JWT_SECRET: 'test-secret-mindestens-32-zeichen-lang',
+      BACKUP_OUT: '/tmp/backup-einspielen-ui-sicherungen',   // Sicherheitskopie vor dem Zurückspielen (R3)
       BACKUP_EMPFAENGER: `minipc:${minipc.oeffentlich}` }, stdio: ['ignore', lg, lg] });
   let browser;
   try {

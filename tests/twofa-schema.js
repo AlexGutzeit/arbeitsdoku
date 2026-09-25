@@ -31,7 +31,8 @@ let srv = null;
 async function starten(logDatei) {
   const lg = fs.openSync(logDatei, 'w');
   srv = spawn('node', ['server.js'], { cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT: String(PORT), DB_PATH: DB, JWT_SECRET: 'test-secret-mindestens-32-zeichen-lang' },
+    env: { ...process.env, PORT: String(PORT), DB_PATH: DB, JWT_SECRET: 'test-secret-mindestens-32-zeichen-lang',
+      BACKUP_OUT: '/tmp/twofa-schema-sicherungen' },   // Sicherheitskopie vor dem Zurückspielen (R3)
     stdio: ['ignore', lg, lg] });
   for (let i = 0; i < 120; i++) { try { if ((await req('GET', '/health')).status === 200) return; } catch (_) {} await sleep(200); }
   throw new Error('Server kam nicht hoch: ' + logDatei);

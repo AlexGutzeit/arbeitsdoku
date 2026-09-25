@@ -855,7 +855,7 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
       }
     }
 
-    if (!(await confirmModal('ACHTUNG: Alle aktuellen Daten werden durch das Backup ersetzt!\n\nEin Sicherungs-Backup wird automatisch erstellt.\n\nFortfahren?', { title: 'Backup einspielen', okLabel: 'Fortfahren' }))) return;
+    if (!(await confirmModal('ACHTUNG: Alle aktuellen Daten werden durch das Backup ersetzt!\n\nVorher wird automatisch eine Sicherheitskopie des jetzigen Stands angelegt — im Sicherungsordner des Servers, neben den nächtlichen Sicherungen.\n\nFortfahren?', { title: 'Backup einspielen', okLabel: 'Fortfahren' }))) return;
 
     const fd = new FormData();
     fd.append('backup', inhalt, 'sicherung.zip');
@@ -866,7 +866,9 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
         logout();
         location.reload();
       }, 2000);
-    } catch (err) { toast(err.message, 'error'); }
+    // Lang stehen lassen: Die Meldung sagt, ob der alte Stand noch gilt — und im schlimmsten Fall,
+    // welche Sicherheitskopie jetzt zurueckzuspielen ist (R3). Das liest niemand in 3 Sekunden.
+    } catch (err) { toast(err.message, 'error', 15000); }
   });
 }
 

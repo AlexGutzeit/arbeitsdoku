@@ -66,7 +66,9 @@ const ok = (n, c, e) => c ? (pass++, console.log('  ✓ '+n)) : (fail++, console
   try { fs.unlinkSync(DB); } catch (_) {}
   const log = fs.openSync('/tmp/backup-restore-srv.log','w');
   const srv = spawn('node', ['server.js'], { cwd: path.join(__dirname,'..'),
-    env: { ...process.env, PORT:String(PORT), DB_PATH:DB, JWT_SECRET:'test-secret-mindestens-32-zeichen-lang' }, stdio:['ignore', log, log] });
+    // BACKUP_OUT: wohin die Sicherheitskopie vor dem Zurückspielen geht (R3)
+    env: { ...process.env, PORT:String(PORT), DB_PATH:DB, JWT_SECRET:'test-secret-mindestens-32-zeichen-lang',
+      BACKUP_OUT:'/tmp/backup-restore-sicherungen' }, stdio:['ignore', log, log] });
   try {
     for (let i=0;i<40;i++){ try{ const h=await reqJSON('GET','/health'); if(h.status===200) break; }catch(_){}; await sleep(150); }
     const pw = (fs.readFileSync('/tmp/backup-restore-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];

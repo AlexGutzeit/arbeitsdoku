@@ -1741,12 +1741,18 @@ function ensureEmploymentSchema(targetDb) {
   }
 }
 
-function reloadFromFile(filePath) {
-  const buffer = fs.readFileSync(filePath || DB_PATH);
-  const rawDb = new SQL.Database(buffer);
-  db = wrapDb(rawDb);
-  db.pragma('foreign_keys = ON');
-  ensureAuditSchema(db);
+// Eine Datenbank aus einem Puffer betriebsbereit machen — geoeffnet und auf den aktuellen Stand
+// gebracht —, OHNE sie einzusetzen. Das Zurueckspielen (routes/backup.js) macht damit ALLES, was
+// scheitern kann, bevor es den Bestand anfasst; das Einsetzen selbst ist dann nur noch setDb() (R3).
+function datenbankVorbereiten(buffer) {
+  const neu = wrapDb(new SQL.Database(buffer));
+  neu.pragma('foreign_keys = ON');
+  ensureAuditSchema(neu);
+  return neu;
 }
 
-module.exports = { getDb, closeDb, setDb, initDatabase, saveToFile, reloadFromFile, writeFileAtomic, normalizeManagerRights, ensureAuditSchema, DB_PATH, get SQL() { return SQL; } };
+function reloadFromFile(filePath) {
+  db = datenbankVorbereiten(fs.readFileSync(filePath || DB_PATH));
+}
+
+module.exports = { getDb, closeDb, setDb, initDatabase, saveToFile, reloadFromFile, datenbankVorbereiten, writeFileAtomic, normalizeManagerRights, ensureAuditSchema, DB_PATH, get SQL() { return SQL; } };

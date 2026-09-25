@@ -62,6 +62,7 @@ async function starten(extra = {}) {
   const lg = fs.openSync('/tmp/backup-verschl-srv.log', 'a');
   srv = spawn('node', ['server.js'], { cwd: path.join(__dirname, '..'),
     env: { ...process.env, PORT: String(PORT), DB_PATH: DB, JWT_SECRET: 'test-secret-mindestens-32-zeichen-lang',
+      BACKUP_OUT: '/tmp/backup-verschluesselt-sicherungen',   // Sicherheitskopie vor dem Zurückspielen (R3)
       BACKUP_EMPFAENGER: '', ...extra }, stdio: ['ignore', lg, lg] });
   for (let i = 0; i < 150; i++) { try { if ((await req('GET', '/health')).status === 200) return; } catch (_) {} await sleep(200); }
   throw new Error('Server kam nicht hoch');

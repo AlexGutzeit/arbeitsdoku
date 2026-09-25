@@ -16,6 +16,7 @@
 const fs = require('fs');
 
 process.env.JWT_SECRET = 'test-secret-mindestens-32-zeichen-lang';
+process.env.BACKUP_OUT = '/tmp/altdb-spalten-sicherungen';   // Sicherheitskopie vor dem Zurückspielen (R3)
 process.env.DB_PATH = '/tmp/altdb-spalten-neu.db';
 const ALT = '/tmp/altdb-spalten-alt.db';
 for (const f of [process.env.DB_PATH, ALT]) { try { fs.unlinkSync(f); } catch (_) {} }
