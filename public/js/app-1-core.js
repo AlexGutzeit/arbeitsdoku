@@ -166,7 +166,11 @@ async function api(method, url, body, isFormData) {
     }
     if (res.headers.get('content-type')?.includes('json')) {
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Fehler');
+      if (!res.ok) {
+        const e = new Error(data.error || 'Fehler');
+        if (data.code) e.code = data.code;   // Kennung des Servers mitgeben — der Aufrufer kann danach unterscheiden
+        throw e;
+      }
       return data;
     }
     // Ohne JSON-Antwort kommt der Fehler meist nicht von der App, sondern vom Vorschalt-Server:

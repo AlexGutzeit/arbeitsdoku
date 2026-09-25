@@ -156,7 +156,9 @@ router.post('/login/2fa', zweiFaktorLimiter, (req, res) => {
 
     let entschluesselt;
     try { entschluesselt = jwt.verify(zwischen_token, JWT_SECRET); }
-    catch (_) { return res.status(401).json({ error: 'Die Anmeldung ist abgelaufen. Bitte erneut anmelden.' }); }
+    // Eigene Kennung, damit die Oberflaeche von selbst zur Passworteingabe zurueckkehrt (R13): Vorher
+    // scheiterte jeder weitere Code mit dieser Meldung, und heraus kam man nur ueber „Abbrechen".
+    catch (_) { return res.status(401).json({ code: 'ZWISCHENSCHRITT_ABGELAUFEN', error: 'Die Anmeldung ist abgelaufen. Bitte erneut anmelden.' }); }
     // Nur der Zwischen-Token darf hier hinein — ein vollwertiger Login-Token nicht, sonst koennte
     // man sich damit ein Geraet als vertrauenswuerdig eintragen lassen.
     if (!entschluesselt || entschluesselt.pending2fa !== true) {

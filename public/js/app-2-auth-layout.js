@@ -64,6 +64,13 @@ async function handleLoginCode(e, zwischenToken) {
     if (!data) return;
     anmeldungAbschliessen(data);
   } catch (err) {
+    // Der Zwischenschritt gilt nur 5 Minuten. Danach half kein Code mehr, und heraus kam man nur
+    // über „Abbrechen" (R13) — jetzt geht es von selbst zurück zur Passworteingabe, mit Hinweis.
+    if (err.code === 'ZWISCHENSCHRITT_ABGELAUFEN') {
+      S.anmeldeHinweis = 'Der Code kam zu spät — nach dem Passwort bleiben dafür 5 Minuten. Bitte noch einmal anmelden.';
+      renderLogin();
+      return;
+    }
     const el = document.getElementById('login-error');
     el.textContent = err.message;
     el.style.display = 'block';
