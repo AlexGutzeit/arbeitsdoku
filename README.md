@@ -959,7 +959,8 @@ Konfiguration über die Datei `.env` (Vorlage: `.env.example`).
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` | nein | – | Schlüsselpaar für **Push-Benachrichtigungen** (Web Push). Einmalig erzeugen mit `node -e "console.log(require('web-push').generateVAPIDKeys())"`. Fehlen sie, ist Push inaktiv. |
 | `VAPID_SUBJECT` | nein | `mailto:admin@example.com` | Kontaktangabe (`mailto:` oder `https:`) für den Push-Dienst. |
 | `TWOFA_KEY` | nein, **empfohlen** | aus `JWT_SECRET` abgeleitet | Schlüssel, mit dem die Authenticator-Geheimnisse in der Datenbank verschlüsselt werden. 32 Byte als hex oder base64 (`openssl rand -base64 32`). Ohne diesen Wert wird einer aus `JWT_SECRET` abgeleitet — dann gilt: **Wer `JWT_SECRET` austauscht, macht alle Authenticator-Einrichtungen ungültig.** Der Wert gehört auf **jede** Anlage (auch die Zweitanlage) und liegt **nicht** im Backup. |
-| `BACKUP_EMPFAENGER` | nein | leer → Klartext-ZIP | Öffentliche Schlüssel der Sicherungs-Empfänger, mit Komma getrennt (`minipc:MFkw…,offline:MFkw…`). Gesetzt ⇒ **sowohl Downloads als auch die nächtliche Sicherung** sind verschlüsselte `.adbk`-Dateien, die der Server selbst **nicht** lesen kann. Dasselbe bewirkt ein Eintrag unter *Einstellungen → Backup*. Nur dann wandert auch die **`.env`** mit – aber ausschliesslich in die **nächtliche** Sicherung, nicht in den Download über die Oberfläche (der landet im Browser eines Menschen). Ohne Empfänger bleibt sie überall draussen, denn ein Klartext-Zip mit `TWOFA_KEY` läge am Ende in 60 Versionen auf zwei Rechnern. Paar erzeugen: `node scripts/backup-schluessel.js <name>`. |
+| `BACKUP_EMPFAENGER` | nein | leer → Klartext-ZIP | Öffentliche Schlüssel der Sicherungs-Empfänger, mit Komma getrennt (`minipc:MFkw…,offline:MFkw…`). Gesetzt ⇒ **sowohl Downloads als auch die nächtliche Sicherung** sind verschlüsselte `.adbk`-Dateien, die der Server selbst **nicht** lesen kann. Dasselbe bewirkt ein Eintrag unter *Einstellungen → Backup*. Nur dann wandert auch die **`.env`** mit – aber ausschliesslich in die **nächtliche** Sicherung (und die Sicherheitskopie vor dem Einspielen, die daneben liegt), nicht in den Download über die Oberfläche (der landet im Browser eines Menschen). Ohne Empfänger bleibt sie überall draussen, denn ein Klartext-Zip mit `TWOFA_KEY` läge am Ende in 60 Versionen auf zwei Rechnern. Paar erzeugen: `node scripts/backup-schluessel.js <name>`. |
+| `BACKUP_OUT` | nein | `../arbeitsdoku-backups` (neben dem App-Ordner) | Ordner der **nächtlichen Sicherungen** (`scripts/make-backup.js`) — und der **Sicherheitskopie**, die vor jedem *Backup einspielen* entsteht. Relativ zum App-Ordner. Muss beschreibbar sein: Ohne Sicherheitskopie spielt die App nicht zurück. |
 | `BACKUP_SCHLUESSEL` | nein | leer | **Privater** Schlüssel dieser Maschine. Gehört **nicht** auf den Hauptserver (der soll nur verschlüsseln können), wohl aber auf die Zweitanlage, damit `notfall-umschalten.sh` ohne Menschen entschlüsselt. |
 | `TWOFA_AUS` | nein | – | **Notfall-Schalter.** Auf `1` gesetzt wird kein zweiter Faktor mehr verlangt: kein Code beim Anmelden, keine erzwungene Einrichtung. Es wird nichts gelöscht — Variable entfernen, Dienst neu starten, alles greift wie zuvor. |
 | `CHROME_BIN` | nein | – | Nur für die Browser-Tests (Puppeteer), nicht für den Betrieb. |
@@ -1055,13 +1056,14 @@ Alle veränderlichen Daten liegen im Projektordner (und sind aus der Versionsver
 | `data/` | Die SQLite-Datenbank (`arbeitsdoku.db`) – Herzstück, **atomar** gespeichert (alle 5 s + beim Beenden). |
 | `uploads/` | Firmenlogo und generierte App-Icons. |
 | `storage/documents/` | Hochgeladene Dokumente (liegen **außerhalb** des öffentlichen Bereichs, nur per Login abrufbar). |
-| `backups/` | Automatische Sicherungs-Backups, die vor jedem Restore angelegt werden. |
+| `backups/` | Zwischenablage beim Hochladen einer Sicherung (wird danach geleert). |
 
 **Backup über die UI** (*Einstellungen → Datenbank-Backup*):
 
-- **Backup herunterladen** – erzeugt ein ZIP mit Datenbank **+** Uploads (Logo/Icons) **+** Dokumenten.
-- **Backup einspielen** – ersetzt die aktuellen Daten; vorher wird automatisch ein Safety-Backup in
-  `backups/` abgelegt. Das Upload-Limit beim Einspielen ist **dynamisch** = konfiguriertes Dokumenten-
+- **Backup herunterladen** – erzeugt ein ZIP mit Datenbank **+** Uploads (Logo/Icons) **+** Dokumenten
+  **+** Profilbildern.
+- **Backup einspielen** – ersetzt die aktuellen Daten; vorher wird automatisch eine **Sicherheitskopie**
+  des jetzigen Stands angelegt (siehe *Wiederherstellung* unten). Das Upload-Limit beim Einspielen ist **dynamisch** = konfiguriertes Dokumenten-
   Speicherlimit **+ Reserve** (für DB/Icons), damit ein selbst erzeugtes Backup immer wieder eingespielt
   werden kann – auch wenn die Dokumenten-Ablage groß ist.
 
@@ -1090,10 +1092,26 @@ Wer den Server über einen **Namen** prüft, prüft die Namensauflösung gleich 
 aber bedacht sein will: Hängt der einzige Nameserver, meldet die Kontrolle einen Ausfall, obwohl
 Server und App laufen.
 
-**Wiederherstellung (getestet):** Ein per *Backup herunterladen* (oder per Cron) erzeugtes ZIP wird über
-*Einstellungen → Backup einspielen* hochgeladen. Der Server prüft das ZIP, legt **zuerst** ein
-Safety-Backup der aktuellen Daten an, schreibt die Datenbank **atomar** zurück, stellt Uploads/Dokumente
-wieder her und **lädt live neu** (kein Neustart nötig). Wichtig: Das Backup enthält die **echten
+**Wiederherstellung (getestet, auch der Abbruch):** Ein per *Backup herunterladen* (oder per Cron)
+erzeugtes ZIP wird über *Einstellungen → Backup einspielen* hochgeladen. Der Server geht in fünf
+Schritten vor und erledigt alles, was scheitern kann, **bevor** er etwas am Bestand ändert:
+
+1. **Prüfen** – die Datenbank aus der Sicherung wird geöffnet und auf den aktuellen Stand gebracht.
+2. **Sicherheitskopie** des jetzigen Stands – so vollständig wie die nächtliche Sicherung (Datenbank,
+   Uploads, Dokumente, Profilbilder) und **verschlüsselt**, sobald Schlüssel hinterlegt sind. Sie liegt
+   **bei den nächtlichen Sicherungen** (`BACKUP_OUT`, sonst `../arbeitsdoku-backups`) als
+   `arbeitsdoku_backup_<Datum-Uhrzeit>_vor-rueckspielen.adbk`, wird also mit abgeholt und mit
+   aufgeräumt. **Lässt sie sich nicht anlegen, wird nicht zurückgespielt.**
+3. **Bereitlegen** – alle neuen Dateien werden neben ihr Ziel geschrieben. Eine volle Platte scheitert hier.
+4. **Einsetzen** – nur noch Umbenennen. Scheitert ein Schritt, wird alles Getane zurückgenommen, und
+   die Meldung sagt: *„Es gilt weiterhin der Stand von vorher."* Die laufende App wechselt erst ganz
+   am Ende auf die neuen Daten – **kein Neustart nötig**.
+5. **Aufräumen.**
+
+Dateien, die nicht in der Sicherung stehen, bleiben liegen: Eine alte Sicherung ohne Dokumente
+löscht nicht die Dokumentenablage. Nicht abgedeckt ist ein **Stromausfall mitten im Einsetzen** –
+dann bleiben Arbeitsordner `.rueckspielen-…` neben den Dateien liegen, und der Weg zurück ist die
+Sicherheitskopie. Wichtig: Das Backup enthält die **echten
 Passwörter zum Sicherungszeitpunkt** – nach dem Einspielen gelten wieder genau diese Anmeldedaten. Bei
 Totalverlust genügen die drei Ordner `data/`, `uploads/`, `storage/` aus einer Dateisicherung bzw. das
 ZIP über die UI.

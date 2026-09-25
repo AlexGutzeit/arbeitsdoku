@@ -62,7 +62,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   der sich nicht herbeiführen lässt. Bleibt eine **Absicherung gegen künftige Fehler** — sinnvoll,
   aber keine akute Gefahr. Herabgestuft auf **Mittel**.
 
-### [~] R3 · Sicherung zurückspielen: halber Abbruch hinterlässt unbestimmten Zustand
+### [x] R3 · Sicherung zurückspielen: halber Abbruch hinterlässt unbestimmten Zustand — erledigt in `3dadfd4`
 - **Wo:** `routes/backup.js:484–533`, Sicherheitskopie `:486`, Rotation `scripts/make-backup.js:117`
 - **Was passiert:** Erst wird die DB-Datei ersetzt, dann werden Dateien geschrieben, erst am Ende
   wird die DB neu geladen. Scheitert etwas dazwischen (z. B. volle Platte): Meldung
@@ -77,6 +77,10 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   zurückgespielt).
 - **Vorschlag:** Bei Fehler aus der Sicherheitskopie zurückspielen, oder Reihenfolge: Dateien →
   DB → sofort neu laden. Sicherheitskopie als `.adbk` verschlüsseln, vollständig machen, mitrotieren.
+- **Gelöst (25.09.):** fünf Schritte — Prüfen, Sicherheitskopie (vollständig, verschlüsselt, bei den
+  nächtlichen Sicherungen, ohne sie kein Weiter), Bereitlegen neben dem Ziel, Einsetzen nur per
+  Umbenennen mit Zurückrollen, Aufräumen. Test `tests/rueckspielen-abbruch.js` löst Abbrüche echt aus
+  (Schreibrechte) und prüft auch nach hartem Neustart.
 
 ---
 

@@ -3044,3 +3044,69 @@ Knöpfe, die nach `await api(PUT …)` direkt `renderDocuments()` usw. aufrufen,
 auch dann, wenn man inzwischen woanders ist. Gemessen: Ordner umbenannt, Antwort 2 s verzögert, auf
 *Mein Konto* gewechselt → Adresse `#/konto`, im Bild die Dokumente, Menü „Dokumente". `seiteLaden`
 kann das nicht abfangen, weil der Aufruf selbst frisch ist. Offen als R23 in der Bugliste.
+
+## Zurückspielen, das mittendrin scheitert (R3, 25.09.2026)
+
+### Was vorher geschah
+
+`POST /api/backup/restore` ersetzte **zuerst** die Datenbank-Datei, schrieb dann die Dateien einzeln
+und lud die Datenbank **erst ganz am Ende** neu. Brach es dazwischen ab (volle Platte, fehlende
+Rechte), meldete die App „fehlgeschlagen" — auf der Platte lag aber schon die **neue** Datenbank, im
+Speicher noch die **alte**, und die Dateien waren halb ersetzt. Welcher Stand danach galt, entschied
+das Rennen: Speicherte das Autosave zuerst, die alte; startete der Server vorher neu, die neue.
+
+Die Sicherheitskopie davor war ein **Klartext-Zip** (entgegen der Regel seit 09.09.2026) mit
+Datenbank und den obersten Dateien aus `uploads/` — **ohne** Dokumente, Profilbilder und App-Icons.
+Sie lag in `backups/`, wo nichts aufräumt: Lokal lagen dort 436 Stück aus Testläufen.
+
+### Fünf Schritte, alles Scheiterbare zuerst
+
+1. **Prüfen** — `datenbankVorbereiten()` (neu in `database/init.js`) öffnet die Datenbank aus der
+   Sicherung und zieht sie hoch, *ohne* sie einzusetzen. `reloadFromFile()` benutzt dieselbe Funktion.
+2. **Sicherheitskopie** — über dieselbe Dateiliste wie der Download (`sicherungsDateien()`, vorher
+   standen die Teile doppelt), verschlüsselt wie die nächtliche, die `.env` nach derselben harten
+   Regel nur in die verschlüsselte Fassung. **Ohne Kopie kein Weiter.**
+3. **Bereitlegen** — alle neuen Dateien werden geschrieben, und zwar **neben ihr Ziel** in einen
+   Arbeitsordner `.rueckspielen-…`. Nur innerhalb eines Dateisystems ist Umbenennen atomar und
+   platzfrei; ein Sammelordner in `backups/` hätte auf einem eingehängten Volume erst beim Einsetzen
+   versagt.
+4. **Einsetzen** — nur noch `rename`. Jede Aktion steht in einem Protokoll, bei Fehler wird es
+   rückwärts abgearbeitet. Die Datenbank-Datei kommt **zuerst**, die Datenbank im Speicher (`setDb`)
+   **zuletzt** — dazwischen kann nichts sie erreichen.
+5. **Aufräumen.**
+
+Schritte 3–5 laufen ohne `await` am Stück, also ohne dass eine andere Anfrage oder das Autosave
+dazwischenkommt. Ein zweites Zurückspielen, während das erste an der Sicherheitskopie schreibt, wird
+mit 409 abgewiesen.
+
+**Wohin die Sicherheitskopie kommt, hat Alex entschieden:** zu den nächtlichen Sicherungen, nach
+deren Namensregel (`arbeitsdoku_backup_<Zeit>_vor-rueckspielen.adbk`). Die Aufräumregel in
+`make-backup.js` erfasst sie damit ohne Änderung, und der Mini-PC holt sie mit ab. `make-backup.js`
+selbst bleibt unberührt — die nächtliche Sicherung fasst man nicht nebenbei an.
+
+**Bewusst nicht geändert:** Dateien, die nicht in der Sicherung stehen, bleiben liegen. Hätte das
+Zurückspielen die Ablage ersetzt statt ergänzt, würde eine alte Sicherung ohne `documents/` die
+ganze Dokumentenablage löschen. **Nicht abgedeckt:** ein Stromausfall mitten in Schritt 4 — dann
+bleiben die Arbeitsordner liegen (Sicherungen überspringen sie), und der Weg zurück ist die
+Sicherheitskopie.
+
+### Test und die Frage, wie man „mittendrin" auslöst
+
+`tests/rueckspielen-abbruch.js` löst die Fehler **echt** aus, ohne Hintertür im Code: fehlende
+Schreibrechte genau dort, wo der jeweilige Schritt schreiben muss. Für den Abbruch in Schritt 4 wird
+das Profilbild durch einen **schreibgeschützten Ordner gleichen Namens** ersetzt — einen Ordner darf
+man unter Linux ohne Schreibrecht an ihm selbst nicht verschieben (sein `..` müsste geändert
+werden). Das Bereitlegen gelingt also, das Einsetzen scheitert dort, nachdem Datenbank-Datei und
+Dokumente schon getauscht sind. Ob es wirklich in Schritt 4 geschah, liest der Test aus dem
+Server-Protokoll. Danach prüft er Dateien byte-genau, die Datenbank-**Datei** direkt mit sql.js und
+die App — auch nach einem `SIGKILL`-Neustart, genau dem Fall, in dem früher der Zufall entschied.
+
+**Gegenproben:** Der **alte Code** fällt an genau den erwarteten Stellen durch (Dateien gemischt,
+Datei ≠ Speicher, nach Neustart der falsche Stand, keine Kopie am richtigen Ort). Einzeln
+zurückgebaut: kein Zurückrollen, Speicher vor den Dateien getauscht, Weitermachen ohne Kopie, Kopie
+ohne Dokumente, Kopie unverschlüsselt, kein Aufräumen, `.env` ohne Schlüssel — jede wird genau an
+ihrer Stelle rot.
+
+Eine Lehre aus den Gegenproben: Die Probe „kein Aufräumen" ließ Arbeitsordner in den Ablagen des
+**Repos** liegen, und die nächste Probe wurde deshalb an zusätzlichen Stellen rot. Die Ablagen
+gehören nicht dem Test — er räumt Reste früherer, abgebrochener Läufe jetzt beim Start weg.
