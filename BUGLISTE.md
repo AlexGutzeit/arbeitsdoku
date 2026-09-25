@@ -131,14 +131,14 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Vorschlag:** Vorschlag auf Eintragsdauer begrenzen; „Die Pause ist länger als die Arbeitszeit"
   abweisen oder bewusst bestätigen lassen (Oberfläche und Server).
 
-### [ ] R7 · „Abmelden" und „Benachrichtigungen an/aus" können endlos hängen
+### [~] R7 · „Abmelden" und „Benachrichtigungen an/aus" können endlos hängen
 - **Wo:** `app-5-team.js:163` (`await navigator.serviceWorker.ready` ohne Zeitgrenze) →
   `disablePush()` `:191` → `logout()` `app-2-auth-layout.js:154`; ebenso `enablePush()` `:173`
 - **Was passiert:** Ohne aktiven Service Worker (z. B. privates Firefox-Fenster) löst das Warten
   nie auf — der Knopf wirkt **funktionslos**.
 - **Vorschlag:** `Promise.race` mit 3 s Zeitgrenze; beim Abmelden den Push-Abbau nicht abwarten.
 
-### [ ] R8 · Neue Rechte greifen erst nach Seitenwechsel
+### [~] R8 · Neue Rechte greifen erst nach Seitenwechsel
 - **Wo:** `app-2-auth-layout.js:185` — `refreshUser()` vergleicht nur `role, can_plan,
   can_plan_all, can_bulletin, can_upload`; es fehlen `can_order`, `can_products_edit`,
   `can_products_add`
@@ -216,7 +216,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 
 ## Niedrig — Feinschliff
 
-### [ ] R13 · Zwei-Faktor-Code abgelaufen
+### [~] R13 · Zwei-Faktor-Code abgelaufen
 Nach 5 Minuten scheitert jeder weitere Code mit „abgelaufen", raus nur über „Abbrechen"
 (`routes/auth.js:158`, `app-2-auth-layout.js:57`). → Bei Ablauf automatisch zur Passworteingabe.
 
@@ -239,7 +239,7 @@ korrekt Ortszeit (`berlinHeute`).
 Schwarzes Brett (`routes/bulletin.js:141`) und Bestellungen (`routes/orders.js:156`) löschen hart,
 ohne Eintrag im Protokoll.
 
-### [ ] R18 · PDF-Download kann in Safari/iOS abbrechen
+### [~] R18 · PDF-Download kann in Safari/iOS abbrechen
 `app-8-comm-init.js:2298` — `URL.revokeObjectURL` direkt nach dem Klick. → verzögert freigeben.
 
 ### [ ] R19 · Mitarbeiter anlegen ohne Transaktion
