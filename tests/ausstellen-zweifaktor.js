@@ -131,7 +131,7 @@ function req(m, p, t, b) {
     const audit = await req('GET', '/api/audit?limit=50', admin);
     const eintrag = (audit.body.logs || audit.body.entries || []).find(z => z.action === 'user_deactivate');
     ok('der Audit-Eintrag nennt die gelöschte Zwei-Faktor-Anmeldung',
-      !!eintrag && /Zwei-Faktor geloescht/.test(eintrag.details || ''), JSON.stringify(eintrag && eintrag.details));
+      !!eintrag && /Zwei-Faktor gelöscht/.test(eintrag.details || ''), JSON.stringify(eintrag && eintrag.details));
   } catch (e) {
     console.error(e); fail++; fails.push('Ausnahme: ' + e.message);
   } finally { srv.kill('SIGTERM'); await sleep(600); }

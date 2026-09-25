@@ -591,7 +591,7 @@ async function rueckspielen(req, res) {
       if (!e.entryName.startsWith('uploads/') || e.isDirectory) return;
       const rel = e.entryName.slice('uploads/'.length); // z.B. "logo.jpg" oder "icons/master.png"
       if (rel.includes('..') || rel.startsWith('.') || rel.startsWith('/')) {
-        console.warn('Backup-Restore: Eintrag uebersprungen (verdaechtiger Name):', e.entryName);
+        console.warn('Backup-Restore: Eintrag übersprungen (verdächtiger Name):', e.entryName);
         return;
       }
       const parts = rel.split('/');
@@ -601,17 +601,17 @@ async function rueckspielen(req, res) {
       } else if (parts.length === 2 && ALLOWED_SUBDIRS.includes(parts[0])) {
         const subFile = path.basename(parts[1]);
         if (!subFile || subFile.startsWith('.')) {
-          console.warn('Backup-Restore: Eintrag uebersprungen (Subfile-Name verdaechtig):', e.entryName);
+          console.warn('Backup-Restore: Eintrag übersprungen (Subfile-Name verdächtig):', e.entryName);
           return;
         }
         safeRel = parts[0] + '/' + subFile;
       } else {
-        console.warn('Backup-Restore: Eintrag uebersprungen (Subpfad nicht erlaubt):', e.entryName);
+        console.warn('Backup-Restore: Eintrag übersprungen (Subpfad nicht erlaubt):', e.entryName);
         return;
       }
       const finalPath = path.resolve(uploadsDir, safeRel);
       if (!finalPath.startsWith(uploadsResolved + path.sep)) {
-        console.warn('Backup-Restore: Eintrag uebersprungen (Pfad ausserhalb uploads):', e.entryName);
+        console.warn('Backup-Restore: Eintrag übersprungen (Pfad ausserhalb uploads):', e.entryName);
         return;
       }
       uploadFiles.push({ name: safeRel, data: e.getData() });
@@ -623,13 +623,13 @@ async function rueckspielen(req, res) {
       if (!e.entryName.startsWith('documents/') || e.isDirectory) return;
       const rel = e.entryName.slice('documents/'.length);
       if (!rel || rel.includes('/') || rel.includes('..') || rel.startsWith('.')) {
-        console.warn('Backup-Restore: Dokument uebersprungen (verdaechtiger Name):', e.entryName);
+        console.warn('Backup-Restore: Dokument übersprungen (verdächtiger Name):', e.entryName);
         return;
       }
       const safeName = path.basename(rel);
       const finalPath = path.resolve(documentsDir, safeName);
       if (!finalPath.startsWith(docsResolved + path.sep)) {
-        console.warn('Backup-Restore: Dokument uebersprungen (Pfad ausserhalb storage):', e.entryName);
+        console.warn('Backup-Restore: Dokument übersprungen (Pfad ausserhalb storage):', e.entryName);
         return;
       }
       documentFiles.push({ name: safeName, data: e.getData() });
@@ -642,13 +642,13 @@ async function rueckspielen(req, res) {
       if (!e.entryName.startsWith('avatare/') || e.isDirectory) return;
       const rel = e.entryName.slice('avatare/'.length);
       if (!rel || rel.includes('/') || rel.includes('..') || rel.startsWith('.')) {
-        console.warn('Backup-Restore: Profilbild uebersprungen (verdaechtiger Name):', e.entryName);
+        console.warn('Backup-Restore: Profilbild übersprungen (verdächtiger Name):', e.entryName);
         return;
       }
       const safeName = path.basename(rel);
       const finalPath = path.resolve(avatarDir, safeName);
       if (!finalPath.startsWith(avatarResolved + path.sep)) {
-        console.warn('Backup-Restore: Profilbild uebersprungen (Pfad ausserhalb storage):', e.entryName);
+        console.warn('Backup-Restore: Profilbild übersprungen (Pfad ausserhalb storage):', e.entryName);
         return;
       }
       avatarFiles.push({ name: safeName, data: e.getData() });

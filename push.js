@@ -29,7 +29,7 @@ if (VAPID_PUBLIC && VAPID_PRIVATE) {
     webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
     enabled = true;
   } catch (e) {
-    console.error('Web-Push deaktiviert — ungueltige VAPID-Konfiguration:', e.message);
+    console.error('Web-Push deaktiviert — ungültige VAPID-Konfiguration:', e.message);
   }
 }
 

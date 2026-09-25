@@ -72,7 +72,7 @@ function empfaengerAusUmgebung(wert = process.env.BACKUP_EMPFAENGER) {
     const s = stueck.trim();
     if (!s) continue;
     const i = s.indexOf(':');
-    if (i <= 0) throw new Error(`BACKUP_EMPFAENGER: „${s}" — erwartet wird name:schluessel`);
+    if (i <= 0) throw new Error(`BACKUP_EMPFAENGER: „${s}" — erwartet wird name:schlüssel`);
     const name = s.slice(0, i).trim();
     const b64 = s.slice(i + 1).trim();
     let schluessel;

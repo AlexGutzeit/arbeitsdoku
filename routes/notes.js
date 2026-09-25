@@ -222,7 +222,7 @@ router.post('/:id/unlock', authenticate, (req, res) => {
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
 
   if (note.editing_by && note.editing_by !== req.user.id) {
-    return res.status(403).json({ error: 'Sperre gehoert einem anderen Benutzer' });
+    return res.status(403).json({ error: 'Sperre gehört einem anderen Benutzer' });
   }
 
   db.prepare("UPDATE notes SET editing_by = NULL, editing_since = NULL WHERE id = ?").run(note.id);
@@ -305,11 +305,11 @@ router.delete('/:id', authenticate, (req, res) => {
   const db = getDb();
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
-  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentuemer kann loeschen' });
+  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann löschen' });
 
   clearStaleLock(db, Number(req.params.id));
   if (note.editing_by && note.editing_by !== req.user.id) {
-    return res.status(409).json({ error: 'Notiz ist gerade in Bearbeitung und kann nicht geloescht werden.' });
+    return res.status(409).json({ error: 'Notiz ist gerade in Bearbeitung und kann nicht gelöscht werden.' });
   }
 
   db.prepare('DELETE FROM notes WHERE id = ?').run(req.params.id);
@@ -339,7 +339,7 @@ router.get('/:id/shares', authenticate, (req, res) => {
   const db = getDb();
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
-  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentuemer kann Freigaben verwalten' });
+  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann Freigaben verwalten' });
 
   const shares = db.prepare(`
     SELECT ns.user_id, ns.permission, u.name as user_name
@@ -355,7 +355,7 @@ router.put('/:id/shares', authenticate, (req, res) => {
   const db = getDb();
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
-  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentuemer kann Freigaben verwalten' });
+  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann Freigaben verwalten' });
 
   const { shares } = req.body;
   if (!Array.isArray(shares)) return res.status(400).json({ error: 'shares muss ein Array sein' });
@@ -402,11 +402,11 @@ router.post('/:id/offer', authenticate, (req, res) => {
   const db = getDb();
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
-  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentuemer kann weitergeben' });
+  if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann weitergeben' });
 
   const { user_ids } = req.body;
   if (!Array.isArray(user_ids) || !user_ids.length) {
-    return res.status(400).json({ error: 'Mindestens ein Empfaenger erforderlich' });
+    return res.status(400).json({ error: 'Mindestens ein Empfänger erforderlich' });
   }
 
   const insert = db.prepare(

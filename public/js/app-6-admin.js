@@ -175,7 +175,7 @@ async function renderSettings() {
             <input type="text" class="form-control" id="b-app-name" maxlength="60" value="${esc(S.settings.app_name || '')}" placeholder="Arbeitsdoku">
           </div>
           <div class="form-group">
-            <label>Short-Name (max. 12 Zeichen, fuer Homescreen-Icon)</label>
+            <label>Short-Name (max. 12 Zeichen, für Homescreen-Icon)</label>
             <input type="text" class="form-control" id="b-app-short" maxlength="12" value="${esc(S.settings.app_short_name || '')}" placeholder="Arbeitsdoku">
           </div>
           ${colorPickerHtml('b-theme', 'Theme-Farbe', S.settings.theme_color || '#5DB635')}
@@ -191,7 +191,7 @@ async function renderSettings() {
           ${S.settings.app_icon_master ? `
             <div style="margin-bottom:0.75rem;display:flex;align-items:center;gap:0.75rem;">
               <img src="${esc(S.settings.app_icon_master)}?t=${Date.now()}" style="width:64px;height:64px;border-radius:12px;border:1px solid var(--border);" alt="App-Icon">
-              <button class="btn btn-sm btn-danger" id="delete-app-icon" type="button">Auf Standard zuruecksetzen</button>
+              <button class="btn btn-sm btn-danger" id="delete-app-icon" type="button">Auf Standard zurücksetzen</button>
             </div>
           ` : `
             <div style="margin-bottom:0.75rem;display:flex;align-items:center;gap:0.75rem;">
@@ -571,7 +571,7 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
   // App-Icon hochladen
   document.getElementById('upload-app-icon').addEventListener('click', async () => {
     const fileInput = document.getElementById('b-icon');
-    if (!fileInput.files.length) { toast('Bitte eine Datei auswaehlen', 'error'); return; }
+    if (!fileInput.files.length) { toast('Bitte eine Datei auswählen', 'error'); return; }
     const fd = new FormData();
     fd.append('icon', fileInput.files[0]);
     try {
@@ -583,10 +583,10 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
 
   // App-Icon zuruecksetzen
   document.getElementById('delete-app-icon')?.addEventListener('click', async () => {
-    if (!(await confirmModal('App-Icon auf Standard zuruecksetzen?', { title: 'App-Icon zurücksetzen', okLabel: 'Zurücksetzen' }))) return;
+    if (!(await confirmModal('App-Icon auf Standard zurücksetzen?', { title: 'App-Icon zurücksetzen', okLabel: 'Zurücksetzen' }))) return;
     try {
       await api('DELETE', '/api/settings/app-icon');
-      toast('Icon zurueckgesetzt — App wird neu geladen', 'success');
+      toast('Icon zurückgesetzt — App wird neu geladen', 'success');
       setTimeout(() => location.reload(), 800);
     } catch (err) { toast(err.message, 'error'); }
   });

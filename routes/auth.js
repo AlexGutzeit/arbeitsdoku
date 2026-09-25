@@ -243,7 +243,7 @@ router.put('/password', authenticate, async (req, res) => {
     logAudit(db, { userId: req.user.id, username: reihe.username, action: 'password_self_change', ip: req.ip });
     res.json({ success: true });
   } catch (e) {
-    console.error('Passwort aendern fehlgeschlagen:', e.message);
+    console.error('Passwort ändern fehlgeschlagen:', e.message);
     res.status(500).json({ error: 'Interner Serverfehler' });
   }
 });

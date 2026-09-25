@@ -23,7 +23,7 @@ router.get('/key', authenticate, (req, res) => {
 router.post('/subscribe', authenticate, (req, res) => {
   const sub = req.body && req.body.subscription ? req.body.subscription : req.body;
   if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
-    return res.status(400).json({ error: 'Ungueltiges Abo' });
+    return res.status(400).json({ error: 'Ungültiges Abo' });
   }
   const db = getDb();
   const ua = (req.get('user-agent') || '').slice(0, 255);
@@ -81,10 +81,10 @@ router.post('/test', authenticate, async (req, res) => {
   if (!push.isEnabled()) return res.status(503).json({ error: 'Push nicht konfiguriert' });
   const db = getDb();
   const has = db.prepare('SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?').get(req.user.id).n;
-  if (!has) return res.status(400).json({ error: 'Kein Geraet abonniert' });
+  if (!has) return res.status(400).json({ error: 'Kein Gerät abonniert' });
   await push.notifyUsers(db, [req.user.id], null, {
     title: 'Test-Benachrichtigung',
-    body: 'Push funktioniert auf diesem Geraet. 🎉',
+    body: 'Push funktioniert auf diesem Gerät. 🎉',
     url: '/',
   }, null);
   res.json({ success: true });

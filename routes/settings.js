@@ -371,7 +371,7 @@ router.post('/app-icon', authenticate, authorize('chef'), (req, res) => {
     } catch (e) {
       console.error('Icon-Upload fehlgeschlagen:', e.message);
       try { fs.unlinkSync(req.file.path); } catch (_) {}
-      res.status(400).json({ error: 'Bild ungueltig oder kann nicht verarbeitet werden' });
+      res.status(400).json({ error: 'Bild ungültig oder kann nicht verarbeitet werden' });
     }
   });
 });

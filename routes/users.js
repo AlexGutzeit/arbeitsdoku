@@ -648,7 +648,7 @@ router.post('/:id/reset-password', authenticate, authorize('chef'), async (req, 
   catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }
   db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(hash, req.params.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_password_reset',
-    details: `Passwort zurueckgesetzt fuer: ${user.username} (id=${req.params.id})`, ip: req.ip });
+    details: `Passwort zurückgesetzt für: ${user.username} (id=${req.params.id})`, ip: req.ip });
   res.json({ success: true });
 });
 
@@ -668,7 +668,7 @@ router.post('/:id/twofa-reset', authenticate, authorize('chef'), (req, res) => {
   }
   zweiFaktor.zuruecksetzen(db, user.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_2fa_reset',
-    details: `Zwei-Faktor zurueckgesetzt fuer: ${user.username} (id=${req.params.id})`, ip: req.ip });
+    details: `Zwei-Faktor zurückgesetzt für: ${user.username} (id=${req.params.id})`, ip: req.ip });
   res.json({ success: true });
 });
 
@@ -831,7 +831,7 @@ router.delete('/:id', authenticate, authorize('admin'), (req, res) => {
   const abgerechnet = abgerechnetBis(db);
   db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_delete',
-    details: `Endgueltig geloescht: ${user.username} (${user.role}, id=${req.params.id})`
+    details: `Endgültig gelöscht: ${user.username} (${user.role}, id=${req.params.id})`
       + (abgerechnet ? ` — BETRIFFT ABGERECHNETE ZEITRÄUME (bis ${abgerechnet})` : ''), ip: req.ip });
   res.json({ success: true });
 });

@@ -98,7 +98,7 @@ function ausstellenVollziehen(db, userId, employedUntil, wer, zusatz = '') {
       ).run(ZURUECKGEZOGEN, berlinJetzt(), wer.id, wer.username, userId, OFFEN);
       logAudit(db, {
         userId: wer.id, username: wer.username, action: 'overtime_payout_auto_withdraw',
-        details: `Beim Ausstellen von ${nutzer ? nutzer.username : userId} zurueckgezogen: `
+        details: `Beim Ausstellen von ${nutzer ? nutzer.username : userId} zurückgezogen: `
           + offeneAuszahlungen.map(a => `${a.stunden} h`).join(', ')
           + ' — die Stunden bleiben stehen',
         ip: wer.ip,
@@ -110,7 +110,7 @@ function ausstellenVollziehen(db, userId, employedUntil, wer, zusatz = '') {
     userId: wer.id, username: wer.username, action: 'user_deactivate',
     details: `Ausgestellt: ${nutzer ? nutzer.username : '?'} (${nutzer ? nutzer.role : '?'}, id=${userId}), `
       + `letzter Arbeitstag ${employedUntil}${zusatz}`
-      + (hatteZweiFaktor ? ' · Zwei-Faktor geloescht (Neueinrichtung noetig)' : ''),
+      + (hatteZweiFaktor ? ' · Zwei-Faktor gelöscht (Neueinrichtung nötig)' : ''),
     ip: wer.ip,
   });
   return { hatteZweiFaktor, zurueckgezogeneAuszahlungen: offeneAuszahlungen.length };
