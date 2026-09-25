@@ -62,7 +62,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   der sich nicht herbeiführen lässt. Bleibt eine **Absicherung gegen künftige Fehler** — sinnvoll,
   aber keine akute Gefahr. Herabgestuft auf **Mittel**.
 
-### [ ] R3 · Sicherung zurückspielen: halber Abbruch hinterlässt unbestimmten Zustand
+### [~] R3 · Sicherung zurückspielen: halber Abbruch hinterlässt unbestimmten Zustand
 - **Wo:** `routes/backup.js:484–533`, Sicherheitskopie `:486`, Rotation `scripts/make-backup.js:117`
 - **Was passiert:** Erst wird die DB-Datei ersetzt, dann werden Dateien geschrieben, erst am Ende
   wird die DB neu geladen. Scheitert etwas dazwischen (z. B. volle Platte): Meldung
