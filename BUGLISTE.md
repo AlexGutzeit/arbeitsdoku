@@ -188,7 +188,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Vorschlag:** Sperre beim Tippen alle paar Minuten erneuern; Namen anzeigen;
   `fetch(…, { keepalive: true })` statt synchronem XHR.
 
-### [ ] R12 · „Bestellt" ohne Rückfrage und ohne Rückweg
+### [~] R12 · „Bestellt" ohne Rückfrage und ohne Rückweg
 - **Wo:** `routes/orders.js:177`, Oberfläche `app-8-comm-init.js:895`; Ändern: `routes/orders.js:120`
 - **Was passiert:** Ein Fehltipp am Handy verschiebt die Bestellung endgültig. Zurücknehmen geht
   nicht, löschen nur Admin — ein Chef sitzt fest. Außerdem erlaubt der Server, bereits bestellte
