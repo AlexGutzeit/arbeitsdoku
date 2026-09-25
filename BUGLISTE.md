@@ -301,6 +301,18 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 - **Vorschlag:** Handy: stehen lassen bis zum nächsten Antippen oder Scrollen. Rechner: offen, solange
   die Maus auf dem Zeichen oder auf der Sprechblase ist, mit kurzer Kulanz beim Hinübergleiten.
 - **Gelöst (25.09.):** so umgesetzt; gilt am Handy auch für die Detail-Sprechblasen der Einträge.
+
+### [~] R25 · Zeitfeld am Handy öffnet die Uhr nicht mehr beim Antippen
+*(Hinweis Alex, 25.09.2026)*
+- **Was passiert:** Antippen von „Von"/„Bis" markiert nur Stunde oder Minute; die Uhr öffnet nur noch
+  das Symbol rechts. Früher öffnete Antippen sofort die Uhr.
+- **Ursache: der Browser, nicht die App.** Chrome 154 auf Android 10. Belegt mit einer Testseite ohne
+  App (dasselbe Verhalten); im Code ist das Zeitfeld seit März unverändert, kein Handler unterdrückt
+  den Tipp. Ein erster Versuch mit der Uhr-Hilfe auf claude.ai ergab „SecurityError" — dort liegt die
+  Seite in einem fremden Rahmen, aus dem Chrome das Öffnen der Uhr verbietet. Auf dem eigenen Server
+  (ohne Rahmen) öffnet `showPicker()` die Uhr beim Antippen zuverlässig.
+- **Entscheidung Alex:** Uhr wie früher; das Symbol rechts bleibt. Umsetzung: beim Antippen
+  `showPicker()` — nur Android mit Chrome-artigem Browser und nur bei Berührung, sonst unverändert.
 ---
 
 ## Geprüft und in Ordnung
