@@ -151,6 +151,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   Schlüssel von der Quelle (wie `tests/konto-rechte-ui.js`).
 
 ### [x] R9 · Englische und technische Fehlermeldungen — erledigt in `1bf11a8`
+- **Deployt:** Prod 25.09.2026 (`351e2d9`, Cache 422).
 - **Upload-Fehler** wörtlich durchgereicht: `routes/documents.js:251`, `routes/settings.js:60`,
   `routes/settings.js:344` — z. B. bei voller Platte „ENOSPC: no space left on device, open
   '/home/…'" (englisch **und** mit Serverpfad), oder „Unexpected field".
@@ -178,6 +179,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   `fehlertext.js` nicht mitgenommen).
 
 ### [x] R10 · Fehlende Umlaute in sichtbaren Texten (~20 Stellen) — erledigt in `a9d7912`, Test `641f35c`
+- **Deployt:** Prod 25.09.2026 (`351e2d9`, Cache 422).
 - `routes/notes.js` 225, 308, 312, 342, 358, 405, 409 („Eigentuemer", „geloescht", „Empfaenger", „gehoert")
 - `routes/push.js` 26, 84, **87** (auch der Text der Test-Benachrichtigung: „…auf diesem Geraet")
 - `routes/settings.js` 374 („Bild ungueltig")
