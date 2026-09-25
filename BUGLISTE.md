@@ -220,9 +220,10 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 Nach 5 Minuten scheitert jeder weitere Code mit „abgelaufen", raus nur über „Abbrechen"
 (`routes/auth.js:158`, `app-2-auth-layout.js:57`). → Bei Ablauf automatisch zur Passworteingabe.
 
-### [~] R14 · Meldungen stehen immer nur 3 Sekunden
+### [x] R14 · Meldungen stehen immer nur 3 Sekunden — erledigt in `3c6fdb1`
 `app-1-core.js:1091` — zweizeilige Fehler kaum lesbar. → Fehler länger bzw. bis zum Antippen,
 Dauer nach Textlänge.
+**Gelöst (25.09.):** Dauer nach Textlänge (Fehler 6–15 s), Antippen schließt. Test `tests/lesbar-und-sicher-ui.js`.
 
 ### [ ] R15 · Auszahlungen: Name und Datumsprüfung uneinheitlich
 Beim Anlegen wird der Anzeigename gespeichert, beim Bestätigen/Ablehnen/Zurückziehen der
@@ -244,9 +245,11 @@ ohne Eintrag im Protokoll.
 `routes/users.js:495–505` — drei Inserts (Nutzer, Soll-Stunden, Anstellung) ohne Transaktion;
 scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
 
-### [~] R20 · Eingabedialog verwirft Text bei Klick daneben
+### [x] R20 · Eingabedialog verwirft Text bei Klick daneben — erledigt in `3c6fdb1`
 `app-1-core.js:1266` (`promptModal`) — ärgerlich bei längeren Begründungen (z. B. Ablehnungsgrund).
 → Klick daneben nur schließen, wenn das Feld leer ist, sonst nachfragen.
+**Gelöst (25.09.):** betraf 14 Fenster, nicht nur den Eingabedialog. Klick daneben schließt nur ohne
+Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 
 ### [x] R21 · Abwesenheitskalender merkt sich die eigene Scrollposition als Benutzer-Wischen — erledigt in `e6c34e4`
 - **Wo:** `public/js/abwesenheitskalender.js:303–313`
@@ -282,7 +285,7 @@ scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
   Klick, und die Stellen darauf umstellen; Test nach dem Muster von `tests/seite-laden-ui.js`.
 
 
-### [~] R24 · Erklärung am Warnzeichen („!") verschwindet zu schnell
+### [x] R24 · Erklärung am Warnzeichen („!") verschwindet zu schnell — erledigt in `3c6fdb1`
 *(Hinweis Alex, 25.09.2026 — gehört zu R14)*
 - **Wo:** `attachLongPressTooltip` / `showTooltip` in `app-1-core.js` (Zeichen aus
   `arbeitszeitrecht.js`, angebunden in `app-3-dashboard.js`)
@@ -294,6 +297,7 @@ scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
   der Einträge (B7).
 - **Vorschlag:** Handy: stehen lassen bis zum nächsten Antippen oder Scrollen. Rechner: offen, solange
   die Maus auf dem Zeichen oder auf der Sprechblase ist, mit kurzer Kulanz beim Hinübergleiten.
+- **Gelöst (25.09.):** so umgesetzt; gilt am Handy auch für die Detail-Sprechblasen der Einträge.
 ---
 
 ## Geprüft und in Ordnung

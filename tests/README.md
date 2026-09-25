@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**232 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**233 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -139,6 +139,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `konto-sitzung-daten.js` | „Auf allen Geräten abmelden" und die Datenauskunft (Art. 15 DSGVO). |
 | `legal-pages-ui.js` | Puppeteer-UI-Test: Impressum/Datenschutz — Admin füllt in Einstellungen, Links auf Login-Seite (pre-login) |
 | `legal-pages.js` | API-Test: Impressum/Datenschutz als admin/chef-konfigurierbare Settings + öffentlicher Endpunkt. |
+| `lesbar-und-sicher-ui.js` | Lesen können, nichts verlieren: Meldungen, Sprechblase am Warnzeichen, Klick neben ein Fenster |
 | `limits-ui.js` | UI-Test (Puppeteer) der Admin-Karte „Speicher- & Größenlimits": |
 | `listen-suche-prodklon.js` | Prod-Klon-Pruefung fuer B6 (Suche in den Listen). |
 | `listen-suche-ui.js` | Puppeteer-Test (B6): Suchfeld in den Listen. |

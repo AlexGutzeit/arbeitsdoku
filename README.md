@@ -728,7 +728,16 @@ Darauf ist sie ausgelegt:
   kurz **„Entwurf gesichert"** statt eines blockierenden Dialogs.
 * **Details ohne Umweg ansehen:** Einen Eintrag im Zeitnachweis oder einen Termin in der Planung
   **gedrückt halten** zeigt Kunde, Ort, Beschreibung und Pause als Sprechblase – am Rechner erscheinen
-  dieselben Angaben beim Drüberfahren mit der Maus. Kurz antippen öffnet wie gewohnt.
+  dieselben Angaben beim Drüberfahren mit der Maus. Kurz antippen öffnet wie gewohnt. Die Sprechblase
+  bleibt am Handy stehen, **bis man irgendwo hintippt oder scrollt** – kein Zeitlimit beim Lesen. Das
+  gilt auch für die Erklärung am **„!"** eines Eintrags (zu lange gearbeitet, Pause oder Ruhezeit zu
+  kurz); am Rechner bleibt diese Erklärung offen, solange die Maus auf dem Zeichen **oder auf der
+  Sprechblase** ist.
+* **Meldungen lassen sich lesen:** Wie lange eine Meldung steht, richtet sich nach ihrer Länge –
+  Fehler mindestens 6, höchstens 15 Sekunden. **Antippen** schließt sie sofort.
+* **Nichts Eingetipptes geht durch einen Fehltipp verloren:** Ein Tipp neben ein Fenster schließt es
+  nur, solange darin noch nichts eingegeben wurde. Sonst bleibt es offen – verworfen wird mit
+  „Abbrechen".
 * **Suche in jeder langen Liste:** Werkzeuge, Mitarbeiter, Dokumente, Bestellungen und beide
   Papierkorb-Ansichten haben ein Suchfeld – **immer sichtbar**, direkt über der Liste. Gesucht wird über
   alle sichtbaren Angaben (beim Werkzeug also auch danach, **wer** es hat und **wo** es ist), mehrere

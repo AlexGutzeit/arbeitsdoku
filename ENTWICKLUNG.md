@@ -3203,3 +3203,30 @@ mit einem schreibgeschützten Dokumentenordner. **Gegenproben:** alter Code (all
 rot, die Oberfläche bricht ab, weil `pushFehlerText` fehlt), Fehlerbehandler ohne 413/400, interner
 Feldname, Upload-Rohtext, Meldung ohne Übersetzung, Meldung nach dem Abmelden, Push unübersetzt —
 jede an ihrer Stelle rot.
+
+## Lesen können, nichts verlieren (R14, R20, R24 — 25.09.2026)
+
+* **R14 — Meldungen:** Vorher immer 3 s. Jetzt `meldungsDauer()`: nach Textlänge, Fehler 6–15 s;
+  wer eine Dauer vorgibt (Bestellt 8 s, Zurückspielen 15 s), behält sie. Antippen schließt.
+* **R24 — Sprechblasen** (Hinweis Alex: die Erklärung am „!" war zu kurz lesbar). Nach langem Druck
+  bleibt sie jetzt bis zum nächsten Antippen oder Scrollen; das feste 4-s-Ausblenden ist weg — und
+  mit ihm ein Fehler: Der Zeitgeber wurde nie zurückgesetzt und schloss auch eine NEUERE Sprechblase,
+  wenn man zweimal kurz hintereinander hielt. Am Rechner öffnet das „!" eine Erklärung **zum Lesen**
+  (`showTooltipZumLesen`): Sie nimmt die Maus an, man kann auf sie hinübergleiten, beim Verlassen
+  0,4 s Kulanz (`tooltipVerlassen`). **Nur dort** — die Eintrags-Sprechblasen wandern mit dem Zeiger
+  und könnten am Bildschirmrand unter ihn rutschen; dort bleiben sie für die Maus durchlässig.
+* **R20 — Klick daneben:** Es waren nicht nur der Eingabedialog, sondern **14 Fenster** (Produkt
+  anlegen, Mitarbeiter, Freigaben …). `klickDanebenSchliesst(overlay, schliessen)` merkt sich, ob der
+  Mensch etwas geändert hat (`input`/`change` — was das Programm vorbelegt, zählt nicht). Dann bleibt
+  das Fenster offen, mit einem Hinweis.
+
+**Zwei Messfallen im eigenen Test, beide erst durch Gegenproben sichtbar.** Unter dem Warnzeichen
+liegt der Eintragsblock mit seiner eigenen Sprechblase: Die Prüfung „eine Sprechblase ist offen" war
+auch ohne Reparatur grün — der Test prüft jetzt den **Inhalt** (ArbZG). Und nach dem ersten Fehlschlag
+klickte der Test einen Knopf, den es dann nicht mehr gab, und brach ab. Außerdem lag meine erste
+Erklärung für einen roten Kulanz-Test daneben: Nicht die Sprechblase lag unter dem Zielpunkt, sondern
+der Eintragsblock (nachgemessen mit `elementFromPoint`).
+
+`tests/lesbar-und-sicher-ui.js` (19 Prüfungen). **Gegenproben:** alter Code (9 rot), feste 3 s,
+Antippen schließt nicht, Klick daneben trotz Eingabe, 4-s-Ausblenden, Antippen irgendwo schließt
+nicht, sofortiges Schließen am Rechner, Sprechblase nimmt die Maus nicht an — jede an ihrer Stelle rot.
