@@ -62,9 +62,20 @@ function req(m, p, t, b) {
       await seite.type('#login-user', u); await seite.type('#login-pass', pw(u));
       await seite.click('#login-form button[type="submit"]'); await sleep(2600);
     };
+    // Gueltige Zeiten ausdruecklich setzen. Die Vorbelegung haengt an der Uhrzeit: Vor Arbeitsbeginn
+    // (nachts) steht das Formular auf 07:00–07:00 mit 30 min Pause — seit R6 haelt die Oberflaeche das
+    // beim Absenden auf, der Aufruf erreicht den Server nie, und die Sitzungspruefung, um die es HIER
+    // geht, kommt nicht zum Zug. Gefunden, weil die Suite um 2 Uhr nachts lief.
     const neuesFormular = async () => {
       await seite.goto(BASIS + '/#/entry/new', { waitUntil: 'domcontentloaded' });
       await seite.waitForSelector('#ef-desc'); await sleep(900);
+      await seite.evaluate(() => {
+        for (const [id, w] of [['ef-from', '08:00'], ['ef-to', '12:00']]) {
+          const el = document.getElementById(id); el.value = w;
+          el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+      await sleep(700);
     };
     // Macht das Token im Browser ungueltig — genau so, wie es nach Ablauf aussaehe.
     const sitzungAblaufenLassen = (uid) => seite.evaluate((t) => { S.token = t; localStorage.setItem('token', t); },
