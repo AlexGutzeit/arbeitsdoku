@@ -646,7 +646,7 @@ document.addEventListener('touchstart', () => { _letzteBeruehrung = Date.now(); 
 document.addEventListener('touchend', () => { _letzteBeruehrung = Date.now(); }, { passive: true, capture: true });
 function istMauszeiger() { return Date.now() - _letzteBeruehrung > 700; }
 
-// ── Uhrzeit-Felder: Antippen öffnet die Uhr (R25, Alex 25.09.2026) ──
+// ── Uhrzeit- und Datumsfelder: Antippen öffnet Uhr bzw. Kalender (R25, Alex 25./26.09.2026) ──
 // Chrome auf Android hat das Uhrzeit-Feld umgestellt (bemerkt mit Version 154): Antippen markiert
 // jetzt Stunde oder Minute zum Eintippen, die Uhr öffnet nur noch das Symbol rechts. Auf der
 // Baustelle ist die Uhr der gewohnte Weg — also ruft die App sie beim Antippen selbst auf.
@@ -657,11 +657,13 @@ function istMauszeiger() { return Date.now() - _letzteBeruehrung > 700; }
 // Berührung. iPhone, Firefox und der Rechner bleiben unberührt — dort öffnet der Browser die Uhr
 // selbst, oder man tippt ein. Das Symbol rechts funktioniert wie bisher; ein zweiter Aufruf, während
 // die Uhr schon offen ist, wird vom Browser abgewiesen und hier still übergangen.
+// Datum und Monat betrifft dieselbe Umstellung (Alex, 26.09.) — dort öffnet sich der Kalender.
+const UHR_HILFE_ARTEN = new Set(['time', 'date', 'month', 'week', 'datetime-local']);
 const UHR_HILFE = /Android/.test(navigator.userAgent) && /Chrome\//.test(navigator.userAgent) && !/Firefox\//.test(navigator.userAgent);
 document.addEventListener('click', (ev) => {
   if (!UHR_HILFE) return;
   const feld = ev.target;
-  if (!(feld instanceof HTMLInputElement) || feld.type !== 'time' || feld.disabled || feld.readOnly) return;
+  if (!(feld instanceof HTMLInputElement) || !UHR_HILFE_ARTEN.has(feld.type) || feld.disabled || feld.readOnly) return;
   if (istMauszeiger() || typeof feld.showPicker !== 'function') return;
   try { feld.showPicker(); } catch (_) { /* schon offen oder abgelehnt: dann bleibt es beim Eintippen */ }
 });

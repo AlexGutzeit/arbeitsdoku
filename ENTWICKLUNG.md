@@ -3258,3 +3258,9 @@ auf — **nur** auf Android mit Chrome-artigem Browser (`UHR_HILFE`) und **nur**
 `showPicker` durch einen Zähler — ein Test-Chrome kann keine Uhr zeigen, aber er sieht, wann die App
 sie aufruft. Gegenproben: Hilfe aus, ohne Einschränkung auf Android-Chrome, auch bei Maus, jedes Feld
 statt nur Zeitfelder — jede an ihrer Stelle rot.
+
+**Nachtrag 26.09.2026 — Datum:** Dieselbe Umstellung betrifft Datums- und Monatsfelder (Hinweis Alex).
+Die Uhr-Hilfe erfasst jetzt `UHR_HILFE_ARTEN` = time, date, month, week, datetime-local — sie hängt an
+der Feldart, nicht an einzelnen Feldern, und greift so in allen 21 Datums- und 2 Monatsfeldern und im
+Eingabedialog mit Datum. Test um Datum und Monat erweitert (11); Gegenprobe „nur Uhrzeit" → genau
+die beiden neuen Prüfungen rot.

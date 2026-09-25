@@ -1,4 +1,4 @@
-// Zeitfeld am Handy: Antippen öffnet wieder die Uhr — nur dort, wo es fehlt (R25, 25.09.2026).
+// Zeit- und Datumsfeld am Handy: Antippen öffnet wieder Uhr bzw. Kalender — nur dort, wo es fehlt (R25, 25./26.09.2026).
 //
 // Chrome auf Android (bemerkt mit Version 154) öffnet beim Antippen eines Uhrzeit-Felds nicht mehr die
 // Uhr, sondern markiert Stunde oder Minute; die Uhr gibt es nur noch über das Symbol rechts. Die App
@@ -82,6 +82,12 @@ function req(m, p, t, b) {
     const vorher = (await aufrufe(a)).length;
     await tippe(a, '#ef-break');
     ok('ein anderes Feld (Pause) ruft keine Uhr auf', (await aufrufe(a)).length === vorher, JSON.stringify(await aufrufe(a)));
+    // Datum: dieselbe Umstellung, dort öffnet sich der Kalender (Alex, 26.09.)
+    await tippe(a, '#ef-date');
+    ok('Antippen des Datums ruft den Kalender auf', (await aufrufe(a)).includes('ef-date'), JSON.stringify(await aufrufe(a)));
+    await a.evaluate(() => { location.hash = '/pdf'; }); await a.waitForSelector('#lohn-monat'); await sleep(800);
+    await tippe(a, '#lohn-monat');
+    ok('… und das Monatsfeld (Lohn-Export) ebenso', (await aufrufe(a)).includes('lohn-monat'), JSON.stringify(await aufrufe(a)));
     await a.evaluate(() => { location.hash = '/planning/new'; }); await a.waitForSelector('#pf-single-from'); await sleep(800);
     await tippe(a, '#pf-single-from');
     ok('gilt für alle Zeitfelder — auch in der Planung', (await aufrufe(a)).includes('pf-single-from'), JSON.stringify(await aufrufe(a)));
@@ -93,14 +99,15 @@ function req(m, p, t, b) {
 
     console.log('\nWo sich nichts ändern darf');
     const i = await seite(KENNUNG.iphone, true);
-    await eintragsformular(i); await tippe(i, '#ef-from');
-    ok('iPhone: kein Aufruf — der Browser öffnet die Uhr dort selbst', (await aufrufe(i)).length === 0, JSON.stringify(await aufrufe(i)));
+    await eintragsformular(i); await tippe(i, '#ef-from'); await tippe(i, '#ef-date');
+    ok('iPhone: kein Aufruf (Uhr und Datum) — der Browser öffnet sie dort selbst', (await aufrufe(i)).length === 0, JSON.stringify(await aufrufe(i)));
     const f = await seite(KENNUNG.firefox, true);
     await eintragsformular(f); await tippe(f, '#ef-from');
     ok('Firefox auf Android: kein Aufruf', (await aufrufe(f)).length === 0, JSON.stringify(await aufrufe(f)));
     const r = await seite(KENNUNG.rechner, false);
     await eintragsformular(r);
     const m = await mitte(r, '#ef-from'); await r.mouse.click(m.x, m.y); await sleep(250);
+    const md = await mitte(r, '#ef-date'); await r.mouse.click(md.x, md.y); await sleep(250);
     ok('Rechner mit Maus: kein Aufruf — dort tippt man ein', (await aufrufe(r)).length === 0, JSON.stringify(await aufrufe(r)));
     // Auch auf Android: ein Mausklick (Tablet mit Maus) ist keine Berührung
     await sleep(900);
