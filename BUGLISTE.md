@@ -220,7 +220,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 Nach 5 Minuten scheitert jeder weitere Code mit „abgelaufen", raus nur über „Abbrechen"
 (`routes/auth.js:158`, `app-2-auth-layout.js:57`). → Bei Ablauf automatisch zur Passworteingabe.
 
-### [ ] R14 · Meldungen stehen immer nur 3 Sekunden
+### [~] R14 · Meldungen stehen immer nur 3 Sekunden
 `app-1-core.js:1091` — zweizeilige Fehler kaum lesbar. → Fehler länger bzw. bis zum Antippen,
 Dauer nach Textlänge.
 
@@ -244,7 +244,7 @@ ohne Eintrag im Protokoll.
 `routes/users.js:495–505` — drei Inserts (Nutzer, Soll-Stunden, Anstellung) ohne Transaktion;
 scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
 
-### [ ] R20 · Eingabedialog verwirft Text bei Klick daneben
+### [~] R20 · Eingabedialog verwirft Text bei Klick daneben
 `app-1-core.js:1266` (`promptModal`) — ärgerlich bei längeren Begründungen (z. B. Ablehnungsgrund).
 → Klick daneben nur schließen, wenn das Feld leer ist, sonst nachfragen.
 
@@ -281,6 +281,19 @@ scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
 - **Vorschlag:** ein Helfer, der nur neu zeichnet, wenn die Adresse noch dieselbe ist wie beim
   Klick, und die Stellen darauf umstellen; Test nach dem Muster von `tests/seite-laden-ui.js`.
 
+
+### [~] R24 · Erklärung am Warnzeichen („!") verschwindet zu schnell
+*(Hinweis Alex, 25.09.2026 — gehört zu R14)*
+- **Wo:** `attachLongPressTooltip` / `showTooltip` in `app-1-core.js` (Zeichen aus
+  `arbeitszeitrecht.js`, angebunden in `app-3-dashboard.js`)
+- **Was passiert:** Das „!" an einem Zeiteintrag (zu lange gearbeitet, zu kurze Pause, zu kurze
+  Ruhezeit) erklärt sich per Maus-Überfahren bzw. langem Druck. Am Handy blendet die Sprechblase nach
+  fest 4 s aus — zu kurz zum Lesen. Am Rechner verschwindet sie, sobald die Maus das kleine Zeichen
+  verlässt. Außerdem wird der 4-s-Zeitgeber nie zurückgesetzt: Zweimal kurz hintereinander gehalten,
+  schließt der alte Zeitgeber die neue Sprechblase zu früh. Dasselbe gilt für die Detail-Sprechblasen
+  der Einträge (B7).
+- **Vorschlag:** Handy: stehen lassen bis zum nächsten Antippen oder Scrollen. Rechner: offen, solange
+  die Maus auf dem Zeichen oder auf der Sprechblase ist, mit kurzer Kulanz beim Hinübergleiten.
 ---
 
 ## Geprüft und in Ordnung
