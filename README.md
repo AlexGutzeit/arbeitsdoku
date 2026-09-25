@@ -756,6 +756,9 @@ Darauf ist sie ausgelegt:
   Uhr bzw. Kalender – auch in neueren Chrome-Versionen auf Android, die das von sich aus nicht mehr
   tun (dort markiert Antippen sonst nur Stunde, Tag oder Monat zum Eintippen). Das Symbol rechts im
   Feld funktioniert ebenfalls. Auf dem iPhone und am Rechner bleibt alles, wie der Browser es macht.
+* **Downloads klappen auch auf dem iPhone:** PDF, CSV, Sicherung und Dokumente werden über einen
+  gemeinsamen Weg heruntergeladen, der Safari genug Zeit lässt. Meldet der Server beim Sichern einen
+  Fehler, wird er angezeigt – statt eine Fehlermeldung als „Sicherung" zu speichern.
 * **Zoom ist nicht gesperrt** – Aufziehen mit zwei Fingern funktioniert überall.
 * **Große Trefferflächen:** Auf Touchgeräten haben kleine Symbol- und Textknöpfe eine unsichtbar
   vergrößerte Fläche, ohne dass sich das Aussehen ändert. Mit Maus bleibt alles wie gewohnt.

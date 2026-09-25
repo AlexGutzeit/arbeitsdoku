@@ -3264,3 +3264,27 @@ Die Uhr-Hilfe erfasst jetzt `UHR_HILFE_ARTEN` = time, date, month, week, datetim
 der Feldart, nicht an einzelnen Feldern, und greift so in allen 21 Datums- und 2 Monatsfeldern und im
 Eingabedialog mit Datum. Test um Datum und Monat erweitert (11); Gegenprobe „nur Uhrzeit" → genau
 die beiden neuen Prüfungen rot.
+
+## Kleine Sackgassen (R18, R13, R7, R8 — 26.09.2026)
+
+* **R18 — Downloads.** Das Muster „Datei-Adresse erzeugen, Link klicken, freigeben" stand an zehn
+  Stellen; an sieben wurde sofort freigegeben (Safari auf dem iPhone kann den Download dann still
+  abbrechen), an drei nach 5 s. Jetzt `dateiHerunterladen()` / `dateinameAus()` in `app-1-core.js`,
+  Freigabe nach 60 s; der Test prüft, dass `.download =` nur noch dort steht. Dabei gefunden: Der
+  **Sicherungs-Download** speicherte jede Antwort — auch eine Fehlermeldung des Servers — als Datei
+  mit dem Namen einer Sicherung und meldete „Backup heruntergeladen". Jetzt wird die Antwort geprüft.
+  Außerdem trug der Protokoll-Export das UTC-Datum im Namen (zwischen 0 und 2 Uhr der Vortag) — die
+  Gegenprobe lief zufällig nach Mitternacht und zeigte genau das.
+* **R13 — Zwei-Faktor-Schritt abgelaufen.** Der Server kennzeichnet ihn (`ZWISCHENSCHRITT_ABGELAUFEN`),
+  die Oberfläche kehrt mit Hinweis zur Passworteingabe zurück. `api()` gibt Kennungen des Servers
+  seitdem allgemein als `err.code` weiter.
+* **R7 — Abmelden hing.** `navigator.serviceWorker.ready` wartet ewig, wenn der Hintergrunddienst
+  nicht läuft. `hintergrunddienst()` wartet höchstens 3 s; Abmelden zusätzlich höchstens 5 s auf den
+  Push-Abbau (Doppelschutz: die Gegenprobe ohne die 3-s-Grenze wird rot, weil Abmelden dann 5 s braucht).
+* **R8 — Rechte.** Anmelde-Antwort und `refreshUser()` zählten Rechte einzeln auf; es fehlten
+  `can_products_add` bzw. `can_order` und die Lagerrechte. Beide leiten jetzt alle `can_*` aus dem
+  Objekt ab — dasselbe Muster wie bei den „parallelen Listen".
+
+`tests/kleine-sackgassen-ui.js` (15). **Gegenproben:** alter Code (12 rot), und jeder Teil einzeln —
+Teilliste, aufgezählte Rechte, Server ohne Kennung, Oberfläche bleibt stehen, sofort freigeben,
+Sicherung ohne Prüfung, Dienst ohne Zeitgrenze — jede an ihrer Stelle rot.
