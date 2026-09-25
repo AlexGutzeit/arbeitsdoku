@@ -1284,6 +1284,28 @@ function toast(msg, type, duration, aktion) {
   t._hideTimer = setTimeout(() => t.classList.remove('show'), duration || meldungsDauer(msg, type));
 }
 
+// ── Datei herunterladen (R18) ──
+// EINE Stelle für alle Downloads (PDF, CSV, Sicherung, Dokumente, Datenauskunft …). Vorher stand das
+// Muster an zehn Stellen, und an sieben wurde die Datei-Adresse SOFORT nach dem Klick wieder
+// freigegeben. Safari auf dem iPhone liest die Datei aber erst danach — der Download konnte still
+// abbrechen. Freigegeben wird deshalb erst nach einer Minute.
+const DOWNLOAD_FREIGABE_MS = 60000;
+function dateiHerunterladen(blob, dateiname) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = dateiname;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_FREIGABE_MS);
+}
+// Dateiname aus der Server-Antwort (Content-Disposition), sonst der Ersatzname.
+function dateinameAus(antwort, ersatz) {
+  return ((antwort.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || ersatz;
+}
+
 // Klick neben ein Fenster schließt es — aber nur, solange darin nichts eingegeben wurde (R20).
 // Vorher schloss ein Tipp daneben jedes Fenster, und der getippte Text war weg: der Ablehnungsgrund,
 // ein halb angelegtes Produkt, ein Mitarbeiter mit allen Angaben. „Eingegeben" heißt: der Mensch hat

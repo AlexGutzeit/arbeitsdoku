@@ -1834,12 +1834,7 @@ async function exportProjectCsv(id) {
   try {
     const res = await fetch('/api/projects/' + id + '/entries.csv', { headers: { Authorization: 'Bearer ' + S.token } });
     if (!res.ok) { toast('Export fehlgeschlagen', 'error'); return; }
-    const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = ((res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || ('projekt-' + id + '.csv');
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(a.href);
+    dateiHerunterladen(await res.blob(), dateinameAus(res, 'projekt-' + id + '.csv'));
   } catch (e) { toast('Export fehlgeschlagen', 'error'); }
 }
 
@@ -3137,12 +3132,7 @@ function kontoSicherheitKarte() {
       // nicht mitschicken.
       const antwort = await fetch('/api/users/meine-daten', { headers: { Authorization: 'Bearer ' + S.token } });
       if (!antwort.ok) throw new Error('Auskunft nicht möglich');
-      const url = URL.createObjectURL(await antwort.blob());
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `arbeitsdoku-meine-daten-${(S.user.username || 'daten')}.json`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      dateiHerunterladen(await antwort.blob(), `arbeitsdoku-meine-daten-${(S.user.username || 'daten')}.json`);
       toast('Datei wird heruntergeladen', 'success');
     } catch (err) { toast(err.message || 'Auskunft nicht möglich', 'error'); }
   });

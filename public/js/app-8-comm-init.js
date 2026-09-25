@@ -2329,12 +2329,7 @@ async function exportVacationOverviewPdf(year) {
   try {
     const res = await fetch(`/api/absences/vacation-overview.pdf?year=${year}`, { headers: { Authorization: 'Bearer ' + S.token } });
     if (!res.ok) { toast('PDF-Export fehlgeschlagen', 'error'); return; }
-    const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = ((res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || `Urlaubsuebersicht_${year}.pdf`;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(a.href);
+    dateiHerunterladen(await res.blob(), dateinameAus(res, `Urlaubsuebersicht_${year}.pdf`));
   } catch (e) { toast('PDF-Export fehlgeschlagen', 'error'); }
 }
 

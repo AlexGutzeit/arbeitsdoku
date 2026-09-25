@@ -593,32 +593,27 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
 
   // Backup download
   document.getElementById('backup-download').addEventListener('click', () => {
-    const a = document.createElement('a');
-    a.href = '/api/backup/download';
-    a.style.display = 'none';
-    // Add auth header via fetch
     // Der Name kommt vom Server: verschluesselt heisst die Datei .adbk, sonst .zip. Fest
     // „.zip" hiesse, dass eine verschluesselte Sicherung unter falschem Namen auf der Platte
     // landet und spaeter niemand weiss, was sie ist.
     let name = 'arbeitsdoku_backup.zip';
     fetch('/api/backup/download', { headers: { 'Authorization': 'Bearer ' + S.token } })
-      .then(r => {
-        const cd = r.headers.get('content-disposition') || '';
-        const m = /filename="([^"]+)"/.exec(cd);
-        if (m) name = m[1];
+      .then(async r => {
+        // Vorher wurde JEDE Antwort gespeichert — auch eine Fehlermeldung, dann unter dem Namen
+        // einer Sicherung. Wer die Datei später zurückspielen wollte, hatte keine (R18).
+        if (!r.ok) {
+          let text = 'Backup-Download fehlgeschlagen';
+          try { text = (await r.json()).error || text; } catch (_) {}
+          throw new Error(text);
+        }
+        name = dateinameAus(r, name);
         return r.blob();
       })
       .then(blob => {
-        const url = URL.createObjectURL(blob);
-        a.href = url;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        dateiHerunterladen(blob, name);
         toast('Backup heruntergeladen', 'success');
       })
-      .catch(() => toast('Backup-Download fehlgeschlagen', 'error'));
+      .catch((e) => toast(e.message || 'Backup-Download fehlgeschlagen', 'error'));
   });
 
   // Backup restore
@@ -740,11 +735,7 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
   document.getElementById('empf-privat-file').addEventListener('click', () => {
     const wert = document.getElementById('empf-privat-wert').value;
     const name = (document.getElementById('empf-name').value.trim() || 'sicherung').replace(/[^A-Za-z0-9._-]/g, '_');
-    const url = URL.createObjectURL(new Blob([wert], { type: 'text/plain' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `privater-schluessel-${name}.txt`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    dateiHerunterladen(new Blob([wert], { type: 'text/plain' }), `privater-schluessel-${name}.txt`);
     toast('Gespeichert — in die Passwortverwaltung legen und die Datei danach löschen', 'success');
   });
 
@@ -826,11 +817,7 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
     try {
       const antwort = await fetch('/api/backup/entschluesseler', { headers: { Authorization: 'Bearer ' + S.token } });
       if (!antwort.ok) throw new Error('Konnte nicht erzeugt werden');
-      const url = URL.createObjectURL(await antwort.blob());
-      const a = document.createElement('a');
-      a.href = url; a.download = 'sicherung-entschluesseln.html';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      dateiHerunterladen(await antwort.blob(), 'sicherung-entschluesseln.html');
       toast('Heruntergeladen — leg die Datei zum Schlüssel', 'success');
     } catch (err) { toast(err.message || 'Download fehlgeschlagen', 'error'); }
   });
@@ -1000,12 +987,7 @@ async function auditExport() {
   try {
     const res = await fetch('/api/audit/export?' + auditQuery(), { headers: { Authorization: 'Bearer ' + S.token } });
     if (!res.ok) { toast('Export fehlgeschlagen', 'error'); return; }
-    const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(a.href);
+    dateiHerunterladen(await res.blob(), `audit-log-${formatDateISO(new Date())}.csv`);   // Ortsdatum statt UTC (zwischen 0 und 2 Uhr sonst gestern)
   } catch (e) { toast('Export fehlgeschlagen', 'error'); }
 }
 
@@ -1362,12 +1344,7 @@ async function downloadDocument(id, name) {
   try {
     const res = await fetch('/api/documents/' + id + '/download', { headers: { 'Authorization': 'Bearer ' + S.token } });
     if (!res.ok) throw new Error('Download fehlgeschlagen');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = name || 'dokument';
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
+    dateiHerunterladen(await res.blob(), name || 'dokument');
   } catch (e) { toast(e.message, 'error'); }
 }
 

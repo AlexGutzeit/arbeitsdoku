@@ -89,15 +89,7 @@ function pdfFormularBinden() {
         headers: { 'Authorization': 'Bearer ' + S.token }
       });
       if (!res.ok) throw new Error('PDF-Export fehlgeschlagen');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `arbeitsdoku_${dateFrom}_${dateTo}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      dateiHerunterladen(await res.blob(), `arbeitsdoku_${dateFrom}_${dateTo}.pdf`);
       toast('PDF heruntergeladen', 'success');
     } catch (err) { toast(err.message, 'error'); }
   });
@@ -166,15 +158,7 @@ async function renderPdfExport() {
         headers: { 'Authorization': 'Bearer ' + S.token },
       });
       if (!res.ok) throw new Error('Lohn-Export fehlgeschlagen');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a2 = document.createElement('a');
-      a2.href = url;
-      a2.download = `Lohn_${monat}.csv`;
-      document.body.appendChild(a2);
-      a2.click();
-      a2.remove();
-      URL.revokeObjectURL(url);
+      dateiHerunterladen(await res.blob(), `Lohn_${monat}.csv`);
       toast('Lohn-Export heruntergeladen', 'success');
     } catch (err) { toast(err.message, 'error'); }
   });
