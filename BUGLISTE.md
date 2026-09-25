@@ -82,7 +82,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 
 ## Mittel — Sackgassen und irreführende Zustände
 
-### [ ] R4 · Ewiger Lade-Kreisel auf 9 Seiten
+### [~] R4 · Ewiger Lade-Kreisel auf 9 Seiten
 - **Wo:** Mitarbeiter `app-5-team.js:1004`, Projekte `app-5-team.js:1919`, Notizen
   `app-8-comm-init.js:944`, Dokumente `app-6-admin.js:1432`, Papierkorb-Reiter
   `app-6-admin.js:1075 / 1138 / 1191 / 1270`
@@ -91,7 +91,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Vorschlag:** die vorhandene `renderLoadError()` verwenden (Dashboard, Planung, Statistik
   nutzen sie schon). Siehe auch R5 — beides über eine gemeinsame Seiten-Hülle lösen.
 
-### [ ] R5 · Ältere, langsame Seite überschreibt die gerade geöffnete
+### [~] R5 · Ältere, langsame Seite überschreibt die gerade geöffnete
 - **Wo:** Wächter `renderToken()/renderStale()` in `app-1-core.js:347` — genutzt nur von
   Dashboard, Planung, Statistik, Abwesenheiten. **17 Seiten ohne Wächter:** `renderEntryForm`,
   `renderPlanningForm`, `renderProjectForm`, `renderPdfExport`, `renderTools`, `renderSettings`,
@@ -102,6 +102,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   Veraltet-Wächter), damit neue Seiten nicht wieder ohne gebaut werden.
 
 ### [x] R6 · Pause länger als Arbeitszeit → still ein 0-Stunden-Eintrag — erledigt in `0f03d56`
+- **Deployt:** Prod 25.09.2026 (`8bdc1d4`, Cache 417); nachgebessert in `5ea9648`.
 - **Wo:** `public/js/arbeitszeitrecht.js:127` (`restPause` nicht auf Eintragsdauer begrenzt),
   `routes/entries.js:37` (`calculateNetHours` klemmt auf 0), keine Prüfung in Oberfläche/Server
 - **Beispiel:** 15:00–15:20 als erster Eintrag des Tages → 30 min Pause vorgeschlagen → **0 h**.
