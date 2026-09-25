@@ -2015,7 +2015,11 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .order-comment { font-size: 0.85rem; color: var(--text-light); margin-top: 2px; }
 .order-meta { font-size: 0.75rem; color: var(--text-lighter); margin-top: 4px; }
 .order-actions { display: flex; gap: 0.25rem; flex-shrink: 0; align-items: center; }
-.order-done { opacity: 0.5; background: #f8fafc; }
+/* Bestellte Positionen: nur der TEXT wird blass, nicht die ganze Karte. Mit der Deckkraft auf der
+   Karte sah „Doch nicht bestellt" ausgegraut aus, obwohl der Knopf funktioniert (R12) — ein Kind kann
+   nicht kraeftiger sein als sein halbdurchsichtiges Elternteil. */
+.order-done { background: #f8fafc; }
+.order-done .order-content { opacity: 0.5; }
 .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; min-width: unset; }
 .order-form .form-group label { font-size: 0.8rem; margin-bottom: 2px; }
 .order-location { color: var(--text-light); font-size: 0.85rem; }

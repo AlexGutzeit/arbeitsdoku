@@ -266,6 +266,14 @@ function fmtOrderQty(o) {
   return `<strong>${esc(String(o.quantity))}x</strong> `;
 }
 
+// Dieselbe Angabe als Klartext fuer Meldungen: „50 Stk Wago 221-413" (Alex, 25.09.2026 — bei
+// mehreren Positionen hintereinander muss man sehen, WELCHE gerade markiert oder zurueckgenommen wurde).
+function bestellBezeichnung(o) {
+  if (!o) return '';
+  const menge = o.quantity ? (o.unit ? `${o.quantity} ${o.unit} ` : `${o.quantity}x `) : '';
+  return menge + o.product;
+}
+
 function fmtOrderLocation(o) {
   if (!o.location_text || o.location_text === 'Lager') return '';
   return ` <span class="order-location">&rarr; ${esc(o.location_text)}</span>`;
@@ -907,12 +915,14 @@ function bindOrderEvents(orders, manage) {
   document.querySelectorAll('.order-mark-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.id;
+      const bez = bestellBezeichnung(orders.find(o => String(o.id) === String(id)));
       try {
         await api('POST', '/api/orders/' + id + '/order');
         await loadBadges();
         // Keine Rueckfrage vor „Bestellt" — wer zehn Positionen abhakt, wuerde zehnmal gefragt.
         // Stattdessen ein Rueckweg: hier sofort, spaeter ueber „Doch nicht bestellt" (R12).
-        toast('Als bestellt markiert', 'success', 8000, { text: 'Rückgängig', beiKlick: () => bestellungZuruecknehmen(id) });
+        toast(bez ? `${bez} als bestellt markiert` : 'Als bestellt markiert', 'success', 8000,
+          { text: 'Rückgängig', beiKlick: () => bestellungZuruecknehmen(id, bez) });
         renderOrders();
       } catch (err) { toast(err.message, 'error'); }
     });
@@ -920,11 +930,11 @@ function bindOrderEvents(orders, manage) {
 }
 
 // „Doch nicht bestellt" (R12) — aus der Meldung nach „Bestellt" oder aus den letzten Bestellungen.
-async function bestellungZuruecknehmen(id) {
+async function bestellungZuruecknehmen(id, bez) {
   try {
     await api('DELETE', '/api/orders/' + id + '/order');
     await loadBadges();
-    toast('Wieder offen — nicht mehr als bestellt markiert', 'success');
+    toast(bez ? `${bez} ist wieder offen` : 'Wieder offen — nicht mehr als bestellt markiert', 'success');
     // Nur neu zeichnen, wenn die Bestellungen noch offen sind: Die Meldung steht auch dann noch da,
     // wenn man schon auf einer anderen Seite ist (vgl. R23).
     if (getRoute() === '/orders') renderOrders();
@@ -933,7 +943,8 @@ async function bestellungZuruecknehmen(id) {
 
 function bindOrderedEvents(orders) {
   document.querySelectorAll('.ordered-undo-btn').forEach(btn => {
-    btn.addEventListener('click', () => bestellungZuruecknehmen(btn.dataset.id));
+    btn.addEventListener('click', () => bestellungZuruecknehmen(btn.dataset.id,
+      bestellBezeichnung(orders.find(o => String(o.id) === String(btn.dataset.id)))));
   });
   document.querySelectorAll('.ordered-del-btn').forEach(btn => {
     btn.addEventListener('click', async () => {

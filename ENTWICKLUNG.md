@@ -3133,7 +3133,19 @@ Eine Testfalle unterwegs: Der erste Testlauf klickte „Rückgängig", sobald di
 Gemessen (Position nach 100/400/1000 ms, `elementFromPoint`), dann erst gewartet. Die App war in
 Ordnung; keine andere Meldung überschreibt den Knopf.
 
-`tests/bestellt-rueckweg.js` (23 Prüfungen). **Gegenproben:** alter Code (12 rot), Sperre weg
+**Nachgeschärft (Alex):** Die Meldungen nennen Menge und Produkt — „50 Stk Wago 221-413 als bestellt
+markiert" bzw. „… ist wieder offen" (`bestellBezeichnung()`); wer mehrere hintereinander abhakt,
+sieht sonst nicht, worauf sich „Rückgängig" bezieht. Gemessen am Handy (390 px): Die Meldung bleibt
+195 px schmal in der Mitte und bricht lange Namen um — sie überlappt die „Bestellt"-Knöpfe
+(x 297–355) nie, auch nicht mit „Sicherungsautomat B16 Hager MBN116". Die schmale Breite kommt von
+`left: 50%` (der verfügbare Platz ist die halbe Breite); das ist hier ein Vorteil und bleibt so.
+
+**Ebenfalls nachgeschärft:** Bestellte Positionen hatten `opacity: 0.5` auf der ganzen Karte — der
+neue Knopf „Doch nicht bestellt" sah dadurch ausgegraut aus, obwohl er funktioniert (ein Kind kann
+nicht kräftiger sein als sein halbdurchsichtiges Elternteil). Jetzt ist nur `.order-content` blass,
+der Knopf hat volle Stärke; auf dem Screenshot von Alex so abgenommen.
+
+`tests/bestellt-rueckweg.js` (25 Prüfungen). **Gegenproben:** alter Code (12 rot), Sperre weg
 (die Menge einer bestellten Position wurde durch eine Namensänderung des Chefs gelöscht), Zurücknehmen
 ohne Rechteprüfung, Zurücknehmen einer offenen Position, Meldung ohne Knopf, Knopf für alle,
 Meldung fängt Klicks ab — jede an ihrer Stelle rot.

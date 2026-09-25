@@ -421,8 +421,10 @@ Werkzeug-Inventar mit Ausleihe/Rückgabe: wer hat was wann entnommen, inkl. Hist
 Material-/Bestellanforderungen der Mitarbeiter; Chef sieht offene Bestellungen (Badge).
 
 **„Bestellt" hat einen Rückweg.** Ein Tipp setzt die Position auf bestellt — ohne Rückfrage, damit
-man zehn Positionen zügig abhaken kann. Danach steht in der Meldung ein paar Sekunden lang
-**„Rückgängig"**, und in den *letzten Bestellungen* trägt jede Position dauerhaft den Knopf
+man zehn Positionen zügig abhaken kann. Die Meldung unten in der Mitte nennt Menge und Produkt
+(*„50 Stk Wago 221-413 als bestellt markiert"*) und trägt 8 Sekunden lang den Knopf
+**„Rückgängig"** — sie blockiert nichts, die nächste Position lässt sich sofort abhaken, und
+„Rückgängig" gilt dann für diese. In den *letzten Bestellungen* trägt jede Position dauerhaft den Knopf
 **„Doch nicht bestellt"**; sie wandert dann an ihre alte Stelle in der offenen Liste zurück.
 Zurücknehmen darf, wer auch markieren darf (Recht „Bestellungen abschließen"). **Bestellte
 Positionen lassen sich nicht mehr ändern** — auch nicht über die Schnittstelle —, damit in der Liste

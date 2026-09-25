@@ -107,12 +107,17 @@ function req(m, p, t, b) {
       return t && /bestellt/i.test(t.textContent) && t.querySelector('.toast-aktion');
     }, { timeout: 5000 }).then(() => true, () => false);
     ok('nach „Bestellt": Meldung mit Knopf „Rückgängig"', knopfDa);
+    // Welche Position? Bei mehreren hintereinander muss man es sehen (Alex, 25.09.2026).
+    const meldung1 = await seite.$eval('.toast', t => t.firstChild.textContent);
+    ok('die Meldung nennt Menge und Produkt', meldung1 === '50 m Abzweigdosen als bestellt markiert', JSON.stringify(meldung1));
     ok('keine Rückfrage vor „Bestellt" (kein Dialog)', !(await seite.$('.modal-overlay, .modal')));
     ok('Position ist wirklich bestellt', (await bestellt()).includes(o2.id));
     await sleep(500);   // die Meldung faehrt 0,3 s lang ein — vorher liegt der Knopf noch unter dem Rand
     await seite.click('.toast .toast-aktion');
     const zurueck = await seite.waitForFunction((id) => !!document.querySelector(`.order-mark-btn[data-id="${id}"]`), { timeout: 5000 }, o2.id).then(() => true, () => false);
     ok('„Rückgängig" → Position wieder offen, in der Liste und auf dem Server', zurueck && (await offen()).includes(o2.id) && !(await bestellt()).includes(o2.id));
+    const meldung2 = await seite.$eval('.toast', t => t.textContent);
+    ok('… und die Meldung sagt, welche', meldung2 === '50 m Abzweigdosen ist wieder offen', JSON.stringify(meldung2));
 
     console.log('\nOberfläche: „Doch nicht bestellt" in den letzten Bestellungen');
     await seite.click(`.order-mark-btn[data-id="${o2.id}"]`);
