@@ -1160,7 +1160,9 @@ function employedInRange(user, from, to) {
 }
 
 let _letzteMeldung = 0;   // wann zuletzt etwas eingeblendet wurde (siehe Entwurfs-Hinweis)
-function toast(msg, type, duration) {
+// `aktion` (optional): { text, beiKlick } — ein Knopf in der Meldung, z. B. „Rückgängig" nach
+// „Bestellt" (R12). Er verschwindet mit der Meldung; die naechste Meldung setzt den Inhalt neu.
+function toast(msg, type, duration, aktion) {
   _letzteMeldung = Date.now();
   let t = document.querySelector('.toast');
   if (!t) {
@@ -1175,6 +1177,18 @@ function toast(msg, type, duration) {
   }
   t.textContent = msg;
   t.className = 'toast ' + (type || '');
+  if (aktion && aktion.text) {
+    const knopf = document.createElement('button');
+    knopf.type = 'button';
+    knopf.className = 'toast-aktion';
+    knopf.textContent = aktion.text;
+    knopf.addEventListener('click', () => {
+      clearTimeout(t._hideTimer);
+      t.classList.remove('show');
+      aktion.beiKlick();
+    }, { once: true });
+    t.appendChild(knopf);
+  }
   requestAnimationFrame(() => t.classList.add('show'));
   clearTimeout(t._hideTimer);
   t._hideTimer = setTimeout(() => t.classList.remove('show'), duration || 3000);

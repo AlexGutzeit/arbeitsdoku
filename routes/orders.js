@@ -125,6 +125,13 @@ router.put('/:id', authenticate, (req, res) => {
   if (!canManage(req.user) && order.user_id !== req.user.id) {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
+  // Bestellt ist bestellt (R12): Vorher liess sich die Menge noch aendern, nachdem die Bestellung
+  // laengst raus war — dann stand in der Liste etwas anderes, als wirklich bestellt wurde. Die
+  // Oberflaeche bot es nicht an, die Schnittstelle schon. Wer sich vertippt hat, nimmt zuerst zurueck.
+  if (order.ordered_at) {
+    return res.status(409).json({ error: 'Diese Position ist schon bestellt und lässt sich nicht mehr ändern. '
+      + 'War das ein Versehen: erst „Doch nicht bestellt", dann ändern.' });
+  }
 
   const { quantity, unit, product, comment, project_id, product_id } = req.body;
   if (!product || !product.trim()) {
@@ -186,6 +193,24 @@ router.post('/:id/order', authenticate, (req, res) => {
 
   db.prepare("UPDATE orders SET ordered_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), ordered_by = ? WHERE id = ?")
     .run(req.user.id, req.params.id);
+  broadcast('orders', req.headers['x-tab-id']);
+  res.json({ success: true });
+});
+
+// „Doch nicht bestellt" (R12). Ein Fehltipp auf „Bestellt" war vorher endgueltig: Zuruecknehmen
+// ging nicht, loeschen durfte nur der Admin — ein Chef oder wer das Bestellrecht hat, sass fest.
+// Zuruecknehmen darf deshalb genau, wer auch markieren darf. Die Position kommt an ihre alte Stelle
+// in der offenen Liste zurueck (sortiert wird nach dem Anlegedatum).
+router.delete('/:id/order', authenticate, (req, res) => {
+  if (!canManage(req.user)) {
+    return res.status(403).json({ error: 'Keine Berechtigung' });
+  }
+  const db = getDb();
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
+  if (!order.ordered_at) return res.status(400).json({ error: 'Diese Position ist gar nicht als bestellt markiert.' });
+
+  db.prepare('UPDATE orders SET ordered_at = NULL, ordered_by = NULL WHERE id = ?').run(req.params.id);
   broadcast('orders', req.headers['x-tab-id']);
   res.json({ success: true });
 });

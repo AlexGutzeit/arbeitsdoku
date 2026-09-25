@@ -300,6 +300,7 @@ function renderOrderList(orders, manage) {
 function renderOrderedList(orders) {
   if (!orders.length) return '<p style="color:var(--text-lighter);text-align:center">Keine Bestellungen im letzten Monat</p>';
   const isAdmin = S.user.role === 'admin';
+  const manage = darfBestellen();   // wer markieren darf, darf auch zuruecknehmen (R12)
   return orders.map(o => {
     const requestedDate = o.created_at ? formatDateTimeDE(o.created_at) : '';
     const orderedDate = o.ordered_at ? formatDateTimeDE(o.ordered_at) : '';
@@ -310,7 +311,10 @@ function renderOrderedList(orders) {
         <div class="order-meta">Bestellt von ${esc(o.user_name)} am ${requestedDate}</div>
         <div class="order-meta">Bestellung ausgelöst${o.ordered_by_name ? ' von ' + esc(o.ordered_by_name) : ''} am ${orderedDate}</div>
       </div>
-      ${isAdmin ? `<div class="order-actions"><button class="btn btn-sm btn-danger ordered-del-btn" data-id="${o.id}" aria-label="Bestellung ${esc(o.product)} löschen" title="Löschen">&times;</button></div>` : ''}
+      ${(manage || isAdmin) ? `<div class="order-actions">
+        ${manage ? `<button class="btn btn-sm btn-outline ordered-undo-btn" data-id="${o.id}" aria-label="${esc(o.product)}: doch nicht bestellt">Doch nicht bestellt</button>` : ''}
+        ${isAdmin ? `<button class="btn btn-sm btn-danger ordered-del-btn" data-id="${o.id}" aria-label="Bestellung ${esc(o.product)} löschen" title="Löschen">&times;</button>` : ''}
+      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -902,17 +906,35 @@ function bindOrderEvents(orders, manage) {
   // Bestellt markieren
   document.querySelectorAll('.order-mark-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
       try {
-        await api('POST', '/api/orders/' + btn.dataset.id + '/order');
+        await api('POST', '/api/orders/' + id + '/order');
         await loadBadges();
-        toast('Als bestellt markiert', 'success');
+        // Keine Rueckfrage vor „Bestellt" — wer zehn Positionen abhakt, wuerde zehnmal gefragt.
+        // Stattdessen ein Rueckweg: hier sofort, spaeter ueber „Doch nicht bestellt" (R12).
+        toast('Als bestellt markiert', 'success', 8000, { text: 'Rückgängig', beiKlick: () => bestellungZuruecknehmen(id) });
         renderOrders();
       } catch (err) { toast(err.message, 'error'); }
     });
   });
 }
 
+// „Doch nicht bestellt" (R12) — aus der Meldung nach „Bestellt" oder aus den letzten Bestellungen.
+async function bestellungZuruecknehmen(id) {
+  try {
+    await api('DELETE', '/api/orders/' + id + '/order');
+    await loadBadges();
+    toast('Wieder offen — nicht mehr als bestellt markiert', 'success');
+    // Nur neu zeichnen, wenn die Bestellungen noch offen sind: Die Meldung steht auch dann noch da,
+    // wenn man schon auf einer anderen Seite ist (vgl. R23).
+    if (getRoute() === '/orders') renderOrders();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
 function bindOrderedEvents(orders) {
+  document.querySelectorAll('.ordered-undo-btn').forEach(btn => {
+    btn.addEventListener('click', () => bestellungZuruecknehmen(btn.dataset.id));
+  });
   document.querySelectorAll('.ordered-del-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!(await confirmModal('Eintrag endg\u00fcltig l\u00f6schen?', { title: 'Endg\u00fcltig l\u00f6schen', okLabel: 'Endg\u00fcltig l\u00f6schen' }))) return;
