@@ -221,6 +221,7 @@ Nach 5 Minuten scheitert jeder weitere Code mit „abgelaufen", raus nur über �
 (`routes/auth.js:158`, `app-2-auth-layout.js:57`). → Bei Ablauf automatisch zur Passworteingabe.
 
 ### [x] R14 · Meldungen stehen immer nur 3 Sekunden — erledigt in `3c6fdb1`
+**Deployt:** Prod 25.09.2026 (`6712d7d`, Cache 424) — Meldungen dabei nach oben verlegt (Entscheidung Alex).
 `app-1-core.js:1091` — zweizeilige Fehler kaum lesbar. → Fehler länger bzw. bis zum Antippen,
 Dauer nach Textlänge.
 **Gelöst (25.09.):** Dauer nach Textlänge (Fehler 6–15 s), Antippen schließt. Test `tests/lesbar-und-sicher-ui.js`.
@@ -246,6 +247,7 @@ ohne Eintrag im Protokoll.
 scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
 
 ### [x] R20 · Eingabedialog verwirft Text bei Klick daneben — erledigt in `3c6fdb1`
+**Deployt:** Prod 25.09.2026 (`6712d7d`, Cache 424) — Meldungen dabei nach oben verlegt (Entscheidung Alex).
 `app-1-core.js:1266` (`promptModal`) — ärgerlich bei längeren Begründungen (z. B. Ablehnungsgrund).
 → Klick daneben nur schließen, wenn das Feld leer ist, sonst nachfragen.
 **Gelöst (25.09.):** betraf 14 Fenster, nicht nur den Eingabedialog. Klick daneben schließt nur ohne
@@ -286,6 +288,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 
 
 ### [x] R24 · Erklärung am Warnzeichen („!") verschwindet zu schnell — erledigt in `3c6fdb1`
+**Deployt:** Prod 25.09.2026 (`6712d7d`, Cache 424) — Meldungen dabei nach oben verlegt (Entscheidung Alex).
 *(Hinweis Alex, 25.09.2026 — gehört zu R14)*
 - **Wo:** `attachLongPressTooltip` / `showTooltip` in `app-1-core.js` (Zeichen aus
   `arbeitszeitrecht.js`, angebunden in `app-3-dashboard.js`)
