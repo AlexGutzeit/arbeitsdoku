@@ -150,7 +150,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Vorschlag:** alle `can_*`-Felder aus dem Objekt ableiten statt aufzählen; Test holt die
   Schlüssel von der Quelle (wie `tests/konto-rechte-ui.js`).
 
-### [x] R9 · Englische und technische Fehlermeldungen — erledigt in `R9-COMMIT`
+### [x] R9 · Englische und technische Fehlermeldungen — erledigt in `1bf11a8`
 - **Upload-Fehler** wörtlich durchgereicht: `routes/documents.js:251`, `routes/settings.js:60`,
   `routes/settings.js:344` — z. B. bei voller Platte „ENOSPC: no space left on device, open
   '/home/…'" (englisch **und** mit Serverpfad), oder „Unexpected field".
