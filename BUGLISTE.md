@@ -305,7 +305,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 ### [x] R25 · Zeitfeld am Handy öffnet die Uhr nicht mehr beim Antippen — erledigt in `5356b8b`
 - **Deployt:** Prod 26.09.2026 (`91d06a3`, Cache 425).
 - **Nachtrag (26.09., Hinweis Alex):** Datums- und Monatsfelder hatten dieselbe Umstellung — die Hilfe
-  öffnet jetzt auch den Kalender (alle Feldarten time/date/month/week/datetime-local).
+  öffnet jetzt auch den Kalender (alle Feldarten time/date/month/week/datetime-local). Deployt Prod 26.09.2026 (`35d6085`, Cache 426).
 *(Hinweis Alex, 25.09.2026)*
 - **Was passiert:** Antippen von „Von"/„Bis" markiert nur Stunde oder Minute; die Uhr öffnet nur noch
   das Symbol rechts. Früher öffnete Antippen sofort die Uhr.
