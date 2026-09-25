@@ -114,26 +114,34 @@ async function renderOrders() {
 
   const manage = darfBestellen();   // Rolle ODER Einzelrecht (s. app-1-core.js)
 
-  // Produktverzeichnis mitladen — in EINEM Zug (Kategorien, Produkte, Barcodes). Ein Fehlschlag
-  // darf die Bestellseite NICHT aufhalten: Der Katalog ist eine Hilfe, kein Voraussetzung. Wer
-  // ihn nicht bekommt, tippt wie bisher.
-  await katalogLaden();
   // Ohne Verbindung darf die Seite NICHT leer bleiben. Vorher stand hier ein `return` — dann sah
   // man im Lager weder den gespiegelten Katalog noch den Hinweis darauf, sondern gar nichts.
   // Die Liste fehlt dann eben; Nachschlagen und Suchen gehen trotzdem.
-  let orders = [];
-  let listeFehlt = false;
-  try {
-    const [oData, pData] = await Promise.all([
-      api('GET', '/api/orders'),
-      api('GET', '/api/projects')
-    ]);
-    if (!oData) return;                       // 401: die Abmeldung hat schon uebernommen
-    orders = oData.orders;
-    if (pData) S.projects = pData.projects;
-  } catch (e) {
-    if (!istVerbindungsfehler(e)) { toast(e.message, 'error'); return; }
-    listeFehlt = true;
+  // Ein Fehler, der NICHT an der Verbindung liegt, bekommt die Fehleranzeige (vorher: Meldung
+  // weg nach 3 s, „Laden…" fuer immer — R4). Fehlt nur die Verbindung, kommt die Seite trotzdem.
+  const geladen = await seiteLaden(async () => {
+    // Produktverzeichnis mitladen — in EINEM Zug (Kategorien, Produkte, Barcodes). Ein Fehlschlag
+    // darf die Bestellseite NICHT aufhalten: Der Katalog ist eine Hilfe, kein Voraussetzung. Wer
+    // ihn nicht bekommt, tippt wie bisher. (Innerhalb von seiteLaden, damit auch diese Wartezeit
+    // vom Veraltet-Waechter erfasst ist.)
+    await katalogLaden();
+    try {
+      const [oData, pData] = await Promise.all([
+        api('GET', '/api/orders'),
+        api('GET', '/api/projects')
+      ]);
+      if (!oData) return null;                // 401: die Abmeldung hat schon uebernommen
+      return { orders: oData.orders, projects: pData && pData.projects, listeFehlt: false };
+    } catch (e) {
+      if (!istVerbindungsfehler(e)) throw e;
+      return { orders: [], projects: null, listeFehlt: true };
+    }
+  }, () => renderOrders());
+  if (!geladen) return;
+  const orders = geladen.orders;
+  const listeFehlt = geladen.listeFehlt;
+  if (geladen.projects) S.projects = geladen.projects;
+  if (listeFehlt) {
     S.katalogAusSpiegel = true;               // die Verbindung ist weg, nicht nur der Katalog
     S.projects = S.projects || [];
   }
@@ -929,19 +937,16 @@ async function renderNotizen() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'notes');
   bindLayout();
 
-  let notes = [], offers = [];
-  try {
-    const [nData, pData, oData] = await Promise.all([
-      api('GET', '/api/notes'),
-      api('GET', '/api/projects'),
-      api('GET', '/api/notes/offers')
-    ]);
-    markSeen('notes');
-    if (!nData) return;
-    notes = nData.notes || [];
-    if (pData) S.projects = pData.projects;
-    offers = (oData && oData.offers) || [];
-  } catch (e) { toast(e.message, 'error'); return; }
+  const geladen = await seiteLaden(() => Promise.all([
+    api('GET', '/api/notes'),
+    api('GET', '/api/projects'),
+    api('GET', '/api/notes/offers')
+  ]).then(([nData, pData, oData]) => nData ? { nData, pData, oData } : null), () => renderNotizen());
+  if (!geladen) return;
+  markSeen('notes');   // erst wenn man die Notizen wirklich zu sehen bekommt
+  const notes = geladen.nData.notes || [];
+  if (geladen.pData) S.projects = geladen.pData.projects;
+  const offers = (geladen.oData && geladen.oData.offers) || [];
 
   _notizen = notes;
   const mainEl = document.querySelector('.main');
@@ -1871,27 +1876,31 @@ let _collapsedSections;
 try { _collapsedSections = new Set(JSON.parse(localStorage.getItem('absenceCollapsed') || '[]')); } catch(e) { _collapsedSections = new Set(); }
 
 async function renderAbsences() {
-  const _tok = renderToken();
   const topicToMark = isManagerRole() ? 'absences' : 'absence_status';
   S.badges.absences = 0;
   refreshBadges();
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'absences');
   bindLayout();
 
-  // S.users nachladen falls noch nicht vorhanden (z.B. direkter Seitenaufruf)
-  if (isManagerRole() && (!S.users || S.users.length <= 1)) {
-    try {
-      const uData = await api('GET', '/api/users');
-      if (uData) S.users = uData.users;
-    } catch(e) {}
-  }
-
-  let absences = [];
-  try {
-    const data = await api('GET', '/api/absences');
-    markSeen(topicToMark);
-    if (data) absences = data.absences;
-  } catch(e) {}
+  // Frueher: Fehler geschluckt → leerer Posteingang und „keine Abwesenheiten", obwohl nur kein
+  // Netz da war (R4). Jetzt Pflicht, mit Fehleranzeige.
+  const thisYear = new Date().getFullYear().toString();
+  const geladen = await seiteLaden(async () => {
+    const [uData, data] = await Promise.all([
+      // S.users nachladen falls noch nicht vorhanden (z.B. direkter Seitenaufruf)
+      (isManagerRole() && (!S.users || S.users.length <= 1)) ? api('GET', '/api/users') : {},
+      api('GET', '/api/absences'),
+    ]);
+    if (!uData || !data) return null;   // 401: Abmeldung laeuft
+    // Urlaubskonto: eine Zugabe — scheitert sie, fehlen nur die Zahlen oben (wie bisher).
+    let sd = null;
+    try { sd = await api('GET', `/api/absences/summary?from=${thisYear}-01-01&to=${thisYear}-12-31`); } catch (e) {}
+    return { users: uData.users, absences: data.absences || [], sd };
+  }, () => renderAbsences());
+  if (!geladen) return;
+  markSeen(topicToMark);   // erst wenn man die Abwesenheiten wirklich zu sehen bekommt
+  if (geladen.users) S.users = geladen.users;
+  const absences = geladen.absences;
 
   // Eigener Posteingang: alle Einträge die eine Aktion des aktuellen Users erfordern
   const myAckItems = absences.filter(a => {
@@ -1906,14 +1915,11 @@ async function renderAbsences() {
   const myAckItemIds = new Set(myAckItems.map(a => a.id));
 
   const mainEl = document.querySelector('.main');
-  if (!mainEl || renderStale(_tok)) return;   // inzwischen andere Seite offen
+  if (!mainEl) return;
 
-  const thisYear = new Date().getFullYear().toString();
   let urlaubTageJahr = 0, myVac = null, anyVacCfg = false;
-  try {
-    const sd = await api('GET', `/api/absences/summary?from=${thisYear}-01-01&to=${thisYear}-12-31`);
-    if (sd) { urlaubTageJahr = sd.urlaubTageJahr || 0; myVac = sd.vacation || null; anyVacCfg = !!sd.anyVacationConfigured; }
-  } catch(e) {}
+  const sd = geladen.sd;
+  if (sd) { urlaubTageJahr = sd.urlaubTageJahr || 0; myVac = sd.vacation || null; anyVacCfg = !!sd.anyVacationConfigured; }
 
   // Mein Posteingang (für alle Rollen): Manager-Änderungen die quittiert werden müssen
   let maInboxHtml = '';

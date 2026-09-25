@@ -76,15 +76,15 @@ async function renderProdukte(fokusId) {
     return;
   }
 
-  let v, hl;
-  try {
+  const geladen = await seiteLaden(async () => {
     const [a, b] = await Promise.all([
       api('GET', '/api/products/verzeichnis'),
       api('GET', '/api/suppliers'),
     ]);
-    if (!a || !b) return;
-    v = a; hl = b.haendler;
-  } catch (e) { toast(e.message, 'error'); return; }
+    return (a && b) ? { v: a, hl: b.haendler } : null;
+  }, () => renderProdukte(fokusId));
+  if (!geladen) return;
+  const { v, hl } = geladen;
 
   S.verzeichnis = v;
   S.haendlerListe = hl;

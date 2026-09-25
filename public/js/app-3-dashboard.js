@@ -3,15 +3,20 @@ async function renderDashboard() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'dashboard');
   bindLayout();
 
-  try {
-    const projData = await api('GET', '/api/projects');
-    if (projData) S.projects = projData.projects;
-
-    if (canViewAll()) {
-      const userData = await api('GET', '/api/users');
-      if (userData) S.users = userData.users;
-    }
-  } catch (e) {}
+  // Die Marke zieht seiteLaden() VOR dem ersten Warten. Frueher zog sie erst renderDashboardContent() —
+  // NACH diesem Laden. Kam die Antwort spaet, hielt sich die Seite fuer aktuell und ueberschrieb
+  // die inzwischen geoeffnete (R5). Fehler wurden hier ausserdem still
+  // geschluckt; jetzt gibt es die Fehleranzeige.
+  const geladen = await seiteLaden(async () => {
+    const [projData, userData] = await Promise.all([
+      api('GET', '/api/projects'),
+      canViewAll() ? api('GET', '/api/users') : {},
+    ]);
+    return (projData && userData) ? { projData, userData } : null;
+  }, () => renderDashboard());
+  if (!geladen) return;
+  S.projects = geladen.projData.projects;
+  if (geladen.userData.users) S.users = geladen.userData.users;
 
   renderDashboardContent();
 }
@@ -871,57 +876,43 @@ function navDate(dir) {
 
 // --- Entry Form ---
 async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
-  await ladeArbeitszeit();   // Firmenvorgaben fuer die Vorbelegung (einmal je Sitzung)
-  await ladeAbschluss();     // Stichtag der Abrechnung (fuer den Hinweis, gesperrt wird serverseitig)
-  let entry = null;
-  let continueEntry = null;
-  let planningEntry = null;
+  // Kreisel sofort: Vorher blieb waehrend des Ladens die alte Seite stehen, und ein Tipp auf
+  // „+ Neuer Eintrag" sah bei langsamem Netz aus, als passiere nichts.
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', '');
+  bindLayout();
+
+  // Alles, was das Formular braucht, in EINEM Zug — und alles Pflicht. Frueher liefen Fehler
+  // still durch: „Planung übernehmen" oder „Weiterarbeiten" oeffnete dann ein LEERES Formular,
+  // und die Projekt- und Mitarbeiterauswahl blieb leer.
+  const geladen = await seiteLaden(async () => {
+    await ladeArbeitszeit();   // Firmenvorgaben fuer die Vorbelegung (einmal je Sitzung)
+    await ladeAbschluss();     // Stichtag der Abrechnung (fuer den Hinweis, gesperrt wird serverseitig)
+    const [eData, cData, plData, prData, pData, uData, rData] = await Promise.all([
+      editId ? api('GET', '/api/entries/' + editId) : {},
+      continueId ? api('GET', '/api/entries/' + continueId) : {},
+      planningId ? api('GET', '/api/planning/' + planningId) : {},
+      fromProjectId ? api('GET', '/api/projects/' + fromProjectId) : {},
+      api('GET', '/api/projects'),
+      canViewAll() ? api('GET', '/api/users') : {},
+      // Regie-Dropdown: alle Non-Admin-User für jeden Benutzer
+      api('GET', '/api/users/list'),
+    ]);
+    if (!eData || !cData || !plData || !prData || !pData || !uData || !rData) return null;   // 401: Abmeldung laeuft
+    return { eData, cData, plData, prData, pData, uData, rData };
+  }, () => renderEntryForm(editId, continueId, planningId, fromProjectId));
+  if (!geladen) return;
+
+  const entry = editId ? (geladen.eData.entry || null) : null;
+  const continueEntry = continueId ? (geladen.cData.entry || null) : null;
+  const planningEntry = planningId ? (geladen.plData.entry || null) : null;
   let projectSource = null;
-
-  if (editId) {
-    try {
-      const data = await api('GET', '/api/entries/' + editId);
-      if (data) entry = data.entry;
-    } catch (e) { toast(e.message, 'error'); navigate('/'); return; }
+  if (fromProjectId && geladen.prData.project) {
+    const pr = geladen.prData.project;
+    projectSource = { address: pr.address || '', client: pr.client || '', project_id: pr.id, project_text: '', description: pr.note || '' };
   }
-
-  if (continueId) {
-    try {
-      const data = await api('GET', '/api/entries/' + continueId);
-      if (data) continueEntry = data.entry;
-    } catch (e) {}
-  }
-
-  if (planningId) {
-    try {
-      const data = await api('GET', '/api/planning/' + planningId);
-      if (data) planningEntry = data.entry;
-    } catch (e) {}
-  }
-
-  if (fromProjectId) {
-    try {
-      const data = await api('GET', '/api/projects/' + fromProjectId);
-      if (data && data.project) {
-        const pr = data.project;
-        projectSource = { address: pr.address || '', client: pr.client || '', project_id: pr.id, project_text: '', description: pr.note || '' };
-      }
-    } catch (e) {}
-  }
-
-  // Projekte und Benutzerliste laden
-  let regieUsers = [];
-  try {
-    const pData = await api('GET', '/api/projects');
-    if (pData) S.projects = pData.projects;
-    if (canViewAll()) {
-      const uData = await api('GET', '/api/users');
-      if (uData) S.users = uData.users;
-    }
-    // Regie-Dropdown: alle Non-Admin-User für jeden Benutzer
-    const rData = await api('GET', '/api/users/list');
-    if (rData) regieUsers = rData.users;
-  } catch (e) {}
+  S.projects = geladen.pData.projects;
+  if (geladen.uData.users) S.users = geladen.uData.users;
+  const regieUsers = geladen.rData.users || [];
 
   const isEdit = !!entry;
   const source = continueEntry || planningEntry || projectSource;

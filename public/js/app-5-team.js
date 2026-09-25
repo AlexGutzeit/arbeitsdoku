@@ -487,18 +487,28 @@ async function renderWelcome() {
   const now = new Date();
   const dateStr = `${dayNames[now.getDay()]}, ${now.getDate()}. ${mNames[now.getMonth()]} ${now.getFullYear()}`;
 
-  // Schwarzes Brett laden
-  let newBulletins = [];
-  let eventBulletins = [];
-  try {
+  // Aushaenge und Geburtstage in EINEM Zug. Die Aushaenge sind Pflicht: Ohne sie saehe die
+  // Startseite aus wie „heute nichts Neues", obwohl nur kein Netz da war (R4). Die Geburtstage
+  // sind eine Zugabe.
+  const geladen = await seiteLaden(async () => {
     const data = await api('GET', '/api/bulletin');
-    if (data) {
-      newBulletins = data.entries.filter(b => b.created_at && datumAusZeitstempel(b.created_at) === today);
-      const in3 = new Date(now); in3.setDate(in3.getDate() + 3);
-      const day3 = formatDateISO(in3);
-      eventBulletins = data.entries.filter(b => b.event_date && b.event_date >= today && b.event_date <= day3);
-    }
-  } catch (e) {}
+    if (!data) return null;
+    // Geburtstags-Einblendung. Fuer JEDE Rolle abgefragt — der Server entscheidet, was man sieht:
+    // Chef/Admin/Buchhalter wie bisher alle mit Alter, alle uebrigen nur die Kollegen, die sich
+    // selbst freigegeben haben (und deren Alter nur bei ausdruecklicher Freigabe).
+    let geburtstage = [];
+    try {
+      const g = await api('GET', '/api/users/geburtstage');
+      if (g) geburtstage = g.geburtstage || [];
+    } catch (e) {}
+    return { aushaenge: data.entries || [], geburtstage };
+  }, () => renderWelcome());
+  if (!geladen) return;
+
+  const newBulletins = geladen.aushaenge.filter(b => b.created_at && datumAusZeitstempel(b.created_at) === today);
+  const in3 = new Date(now); in3.setDate(in3.getDate() + 3);
+  const day3 = formatDateISO(in3);
+  const eventBulletins = geladen.aushaenge.filter(b => b.event_date && b.event_date >= today && b.event_date <= day3);
 
   // Anklickbar: fuehrt zum Schwarzen Brett und dort direkt zu diesem Aushang. Als Knopf statt als
   // div, damit er auch per Tastatur erreichbar ist (die Barrierefreiheits-Pruefung achtet darauf).
@@ -521,14 +531,7 @@ async function renderWelcome() {
     </div>`;
   }
 
-  // Geburtstags-Einblendung. Fuer JEDE Rolle abgefragt — der Server entscheidet, was man sieht:
-  // Chef/Admin/Buchhalter wie bisher alle mit Alter, alle uebrigen nur die Kollegen, die sich
-  // selbst freigegeben haben (und deren Alter nur bei ausdruecklicher Freigabe).
-  let geburtstage = [];
-  try {
-    const g = await api('GET', '/api/users/geburtstage');
-    if (g) geburtstage = g.geburtstage || [];
-  } catch (e) {}
+  const geburtstage = geladen.geburtstage;
   let geburtstagHtml = '';
   if (geburtstage.length > 0) {
     geburtstagHtml = `<div class="welcome-section">
@@ -811,12 +814,11 @@ async function renderBulletin() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'bulletin');
   bindLayout();
 
-  let entries = [];
-  try {
-    const data = await api('GET', '/api/bulletin');
-    markSeen('bulletin');
-    if (data) entries = data.entries;
-  } catch (e) {}
+  // Frueher: Fehler geschluckt → „Keine Einträge am Schwarzen Brett", obwohl nur kein Netz da war.
+  const data = await seiteLaden(() => api('GET', '/api/bulletin'), () => renderBulletin());
+  if (!data) return;
+  markSeen('bulletin');   // erst wenn man die Aushaenge wirklich zu sehen bekommt
+  const entries = data.entries || [];
 
   const canEdit = canEditBulletin();
   const mainEl = document.querySelector('.main');
@@ -887,10 +889,11 @@ async function renderBulletin() {
 async function renderBulletinForm(editId) {
   let entry = null;
   if (editId) {
-    try {
-      const data = await api('GET', '/api/bulletin');
-      if (data) entry = data.entries.find(e => e.id === Number(editId));
-    } catch (e) { toast(e.message, 'error'); navigate('/bulletin'); return; }
+    $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'bulletin');
+    bindLayout();
+    const data = await seiteLaden(() => api('GET', '/api/bulletin'), () => renderBulletinForm(editId));
+    if (!data) return;
+    entry = (data.entries || []).find(e => e.id === Number(editId));
     // A17: Ist der Aushang inzwischen weg (Auto-Löschdatum abgelaufen oder von jemand anderem gelöscht),
     // darf das Formular NICHT stillschweigend in den Anlege-Modus kippen — sonst tippt man in ein
     // scheinbares „Bearbeiten"-Formular und erzeugt in Wahrheit einen zweiten Eintrag.
@@ -997,27 +1000,29 @@ async function renderUsers(ausSse) {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'users');
   bindLayout();
 
-  try {
+  const geladen = await seiteLaden(async () => {
     const data = await api('GET', '/api/users');
-    if (!data) return;
-    S.users = data.users;
-  } catch (e) { toast(e.message, 'error'); return; }
+    if (!data) return null;
+    // Stand der Überstunden-Auszahlungen mitladen.
+    //
+    // Ohne das erfährt der Chef NIE, was aus seiner Anfrage geworden ist: Er stellt sie, der
+    // Mitarbeiter entscheidet — und kein Signal geht zurück. Eine eigene Push-Kategorie wäre der
+    // schwerere Weg (Schema, Einstellungen, Tests); die Liste ist die Stelle, an der er ohnehin
+    // nachsieht. Ein Fehlschlag hier darf die Liste nicht verhindern.
+    let auszahlungen = [];
+    try { auszahlungen = ((await api('GET', '/api/payouts')) || {}).auszahlungen || []; }
+    catch (_) { /* Auszahlungen sind ein Zusatz, keine Voraussetzung */ }
+    return { users: data.users, auszahlungen };
+  }, () => renderUsers(ausSse));
+  if (!geladen) return;
+  S.users = geladen.users;
 
-  // Stand der Überstunden-Auszahlungen mitladen.
-  //
-  // Ohne das erfährt der Chef NIE, was aus seiner Anfrage geworden ist: Er stellt sie, der
-  // Mitarbeiter entscheidet — und kein Signal geht zurück. Eine eigene Push-Kategorie wäre der
-  // schwerere Weg (Schema, Einstellungen, Tests); die Liste ist die Stelle, an der er ohnehin
-  // nachsieht. Ein Fehlschlag hier darf die Liste nicht verhindern.
   const auszahlungStand = {};
-  let auszahlungAlle = [];
-  try {
-    auszahlungAlle = ((await api('GET', '/api/payouts')) || {}).auszahlungen || [];
-    for (const z of auszahlungAlle) {
-      // Die Liste kommt neueste zuerst — die ERSTE Zeile je Mitarbeiter ist die jüngste.
-      if (!auszahlungStand[z.user_id]) auszahlungStand[z.user_id] = z;
-    }
-  } catch (_) { /* Auszahlungen sind ein Zusatz, keine Voraussetzung */ }
+  const auszahlungAlle = geladen.auszahlungen;
+  for (const z of auszahlungAlle) {
+    // Die Liste kommt neueste zuerst — die ERSTE Zeile je Mitarbeiter ist die jüngste.
+    if (!auszahlungStand[z.user_id]) auszahlungStand[z.user_id] = z;
+  }
 
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
@@ -1900,8 +1905,7 @@ async function renderProjects() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'projects');
   bindLayout();
 
-  let projects = [];
-  try {
+  const geladen = await seiteLaden(async () => {
     // ?all=1 — die Liste MUSS Ausgestellte enthalten. Zwei Dinge haengen daran:
     //   * die Spalte eines Ausgeschiedenen wird als solche gekennzeichnet (sonst sieht sie aus
     //     wie jede andere, und man uebersieht herrenlose Auftraege);
@@ -1912,26 +1916,32 @@ async function renderProjects() {
       api('GET', '/api/users/list?all=1'),
       api('GET', '/api/projects/kategorien'),
     ]);
-    if (!pData) return;
-    projects = pData.projects || [];
-    _boardUsers = (uData && uData.users) || [];
-    _boardKategorien = (kData && kData.kategorien) || [];
-  } catch (e) { toast(e.message, 'error'); return; }
+    if (!pData) return null;
+    const projects = pData.projects || [];
+    // Feiertage im relevanten Bereich laden (für die Arbeitstag-Berechnung der Fälligkeit) — nur wenn Fristen da sind.
+    let feiertage = [];
+    const dueDates = projects.filter(p => p.due_date).map(p => p.due_date);
+    if (dueDates.length) {
+      const today = todayISO();
+      const lo = dueDates.reduce((m, d) => d < m ? d : m, today);
+      const hi = dueDates.reduce((m, d) => d > m ? d : m, today);
+      try {
+        const fData = await api('GET', `/api/absences?type=feiertag&from=${lo}&to=${hi}`);
+        feiertage = (fData && fData.absences) || [];
+      } catch (_) { /* Feiertage optional — ohne sie zählen nur Sa/So nicht */ }
+    }
+    return { projects, users: (uData && uData.users) || [], kategorien: (kData && kData.kategorien) || [], feiertage };
+  }, () => renderProjects());
+  if (!geladen) return;
+  // Erst jetzt in den gemeinsamen Zustand: Eine veraltete Antwort soll auch dort nichts ueberschreiben.
+  const projects = geladen.projects;
+  _boardUsers = geladen.users;
+  _boardKategorien = geladen.kategorien;
   S.projects = projects;
 
-  // Feiertage im relevanten Bereich laden (für die Arbeitstag-Berechnung der Fälligkeit) — nur wenn Fristen da sind.
   const holidaySet = new Set();
-  const dueDates = projects.filter(p => p.due_date).map(p => p.due_date);
-  if (dueDates.length) {
-    const today = todayISO();
-    const lo = dueDates.reduce((m, d) => d < m ? d : m, today);
-    const hi = dueDates.reduce((m, d) => d > m ? d : m, today);
-    try {
-      const fData = await api('GET', `/api/absences?type=feiertag&from=${lo}&to=${hi}`);
-      for (const a of ((fData && fData.absences) || [])) {
-        for (const c = new Date(a.date_from + 'T00:00:00'), e = new Date((a.date_to || a.date_from) + 'T00:00:00'); c <= e; c.setDate(c.getDate() + 1)) holidaySet.add(formatDateISO(c));
-      }
-    } catch (_) { /* Feiertage optional — ohne sie zählen nur Sa/So nicht */ }
+  for (const a of geladen.feiertage) {
+    for (const c = new Date(a.date_from + 'T00:00:00'), e = new Date((a.date_to || a.date_from) + 'T00:00:00'); c <= e; c.setDate(c.getDate() + 1)) holidaySet.add(formatDateISO(c));
   }
 
   // ── Gruppieren, je nach Ansicht ──────────────────────────────────────────────────────────
@@ -2239,21 +2249,29 @@ async function renderProjects() {
 // Projekt-Formular (Chef/Admin) — via FAB (neu) oder „Bearbeiten" (mit Projekt).
 async function renderProjectForm(project) {
   if (!isChefOrAdmin()) { navigate('/projects'); return; }
-  if (!_boardUsers.length) { try { const uData = await api('GET', '/api/users/list?all=1'); _boardUsers = (uData && uData.users) || []; } catch (_) {} }
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'projects');
+  bindLayout();
+  // Mitarbeiter- und Kategorienliste koennen fehlen, wenn das Formular ohne vorherigen
+  // Board-Aufbau geoeffnet wird (Direktaufruf per Adresse) — dann nachladen. Pflicht, nicht
+  // Zugabe: Mit leerer Liste stuende dort faelschlich „keine", und Speichern nahme dem Auftrag
+  // seine Zuweisungen.
+  const geladen = await seiteLaden(async () => {
+    const [uData, kD] = await Promise.all([
+      _boardUsers.length ? null : api('GET', '/api/users/list?all=1'),
+      _boardKategorien.length ? null : api('GET', '/api/projects/kategorien'),
+    ]);
+    return { users: uData && uData.users, kategorien: kD && kD.kategorien };
+  }, () => renderProjectForm(project));
+  if (!geladen) return;
+  if (geladen.users) _boardUsers = geladen.users;
+  if (geladen.kategorien) _boardKategorien = geladen.kategorien;
+
   const isEdit = !!(project && project.id);
   const p = project || { name: '', client: '', address: '', note: '', urgency: 'gelb', assigned_users: [] };
   const assignedIds = new Set((p.assigned_users || []).map(u => u.user_id));
   const katIds = new Set((p.categories || []).map(k => k.id));
-  // Die Kategorienliste kann fehlen, wenn das Formular ohne vorherigen Board-Aufbau geoeffnet
-  // wird (Direktaufruf per Adresse) — dann nachladen, sonst stuende dort faelschlich „keine".
-  if (!_boardKategorien.length) {
-    try { const kD = await api('GET', '/api/projects/kategorien'); _boardKategorien = (kD && kD.kategorien) || []; } catch (_) {}
-  }
   // Alle Nutzer außer Admin sind zuteilbar (Chef/Buchhalter können sich auch Arbeit zuweisen).
   const workers = _boardUsers.filter(u => u.role !== 'admin' && (u.active !== 0 || assignedIds.has(u.id)));
-
-  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'projects');
-  bindLayout();
   const fab = document.getElementById('fab-new'); if (fab) fab.style.display = 'none';
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `

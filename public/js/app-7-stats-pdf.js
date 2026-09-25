@@ -104,16 +104,23 @@ function pdfFormularBinden() {
 }
 
 async function renderPdfExport() {
-  try {
-    const pData = await api('GET', '/api/projects');
-    if (pData) S.projects = pData.projects;
-    if (canViewAll()) {
-      const uData = await api('GET', '/api/users');
-      if (uData) S.users = uData.users;
-    }
-  } catch (e) {}
-
-  await ladeAbschluss(true);   // frisch: der Stand aendert sich genau auf dieser Seite
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'pdf');
+  bindLayout();
+  // Alles Pflicht. Frueher liefen Fehler still durch: leere Projekt- und Mitarbeiterauswahl, und
+  // die Abschluss-Karte zeigte mit dem Rueckfallwert von ladeAbschluss() „nichts abgeschlossen".
+  const geladen = await seiteLaden(async () => {
+    const [pData, uData, abschluss] = await Promise.all([
+      api('GET', '/api/projects'),
+      canViewAll() ? api('GET', '/api/users') : {},
+      api('GET', '/api/closure'),   // frisch: der Stand aendert sich genau auf dieser Seite
+    ]);
+    if (!pData || !uData || !abschluss) return null;   // 401: Abmeldung laeuft
+    return { pData, uData, abschluss };
+  }, () => renderPdfExport());
+  if (!geladen) return;
+  S.projects = geladen.pData.projects;
+  if (geladen.uData.users) S.users = geladen.uData.users;
+  S.abschluss = geladen.abschluss;
 
   // Lohn-Export: der Vormonat ist der Regelfall — der laufende Monat ist noch nicht abgeschlossen.
   const lastMonthDate = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 15);
@@ -185,13 +192,20 @@ async function renderStatistics() {
   if (!S.statsDate) S.statsDate = new Date();
   if (!S.statsSelectedUsers) S.statsSelectedUsers = new Set();
 
-  try {
-    if (canViewAll()) {
-      const ud = await api('GET', '/api/users');
-      if (ud) S.users = ud.users;
-    }
-  } catch (e) {}
-  await ladeAbschluss(true);   // Stichtag + eigene abgerechnete Zahlen
+  // Die Marke zieht seiteLaden() VOR dem ersten Warten. Frueher zog sie erst renderStatisticsContent() —
+  // NACH diesem Laden. Kam die Antwort spaet, hielt sich die Seite fuer aktuell und ueberschrieb
+  // die inzwischen geoeffnete (R5). Fehler wurden hier ausserdem still
+  // geschluckt; jetzt gibt es die Fehleranzeige.
+  const geladen = await seiteLaden(async () => {
+    const ud = canViewAll() ? await api('GET', '/api/users') : {};
+    if (!ud) return null;
+    // Stichtag der Abrechnung — hier nur fuer den Hinweis „abgerechnet"; die Zahlen rechnet der
+    // Server. Scheitert er, faellt ladeAbschluss() auf „nichts abgeschlossen" zurueck, wie bisher.
+    await ladeAbschluss(true);
+    return { ud };
+  }, () => renderStatistics());
+  if (!geladen) return;
+  if (geladen.ud.users) S.users = geladen.ud.users;
 
   renderStatisticsContent();
 }

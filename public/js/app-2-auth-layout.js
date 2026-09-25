@@ -116,20 +116,26 @@ async function loadLegalFlags() {
 // Rechtsseite (Impressum/Datenschutz). Funktioniert eingeloggt UND ausgeloggt (Impressumspflicht).
 async function renderLegal(kind) {
   const title = kind === 'datenschutz' ? 'Datenschutzerklärung' : 'Impressum';
-  let data = null;
-  try { data = await api('GET', '/api/legal'); } catch (_) {}
-  const raw = data ? (kind === 'datenschutz' ? data.datenschutz : data.impressum) : '';
-  const body = (raw && raw.trim())
-    ? esc(raw).replace(/\n/g, '<br>')
-    : `<p class="legal-empty">Für diese Seite wurde noch kein Inhalt hinterlegt.${(S.user && canSeeSettings()) ? ' Du kannst ihn unter <a href="#/settings">Einstellungen → Rechtliches</a> eintragen.' : ''}</p>`;
   const back = (S.token && S.user) ? `<a href="#${S._lastRoute || '/welcome'}">← Zurück</a>` : '<a href="#/login">← Zurück zur Anmeldung</a>';
-  const card = `<div class="legal-page"><h1>${esc(title)}</h1><div class="legal-body">${body}</div><p class="legal-back">${back}</p></div>`;
+  // Erst der Rahmen mit Kreisel, dann der Text. Ohne Anmeldung gibt es kein .main — deshalb
+  // zielt die Fehleranzeige auf den Textblock selbst.
+  const card = `<div class="legal-page"><h1>${esc(title)}</h1><div class="legal-body" id="legal-body"><div class="loading"><div class="spinner"></div></div></div><p class="legal-back">${back}</p></div>`;
   if (S.token && S.user) {
     $app().innerHTML = layout(card, kind);
     bindLayout();
   } else {
     $app().innerHTML = `<div class="login-container"><div class="login-card legal-standalone">${card}</div></div>`;
   }
+  // Frueher: Fehler geschluckt → „Für diese Seite wurde noch kein Inhalt hinterlegt", obwohl nur
+  // kein Netz da war (R4).
+  const data = await seiteLaden(() => api('GET', '/api/legal'), () => renderLegal(kind), '#legal-body');
+  if (!data) return;
+  const raw = kind === 'datenschutz' ? data.datenschutz : data.impressum;
+  const el = document.getElementById('legal-body');
+  if (!el) return;
+  el.innerHTML = (raw && raw.trim())
+    ? esc(raw).replace(/\n/g, '<br>')
+    : `<p class="legal-empty">Für diese Seite wurde noch kein Inhalt hinterlegt.${(S.user && canSeeSettings()) ? ' Du kannst ihn unter <a href="#/settings">Einstellungen → Rechtliches</a> eintragen.' : ''}</p>`;
 }
 
 async function handleLogin(e) {
@@ -171,6 +177,10 @@ async function logout(manual, grund) {
   // Mehrere gleichzeitige Anfragen (Promise.all) melden dasselbe 401 — nur das ERSTE zaehlt,
   // sonst saehe der zweite Durchlauf schon die Anmeldeseite und merkte sich die falsche Stelle.
   if (!manual && !S.token) return;
+  // Was jetzt noch laedt, gehoert zur alten Sitzung und darf nichts mehr zeichnen (R5). Die
+  // Anmeldeseite kommt erst mit dem naechsten hashchange — bis dahin liefe eine Seite sonst mit
+  // halben Daten (api() gibt nach 401 `null`) weiter.
+  renderToken();
   // Nur der bewusste „Abmelden"-Klick: Push-Abo dieses Geraets abmelden (wichtig auf geteilten
   // Geraeten) und serverseitig fuers Audit-Log abmelden — beides MUSS passieren, solange das Token
   // noch gueltig ist, daher VOR dem Loeschen. Der automatische Logout (401) ruft logout(false, grund)

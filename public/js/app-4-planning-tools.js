@@ -3,12 +3,17 @@ async function renderPlanning() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'planning');
   bindLayout();
 
-  try {
-    const pData = await api('GET', '/api/projects');
-    if (pData) S.projects = pData.projects;
-    const uData = await api('GET', '/api/users/list');
-    if (uData) S.users = uData.users;
-  } catch (e) {}
+  // Die Marke zieht seiteLaden() VOR dem ersten Warten. Frueher zog sie erst renderPlanningContent() —
+  // NACH diesem Laden. Kam die Antwort spaet, hielt sich die Seite fuer aktuell und ueberschrieb
+  // die inzwischen geoeffnete (R5). Fehler wurden hier ausserdem still
+  // geschluckt; jetzt gibt es die Fehleranzeige.
+  const geladen = await seiteLaden(async () => {
+    const [pData, uData] = await Promise.all([api('GET', '/api/projects'), api('GET', '/api/users/list')]);
+    return (pData && uData) ? { pData, uData } : null;
+  }, () => renderPlanning());
+  if (!geladen) return;
+  S.projects = geladen.pData.projects;
+  S.users = geladen.uData.users;
 
   renderPlanningContent();
 }
@@ -757,51 +762,47 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
 
 // --- Planning Form ---
 async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) {
-  await ladeArbeitszeit();   // Firmenvorgaben fuer die Tages-Vorbelegung
   suppressTooltip();
-  let entry = null;
-  let replanEntry = null;
-  let groupEntries = null;
-  let groupAssigned = null;
+  // Kreisel sofort: Vorher blieb waehrend des Ladens die alte Seite stehen, und ein Tipp auf
+  // „Bearbeiten" sah bei langsamem Netz aus, als passiere nichts.
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'planning');
+  bindLayout();
+
+  // Alles, was das Formular braucht, in EINEM Zug — und alles Pflicht. Frueher liefen Fehler
+  // teils still durch, mit echten Folgen:
+  //  * ohne Projekt-/Mitarbeiterliste leere Auswahlfelder;
+  //  * aus „Aus Auftrag planen" wurde ein leeres Formular;
+  //  * ohne die Serien-Regel stand die Wiederholung eines Serientermins auf „Keine", und
+  //    Speichern fragte „Wiederholung entfernen – wie?", obwohl das niemand wollte.
+  const geladen = await seiteLaden(async () => {
+    await ladeArbeitszeit();   // Firmenvorgaben fuer die Tages-Vorbelegung (faellt selbst auf Standardwerte zurueck)
+    const [pData, uData, eData, rData, gData, prData] = await Promise.all([
+      api('GET', '/api/projects'),
+      api('GET', '/api/users/list'),
+      editId ? api('GET', '/api/planning/' + editId) : {},
+      replanId ? api('GET', '/api/planning/' + replanId) : {},
+      editGroupId ? api('GET', '/api/planning/group/' + editGroupId) : {},
+      fromProjectId ? api('GET', '/api/projects/' + fromProjectId) : {},
+    ]);
+    if (!pData || !uData || !eData || !rData || !gData || !prData) return null;   // 401: Abmeldung laeuft
+    const erstes = editId ? eData.entry : (editGroupId && gData.entries ? gData.entries[0] : null);
+    // Serien-Taktung (nur beim Bearbeiten eines Serientermins) — Anzeige UND Vorbelegung der Wiederholung.
+    const serie = (erstes && erstes.series_id) ? await api('GET', '/api/planning/series/' + erstes.series_id) : null;
+    return { pData, uData, eData, rData, gData, prData, serie };
+  }, () => renderPlanningForm(editId, replanId, editGroupId, fromProjectId));
+  if (!geladen) return;
+
+  S.projects = geladen.pData.projects;
+  S.users = geladen.uData.users;
+  const entry = editId ? (geladen.eData.entry || null) : null;
+  const replanEntry = replanId ? (geladen.rData.entry || null) : null;
+  const groupEntries = editGroupId ? (geladen.gData.entries || null) : null;
+  const groupAssigned = editGroupId ? (geladen.gData.assigned_users || null) : null;
   let projectSource = null;
-
-  try {
-    const pData = await api('GET', '/api/projects');
-    if (pData) S.projects = pData.projects;
-    const uData = await api('GET', '/api/users/list');
-    if (uData) S.users = uData.users;
-  } catch (e) {}
-
-  if (editId) {
-    try {
-      const data = await api('GET', '/api/planning/' + editId);
-      if (data) entry = data.entry;
-    } catch (e) { toast(e.message, 'error'); navigate('/planning'); return; }
-  }
-
-  if (replanId) {
-    try {
-      const data = await api('GET', '/api/planning/' + replanId);
-      if (data) replanEntry = data.entry;
-    } catch (e) { toast(e.message, 'error'); navigate('/planning'); return; }
-  }
-
-  if (editGroupId) {
-    try {
-      const data = await api('GET', '/api/planning/group/' + editGroupId);
-      if (data) { groupEntries = data.entries; groupAssigned = data.assigned_users; }
-    } catch (e) { toast(e.message, 'error'); navigate('/planning'); return; }
-  }
-
-  if (fromProjectId) {
-    try {
-      const data = await api('GET', '/api/projects/' + fromProjectId);
-      if (data && data.project) {
-        const pr = data.project;
-        // Quelle wie ein Planungseintrag aufbauen → Adresse/Kunde/Projekt/Notiz/zugedachte User werden vorbefüllt.
-        projectSource = { address: pr.address || '', client: pr.client || '', project_id: pr.id, project_text: '', description: pr.note || '', assigned_users: pr.assigned_users || [] };
-      }
-    } catch (e) {}
+  if (fromProjectId && geladen.prData.project) {
+    const pr = geladen.prData.project;
+    // Quelle wie ein Planungseintrag aufbauen → Adresse/Kunde/Projekt/Notiz/zugedachte User werden vorbefüllt.
+    projectSource = { address: pr.address || '', client: pr.client || '', project_id: pr.id, project_text: '', description: pr.note || '', assigned_users: pr.assigned_users || [] };
   }
 
   const isEdit = !!entry;
@@ -810,9 +811,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
   const seriesLink = (entry && entry.series_id) ? { series_id: entry.series_id, occurrence_date: entry.occurrence_date, entry_id: entry.id }
     : (groupEntries && groupEntries[0] && groupEntries[0].series_id) ? { series_id: groupEntries[0].series_id, occurrence_date: groupEntries[0].occurrence_date, entry_id: groupEntries[0].id }
     : null;
-  // Serien-Taktung laden (nur beim Bearbeiten eines Serientermins) — für die Anzeige im Formular.
-  let seriesRule = null;
-  if (seriesLink) { try { seriesRule = await api('GET', '/api/planning/series/' + seriesLink.series_id); } catch (_) {} }
+  const seriesRule = geladen.serie;
   const seriesInfoLine = (seriesLink && seriesRule) ? (() => {
     const s = seriesRule.series || {};
     const end = s.end_type === 'count' ? ` · endet nach ${s.end_count} Terminen` : (s.end_type === 'until' ? ` · bis ${formatDateDE(s.end_until)}` : ' · läuft fortlaufend');
@@ -1449,14 +1448,14 @@ async function renderTools() {
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
 
-  let tools = [];
-  let projects = [];
-  try {
-    const data = await api('GET', '/api/tools');
-    if (data) tools = data.tools;
-    const pData = await api('GET', '/api/projects');
-    if (pData) projects = pData.projects;
-  } catch (e) {}
+  // Frueher: Fehler geschluckt → „keine Werkzeuge", obwohl nur kein Netz da war (R4).
+  const geladen = await seiteLaden(async () => {
+    const [data, pData] = await Promise.all([api('GET', '/api/tools'), api('GET', '/api/projects')]);
+    if (!data || !pData) return null;
+    return { tools: data.tools || [], projects: pData.projects || [] };
+  }, () => renderTools());
+  if (!geladen) return;
+  const { tools, projects } = geladen;
 
   const canManage = S.user.role === 'admin' || S.user.role === 'chef';
 

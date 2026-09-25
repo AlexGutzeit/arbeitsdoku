@@ -20,19 +20,24 @@ async function renderSettings() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'settings');
   bindLayout();
 
-  try {
+  // Frueher lief die Seite bei einem Ladefehler still weiter — mit den Werten, die gerade im
+  // Browser lagen, oder den Standardwerten. „Speichern" haette sie dann ueber die echten
+  // Einstellungen geschrieben. Deshalb beides Pflicht, auch der Speicherstand: Seine Felder
+  // stehen im selben Formular und fielen sonst auf 500 MB zurueck.
+  const geladen = await seiteLaden(async () => {
     const data = await api('GET', '/api/settings');
-    if (data) S.settings = data.settings;
-  } catch (e) {}
+    if (!data) return null;
+    const ds = isAdmin() ? await api('GET', '/api/documents') : null;
+    return { settings: data.settings, docStorage: (ds && ds.storage) || null };
+  }, () => renderSettings());
+  if (!geladen) return;
+  S.settings = geladen.settings;
 
   // Empfaengerliste der Sicherungen: sehen duerfen Chef und Admin, aendern nur Admin.
   const istAdmin = S.user && S.user.role === 'admin';
 
   // Dokumenten-Speicher (nur Admin)
-  let docStorage = null;
-  if (isAdmin()) {
-    try { const ds = await api('GET', '/api/documents'); if (ds) docStorage = ds.storage; } catch (e) {}
-  }
+  const docStorage = geladen.docStorage;
   let docLimitVal = '500', docLimitUnit = 'MB', docUsedStr = '', docLimitStr = '';
   let docFileVal = '5', docFileUnit = 'MB';
   // Wert+Einheit aus Bytes ableiten (GB nur bei glatten GB, sonst MB)
@@ -1060,7 +1065,9 @@ async function renderAudit() {
   });
   document.getElementById('audit-export').addEventListener('click', auditExport);
 
-  try { await auditLoad(true); auditPaint(); } catch (e) { toast(e.message, 'error'); }
+  // Die Zeilen kommen erst jetzt. Scheitert das, stuende eine leere Tabelle da, die wie „nichts
+  // protokolliert" aussieht — deshalb die Fehleranzeige statt der ganzen Seite (R4).
+  if (await seiteLaden(async () => { await auditLoad(true); return true; }, () => renderAudit())) auditPaint();
 }
 
 // --- Gelöschte Einträge (Papierkorb). Chef/Admin: alle; Mitarbeiter: nur selbst gelöschte (Server filtert) ---
@@ -1069,12 +1076,10 @@ async function renderDeletedEntries() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-entries');
   bindLayout();
 
-  let data;
-  try {
-    data = await api('GET', '/api/entries/deleted');
-  } catch (e) { toast(e.message, 'error'); return; }
+  const data = await seiteLaden(() => api('GET', '/api/entries/deleted'), () => renderDeletedEntries());
+  if (!data) return;
 
-  const entries = (data && data.entries) || [];
+  const entries = data.entries || [];
   const rows = entries.map(e => {
     const proj = e.project_name || e.project_text || '';
     const suchtext = [e.date, e.user_name, proj, e.deleted_by_name, e.delete_reason].filter(Boolean).join(' ');
@@ -1134,9 +1139,9 @@ async function renderDeletedProjects() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-projects');
   bindLayout();
 
-  let data;
-  try { data = await api('GET', '/api/projects/deleted'); } catch (e) { toast(e.message, 'error'); return; }
-  const projects = (data && data.projects) || [];
+  const data = await seiteLaden(() => api('GET', '/api/projects/deleted'), () => renderDeletedProjects());
+  if (!data) return;
+  const projects = data.projects || [];
   const rows = projects.map(p => `<tr>
     <td>${esc(p.name)}</td>
     <td>${esc(p.client || '—')}</td>
@@ -1185,12 +1190,10 @@ async function renderDeletedAbsences() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-absences');
   bindLayout();
 
-  let data;
-  try {
-    data = await api('GET', '/api/absences/deleted/list');
-  } catch (e) { toast(e.message, 'error'); return; }
+  const data = await seiteLaden(() => api('GET', '/api/absences/deleted/list'), () => renderDeletedAbsences());
+  if (!data) return;
 
-  const absences = (data && data.absences) || [];
+  const absences = data.absences || [];
   const rows = absences.map(a => {
     const t = ABSENCE_TYPES[a.type];
     const typeLabel = t ? `${t.icon} ${t.label}` : a.type;
@@ -1264,12 +1267,10 @@ async function renderDeletedUsers() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'deleted-users');
   bindLayout();
 
-  let data;
-  try {
-    data = await api('GET', '/api/users/inactive');
-  } catch (e) { toast(e.message, 'error'); return; }
+  const data = await seiteLaden(() => api('GET', '/api/users/inactive'), () => renderDeletedUsers());
+  if (!data) return;
 
-  const users = (data && data.users) || [];
+  const users = data.users || [];
   const rows = users.map(u => `<tr>
       <td>${esc(u.name)}</td>
       <td>${esc(u.username)}</td>
@@ -1426,10 +1427,9 @@ async function renderDocuments() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'documents');
   bindLayout();
 
-  let data;
-  try {
-    data = await api('GET', '/api/documents' + (folderId ? '?folder_id=' + folderId : ''));
-  } catch (e) { toast(e.message, 'error'); return; }
+  const data = await seiteLaden(() => api('GET', '/api/documents' + (folderId ? '?folder_id=' + folderId : '')),
+    () => renderDocuments());
+  if (!data) return;
 
   const manage = isChefOrAdmin() || (S.user && S.user.can_upload);
   const crumbs = [{ id: null, name: 'Dokumente' }].concat(data.breadcrumb || []);

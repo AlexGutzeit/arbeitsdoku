@@ -118,8 +118,12 @@ async function api(method, url, body, isFormData) {
     try {
       res = await fetch(url, opts);
     } catch (netzFehler) {
-      const e = new Error('Keine Verbindung zum Server — es wurde nichts gespeichert. '
-        + 'Sobald wieder Empfang da ist, noch einmal versuchen.');
+      // Beim LESEN wurde nichts gespeichert, weil nichts gespeichert werden sollte — dort
+      // verwirrte der Satz nur (R4: „es wurde nichts gespeichert" auf einer Seite, die nur laden wollte).
+      const e = new Error(mutating
+        ? 'Keine Verbindung zum Server — es wurde nichts gespeichert. '
+          + 'Sobald wieder Empfang da ist, noch einmal versuchen.'
+        : 'Keine Verbindung zum Server. Sobald wieder Empfang da ist, noch einmal versuchen.');
       e.verbindung = true;
       e.ursprung = netzFehler && netzFehler.message;
       throw e;
@@ -165,7 +169,13 @@ async function api(method, url, body, isFormData) {
       if (!res.ok) throw new Error(data.error || 'Fehler');
       return data;
     }
-    if (!res.ok) throw new Error('Fehler');
+    // Ohne JSON-Antwort kommt der Fehler meist nicht von der App, sondern vom Vorschalt-Server:
+    // Waehrend eines Neustarts (Deploy) antwortet Caddy mit 502. Frueher stand dann nur „Fehler" da.
+    if (!res.ok) {
+      throw new Error([502, 503, 504].includes(res.status)
+        ? 'Der Server ist gerade nicht erreichbar, vermutlich startet er neu. Bitte gleich noch einmal versuchen.'
+        : 'Unerwarteter Fehler vom Server (' + res.status + ').');
+    }
     return res;
   })();
 
@@ -382,6 +392,8 @@ function initViewStateKeeper() {
 // Render-Funktionen laden erst Daten (await) und schreiben danach in .main. Kommt eine langsame Antwort
 // verspätet an, würde sie den Inhalt der inzwischen geöffneten Seite überschreiben. Jede Render-Funktion
 // zieht darum zu Beginn eine Marke; vor dem Schreiben wird geprüft, ob sie noch die aktuelle ist.
+// Zusätzlich zieht render() bei JEDEM Seitenwechsel eine Marke, und logout() ebenso: Dann ist ein
+// Ladevorgang auch dann veraltet, wenn die NEUE Seite selbst gar nichts lädt (R5).
 let _renderSeq = 0;
 function renderToken() { return ++_renderSeq; }
 function renderStale(tok) { return tok !== _renderSeq; }
@@ -399,6 +411,44 @@ function renderLoadError(target, msg, retryFn) {
     </div>`;
   const btn = document.getElementById(id);
   if (btn && typeof retryFn === 'function') btn.addEventListener('click', () => retryFn());
+}
+
+// --- Seiten laden (R4 + R5) -------------------------------------------------------------------
+// Jede Seite holt erst Daten und schreibt dann in .main. Dabei muss sie an ZWEI Dinge denken, und
+// bis zum 25.09.2026 taten das nur vier von über zwanzig Seiten:
+//  * Das Laden scheitert (Baustelle ohne Empfang). Die Meldung verschwand nach 3 s, der Kreisel
+//    drehte weiter, und kein Knopf führte zurück — nur das Neuladen der ganzen App (R4). Manche
+//    Seiten zeigten statt des Kreisels eine LEERE Liste, was noch schlimmer ist: „Keine Einträge
+//    am Schwarzen Brett" stimmte nicht, es war nur kein Netz da.
+//  * Man ist inzwischen woanders. Die verspätete Antwort überschrieb die neue Seite — Adresse und
+//    Menü sagten „Mein Konto", zu sehen war das Auftrags-Board (R5, gemessen am 25.09.2026).
+// seiteLaden() erledigt beides. `laden` holt ALLES, was die Seite zum Zeichnen braucht; danach
+// zeichnet sie ohne weiteres Warten. Kommt `null` zurück, ist schon alles erledigt (Fehler steht
+// da, abgemeldet, oder die Seite ist nicht mehr dran) — der Aufrufer hört einfach auf.
+// `laden` muss darum ein Objekt liefern; `null` von dort bedeutet „abbrechen" (z. B. nach 401).
+// Zwei Regeln für den Aufrufer:
+//  * seiteLaden() ist das ERSTE Warten der Seite. Die Marke wird hier gezogen — wartet die Seite
+//    vorher schon auf etwas anderes, hält sie sich hinterher für aktuell, obwohl längst eine
+//    andere Seite offen ist. Was vorher geladen werden muss, gehört mit in `laden`.
+//  * Nur auf SEITEN-Ebene: Ein Aufruf mitten in einer Seite zöge eine neue Marke und erklärte
+//    damit die eigene Seite für veraltet.
+async function seiteLaden(laden, nochmal, ziel) {
+  const tok = renderToken();
+  let daten;
+  try {
+    daten = await laden();
+  } catch (e) {
+    if (renderStale(tok)) return null;
+    // Programmfehler (nicht Netz, nicht Server) nicht wörtlich zeigen: „Cannot read properties
+    // of undefined" hilft niemandem. Die echte Meldung steht in der Konsole.
+    const programmfehler = e instanceof TypeError || e instanceof ReferenceError || e instanceof SyntaxError;
+    if (programmfehler) console.error(e);
+    renderLoadError(ziel || '.main', programmfehler
+      ? 'Unerwarteter Fehler beim Laden. Bitte die Seite neu laden.'
+      : (e && e.message), nochmal);
+    return null;
+  }
+  return renderStale(tok) ? null : daten;
 }
 
 async function loadBadges() {
@@ -1663,6 +1713,9 @@ window.addEventListener('hashchange', () => {
 });
 
 function render() {
+  // Jeder Seitenwechsel macht alle noch laufenden Ladevorgänge ungültig — auch wenn die neue Seite
+  // selbst nichts lädt (R5, s. seiteLaden).
+  renderToken();
   // Die Sprechblase haengt an document.body, nicht an .main — ein Seitenwechsel raeumt sie also
   // NICHT mit weg. Sichtbar geworden auf einem Bildschirmfoto: Der Tooltip eines Planungseintrags
   // stand noch auf der Willkommensseite. Normalerweise nimmt ihn `mouseleave`, aber nach dem
