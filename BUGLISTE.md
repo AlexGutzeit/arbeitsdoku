@@ -189,6 +189,8 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   `fetch(…, { keepalive: true })` statt synchronem XHR.
 
 ### [x] R12 · „Bestellt" ohne Rückfrage und ohne Rückweg — erledigt in `eb7ac78`
+- **Deployt:** Prod 25.09.2026 (`b20c46d`, Cache 421) — mit Menge und Produkt in der Meldung und
+  „Doch nicht bestellt" in voller Stärke (beides Wunsch bzw. Abnahme Alex am Screenshot).
 - **Wo:** `routes/orders.js:177`, Oberfläche `app-8-comm-init.js:895`; Ändern: `routes/orders.js:120`
 - **Was passiert:** Ein Fehltipp am Handy verschiebt die Bestellung endgültig. Zurücknehmen geht
   nicht, löschen nur Admin — ein Chef sitzt fest. Außerdem erlaubt der Server, bereits bestellte
