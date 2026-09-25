@@ -193,7 +193,10 @@ async function logout(manual, grund) {
   // noch gueltig ist, daher VOR dem Loeschen. Der automatische Logout (401) ruft logout(false, grund)
   // — dort protokolliert der Server ein Ablaufen bereits selbst als 'session_expired'.
   if (manual && S.token) {
-    try { await disablePush(); } catch (_) { /* Push bleibt zur Not aktiv — kein Logout-Blocker */ }
+    // Höchstens 5 s — Abmelden darf nie am Push-Abbau hängen bleiben (R7). Der Hintergrunddienst hat
+    // ohnehin eine eigene Zeitgrenze; diese hier deckt zusätzlich ein zähes Netz beim Abmelden des Abos ab.
+    try { await Promise.race([disablePush(), new Promise(fertig => setTimeout(fertig, 5000))]); }
+    catch (_) { /* Push bleibt zur Not aktiv — kein Logout-Blocker */ }
     api('POST', '/api/auth/logout').catch(() => {});
   }
   stopSSE();

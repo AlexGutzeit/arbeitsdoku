@@ -158,10 +158,22 @@ function urlBase64ToUint8Array(base64String) {
   return arr;
 }
 
+// Der Hintergrunddienst der App (Service Worker) — mit Zeitgrenze (R7). `navigator.serviceWorker.ready`
+// wartet EWIG, wenn er nicht läuft (manche Browser, private Fenster, blockierte Website-Daten). Daran
+// hingen „Abmelden" und „Benachrichtigungen an/aus": Der Knopf tat einfach nichts. `null` heißt:
+// nach 3 s kein Dienst — dann gibt es hier auch kein Push-Abo.
+const HINTERGRUNDDIENST_WARTEN_MS = 3000;
+function hintergrunddienst() {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise(fertig => setTimeout(() => fertig(null), HINTERGRUNDDIENST_WARTEN_MS)),
+  ]);
+}
+
 async function getPushSubscription() {
   if (!pushSupported()) return null;
-  const reg = await navigator.serviceWorker.ready;
-  return reg.pushManager.getSubscription();
+  const reg = await hintergrunddienst();
+  return reg ? reg.pushManager.getSubscription() : null;
 }
 
 // Browserfehler beim Push-Abo auf Deutsch (R9). Sie kommen englisch und technisch, z. B. in Brave
@@ -183,7 +195,8 @@ async function enablePush() {
   if (perm !== 'granted') throw new Error('Benachrichtigungen wurden im Browser nicht erlaubt.');
   const keyResp = await api('GET', '/api/push/key');
   if (!keyResp || !keyResp.key) throw new Error('Push ist auf dem Server nicht konfiguriert.');
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await hintergrunddienst();
+  if (!reg) throw new Error('Der Hintergrunddienst der App läuft in diesem Browser nicht — Benachrichtigungen sind hier nicht möglich (z. B. in einem privaten Fenster).');
   let sub;
   try {
     sub = await reg.pushManager.subscribe({
@@ -234,7 +247,8 @@ async function syncPushSubscription() {
   // Auf diesem Geraet bewusst ausgeschaltet → nicht heimlich wieder abonnieren.
   try { if (localStorage.getItem(PUSH_OPTOUT_KEY) === '1') return; } catch (_) {}
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await hintergrunddienst();
+    if (!reg) return;   // kein Dienst: dann gibt es auch nichts nachzuziehen (R7)
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       const keyResp = await api('GET', '/api/push/key');
