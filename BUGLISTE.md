@@ -63,6 +63,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   aber keine akute Gefahr. Herabgestuft auf **Mittel**.
 
 ### [x] R3 · Sicherung zurückspielen: halber Abbruch hinterlässt unbestimmten Zustand — erledigt in `3dadfd4`
+- **Deployt:** Prod 25.09.2026 (`db4c4b0`, Cache 419).
 - **Wo:** `routes/backup.js:484–533`, Sicherheitskopie `:486`, Rotation `scripts/make-backup.js:117`
 - **Was passiert:** Erst wird die DB-Datei ersetzt, dann werden Dateien geschrieben, erst am Ende
   wird die DB neu geladen. Scheitert etwas dazwischen (z. B. volle Platte): Meldung
