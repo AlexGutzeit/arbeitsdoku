@@ -822,8 +822,9 @@ function pvNeuesProduktDialog(hKarte) {
     if (neu) overlay.querySelector('#pnp-katname').focus();
   });
 
+  klickDanebenSchliesst(overlay, () => overlay.remove());   // R20: nur ohne Eingaben
   overlay.addEventListener('click', async (ev) => {
-    if (ev.target === overlay || ev.target.dataset.act === 'cancel') return overlay.remove();
+    if (ev.target.dataset.act === 'cancel') return overlay.remove();
     if (ev.target.dataset.act !== 'ok') return;
     const fehler = overlay.querySelector('#pnp-fehler');
     try {
@@ -942,8 +943,9 @@ async function pvMergeDialog(zielId, vorschlagVonId) {
     const p = alle.find(x => x.id === Number(zielSel.value));
     if (p) nameFeld.value = p.name;
   });
+  klickDanebenSchliesst(overlay, zu);   // R20: nur ohne Eingaben
   overlay.addEventListener('click', async ev => {
-    if (ev.target === overlay || ev.target.dataset.act === 'cancel') return zu();
+    if (ev.target.dataset.act === 'cancel') return zu();
     if (ev.target.dataset.act !== 'ok') return;
     const zId = Number(zielSel.value), vId = Number(overlay.querySelector('#pm-von').value);
     if (!vId) { toast('Bitte das Produkt wählen, das verschwinden soll.', 'error'); return; }

@@ -1391,7 +1391,7 @@ async function showShareDialog(note) {
 
   const aufraeumen = dialogBarrierefrei(overlay);
   const close = () => { overlay.remove(); aufraeumen(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  klickDanebenSchliesst(overlay, () => close());
   overlay.querySelector('#share-cancel').addEventListener('click', close);
   overlay.querySelector('#share-save').addEventListener('click', async () => {
     const newShares = [];
@@ -1447,7 +1447,7 @@ async function showOfferDialog(note) {
 
   const aufraeumen = dialogBarrierefrei(overlay);
   const close = () => { overlay.remove(); aufraeumen(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  klickDanebenSchliesst(overlay, () => close());
   overlay.querySelector('#offer-cancel').addEventListener('click', close);
   overlay.querySelector('#offer-send').addEventListener('click', async () => {
     const userIds = [];

@@ -600,7 +600,7 @@ async function scannerOeffnen() {
     const beiTaste = (e) => { if (e.key === 'Escape') schliessen(null); };
     document.addEventListener('keydown', beiTaste);
     overlay.querySelector('[data-act="zu"]').addEventListener('click', () => schliessen(null));
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) schliessen(null); });
+    klickDanebenSchliesst(overlay, () => schliessen(null));
 
     // ── Gedrueckt halten ────────────────────────────────────────────────────────────────────
     const haltenKnopf = overlay.querySelector('#sc-halten');

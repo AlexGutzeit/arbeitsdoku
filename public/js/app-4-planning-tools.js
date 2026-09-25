@@ -343,7 +343,7 @@ async function openReminderDialog(e) {
   const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); if (changed) renderPlanningContent(); };
   const onKey = (ev) => { if (ev.key === 'Escape') finish(); };
   document.addEventListener('keydown', onKey);
-  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) finish(); });
+  klickDanebenSchliesst(overlay, () => finish());
   overlay.querySelector('[data-act="close"]').addEventListener('click', finish);
 
   const numEl = overlay.querySelector('#rem-num');

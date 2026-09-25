@@ -323,15 +323,17 @@ async function renderDashboardContent() {
   // einer Monatszeile springt die App NICHT zusätzlich in die Tagesansicht.
   mainEl.querySelectorAll('[data-verstoss]').forEach(el => {
     const html = () => verstossTooltipHtml(verstossAusSchluessel(verstoesse, el.dataset.verstoss));
+    // Zum Lesen (R24): Die Erklärung bleibt offen, solange die Maus auf dem Zeichen oder auf der
+    // Sprechblase ist — das Zeichen ist klein, und wer die Maus zum Lesen bewegt, verlor sie vorher.
     el.addEventListener('mouseenter', (ev) => {
       if (!istMauszeiger()) return;
-      showTooltip(html(), ev.clientX, ev.clientY);
+      showTooltipZumLesen(html(), ev.clientX, ev.clientY);
     });
     el.addEventListener('mousemove', (ev) => {
       if (!istMauszeiger()) return;
-      if (tooltipEl && tooltipEl.style.display !== 'none') showTooltip(tooltipEl.innerHTML, ev.clientX, ev.clientY);
+      if (tooltipEl && tooltipEl.style.display !== 'none') showTooltipZumLesen(tooltipEl.innerHTML, ev.clientX, ev.clientY);
     });
-    el.addEventListener('mouseleave', () => { if (istMauszeiger()) hideTooltip(); });
+    el.addEventListener('mouseleave', () => { if (istMauszeiger()) tooltipVerlassen(); });
     attachLongPressTooltip(el, html);
   });
 

@@ -567,11 +567,30 @@ function initTooltip() {
   tooltipEl = document.createElement('div');
   tooltipEl.className = 'entry-tooltip';
   tooltipEl.style.display = 'none';
+  // Auf die Sprechblase hinübergeglitten: offen lassen; wieder herunter: schließen (R24).
+  tooltipEl.addEventListener('mouseenter', () => clearTimeout(_tooltipSchliessTimer));
+  tooltipEl.addEventListener('mouseleave', () => {
+    if (tooltipEl.classList.contains('entry-tooltip--lesbar')) tooltipVerlassen();
+  });
   document.body.appendChild(tooltipEl);
 }
+// Wie lange eine Sprechblase stehen bleibt (R24). Vorher blendete sie nach langem Druck fest nach
+// 4 s aus — zu kurz, um die Erklärung am Warnzeichen („Pause zu kurz …") zu lesen; und der alte
+// Zeitgeber schloss auch eine NEUERE Sprechblase, wenn man zweimal kurz hintereinander hielt.
+// Jetzt: Nach langem Druck bleibt sie, bis man irgendwo hintippt oder scrollt. Am Rechner bleibt eine
+// Erklärung zum Lesen (showTooltipZumLesen) offen, solange die Maus auf dem Zeichen ODER auf der
+// Sprechblase ist — mit kurzer Kulanz beim Hinübergleiten.
+const TOOLTIP_KULANZ_MS = 400;
+let _tooltipSchliessTimer = null;
+let _tooltipBisBeruehrung = false;
+document.addEventListener('touchstart', () => { if (_tooltipBisBeruehrung) hideTooltip(); }, { passive: true, capture: true });
+window.addEventListener('scroll', () => { if (_tooltipBisBeruehrung) hideTooltip(); }, { passive: true, capture: true });
+
 function showTooltip(html, x, y) {
   if (_tooltipSuppressed) return;
   initTooltip();
+  clearTimeout(_tooltipSchliessTimer);
+  tooltipEl.classList.remove('entry-tooltip--lesbar');
   tooltipEl.innerHTML = html;
   tooltipEl.style.display = '';
   const rect = tooltipEl.getBoundingClientRect();
@@ -581,7 +600,21 @@ function showTooltip(html, x, y) {
   tooltipEl.style.top = Math.max(5, Math.min(y + 12, maxY)) + 'px';
 }
 function hideTooltip() {
+  clearTimeout(_tooltipSchliessTimer);
+  _tooltipBisBeruehrung = false;
   if (tooltipEl) tooltipEl.style.display = 'none';
+}
+// Eine Erklärung, die man in Ruhe lesen will: Die Sprechblase nimmt die Maus an, damit man auf sie
+// hinübergleiten kann. Nur hier — bei den großen Eintrags-Blöcken wandert die Sprechblase mit dem
+// Zeiger und könnte am Rand unter ihn rutschen; dort bleibt sie für die Maus durchlässig.
+function showTooltipZumLesen(html, x, y) {
+  showTooltip(html, x, y);
+  if (tooltipEl && tooltipEl.style.display !== 'none') tooltipEl.classList.add('entry-tooltip--lesbar');
+}
+// Die Maus verlässt den Auslöser: noch nicht schließen, vielleicht will sie auf die Sprechblase.
+function tooltipVerlassen() {
+  clearTimeout(_tooltipSchliessTimer);
+  _tooltipSchliessTimer = setTimeout(hideTooltip, TOOLTIP_KULANZ_MS);
 }
 function suppressTooltip() {
   hideTooltip();
@@ -596,7 +629,6 @@ function suppressTooltip() {
 // `htmlFor` wird erst beim Ausloesen aufgerufen, damit immer die aktuellen Daten gezeigt werden.
 const LP_DAUER_MS = 500;      // ab hier gilt es als „gehalten"
 const LP_WACKEL_PX = 8;       // Scrollen/Wischen bricht ab
-const LP_SICHTBAR_MS = 4000;  // danach blendet die Sprechblase von selbst aus
 
 // Nach dem Loslassen feuert der Browser noch einen Klick. Der darf nach einem langen Druck NICHT
 // durchgehen, sonst zeigt die App die Details und oeffnet gleichzeitig das Bearbeiten-Formular.
@@ -642,7 +674,7 @@ function attachLongPressTooltip(el, htmlFor) {
       if (!html) return;
       hideTooltip();
       showTooltip(html, x, y);
-      setTimeout(hideTooltip, LP_SICHTBAR_MS);
+      _tooltipBisBeruehrung = true;   // bleibt, bis man irgendwo hintippt oder scrollt (R24)
       // Klick sperren. Falls doch keiner kommt (Finger wandert weg), nach kurzer Zeit loesen —
       // sonst schluckt der Riegel spaeter einen voellig unbeteiligten Klick.
       _lpKlickSperren = true;
@@ -738,7 +770,7 @@ function chooseNavModal(address, options) {
   const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); };
   const onKey = (e) => { if (e.key === 'Escape') finish(); };
   document.addEventListener('keydown', onKey);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(); });
+  klickDanebenSchliesst(overlay, () => finish());
   overlay.querySelector('[data-act="cancel"]').addEventListener('click', finish);
   const ersteWahl = overlay.querySelector('.nav-choose-btn');
   if (ersteWahl) ersteWahl.focus();
@@ -1176,6 +1208,14 @@ function meldungFuerMenschen(msg) {
   return s;
 }
 
+// Wie lange eine Meldung stehen bleibt, wenn der Aufrufer nichts vorgibt (R14): nach Textlänge.
+// Vorher immer 3 s — eine zweizeilige Fehlermeldung las niemand zu Ende. Fehler bleiben länger,
+// weil man dort etwas tun muss. Antippen schließt jede Meldung sofort (s. toast()).
+function meldungsDauer(text, type) {
+  const zeichen = String(text || '').length;
+  return Math.min(15000, Math.max(type === 'error' ? 6000 : 3000, 1500 + zeichen * 70));
+}
+
 // `aktion` (optional): { text, beiKlick } — ein Knopf in der Meldung, z. B. „Rückgängig" nach
 // „Bestellt" (R12). Er verschwindet mit der Meldung; die naechste Meldung setzt den Inhalt neu.
 function toast(msg, type, duration, aktion) {
@@ -1195,6 +1235,12 @@ function toast(msg, type, duration, aktion) {
     t.setAttribute('role', 'status');
     t.setAttribute('aria-live', 'polite');
     t.setAttribute('aria-atomic', 'true');
+    // Antippen schließt (R14) — außer auf dem Knopf in der Meldung, der tut, was er sagt.
+    t.addEventListener('click', (ev) => {
+      if (ev.target.closest('.toast-aktion')) return;
+      clearTimeout(t._hideTimer);
+      t.classList.remove('show');
+    });
     document.body.appendChild(t);
   }
   t.textContent = msg;
@@ -1213,7 +1259,22 @@ function toast(msg, type, duration, aktion) {
   }
   requestAnimationFrame(() => t.classList.add('show'));
   clearTimeout(t._hideTimer);
-  t._hideTimer = setTimeout(() => t.classList.remove('show'), duration || 3000);
+  t._hideTimer = setTimeout(() => t.classList.remove('show'), duration || meldungsDauer(msg, type));
+}
+
+// Klick neben ein Fenster schließt es — aber nur, solange darin nichts eingegeben wurde (R20).
+// Vorher schloss ein Tipp daneben jedes Fenster, und der getippte Text war weg: der Ablehnungsgrund,
+// ein halb angelegtes Produkt, ein Mitarbeiter mit allen Angaben. „Eingegeben" heißt: der Mensch hat
+// ein Feld geändert (input/change) — was das Programm beim Öffnen vorbelegt, zählt nicht.
+function klickDanebenSchliesst(overlay, schliessen) {
+  let eingegeben = false;
+  overlay.addEventListener('input', () => { eingegeben = true; });
+  overlay.addEventListener('change', () => { eingegeben = true; });
+  overlay.addEventListener('click', (ev) => {
+    if (ev.target !== overlay) return;
+    if (!eingegeben) { schliessen(); return; }
+    toast('Deine Eingaben sind noch da. Zum Verwerfen „Abbrechen" wählen.', 'warning');
+  });
 }
 
 // Passwort-Policy (spiegelt routes/users.js passwordPolicyError) — für die Live-Anzeige beim Setzen.
@@ -1310,7 +1371,7 @@ function confirmModal(message, opts = {}) {
     // etwa direkt nach dem Tippen in einem Formular — sonst „Löschen" auslösen. Dort ist bewusst ein Klick nötig.
     const onKey = (e) => { if (e.key === 'Escape') finish(false); else if (e.key === 'Enter' && !danger) finish(true); };
     document.addEventListener('keydown', onKey);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(false); });
+    klickDanebenSchliesst(overlay, () => finish(false));
     overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(false));
     overlay.querySelector('[data-act="ok"]').addEventListener('click', () => finish(true));
     // Fokus bei destruktiven Dialogen auf „Abbrechen" (sichere Vorauswahl), sonst auf OK.
@@ -1335,7 +1396,7 @@ function choiceModal(message, choices, opts = {}) {
     const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); resolve(val); };
     const onKey = (e) => { if (e.key === 'Escape') finish(null); };
     document.addEventListener('keydown', onKey);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
+    klickDanebenSchliesst(overlay, () => finish(null));
     overlay.querySelectorAll('[data-val]').forEach(b => b.addEventListener('click', () => finish(b.dataset.val)));
     overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(null));
     const ersterKnopf = overlay.querySelector('[data-val]') || overlay.querySelector('[data-act="cancel"]');
@@ -1388,7 +1449,7 @@ function promptModal(message, opts = {}) {
       else if (e.key === 'Enter' && !multiline) { e.preventDefault(); submit(); }
     };
     document.addEventListener('keydown', onKey);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
+    klickDanebenSchliesst(overlay, () => finish(null));
     overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(null));
     overlay.querySelector('[data-act="ok"]').addEventListener('click', submit);
     input.focus();

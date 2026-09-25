@@ -711,6 +711,7 @@ table.data-table .actions button { margin-left: 0.25rem; }
 /* Ausgeblendet ist die Meldung nur durchsichtig und nach unten geschoben — ohne diese Zeile fing
    sie weiter Klicks ab, und ein Knopf darin („Rückgängig") waere unsichtbar anklickbar gewesen. */
 .toast:not(.show) { pointer-events: none; }
+.toast.show { cursor: pointer; }   /* Antippen schließt (R14) */
 .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 .toast .toast-aktion {
   margin-left: 0.75rem;
@@ -1431,6 +1432,8 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 
 /* Entry Tooltip */
 .entry-tooltip { position: fixed; z-index: 2000; background: #1e293b; color: #f1f5f9; padding: 0.6rem 0.8rem; border-radius: 8px; font-size: 0.8rem; line-height: 1.5; max-width: 320px; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+/* Erklärung am Warnzeichen: nimmt die Maus an, damit man zum Lesen auf sie hinübergleiten kann (R24) */
+.entry-tooltip.entry-tooltip--lesbar { pointer-events: auto; }
 .entry-tooltip strong { color: #fff; }
 
 .input-with-btn { display: flex; gap: 0.25rem; align-items: center; }

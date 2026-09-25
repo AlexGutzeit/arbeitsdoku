@@ -1405,7 +1405,7 @@ async function showUserModal(user) {
   const umAufraeumen = dialogBarrierefrei(overlay);
   const umSchliessen = () => { overlay.remove(); umAufraeumen(); };
   document.getElementById('um-cancel').addEventListener('click', umSchliessen);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) umSchliessen(); });
+  klickDanebenSchliesst(overlay, () => umSchliessen());
 
   // Live-Passwort-Prüfung (Feld färbt sich rot/grün, Checkliste ✓/✗). Anlegen: Passwortfeld; Bearbeiten:
   // das Zurücksetzen-Feld (existiert im DOM, auch wenn eingeklappt).
@@ -2627,7 +2627,7 @@ function avatarZuschnittDialog(quelle) {
     }
     const beiTaste = (e) => { if (e.key === 'Escape') fertig(null); };
     document.addEventListener('keydown', beiTaste);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) fertig(null); });
+    klickDanebenSchliesst(overlay, () => fertig(null));
     overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => fertig(null));
     overlay.querySelector('[data-act="ok"]').addEventListener('click', () => {
       if (!natB) return fertig(null);
@@ -2913,7 +2913,7 @@ async function auszahlungAnlegen(userId, name) {
   const schliessen = () => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); };
   const onKey = (e) => { if (e.key === 'Escape') schliessen(); };
   document.addEventListener('keydown', onKey);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) schliessen(); });
+  klickDanebenSchliesst(overlay, () => schliessen());
   overlay.querySelector('[data-act="cancel"]').addEventListener('click', schliessen);
   overlay.querySelector('#az-stunden').focus();
 

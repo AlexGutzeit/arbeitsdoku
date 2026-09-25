@@ -1417,7 +1417,7 @@ async function pickTargetFolder(excludeRootId) {
       done(b.dataset.id ? Number(b.dataset.id) : null);
     }));
     overlay.querySelector('#doc-picker-cancel').addEventListener('click', () => done(undefined));
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) done(undefined); });
+    klickDanebenSchliesst(overlay, () => done(undefined));
   });
 }
 
