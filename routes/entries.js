@@ -20,11 +20,17 @@ function isValidBreak(n) {
   return typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 600 && Math.floor(n) === n;
 }
 // Liefert Fehlermeldung, wenn ein String-Feld in req.body laenger ist als sein Limit. null sonst.
+// Mit der Beschriftung aus dem Formular — vorher stand dort der interne Name („Feld 'personal_note'
+// ist zu lang", R9).
+const FELDNAMEN = {
+  address: 'Die Adresse', client: 'Der Kunde', project_text: 'Das Projekt',
+  description: 'Die Beschreibung', personal_note: 'Die persönliche Notiz',
+};
 function validateLengths(body, limits) {
   for (const [field, max] of Object.entries(limits)) {
     const v = body[field];
     if (typeof v === 'string' && v.length > max) {
-      return `Feld '${field}' ist zu lang (max. ${max} Zeichen)`;
+      return `${FELDNAMEN[field] || `Das Feld „${field}"`} ist zu lang (höchstens ${max} Zeichen).`;
     }
   }
   return null;

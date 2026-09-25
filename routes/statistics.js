@@ -458,7 +458,7 @@ router.get('/overtime', authenticate, (req, res) => {
     return res.status(403).json({ error: 'Keine Berechtigung' });
   }
   const user = db.prepare('SELECT id, start_overtime FROM users WHERE id = ?').get(uid);
-  if (!user) return res.status(404).json({ error: 'User nicht gefunden' });
+  if (!user) return res.status(404).json({ error: 'Mitarbeiter nicht gefunden' });
 
   // Auch hier die gemeinsame Funktion: der kumulierte Ueberstundenstand ist dieselbe Rechnung,
   // die Statistik, PDF und Lohn-Export verwenden. Der Zeitraum ist egal — `ueberstundenGesamt`

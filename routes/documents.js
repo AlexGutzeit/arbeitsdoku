@@ -1,4 +1,5 @@
 const express = require('express');
+const { uploadFehlerText } = require('../fehlertext');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -248,7 +249,9 @@ router.post('/upload', authenticate, canManageDocs, (req, res) => {
         const maxMb = (getFileLimit(db) / (1024 * 1024)).toFixed(getFileLimit(db) % (1024 * 1024) ? 1 : 0);
         return res.status(400).json({ error: `Datei zu groß (max. ${maxMb} MB pro Datei).` });
       }
-      return res.status(400).json({ error: err.message || 'Upload fehlgeschlagen' });
+      // Rohtext (englisch, mit Serverpfad) nur ins Protokoll — R9
+      if (err.code && err.name !== 'MulterError') console.error('Dokument hochladen:', err);
+      return res.status(400).json({ error: uploadFehlerText(err) });
     }
     if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
     const ext = path.extname(req.file.originalname).toLowerCase();

@@ -11,6 +11,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { abgerechnetBis } = require('../abschluss');
 const krypto = require('../backup-krypto');
+const fehlertext = require('../fehlertext');
 const { berlinJetzt } = require('../zeit');
 
 const router = express.Router();
@@ -373,14 +374,11 @@ router.get('/entschluesseler', authenticate, authorize('chef'), (req, res) => {
 const ARBEITSORDNER = '.rueckspielen-';
 let rueckspielenLaeuft = false;
 
-// Datei-Fehler fuer Menschen. Der Rohtext („ENOSPC: no space left on device, open '/home/…'")
-// ist englisch und nennt Serverpfade (vgl. R9) — er gehoert ins Protokoll, nicht in die Meldung.
+// Datei-Fehler fuer Menschen — die gemeinsame Uebersetzung aus fehlertext.js (R9). Hier nur ein
+// Zusatz: Ist der Sicherungsordner kein Ordner, liegt es fast immer an BACKUP_OUT.
 function dateiFehlerText(e) {
-  const code = e && e.code;
-  if (code === 'ENOSPC') return 'kein Speicherplatz mehr frei';
-  if (code === 'EACCES' || code === 'EPERM' || code === 'EROFS') return 'fehlende Schreibrechte';
-  if (code === 'ENOTDIR' || code === 'EEXIST') return 'der Sicherungsordner ist kein Ordner (BACKUP_OUT prüfen)';
-  return 'unerwarteter Fehler — Einzelheiten im Server-Protokoll';
+  if (e && (e.code === 'ENOTDIR' || e.code === 'EEXIST')) return 'der Sicherungsordner ist kein Ordner (BACKUP_OUT prüfen)';
+  return fehlertext.dateiFehlerText(e);
 }
 
 // Zeitstempel wie in scripts/make-backup.js — nur dann sortiert die Aufraeum-Regel dort die

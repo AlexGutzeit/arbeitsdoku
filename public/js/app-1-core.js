@@ -1160,9 +1160,31 @@ function employedInRange(user, from, to) {
 }
 
 let _letzteMeldung = 0;   // wann zuletzt etwas eingeblendet wurde (siehe Entwurfs-Hinweis)
+// Rohe Programm- und Netzfehler, die sonst wörtlich in einer Meldung landeten (R9). Viele Stellen
+// zeigen im catch einfach `e.message` — bei einem Programmfehler stand dann „Cannot read properties
+// of null (reading 'folders')" auf dem Handy. Statt dreißig Fangstellen einzeln anzufassen, wird
+// hier EINMAL übersetzt; die echte Meldung steht in der Konsole.
+const ROHFEHLER_PROGRAMM = /(Cannot read propert|Cannot set propert|is not a function|is not defined|is not iterable|undefined is not|null is not an object|Unexpected token|Unexpected end of JSON|JSON\.parse)/i;
+const ROHFEHLER_NETZ = /^(Failed to fetch|NetworkError when attempting to fetch resource\.?|Load failed|Network request failed)$/i;
+function meldungFuerMenschen(msg) {
+  const s = String(msg == null ? '' : msg);
+  if (ROHFEHLER_NETZ.test(s.trim())) return 'Keine Verbindung zum Server. Sobald wieder Empfang da ist, noch einmal versuchen.';
+  if (ROHFEHLER_PROGRAMM.test(s)) {
+    console.error('Meldung ersetzt (Programmfehler):', s);
+    return 'Unerwarteter Fehler. Bitte die Seite neu laden.';
+  }
+  return s;
+}
+
 // `aktion` (optional): { text, beiKlick } — ein Knopf in der Meldung, z. B. „Rückgängig" nach
 // „Bestellt" (R12). Er verschwindet mit der Meldung; die naechste Meldung setzt den Inhalt neu.
 function toast(msg, type, duration, aktion) {
+  if (type === 'error') {
+    // Nach dem Abmelden stolpern noch laufende Aufrufe über die leere Antwort (api() liefert beim
+    // Lesen `null`). Die Anmeldeseite erklärt schon, was los ist — kein „Unerwarteter Fehler" dazu.
+    if (!S.token && ROHFEHLER_PROGRAMM.test(String(msg))) { console.error('Meldung unterdrückt (abgemeldet):', msg); return; }
+    msg = meldungFuerMenschen(msg);
+  }
   _letzteMeldung = Date.now();
   let t = document.querySelector('.toast');
   if (!t) {

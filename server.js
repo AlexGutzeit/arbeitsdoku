@@ -190,7 +190,16 @@ app.get('*', (req, res) => brandingRouter.renderIndex(req, res));
 
 // Fehlerbehandlung
 app.use((err, req, res, next) => {
+  // Fehler aus express.json() liegen an der ANFRAGE, nicht am Server. Vorher wurde auch daraus
+  // „Interner Serverfehler" (500) — wer zu viel Text schickte, erfuhr nicht, woran es lag (R9).
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Die Anfrage ist zu groß und wurde nicht verarbeitet. Bitte kürzer fassen.' });
+  }
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Die Anfrage war ungültig und wurde nicht verarbeitet.' });
+  }
   console.error(err);
+  if (res.headersSent) return next(err);
   res.status(500).json({ error: 'Interner Serverfehler' });
 });
 

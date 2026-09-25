@@ -76,10 +76,13 @@ router.post('/', authenticate, nurPfleger, (req, res) => {
  * Leere Eingaben werden zu NULL — nicht zu "", damit „nichts hinterlegt" EINE Form hat und die
  * Anzeige nicht zwischen leerem Feld und fehlendem Feld unterscheiden muss.
  */
+// Beschriftungen wie im Formular — die internen Namen gehoeren nicht in eine Meldung (R9).
+const FELDNAMEN = { kundennummer: 'Die Kundennummer', ansprechpartner: 'Der Ansprechpartner',
+  telefon: 'Die Telefonnummer', email: 'Die E-Mail-Adresse', notiz: 'Die Notiz' };
 function werteLesen(rumpf) {
   const t = (k, max) => {
     const v = String(rumpf[k] == null ? '' : rumpf[k]).trim();
-    if (v.length > max) return { fehler: `„${k}" ist zu lang (höchstens ${max} Zeichen).` };
+    if (v.length > max) return { fehler: `${FELDNAMEN[k] || `„${k}"`} ist zu lang (höchstens ${max} Zeichen).` };
     return { wert: v || null };
   };
   const aus = {};

@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**231 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**232 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -152,6 +152,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `manager-rights-normalize.js` | Unit-Test (#9): normalizeManagerRights() nullt die redundanten Einzelrecht-Flags von Chef/Admin |
 | `meldung-klick-ui.js` | Der Klick auf eine Meldung landet im richtigen Menü — die Seite des Clients (Alex, 27.08.2026). |
 | `meldung-ziel.js` | Ein Klick auf die Meldung muss in dem Menue landen, aus dem sie kam (Alex, 27.08.2026). |
+| `meldungen-deutsch.js` | Meldungen auf Deutsch und ohne Innereien — Server und Oberfläche (R9, 25.09.2026). |
 | `menue-abrechnung-ui.js` | Der Menüpunkt hinter #/pdf gehört Chef, Admin und Buchhaltung — und heißt „Abrechnung". |
 | `milestone-days-input.js` | Test: Zwischenziel-Dauer akzeptiert Komma UND Punkt (1,5 === 1.5), ungültige Werte werden abgefangen |
 | `nav-chooser.js` | Navigations-Auswahl-Test (Puppeteer, headless). Prüft Plattform-Optionen, URL-Builder, Auswahl-Dialog, |

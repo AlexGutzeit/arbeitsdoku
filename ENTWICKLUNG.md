@@ -3149,3 +3149,57 @@ der Knopf hat volle Stärke; auf dem Screenshot von Alex so abgenommen.
 (die Menge einer bestellten Position wurde durch eine Namensänderung des Chefs gelöscht), Zurücknehmen
 ohne Rechteprüfung, Zurücknehmen einer offenen Position, Meldung ohne Knopf, Knopf für alle,
 Meldung fängt Klicks ab — jede an ihrer Stelle rot.
+
+## Meldungen auf Deutsch und ohne Innereien (R9 + R10, 25.09.2026)
+
+### Umlaute (R10)
+
+82 Ersatzschreibungen in Texten — Meldungen („Nur der Eigentuemer kann loeschen"), Audit-Texte,
+die Test-Benachrichtigung („Push funktioniert auf diesem Geraet"), Server-Protokolle. Korrigiert
+wurde **nur in Texten**: Kennungen bleiben, wie sie sind — Routen (`/api/backup/empfaenger`),
+Datenfelder (`haendler`, `uebertrag`), Datenbank-Werte (`bestaetigt`), Klassen, Tabellen,
+Funktionsnamen. Die umzubenennen hieße, Schnittstellen und gespeicherte Daten zu brechen.
+
+`tests/umlaute-in-texten.js` hält den Stand. Es gibt keinen JS-Parser im Projekt, also zerlegt der
+Test selbst: Texte (Zeichenketten, Vorlagen) ja, Kommentare und reguläre Ausdrücke nein, und Code in
+`${…}` mit derselben Schleife wie Code außerhalb. Die erste Fassung tat das nicht — ein regulärer
+Ausdruck mit Anführungszeichen innerhalb einer Vorlage (Abwesenheitskalender) ließ sie 4000 Zeichen
+Code für einen „Text" halten. Deshalb prüft der Test sich selbst: an Beispielen (echte Wörter wie
+„neue", „aktuell", „zuerst" und Kennungen dürfen nicht anschlagen) und daran, dass kein gefundener
+„Text" nach Code aussieht. Gegenprobe mit dem alten Stand: 16 Funde.
+
+### Fehlermeldungen (R9)
+
+* **Hochladen** (Dokumente, Logo, App-Icon) reichte den Rohtext weiter — gemessen im alten Stand:
+  „EACCES: permission denied, open '/home/alex/…/storage/documents/…'". Jetzt übersetzt
+  `fehlertext.js` (eine Stelle für alle Upload-Routen und das Zurückspielen); der Rohtext geht ins
+  Server-Protokoll.
+* **Fehlerbehandler:** zu große Anfrage → 413 mit Erklärung, kaputtes JSON → 400; vorher beides
+  „Interner Serverfehler" (500).
+* **Feldnamen:** „Die persönliche Notiz ist zu lang (höchstens 2000 Zeichen)." statt
+  „Feld 'personal_note' …"; ebenso bei den Großhändler-Angaben. „Mitarbeiter nicht gefunden".
+* **Oberfläche:** `toast()` übersetzt rohe Programm- und Netzfehler zentral („Cannot read
+  properties of null …" → „Unerwarteter Fehler. Bitte die Seite neu laden."), statt dreißig
+  Fangstellen einzeln anzufassen. Nach dem Abmelden wird so eine Meldung ganz unterdrückt — die
+  Anmeldeseite erklärt schon, was los ist. Push-Fehler des Browsers (z. B. Brave „push service
+  error") bekommen deutsche Erklärungen (`pushFehlerText`).
+
+### Ein Fund am Rand: die feste Dateiliste im Deploy
+
+`deploy.sh` kopierte aus dem Projektstamm nur Dateien einer **festen Liste** — mit dem Hinweis,
+jede neue Datei nachzutragen, und einem Verweis auf eine Prüfung `--pruefen`, die es nicht mehr gab.
+`fehlertext.js` wäre nicht auf den Server gekommen; der Dienst hätte nach dem Neustart nicht mehr
+gestartet, bemerkt erst am `/health`, wenn Prod schon steht. Die Liste wird jetzt aus Git abgeleitet
+(`git ls-files -- ':(glob)*.js'`): alle versionierten `.js` im Stamm.
+
+### Messfalle: `cp` fragt nach
+
+Die erste Gegenprobe zu R10 lief still auf dem neuen Code: `cp` ist in der Shell auf `cp -i` gelegt
+und überschreibt aus einem Skript heraus nichts. Gegenproben tauschen Dateien deshalb per Skript und
+belegen die Wiederherstellung per Prüfsumme.
+
+`tests/meldungen-deutsch.js` (16 Prüfungen) löst jede Fehlerart echt aus — die Schreibrechte-Probe
+mit einem schreibgeschützten Dokumentenordner. **Gegenproben:** alter Code (alle Server-Prüfungen
+rot, die Oberfläche bricht ab, weil `pushFehlerText` fehlt), Fehlerbehandler ohne 413/400, interner
+Feldname, Upload-Rohtext, Meldung ohne Übersetzung, Meldung nach dem Abmelden, Push unübersetzt —
+jede an ihrer Stelle rot.

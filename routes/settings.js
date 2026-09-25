@@ -1,4 +1,5 @@
 const express = require('express');
+const { uploadFehlerText } = require('../fehlertext');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -57,7 +58,8 @@ function logoUpload(req, res, next) {
   m(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `Datei zu groß (max. ${Math.round(limit / (1024 * 1024))} MB)` });
-      return res.status(400).json({ error: err.message || 'Upload fehlgeschlagen' });
+      if (err.code && err.name !== 'MulterError') console.error('Bild hochladen:', err);   // Rohtext nur ins Protokoll (R9)
+      return res.status(400).json({ error: uploadFehlerText(err) });
     }
     next();
   });
@@ -341,7 +343,8 @@ router.post('/app-icon', authenticate, authorize('chef'), (req, res) => {
   iconUpload.single('icon')(req, res, async (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `Datei zu groß (max. ${Math.round(limit / (1024 * 1024))} MB)` });
-      return res.status(400).json({ error: err.message || 'Upload fehlgeschlagen' });
+      if (err.code && err.name !== 'MulterError') console.error('Bild hochladen:', err);   // Rohtext nur ins Protokoll (R9)
+      return res.status(400).json({ error: uploadFehlerText(err) });
     }
     if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
     try {

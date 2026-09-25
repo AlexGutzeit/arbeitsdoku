@@ -707,6 +707,11 @@ Geräte-Auswahl der installierten Apps, iOS/Desktop eine kuratierte Liste; Wahl 
 Sichtbarkeit, mobil-optimiert/installierbar (PWA), Brute-Force-Schutz am Login, durchgehend
 parametrisierte SQL-Abfragen und HTML-Escaping (XSS-Schutz).
 
+**Meldungen sind deutsch und verständlich.** Auch wenn etwas schiefgeht, steht dort kein englischer
+Rohtext und kein Pfad vom Server („EACCES … /home/…"), sondern was los ist — z. B. *„Hochladen
+fehlgeschlagen: kein Speicherplatz mehr frei."* oder *„Die persönliche Notiz ist zu lang (höchstens
+2000 Zeichen)."* Die Einzelheiten stehen für den Betreiber im Server-Protokoll.
+
 ## 📱 Für die Baustelle gedacht
 
 Die App wird überwiegend mit dem Handy in der Hand bedient – teils in der Sonne, teils mit Handschuhen.

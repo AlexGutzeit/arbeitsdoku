@@ -102,10 +102,12 @@ rsync -az middleware/ "$DEPLOY_HOST:$DEPLOY_PATH/middleware/"
 # braucht die Zweitanlage fuer notfall-umschalten.sh, das die Sicherung entschluesselt.
 rsync -az werkzeuge/ "$DEPLOY_HOST:$DEPLOY_PATH/werkzeuge/"
 rsync -az scripts/ "$DEPLOY_HOST:$DEPLOY_PATH/scripts/"
-# ACHTUNG: Dies ist eine FESTE Liste — eine neue Datei im Projektstamm landet sonst NICHT auf dem
-# Server, und der Dienst startet nach dem Neustart gar nicht mehr (require schlaegt fehl).
-# Beim Anlegen einer neuen Datei hier eintragen. Die Probe unten (--pruefen) faengt es ab.
-STAMMDATEIEN="server.js audit.js push.js sse.js scheduler.js planning-recurrence.js csv.js zeit.js abschluss.js totp.js geheimnis.js zweifaktor.js backup-krypto.js bestellrecht.js ausstellen.js auszahlung.js produktrecht.js barcoderecht.js linkpruefung.js .puppeteerrc.cjs package.json package-lock.json"
+# Alle versionierten .js-Dateien im Projektstamm — aus Git abgeleitet statt von Hand gepflegt.
+# Hier stand frueher eine FESTE Liste mit dem Hinweis, jede neue Datei nachzutragen. Am 25.09.2026
+# waere fehlertext.js so nicht auf den Server gekommen, und der Dienst haette nach dem Neustart
+# nicht mehr gestartet (require schlaegt fehl) — bemerkt erst am /health, wenn Prod schon steht.
+# ':(glob)*.js' erfasst nur den Stamm; Unterordner laufen oben per eigenem rsync.
+STAMMDATEIEN="$(git ls-files -- ':(glob)*.js' | tr '\n' ' ') .puppeteerrc.cjs package.json package-lock.json"
 rsync -az $STAMMDATEIEN "$DEPLOY_HOST:$DEPLOY_PATH/"
 # Produktions-Dependencies abgleichen (z. B. neu hinzugekommenes web-push). --omit=dev laesst
 # Puppeteer & Co. aussen vor; ist nichts zu tun, ist der Schritt praktisch ein No-op.

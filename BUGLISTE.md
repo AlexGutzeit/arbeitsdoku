@@ -150,7 +150,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Vorschlag:** alle `can_*`-Felder aus dem Objekt ableiten statt aufzählen; Test holt die
   Schlüssel von der Quelle (wie `tests/konto-rechte-ui.js`).
 
-### [~] R9 · Englische und technische Fehlermeldungen
+### [x] R9 · Englische und technische Fehlermeldungen — erledigt in `R9-COMMIT`
 - **Upload-Fehler** wörtlich durchgereicht: `routes/documents.js:251`, `routes/settings.js:60`,
   `routes/settings.js:344` — z. B. bei voller Platte „ENOSPC: no space left on device, open
   '/home/…'" (englisch **und** mit Serverpfad), oder „Unexpected field".
@@ -169,14 +169,23 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Vorschlag:** zentrale Fehler-Übersetzung in der Oberfläche (JS-interne Fehler →
   „Unerwarteter Fehler — bitte Seite neu laden", echte Meldung in die Konsole); auf dem Server
   `err.type` / `err.code` auswerten.
+- **Gelöst (25.09.):** `fehlertext.js` für Upload- und Dateifehler (Rohtext nur ins Protokoll),
+  413/400 im Fehlerbehandler, Beschriftungen statt Feldnamen, „Mitarbeiter nicht gefunden",
+  Push-Fehler übersetzt, `toast()` übersetzt Programm- und Netzfehler zentral und schweigt nach dem
+  Abmelden. Die Null-Zugriffe nach abgelaufener Sitzung hatten sich mit R1 größtenteils erledigt;
+  der Rest landet jetzt übersetzt oder gar nicht in einer Meldung. Test `tests/meldungen-deutsch.js`.
+  Nebenbei: `deploy.sh` leitet die Stammdateien jetzt aus Git ab (die feste Liste hätte
+  `fehlertext.js` nicht mitgenommen).
 
-### [~] R10 · Fehlende Umlaute in sichtbaren Texten (~20 Stellen)
+### [x] R10 · Fehlende Umlaute in sichtbaren Texten (~20 Stellen) — erledigt in `a9d7912`, Test `641f35c`
 - `routes/notes.js` 225, 308, 312, 342, 358, 405, 409 („Eigentuemer", „geloescht", „Empfaenger", „gehoert")
 - `routes/push.js` 26, 84, **87** (auch der Text der Test-Benachrichtigung: „…auf diesem Geraet")
 - `routes/settings.js` 374 („Bild ungueltig")
 - `public/js/app-6-admin.js` 569, 581, 584 („auswaehlen", „zuruecksetzen")
 - Protokolltexte: `ausstellen.js` 101, 113; `routes/users.js` 651, 671, 834
 - **Vorschlag:** korrigieren; Prüfskript als Test, das Umlaut-Ersatz in sichtbaren Texten meldet.
+- **Gelöst (25.09.):** 82 Stellen (mehr als die ~20 der Durchsicht) in Meldungen, Audit-Texten und
+  Protokollen; Kennungen unverändert. Prüftest `tests/umlaute-in-texten.js`.
 
 ### [ ] R11 · Notiz-Sperre läuft nach 15 Minuten ab, ohne Verlängerung
 - **Wo:** `routes/notes.js:8` (`LOCK_TIMEOUT_MINUTES = 15`), kein Herzschlag im Client

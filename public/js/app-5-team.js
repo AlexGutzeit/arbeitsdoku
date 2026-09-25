@@ -164,6 +164,19 @@ async function getPushSubscription() {
   return reg.pushManager.getSubscription();
 }
 
+// Browserfehler beim Push-Abo auf Deutsch (R9). Sie kommen englisch und technisch, z. B. in Brave
+// „Registration failed - push service error". null = unbekannt, dann bleibt die Originalmeldung.
+function pushFehlerText(e) {
+  const name = e && e.name, text = String((e && e.message) || '');
+  if (name === 'NotAllowedError') return 'Benachrichtigungen sind im Browser nicht erlaubt. Das lässt sich in den Website-Einstellungen des Browsers wieder freigeben.';
+  if (name === 'NotSupportedError') return 'Dieser Browser unterstützt keine Push-Benachrichtigungen.';
+  if (name === 'InvalidStateError') return 'Der Browser lässt Push-Benachrichtigungen hier gerade nicht zu, z. B. in einem privaten Fenster.';
+  if (name === 'AbortError' || /push service/i.test(text)) {
+    return 'Der Push-Dienst des Browsers hat die Anmeldung abgelehnt. In Brave muss dafür in den Einstellungen unter Datenschutz die Nutzung der Google-Dienste für Push-Nachrichten erlaubt sein.';
+  }
+  return null;
+}
+
 // Abonnieren: Erlaubnis anfragen → VAPID-Key holen → subscribe → an Server melden.
 async function enablePush() {
   const perm = await Notification.requestPermission();
@@ -171,10 +184,17 @@ async function enablePush() {
   const keyResp = await api('GET', '/api/push/key');
   if (!keyResp || !keyResp.key) throw new Error('Push ist auf dem Server nicht konfiguriert.');
   const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(keyResp.key),
-  });
+  let sub;
+  try {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(keyResp.key),
+    });
+  } catch (e) {
+    const text = pushFehlerText(e);
+    if (text) { console.error('Push-Abo:', e); throw new Error(text); }
+    throw e;
+  }
   await api('POST', '/api/push/subscribe', { subscription: sub.toJSON() });
   // Geraeteweites „Opt-out" aufheben (s. PUSH_OPTOUT_KEY): bewusstes Aktivieren erlaubt wieder
   // das automatische Mitziehen beim Login.
