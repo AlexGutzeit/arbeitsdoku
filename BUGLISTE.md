@@ -303,6 +303,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 - **Gelöst (25.09.):** so umgesetzt; gilt am Handy auch für die Detail-Sprechblasen der Einträge.
 
 ### [x] R25 · Zeitfeld am Handy öffnet die Uhr nicht mehr beim Antippen — erledigt in `5356b8b`
+- **Deployt:** Prod 26.09.2026 (`91d06a3`, Cache 425).
 *(Hinweis Alex, 25.09.2026)*
 - **Was passiert:** Antippen von „Von"/„Bis" markiert nur Stunde oder Minute; die Uhr öffnet nur noch
   das Symbol rechts. Früher öffnete Antippen sofort die Uhr.
