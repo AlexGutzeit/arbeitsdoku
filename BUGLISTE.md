@@ -82,7 +82,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 
 ## Mittel — Sackgassen und irreführende Zustände
 
-### [~] R4 · Ewiger Lade-Kreisel auf 9 Seiten
+### [x] R4 · Ewiger Lade-Kreisel auf 9 Seiten — erledigt in `8fcafa1`
 - **Wo:** Mitarbeiter `app-5-team.js:1004`, Projekte `app-5-team.js:1919`, Notizen
   `app-8-comm-init.js:944`, Dokumente `app-6-admin.js:1432`, Papierkorb-Reiter
   `app-6-admin.js:1075 / 1138 / 1191 / 1270`
@@ -90,8 +90,14 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   3 s, der Kreisel dreht weiter, kein „Erneut versuchen".
 - **Vorschlag:** die vorhandene `renderLoadError()` verwenden (Dashboard, Planung, Statistik
   nutzen sie schon). Siehe auch R5 — beides über eine gemeinsame Seiten-Hülle lösen.
+- **Gelöst (25.09.):** `seiteLaden()` für alle Seiten, zusammen mit R5. Beim Durchgehen kam heraus,
+  dass es mehr als 9 Seiten waren: Schwarzes Brett, Werkzeuge, Abwesenheiten, Impressum und die
+  Formulare zeigten bei Ladefehlern eine **leere** Liste bzw. ein leeres Formular statt eines Kreisels.
+  Mit echtem Schaden: Die Einstellungen erschienen mit Ersatzwerten (Speichern hätte überschrieben),
+  das Planungsformular verlor die Serien-Regel („Wiederholung entfernen?"). Lesefehler sagen nicht mehr
+  „es wurde nichts gespeichert". Test `tests/seite-laden-ui.js`.
 
-### [~] R5 · Ältere, langsame Seite überschreibt die gerade geöffnete
+### [x] R5 · Ältere, langsame Seite überschreibt die gerade geöffnete — erledigt in `8fcafa1`
 - **Wo:** Wächter `renderToken()/renderStale()` in `app-1-core.js:347` — genutzt nur von
   Dashboard, Planung, Statistik, Abwesenheiten. **17 Seiten ohne Wächter:** `renderEntryForm`,
   `renderPlanningForm`, `renderProjectForm`, `renderPdfExport`, `renderTools`, `renderSettings`,
@@ -100,6 +106,11 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Was passiert:** Bei langsamem Netz sagt die Adresse „Planung", zu sehen ist das Auftrags-Board.
 - **Vorschlag:** Wächter überall; am besten eine gemeinsame Seiten-Hülle (Laden + Fehleranzeige +
   Veraltet-Wächter), damit neue Seiten nicht wieder ohne gebaut werden.
+- **Gelöst (25.09.):** gemeinsame Ladefunktion `seiteLaden()`, Zähler zusätzlich zentral in `render()`
+  und `logout()`. **Auch die vier „geschützten" Seiten waren es nicht:** Übersicht, Planung und
+  Statistik zogen ihre Marke erst nach dem ersten Laden, der Test zeigte bei Übersicht und Planung
+  genau das Überschreiben. Regel jetzt: `seiteLaden()` ist das erste Warten einer Seite.
+  Nicht erfasst: Neuzeichnen nach dem Speichern → R23.
 
 ### [x] R6 · Pause länger als Arbeitszeit → still ein 0-Stunden-Eintrag — erledigt in `0f03d56`
 - **Deployt:** Prod 25.09.2026 (`8bdc1d4`, Cache 417); nachgebessert in `5ea9648`.
@@ -141,8 +152,9 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Interne Feldnamen:** „Feld 'personal_note' ist zu lang" — `routes/entries.js:27`.
 - **Globaler Fehlerbehandler** `server.js:192` macht aus allem „Interner Serverfehler" (500), auch
   aus „Anfrage zu groß" (Express-Grenze 100 kB) und „ungültige Anfrage" (400).
-- **Während Deploy/Neustart** (502/503) zeigt die App nur „Fehler" — `app-1-core.js:129`.
-  Besser: „Server startet gerade neu — bitte gleich noch einmal".
+- ~~**Während Deploy/Neustart** (502/503) zeigt die App nur „Fehler" — `app-1-core.js:129`.
+  Besser: „Server startet gerade neu — bitte gleich noch einmal".~~ Erledigt mit R4 in `8fcafa1`
+  (502/503/504 ohne JSON → „Der Server ist gerade nicht erreichbar, vermutlich startet er neu").
 - **Nach abgelaufener Sitzung** liefert `api()` `null`, einige Stellen greifen trotzdem zu
   (`app-4-planning-tools.js:1312 / 1345 / 1380`, `app-5-team.js:494`) → „Cannot read properties
   of null" kann aufblitzen.
@@ -230,6 +242,22 @@ scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
   der Test legt einen Urlaub ohne Datum an und bricht ab. Die App verhält sich korrekt.
 - **Vorschlag:** ein Fenster wählen, das garantiert Werktage enthält.
 
+### [ ] R23 · Neuzeichnen nach dem Speichern trifft die inzwischen geöffnete Seite
+*(gefunden beim Bau von R4 + R5, 25.09.2026)*
+- **Wo:** überall, wo ein Knopf nach `await api(…)` direkt die Seite neu zeichnet — z. B. Dokumente
+  umbenennen/verschieben/löschen (`app-6-admin.js`, `renderDocuments()`), Werkzeuge
+  (`renderTools()`), Produktverzeichnis (`renderProdukte()`), Einstellungen (`renderSettings()`),
+  Papierkorb (Wiederherstellen).
+- **Was passiert:** Speichern antippen und, solange die Antwort unterwegs ist, eine andere Seite
+  öffnen. Kommt die Antwort, zeichnet der Knopf seine alte Seite über die neue — Adresse und Menü
+  zeigen die neue. Dasselbe Bild wie R5, aber `seiteLaden()` hilft hier nicht: Der Aufruf ist ja
+  frisch, nicht veraltet.
+- **Gemessen (25.09., auf dem Stand nach R4 + R5):** Ordner umbenennen, Antwort 2 s verzögert,
+  inzwischen „Mein Konto" geöffnet → danach Adresse `#/konto`, im Bild die Dokumente, und das Menü
+  springt mit auf „Dokumente".
+- **Vorschlag:** ein Helfer, der nur neu zeichnet, wenn die Adresse noch dieselbe ist wie beim
+  Klick, und die Stellen darauf umstellen; Test nach dem Muster von `tests/seite-laden-ui.js`.
+
 ---
 
 ## Geprüft und in Ordnung
@@ -256,6 +284,6 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 
 1. **R1** — Datenverlust
 2. **R2** — Absturz
-3. **R4 + R5** gemeinsam über eine Seiten-Hülle
+3. ~~**R4 + R5** gemeinsam über eine Seiten-Hülle~~ erledigt
 4. **R9 + R10** — Meldungen (lässt sich gut bündeln)
 5. Rest nach Belieben

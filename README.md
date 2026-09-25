@@ -720,6 +720,13 @@ Darauf ist sie ausgelegt:
   Wörter werden UND-verknüpft, Groß-/Kleinschreibung ist egal. Gefiltert wird im Gerät – kein Nachladen,
   kein Warten. Der Zähler zeigt „3 von 34"; der Suchbegriff **überlebt Live-Aktualisierungen** durch
   Kollegen. Besonders im Papierkorb hilft das, weil der wegen der Revisionssicherheit dauerhaft wächst.
+* **Kein Funkloch ohne Ausweg:** Scheitert das Laden einer Seite (Baustelle ohne Empfang, Server startet
+  gerade neu), steht dort **„Konnte nicht geladen werden"** mit dem Grund und einem Knopf
+  **„Erneut versuchen"** – kein ewig drehender Kreisel und keine leere Liste, die so aussieht, als gäbe
+  es nichts. Menü und Adresszeile bleiben bedienbar. Wer bei langsamem Netz schon zur nächsten Seite
+  weitertippt, bleibt auch dort: Die verspätete Antwort der vorigen Seite wird verworfen, statt die neue
+  zu überschreiben. Mit Absicht anders: Die **Bestellungen** erscheinen auch ohne Netz, mit dem Katalog
+  aus dem Gerätespeicher.
 * **Zoom ist nicht gesperrt** – Aufziehen mit zwei Fingern funktioniert überall.
 * **Große Trefferflächen:** Auf Touchgeräten haben kleine Symbol- und Textknöpfe eine unsichtbar
   vergrößerte Fläche, ohne dass sich das Aussehen ändert. Mit Maus bleibt alles wie gewohnt.

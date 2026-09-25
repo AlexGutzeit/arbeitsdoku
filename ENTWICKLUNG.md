@@ -2936,3 +2936,111 @@ Eine Testfalle unterwegs: Der Testnutzer hatte kein Geburtsdatum, die App rechne
 „unter 18" und schlug für 8 Stunden 60 statt 30 Minuten vor. Der Test setzt jetzt ein Geburtsdatum —
 er soll den gewöhnlichen Fall messen, nicht zufällig den Jugendschutz.
 
+
+## Seiten laden: Fehleranzeige und Veraltet-Wächter (R4 + R5, 25.09.2026)
+
+### Was gemessen wurde
+
+* **R4:** `/api/users` im Browser abgebrochen. Nach 1 s eine Meldung — mit dem falschen Satz
+  „es wurde nichts gespeichert", obwohl die Seite nur laden wollte —, nach 3 s war sie weg, nach 6 s
+  drehte der Kreisel noch, und es gab keinen Knopf. Andere Seiten zeigten stattdessen eine **leere
+  Liste**: „Keine Einträge am Schwarzen Brett", keine Werkzeuge, ein leerer Posteingang, beim
+  Impressum „kein Inhalt hinterlegt". Das ist schlimmer als ein Kreisel, weil es nach einer Auskunft
+  aussieht.
+* **R5:** `/api/projects` um 4 s verzögert, inzwischen auf *Mein Konto* gewechselt. Danach stand das
+  Auftrags-Board im Bild, Adresse und Menü sagten „Mein Konto".
+
+### Eine Funktion statt zwei Dinge, an die jede Seite denken muss
+
+Die Bausteine gab es: `renderLoadError()` und `renderToken()`/`renderStale()`. Genutzt haben sie
+vier von über zwanzig Seiten. Jetzt gibt es `seiteLaden(laden, nochmal, ziel)` in `app-1-core.js`:
+`laden` holt **alles**, was die Seite zum Zeichnen braucht; bei einem Fehler zeigt `seiteLaden` die
+Fehleranzeige mit „Erneut versuchen" (der Knopf ruft `nochmal`), und eine Antwort, die zu spät
+kommt, wird verworfen. Kommt `null` zurück, ist alles erledigt — die Seite hört einfach auf.
+Programmfehler (TypeError …) erscheinen als „Unerwarteter Fehler", die echte Meldung steht in der
+Konsole.
+
+Die Marke wird außerdem **zentral** gezogen: in `render()` bei jedem Seitenwechsel und in `logout()`.
+So ist ein Ladevorgang auch dann veraltet, wenn die neue Seite selbst gar nichts lädt (das Aushang-
+Formular zum Beispiel), und eine Seite, der mitten im Laden die Sitzung wegbricht, zeichnet nicht
+mit halben Daten weiter.
+
+### Wo es den Schutz schon gab, wirkte er nicht
+
+Übersicht, Planung und Statistik hatten den Wächter — und fielen im neuen Test trotzdem durch. Sie
+zogen die Marke erst in `renderDashboardContent()` usw., also **nach** dem ersten Laden (Projekte,
+Mitarbeiter). Kam diese Antwort spät, zog die alte Seite danach eine frische Marke, hielt sich damit
+für aktuell und überschrieb die neue. Daraus die Regel, die jetzt an `seiteLaden` steht:
+**`seiteLaden()` ist das erste Warten der Seite.** Was vorher geladen werden muss, gehört mit in
+`laden`. Genau deshalb wanderte bei den Bestellungen auch `katalogLaden()` in die Ladefunktion.
+
+### Pflicht oder Zugabe
+
+Was die Seite **richtig** zeigen muss, ist Pflicht — scheitert es, kommt die Fehleranzeige. Drei
+Fälle, in denen das Weiterlaufen mit Ersatzwerten echten Schaden anrichten konnte:
+
+* **Einstellungen:** Das Formular erschien mit den Werten, die gerade im Browser lagen (oder den
+  Standardwerten), und „Speichern" hätte sie über die echten geschrieben. Auch der Speicherstand der
+  Dokumente ist deshalb Pflicht — seine Felder fielen sonst auf 500 MB zurück.
+* **Planungsformular:** Ohne die Serien-Regel stand die Wiederholung eines Serientermins auf „Keine",
+  und Speichern fragte „Wiederholung entfernen – wie?", obwohl das niemand wollte.
+* **Projektformular:** Ohne Mitarbeiterliste hätte Speichern dem Auftrag seine Zuweisungen genommen.
+
+Zugaben bleiben Zugaben: die Auszahlungs-Stände in der Mitarbeiterliste, die Feiertage im Board, die
+Geburtstage auf der Startseite, die Urlaubskonto-Zahlen, der Abschluss-Hinweis in der Statistik (die
+Zahlen selbst rechnet der Server) und der Katalog in den Bestellungen. Auf der **PDF-Seite** dagegen
+ist der Abschluss Pflicht: Dort hängt die Karte, mit der Monate abgeschlossen werden, und die hätte
+mit dem Rückfallwert „nichts abgeschlossen" angezeigt.
+
+**Mit Absicht anders:** Die Bestellungen erscheinen auch ohne Verbindung — mit dem Katalog aus dem
+Gerätespeicher (so gewollt seit dem 09.09.2026). Nur ein Fehler, der *nicht* an der Verbindung liegt,
+bekommt dort die Fehleranzeige. *Mein Konto* baut sich kartenweise auf; dort prüft der Test nur, dass
+kein Kreisel ewig dreht.
+
+### Was sich sonst ändert
+
+* Formulare (Zeiteintrag, Planung, Aushang bearbeiten, PDF) zeigen den Kreisel **sofort**. Vorher
+  blieb die alte Seite stehen, und ein Tipp auf „+ Neuer Eintrag" sah bei langsamem Netz aus, als
+  passiere nichts.
+* Ein Ladefehler im Formular führt nicht mehr per `navigate()` zur Liste zurück — der Sprung traf bei
+  langsamem Netz auch dann, wenn man längst woanders war.
+* „Gesehen" (`markSeen`) wird erst gemeldet, wenn die Seite wirklich zu sehen ist.
+* Lesende Aufrufe sagen bei fehlender Verbindung nicht mehr „es wurde nichts gespeichert".
+  Antworten ohne JSON mit 502/503/504 (Caddy während eines Neustarts) ergeben „Der Server ist gerade
+  nicht erreichbar, vermutlich startet er neu" statt „Fehler" — ein Teil von R9.
+
+### Test
+
+`tests/seite-laden-ui.js` geht **jede** Adresse durch, die etwas lädt (33), dazu das Projektformular:
+
+* **A** Netz weg → Fehleranzeige mit Knopf, ohne Kreisel, ohne „gespeichert"; Netz zurück, Knopf →
+  die Seite kommt. Dazu ein Serverfehler (500) mit der Meldung des Servers.
+* **B** Antworten der alten Seite 1,5 s zurückgehalten, vorher weitergewechselt → die neue Seite steht
+  noch. Abwechselnd zwei Ziele: eines, das selbst nichts lädt (nur der zentrale Zähler schützt es),
+  und eines, das selbst lädt.
+* **C** 401 mitten im Laden → Anmeldeseite, nichts darübergezeichnet, kein Absturz.
+* **D** Bestellungen: ohne Netz mit Seite, bei Serverfehler Fehleranzeige.
+
+**Gegenproben** (jeweils ein Teil zurückgebaut, danach byte-genau wiederhergestellt):
+
+| Zurückgebaut | Ergebnis |
+|---|---|
+| zentraler Zähler in `render()` | 27 rot — genau die Wechsel zu Seiten, die selbst keine Marke ziehen |
+| Veraltet-Prüfung in `seiteLaden` | Wechsel rot |
+| Fehleranzeige in `seiteLaden` | 36 rot — alle Seiten aus Teil A |
+| Lese-Meldung wieder „nichts gespeichert" | Teil A rot |
+| Werkzeugseite im alten Stand | nur ihre zwei Prüfungen rot |
+| Übersicht: Marke wieder nach dem ersten Warten | ihr Wechsel rot |
+| Bestellungen: Katalog wieder vor `seiteLaden` | genau ein Wechsel rot |
+| Marke in `logout()` | **bleibt grün** — Doppelschutz: jede Ladefunktion prüft ohnehin selbst auf `null` nach 401 |
+
+Die alte Werkzeugseite wird in Teil B übrigens *nicht* rot: Sie merkte sich `.main` **vor** dem
+Warten und schrieb danach in ein Element, das es nicht mehr gab — harmlos, aus Zufall. Ihr Fehler war
+nur R4 (leere Liste statt Fehler).
+
+### Nicht erfasst: Neuzeichnen nach dem Speichern (R23)
+
+Knöpfe, die nach `await api(PUT …)` direkt `renderDocuments()` usw. aufrufen, zeichnen ihre Seite
+auch dann, wenn man inzwischen woanders ist. Gemessen: Ordner umbenannt, Antwort 2 s verzögert, auf
+*Mein Konto* gewechselt → Adresse `#/konto`, im Bild die Dokumente, Menü „Dokumente". `seiteLaden`
+kann das nicht abfangen, weil der Aufruf selbst frisch ist. Offen als R23 in der Bugliste.

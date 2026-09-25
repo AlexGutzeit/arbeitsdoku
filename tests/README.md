@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**227 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**228 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -220,6 +220,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `scheduler-tick.js` | In-Process-Test des Zusammenfassungs-Schedulers: reine Funktionen isDue()/buildSummaryText() + |
 | `scroll-ruckeln-prodklon.js` | Prod-Klon-Pruefung: Kein Zurueckspringen beim Scrollen — mit den ECHTEN Daten, |
 | `scroll-ruckeln-ui.js` | Puppeteer-Test: Beim Scrollen darf die Seite NICHT zurückspringen. |
+| `seite-laden-ui.js` | Seiten laden: Fehleranzeige und Veraltet-Waechter auf JEDER Seite (R4 + R5, 25.09.2026). |
 | `self-planning-ui.js` | UI-Smoke (Puppeteer) für das zweistufige Planungsrecht: |
 | `self-planning.js` | Self-Planung-Test: Planungsrecht-Stufen „sich" (can_plan) vs. „alle" (can_plan_all). |
 | `shot-notifications.js` | Einmal-Screenshot der Benachrichtigungen-Seite — ein Werkzeug, kein Test. |
