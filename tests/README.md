@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**229 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**230 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -99,6 +99,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `benachrichtigungen-umzug.js` | Die Benachrichtigungen sind von ihrer eigenen Seite nach „Mein Konto" umgezogen (Alex, |
 | `bestellrecht-ui.js` | Das Bestellrecht, geklickt statt aufgerufen (Alex, 25.08.2026). |
 | `bestellrecht.js` | Bestellen, wenn Chef und Chefin im Urlaub sind (Alex, 25.08.2026) |
+| `bestellt-rueckweg.js` | „Bestellt" mit Rückweg, bestellte Einträge gesperrt (R12, 25.09.2026). |
 | `board-archive-ampel-ui.js` | Archiv/Reopen + Dringlichkeitsampel (Chef/Admin). MA hat weder Ampel noch Archiv-Zugriff. |
 | `board-assign-all-ui.js` | Zuteilbarkeit: ALLE Nutzer außer Admin (Chef, Buchhalter, Mitarbeiter) sind im Projekt-Formular auswählbar |
 | `board-ausgeschieden-ui.js` | Was wird aus den Aufträgen, wenn jemand die Firma verlässt? |

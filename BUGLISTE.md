@@ -188,13 +188,16 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Vorschlag:** Sperre beim Tippen alle paar Minuten erneuern; Namen anzeigen;
   `fetch(…, { keepalive: true })` statt synchronem XHR.
 
-### [~] R12 · „Bestellt" ohne Rückfrage und ohne Rückweg
+### [x] R12 · „Bestellt" ohne Rückfrage und ohne Rückweg — erledigt in `eb7ac78`
 - **Wo:** `routes/orders.js:177`, Oberfläche `app-8-comm-init.js:895`; Ändern: `routes/orders.js:120`
 - **Was passiert:** Ein Fehltipp am Handy verschiebt die Bestellung endgültig. Zurücknehmen geht
   nicht, löschen nur Admin — ein Chef sitzt fest. Außerdem erlaubt der Server, bereits bestellte
   Einträge nachträglich zu ändern (`ordered_at` wird nicht geprüft; die Oberfläche bietet es nicht an).
 - **Vorschlag:** „Rückgängig"-Hinweis oder Rückfrage; Route „doch nicht bestellt" für Chef/Admin;
   Ändern bestellter Einträge für Nicht-Manager sperren.
+- **Gelöst (25.09.):** keine Rückfrage (Alex), dafür „Rückgängig" in der Meldung und dauerhaft
+  „Doch nicht bestellt" für alle mit Bestellrecht (`DELETE /api/orders/:id/order`); bestellte
+  Einträge für **alle** gesperrt (409). Test `tests/bestellt-rueckweg.js`.
 
 ---
 

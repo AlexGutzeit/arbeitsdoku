@@ -3110,3 +3110,30 @@ ihrer Stelle rot.
 Eine Lehre aus den Gegenproben: Die Probe „kein Aufräumen" ließ Arbeitsordner in den Ablagen des
 **Repos** liegen, und die nächste Probe wurde deshalb an zusätzlichen Stellen rot. Die Ablagen
 gehören nicht dem Test — er räumt Reste früherer, abgebrochener Läufe jetzt beim Start weg.
+
+## „Bestellt" mit Rückweg (R12, 25.09.2026)
+
+Ein Tipp auf „Bestellt" war endgültig. Zurücknehmen ging nicht, bestellte Einträge löschen durfte
+nur der Admin — ein Chef oder ein Mitarbeiter mit Bestellrecht saß nach einem Fehltipp am Handy
+fest. Außerdem nahm `PUT /api/orders/:id` Änderungen an bestellten Einträgen an; die Oberfläche bot
+das nicht an, die Schnittstelle schon.
+
+**Entschieden (Alex):** keine Rückfrage vor „Bestellt" — wer zehn Positionen abhakt, würde zehnmal
+gefragt —, dafür zwei Rückwege: „Rückgängig" in der Meldung (8 s) und dauerhaft „Doch nicht bestellt"
+in den letzten Bestellungen (`DELETE /api/orders/:id/order`). Zurücknehmen darf, wer markieren darf
+(`darfBestellen`, Rolle oder Einzelrecht). Bestellte Einträge sind **für alle** gesperrt (409), die
+Meldung nennt den Weg.
+
+Dafür kann `toast()` jetzt einen Knopf tragen (`aktion: { text, beiKlick }`). Dabei fiel auf: Eine
+ausgeblendete Meldung war nur durchsichtig und nach unten geschoben und fing weiter Klicks ab — ein
+Knopf darin wäre unsichtbar anklickbar gewesen. `.toast:not(.show)` hat jetzt `pointer-events: none`.
+
+Eine Testfalle unterwegs: Der erste Testlauf klickte „Rückgängig", sobald die Meldung die Klasse
+`show` hatte — da fährt sie aber noch 0,3 s ein, und der Knopf lag halb unter dem Bildschirmrand.
+Gemessen (Position nach 100/400/1000 ms, `elementFromPoint`), dann erst gewartet. Die App war in
+Ordnung; keine andere Meldung überschreibt den Knopf.
+
+`tests/bestellt-rueckweg.js` (23 Prüfungen). **Gegenproben:** alter Code (12 rot), Sperre weg
+(die Menge einer bestellten Position wurde durch eine Namensänderung des Chefs gelöscht), Zurücknehmen
+ohne Rechteprüfung, Zurücknehmen einer offenen Position, Meldung ohne Knopf, Knopf für alle,
+Meldung fängt Klicks ab — jede an ihrer Stelle rot.
