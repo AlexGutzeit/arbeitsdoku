@@ -302,7 +302,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   die Maus auf dem Zeichen oder auf der Sprechblase ist, mit kurzer Kulanz beim Hinübergleiten.
 - **Gelöst (25.09.):** so umgesetzt; gilt am Handy auch für die Detail-Sprechblasen der Einträge.
 
-### [~] R25 · Zeitfeld am Handy öffnet die Uhr nicht mehr beim Antippen
+### [x] R25 · Zeitfeld am Handy öffnet die Uhr nicht mehr beim Antippen — erledigt in `R25-COMMIT`
 *(Hinweis Alex, 25.09.2026)*
 - **Was passiert:** Antippen von „Von"/„Bis" markiert nur Stunde oder Minute; die Uhr öffnet nur noch
   das Symbol rechts. Früher öffnete Antippen sofort die Uhr.
@@ -313,6 +313,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   (ohne Rahmen) öffnet `showPicker()` die Uhr beim Antippen zuverlässig.
 - **Entscheidung Alex:** Uhr wie früher; das Symbol rechts bleibt. Umsetzung: beim Antippen
   `showPicker()` — nur Android mit Chrome-artigem Browser und nur bei Berührung, sonst unverändert.
+- **Gelöst (25.09.):** so umgesetzt, Test `tests/uhr-hilfe-ui.js` (9), Gegenproben greifen.
 ---
 
 ## Geprüft und in Ordnung

@@ -752,6 +752,10 @@ Darauf ist sie ausgelegt:
   weitertippt, bleibt auch dort: Die verspätete Antwort der vorigen Seite wird verworfen, statt die neue
   zu überschreiben. Mit Absicht anders: Die **Bestellungen** erscheinen auch ohne Netz, mit dem Katalog
   aus dem Gerätespeicher.
+* **Uhrzeit per Uhr:** Antippen eines Uhrzeit-Felds öffnet die Uhr – auch in neueren Chrome-Versionen
+  auf Android, die das von sich aus nicht mehr tun (dort markiert Antippen sonst nur Stunde oder
+  Minute). Das Uhr-Symbol rechts im Feld funktioniert ebenfalls. Auf dem iPhone und am Rechner
+  bleibt alles, wie der Browser es macht.
 * **Zoom ist nicht gesperrt** – Aufziehen mit zwei Fingern funktioniert überall.
 * **Große Trefferflächen:** Auf Touchgeräten haben kleine Symbol- und Textknöpfe eine unsichtbar
   vergrößerte Fläche, ohne dass sich das Aussehen ändert. Mit Maus bleibt alles wie gewohnt.

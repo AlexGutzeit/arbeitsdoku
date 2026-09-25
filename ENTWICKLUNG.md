@@ -3238,3 +3238,23 @@ Rand — genau unter der Fehlermeldung, die jetzt länger steht. Der Klick schlo
 echte Folge von R14. Alex hat entschieden: Meldungen erscheinen **oben unter der Kopfleiste**. Der
 Test ist damit ohne Änderung grün; `lesbar-und-sicher-ui` prüft die Lage ausdrücklich (Gegenprobe:
 Meldung unten → rot). Am Handy verdeckt sie oben keinen Knopf in der Mitte (gemessen).
+
+## Zeitfeld: Antippen öffnet wieder die Uhr (R25, 25.09.2026)
+
+Alex bemerkte am Handy: Antippen von „Von"/„Bis" öffnete nicht mehr die Uhr, sondern markierte nur
+Stunde oder Minute; die Uhr gab es nur noch über das Symbol rechts. **Die App war es nicht** — das
+Zeitfeld ist seit März unverändert, kein Handler unterdrückt den Tipp. Belegt wurde das mit einer
+Testseite ohne App: dasselbe Verhalten in Chrome 154 auf Android 10.
+
+Der erste Test der Abhilfe auf claude.ai scheiterte mit „SecurityError" — dort liegt eine Seite in
+einem **fremden Rahmen**, aus dem Chrome das Öffnen der Uhr per `showPicker()` verbietet. Fast hätte
+das zur Entscheidung für eine Zahlentastatur geführt. Erst eine Testseite auf dem eigenen Server
+(eigene Skriptdatei wegen `script-src 'self'`, danach wieder entfernt) zeigte: Ohne Rahmen öffnet
+`showPicker()` die Uhr zuverlässig.
+
+Umsetzung in `app-1-core.js`: ein seitenweiter Klick-Handler ruft bei Uhrzeit-Feldern `showPicker()`
+auf — **nur** auf Android mit Chrome-artigem Browser (`UHR_HILFE`) und **nur** bei Berührung
+(`istMauszeiger()`). iPhone, Firefox und Rechner bleiben unberührt. `tests/uhr-hilfe-ui.js` ersetzt
+`showPicker` durch einen Zähler — ein Test-Chrome kann keine Uhr zeigen, aber er sieht, wann die App
+sie aufruft. Gegenproben: Hilfe aus, ohne Einschränkung auf Android-Chrome, auch bei Maus, jedes Feld
+statt nur Zeitfelder — jede an ihrer Stelle rot.

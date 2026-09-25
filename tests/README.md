@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**233 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**234 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -254,6 +254,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `ueberschneidung-kette-ui.js` | Drei sich überschneidende Aufträge — Pausenvorschlag UND Arbeitszeit-Warnung, Schritt für Schritt. |
 | `ueberstunden-auszahlung-ui.js` | Überstunden-Auszahlung in der Oberfläche. |
 | `ueberstunden-auszahlung.js` | Überstunden auszahlen — Routen, Rechnung und die Regeln drumherum. |
+| `uhr-hilfe-ui.js` | Zeitfeld am Handy: Antippen öffnet wieder die Uhr — nur dort, wo es fehlt (R25, 25.09.2026). |
 | `umlaute-in-texten.js` | Umlaute in Texten: kein „fuer", „geloescht", „Geraet" in dem, was Menschen lesen (R10, 25.09.2026). |
 | `user-hours-gleichheit.js` | Gleichheitsbeweis fuer die Zusammenlegung der Stunden-Rechnung (C1). |
 | `user-hours-nullprobe.js` | NULLPROBE: Eine Änderung an der Stunden-Rechnung darf bestehende Stände NICHT verschieben. |
