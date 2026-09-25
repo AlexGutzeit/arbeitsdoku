@@ -150,7 +150,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Vorschlag:** alle `can_*`-Felder aus dem Objekt ableiten statt aufzählen; Test holt die
   Schlüssel von der Quelle (wie `tests/konto-rechte-ui.js`).
 
-### [ ] R9 · Englische und technische Fehlermeldungen
+### [~] R9 · Englische und technische Fehlermeldungen
 - **Upload-Fehler** wörtlich durchgereicht: `routes/documents.js:251`, `routes/settings.js:60`,
   `routes/settings.js:344` — z. B. bei voller Platte „ENOSPC: no space left on device, open
   '/home/…'" (englisch **und** mit Serverpfad), oder „Unexpected field".
@@ -170,7 +170,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   „Unerwarteter Fehler — bitte Seite neu laden", echte Meldung in die Konsole); auf dem Server
   `err.type` / `err.code` auswerten.
 
-### [ ] R10 · Fehlende Umlaute in sichtbaren Texten (~20 Stellen)
+### [~] R10 · Fehlende Umlaute in sichtbaren Texten (~20 Stellen)
 - `routes/notes.js` 225, 308, 312, 342, 358, 405, 409 („Eigentuemer", „geloescht", „Empfaenger", „gehoert")
 - `routes/push.js` 26, 84, **87** (auch der Text der Test-Benachrichtigung: „…auf diesem Geraet")
 - `routes/settings.js` 374 („Bild ungueltig")
