@@ -33,7 +33,13 @@ function pfadeAusDeploySkript() {
   const variablen = {};
   for (const zeile of skript.split('\n')) {
     const m = /^\s*([A-Z_]+)="([^"]*)"\s*$/.exec(zeile);
-    if (m) variablen[m[1]] = m[2];
+    if (!m) continue;
+    // Seit R9 (25.09.2026) leitet deploy.sh die Stammdateien aus Git ab: $(git ls-files …). Solche
+    // Werte wertet der Test genauso aus wie das Skript — mit bash, im Projektordner. Sonst läse er
+    // „$(git" als Dateinamen, und keine neue Datei im Stamm fiele mehr auf.
+    variablen[m[1]] = m[2].includes('$(')
+      ? require('child_process').spawnSync('bash', ['-c', zeile + '\nprintf "%s" "$' + m[1] + '"'], { cwd: PROJEKT, encoding: 'utf8' }).stdout
+      : m[2];
   }
   const pfade = [];
   for (const zeile of skript.split('\n')) {
