@@ -287,7 +287,9 @@ function _sseOnMessage(e) {
   if (p.originTab === S.tabId) return;
   const route = getRoute();
   if (p.type === 'orders'   && route === '/orders' && !_editorBusy('#order-form-area'))   renderOrders();
-  if (p.type === 'notes'    && route === '/notes' && !_editingNoteLockId && !_editorBusy('#note-form-area')) renderNotizen();
+  // Notizen: leise auffrischen statt neu aufbauen — seit den Live-Notizen kommen diese Meldungen
+  // im Sekundentakt (jemand tippt, jemand öffnet). Ein offenes „Neue Notiz"-Formular bleibt stehen.
+  if ((p.type === 'notes' || p.type === 'notes-anwesend') && route === '/notes' && !_editorBusy('#note-form-area')) notizenAuffrischen();
   if (p.type === 'bulletin' && route === '/bulletin')                            renderBulletin();
   if (p.type === 'planning' && route === '/planning' && !_editorBusy())          renderPlanningContent();
   if (p.type === 'tools'    && route === '/tools' && !_editorBusy('.tool-checkout-form[style*="block"]')) renderTools();

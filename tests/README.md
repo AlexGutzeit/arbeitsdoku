@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**238 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**239 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -162,6 +162,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `note-leave-ui.js` | UI-Test (Puppeteer): Empfänger sieht bei einer geteilten Notiz den „Freigabe verlassen"-Button und |
 | `note-leave.js` | API-Test „Freigabe verlassen": Empfänger entfernt sich selbst aus einer geteilten Notiz; beim |
 | `notizen-live-prodklon.js` | Live-Notizen am Prod-Klon: Umstellung der echten Notizen auf das gemeinsame Dokument (Etappe A, Schritt 3). |
+| `notizen-live-ui.js` | Live-Notizen in der Oberfläche: Vorschau, Öffnen, gemeinsam schreiben, Cursor, Fertig (Etappe A, Schritt 4). |
 | `notizen-live.js` | Live-Notizen auf dem Server: mehrere bearbeiten gleichzeitig, Rechte, Rauswurf, Speichern (Etappe A, Schritt 3). |
 | `password-policy-ui.js` | UI-Test (Puppeteer): Passwort-Policy im Anlege-Formular — Live-Checkliste (✓/✗), Feld-Einfärbung (rot/grün), |
 | `password-policy.js` | API-Test (B3): Passwort-Policy beim Anlegen + Zurücksetzen. |

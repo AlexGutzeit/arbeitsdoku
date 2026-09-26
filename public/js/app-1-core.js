@@ -1866,6 +1866,9 @@ function render() {
   // stand noch auf der Willkommensseite. Normalerweise nimmt ihn `mouseleave`, aber nach dem
   // Wechsel gibt es das Element, an dem der Zeiger haengt, gar nicht mehr — es feuert nie.
   hideTooltip();
+  // Eine offene Notiz (gemeinsame Bearbeitung) endet mit jedem Seitenwechsel — auch zurück in die
+  // Übersicht oder beim Abmelden. Ist es dieselbe Notiz, baut ihre Seite die Sitzung gleich neu auf.
+  if (typeof notizSitzungVerlassen === 'function') notizSitzungVerlassen();
   const r0 = getRoute();
   // Rechtsseiten sind bewusst OHNE Login erreichbar (Impressumspflicht) → vor dem Auth-Guard behandeln.
   if (r0 === '/impressum' || r0 === '/datenschutz') { renderLegal(r0.slice(1)); return; }
@@ -1910,6 +1913,7 @@ function render() {
   else if (route === '/tools') renderTools();
   else if (route === '/orders') renderOrders();
   else if (route === '/notes') renderNotizen();
+  else if (route.startsWith('/notes/')) renderNotizEditor(route.split('/').pop());
   else if (route === '/absences') renderAbsences();
   else if (route.startsWith('/absences/')) renderAbsenceType(route.split('/')[2]);
   else if (route === '/bulletin') renderBulletin();

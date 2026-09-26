@@ -962,7 +962,6 @@ function bindOrderedEvents(orders) {
 let _notizen = [];
 let _notizenFilter = { projectId: '', search: '', owner: '' };
 let _expandedNoteId = null;
-let _editingNoteLockId = null;
 
 let _kollabGeladen = null;
 
@@ -1118,6 +1117,37 @@ async function renderNotizen() {
   });
 
   bindNoteEvents();
+
+  // Zurück aus einer geöffneten Notiz („← Fertig"): an die Stelle, an der man war — nicht nach oben.
+  if (_notizListeZurueck) {
+    const z = _notizListeZurueck; _notizListeZurueck = null;
+    window.scrollTo(0, z.scroll || 0);
+    _viewState.frisch = false;   // der Sprung nach oben eines Seitenwechsels ist damit erledigt
+    viewStateSave();
+  }
+}
+
+/**
+ * Liste leise auffrischen, ohne Ladekreisel und Neuaufbau der Seite. Seit den Live-Notizen kommen
+ * Aktualisierungen oft (jemand tippt → alle paar Sekunden gespeichert, jemand öffnet eine Notiz →
+ * „gerade drin"); der volle Neuaufbau flackerte dann im Sekundentakt. Neue Angebote brauchen den
+ * Abschnitt oben — dann doch der volle Weg.
+ */
+async function notizenAuffrischen() {
+  // Keine neue Marke ziehen (das würde die Seite für veraltet erklären) — nur nachsehen, ob
+  // inzwischen eine andere Seite gezeichnet wurde.
+  const seq = _renderSeq;
+  let nData, oData;
+  try { [nData, oData] = await Promise.all([api('GET', '/api/notes'), api('GET', '/api/notes/offers')]); } catch (_) { return; }
+  if (!nData || getRoute() !== '/notes' || _renderSeq !== seq) return;
+  const angebote = (oData && oData.offers) || [];
+  if (angebote.length !== document.querySelectorAll('.note-offer-item').length) { renderNotizen(); return; }
+  _notizen = nData.notes || [];
+  const listEl = document.getElementById('note-list');
+  if (!listEl) return;
+  listEl.innerHTML = renderNoteList(filterNotizen());
+  bindNoteEvents();
+  markSeen('notes');   // wer auf die Liste schaut, hat es gesehen
 }
 
 function filterNotizen() {
@@ -1156,16 +1186,21 @@ function renderNoteList(notes) {
       ? `<span>Geteilt mit: ${n.shares.map(s => esc(s.user_name)).join(', ')}</span>` : '';
     const accessBadge = !isOwner ? `<span class="badge badge-${n.access_level === 'write' ? 'chef' : 'mitarbeiter'}">${n.access_level === 'write' ? 'Schreibzugriff' : 'Lesezugriff'}</span>` : '';
     const isExpanded = _expandedNoteId === n.id;
-    const lockBadge = (n.editing_by && n.editing_by !== uid)
-      ? `<span class="badge badge-lock">&#128274; ${esc(n.editing_by_name || '')}</span>` : '';
+    // Wer gerade in der Notiz ist (ersetzt das frühere „🔒 gesperrt"). Man selbst zählt hier nicht —
+    // in der Übersicht ist man ja gerade NICHT drin.
+    const drin = (n.live || []).filter(name => name !== S.user.name);
+    const drinBadge = drin.length
+      ? `<span class="badge notiz-drin" title="Gerade in der Notiz">&#9998; ${drin.map(esc).join(', ')}</span>` : '';
+    const oeffnenBtn = `<button class="btn btn-sm note-open-btn" data-id="${n.id}" title="${canWrite ? 'Öffnen und mitschreiben' : 'Öffnen und live mitlesen'}" aria-label="${canWrite ? 'Öffnen und mitschreiben' : 'Öffnen und live mitlesen'}">${canWrite ? '&#9998;' : '&#128065;'}</button>`;
 
     return `<div class="note-card${n.is_unread ? ' note-card--unread' : ''}${isExpanded ? ' note-card-expanded' : ''}" data-id="${n.id}">
       <div class="note-card-row">
         <div class="note-content" style="flex:1;min-width:0">
-          <div class="note-title">${esc(n.title)} ${accessBadge} ${lockBadge}</div>
+          <div class="note-title">${esc(n.title)} ${accessBadge} ${drinBadge}</div>
           ${projDisplay}
           ${isExpanded
-            ? `<div class="note-body-full">${esc(n.body || '')}</div>`
+            ? `<div class="note-body-full">${notizHtml(n.body_delta, n.body)}</div>
+               <button class="btn btn-primary btn-sm note-open-btn notiz-oeffnen-gross" data-id="${n.id}">${canWrite ? '&#9998; Öffnen und mitschreiben' : '&#128065; Öffnen und live mitlesen'}</button>`
             : `<div class="note-preview">${preview}</div>`}
           <div class="note-meta">
             ${ownerInfo}
@@ -1174,7 +1209,7 @@ function renderNoteList(notes) {
           </div>
         </div>
         <div class="note-actions">
-          ${canWrite ? `<button class="btn btn-sm note-edit-btn" data-id="${n.id}" title="Bearbeiten">&#9998;</button>` : ''}
+          ${oeffnenBtn}
           ${isOwner ? `<button class="btn btn-sm note-share-btn" data-id="${n.id}" title="Freigabe">&#128101;</button>` : ''}
           ${isOwner ? `<button class="btn btn-sm note-offer-btn" data-id="${n.id}" title="Weitergeben">&#10145;</button>` : ''}
           ${isOwner ? `<button class="btn btn-sm btn-danger note-del-btn" data-id="${n.id}" title="L\u00f6schen">&times;</button>` : ''}
@@ -1183,6 +1218,12 @@ function renderNoteList(notes) {
       </div>
     </div>`;
   }).join('');
+}
+
+/** Notiz zur gemeinsamen Bearbeitung öffnen — und merken, wohin „← Fertig" zurückführt. */
+function notizOeffnen(id) {
+  _notizListeZurueck = { scroll: window.scrollY || 0, ausListe: getRoute() === '/notes' };
+  navigate('/notes/' + id);
 }
 
 function bindNoteEvents() {
@@ -1199,11 +1240,10 @@ function bindNoteEvents() {
       }
     });
   });
-  document.querySelectorAll('.note-edit-btn').forEach(btn => {
+  document.querySelectorAll('.note-open-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const n = _notizen.find(x => x.id === Number(btn.dataset.id));
-      if (n) acquireLockAndEdit(n);
+      notizOeffnen(Number(btn.dataset.id));
     });
   });
   document.querySelectorAll('.note-del-btn').forEach(btn => {
@@ -1244,57 +1284,37 @@ function bindNoteEvents() {
   });
 }
 
-async function acquireLockAndEdit(note) {
-  const isShared = note.shares && note.shares.length > 0;
-  if (isShared) {
-    try {
-      await api('POST', '/api/notes/' + note.id + '/lock');
-      _editingNoteLockId = note.id;
-    } catch (err) {
-      toast(err.message || 'Notiz ist gerade in Bearbeitung', 'error');
-      return;
-    }
-  }
-  showNoteForm(note);
-}
-
-function showNoteForm(editNote) {
+// Neue Notiz: nur Titel und Projekt — geschrieben wird danach in der gemeinsamen Bearbeitung, die
+// sich gleich öffnet (seit den Live-Notizen, 26.09.2026; vorher gab es hier auch ein Textfeld und
+// „Speichern"). Bestehende Notizen werden nur noch über „Öffnen" bearbeitet.
+function showNoteForm() {
   const area = document.getElementById('note-form-area');
   if (!area) return;
 
-  const projId = editNote ? editNote.project_id : null;
-  const projText = editNote ? (editNote.project_text || '') : '';
-  const hasProject = !!projId;
-
-  const projOpts = (S.projects || []).map(p =>
-    `<option value="${p.id}" ${p.id === projId ? 'selected' : ''}>${esc(p.name)}</option>`
-  ).join('');
+  const projOpts = (S.projects || []).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
 
   area.innerHTML = `
     <form id="note-form" class="note-form" style="margin-bottom:1rem;padding:1rem;border:1px solid var(--border);border-radius:8px;background:#f8fafc">
       <div class="form-group">
-        <label>Titel *</label>
-        <input type="text" id="nf-title" class="form-control" value="${editNote ? esc(editNote.title) : ''}" required>
+        <label for="nf-title">Titel *</label>
+        <input type="text" id="nf-title" class="form-control" required>
       </div>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
         <div class="form-group" style="flex:1;min-width:150px">
-          <label>Projekt</label>
+          <label for="nf-project">Projekt</label>
           <select id="nf-project" class="form-control">
             <option value="">-- Kein Projekt --</option>
             ${projOpts}
           </select>
         </div>
         <div class="form-group" style="flex:1;min-width:150px">
-          <label>Projekt (Freitext)</label>
-          <input type="text" id="nf-project-text" class="form-control" value="${!hasProject ? esc(projText) : ''}" placeholder="z.B. Baustelle XY" ${hasProject ? 'disabled' : ''}>
+          <label for="nf-project-text">Projekt (Freitext)</label>
+          <input type="text" id="nf-project-text" class="form-control" placeholder="z.B. Baustelle XY">
         </div>
       </div>
-      <div class="form-group">
-        <label>Notiz</label>
-        <textarea id="nf-body" class="form-control note-body-textarea" rows="8">${editNote ? esc(editNote.body || '') : ''}</textarea>
-      </div>
+      <p class="form-hint" style="margin:0 0 .5rem">Danach öffnet sich die Notiz, und du schreibst direkt los — gespeichert wird von selbst.</p>
       <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-        <button type="submit" class="btn btn-primary">${editNote ? 'Speichern' : 'Erstellen'}</button>
+        <button type="submit" class="btn btn-primary">Erstellen und öffnen</button>
         <button type="button" class="btn btn-outline" id="nf-cancel">Abbrechen</button>
       </div>
     </form>
@@ -1317,35 +1337,22 @@ function showNoteForm(editNote) {
     }
   });
 
-  document.getElementById('nf-cancel').addEventListener('click', async () => {
-    if (_editingNoteLockId) {
-      try { await api('POST', '/api/notes/' + _editingNoteLockId + '/unlock'); } catch(e) {}
-      _editingNoteLockId = null;
-    }
-    renderNotizen();
-  });
-  const nfEntwurf = 'notiz:' + (editNote ? editNote.id : 'neu');
+  document.getElementById('nf-cancel').addEventListener('click', () => renderNotizen());
+  const nfEntwurf = 'notiz:neu';
   initDraftKeeper(document.getElementById('note-form'), nfEntwurf);
 
   document.getElementById('note-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = {
       title: document.getElementById('nf-title').value.trim(),
-      body: document.getElementById('nf-body').value,
       project_id: projSelect.value ? Number(projSelect.value) : null,
       project_text: projSelect.value ? '' : projTextInput.value.trim()
     };
     try {
-      if (editNote) {
-        await api('PUT', '/api/notes/' + editNote.id, body);
-        _editingNoteLockId = null;
-        toast('Gespeichert', 'success');
-      } else {
-        await api('POST', '/api/notes', body);
-        toast('Erstellt', 'success');
-      }
+      const r = await api('POST', '/api/notes', body);
       entwurfLoeschen(nfEntwurf);
-      renderNotizen();
+      if (r && r.note) notizOeffnen(r.note.id);
+      else renderNotizen();
     } catch (err) { toast(err.message, 'error'); }
   });
 
@@ -2362,12 +2369,6 @@ async function exportVacationOverviewPdf(year) {
 }
 
 // --- Init ---
-async function releaseCurrentLock() {
-  if (_editingNoteLockId) {
-    try { await api('POST', '/api/notes/' + _editingNoteLockId + '/unlock'); } catch(e) {}
-    _editingNoteLockId = null;
-  }
-}
 // Planungs-Kontextmenü global schließen (einmalig registriert)
 document.addEventListener('click', () => {
   document.querySelectorAll('.plan-action-menu').forEach(m => m.remove());
@@ -2387,20 +2388,9 @@ document.addEventListener('submit', (e) => {
   form.addEventListener('input', () => { clearTimeout(t); reenable(); }, { once: true }); // Validierungsfehler → sofort frei
 });
 window.addEventListener('hashchange', () => {
-  releaseCurrentLock();
   // Echter Seitenwechsel: gemerkte Ansicht der alten Seite verwerfen, damit die neue oben startet.
   viewStateReset();
   render();
-});
-window.addEventListener('beforeunload', () => {
-  if (_editingNoteLockId && S.token) {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/notes/' + _editingNoteLockId + '/unlock', false);
-    xhr.setRequestHeader('Authorization', 'Bearer ' + S.token);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    try { xhr.send('{}'); } catch(e) {}
-    _editingNoteLockId = null;
-  }
 });
 window.addEventListener('DOMContentLoaded', () => {
   initViewStateKeeper();   // Scrollposition + aufgeklappte Bereiche über Neuaufbauten hinweg erhalten

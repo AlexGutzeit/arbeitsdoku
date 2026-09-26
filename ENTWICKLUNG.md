@@ -3378,3 +3378,36 @@ ohne Sichern" bleibt grün: Der Test beendet mit SIGTERM wie systemd; SIGINT ist
 er hat sie bei sich schon eingetragen. Fremde Cursor: quill-cursors legt sie auf Touch-Geräten mit
 `z-index:-1` hinter die Karte (Alex sah auf der Probeseite keinen Cursor); eigene Regel +
 Namensfähnchen per `toggleFlag`, Test über Bildpunkte statt Elementzahl.
+
+**Schritt 4 — die Oberfläche** (`public/js/notiz-sitzung.js`, Übersicht in `app-8-comm-init.js`).
+Zwei Wege zu einer Notiz, auf Alex' Frage hin bewusst getrennt: **Vorschau** in der Übersicht
+(Karte antippen, formatiert aus `body_delta`, man ist NICHT drin) und **Öffnen** (`#/notes/<id>`,
+gemeinsame Bearbeitung). „← Fertig" — wie jeder Seitenwechsel — beendet die Sitzung und führt an
+dieselbe Stelle der Übersicht zurück. Neue Notiz: nur Titel/Projekt, dann öffnet sie sich.
+
+* **Leerzeile zu viel am Ende**, gesehen im ersten Blick mit zwei Browsern: Das Schreibfeld wurde an
+  das (noch leere) Dokument gebunden, bevor der Stand vom Server kam; Quills eigenes Schluss-
+  Zeilenende blieb dann zusätzlich stehen, und Tom tippte in eine Zeile, die es im Dokument nicht
+  gab. Angebunden wird jetzt erst mit dem Stand. Der Test vergleicht Schreibfeld und Dokument
+  Zeichen für Zeichen — die Textprobe allein fasst Leerzeilen zusammen und hätte es nicht gesehen.
+* **Fremde Cursor** (Fund von der Probeseite): eigene Stilregel gegen `z-index:-1` auf Touch-Geräten,
+  Namensfähnchen per `toggleFlag` 3 s nach jeder Bewegung. Geprüft über Bildpunkte in der Farbe der
+  Person — mit Touch-Emulation, genau dem Fall, der am Handy fehlte.
+* **Übersicht frischt leise auf** (`notizenAuffrischen`): Wer tippt, löst alle paar Sekunden eine
+  Speicher-Meldung aus; der frühere volle Neuaufbau mit Ladekreisel hätte im Sekundentakt geflackert.
+* **Hintergrund**: nach 1 Minute aus der Notiz abgemeldet (sonst zählt man als „drin" und bekommt keine
+  Meldungen), beim Zurückkommen von selbst wieder verbunden. **Funkloch**: Änderungen bleiben in der
+  Warteschlange und auf dem Gerät (`localStorage`), Anzeige „Keine Verbindung – wird nachgereicht",
+  neuer Versuch alle 3 s; „Fertig" fragt dann nach; beim nächsten Öffnen wird nachgereicht.
+* **Nach einer Abweisung** (Leserecht, zu groß, beschädigt) öffnet der Browser die Notiz neu — er hat
+  die Änderung bei sich schon eingetragen und muss den Stand des Servers übernehmen.
+* Die Sperre ist aus dem Browser verschwunden (`acquireLockAndEdit`, Freigabe beim Schließen per
+  synchronem XHR — R11 gibt es damit nicht mehr).
+
+`tests/notizen-live-ui.js` (32, drei Browser mit Touch). **Gegenproben** (13): Cursor-Regel fehlt,
+kein Fähnchen, Feld vor dem Stand angebunden, voller Neuaufbau, kein Abmelden im Hintergrund, nichts
+auf dem Gerät gesichert, nicht nachgereicht, Rückweg ohne Scrollposition, Vorschau ohne `esc()`,
+Knopfleiste bei Leserecht, Rauswurf ohne Rückweg, alte Funkloch-Anzeige, Vorschau tritt bei — jede
+an ihrer Stelle rot. Die Probe „voller Neuaufbau" blieb zunächst GRÜN: Tom öffnete die Übersicht
+erst, als Anna schon drin war — „Anna ist drin" kam mit dem ersten Laden, aufgefrischt wurde gar
+nichts. Reihenfolge im Test umgedreht, danach rot. `tests/seite-laden-ui.js` kennt die neue Seite (79).

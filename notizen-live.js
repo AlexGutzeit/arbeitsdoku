@@ -185,9 +185,11 @@ function verbinden(noteId, nutzer, req, res) {
   v.ping = setInterval(() => { try { res.write(': ping\n\n'); } catch (_) {} }, PING_MS);
 
   const fremde = [...raum.aw.getStates().keys()];
+  const kopf = db.prepare('SELECT title, project_id, project_text FROM notes WHERE id = ?').get(noteId);
   senden(v, 'start', {
     verbindung: v.id,
     zugriff,
+    kopf,
     du: { name: nutzer.name, farbe },
     stand: b64(Y.encodeStateAsUpdate(raum.doc)),
     sv: b64(Y.encodeStateVector(raum.doc)),
@@ -227,15 +229,15 @@ function aenderung(noteId, userId, verbindungId, updateB64) {
   const zugriff = zugriffVon(getDb(), noteId, userId);
   if (!darfSchreiben(zugriff)) {
     zugriffAbgleichen(noteId);
-    return { status: 403, fehler: 'Du darfst diese Notiz nur lesen.' };
+    return { status: 403, code: 'NUR_LESEN', fehler: 'Du darfst diese Notiz nur lesen.' };
   }
   const update = ausB64(updateB64);
-  if (!update.length || update.length > GROESSTE_AENDERUNG) return { status: 413, fehler: 'Diese Änderung ist zu groß.' };
+  if (!update.length || update.length > GROESSTE_AENDERUNG) return { status: 413, code: 'ZU_GROSS', fehler: 'Diese Änderung ist zu groß (z. B. ein sehr langer eingefügter Text).' };
   const vorher = inhalt(raum);
   try {
     Y.applyUpdate(raum.doc, update, v);
   } catch (_) {
-    return { status: 400, fehler: 'Die Änderung war beschädigt und wurde nicht übernommen.' };
+    return { status: 400, code: 'BESCHAEDIGT', fehler: 'Die Änderung war beschädigt und wurde nicht übernommen.' };
   }
   // Das Dokument endet immer mit einem Zeilenende (siehe notiz-dokument.js). Löscht jemand
   // alles bis auf den letzten Rest, wird es hier wieder angefügt — und an ALLE verteilt.

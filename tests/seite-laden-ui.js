@@ -54,7 +54,8 @@ function req(m, p, t, b) {
       days: [{ date: '2027-12-06', time_from: '07:00', time_to: '16:00' }, { date: '2027-12-07', time_from: '07:00', time_to: '16:00' }] });
     const plan = ((await req('GET', '/api/planning?from=2027-12-01&to=2027-12-31', admin)).body.entries || [])[0];
     const aushang = (await req('POST', '/api/bulletin', admin, { title: 'Laden-Aushang', text: 'x' })).body.entry;
-    if (!projekt || !eintrag || !plan || !aushang) throw new Error('Testdaten fehlen: ' + JSON.stringify({ projekt: !!projekt, eintrag: !!eintrag, plan: !!plan, aushang: !!aushang }));
+    const notiz = (await req('POST', '/api/notes', admin, { title: 'Laden-Notiz' })).body.note;   // geöffnete Notiz (Live-Notizen, 26.09.2026)
+    if (!projekt || !eintrag || !plan || !aushang || !notiz) throw new Error('Testdaten fehlen: ' + JSON.stringify({ projekt: !!projekt, eintrag: !!eintrag, plan: !!plan, aushang: !!aushang, notiz: !!notiz }));
 
     // Jede Adresse, die der Router kennt und die etwas laedt (app-1-core.js, render()).
     const SEITEN = [
@@ -64,7 +65,7 @@ function req(m, p, t, b) {
       '/planning/edit-group/' + plan.group_id, '/planning/accept/' + plan.id, '/planning/from-project/' + projekt.id,
       '/users', '/projects', '/settings', '/audit',
       '/deleted-entries', '/deleted-absences', '/deleted-projects', '/deleted-users',
-      '/documents', '/pdf', '/statistics', '/produkte', '/tools', '/notes',
+      '/documents', '/pdf', '/statistics', '/produkte', '/tools', '/notes', '/notes/' + notiz.id,
       '/absences', '/absences/urlaub', '/bulletin', '/bulletin/edit/' + aushang.id,
       '/impressum', '/datenschutz',
     ];

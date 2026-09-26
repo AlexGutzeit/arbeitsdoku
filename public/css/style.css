@@ -2043,9 +2043,62 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .note-actions { display: flex; gap: 0.25rem; flex-shrink: 0; align-items: center; }
 .note-filters { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .note-filters select, .note-filters input { flex: 1; min-width: 150px; }
-.note-body-textarea { min-height: 200px; resize: vertical; }
-.note-body-full { font-size: 0.88rem; color: #334155; margin-top: 8px; white-space: pre-wrap; word-break: break-word; line-height: 1.55; max-height: 400px; overflow-y: auto; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 6px; }
-.badge-lock { background: #fef2f2; color: #dc2626; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; }
+.note-body-full { font-size: 0.88rem; color: #334155; margin-top: 8px; word-break: break-word; line-height: 1.55; max-height: 400px; overflow-y: auto; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 6px; }
+/* „gerade drin" an der Karte (ersetzt das frühere „🔒 gesperrt") */
+.notiz-drin { background: #eef2ff; color: #3730a3; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 500; }
+.notiz-oeffnen-gross { margin-top: 0.6rem; }
+
+/* Formatierte Notiz (Vorschau in der Übersicht) — aus body_delta gebaut, siehe notizHtml() */
+.notiz-inhalt p { margin: 0; }
+.notiz-inhalt ul, .notiz-inhalt ol { margin: 0.15rem 0; padding-left: 1.4rem; }
+.notiz-inhalt ul.notiz-check { list-style: none; padding-left: 0.1rem; }
+.notiz-inhalt ul.notiz-check li { display: flex; gap: 0.4rem; }
+.notiz-inhalt li.erledigt { color: var(--text-lighter); text-decoration: line-through; }
+.notiz-haken { flex-shrink: 0; text-decoration: none; display: inline-block; }
+
+/* Nur für Screenreader sichtbar */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* --- Notiz geöffnet: gemeinsame Bearbeitung (notiz-sitzung.js) ---
+   Die Quill-Grundstile kommen aus /vendor/kollab.css und werden NACH dieser Datei geladen — deshalb
+   sind die Anpassungen hier über .notiz-editor spezifischer gefasst, statt sich auf die Reihenfolge
+   zu verlassen. */
+.notiz-editor { max-width: 900px; margin: 0 auto; padding: 0; }
+.notiz-editor-kopf { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.85rem 1rem 0.5rem; }
+.notiz-status { font-size: 0.8rem; color: var(--text-light); text-align: right; }
+.notiz-status[data-art="ok"]::before { content: "\2713  "; color: var(--success); font-weight: 700; }
+.notiz-status[data-art="fehler"] { color: var(--danger); font-weight: 600; }
+.notiz-editor .notiz-titel { margin: 0 1rem; width: calc(100% - 2rem); font-size: 1.15rem; font-weight: 600; }
+.notiz-projekt { margin: 0.35rem 1rem 0; font-size: 0.85rem; color: var(--text-light); }
+.notiz-projekt summary { cursor: pointer; padding: 0.35rem 0; min-height: 32px; }
+.notiz-projekt-felder { display: flex; gap: 0.5rem; flex-wrap: wrap; padding: 0.3rem 0 0.4rem; }
+.notiz-projekt-felder > * { flex: 1; min-width: 150px; }
+.notiz-anwesend { display: flex; flex-wrap: wrap; gap: 6px; padding: 0.6rem 1rem 0.5rem; min-height: 2.4rem; }
+.notiz-person { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; padding: 2px 10px 2px 8px; border-radius: 999px; background: var(--bg); }
+.notiz-person--du { font-weight: 600; }
+.notiz-punkt { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.notiz-nur-lesen { margin: 0 1rem 0.5rem; font-size: 0.85rem; color: var(--text-light); background: var(--bg); border-radius: 6px; padding: 0.45rem 0.6rem; }
+/* Knopfleiste: bleibt beim Scrollen direkt unter der Kopfleiste (56 px) stehen */
+.notiz-editor .notiz-leiste.ql-toolbar.ql-snow { position: sticky; top: 56px; z-index: 5; background: var(--card); border: 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px 8px; display: flex; flex-wrap: wrap; gap: 2px 12px; font-family: inherit; }
+.notiz-editor .notiz-leiste.ql-toolbar.ql-snow .ql-formats { margin-right: 0; display: flex; gap: 2px; }
+.notiz-editor .ql-snow.ql-toolbar button { width: 44px; height: 44px; padding: 10px; border-radius: 8px; }
+.notiz-editor .ql-snow.ql-toolbar button:hover { background: var(--bg); }
+.notiz-editor .ql-snow.ql-toolbar button:focus-visible { outline: 3px solid var(--primary); outline-offset: 0; }
+.notiz-editor .ql-snow.ql-toolbar button.ql-active { background: var(--primary-light); }
+.notiz-editor .ql-snow.ql-toolbar button:hover .ql-stroke, .notiz-editor .ql-snow.ql-toolbar button.ql-active .ql-stroke { stroke: var(--primary-hover); }
+.notiz-editor .ql-snow.ql-toolbar button:hover .ql-fill, .notiz-editor .ql-snow.ql-toolbar button.ql-active .ql-fill { fill: var(--primary-hover); }
+.notiz-editor .ql-container.ql-snow { border: 0; font: inherit; font-size: 16px; }   /* 16 px: iPhone zoomt sonst beim Tippen hinein */
+.notiz-editor .ql-editor { min-height: 50vh; padding: 12px 1rem 1.5rem; line-height: 1.55; color: var(--text); }
+.notiz-editor .ql-editor.ql-blank::before { color: var(--text-lighter); font-style: normal; left: 1rem; }
+.notiz-editor .ql-editor li[data-list="checked"] { color: var(--text-lighter); text-decoration: line-through; }
+.notiz-editor .ql-editor li[data-list] > .ql-ui::before { font-size: 1.1em; }
+/* Fremde Cursor. quill-cursors legt sie auf Touch-Geräten (pointer: coarse) mit z-index:-1 HINTER
+   die Karte, damit sie kein Antippen abfangen — dort waren sie unsichtbar (Alex auf der Probeseite,
+   26.09.2026). Hier bleiben sie vorn und lassen Berührungen durch. Das Namensfähnchen blendet
+   notiz-sitzung.js nach jeder Bewegung 3 s lang ein — am Handy gibt es kein Überfahren mit der Maus. */
+.ql-cursor .ql-cursor-caret-container { z-index: 1; }
+@media (pointer: coarse) { .ql-cursor .ql-cursor-caret-container { z-index: 1; pointer-events: none; } }
+.ql-cursor .ql-cursor-flag { font-size: 0.75rem; line-height: 1.5; }
 .note-offers-section { background: #fef9e7; border: 1px solid #f0c36d; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
 .note-offers-section h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
 .note-offer-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); gap: 0.5rem; }
