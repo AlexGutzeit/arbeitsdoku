@@ -3444,3 +3444,12 @@ Bild mit `onerror`, Tabelle) — ankommen darf nur Text mit erlaubter Formatieru
 nichts ab. Die Prüfung „weist nichts ab" vergleicht die SITZUNG vor und nach dem Einfügen: Nach einer
 Abweisung öffnet die App neu, und „offen" wäre auch die neue Sitzung (Gegenprobe ohne Format-Liste
 hat das gezeigt). Tests: `notizen-live` 36, `notizen-live-ui` 37.
+
+**Schritt 6 — Aufräumen.** README-Abschnitt „Notizen" neu (Vorschau/Öffnen/Fertig, Meldung je Runde,
+Zähler, Technik; dabei ein echter Name aus dem Beispiel-Text entfernt — das Repo ist öffentlich).
+R11 in der Bugliste erledigt (es gibt keine Sperre mehr). Nebenbefund vom Prod-Klon abgeräumt: Die
+Umstellung entfernt Freigaben, Angebote und Gesehen-Merker zu Notizen, die es nicht mehr gibt (am
+Klon 18 Einträge, echte Freigaben unverändert — `notizen-live-prodklon`), und das Löschen einer Notiz
+nimmt sie ausdrücklich mit. Ehrlich festgehalten: Die Gegenprobe ohne dieses Mitlöschen bleibt grün,
+weil `ON DELETE CASCADE` heute greift; die Waisen am Klon stammen aus früherer Zeit. Das Mitlöschen
+ist ein Netz, keine Reparatur.

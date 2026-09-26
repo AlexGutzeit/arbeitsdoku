@@ -1038,6 +1038,12 @@ function ensureNotizLiveSchema(targetDb) {
     targetDb.exec(`CREATE TABLE IF NOT EXISTS note_gesehen (
       user_id INTEGER NOT NULL, note_id INTEGER NOT NULL, gesehen_am TEXT NOT NULL,
       PRIMARY KEY (user_id, note_id))`);
+    // Freigaben, Angebote und Gesehen-Merker zu Notizen, die es nicht mehr gibt (Nebenbefund am
+    // Prod-Klon: 17 Freigaben zu 8 gelöschten Notizen). Harmlos — die Listen verbinden sie nie —,
+    // aber sie tauchten in der Datenauskunft unter „mit mir geteilte Notizen" auf.
+    const weg = ['note_shares', 'note_offers', 'note_gesehen'].reduce((n, t) =>
+      n + targetDb.prepare(`DELETE FROM ${t} WHERE note_id NOT IN (SELECT id FROM notes)`).run().changes, 0);
+    if (weg) console.log(`Migration: ${weg} verwaiste Einträge zu gelöschten Notizen entfernt.`);
     const offen = targetDb.prepare('SELECT id, body FROM notes WHERE ydoc IS NULL').all();
     if (!offen.length) return;
     const { zeileAusKlartext } = require('../notiz-dokument');

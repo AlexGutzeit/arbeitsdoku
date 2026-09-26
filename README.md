@@ -69,7 +69,7 @@ es geht; die Abschnitte darunter beschreiben es im Einzelnen.
 **Zusammenarbeit**
 
 - [📌 Schwarzes Brett](#-schwarzes-brett) — Aushänge fürs Team, auf der Willkommensseite eingeblendet.
-- [📝 Notizen](#-notizen) — Eigene Notizen, einzeln freigebbar.
+- [📝 Notizen](#-notizen) — Eigene Notizen, einzeln freigebbar, gemeinsam live bearbeitbar.
 - [🗂️ Dokumente](#-dokumente) — Dateiablage mit Ordnern und Speicherlimits.
 
 **Verwaltung**
@@ -644,7 +644,21 @@ Aushänge/Ankündigungen fürs ganze Team, mit Benachrichtigungs-Badge. Ein **ne
 
 #### 📝 Notizen
 
-Persönliche und **geteilte** Notizen (Lese-/Schreibrechte pro Benutzer), mit Bearbeitungs-Sperre gegen gleichzeitiges Editieren. Empfänger können eine geteilte Notiz per **„Freigabe verlassen"** selbst aus ihrer Liste entfernen; beim Eigentümer verschwindet der Haken, er kann sie durch erneutes Anhaken wieder freigeben. Filterbar nach **eigenen / freigegebenen** Notizen (sowie gezielt **nach jedem einzelnen Freigeber**), Projekt und Suchtext. **Bearbeitet jemand eine geteilte Notiz, bekommen Eigentümer und Mitleser eine Push-Meldung** („Notiz bearbeitet – Bastian Budau hat ‚Oberhohenried‘ bearbeitet“) – der Bearbeiter selbst natürlich nicht, und nur wer den Kategorie-Schalter „Notizen“ an hat. **Nur bei einer echten Änderung:** Wer eine Notiz nur aufmacht, hineinschaut und speichert, löst weder eine Meldung noch den Zähler aus – der Zeitstempel der Notiz bleibt dann unangetastet (reine Leerzeichen am Rand zählen ebenfalls nicht als Änderung). Die Bearbeitungs-Sperre wird trotzdem gelöst.
+Persönliche und **geteilte** Notizen (Lese-/Schreibrechte pro Benutzer), die **mehrere gleichzeitig bearbeiten** können – wie in einem Etherpad:
+
+- **Vorschau:** Eine Karte in der Übersicht antippen klappt die Notiz formatiert auf. Man ist dabei **nicht** „drin" – niemand sieht einen, und die eigenen Meldungen laufen weiter. An der Karte steht, wer gerade in der Notiz ist (**✎ Name**).
+- **Öffnen** (✎ bzw. 👁 bei Leserecht) führt in die gemeinsame Bearbeitung: Alles, was jemand tippt, erscheint sofort bei allen. Oben steht, **wer gerade drin ist** – jede Person in eigener Farbe; ihr **Cursor** steht in dieser Farbe im Text, mit einem Namensfähnchen, das nach jeder Bewegung kurz erscheint (auch am Handy). Knopfleiste: **fett, kursiv, unterstrichen, Aufzählung, nummerierte Liste, Checkliste** (☐/☑ zum Abhaken). Rückgängig nimmt nur die **eigenen** Änderungen zurück.
+- **Kein Speichern:** Alles geht sofort an den Server (Anzeige oben rechts: „✓ Gespeichert"). **„← Fertig"** – oder jeder andere Seitenwechsel – beendet die Sitzung und führt an dieselbe Stelle der Übersicht zurück.
+- **Leserecht:** keine Knopfleiste, nicht tippbar, aber live mitlesen. Wird eine Freigabe entzogen oder die Notiz gelöscht, ist man sofort draußen; Schreiben ↔ Lesen gilt sofort.
+- **Funkloch:** Änderungen bleiben auf dem Gerät („Keine Verbindung – wird nachgereicht") und werden nachgereicht, sobald wieder Empfang da ist – auch erst beim nächsten Öffnen. **Im Hintergrund** (Handy weggesteckt) meldet die App einen nach einer Minute aus der Notiz ab und beim Zurückkommen von selbst wieder an.
+- **Neue Notiz:** „+" → Titel (und Projekt) → die Notiz öffnet sich zum Schreiben.
+- Eingefügter Text (Word, Webseite, WhatsApp) behält nur die erlaubte Formatierung; Links, Bilder und Farben fallen weg.
+
+Empfänger können eine geteilte Notiz per **„Freigabe verlassen"** selbst aus ihrer Liste entfernen; beim Eigentümer verschwindet der Haken, er kann sie durch erneutes Anhaken wieder freigeben. **„Weitergeben"** legt beim Empfänger eine **Kopie** an (das Original bleibt). Filterbar nach **eigenen / freigegebenen** Notizen (sowie gezielt **nach jedem einzelnen Freigeber**), Projekt und Suchtext.
+
+**Meldungen:** Eine Push-Meldung **je Bearbeitungsrunde**, nicht je Tastendruck („Notiz bearbeitet – Max Mustermann hat ‚Übergabe' bearbeitet"). Eine Runde endet, wenn der Bearbeiter die Notiz verlässt oder 2 Minuten nichts ändert. Gemeldet wird an Eigentümer und Mitleser, die **gerade nicht in der Notiz sind** – wer drin ist, hat es live gesehen –, nur bei einer echten Änderung (auch Umbenennen), nie an den Bearbeiter selbst, und nur mit eingeschaltetem Kategorie-Schalter „Notizen". **Zähler:** Nur hineinschauen löst nichts aus. Was man live in einer offenen Notiz gesehen hat, zählt danach nicht als neu.
+
+*Technik:* Yjs (gemeinsames Dokument, das ohne Sperre zusammenführt) und Quill (Schreibfeld), mitgeliefert als `public/vendor/kollab.min.js` (siehe `public/vendor/HERKUNFT.md`), erst beim Öffnen geladen. Ein Ereignisstrom je geöffneter Notiz (SSE, 60-Sekunden-Ticket), Änderungen und Cursor als kurze Anfragen; der Server prüft bei **jeder** Änderung das Schreibrecht und den Inhalt (nur erlaubte Formatierung), speichert nach 1,5 s Ruhe und vor jedem Neustart. Beim ersten Start nach dem Update werden bestehende Notizen einmal umgestellt – Text und Zeitstempel bleiben unverändert. Ein noch nicht aktualisierter Programmstand wird beim Speichern mit dem Hinweis „bitte neu laden" abgewiesen, statt die Formatierung der anderen zu überschreiben.
 
 #### 🗂️ Dokumente
 
@@ -789,7 +803,7 @@ an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweilig
 | Neue Bestellung | Chef + Admin |
 | Neuer Aushang bzw. **inhaltlich geänderter** Aushang | alle außer dem Autor |
 | Notiz geteilt/angeboten | die betroffenen Empfänger |
-| Geteilte Notiz **inhaltlich geändert** | Eigentümer + Mitleser, außer dem Bearbeiter |
+| Geteilte Notiz **inhaltlich geändert** (einmal je Bearbeitungsrunde) | Eigentümer + Mitleser, die gerade nicht in der Notiz sind, außer dem Bearbeiter |
 | Neuer Abwesenheitsantrag bzw. Krank-/Schule-/Innung-Meldung | alle Manager (Chef/Admin/Buchhalter) |
 | Urlaub genehmigt/abgelehnt bzw. Abwesenheit vom Chef bearbeitet | der betroffene Mitarbeiter |
 

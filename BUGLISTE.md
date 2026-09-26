@@ -191,7 +191,11 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Gelöst (25.09.):** 82 Stellen (mehr als die ~20 der Durchsicht) in Meldungen, Audit-Texten und
   Protokollen; Kennungen unverändert. Prüftest `tests/umlaute-in-texten.js`.
 
-### [ ] R11 · Notiz-Sperre läuft nach 15 Minuten ab, ohne Verlängerung
+### [x] R11 · Notiz-Sperre läuft nach 15 Minuten ab, ohne Verlängerung — erledigt durch die Live-Notizen (Etappe A, `d053371` / `421b66f`)
+- **Gelöst (26.09.2026, Entscheidung Alex):** Statt die Sperre zu verlängern, gibt es keine Sperre mehr —
+  mehrere bearbeiten eine Notiz gleichzeitig (Yjs + Quill). Damit entfallen Ablauf, fehlender Name und das
+  synchrone XHR beim Schließen. Ein alter Programmstand bekommt beim Sperren/Speichern „bitte neu laden".
+  Tests `tests/notizen-live*.js`. Noch nicht deployt.
 - **Wo:** `routes/notes.js:8` (`LOCK_TIMEOUT_MINUTES = 15`), kein Herzschlag im Client
   (`app-8-comm-init.js:1181`), Freigabe per synchronem XHR in `beforeunload` (`:2336`)
 - **Was passiert:** Wer länger schreibt, kann von einem Kollegen überholt werden und bekommt beim

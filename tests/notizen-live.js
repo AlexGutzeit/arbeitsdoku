@@ -277,6 +277,9 @@ async function beenden() {
     const [g1, g2] = [await O2.warte('raus'), await R2.warte('raus')];
     ok('Notiz gelöscht → alle Drinnen sofort raus', weg.status === 200 && g1 && g2 && g1.grund === 'geloescht' && g2.grund === 'geloescht',
       JSON.stringify([weg.status, g1, g2, Xn.status]));
+    const ritaDaten = (await req('GET', '/api/users/meine-daten', rita.token)).text || '';
+    const geteilt = (JSON.parse(ritaDaten).mit_mir_geteilte_notizen || []).map(x => x.note_id);
+    ok('… und ihre Freigaben sind mit weg (Ritas Datenauskunft nennt die Notiz nicht mehr)', !geteilt.includes(id), JSON.stringify(geteilt));
   } catch (e) {
     fail++; fails.push('Absturz: ' + e.message); console.log('  ✗ Absturz: ' + e.stack);
   } finally {

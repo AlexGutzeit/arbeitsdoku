@@ -259,6 +259,10 @@ router.delete('/:id', authenticate, (req, res) => {
   if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann löschen' });
 
   db.prepare('DELETE FROM notes WHERE id = ?').run(req.params.id);
+  // Abhängiges ausdrücklich mitlöschen. Heute erledigt das auch ON DELETE CASCADE (die Gegenprobe
+  // ohne diese Zeile bleibt grün) — aber am Prod-Klon standen 17 Freigaben zu gelöschten Notizen aus
+  // früherer Zeit. Das Netz kostet nichts.
+  for (const t of ['note_shares', 'note_offers', 'note_gesehen']) db.prepare(`DELETE FROM ${t} WHERE note_id = ?`).run(req.params.id);
   live.notizGeloescht(req.params.id);
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });

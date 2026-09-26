@@ -54,6 +54,7 @@ const zeilen = (d, sql) => { const r = d.exec(sql)[0]; return r ? r.values.map(v
   const d0 = new SQL.Database(fs.readFileSync(DB));
   const spalten = zeilen(d0, 'PRAGMA table_info(notes)').map(c => c.name);
   const alt = zeilen(d0, 'SELECT id, user_id, title, body, updated_at, updated_by FROM notes ORDER BY id');
+  const freigabenEcht = zeilen(d0, 'SELECT COUNT(*) AS n FROM note_shares WHERE note_id IN (SELECT id FROM notes)')[0].n;
   d0.close();
   console.log(`Klon: ${alt.length} Notizen${spalten.includes('ydoc') ? ' (schon umgestellt!)' : ''}\n`);
   if (!alt.length) { console.log('Keine Notizen im Klon — Test übersprungen.'); process.exit(0); }
@@ -67,6 +68,14 @@ const zeilen = (d, sql) => { const r = d.exec(sql)[0]; return r ? r.values.map(v
     const m = log1.match(/Migration: (\d+) Notiz\(en\) auf gemeinsames Dokument umgestellt\./);
     ok(`alle ${alt.length} Notizen umgestellt (Meldung im Startprotokoll)`, spalten.includes('ydoc') || (m && Number(m[1]) === alt.length), m ? m[0] : 'keine Meldung');
     ok('keine Fehlermeldung der Umstellung', !/ensureNotizLiveSchema fehlgeschlagen/.test(log1));
+    {
+      const dw = new SQL.Database(fs.readFileSync(DB));
+      const waisen = zeilen(dw, 'SELECT COUNT(*) AS n FROM note_shares WHERE note_id NOT IN (SELECT id FROM notes)')[0].n;
+      const echte = zeilen(dw, 'SELECT COUNT(*) AS n FROM note_shares')[0].n;
+      dw.close();
+      ok('verwaiste Freigaben zu gelöschten Notizen sind weg, echte Freigaben bleiben', waisen === 0 && echte === freigabenEcht,
+        JSON.stringify({ waisen, echte, erwartet: freigabenEcht }));
+    }
 
     const d1 = new SQL.Database(fs.readFileSync(DB));
     const neu = Object.fromEntries(zeilen(d1, 'SELECT id, title, body, body_delta, ydoc, updated_at, updated_by FROM notes').map(n => [n.id, n]));
