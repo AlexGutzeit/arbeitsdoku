@@ -1032,6 +1032,12 @@ function ensureNotizLiveSchema(targetDb) {
     const cols = targetDb.prepare('PRAGMA table_info(notes)').all().map(c => c.name);
     if (!cols.includes('ydoc')) targetDb.exec('ALTER TABLE notes ADD COLUMN ydoc BLOB');
     if (!cols.includes('body_delta')) targetDb.exec('ALTER TABLE notes ADD COLUMN body_delta TEXT');
+    // Bis wann jemand eine Notiz gesehen hat — für den Zähler. Wer in einer Notiz ist, sieht die
+    // Änderungen der anderen live; sie sollen danach nicht als „neu" zählen. Der alte Merker je
+    // Thema (user_seen 'notes') bleibt daneben bestehen (Übersicht angesehen = alles gesehen).
+    targetDb.exec(`CREATE TABLE IF NOT EXISTS note_gesehen (
+      user_id INTEGER NOT NULL, note_id INTEGER NOT NULL, gesehen_am TEXT NOT NULL,
+      PRIMARY KEY (user_id, note_id))`);
     const offen = targetDb.prepare('SELECT id, body FROM notes WHERE ydoc IS NULL').all();
     if (!offen.length) return;
     const { zeileAusKlartext } = require('../notiz-dokument');

@@ -44,16 +44,19 @@ function computeBadgeCounts(db, user) {
     "SELECT COUNT(*) as n FROM bulletin_entries WHERE updated_at > ? AND COALESCE(updated_by, created_by) != ?"
   ).get(bulletinSince, uid).n;
 
+  // Eine Notiz, die man selbst offen hatte, während andere geschrieben haben, zählt nicht als neu:
+  // note_gesehen hält fest, bis zu welchem Stand man sie live gesehen hat (Live-Notizen, 26.09.2026).
+  const NICHT_LIVE_GESEHEN = "n.updated_at > COALESCE((SELECT g.gesehen_am FROM note_gesehen g WHERE g.user_id = ? AND g.note_id = n.id), '')";
   const sharedNotes = db.prepare(`
     SELECT COUNT(DISTINCT id) as n FROM (
       SELECT n.id FROM notes n
-      WHERE n.user_id = ? AND n.updated_at > ? AND COALESCE(n.updated_by, n.user_id) != ?
+      WHERE n.user_id = ? AND n.updated_at > ? AND COALESCE(n.updated_by, n.user_id) != ? AND ${NICHT_LIVE_GESEHEN}
       UNION
       SELECT n.id FROM notes n
       JOIN note_shares ns ON ns.note_id = n.id AND ns.user_id = ?
-      WHERE (n.updated_at > ? AND COALESCE(n.updated_by, n.user_id) != ?) OR ns.created_at > ?
+      WHERE (n.updated_at > ? AND COALESCE(n.updated_by, n.user_id) != ? AND ${NICHT_LIVE_GESEHEN}) OR ns.created_at > ?
     )
-  `).get(uid, notesSince, uid, uid, notesSince, uid, notesSince).n;
+  `).get(uid, notesSince, uid, uid, uid, notesSince, uid, uid, notesSince).n;
 
   const offers = db.prepare(
     "SELECT COUNT(*) as n FROM note_offers WHERE to_user_id = ? AND status = 'pending'"

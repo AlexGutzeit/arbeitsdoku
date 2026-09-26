@@ -156,14 +156,17 @@ router.get('/', authenticate, (req, res) => {
     return row ? row.seen_at : '2000-01-01 00:00:00';
   })();
 
+  // Live gesehen (Notiz offen gehabt, während andere schrieben) zählt nicht als ungelesen — siehe badges.js.
+  const gesehen = new Map(db.prepare('SELECT note_id, gesehen_am FROM note_gesehen WHERE user_id = ?').all(uid).map(g => [g.note_id, g.gesehen_am]));
   for (const n of notes) {
     const effectiveUpdater = n.updated_by ?? n.user_id;
+    const neuSeitLive = n.updated_at > (gesehen.get(n.id) || '');
     if (n.user_id === uid) {
-      n.is_unread = n.updated_at > notesSince && effectiveUpdater !== uid;
+      n.is_unread = n.updated_at > notesSince && effectiveUpdater !== uid && neuSeitLive;
     } else {
       const share = (n.shares || []).find(s => s.user_id === uid);
       const shareNew = share ? share.created_at > notesSince : false;
-      n.is_unread = (n.updated_at > notesSince && effectiveUpdater !== uid) || shareNew;
+      n.is_unread = (n.updated_at > notesSince && effectiveUpdater !== uid && neuSeitLive) || shareNew;
     }
   }
 
@@ -227,6 +230,7 @@ router.put('/:id', authenticate, (req, res) => {
   ).run(title.trim(), proj.project_id, proj.project_text, req.user.id, req.params.id);
 
   const updated = notizAusgeben(db, req.params.id);
+  live.gesehenVermerken(note.id);
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ note: updated });
 

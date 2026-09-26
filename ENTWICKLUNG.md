@@ -3411,3 +3411,23 @@ Knopfleiste bei Leserecht, Rauswurf ohne Rückweg, alte Funkloch-Anzeige, Vorsch
 an ihrer Stelle rot. Die Probe „voller Neuaufbau" blieb zunächst GRÜN: Tom öffnete die Übersicht
 erst, als Anna schon drin war — „Anna ist drin" kam mit dem ersten Laden, aufgefrischt wurde gar
 nichts. Reihenfolge im Test umgedreht, danach rot. `tests/seite-laden-ui.js` kennt die neue Seite (79).
+
+**Schritt 5 — Meldungen und Zähler.** Die Meldung je Bearbeitungsrunde kam schon mit Schritt 3. Neu
+ist der **Zähler je Notiz**: Wer in einer Notiz ist, sieht die Änderungen der anderen live — nach
+jeder Speicherung zeigte der Menüpunkt trotzdem „1", weil der Zähler nur „Notizen insgesamt gesehen"
+kannte. `note_gesehen (user_id, note_id, gesehen_am)` hält fest, bis zu welchem gespeicherten Stand
+(`updated_at`, nicht „jetzt") jemand die Notiz gesehen hat: beim Öffnen, bei jeder Speicherung für
+alle Anwesenden, beim Verlassen. Zähler (`routes/badges.js`) und Kennzeichnung „ungelesen" in der
+Liste berücksichtigen ihn in beiden Zweigen (eigene und geteilte Notizen).
+
+**Zwei Fehler in meinen eigenen Gegenproben**, beide erst beim Nachhaken gefunden:
+* Die Probe „Merker aus" entfernte das SQL-Stück, ließ aber seinen Parameter stehen → die Abfrage
+  stürzte ab. Das Probe-Skript zählte nur ✗-Zeilen und meldete „grün"; im Oberflächen-Test lieferte
+  der Zähler einen Serverfehler statt einer Zahl und blieb deshalb bei 0. Seitdem wertet das
+  Probe-Skript den Exit-Code aus, und der Merker wird mit `(? IS NULL OR 1 = 1)` abgeschaltet —
+  gleiche Parameterzahl, immer wahr.
+* Die Prüfung bei Anna (Eigentümerin) maß nichts: Anna tippte im Test NACH Tom, beim Speichern stand
+  sie als Bearbeiterin drin, und eigene Änderungen zählen nie. Tom tippt jetzt zuletzt; der Test
+  prüft zusätzlich, dass wirklich er als Bearbeiter gespeichert ist.
+Danach: beide Zweige einzeln ohne Merker → jeweils rot (`push-targeting` für geteilte,
+`notizen-live-ui` für eigene Notizen), Speichern ohne Merker → rot.

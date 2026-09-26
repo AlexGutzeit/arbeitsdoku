@@ -154,6 +154,18 @@ async function cursorSichtbar(p, farbe) {
     const [ta, tt] = [await editorText(A), await editorText(T)];
     ok('Getipptes von beiden steht bei beiden gleich da', ta === tt && /Kabel NYM-J 3×1,5 2 Ringe/.test(ta) && /Wago 221-413 50 Stück/.test(ta), JSON.stringify([ta, tt]));
     ok('die Checkliste kommt als Checkliste an', await T.evaluate(() => !!document.querySelector('.notiz-editor .ql-editor li[data-list="unchecked"]')));
+    await sleep(2200);   // gespeichert → Meldung an alle Browser → Zähler werden neu geholt
+    const tomZaehler = await T.evaluate(() => { const b = document.getElementById('nav-badge-notes'); return b ? (b.style.display === 'none' ? 0 : Number(b.textContent)) : -1; });
+    ok('Tom ist drin und sieht Annas Tippen live → sein Notizen-Zähler bleibt bei 0', tomZaehler === 0, String(tomZaehler));
+    // Für Anna muss Tom als LETZTER tippen: Beim Speichern steht der zuletzt Tippende als Bearbeiter
+    // drin, und eigene Änderungen zählen nie — so gemessen, prüfte die erste Fassung nichts
+    // (Gegenprobe ohne Merker blieb grün).
+    await T.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(q.getLength() - 1, 0, 'user'); });
+    await T.keyboard.type(' Nachtrag');
+    await sleep(2200);
+    const annaZaehler = await A.evaluate(() => { const b = document.getElementById('nav-badge-notes'); return b ? (b.style.display === 'none' ? 0 : Number(b.textContent)) : -1; });
+    const letzter = (await req('GET', '/api/notes', tAnna)).body.notes.find(n => n.id === note.id).updated_by;
+    ok('… und bei Anna (Eigentümerin) ebenso, wenn Tom zuletzt getippt hat', annaZaehler === 0 && letzter === id.tom, JSON.stringify({ annaZaehler, letzter }));
     const deckungT = await T.evaluate(() => [_notizSitzung.quill.getText(), _notizSitzung.doc.getText('notiz').toString()]);
     ok('… auch bei Tom decken sich Schreibfeld und Dokument exakt', deckungT[0] === deckungT[1], JSON.stringify(deckungT));
 

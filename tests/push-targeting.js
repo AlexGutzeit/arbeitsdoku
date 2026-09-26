@@ -210,14 +210,32 @@ function req(server, method, p, token, body) {
     if (textOk) { pass++; console.log(`  ✓ Meldungstext nennt Bearbeiter und Notiz  → „${meldung.body}"`); }
     else { fail++; console.log('  ✗ Meldungstext: ' + JSON.stringify(meldung)); }
 
-    // Wer gerade drin ist, hat es live gesehen — keine Meldung an ihn.
+    // Wer gerade drin ist, hat es live gesehen — keine Meldung an ihn, und auch der Zähler zählt die
+    // Änderung bei ihm nicht (note_gesehen, 26.09.2026).
+    const notizenGelesen = (uid) => dbNow.prepare("INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, 'notes', strftime('%Y-%m-%d %H:%M:%f','now')) "
+      + "ON CONFLICT(user_id, topic) DO UPDATE SET seen_at = strftime('%Y-%m-%d %H:%M:%f','now')").run(uid);
+    const zaehlerLisa = () => computeBadgeCounts(dbNow, { id: ids.lisa, role: 'mitarbeiter' }).notes;
+    notizenGelesen(ids.lisa); await sleep(5);
+    // Grundwert statt 0: lisa hat aus Schritt 8 ein offenes Notiz-Angebot, das immer mitzählt.
+    const lisaBasis = zaehlerLisa();
     const lisaDrin = await oeffne('lisa');
     g = await oeffne('max'); SENT = [];
     await g.schreibe(t => t.insert(0, 'Live gesehen: '));
     await verlassen(g);
     expectTargets('Eigentümer bearbeitet, lisa ist gerade drin → keine Meldung an sie', []);
+    if (zaehlerLisa() === lisaBasis) { pass++; console.log(`  ✓ … und ihr Zähler zählt die live gesehene Änderung nicht  → ${lisaBasis}`); }
+    else { fail++; console.log(`  ✗ Zähler bei lisa: ${lisaBasis} → ${zaehlerLisa()} (sie war drin)`); }
     await verlassen(lisaDrin);
     expectTargets('… lisa geht ohne eigene Änderung → auch jetzt nichts', []);
+    if (zaehlerLisa() === lisaBasis) { pass++; console.log(`  ✓ … auch nach dem Verlassen nicht  → ${lisaBasis}`); }
+    else { fail++; console.log(`  ✗ Zähler bei lisa nach dem Verlassen: ${lisaBasis} → ${zaehlerLisa()}`); }
+    // Gegenstück: lisa ist NICHT drin → Meldung UND Zähler
+    g = await oeffne('max'); SENT = [];
+    await g.schreibe(t => t.insert(0, 'Ohne Zuschauer: '));
+    await verlassen(g);
+    expectTargets('Eigentümer bearbeitet, lisa nicht drin → Meldung an sie', ['lisa']);
+    if (zaehlerLisa() === lisaBasis + 1) { pass++; console.log(`  ✓ … und ihr Zähler zählt sie  → ${lisaBasis} → ${lisaBasis + 1}`); }
+    else { fail++; console.log(`  ✗ Zähler bei lisa: ${zaehlerLisa()} (erwartet ${lisaBasis + 1})`); }
 
     // 9d. NUR HINEINSCHAUEN (Alex, 18.08.2026): aufmachen, nichts aendern, zumachen.
     // Weder Meldung noch Zaehler duerfen anspringen. Der Zaehler haengt an `updated_at`, deshalb

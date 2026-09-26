@@ -109,10 +109,26 @@ function jetztSpeichern(raum) {
   if (alt.body !== f.body || alt.body_delta !== f.body_delta) {
     db.prepare("UPDATE notes SET ydoc = ?, body = ?, body_delta = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by = ? WHERE id = ?")
       .run(stand, f.body, f.body_delta, raum.zuletztGeaendertVon, raum.noteId);
+    gesehenVermerken(raum.noteId);   // vor der Meldung: sonst zählt der Zähler der Anwesenden kurz hoch
     broadcast('notes', null);
   } else {
     db.prepare('UPDATE notes SET ydoc = ? WHERE id = ?').run(stand, raum.noteId);
   }
+}
+
+// Wer drin ist, sieht jede Änderung live — für den Zähler gilt die Notiz bei ihm als gesehen, und
+// zwar genau bis zum gespeicherten Stand (`updated_at`), nicht „bis jetzt". Sonst zählte eine
+// Änderung, die zwischen zwei Speicherungen jemand anderes macht, nie als neu.
+function gesehenVermerken(noteId, nurUserId) {
+  const raum = raeume.get(Number(noteId));
+  const leute = nurUserId != null ? [nurUserId] : (raum ? [...new Set([...raum.verbindungen.values()].map(v => v.userId))] : []);
+  if (!leute.length) return;
+  const db = getDb();
+  const n = db.prepare('SELECT updated_at FROM notes WHERE id = ?').get(Number(noteId));
+  if (!n || !n.updated_at) return;
+  const setzen = db.prepare(`INSERT INTO note_gesehen (user_id, note_id, gesehen_am) VALUES (?, ?, ?)
+    ON CONFLICT(user_id, note_id) DO UPDATE SET gesehen_am = excluded.gesehen_am`);
+  for (const uid of leute) setzen.run(uid, Number(noteId), n.updated_at);
 }
 
 // ─── Bearbeitungsrunden und Meldung ──────────────────────────────────────────────────────────
@@ -195,6 +211,7 @@ function verbinden(noteId, nutzer, req, res) {
     sv: b64(Y.encodeStateVector(raum.doc)),
     anwesenheit: fremde.length ? b64(awarenessProtocol.encodeAwarenessUpdate(raum.aw, fremde)) : null,
   });
+  gesehenVermerken(noteId, nutzer.id);   // wer öffnet, sieht den aktuellen Stand
   // Eigenes Signal statt 'notes': „gerade drin" in den Listen auffrischen, ohne dass bei allen
   // der Zähler neu geholt wird — hineinschauen ist keine Änderung.
   broadcast('notes-anwesend', null);
@@ -206,7 +223,11 @@ function verbinden(noteId, nutzer, req, res) {
     raum.verbindungen.delete(v.id);
     if (v.clientIds.size) awarenessProtocol.removeAwarenessStates(raum.aw, [...v.clientIds], 'trennung');
     const nochDa = [...raum.verbindungen.values()].some(x => x.userId === v.userId);
-    if (!nochDa) rundeBeenden(raum, v.userId);
+    if (!nochDa) {
+      rundeBeenden(raum, v.userId);
+      jetztSpeichern(raum);                    // was er gesehen hat, ist damit auch gespeichert …
+      gesehenVermerken(raum.noteId, v.userId); // … und gilt bei ihm als gesehen
+    }
     if (!raum.verbindungen.size) raumSchliessen(raum);
     broadcast('notes-anwesend', null);
   };
@@ -371,5 +392,5 @@ function offenerStand(noteId) {
 function allesSpeichern() { for (const raum of raeume.values()) jetztSpeichern(raum); }
 
 module.exports = { verbinden, aenderung, anwesenheit, zugriffAbgleichen, notizGeloescht, nutzerRauswerfen,
-  kopfGeaendert, inhaltVon, anwesende, offenerStand, allesSpeichern, zugriffVon, FARBEN,
+  kopfGeaendert, inhaltVon, anwesende, offenerStand, allesSpeichern, gesehenVermerken, zugriffVon, FARBEN,
   zeiten, _intern: { raeume } };
