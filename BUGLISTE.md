@@ -132,6 +132,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   abweisen oder bewusst bestätigen lassen (Oberfläche und Server).
 
 ### [x] R7 · „Abmelden" und „Benachrichtigungen an/aus" können endlos hängen — erledigt in `ed0c1ba`, Test `tests/kleine-sackgassen-ui.js`
+**Deployt:** Prod 26.09.2026 (`ed69b7a`, Cache 427).
 - **Wo:** `app-5-team.js:163` (`await navigator.serviceWorker.ready` ohne Zeitgrenze) →
   `disablePush()` `:191` → `logout()` `app-2-auth-layout.js:154`; ebenso `enablePush()` `:173`
 - **Was passiert:** Ohne aktiven Service Worker (z. B. privates Firefox-Fenster) löst das Warten
@@ -139,6 +140,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Vorschlag:** `Promise.race` mit 3 s Zeitgrenze; beim Abmelden den Push-Abbau nicht abwarten.
 
 ### [x] R8 · Neue Rechte greifen erst nach Seitenwechsel — erledigt in `ed8a76d`, Test `tests/kleine-sackgassen-ui.js`
+**Deployt:** Prod 26.09.2026 (`ed69b7a`, Cache 427).
 - **Wo:** `app-2-auth-layout.js:185` — `refreshUser()` vergleicht nur `role, can_plan,
   can_plan_all, can_bulletin, can_upload`; es fehlen `can_order`, `can_products_edit`,
   `can_products_add`
@@ -217,6 +219,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 ## Niedrig — Feinschliff
 
 ### [x] R13 · Zwei-Faktor-Code abgelaufen — erledigt in `8109987`, Test `tests/kleine-sackgassen-ui.js`
+**Deployt:** Prod 26.09.2026 (`ed69b7a`, Cache 427).
 Nach 5 Minuten scheitert jeder weitere Code mit „abgelaufen", raus nur über „Abbrechen"
 (`routes/auth.js:158`, `app-2-auth-layout.js:57`). → Bei Ablauf automatisch zur Passworteingabe.
 
@@ -240,6 +243,7 @@ Schwarzes Brett (`routes/bulletin.js:141`) und Bestellungen (`routes/orders.js:1
 ohne Eintrag im Protokoll.
 
 ### [x] R18 · PDF-Download kann in Safari/iOS abbrechen — erledigt in `3c8e4cb`, Test `tests/kleine-sackgassen-ui.js`
+**Deployt:** Prod 26.09.2026 (`ed69b7a`, Cache 427).
 `app-8-comm-init.js:2298` — `URL.revokeObjectURL` direkt nach dem Klick. → verzögert freigeben.
 
 ### [ ] R19 · Mitarbeiter anlegen ohne Transaktion
