@@ -107,7 +107,7 @@ async function cursorSichtbar(p, farbe) {
     await A.waitForSelector('.notiz-editor .ql-editor'); await bereit(A);
     ok('Anna öffnet: Editor mit Titel, Status „Gespeichert", Anwesenheit „Du", Knopfleiste',
       await A.evaluate(() => document.getElementById('notiz-titel').value === 'Material Montag'
-        && /Du/.test(document.getElementById('notiz-anwesend').textContent) && !document.getElementById('notiz-leiste').hidden)
+        && /Du/.test(document.getElementById('notiz-anwesend').textContent) && document.getElementById('notiz-leiste').checkVisibility())
       && (await editorText(A)) === 'Kabel NYM-J 3×1,5\nWago 221-413', await editorText(A));
     // Schreibfeld und gemeinsames Dokument müssen Zeichen für Zeichen übereinstimmen. Wurde das Feld
     // vor dem Stand des Servers angebunden, stand am Ende eine Leerzeile zu viel (gemessen 26.09.2026)
@@ -191,7 +191,8 @@ async function cursorSichtbar(p, farbe) {
     console.log('\nLeserecht');
     await R.evaluate((i) => { location.hash = '/notes/' + i; }, note.id);
     await R.waitForSelector('.notiz-editor .ql-editor'); await bereit(R);
-    const rZustand = await R.evaluate(() => ({ leiste: document.getElementById('notiz-leiste').hidden, hinweis: !document.getElementById('notiz-nur-lesen').hidden,
+    // Sichtbarkeit, nicht das Attribut: hidden allein half nicht, eine Stilregel überstimmte es (Bildschirmfoto 27.09.2026)
+    const rZustand = await R.evaluate(() => ({ leiste: !document.getElementById('notiz-leiste').checkVisibility(), hinweis: document.getElementById('notiz-nur-lesen').checkVisibility(),
       tippbar: document.querySelector('.notiz-editor .ql-editor').getAttribute('contenteditable'), titel: document.getElementById('notiz-titel').disabled }));
     ok('Rita (nur lesen): keine Knopfleiste, Hinweis, Feld und Titel nicht bearbeitbar',
       rZustand.leiste && rZustand.hinweis && rZustand.tippbar === 'false' && rZustand.titel, JSON.stringify(rZustand));
@@ -208,16 +209,16 @@ async function cursorSichtbar(p, farbe) {
 
     console.log('\nRechte ändern, während man drin ist');
     await req('PUT', `/api/notes/${note.id}/shares`, tAnna, { shares: [{ user_id: id.tom, permission: 'read' }] });
-    await T.waitForFunction(() => document.getElementById('notiz-leiste').hidden, { timeout: 5000 }).catch(() => {});
+    await T.waitForFunction(() => !document.getElementById('notiz-leiste').checkVisibility(), { timeout: 5000 }).catch(() => {});
     ok('Tom wird auf Lesen gestuft → Knopfleiste weg, Feld gesperrt, Hinweis',
-      await T.evaluate(() => document.getElementById('notiz-leiste').hidden && document.querySelector('.notiz-editor .ql-editor').getAttribute('contenteditable') === 'false'
+      await T.evaluate(() => !document.getElementById('notiz-leiste').checkVisibility() && document.querySelector('.notiz-editor .ql-editor').getAttribute('contenteditable') === 'false'
         && /nur noch lesen/.test((document.querySelector('.toast') || {}).textContent || '')));
     await R.waitForFunction(() => location.hash === '#/notes', { timeout: 5000 }).catch(() => {});
     ok('Rita verliert die Freigabe → zurück in der Übersicht mit Hinweis',
       (await R.evaluate(() => location.hash)) === '#/notes' && /Freigabe/.test(await R.evaluate(() => (document.querySelector('.toast') || {}).textContent || '')),
       await R.evaluate(() => location.hash + ' ' + ((document.querySelector('.toast') || {}).textContent || '')));
     await req('PUT', `/api/notes/${note.id}/shares`, tAnna, { shares: [{ user_id: id.tom, permission: 'write' }] });
-    await T.waitForFunction(() => !document.getElementById('notiz-leiste').hidden, { timeout: 5000 }).catch(() => {});
+    await T.waitForFunction(() => document.getElementById('notiz-leiste').checkVisibility(), { timeout: 5000 }).catch(() => {});
 
     console.log('\nIm Hintergrund');
     await T.evaluate(() => { notizZeiten.hintergrundMs = 300; Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });

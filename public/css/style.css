@@ -2081,6 +2081,9 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 /* Knopfleiste: bleibt beim Scrollen direkt unter der Kopfleiste (56 px) stehen */
 .notiz-editor .notiz-leiste.ql-toolbar.ql-snow { position: sticky; top: 56px; z-index: 5; background: var(--card); border: 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px 8px; display: flex; flex-wrap: wrap; gap: 2px 12px; font-family: inherit; }
 .notiz-editor .notiz-leiste.ql-toolbar.ql-snow .ql-formats { margin-right: 0; display: flex; gap: 2px; }
+/* Bei Leserecht ausgeblendet (hidden). Ohne diese Regel gewann das display:flex oben gegen hidden —
+   die Leiste blieb sichtbar, der Test prüfte nur das Attribut (gefunden am Bildschirmfoto, 27.09.2026). */
+.notiz-editor .notiz-leiste.ql-toolbar.ql-snow[hidden] { display: none; }
 .notiz-editor .ql-snow.ql-toolbar button { width: 44px; height: 44px; padding: 10px; border-radius: 8px; }
 .notiz-editor .ql-snow.ql-toolbar button:hover { background: var(--bg); }
 .notiz-editor .ql-snow.ql-toolbar button:focus-visible { outline: 3px solid var(--primary); outline-offset: 0; }

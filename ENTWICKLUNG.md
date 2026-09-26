@@ -3486,3 +3486,8 @@ ist ein Netz, keine Reparatur.
   gesichert; eine Offline-Änderung, deren Vorgänger im Dokument des Servers fehlen, hält Yjs zurück.
   `notizen-live-zurueckspielen` stellt es mit echten Yjs-Bytes nach — und zeigt zum Vergleich, dass
   der ganze Stand „nach der Sicherung" wieder hineingemischt hätte (9).
+* **Am Bildschirmfoto für die Präsentation gefunden: Bei Leserecht war die Knopfleiste sichtbar.** Die
+  Stilregel `display:flex` der Leiste überstimmte das `hidden`-Attribut; der Test prüfte nur das
+  Attribut und war deshalb grün. Jetzt eine eigene `[hidden]`-Regel, und der Test prüft
+  `checkVisibility()` (Probe ohne die Regel → rot). Tippen konnte Rita auch vorher nicht — das Feld
+  war gesperrt —, aber die Leiste versprach etwas, das nicht ging.
