@@ -177,11 +177,17 @@ function notizSitzungStarten(id) {
 
   // Noch nicht beim Server angekommene Änderungen auf dem Gerät sichern — ein Neuladen im Funkloch
   // soll nichts kosten. Beim nächsten Öffnen werden sie nachgereicht.
+  //
+  // Gesichert wird NUR die Warteschlange, nicht der ganze Stand der Notiz: Wird inzwischen eine
+  // Sicherung zurückgespielt, mischte ein ganzer alter Stand die zurückgespielte Notiz wieder auf.
+  // Einzelne Änderungen, deren Vorgänger im Dokument des Servers fehlen, hält Yjs dagegen zurück
+  // (gefunden beim Durchlesen, 27.09.2026).
+  const warteschlangeAlsEine = () => s.warteschlange.length === 1 ? s.warteschlange[0] : Y.mergeUpdates(s.warteschlange);
   function lokalSichern() {
     clearTimeout(s.timer.sichern);
     s.timer.sichern = setTimeout(() => {
       try {
-        if (s.warteschlange.length) localStorage.setItem(speicherKey, notizB64(Y.encodeStateAsUpdate(s.doc)));
+        if (s.warteschlange.length) localStorage.setItem(speicherKey, notizB64(warteschlangeAlsEine()));
         else localStorage.removeItem(speicherKey);
       } catch (_) { /* privates Fenster o. ä. — dann eben nur im Speicher */ }
     }, 300);
@@ -475,11 +481,12 @@ function notizSitzungStarten(id) {
     else if (s.warteschlange.length) {
       // Letzter Versuch beim Verlassen — VOR dem Schließen des Stroms, solange der Server die
       // Verbindung noch kennt. Klappt er nicht, liegt der Stand auf dem Gerät.
-      try { localStorage.setItem(speicherKey, notizB64(Y.encodeStateAsUpdate(s.doc))); } catch (_) {}
+      const offen = warteschlangeAlsEine();
+      try { localStorage.setItem(speicherKey, notizB64(offen)); } catch (_) {}
       if (s.verbindung && S.token) {
         fetch(`/api/notes/${id}/live/aenderung`, { method: 'POST', keepalive: true,
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.token },
-          body: JSON.stringify({ verbindung: s.verbindung, update: notizB64(Y.mergeUpdates(s.warteschlange)) }) }).catch(() => {});
+          body: JSON.stringify({ verbindung: s.verbindung, update: notizB64(offen) }) }).catch(() => {});
       }
     }
     if (s.es) { s.es.close(); s.es = null; }

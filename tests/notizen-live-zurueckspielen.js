@@ -81,6 +81,45 @@ function req(port, m, p, t, b) {
     await sleep(2000);
     ok('… und neue Änderungen werden wieder gespeichert', getDb().prepare('SELECT body FROM notes WHERE id = ?').get(note.id).body === 'Neu: Stand der Sicherung');
     g2.schliessen();
+
+    console.log('\nHandy war offline, dann wird zurückgespielt, dann meldet es sich zurück');
+    // So sichert der Browser im Funkloch (notiz-sitzung.js): nur die WARTESCHLANGE, nicht den ganzen
+    // Stand. Hier nachgestellt mit Yjs direkt — dieselben Bytes, die der Browser schickte.
+    const Y = require('yjs');
+    const ausB = (u) => Buffer.from(u).toString('base64');
+    await sleep(100);
+    const sicherung2 = Buffer.from(getDb()._db.export());                    // Stand „Neu: Stand der Sicherung"
+    const t3 = jwt.sign({ userId: max.id, sse: true }, process.env.JWT_SECRET, { expiresIn: '60s' });
+    const online = await geraetOeffnen({ port, ticket: t3, noteId: note.id, token });
+    await online.schreibe(t => t.insert(t.length - 1, ' – nach der Sicherung'));   // landet auf dem Server
+    const handy = new Y.Doc(); Y.applyUpdate(handy, Y.encodeStateAsUpdate(online.doc));   // das Handy kannte diesen Stand …
+    const svHandy = Y.encodeStateVector(handy);
+    handy.getText('notiz').insert(handy.getText('notiz').length - 1, ' – offline getippt');  // … und tippte offline weiter
+    const nurWarteschlange = Y.encodeStateAsUpdate(handy, svHandy);
+    const ganzerStand = Y.encodeStateAsUpdate(handy);
+    online.schliessen(); await sleep(2000);
+    require('../notizen-live').allesVerwerfen('zurueckgespielt');
+    setDb(datenbankVorbereiten(sicherung2));
+    const zurueck = () => getDb().prepare('SELECT body FROM notes WHERE id = ?').get(note.id).body;
+    ok('zurückgespielt: „Neu: Stand der Sicherung"', zurueck() === 'Neu: Stand der Sicherung', zurueck());
+    // Das Handy öffnet neu: frisches Dokument + Gesichertes, dann Stand des Servers, dann Nachreichen
+    const nachreichen = async (gesichert) => {
+      const t = jwt.sign({ userId: max.id, sse: true }, process.env.JWT_SECRET, { expiresIn: '60s' });
+      const g = await geraetOeffnen({ port, ticket: t, noteId: note.id, token });
+      const d = new Y.Doc(); Y.applyUpdate(d, gesichert, 'gesichert');
+      Y.applyUpdate(d, Y.encodeStateAsUpdate(g.doc), 'server');
+      const fehlt = Y.encodeStateAsUpdate(d, Y.encodeStateVector(g.doc));
+      const r = fehlt.length > 2 ? await g.rohSenden(ausB(fehlt)) : { status: 200 };
+      g.schliessen(); await sleep(2000);
+      return r.status;
+    };
+    const st = await nachreichen(nurWarteschlange);
+    ok('nur die Warteschlange gesichert → die zurückgespielte Notiz bleibt (Offline-Änderung ohne Vorgänger wird zurückgehalten)',
+      st === 200 && zurueck() === 'Neu: Stand der Sicherung', JSON.stringify({ st, body: zurueck() }));
+    // Gegenstück: So war es vorher (ganzer Stand gesichert) — er mischt den alten Stand wieder hinein
+    await nachreichen(ganzerStand);
+    ok('zum Vergleich: der GANZE Stand gesichert hätte „nach der Sicherung" wieder hineingemischt (deshalb nur die Warteschlange)',
+      /nach der Sicherung/.test(zurueck()), zurueck());
   } catch (e) {
     fail++; fails.push('Absturz: ' + e.message); console.log('  ✗ Absturz: ' + e.stack);
   } finally {

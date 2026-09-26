@@ -3480,3 +3480,9 @@ ist ein Netz, keine Reparatur.
   prüften die Umstellung also gar nicht mehr. Jetzt baut er sie auf einer Kopie zurück (Spalten
   entfernen, SQLite 3.49 kann das) und prüft immer von vorn; liegt die rohe Produktivkopie vor, auch
   an ihr: 13 Notizen zeichengleich, 17 verwaiste Freigaben abgeräumt, 55 echte unverändert (15).
+* **Beim Durchlesen gefunden: Das Handy sicherte im Funkloch den GANZEN Stand der Notiz.** Wird
+  inzwischen eine Sicherung zurückgespielt, hätte es beim nächsten Öffnen den alten Inhalt wieder in
+  die zurückgespielte Notiz gemischt. Jetzt wird nur die Warteschlange (die unversandten Änderungen)
+  gesichert; eine Offline-Änderung, deren Vorgänger im Dokument des Servers fehlen, hält Yjs zurück.
+  `notizen-live-zurueckspielen` stellt es mit echten Yjs-Bytes nach — und zeigt zum Vergleich, dass
+  der ganze Stand „nach der Sicherung" wieder hineingemischt hätte (9).
