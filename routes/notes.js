@@ -1,11 +1,26 @@
 const express = require('express');
+const jwt = require('jsonwebtoken');
 const { getDb } = require('../database/init');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, JWT_SECRET } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const push = require('../push');
+const live = require('../notizen-live');
+const { zeileAusKlartext, zeileAusDelta } = require('../notiz-dokument');
 
 const router = express.Router();
-const LOCK_TIMEOUT_MINUTES = 15;
+
+// Spalten, die an Browser gehen. NIE `n.*`: `ydoc` ist das Yjs-Dokument als Binärdaten — als JSON
+// würde daraus ein riesiges Zahlen-Objekt, und es gehört nur dem Live-Betrieb (notizen-live.js).
+const SPALTEN = 'n.id, n.user_id, n.title, n.body, n.body_delta, n.project_id, n.project_text, n.created_at, n.updated_at, n.updated_by';
+
+// Seit den Live-Notizen (26.09.2026) gibt es keine Bearbeitungs-Sperre und kein Speichern des
+// ganzen Textes mehr. Ein noch nicht aktualisierter Programmstand würde beim Speichern aber genau
+// das tun — und die Formatierung aller anderen mit Klartext überschreiben. Deshalb wird dieser
+// Weg abgewiesen, mit einem Hinweis, der den Ausweg nennt.
+const APP_VERALTET = {
+  code: 'APP_VERALTET',
+  error: 'Die App wurde aktualisiert. Bitte neu laden (oder „Jetzt aktualisieren" antippen), dann geht es weiter.',
+};
 
 function resolveProject(db, project_id, project_text) {
   if (project_id) {
@@ -24,16 +39,8 @@ function canAccessNote(db, noteId, userId) {
   return { note, access: share.permission };
 }
 
-function clearStaleLock(db, noteId) {
-  const note = db.prepare('SELECT editing_by, editing_since FROM notes WHERE id = ?').get(noteId);
-  if (note && note.editing_by && note.editing_since) {
-    const lockTime = new Date(note.editing_since + 'Z').getTime();
-    if (Date.now() - lockTime > LOCK_TIMEOUT_MINUTES * 60 * 1000) {
-      db.prepare("UPDATE notes SET editing_by = NULL, editing_since = NULL WHERE id = ?").run(noteId);
-      return true;
-    }
-  }
-  return false;
+function notizAusgeben(db, id) {
+  return db.prepare(`SELECT ${SPALTEN}, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?`).get(id);
 }
 
 // --- Offers-Routen VOR /:id ---
@@ -52,7 +59,7 @@ router.get('/offers', authenticate, (req, res) => {
   res.json({ offers });
 });
 
-// Angebot annehmen
+// Angebot annehmen — legt beim Empfänger eine KOPIE an, das Original bleibt beim Absender.
 router.post('/offers/:id/accept', authenticate, (req, res) => {
   const db = getDb();
   const offer = db.prepare('SELECT * FROM note_offers WHERE id = ?').get(req.params.id);
@@ -60,12 +67,15 @@ router.post('/offers/:id/accept', authenticate, (req, res) => {
   if (offer.to_user_id !== req.user.id) return res.status(403).json({ error: 'Keine Berechtigung' });
   if (offer.status !== 'pending') return res.status(400).json({ error: 'Angebot ist nicht mehr offen' });
 
-  const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(offer.note_id);
+  const note = db.prepare('SELECT title, body, body_delta, project_id, project_text FROM notes WHERE id = ?').get(offer.note_id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
 
+  // Ist die Notiz gerade offen, zählt der Stand von eben — nicht der letzte gespeicherte.
+  const offen = live.offenerStand(offer.note_id);
+  const kopie = zeileAusDelta(offen ? offen.body_delta : note.body_delta, offen ? offen.body : note.body);
   db.prepare(
-    "INSERT INTO notes (user_id, title, body, project_id, project_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
-  ).run(req.user.id, note.title, note.body, note.project_id, note.project_text);
+    "INSERT INTO notes (user_id, title, body, body_delta, ydoc, project_id, project_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+  ).run(req.user.id, note.title, kopie.body, kopie.body_delta, kopie.ydoc, note.project_id, note.project_text);
   db.prepare("UPDATE note_offers SET status = 'accepted' WHERE id = ?").run(offer.id);
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
@@ -104,40 +114,28 @@ router.get('/', authenticate, (req, res) => {
   const db = getDb();
   const uid = req.user.id;
   const notes = db.prepare(`
-    SELECT DISTINCT n.*, u.name as owner_name,
+    SELECT DISTINCT ${SPALTEN}, u.name as owner_name,
       CASE WHEN n.user_id = ? THEN 'owner'
            ELSE COALESCE(ns.permission, '') END as access_level,
-      eu.name as editing_by_name,
       COALESCE(lu.name, u.name) as updated_by_name
     FROM notes n
     JOIN users u ON n.user_id = u.id
     LEFT JOIN note_shares ns ON ns.note_id = n.id AND ns.user_id = ?
-    LEFT JOIN users eu ON n.editing_by = eu.id
     LEFT JOIN users lu ON n.updated_by = lu.id
     WHERE n.user_id = ? OR ns.user_id = ?
     ORDER BY n.updated_at DESC
   `).all(uid, uid, uid, uid);
 
-  // Stale Locks bereinigen
-  const now = Date.now();
-  for (const n of notes) {
-    if (n.editing_by && n.editing_since) {
-      const lockTime = new Date(n.editing_since + 'Z').getTime();
-      if (now - lockTime > LOCK_TIMEOUT_MINUTES * 60 * 1000) {
-        db.prepare("UPDATE notes SET editing_by = NULL, editing_since = NULL WHERE id = ?").run(n.id);
-        n.editing_by = null;
-        n.editing_since = null;
-        n.editing_by_name = null;
-      }
-    }
-  }
+  // Wer ist gerade in der Notiz? (ersetzt das frühere „🔒 gesperrt von …")
+  const drin = live.anwesende();
+  for (const n of notes) n.live = drin[n.id] || [];
 
   // Shares pro Notiz laden (Mitbearbeiter-Anzeige)
   if (notes.length) {
     const noteIds = notes.map(n => n.id);
     const placeholders = noteIds.map(() => '?').join(',');
     const shares = db.prepare(`
-      SELECT ns.note_id, ns.user_id, ns.permission, u.name as user_name
+      SELECT ns.note_id, ns.user_id, ns.permission, ns.created_at, u.name as user_name
       FROM note_shares ns
       JOIN users u ON ns.user_id = u.id
       WHERE ns.note_id IN (${placeholders})
@@ -172,7 +170,8 @@ router.get('/', authenticate, (req, res) => {
   res.json({ notes });
 });
 
-// Neue Notiz erstellen
+// Neue Notiz erstellen. `body` (Klartext) ist optional: Die neue Oberfläche legt die Notiz leer an
+// und öffnet sie sofort live; ein älterer Programmstand schickt den Text gleich mit.
 router.post('/', authenticate, (req, res) => {
   const { title, body, project_id, project_text } = req.body;
   if (!title || !title.trim()) {
@@ -181,113 +180,61 @@ router.post('/', authenticate, (req, res) => {
 
   const db = getDb();
   const proj = resolveProject(db, project_id, project_text);
+  const z = zeileAusKlartext((body || '').trim());
   const result = db.prepare(
-    "INSERT INTO notes (user_id, updated_by, title, body, project_id, project_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
-  ).run(req.user.id, req.user.id, title.trim(), (body || '').trim(), proj.project_id, proj.project_text);
+    "INSERT INTO notes (user_id, updated_by, title, body, body_delta, ydoc, project_id, project_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+  ).run(req.user.id, req.user.id, title.trim(), z.body, z.body_delta, z.ydoc, proj.project_id, proj.project_text);
 
-  const note = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
-    .get(result.lastInsertRowid);
+  const note = notizAusgeben(db, result.lastInsertRowid);
   note.shares = [];
+  note.live = [];
   broadcast('notes', req.headers['x-tab-id']);
   res.status(201).json({ note });
 });
 
-// Bearbeitungssperre setzen
-router.post('/:id/lock', authenticate, (req, res) => {
-  const db = getDb();
-  const { note, access } = canAccessNote(db, req.params.id, req.user.id);
-  if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
-  if (!access || access === 'read') return res.status(403).json({ error: 'Keine Berechtigung' });
+// Frühere Bearbeitungs-Sperre: gibt es nicht mehr. Ein alter Programmstand ruft sie vor dem
+// Bearbeiten einer geteilten Notiz auf — er bekommt den Hinweis, neu zu laden, BEVOR er tippt.
+router.post('/:id/lock', authenticate, (req, res) => res.status(409).json(APP_VERALTET));
+// Das Freigeben ruft ein alter Stand beim Abbrechen und beim Schließen auf — harmlos bestätigen.
+router.post('/:id/unlock', authenticate, (req, res) => res.json({ success: true }));
 
-  clearStaleLock(db, note.id);
-  const current = db.prepare('SELECT editing_by FROM notes WHERE id = ?').get(note.id);
-
-  if (current.editing_by && current.editing_by !== req.user.id) {
-    const locker = db.prepare('SELECT name FROM users WHERE id = ?').get(current.editing_by);
-    return res.status(409).json({
-      error: 'Notiz ist gerade in Bearbeitung, bitte sp\u00e4ter versuchen.',
-      editing_by_name: locker ? locker.name : 'Unbekannt'
-    });
-  }
-
-  db.prepare("UPDATE notes SET editing_by = ?, editing_since = strftime('%Y-%m-%d %H:%M:%f', 'now') WHERE id = ?")
-    .run(req.user.id, note.id);
-  res.json({ success: true });
-});
-
-// Bearbeitungssperre aufheben
-router.post('/:id/unlock', authenticate, (req, res) => {
-  const db = getDb();
-  const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
-  if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
-
-  if (note.editing_by && note.editing_by !== req.user.id) {
-    return res.status(403).json({ error: 'Sperre gehört einem anderen Benutzer' });
-  }
-
-  db.prepare("UPDATE notes SET editing_by = NULL, editing_since = NULL WHERE id = ?").run(note.id);
-  res.json({ success: true });
-});
-
-// Notiz bearbeiten (Owner oder Write-Share)
+// Titel und Projekt ändern (Owner oder Write-Share). Der Text selbst läuft über den Live-Betrieb.
 router.put('/:id', authenticate, (req, res) => {
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'body')) return res.status(409).json(APP_VERALTET);
   const db = getDb();
   const { note, access } = canAccessNote(db, req.params.id, req.user.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (!access || access === 'read') return res.status(403).json({ error: 'Keine Berechtigung' });
 
-  // Lock-Check
-  clearStaleLock(db, Number(req.params.id));
-  const lockInfo = db.prepare('SELECT editing_by FROM notes WHERE id = ?').get(req.params.id);
-  if (lockInfo.editing_by && lockInfo.editing_by !== req.user.id) {
-    return res.status(409).json({ error: 'Notiz ist gerade von einem anderen Benutzer gesperrt.' });
-  }
-
-  const { title, body, project_id, project_text } = req.body;
+  const { title, project_id, project_text, verbindung } = req.body;
   if (!title || !title.trim()) {
     return res.status(400).json({ error: 'Titel ist erforderlich' });
   }
 
   const proj = resolveProject(db, project_id, project_text);
 
-  // Hat sich ueberhaupt etwas geaendert? Wer eine Notiz nur aufmacht, hineinschaut und speichert,
-  // soll WEDER eine Meldung ausloesen NOCH den Zaehler hochsetzen (Alex, 18.08.2026).
-  // Der Zaehler haengt an `updated_at`/`updated_by` (siehe computeBadgeCounts) — es reicht also
-  // nicht, den Push zu unterdruecken: Bei einem Leer-Speichern darf der Zeitstempel gar nicht
-  // erst angefasst werden. Verglichen wird gegen den Stand VOR dem Schreiben (`note`), und zwar
-  // in derselben Form, in der gespeichert wird (getrimmt, NULL und "" gleichwertig).
+  // Hat sich ueberhaupt etwas geaendert? Nur hineinschauen soll WEDER eine Meldung ausloesen NOCH
+  // den Zaehler hochsetzen (Alex, 18.08.2026) — der Zaehler haengt an `updated_at`/`updated_by`.
   const gleich = (a, b) => (a == null ? '' : String(a)) === (b == null ? '' : String(b));
   const unveraendert = gleich(note.title, title.trim())
-    && gleich(note.body, (body || '').trim())
     && gleich(note.project_id, proj.project_id)
     && gleich(note.project_text, proj.project_text);
+  if (unveraendert) return res.json({ note: notizAusgeben(db, req.params.id), unchanged: true });
 
-  if (unveraendert) {
-    // Nur die Bearbeitungs-Sperre loesen, sonst bleibt die Notiz fuer alle anderen gesperrt.
-    db.prepare('UPDATE notes SET editing_by = NULL, editing_since = NULL WHERE id = ?').run(req.params.id);
-    const unbewegt = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
-      .get(req.params.id);
-    broadcast('notes', req.headers['x-tab-id']);   // damit das „wird bearbeitet" bei anderen verschwindet
-    return res.json({ note: unbewegt, unchanged: true });
-  }
-
+  const vorher = live.inhaltVon(note.id);
   db.prepare(
-    "UPDATE notes SET title = ?, body = ?, project_id = ?, project_text = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by = ?, editing_by = NULL, editing_since = NULL WHERE id = ?"
-  ).run(title.trim(), (body || '').trim(), proj.project_id, proj.project_text, req.user.id, req.params.id);
+    "UPDATE notes SET title = ?, project_id = ?, project_text = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by = ? WHERE id = ?"
+  ).run(title.trim(), proj.project_id, proj.project_text, req.user.id, req.params.id);
 
-  const updated = db.prepare('SELECT n.*, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?')
-    .get(req.params.id);
+  const updated = notizAusgeben(db, req.params.id);
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ note: updated });
 
-  // Push an alle, die mit der Notiz zu tun haben: Eigentuemer UND Mitleser — nur der Bearbeiter
-  // selbst nicht (das erledigt notifyUsers ueber excludeUserId).
-  //
-  // Bis 18.08.2026 verschickte diese Route GAR KEINEN Push (Alex gemeldet: Kollege bearbeitet die
-  // geteilte Notiz, der Eigentuemer erfaehrt nichts, obwohl der Kategorie-Schalter an ist). Das
-  // `broadcast` daneben ist KEIN Ersatz: Es aktualisiert nur Fenster, die die Seite gerade offen
-  // haben. Der Zaehler (computeBadgeCounts) zaehlte die Aenderung dagegen laengst mit — genau
-  // deshalb sah es nach einem kaputten Schalter aus statt nach einer fehlenden Meldung.
+  // In der offenen Notiz gehört die Umbenennung zur Bearbeitungsrunde (eine Meldung am Ende).
+  // Ist niemand drin, wird wie früher sofort gemeldet — an Eigentümer und Mitleser, nicht an
+  // den Bearbeiter selbst.
+  const kopf = { title: updated.title, project_id: updated.project_id, project_text: updated.project_text };
+  if (live.kopfGeaendert(note.id, kopf, verbindung, req.user.id, vorher)) return;
   const empfaenger = [
     note.user_id,
     ...db.prepare('SELECT user_id FROM note_shares WHERE note_id = ?').all(req.params.id).map(r => r.user_id),
@@ -295,24 +242,20 @@ router.put('/:id', authenticate, (req, res) => {
   const bearbeiter = db.prepare('SELECT name FROM users WHERE id = ?').get(req.user.id);
   push.notifyUsers(db, empfaenger, 'notes', {
     title: 'Notiz bearbeitet',
-    body: `${bearbeiter ? bearbeiter.name : 'Jemand'} hat \u201e${updated.title}" bearbeitet`,
+    body: `${bearbeiter ? bearbeiter.name : 'Jemand'} hat „${updated.title}" bearbeitet`,
     url: '/#/notes',
   }, req.user.id);
 });
 
-// Notiz loeschen (nur Owner)
+// Notiz loeschen (nur Owner). Wer gerade drin ist, fliegt sofort raus.
 router.delete('/:id', authenticate, (req, res) => {
   const db = getDb();
-  const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
+  const note = db.prepare('SELECT user_id FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann löschen' });
 
-  clearStaleLock(db, Number(req.params.id));
-  if (note.editing_by && note.editing_by !== req.user.id) {
-    return res.status(409).json({ error: 'Notiz ist gerade in Bearbeitung und kann nicht gelöscht werden.' });
-  }
-
   db.prepare('DELETE FROM notes WHERE id = ?').run(req.params.id);
+  live.notizGeloescht(req.params.id);
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
@@ -321,13 +264,14 @@ router.delete('/:id', authenticate, (req, res) => {
 // den Haken leer und kann durch erneutes Anhaken (PUT /:id/shares) wieder hinzufuegen.
 router.delete('/:id/share/self', authenticate, (req, res) => {
   const db = getDb();
-  const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
+  const note = db.prepare('SELECT user_id FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (note.user_id === req.user.id) {
     return res.status(400).json({ error: 'Als Eigentümer kannst du die Notiz löschen, nicht verlassen.' });
   }
   const r = db.prepare('DELETE FROM note_shares WHERE note_id = ? AND user_id = ?').run(req.params.id, req.user.id);
   if (r.changes === 0) return res.status(404).json({ error: 'Für dich besteht keine Freigabe dieser Notiz.' });
+  live.zugriffAbgleichen(req.params.id);
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });
@@ -337,7 +281,7 @@ router.delete('/:id/share/self', authenticate, (req, res) => {
 // Aktuelle Freigaben abrufen
 router.get('/:id/shares', authenticate, (req, res) => {
   const db = getDb();
-  const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
+  const note = db.prepare('SELECT user_id FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann Freigaben verwalten' });
 
@@ -353,7 +297,7 @@ router.get('/:id/shares', authenticate, (req, res) => {
 // Freigabe-Matrix komplett ersetzen
 router.put('/:id/shares', authenticate, (req, res) => {
   const db = getDb();
-  const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
+  const note = db.prepare('SELECT id, user_id, title FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann Freigaben verwalten' });
 
@@ -375,6 +319,9 @@ router.put('/:id/shares', authenticate, (req, res) => {
     insert.run(note.id, s.user_id, perm);
     if (!prevShareIds.has(s.user_id)) newlyAdded.push(s.user_id);
   }
+
+  // Wer drin ist und sein Recht verloren hat, fliegt jetzt raus; Schreiben ↔ Lesen gilt sofort.
+  live.zugriffAbgleichen(note.id);
 
   const updated = db.prepare(`
     SELECT ns.user_id, ns.permission, u.name as user_name
@@ -400,7 +347,7 @@ router.put('/:id/shares', authenticate, (req, res) => {
 // Notiz an User anbieten
 router.post('/:id/offer', authenticate, (req, res) => {
   const db = getDb();
-  const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
+  const note = db.prepare('SELECT id, user_id, title FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann weitergeben' });
 
@@ -431,6 +378,44 @@ router.post('/:id/offer', authenticate, (req, res) => {
       url: '/#/notes',
     }, req.user.id);
   }
+});
+
+// --- Live-Betrieb (siehe notizen-live.js) ---
+
+// Ereignisstrom einer geöffneten Notiz. Ein EventSource kann keinen Authorization-Header senden,
+// deshalb — wie beim allgemeinen Live-Strom (/api/events) — das 60-Sekunden-Ticket aus
+// /api/events/ticket in der Adresse. Anders als dort NUR das Ticket: Der lange Anmelde-Token hat
+// in Adressen nichts verloren, und alte Programmstände kennen diesen Weg ohnehin nicht.
+router.get('/:id/live', (req, res) => {
+  let nutzerId;
+  try {
+    const t = jwt.verify(String(req.query.ticket || ''), JWT_SECRET);
+    if (!t.sse || t.pending2fa) throw new Error('kein Ticket');
+    nutzerId = t.userId;
+  } catch (_) { return res.status(401).json({ error: 'Nicht angemeldet' }); }
+  const db = getDb();
+  const nutzer = db.prepare('SELECT id, name, COALESCE(active,1) AS active FROM users WHERE id = ?').get(nutzerId);
+  if (!nutzer || nutzer.active === 0) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const status = live.verbinden(Number(req.params.id), nutzer, req, res);
+  if (status === 404) return res.status(404).json({ error: 'Notiz nicht gefunden' });
+  if (status === 403) return res.status(403).json({ error: 'Keine Berechtigung' });
+});
+
+function liveAntwort(res, erg) {
+  if (erg.status === 200) return res.json({ success: true });
+  res.status(erg.status).json({ error: erg.fehler, ...(erg.code ? { code: erg.code } : {}) });
+}
+
+// Änderung am Text (Yjs-Update, base64). Das Schreibrecht prüft notizen-live.js bei JEDER Sendung.
+router.post('/:id/live/aenderung', authenticate, (req, res) => {
+  const { verbindung, update } = req.body || {};
+  liveAntwort(res, live.aenderung(Number(req.params.id), req.user.id, verbindung, update));
+});
+
+// Cursor und Anwesenheit (y-protocols, base64) — auch mit Leserecht.
+router.post('/:id/live/anwesenheit', authenticate, (req, res) => {
+  const { verbindung, update } = req.body || {};
+  liveAntwort(res, live.anwesenheit(Number(req.params.id), req.user.id, verbindung, update));
 });
 
 module.exports = router;

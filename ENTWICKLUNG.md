@@ -3327,3 +3327,54 @@ vorbei, und die Prüfung wäre aus dem falschen Grund grün (erster Lauf: genau 
 **Gegenproben** (7, jede an ihrer Stelle rot, per Prüfsumme zurückgesetzt): Bündel von Hand
 angefasst, `eval` im Bündel, Cursor-Modul nicht registriert, Lader ohne erneuten Versuch, Lader ohne
 Doppel-Schutz, Lizenzblock fehlt, Dokument beginnt leer.
+
+**Schritt 3 — der Server** (`notizen-live.js`, `notiz-dokument.js`, `routes/notes.js`). Der Inhalt
+einer Notiz ist jetzt ein Yjs-Dokument (`notes.ydoc`); `body` (Klartext) und `body_delta`
+(Formatierung) leitet der Server beim Speichern ab — für Suche, Vorschau, Meldungstext,
+Datenauskunft. Jede geöffnete Notiz ist ein „Raum" mit dem Dokument, der Anwesenheit (Cursor) und
+den Verbindungen: ein Ereignisstrom je Notiz (`GET /api/notes/:id/live?ticket=…`, nur mit dem
+60-Sekunden-Ticket), Änderungen und Cursor als kurze POSTs. Kein WebSocket — SSE ist durch Caddy und
+das Freifunk-Netz der Zweitanlage erprobt.
+
+* **Die Tür ist der POST, nicht der Strom.** Das Schreibrecht wird bei jeder Änderung neu aus der
+  Datenbank geholt. Rechte-Änderungen (Freigaben, „Freigabe verlassen", Löschen, Ausstellen) werfen
+  zusätzlich sofort raus bzw. melden Schreiben ↔ Lesen — damit auch das Mitlesen endet.
+* **Name und Farbe am Cursor setzt der Server.** Sonst könnte sich jemand im Anwesenheits-Update als
+  ein anderer ausgeben; ebenso gehört eine Clientnummer einer Verbindung und lässt sich nicht von
+  einer anderen Person übernehmen.
+* **Alter Programmstand:** Ein noch nicht aktualisiertes Handy würde beim Speichern Klartext über die
+  Formatierung aller schreiben. `PUT` mit `body` und die frühere Sperre antworten deshalb mit 409
+  `APP_VERALTET` und dem Hinweis, neu zu laden. Das Lösen der Sperre wird harmlos bestätigt.
+* **Speichern** nach 1,5 s Ruhe, spätestens alle 10 s; beim Beenden des Servers (SIGTERM, Deploy)
+  sofort. Nur eine inhaltliche Änderung setzt `updated_at`/`updated_by` — Hineinschauen nicht.
+* **Meldung je Bearbeitungsrunde** (vorgezogen aus Schritt 5, weil sie im Server sitzt): Eine Runde
+  endet beim Verlassen oder nach 2 Minuten Ruhe; gemeldet wird nur bei echter Änderung (auch
+  Umbenennen) und nur an die, die nicht drin sind. Die alte Unterregel „Leerzeichen am Rand zählen
+  nicht" gibt es nicht mehr — sie kam vom Trimmen beim Speichern; wer live ein Leerzeichen tippt,
+  hat etwas geändert.
+* **Umstellung alter Notizen** beim ersten Start (`ensureNotizLiveSchema`, auch im Rückspiel-Pfad):
+  Klartext → Dokument, `body` zeichengleich, `updated_at` unberührt. Am Prod-Klon: 13 von 13
+  zeichengleich, zweiter Start stellt nichts mehr um.
+* **Weitergeben ist eine Kopie** (war es schon immer — das Original bleibt beim Absender). Die Kopie
+  entsteht jetzt aus der Formatierung des Stands von eben, nicht aus den Bytes des Originals: Sie soll
+  dessen Bearbeitungsverlauf nicht mitschleppen.
+
+Zwei Messfallen beim Bau: Der erste Probelauf der Umstellung lief auf einer schon umgestellten
+Datei, weil `cp` nachfragte statt zu überschreiben (die Meldung „13 umgestellt" fehlte — daran fiel
+es auf). Und in Node ≥ 19 landete ein vom Server beendeter Ereignisstrom im Verbindungs-Pool und riss
+eine spätere Anfrage mit („socket hang up"); die Test-Hilfe öffnet Ströme deshalb mit eigener
+Verbindung, wie ein Browser.
+
+`tests/notizen-live.js` (34, mehrere „Geräte" über `tests/hilfen/notiz-live-geraet.js`),
+`tests/notizen-live-prodklon.js` (10), `tests/push-targeting.js` (Notiz-Teil auf Runden umgestellt,
+45). **Gegenproben** (15): Schreibrecht nicht geprüft, Name vom Browser übernommen, fremde
+Clientnummer übernehmbar, Freigabe-Änderung ohne Abgleich, Ausstellen ohne Rauswurf, SIGTERM ohne
+Sichern, alter Speicherweg offen, Speichern setzt immer den Zeitstempel, Umstellung setzt Zeitstempel,
+Meldung auch an Anwesende, kein Zeilenende nach Komplett-Löschen, Binärdokument in der Liste, Kopie
+aus dem gespeicherten Stand, Runde endet nie durch Ruhe — jede an ihrer Stelle rot. Die Probe „SIGINT
+ohne Sichern" bleibt grün: Der Test beendet mit SIGTERM wie systemd; SIGINT ist nur Strg+C am Rechner.
+
+**Für Schritt 4 festgehalten:** Nach einer abgewiesenen Änderung (403) muss der Browser neu öffnen —
+er hat sie bei sich schon eingetragen. Fremde Cursor: quill-cursors legt sie auf Touch-Geräten mit
+`z-index:-1` hinter die Karte (Alex sah auf der Probeseite keinen Cursor); eigene Regel +
+Namensfähnchen per `toggleFlag`, Test über Bildpunkte statt Elementzahl.

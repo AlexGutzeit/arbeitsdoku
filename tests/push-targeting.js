@@ -179,61 +179,110 @@ function req(server, method, p, token, body) {
     await act('PUT', `/api/notes/${noteId}/shares`, 'max', { shares: [{ user_id: ids.lisa, permission: 'write' }] });
     expectTargets('Notiz-Freigabe unverändert → kein Push', []);
 
-    // 9c. Notiz BEARBEITEN (Alex, 18.08.2026): Der Eigentuemer bekam bisher gar nichts, obwohl der
-    // Kategorie-Schalter an war — die Speichern-Route verschickte schlicht keinen Push. Jetzt geht
-    // die Meldung an Eigentuemer UND Mitleser, nur nicht an den Bearbeiter selbst.
+    // 9c. Notiz BEARBEITEN — seit den Live-Notizen (26.09.2026) EINE Meldung je Bearbeitungsrunde
+    // statt je Speichern (es gibt kein Speichern mehr). Eine Runde endet, wenn der Bearbeiter die
+    // Notiz verlässt oder eine Weile nichts ändert (im Betrieb 2 Minuten, hier verkürzt). Gemeldet
+    // wird nur an die, die gerade NICHT drin sind, und nur, wenn sich der Inhalt wirklich geändert hat.
+    // Ursprung der Meldung überhaupt: Alex, 18.08.2026 — vorher bekam der Eigentümer gar nichts.
+    const live = require('../notizen-live');
+    live.zeiten.rundeMs = 500;
+    const jwt = require('jsonwebtoken');
+    const { geraetOeffnen } = require('./hilfen/notiz-live-geraet');
+    const oeffne = async (uname) => geraetOeffnen({ port: server.address().port, noteId, token: tokens[uname],
+      ticket: jwt.sign({ userId: ids[uname], sse: true }, process.env.JWT_SECRET, { expiresIn: '60s' }) });
+    const verlassen = async (g) => { g.schliessen(); await sleep(250); };   // Server merkt das Schließen, Push läuft ab
+    const dbNow = getDb();
+
     // lisa hat aus Schritt 9b Schreibrecht; sie bearbeitet, max ist Eigentuemer.
-    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: 'Übergabe', body: 'Zaehler abgelesen' });
-    expectTargets('Notiz bearbeitet → Eigentümer', ['max']);
+    let g = await oeffne('lisa'); SENT = [];
+    await g.schreibe(t => t.insert(0, 'Zaehler abgelesen'));
+    expectTargets('während lisa noch tippt → noch keine Meldung', []);
+    await verlassen(g);
+    expectTargets('Notiz bearbeitet, Runde vorbei → Eigentümer', ['max']);
 
-    // Und die Gegenprobe, die den eigentlichen Zweck absichert: Bearbeitet der EIGENTUEMER selbst,
-    // darf er sich nicht selbst benachrichtigen — die Mitleser aber schon.
-    await act('PUT', `/api/notes/${noteId}`, 'max', { title: 'Übergabe', body: 'Nachtrag' });
+    // Bearbeitet der EIGENTUEMER selbst, darf er sich nicht selbst benachrichtigen — die Mitleser aber schon.
+    g = await oeffne('max'); SENT = [];
+    await g.schreibe(t => t.insert(t.length - 1, ' – Nachtrag'));
+    await verlassen(g);
     expectTargets('Eigentümer bearbeitet → Mitleser, nicht er selbst', ['lisa']);
-
-    // Text der Meldung: Name des Bearbeiters und Titel der Notiz muessen drinstehen, sonst weiss
-    // der Empfaenger nicht, worum es geht.
     const meldung = SENT[0] && SENT[0].payload;
     const textOk = meldung && /Max/i.test(meldung.body) && /Übergabe/.test(meldung.body) && meldung.title === 'Notiz bearbeitet';
     if (textOk) { pass++; console.log(`  ✓ Meldungstext nennt Bearbeiter und Notiz  → „${meldung.body}"`); }
     else { fail++; console.log('  ✗ Meldungstext: ' + JSON.stringify(meldung)); }
 
-    // 9d. LEER-Speichern (Alex, 18.08.2026): aufmachen, nichts aendern, speichern.
+    // Wer gerade drin ist, hat es live gesehen — keine Meldung an ihn.
+    const lisaDrin = await oeffne('lisa');
+    g = await oeffne('max'); SENT = [];
+    await g.schreibe(t => t.insert(0, 'Live gesehen: '));
+    await verlassen(g);
+    expectTargets('Eigentümer bearbeitet, lisa ist gerade drin → keine Meldung an sie', []);
+    await verlassen(lisaDrin);
+    expectTargets('… lisa geht ohne eigene Änderung → auch jetzt nichts', []);
+
+    // 9d. NUR HINEINSCHAUEN (Alex, 18.08.2026): aufmachen, nichts aendern, zumachen.
     // Weder Meldung noch Zaehler duerfen anspringen. Der Zaehler haengt an `updated_at`, deshalb
-    // wird hier BEIDES geprueft — ein unterdrueckter Push allein wuerde den Coin nicht verhindern.
-    const dbNow = getDb();
+    // wird BEIDES geprueft — ein unterdrueckter Push allein wuerde den Coin nicht verhindern.
     const vorher = dbNow.prepare('SELECT updated_at, updated_by FROM notes WHERE id = ?').get(noteId);
     const zaehlerVorher = computeBadgeCounts(dbNow, { id: ids.max, role: 'mitarbeiter' }).notes;
-    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: 'Übergabe', body: 'Nachtrag' });  // exakt der Stand von eben
-    expectTargets('Leer-Speichern → kein Push', []);
-    const nachher = dbNow.prepare('SELECT updated_at, updated_by FROM notes WHERE id = ?').get(noteId);
+    g = await oeffne('lisa'); SENT = [];
+    await g.cursor(3);
+    await verlassen(g);
+    expectTargets('Nur hineinschauen → kein Push', []);
+    let nachher = dbNow.prepare('SELECT updated_at, updated_by FROM notes WHERE id = ?').get(noteId);
     const zaehlerNachher = computeBadgeCounts(dbNow, { id: ids.max, role: 'mitarbeiter' }).notes;
     if (nachher.updated_at === vorher.updated_at && nachher.updated_by === vorher.updated_by) {
-      pass++; console.log('  ✓ Leer-Speichern lässt den Zeitstempel unangetastet');
+      pass++; console.log('  ✓ Nur hineinschauen lässt den Zeitstempel unangetastet');
     } else { fail++; console.log(`  ✗ Zeitstempel bewegt: ${vorher.updated_at}/${vorher.updated_by} → ${nachher.updated_at}/${nachher.updated_by}`); }
     if (zaehlerNachher === zaehlerVorher) {
-      pass++; console.log(`  ✓ Leer-Speichern erhöht den Zähler nicht  → ${zaehlerVorher}`);
+      pass++; console.log(`  ✓ Nur hineinschauen erhöht den Zähler nicht  → ${zaehlerVorher}`);
     } else { fail++; console.log(`  ✗ Zähler gesprungen: ${zaehlerVorher} → ${zaehlerNachher}`); }
 
-    // Und die Sperre muss trotzdem geloest sein, sonst haengt die Notiz fuer alle anderen fest.
-    const sperre = dbNow.prepare('SELECT editing_by FROM notes WHERE id = ?').get(noteId).editing_by;
-    if (!sperre) { pass++; console.log('  ✓ … die Bearbeitungs-Sperre ist trotzdem gelöst'); }
-    else { fail++; console.log('  ✗ Notiz bleibt gesperrt (editing_by=' + sperre + ')'); }
+    // Hin und zurück (Buchstabe getippt und wieder gelöscht) ist keine Änderung.
+    g = await oeffne('lisa'); SENT = [];
+    await g.schreibe(t => t.insert(0, 'x'));
+    await g.schreibe(t => t.delete(0, 1));
+    await verlassen(g);
+    expectTargets('getippt und wieder gelöscht → kein Push', []);
+    nachher = dbNow.prepare('SELECT updated_at FROM notes WHERE id = ?').get(noteId);
+    if (nachher.updated_at === vorher.updated_at) { pass++; console.log('  ✓ … und der Zeitstempel bleibt'); }
+    else { fail++; console.log(`  ✗ Zeitstempel bewegt: ${vorher.updated_at} → ${nachher.updated_at}`); }
 
     // Gegenprobe: EINE echte Aenderung — jetzt muss beides anspringen.
-    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: 'Übergabe', body: 'Wirklich geändert' });
+    g = await oeffne('lisa'); SENT = [];
+    await g.schreibe(t => t.insert(0, 'Wirklich geändert. '));
+    await verlassen(g);
     expectTargets('Echte Änderung → Push an Eigentümer', ['max']);
     const zaehlerEcht = computeBadgeCounts(dbNow, { id: ids.max, role: 'mitarbeiter' }).notes;
     if (zaehlerEcht > zaehlerVorher) { pass++; console.log(`  ✓ … und der Zähler zählt sie  → ${zaehlerVorher} → ${zaehlerEcht}`); }
     else { fail++; console.log(`  ✗ Zähler blieb bei ${zaehlerEcht}`); }
 
-    // Nur Leerzeichen drumherum ist KEINE Aenderung (gespeichert wird ohnehin getrimmt).
-    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: '  Übergabe  ', body: 'Wirklich geändert\n' });
-    expectTargets('Nur Leerzeichen geändert → kein Push', []);
+    // Bleibt lisa in der Notiz, endet ihre Runde nach der Ruhezeit — EINE Meldung für viele Tastendrücke.
+    g = await oeffne('lisa'); SENT = [];
+    for (const w of ['Eins ', 'Zwei ', 'Drei ']) await g.schreibe(t => t.insert(0, w));
+    await sleep(live.zeiten.rundeMs + 300);
+    expectTargets('lisa bleibt drin, tippt dreimal, dann Ruhe → genau eine Meldung', ['max']);
+    if (SENT.length === 1) { pass++; console.log('  ✓ … wirklich nur eine'); } else { fail++; console.log(`  ✗ ${SENT.length} Meldungen`); }
+    SENT = [];
+    await verlassen(g);
+    expectTargets('… danach ohne weitere Änderung verlassen → nichts mehr', []);
+
+    // Umbenennen in der offenen Notiz gehört zur Runde; ohne offene Notiz wird sofort gemeldet.
+    g = await oeffne('lisa'); SENT = [];
+    await req(server, 'PUT', `/api/notes/${noteId}`, tokens.lisa, { title: 'Übergabe Halle 2', verbindung: g.verbindung });
+    await g.schreibe(t => t.insert(0, 'Und Text. '));
+    await sleep(80);
+    expectTargets('Umbenennen in der offenen Notiz → noch keine Meldung', []);
+    await verlassen(g);
+    expectTargets('… Runde vorbei (Titel + Text) → eine Meldung', ['max']);
+    if (SENT.length === 1) { pass++; console.log('  ✓ … eine, nicht zwei'); } else { fail++; console.log(`  ✗ ${SENT.length} Meldungen`); }
+    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: 'Übergabe' });
+    expectTargets('Umbenennen ohne offene Notiz → sofort an Eigentümer', ['max']);
 
     // Kategorie-Schalter greift auch hier: max schaltet Notizen ab → keine Meldung mehr an ihn.
     await req(server, 'PUT', '/api/push/prefs', tokens.max, { notes: false });
-    await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: 'Übergabe', body: 'Noch ein Nachtrag' });
+    g = await oeffne('lisa'); SENT = [];
+    await g.schreibe(t => t.insert(0, 'Noch ein Nachtrag. '));
+    await verlassen(g);
     expectTargets('Notiz bearbeitet, Schalter aus → kein Push', []);
     await req(server, 'PUT', '/api/push/prefs', tokens.max, { notes: true });
 

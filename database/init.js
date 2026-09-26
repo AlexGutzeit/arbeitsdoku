@@ -434,6 +434,8 @@ async function initDatabase() {
   // Persoenliche Schalter fuer die Gesetzeswarnungen (idempotent, hier UND im Restore-Pfad)
   ensureWarnungSchema(db);
   ensureProduktSchema(db);
+  // Live-Notizen: Inhalt als gemeinsames Dokument (idempotent, hier UND im Restore-Pfad)
+  ensureNotizLiveSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -1017,6 +1019,31 @@ function ensureAuditSchema(targetDb) {
   ensureBackupEmpfaengerSchema(targetDb);
   ensureWarnungSchema(targetDb);
   ensureProduktSchema(targetDb);
+  ensureNotizLiveSchema(targetDb);
+}
+
+// Live-Notizen (26.09.2026): Der Inhalt einer Notiz ist ein Yjs-Dokument (`ydoc`), `body` (Klartext)
+// und `body_delta` (Formatierung) werden daraus abgeleitet — siehe notiz-dokument.js.
+// Alte Notizen werden hier EINMAL umgestellt: Ihr Klartext wird zum Dokument, `body` bleibt
+// zeichengleich, `updated_at` unangetastet (sonst sprängen bei allen die Zähler an).
+// Idempotent — läuft bei Init UND nach dem Zurückspielen einer alten Sicherung.
+function ensureNotizLiveSchema(targetDb) {
+  try {
+    const cols = targetDb.prepare('PRAGMA table_info(notes)').all().map(c => c.name);
+    if (!cols.includes('ydoc')) targetDb.exec('ALTER TABLE notes ADD COLUMN ydoc BLOB');
+    if (!cols.includes('body_delta')) targetDb.exec('ALTER TABLE notes ADD COLUMN body_delta TEXT');
+    const offen = targetDb.prepare('SELECT id, body FROM notes WHERE ydoc IS NULL').all();
+    if (!offen.length) return;
+    const { zeileAusKlartext } = require('../notiz-dokument');
+    const setzen = targetDb.prepare('UPDATE notes SET ydoc = ?, body_delta = ? WHERE id = ?');
+    for (const n of offen) {
+      const z = zeileAusKlartext(n.body || '');
+      setzen.run(z.ydoc, z.body_delta, n.id);
+    }
+    console.log(`Migration: ${offen.length} Notiz(en) auf gemeinsames Dokument umgestellt.`);
+  } catch (e) {
+    console.error('ensureNotizLiveSchema fehlgeschlagen:', e.message);
+  }
 }
 
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".

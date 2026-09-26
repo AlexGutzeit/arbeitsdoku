@@ -317,7 +317,9 @@ router.get('/meine-daten', authenticate, (req, res) => {
     zeiteintraege: hole('SELECT * FROM entries WHERE user_id = ?'),
     abwesenheiten: hole('SELECT * FROM absences WHERE user_id = ?'),
     planung: hole('SELECT p.* FROM planning_entries p JOIN planning_assignments a ON a.planning_id = p.id WHERE a.user_id = ?'),
-    notizen: hole('SELECT * FROM notes WHERE user_id = ?'),
+    // Ohne `ydoc` (Yjs-Dokument als Binärdaten) und die frühere Sperre — der Inhalt steht
+    // vollständig in `body` (Text) und `body_delta` (Formatierung).
+    notizen: hole('SELECT id, title, body, body_delta, project_id, project_text, created_at, updated_at, updated_by FROM notes WHERE user_id = ?'),
     mit_mir_geteilte_notizen: hole('SELECT note_id, permission FROM note_shares WHERE user_id = ?'),
     aushaenge_von_mir: hole('SELECT * FROM bulletin_entries WHERE created_by = ?'),
     bestellungen: hole('SELECT * FROM orders WHERE user_id = ?'),

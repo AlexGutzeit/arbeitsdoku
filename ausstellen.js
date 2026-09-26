@@ -63,6 +63,10 @@ function ausstellenVollziehen(db, userId, employedUntil, wer, zusatz = '') {
   // notifyUsers sperrt zusaetzlich serverseitig). Bei Wiedereinstellung re-abonniert das Geraet beim Login.
   db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(userId);
 
+  // Aus offenen Live-Notizen sofort hinaus — die Tür (jede Änderung) prüft ohnehin das Konto,
+  // aber mitlesen soll er ab jetzt auch nicht mehr.
+  require('./notizen-live').nutzerRauswerfen(userId);
+
   // Zweiten Faktor loeschen (Alex, 25.08.2026). Ohne das ueberlebt der Authenticator auf dem
   // privaten Handy das Ausstellen — samt der gemerkten Geraete, die je nach Intervall wochenlang
   // gar keinen Code verlangen. Kaeme der Account je versehentlich wieder auf active=1, waere sein

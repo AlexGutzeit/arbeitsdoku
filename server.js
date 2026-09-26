@@ -227,14 +227,20 @@ async function start() {
   });
 }
 
-// Graceful shutdown
+// Graceful shutdown. Offene Live-Notizen zuerst in die Datenbank schreiben — sie speichern sonst
+// erst nach 1,5 s Ruhe, und die letzten Tastendrücke vor einem Neustart (Deploy) gingen verloren.
+function offeneNotizenSichern() {
+  try { require('./notizen-live').allesSpeichern(); } catch (e) { console.error('Live-Notizen nicht gesichert:', e.message); }
+}
 process.on('SIGINT', () => {
   console.log('\nServer wird beendet...');
+  offeneNotizenSichern();
   saveToFile();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
+  offeneNotizenSichern();
   saveToFile();
   process.exit(0);
 });
