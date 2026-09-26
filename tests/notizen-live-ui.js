@@ -273,6 +273,23 @@ async function cursorSichtbar(p, farbe) {
       beiAnna.slice(-400));
     ok('… und der Server hat nichts davon abgewiesen (dieselbe Sitzung, gespeichert)', eingefuegt.offen && /Gespeichert/.test(eingefuegt.status), JSON.stringify({ status: eingefuegt.status, offen: eingefuegt.offen }));
 
+    console.log('\nRiesiger Text eingefügt');
+    const annaVorher = await editorText(A);
+    await T.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(q.getLength() - 1, 0, 'user'); });
+    await T.evaluate(() => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', 'Ziemlich viel Text. '.repeat(5000));   // rund 100 KB
+      document.querySelector('.notiz-editor .ql-editor').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    });
+    await T.waitForFunction(() => /zu groß/.test((document.querySelector('.toast') || {}).textContent || ''), { timeout: 5000 }).catch(() => {});
+    await bereit(T).catch(() => {});
+    await sleep(800);
+    const gross = await T.evaluate(() => ({ toast: (document.querySelector('.toast') || {}).textContent || '', status: document.getElementById('notiz-status').textContent,
+      laenge: _notizSitzung ? _notizSitzung.quill.getLength() : -1 }));
+    ok('klare Meldung „zu groß", die Notiz öffnet sich neu ohne den Text — kein endloses „Keine Verbindung"',
+      /zu groß/.test(gross.toast) && /Gespeichert/.test(gross.status) && gross.laenge < 5000, JSON.stringify(gross));
+    ok('… bei den anderen ist nichts Halbes angekommen', (await editorText(A)) === annaVorher);
+
     console.log('\nFertig → zurück');
     await liste(T);
     await T.evaluate(() => window.scrollTo(0, 400));
@@ -308,6 +325,22 @@ async function cursorSichtbar(p, farbe) {
     await sleep(1800);
     await T.tap('#notiz-fertig'); await T.waitForSelector('#note-list'); await sleep(500);
     ok('… geschrieben, „Fertig" — steht in der Übersicht', await T.evaluate(() => [...document.querySelectorAll('.note-card')].some(c => /Baustelle Halle 2/.test(c.textContent) && /Erster Punkt/.test(c.textContent))));
+
+    console.log('\nNeuladen direkt nach dem Tippen („Jetzt aktualisieren", Tab zu)');
+    await T.evaluate((i) => { location.hash = '/notes/' + i; }, note.id);
+    await T.waitForSelector('.notiz-editor .ql-editor'); await bereit(T);
+    // Antworten des Servers künstlich verzögern: So ist beim Neuladen sicher noch etwas unterwegs.
+    await T.setRequestInterception(true);
+    const bremse = r => (r.url().includes('/live/aenderung') ? setTimeout(() => r.continue().catch(() => {}), 1500) : r.continue().catch(() => {}));
+    T.on('request', bremse);
+    await T.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(q.getLength() - 1, 0, 'user'); });
+    await T.keyboard.type(' Eilig');
+    await T.reload({ waitUntil: 'domcontentloaded' });
+    T.off('request', bremse);
+    await T.setRequestInterception(false);
+    await T.waitForSelector('.notiz-editor .ql-editor', { timeout: 15000 }); await bereit(T);
+    await A.waitForFunction(() => /Eilig/.test(document.querySelector('.notiz-editor .ql-editor').innerText), { timeout: 8000 }).catch(() => {});
+    ok('nichts geht verloren — die letzten Tastendrücke kommen nach dem Neuladen an', /Eilig/.test(await editorText(A) || ''), (await editorText(A) || '').slice(-60));
 
     ok('keine Skriptfehler in allen drei Browsern', jsFehler.length === 0, JSON.stringify(jsFehler));
   } catch (e) {

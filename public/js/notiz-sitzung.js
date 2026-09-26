@@ -132,6 +132,12 @@ async function renderNotizEditor(id) {
   _notizSitzung = notizSitzungStarten(id);
 }
 
+// Kommt die Seite aus dem Zwischenspeicher des Browsers zurück (Handy: weg- und wieder hergewischt),
+// ist die Sitzung beim Verlassen beendet worden — auf der Editor-Seite dann neu aufbauen.
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted && !_notizSitzung && /^\/notes\/\d+$/.test(getRoute())) render();
+});
+
 // Wird bei JEDEM Seitenwechsel aufgerufen (render(), app-1). Wer die Notiz verlässt, ist draußen.
 function notizSitzungVerlassen() {
   if (_notizSitzung) _notizSitzung.beenden();
@@ -211,6 +217,15 @@ function notizSitzungStarten(id) {
     s.sendet = true; statusNachWarteschlange();
     const anzahl = s.warteschlange.length;
     const update = anzahl === 1 ? s.warteschlange[0] : Y.mergeUpdates(s.warteschlange);
+    if (update.length > 70 * 1024) {
+      // Würde schon an der Größengrenze des Servers scheitern — und dann endlos wiederholt.
+      s.sendet = false;
+      try { localStorage.removeItem(speicherKey); } catch (_) {}
+      toast('Diese Änderung ist zu groß (z. B. ein sehr langer eingefügter Text) und wurde nicht übernommen.', 'error');
+      s.beenden({ verwerfen: true });
+      if (getRoute() === '/notes/' + id) renderNotizEditor(id);
+      return;
+    }
     try {
       await api('POST', `/api/notes/${id}/live/aenderung`, { verbindung: s.verbindung, update: notizB64(update) });
       s.warteschlange.splice(0, anzahl);
@@ -273,7 +288,8 @@ function notizSitzungStarten(id) {
     const leute = new Map();
     for (const [cid, st] of s.aw.getStates()) {
       if (!st || !st.user) continue;
-      const selbst = cid === s.doc.clientID;
+      // Das eigene zweite Fenster (Handy + Rechner) ist keine fremde Person
+      const selbst = cid === s.doc.clientID || (s.du && st.user.name === s.du.name);
       const key = selbst ? '~du' : st.user.name;
       if (!leute.has(key)) leute.set(key, { name: selbst ? 'Du' : st.user.name, farbe: st.user.color, selbst });
     }
@@ -376,6 +392,7 @@ function notizSitzungStarten(id) {
       s.beenden({ verwerfen: true });
       toast(grund === 'geloescht' ? 'Diese Notiz wurde gelöscht.'
         : grund === 'freigabe-entzogen' ? 'Die Freigabe dieser Notiz wurde dir entzogen.'
+        : grund === 'zurueckgespielt' ? 'Eine Sicherung wurde zurückgespielt. Bitte öffne die Notiz neu.'
         : 'Du bist nicht mehr angemeldet.', 'error');
       if (getRoute() === '/notes/' + id) notizZurueckZurListe();
     });
@@ -424,8 +441,13 @@ function notizSitzungStarten(id) {
     }
   }
   const wiederOnline = () => { if (!s.es) { s.versuche = 0; verbinden(); } };
+  // Seite wird verlassen (Neuladen, „Jetzt aktualisieren", Tab zu): Was noch nicht beim Server ist,
+  // SOFORT auf dem Gerät sichern — das gebündelte Sichern wartet sonst 300 ms, und genau die letzten
+  // Tastendrücke gingen verloren. beenden() sichert und schickt einen letzten Versuch hinterher.
+  const seiteWeg = () => s.beenden();
   document.addEventListener('visibilitychange', sichtbarkeit);
   window.addEventListener('online', wiederOnline);
+  window.addEventListener('pagehide', seiteWeg);
 
   // „← Fertig"
   const fertig = $('notiz-fertig');
@@ -448,6 +470,7 @@ function notizSitzungStarten(id) {
     for (const t of s.faehnchen.values()) clearTimeout(t);
     document.removeEventListener('visibilitychange', sichtbarkeit);
     window.removeEventListener('online', wiederOnline);
+    window.removeEventListener('pagehide', seiteWeg);
     if (verwerfen) { try { localStorage.removeItem(speicherKey); } catch (_) {} }
     else if (s.warteschlange.length) {
       // Letzter Versuch beim Verlassen — VOR dem Schließen des Stroms, solange der Server die

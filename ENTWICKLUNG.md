@@ -3453,3 +3453,24 @@ Klon 18 Einträge, echte Freigaben unverändert — `notizen-live-prodklon`), un
 nimmt sie ausdrücklich mit. Ehrlich festgehalten: Die Gegenprobe ohne dieses Mitlöschen bleibt grün,
 weil `ON DELETE CASCADE` heute greift; die Waisen am Klon stammen aus früherer Zeit. Das Mitlöschen
 ist ein Netz, keine Reparatur.
+
+**Randfälle vor dem Deploy** (27.09.2026, nachts):
+* **Sicherung zurückspielen, während jemand in einer Notiz ist.** Der Raum hält das Dokument aus der
+  alten Datenbank im Speicher; der nächste Speichervorgang hätte die zurückgespielte Notiz
+  überschrieben. `einsetzen()` ruft jetzt vor dem Tausch `allesVerwerfen()` auf: alle Räume zu, ohne
+  Speichern, ohne Meldungen, alle Drinnen mit „Sicherung zurückgespielt" hinaus. Zusätzlich sperrt
+  `raum.verworfen` das Speichern. Gemessen: Solange das Verwerfen VOR dem Tausch läuft, genügt die
+  Reihenfolge allein (Probe ohne Sperre grün — der letzte Speichervorgang trifft die alte Datenbank);
+  mit umgedrehter Reihenfolge hält nur die Sperre (ohne sie rot). `tests/notizen-live-zurueckspielen.js`
+  (6), Quelltext-Prüfung der Reihenfolge in `einsetzen()`.
+* **Zu große Änderung** (riesiger eingefügter Text): Die Grenze je Sendung (96 KB) lag über der
+  JSON-Grenze des Servers (100 KB nach Base64 ≈ 75 KB) — die Anfrage scheiterte schon vorher, ohne
+  Kennung, und der Browser hätte sie endlos wiederholt („Keine Verbindung"). Jetzt 70 KB, die 413-
+  Antwort trägt `ZU_GROSS`, und der Browser prüft vorab. Jeder der beiden Wege allein genügt (Probe
+  ohne Vorprüfung grün), ohne beide rot.
+* **Neuladen direkt nach dem Tippen** („Jetzt aktualisieren", Tab zu): Das gebündelte Sichern auf dem
+  Gerät wartet 300 ms — genau die letzten Tastendrücke gingen verloren, wenn gleichzeitig eine Sendung
+  unterwegs war. `pagehide` sichert jetzt sofort; kommt die Seite aus dem Zwischenspeicher zurück
+  (`pageshow`), baut die Editor-Seite die Sitzung neu auf. Test mit künstlich verzögerten Antworten;
+  ohne `pagehide` rot.
+* Das eigene zweite Fenster (Handy + Rechner) steht in der Anwesenheit nicht als fremde Person.

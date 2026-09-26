@@ -513,7 +513,10 @@ function einsetzen(neueDb, dbPuffer, dateien) {
     throw e;
   }
 
-  // Ab hier kann nichts mehr scheitern: die Datenbank im Speicher tauschen.
+  // Ab hier kann nichts mehr scheitern: die Datenbank im Speicher tauschen. Vorher die offenen
+  // Live-Notizen verwerfen — ihr Stand stammt aus der alten Datenbank und würde sonst beim nächsten
+  // Speichern die zurückgespielten Notizen überschreiben.
+  require('../notizen-live').allesVerwerfen('zurueckgespielt');
   setDb(neueDb);
 
   // 5. Aufraeumen — in den Arbeitsordnern liegen nur noch die alten Fassungen (die stecken

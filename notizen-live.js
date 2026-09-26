@@ -30,7 +30,9 @@ const SPEICHERN_SPAETESTENS_MS = 10000; // … und spätestens so oft, auch wenn
 // die zwei Minuten verkürzen kann (tests/push-targeting.js).
 const zeiten = { rundeMs: 2 * 60 * 1000 };
 const PING_MS = 25000;
-const GROESSTE_AENDERUNG = 96 * 1024; // Bytes je Sendung (die JSON-Grenze des Servers liegt bei 100 KB)
+// Bytes je Sendung. Base64 macht daraus ein Drittel mehr, und die JSON-Grenze des Servers liegt bei
+// 100 KB — 70 KB passen mit Luft hinein (vorher 96 KB: die Anfrage scheiterte schon an der Grenze).
+const GROESSTE_AENDERUNG = 70 * 1024;
 
 // Farben je Person. Jeder hat eine Stammfarbe (nach Nutzernummer); ist sie im Raum schon vergeben,
 // nimmt er die nächste freie — in EINER Notiz sind zwei Leute nie gleich gefärbt.
@@ -99,6 +101,10 @@ function speichernPlanen(raum) {
 
 function jetztSpeichern(raum) {
   if (raum.speicherTimer) { clearTimeout(raum.speicherTimer); raum.speicherTimer = null; }
+  // Nach dem Zurückspielen einer Sicherung darf der alte Stand nicht mehr hinein. Solange
+  // allesVerwerfen() VOR dem Tausch läuft, landete ein letzter Speichervorgang ohnehin in der alten
+  // Datenbank; diese Sperre hält auch, falls die Reihenfolge je umgedreht wird (geprüft 27.09.2026).
+  if (raum.verworfen) return;
   const db = getDb();
   const alt = db.prepare('SELECT body, body_delta FROM notes WHERE id = ?').get(raum.noteId);
   if (!alt) return;   // inzwischen gelöscht
@@ -358,6 +364,23 @@ function notizGeloescht(noteId) {
   for (const v of [...raum.verbindungen.values()]) rauswerfen(v, 'geloescht');
 }
 
+/**
+ * Eine Sicherung wird zurückgespielt: Die offenen Notizen im Speicher stammen aus der ALTEN Datenbank.
+ * Würden sie noch gespeichert, überschrieben sie die zurückgespielten Notizen. Deshalb alle Räume
+ * schließen, OHNE zu speichern und ohne Meldungen, und alle Drinnen hinauswerfen. Muss aufgerufen
+ * werden, BEVOR die neue Datenbank eingesetzt wird (routes/backup.js, einsetzen).
+ */
+function allesVerwerfen(grund = 'zurueckgespielt') {
+  for (const raum of [...raeume.values()]) {
+    raum.verworfen = true;
+    clearTimeout(raum.speicherTimer); raum.speicherTimer = null;
+    for (const r of raum.runden.values()) clearTimeout(r.timer);
+    raum.runden.clear();
+    for (const v of [...raum.verbindungen.values()]) rauswerfen(v, grund);
+    if (raeume.get(raum.noteId) === raum) raumSchliessen(raum);
+  }
+}
+
 /** Nutzer ausgestellt: aus allen Notizen raus. */
 function nutzerRauswerfen(userId) {
   for (const raum of [...raeume.values()]) {
@@ -404,5 +427,5 @@ function offenerStand(noteId) {
 function allesSpeichern() { for (const raum of raeume.values()) jetztSpeichern(raum); }
 
 module.exports = { verbinden, aenderung, anwesenheit, zugriffAbgleichen, notizGeloescht, nutzerRauswerfen,
-  kopfGeaendert, inhaltVon, anwesende, offenerStand, allesSpeichern, gesehenVermerken, zugriffVon, FARBEN,
+  kopfGeaendert, inhaltVon, anwesende, offenerStand, allesSpeichern, allesVerwerfen, gesehenVermerken, zugriffVon, FARBEN,
   zeiten, _intern: { raeume } };
