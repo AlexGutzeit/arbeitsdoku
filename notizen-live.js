@@ -20,7 +20,7 @@ const crypto = require('crypto');
 const decoding = require('lib0/decoding');
 const awarenessProtocol = require('y-protocols/awareness');
 const { getDb } = require('./database/init');
-const { Y, TEXT, laden, felder } = require('./notiz-dokument');
+const { Y, TEXT, laden, felder, zulaessig } = require('./notiz-dokument');
 const { broadcast } = require('./sse');
 const push = require('./push');
 
@@ -254,12 +254,22 @@ function aenderung(noteId, userId, verbindungId, updateB64) {
   }
   const update = ausB64(updateB64);
   if (!update.length || update.length > GROESSTE_AENDERUNG) return { status: 413, code: 'ZU_GROSS', fehler: 'Diese Änderung ist zu groß (z. B. ein sehr langer eingefügter Text).' };
-  const vorher = inhalt(raum);
+  // Erst an einer Kopie ausprobieren: Ist sie lesbar, und steht danach nur Erlaubtes im Dokument?
+  // Ins echte Dokument (und zu den anderen) kommt sie nur dann — zurücknehmen lässt sich in Yjs nichts.
+  const probe = new Y.Doc();
+  let inOrdnung = false;
   try {
-    Y.applyUpdate(raum.doc, update, v);
+    Y.applyUpdate(probe, Y.encodeStateAsUpdate(raum.doc));
+    Y.applyUpdate(probe, update);
+    inOrdnung = zulaessig(probe);
   } catch (_) {
+    probe.destroy();
     return { status: 400, code: 'BESCHAEDIGT', fehler: 'Die Änderung war beschädigt und wurde nicht übernommen.' };
   }
+  probe.destroy();
+  if (!inOrdnung) return { status: 400, code: 'BESCHAEDIGT', fehler: 'Die Änderung enthielt etwas, das in einer Notiz nicht vorkommen kann, und wurde nicht übernommen.' };
+  const vorher = inhalt(raum);
+  Y.applyUpdate(raum.doc, update, v);
   // Das Dokument endet immer mit einem Zeilenende (siehe notiz-dokument.js). Löscht jemand
   // alles bis auf den letzten Rest, wird es hier wieder angefügt — und an ALLE verteilt.
   anAlle(raum, 'aenderung', { update: updateB64 }, v);
@@ -292,6 +302,8 @@ function anwesenheit(noteId, userId, verbindungId, updateB64) {
   if (!treffer) return { status: 409, code: 'VERBINDUNG_WEG', fehler: 'Die Verbindung zur Notiz ist unterbrochen.' };
   const { raum, v } = treffer;
   const update = ausB64(updateB64);
+  // Cursor + Name passen in wenige hundert Bytes; mehr würde nur an alle anderen weitergereicht.
+  if (!update.length || update.length > 4096) return { status: 413, fehler: 'Anwesenheit zu groß.' };
   let ids;
   try { ids = clientIdsIn(update); } catch (_) { return { status: 400, fehler: 'Ungültige Anwesenheit.' }; }
   // Eine Clientnummer gehört einer Verbindung. Übernehmen darf sie nur dieselbe Person (neu

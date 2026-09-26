@@ -126,7 +126,14 @@ async function cursorSichtbar(p, farbe) {
 
     console.log('\nFormatieren');
     await A.evaluate(() => { _notizSitzung.quill.setSelection(0, 5, 'user'); });
-    await A.tap('#notiz-leiste .ql-bold');
+    // fett – wieder entfetten – fett: Das Entfernen einer Formatierung muss der Server annehmen
+    await A.tap('#notiz-leiste .ql-bold'); await sleep(300);
+    await A.tap('#notiz-leiste .ql-bold'); await sleep(300);
+    await A.tap('#notiz-leiste .ql-bold'); await sleep(600);
+    const nachUmschalten = await A.evaluate(() => ({ status: document.getElementById('notiz-status').textContent,
+      toast: (document.querySelector('.toast.show') || {}).textContent || '', offen: !!_notizSitzung && _notizSitzung.offen }));
+    ok('fett → entfetten → fett über die Knopfleiste: keine Abweisung, Sitzung bleibt offen',
+      /Gespeichert|gespeichert/.test(nachUmschalten.status) && !nachUmschalten.toast && nachUmschalten.offen, JSON.stringify(nachUmschalten));
     await A.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(q.getText().indexOf('Wago') + 2, 0, 'user'); });
     await A.tap('#notiz-leiste .ql-list[value="check"]');
     await sleep(2500);   // Ruhe → gespeichert → Übersicht frischt sich auf
@@ -244,6 +251,27 @@ async function cursorSichtbar(p, farbe) {
     await sleep(1200);
     ok('beim nächsten Öffnen wird nachgereicht — Anna hat „Funkloch"', /Funkloch/.test(await editorText(A) || ''), await editorText(A));
     ok('… und die Sicherung auf dem Gerät ist danach weg', !(await T.evaluate((i) => localStorage.getItem('notiz-live:' + i), note.id)));
+
+    console.log('\nEinfügen aus Word / Webseite / WhatsApp');
+    await T.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(q.getLength() - 1, 0, 'user'); });
+    await T.evaluate(() => {
+      window.__sitzungVorher = _notizSitzung;   // nach einer Abweisung öffnete die App NEU — das soll auffallen
+      const dt = new DataTransfer();
+      dt.setData('text/html', '<h1>Lieferung</h1><p><a href="javascript:window.__xss2=1">Link</a> <span style="color:red">rot</span> <b>fett</b> <i>schräg</i></p>'
+        + '<img src="x" onerror="window.__xss3=1"><ul><li>Punkt eins</li></ul><table><tr><td>Zelle</td></tr></table>');
+      dt.setData('text/plain', 'Lieferung Link rot fett schräg Punkt eins Zelle');
+      document.querySelector('.notiz-editor .ql-editor').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    });
+    await sleep(2200);
+    const eingefuegt = await T.evaluate(() => ({
+      status: document.getElementById('notiz-status').textContent, offen: _notizSitzung === window.__sitzungVorher && _notizSitzung.offen,
+      html: document.querySelector('.notiz-editor .ql-editor').innerHTML, xss: !!(window.__xss2 || window.__xss3) }));
+    const beiAnna = await A.evaluate(() => document.querySelector('.notiz-editor .ql-editor').innerHTML);
+    ok('eingefügter Text kommt an — nur erlaubte Formatierung (fett/kursiv/Liste), kein Link, kein Bild, keine Farbe',
+      /Lieferung/.test(beiAnna) && /<strong>fett<\/strong>/.test(beiAnna) && /<em>schräg<\/em>/.test(beiAnna) && /Punkt eins/.test(beiAnna)
+        && !/<a |<img|color|<h1|<table/i.test(beiAnna) && !eingefuegt.xss,
+      beiAnna.slice(-400));
+    ok('… und der Server hat nichts davon abgewiesen (dieselbe Sitzung, gespeichert)', eingefuegt.offen && /Gespeichert/.test(eingefuegt.status), JSON.stringify({ status: eingefuegt.status, offen: eingefuegt.offen }));
 
     console.log('\nFertig → zurück');
     await liste(T);

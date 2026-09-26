@@ -79,4 +79,20 @@ function zeileAusKlartext(klartext) {
   return { ydoc: stand, ...f };
 }
 
-module.exports = { Y, TEXT, ausKlartext, laden, felder, zeileAusKlartext, zeileAusDelta, zeilenendeSichern };
+// Was in einer Notiz stehen darf — genau das, was die Knopfleiste kann. Alles andere (Bilder,
+// Links, Überschriften, fremde Datenfelder im Dokument) kann nur ein manipulierter Browser schicken;
+// es brächte das Schreibfeld der anderen durcheinander. Geprüft wird der Stand NACH einer Änderung.
+// `false` heißt „nicht formatiert" und ist harmlos (Quill selbst entfernt mit null, das Yjs gar nicht speichert).
+const ERLAUBTE_FORMATE = { bold: [true, false], italic: [true, false], underline: [true, false], list: ['bullet', 'ordered', 'checked', 'unchecked', false] };
+function zulaessig(doc) {
+  if ([...doc.share.keys()].some(k => k !== TEXT)) return false;
+  for (const op of doc.getText(TEXT).toDelta()) {
+    if (typeof op.insert !== 'string') return false;
+    for (const [k, v] of Object.entries(op.attributes || {})) {
+      if (!ERLAUBTE_FORMATE[k] || !ERLAUBTE_FORMATE[k].includes(v)) return false;
+    }
+  }
+  return true;
+}
+
+module.exports = { Y, TEXT, ausKlartext, laden, felder, zeileAusKlartext, zeileAusDelta, zeilenendeSichern, zulaessig };

@@ -3431,3 +3431,16 @@ Liste berücksichtigen ihn in beiden Zweigen (eigene und geteilte Notizen).
   prüft zusätzlich, dass wirklich er als Bearbeiter gespeichert ist.
 Danach: beide Zweige einzeln ohne Merker → jeweils rot (`push-targeting` für geteilte,
 `notizen-live-ui` für eigene Notizen), Speichern ohne Merker → rot.
+
+**Nachgezogen: Was darf in einer Notiz stehen?** Der Server prüfte, WER schreiben darf, nicht WAS.
+Ein manipulierter Browser (in Etappe C auch ein Gast) hätte Bilder, Links, fremde Datenfelder im
+Dokument oder unbekannte Listenwerte schicken können — bei allen anderen im Schreibfeld. Jetzt wird
+jede Änderung zuerst an einer Kopie ausprobiert (`zulaessig()` in `notiz-dokument.js`): nur Text,
+fett/kursiv/unterstrichen, die vier Listenarten; `false` als „nicht formatiert" ist erlaubt
+(entfernte Formatierung speichert Yjs gar nicht erst). Zurücknehmen lässt sich in Yjs nichts, darum
+die Kopie. Anwesenheits-Meldungen sind auf 4 KB begrenzt. Geprüft außerdem: fett → entfetten → fett
+über die Knopfleiste, und **Einfügen aus Word/Webseite** (Überschrift, Link mit `javascript:`, Farbe,
+Bild mit `onerror`, Tabelle) — ankommen darf nur Text mit erlaubter Formatierung, und der Server weist
+nichts ab. Die Prüfung „weist nichts ab" vergleicht die SITZUNG vor und nach dem Einfügen: Nach einer
+Abweisung öffnet die App neu, und „offen" wäre auch die neue Sitzung (Gegenprobe ohne Format-Liste
+hat das gezeigt). Tests: `notizen-live` 36, `notizen-live-ui` 37.

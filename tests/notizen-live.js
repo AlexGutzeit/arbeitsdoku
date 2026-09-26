@@ -136,6 +136,26 @@ async function beenden() {
     ok('fremde Clientnummer übernehmen: abgewiesen (403)', uebernahme.status === 403, String(uebernahme.status));
     const kaputt = await O.rohSenden('bm9jaCBrZWluIFlqcw==');
     ok('beschädigte Änderung: abgewiesen (400), nichts verändert', kaputt.status === 400 && O.text() === W.text(), String(kaputt.status));
+    // Was nur ein manipulierter Browser schicken kann: Bild, Link, fremdes Datenfeld, falscher Listenwert
+    const schmuggel = async (was) => {
+      const d = new Y.Doc(); Y.applyUpdate(d, Y.encodeStateAsUpdate(O.doc));
+      const sv = Y.encodeStateVector(d); was(d);
+      const r = await O.rohSenden(b64(Y.encodeStateAsUpdate(d, sv))); d.destroy(); return r.status;
+    };
+    const vorSchmuggel = O.text();
+    const s1 = await schmuggel(d => d.getText('notiz').insertEmbed(0, { image: 'https://example.org/x.png' }));
+    const s2 = await schmuggel(d => d.getText('notiz').insert(0, 'hier', { link: 'javascript:alert(1)' }));
+    const s3 = await schmuggel(d => d.getMap('versteckt').set('x', 'y'));
+    const s4 = await schmuggel(d => d.getText('notiz').format(0, 1, { list: 'irgendwas' }));
+    // Der erlaubte Fall regulär über Wims Gerät — so bleibt er auch der letzte Bearbeiter (Prüfung unten).
+    const s5 = (await W.schreibe(t => t.insert(0, 'fett ', { bold: true }))).status;
+    await O.warte('aenderung', () => O.text() === 'fett ' + vorSchmuggel, 2000);
+    await R.warte('aenderung', () => R.text() === 'fett ' + vorSchmuggel, 2000);
+    ok('Bild, Link, fremdes Datenfeld, falscher Listenwert: abgewiesen (400) — erlaubte Formatierung geht',
+      [s1, s2, s3, s4].every(x => x === 400) && s5 === 200 && O.text() === 'fett ' + vorSchmuggel && R.text() === O.text(),
+      JSON.stringify([s1, s2, s3, s4, s5, O.text().slice(0, 30)]));
+    const riesig = await O.anwesenheitRoh(b64(new Uint8Array(6000)));
+    ok('übergroße Anwesenheits-Meldung: abgewiesen (413)', riesig.status === 413, String(riesig.status));
     const fremdeVerbindung = await O.rohSenden(b64(new Uint8Array([0, 0])), W.verbindung);
     ok('mit der Verbindung eines anderen senden: abgewiesen (409)', fremdeVerbindung.status === 409, String(fremdeVerbindung.status));
 
