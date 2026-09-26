@@ -3474,3 +3474,9 @@ ist ein Netz, keine Reparatur.
   (`pageshow`), baut die Editor-Seite die Sitzung neu auf. Test mit künstlich verzögerten Antworten;
   ohne `pagehide` rot.
 * Das eigene zweite Fenster (Handy + Rechner) steht in der Anwesenheit nicht als fremde Person.
+* **Die Prod-Klon-Vorlage war schon umgestellt.** Ältere Prod-Klon-Tests starten den Server direkt auf
+  `/tmp/prodklon.db`; nach meinem Lauf der Bestandstests enthielt die Vorlage bereits umgestellte
+  Notizen. `notizen-live-prodklon` nahm „schon umgestellt" als bestanden — seine späteren Läufe
+  prüften die Umstellung also gar nicht mehr. Jetzt baut er sie auf einer Kopie zurück (Spalten
+  entfernen, SQLite 3.49 kann das) und prüft immer von vorn; liegt die rohe Produktivkopie vor, auch
+  an ihr: 13 Notizen zeichengleich, 17 verwaiste Freigaben abgeräumt, 55 echte unverändert (15).

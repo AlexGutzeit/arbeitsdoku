@@ -8,6 +8,13 @@
 //   * die Eigentümerin öffnet ihre Notiz live und sieht genau ihren Text.
 // Die Vorlage /tmp/prodklon.db wird nur gelesen (Prüfsumme vorher/nachher).
 //
+// ACHTUNG, gelernt am 27.09.2026: Ältere Prod-Klon-Tests starten den Server DIREKT auf der Vorlage —
+// sie ist danach schon umgestellt. Die erste Fassung dieses Tests nahm „schon umgestellt" als bestanden
+// und prüfte die Umstellung damit gar nicht mehr (in der Suite läuft er nach diesen Tests). Jetzt wird
+// die Umstellung auf der Kopie zurückgebaut (Spalten ydoc/body_delta entfernt, Merker-Tabelle weg) und
+// immer von vorn geprüft. Liegt die rohe Produktivkopie /tmp/prodklon-echt.db vor (unbearbeitet,
+// siehe scripts/prodklon-vorbereiten.js), wird die Umstellung zusätzlich an ihr geprüft.
+//
 //   node tests/notizen-live-prodklon.js
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path'); const crypto = require('crypto');
@@ -49,14 +56,21 @@ const zeilen = (d, sql) => { const r = d.exec(sql)[0]; return r ? r.values.map(v
   if (!fs.existsSync(QUELLE)) { console.log('Prod-Klon fehlt — Test übersprungen.'); process.exit(0); }
   const pruefsumme = () => crypto.createHash('sha256').update(fs.readFileSync(QUELLE)).digest('hex');
   const summeVorher = pruefsumme();
-  fs.copyFileSync(QUELLE, DB);
   const SQL = await initSqlJs();
-  const d0 = new SQL.Database(fs.readFileSync(DB));
+  // Kopie der Vorlage, Umstellung zurückgebaut (siehe oben)
+  const d0 = new SQL.Database(fs.readFileSync(QUELLE));
+  const warUmgestellt = zeilen(d0, 'PRAGMA table_info(notes)').some(c => c.name === 'ydoc');
+  if (warUmgestellt) {
+    d0.run('ALTER TABLE notes DROP COLUMN ydoc');
+    d0.run('ALTER TABLE notes DROP COLUMN body_delta');
+    d0.run('DROP TABLE IF EXISTS note_gesehen');
+  }
+  fs.writeFileSync(DB, Buffer.from(d0.export()));
   const spalten = zeilen(d0, 'PRAGMA table_info(notes)').map(c => c.name);
   const alt = zeilen(d0, 'SELECT id, user_id, title, body, updated_at, updated_by FROM notes ORDER BY id');
   const freigabenEcht = zeilen(d0, 'SELECT COUNT(*) AS n FROM note_shares WHERE note_id IN (SELECT id FROM notes)')[0].n;
   d0.close();
-  console.log(`Klon: ${alt.length} Notizen${spalten.includes('ydoc') ? ' (schon umgestellt!)' : ''}\n`);
+  console.log(`Klon: ${alt.length} Notizen${warUmgestellt ? ' (Vorlage war schon umgestellt — auf der Kopie zurückgebaut)' : ''}\n`);
   if (!alt.length) { console.log('Keine Notizen im Klon — Test übersprungen.'); process.exit(0); }
 
   const offen = [];
@@ -66,7 +80,7 @@ const zeilen = (d, sql) => { const r = d.exec(sql)[0]; return r ? r.values.map(v
     await beenden();
     const log1 = fs.readFileSync(LOG, 'utf8');
     const m = log1.match(/Migration: (\d+) Notiz\(en\) auf gemeinsames Dokument umgestellt\./);
-    ok(`alle ${alt.length} Notizen umgestellt (Meldung im Startprotokoll)`, spalten.includes('ydoc') || (m && Number(m[1]) === alt.length), m ? m[0] : 'keine Meldung');
+    ok(`alle ${alt.length} Notizen umgestellt (Meldung im Startprotokoll)`, !spalten.includes('ydoc') && m && Number(m[1]) === alt.length, m ? m[0] : 'keine Meldung');
     ok('keine Fehlermeldung der Umstellung', !/ensureNotizLiveSchema fehlgeschlagen/.test(log1));
     {
       const dw = new SQL.Database(fs.readFileSync(DB));
@@ -122,6 +136,36 @@ const zeilen = (d, sql) => { const r = d.exec(sql)[0]; return r ? r.values.map(v
       offen.push(g);
       ok('die Eigentümerin öffnet ihre längste Notiz live und sieht genau ihren Text',
         g.status === 200 && g.text() === (kandidat.body || '') + '\n', `${g.status} ${g.doc && JSON.stringify(g.text().slice(0, 60))}`);
+    }
+    await beenden();
+
+    // Die rohe Produktivkopie (falls vorhanden): der Stand, den der Deploy wirklich vorfindet
+    const ROH = process.env.PRODKLON_ROH || '/tmp/prodklon-echt.db';
+    if (fs.existsSync(ROH)) {
+      console.log('\nRohe Produktivkopie ' + ROH);
+      const rohSumme = crypto.createHash('sha256').update(fs.readFileSync(ROH)).digest('hex');
+      const r0 = new SQL.Database(fs.readFileSync(ROH));
+      const rohAlt = zeilen(r0, 'SELECT id, title, body, updated_at, updated_by FROM notes ORDER BY id');
+      const rohUmgestellt = zeilen(r0, 'PRAGMA table_info(notes)').some(c => c.name === 'ydoc');
+      const waisenVorher = zeilen(r0, 'SELECT COUNT(*) AS n FROM note_shares WHERE note_id NOT IN (SELECT id FROM notes)')[0].n;
+      const echteVorher = zeilen(r0, 'SELECT COUNT(*) AS n FROM note_shares WHERE note_id IN (SELECT id FROM notes)')[0].n;
+      r0.close();
+      fs.copyFileSync(ROH, DB);
+      ok('Server startet auf der rohen Kopie', await starten(LOG + '.roh'));
+      await beenden();
+      const logRoh = fs.readFileSync(LOG + '.roh', 'utf8');
+      const mr = logRoh.match(/Migration: (\d+) Notiz\(en\) auf gemeinsames Dokument umgestellt\./);
+      const r1 = new SQL.Database(fs.readFileSync(DB));
+      const rohNeu = Object.fromEntries(zeilen(r1, 'SELECT id, title, body, updated_at, updated_by FROM notes').map(n => [n.id, n]));
+      const waisenNachher = zeilen(r1, 'SELECT COUNT(*) AS n FROM note_shares WHERE note_id NOT IN (SELECT id FROM notes)')[0].n;
+      const echteNachher = zeilen(r1, 'SELECT COUNT(*) AS n FROM note_shares')[0].n;
+      r1.close();
+      ok(`rohe Kopie: ${waisenVorher} verwaiste Freigaben abgeräumt, ${echteVorher} echte unverändert`,
+        waisenVorher > 0 && waisenNachher === 0 && echteNachher === echteVorher, JSON.stringify({ waisenVorher, waisenNachher, echteVorher, echteNachher }));
+      const anders = rohAlt.filter(a => { const n = rohNeu[a.id]; return !n || n.body !== a.body || n.title !== a.title || n.updated_at !== a.updated_at || n.updated_by !== a.updated_by; });
+      ok(`rohe Kopie: ${rohAlt.length} Notizen umgestellt, Text/Titel/Zeitstempel zeichengleich`,
+        !rohUmgestellt && mr && Number(mr[1]) === rohAlt.length && anders.length === 0, JSON.stringify({ meldung: mr && mr[0], anders: anders.map(a => a.id) }));
+      ok('rohe Kopie selbst unverändert', crypto.createHash('sha256').update(fs.readFileSync(ROH)).digest('hex') === rohSumme);
     }
   } catch (e) {
     fail++; fails.push('Absturz: ' + e.message); console.log('  ✗ Absturz: ' + e.stack);
