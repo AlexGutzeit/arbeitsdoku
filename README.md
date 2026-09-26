@@ -1341,6 +1341,7 @@ Datenbank wird beim Hochziehen sicher aktualisiert. Trotzdem vor einem Update ei
 | `npm run clone-db` | Kopiert eine Datenbank per SSH und anonymisiert alle Passwörter zu `test` (interne Nutzung; Quelle in `.env.deploy`). |
 | `node scripts/generate-icons.js` | Erzeugt die Standard-Icons aus `public/icons/source.svg` neu. |
 | `node scripts/generate-test-index.js` | Schreibt die vollständige Testliste in `tests/README.md` (Beschreibung = erste Kommentarzeile jedes Tests). |
+| `node scripts/kollab-buendeln.js` | Baut das Schreibfeld der gemeinsamen Notizen (`public/vendor/kollab.*`) aus den fest versionierten Paketen neu; mit `--pruefen` nur vergleichen. Herkunft und Lizenzen: `public/vendor/HERKUNFT.md`. |
 
 Automatisierte Tests liegen unter `tests/` (Berechnungs-/Logiktests sowie echte Browser-Klick-Tests
 mit Puppeteer). **Jeder Test startet sich seinen eigenen Server und legt seine eigene Datenbank an** —

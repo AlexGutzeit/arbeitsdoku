@@ -22,9 +22,15 @@
     "qrcode-svg": "^1.1.0",
     "sharp": "^0.34.5",
     "sql.js": "^1.11.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "y-protocols": "1.0.7",
+    "yjs": "13.6.33"
   },
   "devDependencies": {
-    "puppeteer": "^25.1.0"
+    "esbuild": "0.28.2",
+    "puppeteer": "^25.1.0",
+    "quill": "2.0.3",
+    "quill-cursors": "4.3.0",
+    "y-quill": "1.0.0"
   }
 }

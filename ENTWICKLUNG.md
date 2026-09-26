@@ -3288,3 +3288,42 @@ die beiden neuen Prüfungen rot.
 `tests/kleine-sackgassen-ui.js` (15). **Gegenproben:** alter Code (12 rot), und jeder Teil einzeln —
 Teilliste, aufgezählte Rechte, Server ohne Kennung, Oberfläche bleibt stehen, sofort freigeben,
 Sicherung ohne Prüfung, Dienst ohne Zeitgrenze — jede an ihrer Stelle rot.
+
+## Gemeinsame Notizen — Etappe A (ab 26.09.2026)
+
+Alex' Wunsch: Notizen gleichzeitig bearbeiten wie in einem Etherpad — wer drin ist, eine Farbe je
+Person, fremde Cursor, alles live, dazu Fett/Kursiv/Unterstrichen, Aufzählungen und Checklisten.
+Es ersetzt die Bearbeitungs-Sperre und damit R11. Geplant in drei Etappen mit je eigenem Deploy:
+A Live-Notizen, B Drucken und „Speichern als" (PDF/DOCX/ODT/eigene Notiz), C benannte Gäste mit
+eigenem Link und Passwort.
+
+**Schritt 1 — Probe am Handy, bevor gebaut wird.** Der bekannte Schwachpunkt eines formatierbaren
+Schreibfelds ist die Android-Tastatur (Wortvorschläge, Autokorrektur, Wischen), besonders wenn
+jemand anderes gleichzeitig in derselben Zeile schreibt. Eine Probeseite mit dem echten Bündel und
+einem nachgestellten Kollegen, der Wörter an den Anfang der eigenen Zeile setzt, hat Alex auf
+seinem Handy ausprobiert („Sieht gut aus“). Ein Test-Browser kann das nicht nachstellen.
+
+**Schritt 2 — das Bündel** (`scripts/kollab-buendeln.js`, `public/vendor/kollab.*`, Herkunft in
+`public/vendor/HERKUNFT.md`). Drei Dinge, die dabei herauskamen:
+
+* **Kein Herunterübersetzen.** Mit `target: chrome90/safari14` bricht esbuild ab — `lib0` lässt sich
+  nicht zurückschreiben. Das Bündel bleibt beim Stand der Quellen.
+* **Datei statt Text als Einstieg — und warum die Probe größer war.** Das Bündel der Probe war
+  8,6 KB größer als das im Projekt, bei byte-gleichen Eingaben (verglichen über die esbuild-Metadaten).
+  Ursache: Der Probe-Ordner hatte `"type": "commonjs"` in seiner `package.json`; esbuild packt dann
+  jedes Paket in eine Hülle, die erst beim ersten Zugriff lädt. Im Projekt (ohne `type`) entfällt
+  sie. Der Bibliothekscode ist derselbe; die Probeseite wurde danach mit dem Projekt-Bündel neu
+  aufgespielt, damit Probe und App wirklich dieselbe Datei laden.
+* **Ein gemeinsames Dokument beginnt nie leer.** Quill hat immer einen Schluss-Zeilenumbruch, den
+  y-quill bei einem leeren Dokument nicht kennt. Formatiert jemand die letzte Zeile (Checkliste),
+  zeigt die Gegenseite eine Leerzeile zu viel — gemessen im ersten Testlauf. Mit einem Zeilenende
+  als Startinhalt stimmen beide Seiten überein. **Schritt 3 legt jede Notiz auf dem Server so an.**
+
+`tests/kollab-buendel.js` (18): Bündel passt zu den Paketen, Lizenzen vollständig und erlaubt, lädt
+nur bei Bedarf und nur einmal unter der Sicherheitsregel, zwei Felder gleichen sich ab (Text,
+Checkliste, fremder Cursor), Server und Browser verstehen dieselben Änderungen, Funkloch beim ersten
+Öffnen. Der Funkloch-Teil umgeht den Hintergrunddienst der App — sonst holt der die Datei am Test
+vorbei, und die Prüfung wäre aus dem falschen Grund grün (erster Lauf: genau das).
+**Gegenproben** (7, jede an ihrer Stelle rot, per Prüfsumme zurückgesetzt): Bündel von Hand
+angefasst, `eval` im Bündel, Cursor-Modul nicht registriert, Lader ohne erneuten Versuch, Lader ohne
+Doppel-Schutz, Lizenzblock fehlt, Dokument beginnt leer.

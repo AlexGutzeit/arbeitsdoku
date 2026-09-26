@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**235 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**236 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -135,6 +135,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `jugendschutz-uebergang-prodklon.js` | Der 18. Geburtstag am ECHTEN Datenstand: Kippt die Pausenregel am richtigen Tag? |
 | `katalog-spiegel-ui.js` | Der Katalog-Spiegel auf dem Gerät (Alex, 09.09.2026). |
 | `kleine-sackgassen-ui.js` | Kleine Sackgassen: Downloads, abgelaufener Zwei-Faktor-Schritt, Abmelden, neue Rechte |
+| `kollab-buendel.js` | Das Bündel für die gemeinsamen Notizen (Etappe A, Schritt 2 — 26.09.2026). |
 | `konto-pdf-ui.js` | Der PDF-Nachweis ist für Mitarbeiter nach „Mein Konto" gezogen (Alex, 23.08.2026). |
 | `konto-rechte-ui.js` | „Zusätzliche Rechte" auf Mein Konto (Alex, 16.09.2026) |
 | `konto-sitzung-daten.js` | „Auf allen Geräten abmelden" und die Datenauskunft (Art. 15 DSGVO). |

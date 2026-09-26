@@ -964,6 +964,34 @@ let _notizenFilter = { projectId: '', search: '', owner: '' };
 let _expandedNoteId = null;
 let _editingNoteLockId = null;
 
+let _kollabGeladen = null;
+
+/**
+ * Schreibfeld für die gemeinsamen Notizen (Yjs + Quill, `window.Kollab`) erst laden, wenn eine
+ * Notiz geöffnet wird — 360 KB gehören nicht in den Start jeder Sitzung. Wie beim Scanner legt der
+ * Service-Worker die Dateien nach dem ersten Mal ab. Gebaut wird das Bündel mit
+ * `scripts/kollab-buendeln.js`; Stile und Skript kommen zusammen, sonst blitzt das Feld ungestaltet auf.
+ */
+function notizEditorLaden() {
+  if (window.Kollab) return Promise.resolve(true);
+  if (_kollabGeladen) return _kollabGeladen;
+  const laden = (el) => new Promise((fertig) => {
+    el.onload = () => fertig(true);
+    el.onerror = () => { el.remove(); fertig(false); };
+    document.head.appendChild(el);
+  });
+  const stil = document.createElement('link');
+  stil.rel = 'stylesheet'; stil.href = '/vendor/kollab.css';
+  const skript = document.createElement('script');
+  skript.src = '/vendor/kollab.min.js';
+  _kollabGeladen = Promise.all([laden(stil), laden(skript)]).then(([a, b]) => {
+    const ok = a && b && !!window.Kollab;
+    if (!ok) _kollabGeladen = null;   // beim nächsten Öffnen erneut versuchen (Funkloch)
+    return ok;
+  });
+  return _kollabGeladen;
+}
+
 async function renderNotizen() {
   S.badges.notes = 0;
   refreshBadges();
