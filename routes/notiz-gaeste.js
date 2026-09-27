@@ -26,7 +26,8 @@ function eigeneNotiz(req, res) {
   if (note.user_id !== req.user.id) { res.status(403).json({ error: 'Nur der Eigentümer kann Gäste verwalten.' }); return null; }
   return { db, note };
 }
-const protokoll = (req, action, details) => logAudit(getDb(), { userId: req.user.id, username: req.user.username, action, details, ip: req.ip });
+// Name beginnt mit „audit": So findet tests/audit-beschriftungen.js die Aktionen und prüft ihre Beschriftung.
+const auditGast = (req, action, details) => logAudit(getDb(), { userId: req.user.id, username: req.user.username, action, details, ip: req.ip });
 
 verwaltung.get('/:id/gaeste', authenticate, (req, res) => {
   const e = eigeneNotiz(req, res); if (!e) return;
@@ -39,7 +40,8 @@ verwaltung.post('/:id/gaeste', authenticate, async (req, res) => {
   const { name, permission, passwort, ablauf } = req.body || {};
   const r = await gaeste.anlegen(e.db, e.note.id, { name, permission, passwort, ablauf }, req.user.id);
   if (r.status !== 201) return res.status(r.status).json({ error: r.fehler });
-  protokoll(req, 'notiz_gast_angelegt', `Notiz ${e.note.id} „${e.note.title}": Gast „${r.gast.name}" (${r.gast.permission === 'write' ? 'Schreiben' : 'Lesen'}${r.gast.ablauf ? ', bis ' + r.gast.ablauf : ''})`);
+  const recht = r.gast.permission === 'write' ? 'Schreiben' : 'Lesen';   // eigene Zeile: der Audit-Test liest Zeichenketten in der Aufrufzeile als Aktionen
+  auditGast(req, 'notiz_gast_angelegt', `Notiz ${e.note.id} „${e.note.title}": Gast „${r.gast.name}" (${recht}${r.gast.ablauf ? ', bis ' + r.gast.ablauf : ''})`);
   broadcast('notes', req.headers['x-tab-id']);
   res.status(201).json({ gast: r.gast });
 });
@@ -53,7 +55,7 @@ verwaltung.put('/:id/gaeste/:gid', authenticate, (req, res) => {
   if (r.vorher.name !== r.gast.name) was.push(`Name „${r.vorher.name}" → „${r.gast.name}"`);
   if (r.vorher.permission !== r.gast.permission) was.push(`Recht ${r.vorher.permission} → ${r.gast.permission}`);
   if ((r.vorher.ablauf || null) !== (r.gast.ablauf || null)) was.push(`Ablauf ${r.vorher.ablauf || 'ohne'} → ${r.gast.ablauf || 'ohne'}`);
-  if (was.length) protokoll(req, 'notiz_gast_geaendert', `Notiz ${e.note.id}: Gast „${r.gast.name}": ${was.join(', ')}`);
+  if (was.length) auditGast(req, 'notiz_gast_geaendert', `Notiz ${e.note.id}: Gast „${r.gast.name}": ${was.join(', ')}`);
   live.zugriffAbgleichen(e.note.id);   // Schreiben ↔ Lesen gilt sofort; abgelaufen → raus
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ gast: r.gast });
@@ -63,7 +65,7 @@ verwaltung.put('/:id/gaeste/:gid/passwort', authenticate, async (req, res) => {
   const e = eigeneNotiz(req, res); if (!e) return;
   const r = await gaeste.passwortSetzen(e.db, e.note.id, Number(req.params.gid), (req.body || {}).passwort);
   if (r.status !== 200) return res.status(r.status).json({ error: r.fehler });
-  protokoll(req, 'notiz_gast_passwort', `Notiz ${e.note.id}: neues Passwort für Gast „${r.gast.name}"`);
+  auditGast(req, 'notiz_gast_passwort', `Notiz ${e.note.id}: neues Passwort für Gast „${r.gast.name}"`);
   live.gastRauswerfen(r.gast.id, 'passwort-geaendert');   // nur DIESER Gast
   res.json({ gast: r.gast });
 });
@@ -72,7 +74,7 @@ verwaltung.delete('/:id/gaeste/:gid', authenticate, (req, res) => {
   const e = eigeneNotiz(req, res); if (!e) return;
   const r = gaeste.entfernen(e.db, e.note.id, Number(req.params.gid));
   if (r.status !== 200) return res.status(r.status).json({ error: r.fehler });
-  protokoll(req, 'notiz_gast_entfernt', `Notiz ${e.note.id} „${e.note.title}": Gast „${r.vorher.name}" entfernt`);
+  auditGast(req, 'notiz_gast_entfernt', `Notiz ${e.note.id} „${e.note.title}": Gast „${r.vorher.name}" entfernt`);
   live.gastRauswerfen(r.vorher.id, 'gast-entfernt');
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
