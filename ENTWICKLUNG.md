@@ -3687,3 +3687,15 @@ derselben Datei). Gegenproben (14): 12 rot, **zwei grün**:
 `tests/notiz-gaeste-ui.js` (30). `notizen-export-ui` erwartete „genau fünf Menüeinträge" — für die
 Eigentümerin sind es jetzt sechs; der Test prüft nun zusätzlich, dass Rita (Leserecht) „Gäste
 verwalten" nicht hat.
+
+Gegenproben Oberfläche (10, alle rot): alte Nummer in `gast.html`, Titel für Gäste änderbar, „Kopie" im
+Gast-Menü, neues Passwort ohne Maske, Abmelden vergisst nicht, 🔗 für Nicht-Eigentümer, Zugang nach dem
+Einladen nicht angezeigt, Abschalten ohne Rückfrage, Gästeseite lädt die App, Gast sieht Nachnamen.
+`push-targeting` (53) prüft zusätzlich die Meldung einer Gast-Runde („Herr Maier (Gast) hat …" an
+Eigentümer und Mitleser) und dass eine Sperre nur beim Eigentümer ankommt.
+
+**An einer frischen Kopie der echten Daten umgestellt:** neu nur `note_gaeste` und `notes.updated_by_gast`;
+50 von 50 bisherigen Tabellen und alle 12 Notizen zeichengleich. **Rückweg:** Der Code vor Etappe C
+verträgt die neue Datenbank. Wird danach der neue Code wieder eingespielt, vorher
+`UPDATE notes SET updated_by_gast = NULL WHERE updated_by IS NOT NULL` — sonst stünde nach einer
+Mitarbeiter-Änderung mit altem Code noch ein Gast als letzter Bearbeiter da.
