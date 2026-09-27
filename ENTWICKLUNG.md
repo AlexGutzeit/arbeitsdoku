@@ -3699,3 +3699,20 @@ Eigentümer und Mitleser) und dass eine Sperre nur beim Eigentümer ankommt.
 verträgt die neue Datenbank. Wird danach der neue Code wieder eingespielt, vorher
 `UPDATE notes SET updated_by_gast = NULL WHERE updated_by IS NOT NULL` — sonst stünde nach einer
 Mitarbeiter-Änderung mit altem Code noch ein Gast als letzter Bearbeiter da.
+
+**Nach der ersten kompletten Suite (243/245) und Alex' Fragen:**
+* **Audit-Log:** Die Gast-Aktionen hatten keine Beschriftung (`audit-beschriftungen` rot). Die
+  Verwaltungs-Aktionen liefen über eine Hilfsfunktion `protokoll()`, die der Test nicht als Protokoll-
+  Aufruf erkennt — sie hätten auch mit Beschriftung nie als fehlend gegolten. Jetzt `auditGast()`
+  (Name mit „audit"), alle sieben beschriftet, Rechte-Änderung als „Lesen → Schreiben" statt
+  „read → write". Alex fragte, ob die Gast-Anmeldung protokolliert wird: ja („Notiz: Gast
+  angemeldet", mit IP) — aber nur die Anmeldung MIT Passwort; ein gemerktes Gerät (7 Tage) erzeugt
+  keinen neuen Eintrag, das zeigt „zuletzt da" in der Gästeübersicht.
+* **Gästeübersicht kompakt** (Alex: „Wie und wo kann ich Gäste auswählen und dann bearbeiten?"): je
+  Gast eine Zeile (Name, Recht, Zustand, gültig bis), Antippen klappt genau diesen Gast auf (bleibt
+  beim Neuzeichnen offen); Einladen hinter „＋ Weiteren Gast einladen", offen solange keiner da ist.
+  Vorher war jeder Gast mit allen Feldern aufgeklappt — bei drei Gästen langes Scrollen, das
+  Formular ganz unten. `notiz-gaeste-ui` 33.
+* **Ein Download-Baustein für beide Seiten:** `kleine-sackgassen-ui` (R18: EINE Stelle für Downloads)
+  war rot — die Gästeseite hatte eine eigene Kopie von `dateiHerunterladen`. Jetzt
+  `public/js/datei-laden.js`, geladen von `index.html` (vor app-1-core) und `gast.html`.
