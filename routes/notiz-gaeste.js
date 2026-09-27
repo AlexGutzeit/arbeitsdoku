@@ -53,7 +53,8 @@ verwaltung.put('/:id/gaeste/:gid', authenticate, (req, res) => {
   if (r.status !== 200) return res.status(r.status).json({ error: r.fehler });
   const was = [];
   if (r.vorher.name !== r.gast.name) was.push(`Name „${r.vorher.name}" → „${r.gast.name}"`);
-  if (r.vorher.permission !== r.gast.permission) was.push(`Recht ${r.vorher.permission} → ${r.gast.permission}`);
+  const RECHT = { read: 'Lesen', write: 'Schreiben' };
+  if (r.vorher.permission !== r.gast.permission) was.push(`Recht ${RECHT[r.vorher.permission]} → ${RECHT[r.gast.permission]}`);
   if ((r.vorher.ablauf || null) !== (r.gast.ablauf || null)) was.push(`Ablauf ${r.vorher.ablauf || 'ohne'} → ${r.gast.ablauf || 'ohne'}`);
   if (was.length) auditGast(req, 'notiz_gast_geaendert', `Notiz ${e.note.id}: Gast „${r.gast.name}": ${was.join(', ')}`);
   live.zugriffAbgleichen(e.note.id);   // Schreiben ↔ Lesen gilt sofort; abgelaufen → raus
