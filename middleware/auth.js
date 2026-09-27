@@ -117,7 +117,9 @@ function authenticate(req, res, next) {
     //
     // ACHTUNG bei Erweiterungen: Das ist eine Verbotsliste. Wer kuenftig einen weiteren
     // Sonder-Token einfuehrt und ihn hier NICHT eintraegt, reisst die Luecke wieder auf.
-    if (decoded.sse || decoded.pending2fa) {
+    // Dazu gehören auch die Anmeldung und das Ticket eines GASTS einer Notiz (notiz-gaeste.js) — sie
+    // tragen keine Nutzernummer und würden schon an der Nutzersuche scheitern; hier steht es ausdrücklich.
+    if (decoded.sse || decoded.pending2fa || decoded.gast !== undefined || decoded.gastTicket !== undefined) {
       return abweisen(res, GRUND.UNGUELTIG, 'Ungültige Anmeldung');
     }
 

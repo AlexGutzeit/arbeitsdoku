@@ -13,6 +13,9 @@
 //     raus; wer von Schreiben auf Lesen fällt, bekommt das sofort mitgeteilt.
 //   * Name und Farbe am Cursor setzt der Server, nicht der Browser — sonst könnte sich jemand
 //     als ein anderer ausgeben.
+//   * Gäste (Etappe C, notiz-gaeste.js) sind Teilnehmer wie alle anderen, nur mit eigener Kennung
+//     `wer` = 'g<Nummer>' statt der Nutzernummer. Sie sehen von Mitarbeitern nur den Vornamen und
+//     vom Kopf nur den Titel (kein Projekt).
 //
 // Diese Datei gehoert in die feste Dateiliste von deploy.sh (STAMMDATEIEN, aus Git abgeleitet).
 'use strict';
@@ -23,6 +26,7 @@ const { getDb } = require('./database/init');
 const { Y, TEXT, laden, felder, zulaessig } = require('./notiz-dokument');
 const { broadcast } = require('./sse');
 const push = require('./push');
+const notizGaeste = require('./notiz-gaeste');
 
 const SPEICHERN_NACH_MS = 1500;       // Ruhe, nach der gespeichert wird
 const SPEICHERN_SPAETESTENS_MS = 10000; // … und spätestens so oft, auch wenn ununterbrochen getippt wird
@@ -44,12 +48,23 @@ const raeume = new Map(); // noteId -> raum
 const b64 = (u8) => Buffer.from(u8).toString('base64');
 const ausB64 = (s) => new Uint8Array(Buffer.from(String(s || ''), 'base64'));
 
-/** Zugriff eines Nutzers auf eine Notiz: 'owner' | 'write' | 'read' | null (nicht vorhanden → undefined). */
-function zugriffVon(db, noteId, userId) {
+// Teilnehmer-Kennung: Nutzernummer (Zahl) oder 'g<Nummer>' für einen Gast
+const gastNr = (wer) => (typeof wer === 'string' && /^g\d+$/.test(wer)) ? Number(wer.slice(1)) : null;
+
+/**
+ * Zugriff eines Teilnehmers auf eine Notiz: 'owner' | 'write' | 'read' | null (Notiz nicht vorhanden
+ * → undefined). `wer` = Nutzernummer oder 'g<Nummer>' (Gast).
+ */
+function zugriffVon(db, noteId, wer) {
   const n = db.prepare('SELECT user_id FROM notes WHERE id = ?').get(noteId);
   if (!n) return undefined;
-  if (n.user_id === userId) return 'owner';
-  const s = db.prepare('SELECT permission FROM note_shares WHERE note_id = ? AND user_id = ?').get(noteId, userId);
+  const g = gastNr(wer);
+  if (g !== null) {
+    const z = notizGaeste.zugriff(db, g);
+    return (z.zugriff && z.gast.note_id === Number(noteId)) ? z.zugriff : null;
+  }
+  if (n.user_id === wer) return 'owner';
+  const s = db.prepare('SELECT permission FROM note_shares WHERE note_id = ? AND user_id = ?').get(noteId, wer);
   return s ? (s.permission === 'write' ? 'write' : 'read') : null;
 }
 const darfSchreiben = (z) => z === 'owner' || z === 'write';
@@ -61,6 +76,26 @@ function anAlle(raum, ereignis, daten, ausser) {
   for (const v of raum.verbindungen.values()) if (v !== ausser) senden(v, ereignis, daten);
 }
 
+// Anwesenheit (Cursor mit Namen) verschicken. Gäste bekommen dieselben Angaben, aber mit dem
+// VORNAMEN der Mitarbeiter (Alex, 26.09.2026) — der Server kodiert für sie eigens.
+function anwesenheitFuer(raum, empfaenger, ids) {
+  if (!empfaenger.gast) return b64(awarenessProtocol.encodeAwarenessUpdate(raum.aw, ids));
+  const states = new Map();
+  for (const id of ids) {
+    const st = raum.aw.states.get(id);
+    if (!st) continue;
+    const besitzer = [...raum.verbindungen.values()].find(x => x.clientIds.has(id));
+    if (!besitzer) continue;   // niemandem zuzuordnen — dann lieber gar nicht zeigen
+    states.set(id, st.user ? { ...st, user: { ...st.user, name: besitzer.gast ? besitzer.name : besitzer.vorname } } : st);
+  }
+  return b64(awarenessProtocol.encodeAwarenessUpdate(raum.aw, ids, states));
+}
+function anwesenheitAnAlle(raum, ids, ausser) {
+  for (const v of raum.verbindungen.values()) if (v !== ausser) senden(v, 'anwesenheit', { update: anwesenheitFuer(raum, v, ids) });
+}
+// Kopf (Titel, Projekt): Gäste sehen nur den Titel
+const kopfFuer = (v, kopf) => (v.gast ? { title: kopf.title } : kopf);
+
 function raumHolen(noteId) {
   let raum = raeume.get(noteId);
   if (raum) return raum;
@@ -70,11 +105,11 @@ function raumHolen(noteId) {
   const aw = new awarenessProtocol.Awareness(doc);
   aw.setLocalState(null);   // der Server selbst ist kein Teilnehmer
   raum = { noteId, doc, aw, verbindungen: new Map(), speicherTimer: null, ungespeichertSeit: 0,
-    zuletztGeaendertVon: null, runden: new Map() };
+    zuletztGeaendertVon: null, zuletztGeaendertName: null, runden: new Map() };
   // Anwesenheit, die der Server selbst beendet (Zeitüberschreitung, Verbindung weg), an alle melden
   aw.on('update', ({ removed }, herkunft) => {
     if ((herkunft === 'timeout' || herkunft === 'trennung') && removed.length) {
-      anAlle(raum, 'anwesenheit', { update: b64(awarenessProtocol.encodeAwarenessUpdate(aw, removed)) });
+      anAlle(raum, 'anwesenheit', { update: b64(awarenessProtocol.encodeAwarenessUpdate(aw, removed)) });   // ohne Namen
     }
   });
   raeume.set(noteId, raum);
@@ -83,7 +118,7 @@ function raumHolen(noteId) {
 
 function raumSchliessen(raum) {
   jetztSpeichern(raum);
-  for (const userId of [...raum.runden.keys()]) rundeBeenden(raum, userId);
+  for (const wer of [...raum.runden.keys()]) rundeBeenden(raum, wer);
   raum.aw.destroy();
   raum.doc.destroy();
   raeume.delete(raum.noteId);
@@ -113,8 +148,10 @@ function jetztSpeichern(raum) {
   // Nur eine INHALTLICHE Änderung setzt Zeitstempel und Bearbeiter — daran hängen Zähler und
   // „Bearbeitet … von …" (Regel vom 18.08.2026: nur hineinschauen löst nichts aus).
   if (alt.body !== f.body || alt.body_delta !== f.body_delta) {
-    db.prepare("UPDATE notes SET ydoc = ?, body = ?, body_delta = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by = ? WHERE id = ?")
-      .run(stand, f.body, f.body_delta, raum.zuletztGeaendertVon, raum.noteId);
+    // Ein Gast ist kein Nutzer: `updated_by` bleibt leer, sein Name steht in `updated_by_gast`
+    const gast = gastNr(raum.zuletztGeaendertVon) !== null;
+    db.prepare("UPDATE notes SET ydoc = ?, body = ?, body_delta = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by = ?, updated_by_gast = ? WHERE id = ?")
+      .run(stand, f.body, f.body_delta, gast ? null : raum.zuletztGeaendertVon, gast ? raum.zuletztGeaendertName : null, raum.noteId);
     gesehenVermerken(raum.noteId);   // vor der Meldung: sonst zählt der Zähler der Anwesenden kurz hoch
     broadcast('notes', null);
   } else {
@@ -127,7 +164,8 @@ function jetztSpeichern(raum) {
 // Änderung, die zwischen zwei Speicherungen jemand anderes macht, nie als neu.
 function gesehenVermerken(noteId, nurUserId) {
   const raum = raeume.get(Number(noteId));
-  const leute = nurUserId != null ? [nurUserId] : (raum ? [...new Set([...raum.verbindungen.values()].map(v => v.userId))] : []);
+  // Nur Mitarbeiter — Gäste haben keinen Zähler
+  const leute = nurUserId != null ? [nurUserId] : (raum ? [...new Set([...raum.verbindungen.values()].filter(v => !v.gast).map(v => v.userId))] : []);
   if (!leute.length) return;
   const db = getDb();
   const n = db.prepare('SELECT updated_at FROM notes WHERE id = ?').get(Number(noteId));
@@ -151,57 +189,64 @@ function inhalt(raum) {
   return (n ? n.title : '') + '\u0000' + f.body + '\u0000' + f.body_delta;
 }
 
-function rundeFortsetzen(raum, userId, vorher) {
-  let r = raum.runden.get(userId);
-  if (!r) { r = { vorher, timer: null }; raum.runden.set(userId, r); }
+function rundeFortsetzen(raum, wer, vorher, name) {
+  let r = raum.runden.get(wer);
+  if (!r) { r = { vorher, timer: null, name }; raum.runden.set(wer, r); }
   clearTimeout(r.timer);
-  r.timer = setTimeout(() => rundeBeenden(raum, userId), zeiten.rundeMs);
+  r.timer = setTimeout(() => rundeBeenden(raum, wer), zeiten.rundeMs);
 }
 
-function rundeBeenden(raum, userId) {
-  const r = raum.runden.get(userId);
+function rundeBeenden(raum, wer) {
+  const r = raum.runden.get(wer);
   if (!r) return;
   clearTimeout(r.timer);
-  raum.runden.delete(userId);
+  raum.runden.delete(wer);
   if (r.vorher === inhalt(raum)) return;   // hin und zurück geändert — nichts zu melden
   jetztSpeichern(raum);
   const db = getDb();
   const note = db.prepare('SELECT user_id, title FROM notes WHERE id = ?').get(raum.noteId);
   if (!note) return;
-  const drin = new Set([...raum.verbindungen.values()].map(v => v.userId));
+  const drin = new Set([...raum.verbindungen.values()].filter(v => !v.gast).map(v => v.userId));
   const empfaenger = [note.user_id,
     ...db.prepare('SELECT user_id FROM note_shares WHERE note_id = ?').all(raum.noteId).map(s => s.user_id)]
     .filter(id => !drin.has(id));
-  const wer = db.prepare('SELECT name FROM users WHERE id = ?').get(userId);
+  const gast = gastNr(wer) !== null;
+  const nutzer = gast ? null : db.prepare('SELECT name FROM users WHERE id = ?').get(wer);
+  const name = gast ? r.name : (nutzer ? nutzer.name : null);
   push.notifyUsers(db, empfaenger, 'notes', {
     title: 'Notiz bearbeitet',
-    body: `${wer ? wer.name : 'Jemand'} hat „${note.title}" bearbeitet`,
+    body: `${name || 'Jemand'} hat „${note.title}" bearbeitet`,
     url: '/#/notes',
-  }, userId);
+  }, gast ? null : wer);
 }
 
 // ─── Verbindungen ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Ereignisstrom einer Notiz öffnen. `nutzer` = { id, name } (bereits geprüft), `res` = Antwort.
- * Liefert false, wenn die Notiz fehlt oder der Nutzer keinen Zugriff hat.
+ * Ereignisstrom einer Notiz öffnen. `nutzer` = { id, name } eines Mitarbeiters ODER
+ * { gast: <Nummer>, name } eines Gasts (beides bereits geprüft), `res` = Antwort.
+ * Liefert 404/403, wenn die Notiz fehlt oder kein Zugriff besteht, sonst 200.
  */
 function verbinden(noteId, nutzer, req, res) {
   const db = getDb();
-  const zugriff = zugriffVon(db, noteId, nutzer.id);
+  const gast = Number.isInteger(nutzer.gast);
+  const wer = gast ? 'g' + nutzer.gast : nutzer.id;
+  const zugriff = zugriffVon(db, noteId, wer);
   if (zugriff === undefined) return 404;
   if (!zugriff) return 403;
   const raum = raumHolen(noteId);
   if (!raum) return 404;
 
-  const belegt = new Set([...raum.verbindungen.values()].filter(v => v.userId !== nutzer.id).map(v => v.farbe));
-  const eigene = [...raum.verbindungen.values()].find(v => v.userId === nutzer.id);
-  const stamm = FARBEN[nutzer.id % FARBEN.length];
+  const belegt = new Set([...raum.verbindungen.values()].filter(v => v.wer !== wer).map(v => v.farbe));
+  const eigene = [...raum.verbindungen.values()].find(v => v.wer === wer);
+  const stamm = FARBEN[(gast ? nutzer.gast * 5 + 3 : nutzer.id) % FARBEN.length];
   const farbe = eigene ? eigene.farbe : (!belegt.has(stamm) ? stamm : (FARBEN.find(f => !belegt.has(f)) || stamm));
+  const name = gast ? notizGaeste.anzeigeName({ name: nutzer.name }) : nutzer.name;
 
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no', 'Connection': 'keep-alive' });
   res.flushHeaders();
-  const v = { id: crypto.randomUUID(), noteId, userId: nutzer.id, name: nutzer.name, farbe, zugriff, res,
+  const v = { id: crypto.randomUUID(), noteId, wer, userId: gast ? null : nutzer.id, gast, gastId: gast ? nutzer.gast : null,
+    name, vorname: String(nutzer.name || '').trim().split(/\s+/)[0] || name, farbe, zugriff, res,
     clientIds: new Set(), ping: null };
   raum.verbindungen.set(v.id, v);
   v.ping = setInterval(() => { try { res.write(': ping\n\n'); } catch (_) {} }, PING_MS);
@@ -211,13 +256,13 @@ function verbinden(noteId, nutzer, req, res) {
   senden(v, 'start', {
     verbindung: v.id,
     zugriff,
-    kopf,
-    du: { name: nutzer.name, farbe },
+    kopf: kopfFuer(v, kopf),
+    du: { name, farbe },
     stand: b64(Y.encodeStateAsUpdate(raum.doc)),
     sv: b64(Y.encodeStateVector(raum.doc)),
-    anwesenheit: fremde.length ? b64(awarenessProtocol.encodeAwarenessUpdate(raum.aw, fremde)) : null,
+    anwesenheit: fremde.length ? anwesenheitFuer(raum, v, fremde) : null,
   });
-  gesehenVermerken(noteId, nutzer.id);   // wer öffnet, sieht den aktuellen Stand
+  if (!gast) gesehenVermerken(noteId, nutzer.id);   // wer öffnet, sieht den aktuellen Stand
   // Eigenes Signal statt 'notes': „gerade drin" in den Listen auffrischen, ohne dass bei allen
   // der Zähler neu geholt wird — hineinschauen ist keine Änderung.
   broadcast('notes-anwesend', null);
@@ -228,11 +273,11 @@ function verbinden(noteId, nutzer, req, res) {
     clearInterval(v.ping);
     raum.verbindungen.delete(v.id);
     if (v.clientIds.size) awarenessProtocol.removeAwarenessStates(raum.aw, [...v.clientIds], 'trennung');
-    const nochDa = [...raum.verbindungen.values()].some(x => x.userId === v.userId);
+    const nochDa = [...raum.verbindungen.values()].some(x => x.wer === v.wer);
     if (!nochDa) {
-      rundeBeenden(raum, v.userId);
+      rundeBeenden(raum, v.wer);
       jetztSpeichern(raum);                    // was er gesehen hat, ist damit auch gespeichert …
-      gesehenVermerken(raum.noteId, v.userId); // … und gilt bei ihm als gesehen
+      if (!v.gast) gesehenVermerken(raum.noteId, v.userId); // … und gilt bei ihm als gesehen
     }
     if (!raum.verbindungen.size) raumSchliessen(raum);
     broadcast('notes-anwesend', null);
@@ -242,18 +287,18 @@ function verbinden(noteId, nutzer, req, res) {
   return 200;
 }
 
-function verbindungFuer(noteId, verbindungId, userId) {
+function verbindungFuer(noteId, verbindungId, wer) {
   const raum = raeume.get(noteId);
   const v = raum && raum.verbindungen.get(String(verbindungId || ''));
-  return (v && v.userId === userId) ? { raum, v } : null;
+  return (v && v.wer === wer) ? { raum, v } : null;
 }
 
-/** Eine Änderung am Dokument übernehmen. Liefert { status, fehler? }. */
-function aenderung(noteId, userId, verbindungId, updateB64) {
-  const treffer = verbindungFuer(noteId, verbindungId, userId);
+/** Eine Änderung am Dokument übernehmen. `wer` = Nutzernummer oder 'g<Nummer>'. Liefert { status, fehler? }. */
+function aenderung(noteId, wer, verbindungId, updateB64) {
+  const treffer = verbindungFuer(noteId, verbindungId, wer);
   if (!treffer) return { status: 409, code: 'VERBINDUNG_WEG', fehler: 'Die Verbindung zur Notiz ist unterbrochen. Sie wird neu aufgebaut.' };
   const { raum, v } = treffer;
-  const zugriff = zugriffVon(getDb(), noteId, userId);
+  const zugriff = zugriffVon(getDb(), noteId, wer);
   if (!darfSchreiben(zugriff)) {
     zugriffAbgleichen(noteId);
     return { status: 403, code: 'NUR_LESEN', fehler: 'Du darfst diese Notiz nur lesen.' };
@@ -286,8 +331,9 @@ function aenderung(noteId, userId, verbindungId, updateB64) {
     anAlle(raum, 'aenderung', { update: b64(Y.encodeStateAsUpdate(raum.doc, sv)) }, null);
   }
   if (inhalt(raum) !== vorher) {
-    raum.zuletztGeaendertVon = userId;
-    rundeFortsetzen(raum, userId, vorher);
+    raum.zuletztGeaendertVon = wer;
+    raum.zuletztGeaendertName = v.gast ? v.name.replace(/ \(Gast\)$/, '') : null;
+    rundeFortsetzen(raum, wer, vorher, v.name);
   }
   speichernPlanen(raum);
   return { status: 200 };
@@ -303,8 +349,8 @@ function clientIdsIn(update) {
 }
 
 /** Cursor / Anwesenheit übernehmen und an die anderen weitergeben. */
-function anwesenheit(noteId, userId, verbindungId, updateB64) {
-  const treffer = verbindungFuer(noteId, verbindungId, userId);
+function anwesenheit(noteId, wer, verbindungId, updateB64) {
+  const treffer = verbindungFuer(noteId, verbindungId, wer);
   if (!treffer) return { status: 409, code: 'VERBINDUNG_WEG', fehler: 'Die Verbindung zur Notiz ist unterbrochen.' };
   const { raum, v } = treffer;
   const update = ausB64(updateB64);
@@ -317,7 +363,7 @@ function anwesenheit(noteId, userId, verbindungId, updateB64) {
   for (const id of ids) {
     for (const x of raum.verbindungen.values()) {
       if (x !== v && x.clientIds.has(id)) {
-        if (x.userId !== userId) return { status: 403, fehler: 'Ungültige Anwesenheit.' };
+        if (x.wer !== wer) return { status: 403, fehler: 'Ungültige Anwesenheit.' };
         x.clientIds.delete(id);
       }
     }
@@ -326,7 +372,7 @@ function anwesenheit(noteId, userId, verbindungId, updateB64) {
   try { awarenessProtocol.applyAwarenessUpdate(raum.aw, update, v); } catch (_) { return { status: 400, fehler: 'Ungültige Anwesenheit.' }; }
   // Name und Farbe setzt der Server — was der Browser mitschickt, zählt nicht.
   for (const id of ids) { const st = raum.aw.states.get(id); if (st) st.user = { name: v.name, color: v.farbe }; }
-  anAlle(raum, 'anwesenheit', { update: b64(awarenessProtocol.encodeAwarenessUpdate(raum.aw, ids)) }, v);
+  anwesenheitAnAlle(raum, ids, v);
   return { status: 200 };
 }
 
@@ -347,12 +393,29 @@ function zugriffAbgleichen(noteId) {
   if (!raum) return;
   const db = getDb();
   for (const v of [...raum.verbindungen.values()]) {
-    const z = zugriffVon(db, raum.noteId, v.userId);
+    const z = zugriffVon(db, raum.noteId, v.wer);
     if (z === undefined) rauswerfen(v, 'geloescht');
-    else if (!z) rauswerfen(v, 'freigabe-entzogen');
+    else if (!z) rauswerfen(v, v.gast ? (notizGaeste.zugriff(db, v.gastId).grund || 'gast-entfernt') : 'freigabe-entzogen');
     else if (z !== v.zugriff) { v.zugriff = z; senden(v, 'zugriff', { zugriff: z }); }
   }
 }
+
+/** Einen Gast aus seiner Notiz werfen (entfernt, neues Passwort). */
+function gastRauswerfen(gastId, grund) {
+  for (const raum of [...raeume.values()]) {
+    for (const v of [...raum.verbindungen.values()]) if (v.gast && v.gastId === Number(gastId)) rauswerfen(v, grund);
+  }
+}
+
+/** Alle Gäste neu prüfen (Firmenschalter, Ablauf um Mitternacht, Eigentümer ausgestellt). */
+function gaesteAbgleichen() {
+  for (const raum of [...raeume.values()]) {
+    if ([...raum.verbindungen.values()].some(v => v.gast)) zugriffAbgleichen(raum.noteId);
+  }
+}
+// Ein Ablaufdatum endet um Mitternacht — auch für den, der gerade nur mitliest und nichts sendet.
+const ABLAUF_PRUEFEN_MS = 60 * 1000;
+setInterval(() => { try { gaesteAbgleichen(); } catch (e) { console.error('Gäste prüfen:', e.message); } }, ABLAUF_PRUEFEN_MS).unref();
 
 /** Notiz gelöscht: alle raus, nichts mehr speichern. */
 function notizGeloescht(noteId) {
@@ -381,11 +444,12 @@ function allesVerwerfen(grund = 'zurueckgespielt') {
   }
 }
 
-/** Nutzer ausgestellt: aus allen Notizen raus. */
+/** Nutzer ausgestellt: aus allen Notizen raus — und die Gäste in SEINEN Notizen auch. */
 function nutzerRauswerfen(userId) {
   for (const raum of [...raeume.values()]) {
-    for (const v of [...raum.verbindungen.values()]) if (v.userId === userId) rauswerfen(v, 'abgemeldet');
+    for (const v of [...raum.verbindungen.values()]) if (!v.gast && v.userId === userId) rauswerfen(v, 'abgemeldet');
   }
+  gaesteAbgleichen();
 }
 
 /** Inhalt einer offenen Notiz vor einer Titel-Änderung (null, wenn niemand drin ist). */
@@ -402,7 +466,8 @@ function inhaltVon(noteId) {
 function kopfGeaendert(noteId, kopf, verbindungId, userId, vorher) {
   const raum = raeume.get(Number(noteId));
   if (!raum) return false;
-  anAlle(raum, 'kopf', kopf, raum.verbindungen.get(String(verbindungId || '')));
+  const absender = raum.verbindungen.get(String(verbindungId || ''));
+  for (const v of raum.verbindungen.values()) if (v !== absender) senden(v, 'kopf', kopfFuer(v, kopf));
   if (vorher != null && vorher !== inhalt(raum)) rundeFortsetzen(raum, userId, vorher);
   return true;
 }
@@ -411,7 +476,7 @@ function kopfGeaendert(noteId, kopf, verbindungId, userId, vorher) {
 function anwesende() {
   const aus = {};
   for (const raum of raeume.values()) {
-    aus[raum.noteId] = [...new Map([...raum.verbindungen.values()].map(v => [v.userId, v.name])).values()];
+    aus[raum.noteId] = [...new Map([...raum.verbindungen.values()].map(v => [v.wer, v.name])).values()];
   }
   return aus;
 }
@@ -427,5 +492,6 @@ function offenerStand(noteId) {
 function allesSpeichern() { for (const raum of raeume.values()) jetztSpeichern(raum); }
 
 module.exports = { verbinden, aenderung, anwesenheit, zugriffAbgleichen, notizGeloescht, nutzerRauswerfen,
+  gastRauswerfen, gaesteAbgleichen,
   kopfGeaendert, inhaltVon, anwesende, offenerStand, allesSpeichern, allesVerwerfen, gesehenVermerken, zugriffVon, FARBEN,
   zeiten, _intern: { raeume } };

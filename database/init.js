@@ -436,6 +436,8 @@ async function initDatabase() {
   ensureProduktSchema(db);
   // Live-Notizen: Inhalt als gemeinsames Dokument (idempotent, hier UND im Restore-Pfad)
   ensureNotizLiveSchema(db);
+  // Gäste in Notizen (idempotent, hier UND im Restore-Pfad)
+  ensureNotizGaesteSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -1020,6 +1022,7 @@ function ensureAuditSchema(targetDb) {
   ensureWarnungSchema(targetDb);
   ensureProduktSchema(targetDb);
   ensureNotizLiveSchema(targetDb);
+  ensureNotizGaesteSchema(targetDb);
 }
 
 // Live-Notizen (26.09.2026): Der Inhalt einer Notiz ist ein Yjs-Dokument (`ydoc`), `body` (Klartext)
@@ -1055,6 +1058,44 @@ function ensureNotizLiveSchema(targetDb) {
     console.log(`Migration: ${offen.length} Notiz(en) auf gemeinsames Dokument umgestellt.`);
   } catch (e) {
     console.error('ensureNotizLiveSchema fehlgeschlagen:', e.message);
+  }
+}
+
+// Gäste in Notizen (Etappe C, 27.09.2026): Der Eigentümer lädt Leute von außerhalb der Firma in
+// eine Notiz ein — jeder mit eigenem Namen, eigenem Link, eigenem Passwort und Lesen ODER Schreiben.
+//   * `token` ist der geheime Teil des Links (steht hinter dem #, erreicht also nie ein Server-Protokoll).
+//     Er bleibt lesbar gespeichert, damit der Eigentümer den Link später noch einmal kopieren kann —
+//     allein nützt er nichts, das Passwort gehört dazu.
+//   * Das Passwort nur als Hash; `pw_stand` zählt bei jedem neuen Passwort hoch und entwertet damit
+//     jede bestehende Anmeldung genau dieses Gasts.
+//   * `ablauf` = letzter gültiger Tag (deutsche Zeit), leer = unbegrenzt.
+//   * `fehlversuche` / `gesperrt_bis` (ms seit 1970): Bremse gegen Durchprobieren.
+// `notes.updated_by_gast` hält den Namen des Gasts fest, der zuletzt geändert hat — `updated_by`
+// verweist auf Nutzer, ein Gast ist keiner.
+function ensureNotizGaesteSchema(targetDb) {
+  try {
+    targetDb.exec(`CREATE TABLE IF NOT EXISTS note_gaeste (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      note_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      permission TEXT NOT NULL DEFAULT 'read',
+      token TEXT NOT NULL UNIQUE,
+      pw_hash TEXT NOT NULL,
+      pw_stand INTEGER NOT NULL DEFAULT 1,
+      ablauf TEXT,
+      fehlversuche INTEGER NOT NULL DEFAULT 0,
+      gesperrt_bis INTEGER,
+      zuletzt_da TEXT,
+      created_by INTEGER,
+      created_at TEXT
+    )`);
+    targetDb.exec('CREATE INDEX IF NOT EXISTS idx_note_gaeste_note ON note_gaeste(note_id)');
+    const cols = targetDb.prepare('PRAGMA table_info(notes)').all().map(c => c.name);
+    if (!cols.includes('updated_by_gast')) targetDb.exec('ALTER TABLE notes ADD COLUMN updated_by_gast TEXT');
+    const weg = targetDb.prepare('DELETE FROM note_gaeste WHERE note_id NOT IN (SELECT id FROM notes)').run().changes;
+    if (weg) console.log(`Migration: ${weg} Gastzugang/-zugänge zu gelöschten Notizen entfernt.`);
+  } catch (e) {
+    console.error('ensureNotizGaesteSchema fehlgeschlagen:', e.message);
   }
 }
 

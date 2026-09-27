@@ -112,6 +112,9 @@ app.use('/api/orders', require('./routes/orders'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/notes', require('./routes/notes'));
+// Gäste in Notizen: Verwaltung durch den Eigentümer + die Wege des Gasts (ohne Mitarbeiter-Anmeldung)
+app.use('/api/notes', require('./routes/notiz-gaeste').verwaltung);
+app.use('/api/gast', require('./routes/notiz-gaeste').gast);
 app.use('/api/badges', require('./routes/badges'));
 app.use('/api/absences', require('./routes/absences'));
 app.use('/api/audit', require('./routes/audit'));
@@ -142,6 +145,8 @@ app.get('/api/events', (req, res) => {
     // von den Live-Aktualisierungen abschneiden, bis jemand neu laedt. Er ist kein Loch: Es IST
     // ein gueltiger Zugangs-Token derselben Person.
     if (decoded.pending2fa) return res.status(401).end();
+    // Gäste (Etappe C) bekommen den Live-Draht der App nie — ihr Token hat keine Nutzernummer.
+    if (decoded.gast !== undefined || decoded.gastTicket !== undefined || !decoded.userId) return res.status(401).end();
   } catch (_) { return res.status(401).end(); }
   res.set({
     'Content-Type': 'text/event-stream',
@@ -183,6 +188,13 @@ app.get('/health', (req, res) => {
   } catch (e) {
     res.status(503).json({ status: 'error', db: false });
   }
+});
+
+// Seite für Gäste einer Notiz (Link: /gast#<Kennung>) — eigene, schlanke Seite ohne die App
+app.get('/gast', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  res.sendFile(path.join(__dirname, 'public', 'gast.html'));
 });
 
 // SPA-Fallback (gerenderte index.html mit Branding-Tokens)

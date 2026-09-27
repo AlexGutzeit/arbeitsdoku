@@ -153,7 +153,11 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
     legal_impressum, legal_datenschutz,
     work_start_default, work_hours_per_day, break_minutes_default,
     twofa_admin, twofa_chef, twofa_buchhalter, twofa_mitarbeiter,
+    notiz_gaeste,
   } = req.body;
+  if (notiz_gaeste !== undefined && !['an', 'aus'].includes(notiz_gaeste)) {
+    return res.status(400).json({ error: 'Gastzugänge: erwartet „an" oder „aus".' });
+  }
 
   // Validierung Branding-Felder
   if (app_short_name !== undefined && typeof app_short_name === 'string' && app_short_name.length > 12) {
@@ -262,6 +266,7 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
     app_name, app_short_name, theme_color, background_color,
     legal_impressum, legal_datenschutz,
     work_start_default, work_hours_per_day, break_minutes_default,
+    notiz_gaeste,
     ...zweiFaktorFelder,
   };
   const changes = [];
@@ -282,6 +287,8 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
   // Zwei-Faktor-Modi werden bei jeder Anfrage gebraucht und deshalb kurz zwischengespeichert —
   // nach einer Umstellung muss dieser Speicher weg, sonst greift sie erst Sekunden spaeter.
   cacheVergessen();
+  // Gastzugänge abgeschaltet → alle Gäste sofort raus (Alex, 26.09.2026); wieder an → sie gelten wieder
+  if (notiz_gaeste !== undefined) require('../notizen-live').gaesteAbgleichen();
 
   const rows = db.prepare('SELECT key, value FROM settings').all();
   const settings = {};

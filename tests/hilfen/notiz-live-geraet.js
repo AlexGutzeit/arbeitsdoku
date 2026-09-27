@@ -2,6 +2,7 @@
 // so wie es der Browser tut, nur ohne Oberfläche. Für Server-Tests der Live-Notizen.
 //
 //   const g = await geraetOeffnen({ port, ticket, noteId, token });
+//   Als Gast einer Notiz (Etappe C):  geraetOeffnen({ port, ticket, token, basis: '/api/gast' })
 //   if (g.status !== 200) … ;                   // abgewiesen (401/403/404)
 //   await g.schreibe(t => t.insert(0, 'Hallo'));  // → { status, body } der POST-Antwort
 //   await g.warte('aenderung');                   // nächstes Ereignis dieser Art
@@ -25,7 +26,8 @@ function post(port, pfad, token, daten) {
   });
 }
 
-function geraetOeffnen({ port, ticket, noteId, token }) {
+function geraetOeffnen({ port, ticket, noteId, token, basis }) {
+  const wurzel = basis || `/api/notes/${noteId}`;
   return new Promise((fertig) => {
     const g = { status: 0, ereignisse: [], offen: false, doc: null, aw: null, zugriff: null, verbindung: null };
     const warter = [];
@@ -36,7 +38,7 @@ function geraetOeffnen({ port, ticket, noteId, token }) {
     // agent: false — eigene Verbindung wie bei einem Browser-Ereignisstrom. Mit dem Verbindungs-Pool
     // (Node ≥ 19: keep-alive) landete ein vom Server beendeter Strom wieder im Pool und riss eine
     // spätere Anfrage mit („socket hang up", gemessen 26.09.2026).
-    const anfrage = http.get({ agent: false, host: 'localhost', port, path: `/api/notes/${noteId}/live?ticket=${encodeURIComponent(ticket || '')}` }, (res) => {
+    const anfrage = http.get({ agent: false, host: 'localhost', port, path: `${wurzel}/live?ticket=${encodeURIComponent(ticket || '')}` }, (res) => {
       g.status = res.statusCode;
       if (res.statusCode !== 200) { res.resume(); return fertig(g); }
       g.offen = true;
@@ -77,16 +79,16 @@ function geraetOeffnen({ port, ticket, noteId, token }) {
     g.schreibe = async (aenderung) => {
       const sv = Y.encodeStateVector(g.doc);
       g.doc.transact(() => aenderung(g.doc.getText('notiz')));
-      return post(port, `/api/notes/${noteId}/live/aenderung`, token, { verbindung: g.verbindung, update: b64(Y.encodeStateAsUpdate(g.doc, sv)) });
+      return post(port, `${wurzel}/live/aenderung`, token, { verbindung: g.verbindung, update: b64(Y.encodeStateAsUpdate(g.doc, sv)) });
     };
-    g.rohSenden = (update, verbindung) => post(port, `/api/notes/${noteId}/live/aenderung`, token, { verbindung: verbindung || g.verbindung, update });
+    g.rohSenden = (update, verbindung) => post(port, `${wurzel}/live/aenderung`, token, { verbindung: verbindung || g.verbindung, update });
     g.cursor = (index, zusatz = {}) => {
       const pos = Y.createRelativePositionFromTypeIndex(g.doc.getText('notiz'), index);
       g.aw.setLocalState({ user: { name: 'selbst erfunden', color: '#000000' }, cursor: { anchor: pos, head: pos }, ...zusatz });
-      return post(port, `/api/notes/${noteId}/live/anwesenheit`, token,
+      return post(port, `${wurzel}/live/anwesenheit`, token,
         { verbindung: g.verbindung, update: b64(awarenessProtocol.encodeAwarenessUpdate(g.aw, [g.doc.clientID])) });
     };
-    g.anwesenheitRoh = (update) => post(port, `/api/notes/${noteId}/live/anwesenheit`, token, { verbindung: g.verbindung, update });
+    g.anwesenheitRoh = (update) => post(port, `${wurzel}/live/anwesenheit`, token, { verbindung: g.verbindung, update });
     g.warte = (typ, pruef = () => true, ms = 4000) => {
       const schon = g.ereignisse.find(e => e.typ === typ && pruef(e.daten) && !e.abgeholt);
       if (schon) { schon.abgeholt = true; return Promise.resolve(schon.daten); }

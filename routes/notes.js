@@ -12,7 +12,7 @@ const router = express.Router();
 
 // Spalten, die an Browser gehen. NIE `n.*`: `ydoc` ist das Yjs-Dokument als Binärdaten — als JSON
 // würde daraus ein riesiges Zahlen-Objekt, und es gehört nur dem Live-Betrieb (notizen-live.js).
-const SPALTEN = 'n.id, n.user_id, n.title, n.body, n.body_delta, n.project_id, n.project_text, n.created_at, n.updated_at, n.updated_by';
+const SPALTEN = 'n.id, n.user_id, n.title, n.body, n.body_delta, n.project_id, n.project_text, n.created_at, n.updated_at, n.updated_by, n.updated_by_gast';
 
 // Seit den Live-Notizen (26.09.2026) gibt es keine Bearbeitungs-Sperre und kein Speichern des
 // ganzen Textes mehr. Ein noch nicht aktualisierter Programmstand würde beim Speichern aber genau
@@ -118,7 +118,8 @@ router.get('/', authenticate, (req, res) => {
     SELECT DISTINCT ${SPALTEN}, u.name as owner_name,
       CASE WHEN n.user_id = ? THEN 'owner'
            ELSE COALESCE(ns.permission, '') END as access_level,
-      COALESCE(lu.name, u.name) as updated_by_name
+      CASE WHEN n.updated_by_gast IS NOT NULL THEN n.updated_by_gast || ' (Gast)'
+           ELSE COALESCE(lu.name, u.name) END as updated_by_name
     FROM notes n
     JOIN users u ON n.user_id = u.id
     LEFT JOIN note_shares ns ON ns.note_id = n.id AND ns.user_id = ?
@@ -150,6 +151,10 @@ router.get('/', authenticate, (req, res) => {
     for (const n of notes) {
       n.shares = shareMap[n.id] || [];
     }
+    // Gäste (🔗 an der Karte) — nur der Eigentümer sieht, wie viele es sind
+    const gaeste = Object.fromEntries(db.prepare(`SELECT note_id, COUNT(*) AS n FROM note_gaeste WHERE note_id IN (${placeholders}) GROUP BY note_id`)
+      .all(...noteIds).map(r => [r.note_id, r.n]));
+    for (const n of notes) if (n.user_id === uid) n.gaeste = gaeste[n.id] || 0;
   }
 
   const notesSince = (() => {
@@ -160,7 +165,8 @@ router.get('/', authenticate, (req, res) => {
   // Live gesehen (Notiz offen gehabt, während andere schrieben) zählt nicht als ungelesen — siehe badges.js.
   const gesehen = new Map(db.prepare('SELECT note_id, gesehen_am FROM note_gesehen WHERE user_id = ?').all(uid).map(g => [g.note_id, g.gesehen_am]));
   for (const n of notes) {
-    const effectiveUpdater = n.updated_by ?? n.user_id;
+    // Ein Gast hat geändert → für jeden Mitarbeiter „jemand anderes"
+    const effectiveUpdater = n.updated_by_gast ? 'gast' : (n.updated_by ?? n.user_id);
     const neuSeitLive = n.updated_at > (gesehen.get(n.id) || '');
     if (n.user_id === uid) {
       n.is_unread = n.updated_at > notesSince && effectiveUpdater !== uid && neuSeitLive;
@@ -227,7 +233,7 @@ router.put('/:id', authenticate, (req, res) => {
 
   const vorher = live.inhaltVon(note.id);
   db.prepare(
-    "UPDATE notes SET title = ?, project_id = ?, project_text = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by = ? WHERE id = ?"
+    "UPDATE notes SET title = ?, project_id = ?, project_text = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now'), updated_by = ?, updated_by_gast = NULL WHERE id = ?"
   ).run(title.trim(), proj.project_id, proj.project_text, req.user.id, req.params.id);
 
   const updated = notizAusgeben(db, req.params.id);
@@ -263,7 +269,7 @@ router.delete('/:id', authenticate, (req, res) => {
   // Abhängiges ausdrücklich mitlöschen. Heute erledigt das auch ON DELETE CASCADE (die Gegenprobe
   // ohne diese Zeile bleibt grün) — aber am Prod-Klon standen 17 Freigaben zu gelöschten Notizen aus
   // früherer Zeit. Das Netz kostet nichts.
-  for (const t of ['note_shares', 'note_offers', 'note_gesehen']) db.prepare(`DELETE FROM ${t} WHERE note_id = ?`).run(req.params.id);
+  for (const t of ['note_shares', 'note_offers', 'note_gesehen', 'note_gaeste']) db.prepare(`DELETE FROM ${t} WHERE note_id = ?`).run(req.params.id);
   live.notizGeloescht(req.params.id);
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
@@ -413,24 +419,31 @@ function anhang(res, name) {
 
 // Notiz als PDF, Word oder OpenDocument — für jeden mit Zugriff, auch mit Leserecht (Alex, 26.09.2026).
 router.get('/:id/export/:format', authenticate, async (req, res) => {
-  const format = exporte.FORMATE[req.params.format];
-  if (!format) return res.status(404).json({ error: 'Unbekanntes Format' });
+  if (!exporte.FORMATE[req.params.format]) return res.status(404).json({ error: 'Unbekanntes Format' });
   const db = getDb();
   const { note, access } = canAccessNote(db, req.params.id, req.user.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (!access) return res.status(403).json({ error: 'Keine Berechtigung' });
-  const n = aktuellerStand(db, note.id);
+  await exportSenden(res, db, note.id, req.params.format);
+});
+
+/** Datei bauen und schicken — auch für Gäste (routes/notiz-gaeste.js). Rechte prüft der Aufrufer. */
+async function exportSenden(res, db, noteId, formatName) {
+  const format = exporte.FORMATE[formatName];
+  if (!format) return res.status(404).json({ error: 'Unbekanntes Format' });
+  const n = aktuellerStand(db, noteId);
+  if (!n) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   const jetzt = new Date();
   try {
     const datei = await format.bauen({ titel: n.title, deltaJson: n.body_delta, klartext: n.body, stand: exporte.standText(jetzt), jetzt });
     res.setHeader('Content-Type', format.typ);
-    anhang(res, exporte.dateiname(n.title, req.params.format, jetzt));
+    anhang(res, exporte.dateiname(n.title, formatName, jetzt));
     res.send(datei);
   } catch (e) {
     console.error('Notiz-Export fehlgeschlagen:', e);
     res.status(500).json({ error: 'Die Datei konnte nicht erstellt werden.' });
   }
-});
+}
 
 // „Stand als eigene Notiz": Kopie des Stands von eben, gehört dem, der klickt — für jeden mit
 // Zugriff, auch mit Leserecht (Alex, 26.09.2026: wirkt wie ein Ausdruck). Projekt wird übernommen,
@@ -494,3 +507,5 @@ router.post('/:id/live/anwesenheit', authenticate, (req, res) => {
 });
 
 module.exports = router;
+module.exports.exportSenden = exportSenden;
+module.exports.liveAntwort = liveAntwort;
