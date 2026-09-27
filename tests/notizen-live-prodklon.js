@@ -147,6 +147,12 @@ const zeilen = (d, sql) => { const r = d.exec(sql)[0]; return r ? r.values.map(v
       const r0 = new SQL.Database(fs.readFileSync(ROH));
       const rohAlt = zeilen(r0, 'SELECT id, title, body, updated_at, updated_by FROM notes ORDER BY id');
       const rohUmgestellt = zeilen(r0, 'PRAGMA table_info(notes)').some(c => c.name === 'ydoc');
+      if (rohUmgestellt) {
+        // Seit dem Deploy von Etappe A (27.09.2026) ist jede frische Kopie schon umgestellt — dann gibt es
+        // an ihr nichts umzustellen. Die Umstellung selbst prüft der erste Teil oben (baut sie zurück).
+        r0.close();
+        console.log('  (rohe Kopie ist schon umgestellt — Umstellungs-Prüfung an ihr entfällt; der Rückbau oben prüft sie)');
+      } else {
       const waisenVorher = zeilen(r0, 'SELECT COUNT(*) AS n FROM note_shares WHERE note_id NOT IN (SELECT id FROM notes)')[0].n;
       const echteVorher = zeilen(r0, 'SELECT COUNT(*) AS n FROM note_shares WHERE note_id IN (SELECT id FROM notes)')[0].n;
       r0.close();
@@ -166,6 +172,7 @@ const zeilen = (d, sql) => { const r = d.exec(sql)[0]; return r ? r.values.map(v
       ok(`rohe Kopie: ${rohAlt.length} Notizen umgestellt, Text/Titel/Zeitstempel zeichengleich`,
         !rohUmgestellt && mr && Number(mr[1]) === rohAlt.length && anders.length === 0, JSON.stringify({ meldung: mr && mr[0], anders: anders.map(a => a.id) }));
       ok('rohe Kopie selbst unverändert', crypto.createHash('sha256').update(fs.readFileSync(ROH)).digest('hex') === rohSumme);
+      }
     }
   } catch (e) {
     fail++; fails.push('Absturz: ' + e.message); console.log('  ✗ Absturz: ' + e.stack);
