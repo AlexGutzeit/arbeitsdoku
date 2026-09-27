@@ -65,17 +65,18 @@ es geht; die Abschnitte darunter beschreiben es im Einzelnen.
 - [📁 Projekte und Aufträge](#-projekte-und-aufträge) — Auftrags-Board mit Zuweisung, Kategorien, Zwischenzielen, Fristen und Statistik.
 - [🔧 Werkzeugliste](#-werkzeugliste) — Wer hat welches Werkzeug — mit Ausleih-Historie.
 - [🛒 Bestellungen](#-bestellungen) — Was fehlt auf der Baustelle; Chef und Admin sehen es sofort.
+- [📦 Produktverzeichnis](#-produktverzeichnis-nur-mit-dem-recht-lagerdaten-pflegen) *(mit dem Recht „Lagerdaten pflegen")* — Artikel per Barcode, mit Hersteller und Großhändlern; Grundlage für schnelles Bestellen.
 
 **Zusammenarbeit**
 
 - [📌 Schwarzes Brett](#-schwarzes-brett) — Aushänge fürs Team, auf der Willkommensseite eingeblendet.
-- [📝 Notizen](#-notizen) — Eigene Notizen, einzeln freigebbar, gemeinsam live bearbeitbar.
+- [📝 Notizen](#-notizen) — Eigene Notizen, einzeln freigebbar, gemeinsam live bearbeitbar; drucken, als PDF/Word/ODT speichern, Gäste von außerhalb einladen.
 - [🗂️ Dokumente](#-dokumente) — Dateiablage mit Ordnern und Speicherlimits.
 
 **Verwaltung**
 
 - [👥 Mitarbeiter](#-mitarbeiter) — Konten, Soll-Stunden, Urlaubsanspruch, Ein- und Austritt.
-- [⚙️ Einstellungen](#-einstellungen) — Arbeitszeit-Vorgaben, Zwei-Faktor-Pflicht je Rolle, Branding, Rechtstexte, Backup.
+- [⚙️ Einstellungen](#-einstellungen) — Arbeitszeit-Vorgaben, Zwei-Faktor-Pflicht je Rolle, Gäste in Notizen, Branding, Rechtstexte, Backup.
 - [📜 Audit-Log](#-audit-log) — Wer hat wann was geändert.
 - [🗑️ Papierkorb](#-papierkorb) — Gelöschtes bleibt erhalten und ist wiederherstellbar (GoBD).
 
@@ -699,11 +700,13 @@ ausgerechnet die Absicherung des stärksten Kontos abschalten.
 
 Zur Häufigkeit: Der Code wird beim **Anmelden** abgefragt, und eine Anmeldung bleibt bestehen, solange man die App benutzt. Damit die gewählte Stufe trotzdem gilt, **begrenzt sie die Anmeldung**: bei „bei jeder Anmeldung" und „täglich" nach spätestens einem Tag, bei „wöchentlich" nach 7, bei „monatlich" nach 30 Tagen — dann meldet man sich neu an und gibt den Code ein. „Einmal pro Gerät" begrenzt nichts. Stellt der Chef eine Rolle strenger, gilt das sofort, nicht erst nach Ablauf der laufenden Anmeldung.
 
+**Gäste in Notizen** *(Chef/Admin)*: Schalter „Gäste in Notizen erlauben" (Vorgabe: an). Aus = alle Gäste fliegen sofort aus ihren Notizen, niemand kann sich als Gast anmelden oder neue einladen; vorher fragt die App nach. Die eingerichteten Zugänge bleiben gespeichert und gelten wieder, sobald der Schalter wieder an ist. Wie Gäste funktionieren: [📝 Notizen](#-notizen).
+
 **Arbeitszeiten** (Arbeitsbeginn, Arbeitszeit pro Tag, Pause pro Tag — Vorgabe 07:00 / 8 h / 30 min): dienen als **Vorbelegung** für die Planung (von/bis/Pause) und für den ersten Zeiteintrag eines Tages. Eine Vorschauzeile zeigt beim Tippen, was die drei Werte zusammen ergeben. **Erfasste Zeiten und Soll-Stunden bleiben davon unberührt.** White-Label-Branding (Logo + App-Icon; **max. Bild-Dateigröße admin-einstellbar, Default 5 MB**), **Impressum & Datenschutz** (konfigurierbare Rechtstexte, erscheinen als Links auf Login-Seite + Menü), Dokumenten-Speicherlimit (Gesamt + pro Datei), Datenbank-Backup/Restore. *(Chef/Admin; Größenlimits nur Admin)*
 
 #### 📜 Audit-Log
 
-Revisionssicheres Protokoll: An-/Abmeldungen (Login erfolgreich/fehlgeschlagen, manuelle Abmeldung, Sitzungs-Timeout), Benutzeränderungen, Einstellungs-/Branding-Änderungen, Backups u. a. Benutzeranlage mit allen Parametern, Änderungen feldgenau als „alt → neu" (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)*
+Revisionssicheres Protokoll: An-/Abmeldungen (Login erfolgreich/fehlgeschlagen, manuelle Abmeldung, Sitzungs-Timeout), Benutzeränderungen, Einstellungs-/Branding-Änderungen, Backups, **Gäste in Notizen** (eingeladen, geändert, neues Passwort, entfernt, Anmeldung mit Passwort, falsche Passwörter, Sperre — jeweils mit Gastname und Notiz) u. a. Benutzeranlage mit allen Parametern, Änderungen feldgenau als „alt → neu" (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)*
 
 #### 🗑️ Papierkorb
 
@@ -804,8 +807,9 @@ an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweilig
 |---|---|
 | Neue Bestellung | Chef + Admin |
 | Neuer Aushang bzw. **inhaltlich geänderter** Aushang | alle außer dem Autor |
-| Notiz geteilt/angeboten | die betroffenen Empfänger |
-| Geteilte Notiz **inhaltlich geändert** (einmal je Bearbeitungsrunde) | Eigentümer + Mitleser, die gerade nicht in der Notiz sind, außer dem Bearbeiter |
+| Notiz geteilt/angeboten | die **neu** hinzugekommenen Empfänger (wer schon Zugriff hatte, bekommt nichts) |
+| Geteilte Notiz **inhaltlich geändert** (einmal je Bearbeitungsrunde) — auch durch einen **Gast** („Herr Maier (Gast) hat … bearbeitet") | Eigentümer + Mitleser, die gerade nicht in der Notiz sind, außer dem Bearbeiter |
+| Gastzugang **gesperrt** (5 falsche Passwörter) | die Eigentümerin der Notiz |
 | Neuer Abwesenheitsantrag bzw. Krank-/Schule-/Innung-Meldung | alle Manager (Chef/Admin/Buchhalter) |
 | Urlaub genehmigt/abgelehnt bzw. Abwesenheit vom Chef bearbeitet | der betroffene Mitarbeiter |
 
@@ -900,6 +904,8 @@ doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusamm
 > Diese Einzelrechte gelten nur für **Mitarbeiter/Buchhalter**. **Chef und Admin** haben Planung, Schwarzes Brett und Datei-Upload ohnehin über ihre Rolle – im Bearbeiten-Formular werden die Checkboxen für sie darum ausgeblendet (und die Flags nicht gespeichert). Beim **Buchhalter** laufen die beiden letzten Rechte auseinander: *Bestellungen abschließen* hat er über seine Rolle, *Lagerdaten pflegen* **nicht** – mit dem Lager hat er nichts zu tun, wer ihn trotzdem braucht, bekommt das Häkchen wie jeder andere.
 
 > Geänderte Rechte greifen für den betroffenen Nutzer **ohne Ab-/Anmelden** – ein Seiten-Reload (F5) bzw. das Zurückkehren zum Tab genügt.
+
+> **Gäste in Notizen sind keine Rolle.** Sie haben kein Konto und sehen genau **eine** Notiz – über einen eigenen Link mit Passwort, den die Eigentümerin der Notiz vergibt (Lesen oder Schreiben). Sonst sehen sie nichts aus der App, von Mitarbeitern nur den Vornamen. Ihre Anmeldung öffnet keinen einzigen Weg der App. Einzelheiten: [📝 Notizen](#-notizen).
 
 ---
 
@@ -1360,8 +1366,11 @@ Datenbank wird beim Hochziehen sicher aktualisiert. Trotzdem vor einem Update ei
 | `node scripts/kollab-buendeln.js` | Baut das Schreibfeld der gemeinsamen Notizen (`public/vendor/kollab.*`) aus den fest versionierten Paketen neu; mit `--pruefen` nur vergleichen. Herkunft und Lizenzen: `public/vendor/HERKUNFT.md`. |
 
 Automatisierte Tests liegen unter `tests/` (Berechnungs-/Logiktests sowie echte Browser-Klick-Tests
-mit Puppeteer). **Jeder Test startet sich seinen eigenen Server und legt seine eigene Datenbank an** —
-vorzubereiten ist nichts außer dem Chromium für die Browser-Tests.
+mit Puppeteer). **Fast jeder Test startet sich seinen eigenen Server und legt seine eigene Datenbank an.**
+Ausnahmen: `browser-absences`, `browser-smoke` und `complex-saldo-versioning` laufen gegen einen
+**Dev-Server auf Port 3000** (`PORT=3000 DB_PATH=data/local.db node server.js`, Anmeldung `admin`/`test`).
+Er muss laufen — und nach Änderungen am Server-Code **neu gestartet** werden, sonst testen diese drei den
+alten Stand.
 
 Die **vollständige Liste aller Tests** steht in [`tests/README.md`](tests/README.md) und wird erzeugt;
 `node tests/testliste-vollstaendigkeit.js` schlägt an, sobald sie nicht mehr zum Stand von `tests/`
@@ -1374,7 +1383,7 @@ Ein einzelner Test:
 node tests/pause-beispiele.js
 ```
 
-Alle nacheinander (dauert etwa eine Dreiviertelstunde):
+Alle nacheinander (dauert gut eine Stunde, zuletzt rund 80 Minuten):
 
 ```bash
 scripts/suite.sh          # Protokoll: /tmp/arbeitsdoku-suite.log
@@ -1387,11 +1396,26 @@ vom letzten Befehl, sonst meldet ein erfolgreicher Lauf „fehlgeschlagen", nur 
 eine nicht zutreffende Bedingung war.
 
 Browser-Tests brauchen einmalig `chrome-headless-shell` (Anleitung in
-[`tests/README.md`](tests/README.md)). Tests mit `-prodklon` im Namen arbeiten gegen eine **Kopie**
-der Produktivdaten unter `/tmp/prodklon.db` und überspringen sich, wenn die Kopie fehlt.
+[`tests/README.md`](tests/README.md)). Die Export-Tests der Notizen lesen PDF, Word und ODT wieder ein —
+dafür `pdftotext`/`pdffonts` (poppler) und LibreOffice (`soffice`); fehlen sie, prüfen die Tests nur,
+dass die Datei kommt, und sagen das.
 
-Technik-Stack: Node.js/Express · `sql.js` (SQLite in WASM) · `pdfkit` (PDF) · `sharp` (Icons) ·
-`bcryptjs` · `jsonwebtoken` · `multer` · `web-push` (Push) · Vanilla-JS-Frontend (kein Framework, kein Build).
+Tests mit `-prodklon` im Namen arbeiten gegen eine **Kopie** der Produktivdaten unter `/tmp/prodklon.db`
+und **überspringen sich, wenn die Kopie fehlt** — die Suite zählt sie dann trotzdem als „ok". Vor einem
+Deploy deshalb im Protokoll nach „uebersprungen" suchen. So entsteht die Kopie (die Rohdaten werden nur
+gelesen, `scripts/prodklon-vorbereiten.js` setzt alle Passwörter auf `test` und leert die Zwei-Faktor-Daten):
+
+```bash
+scp <server>:<pfad>/data/arbeitsdoku.db /tmp/prodklon-frisch-roh.db
+node scripts/prodklon-vorbereiten.js /tmp/prodklon-frisch-roh.db /tmp/prodklon.db
+```
+
+Technik-Stack: Node.js/Express · `sql.js` (SQLite in WASM) · `pdfkit` (PDF) mit der Schrift aus
+`dejavu-fonts-ttf` · `archiver`/`adm-zip` (Sicherungen, Word/ODT) · `sharp` (Bilder) · `bcryptjs` ·
+`jsonwebtoken` · `express-rate-limit` · `multer` · `web-push` (Push) · `yjs`/`y-protocols` (gemeinsame
+Notizen) · Vanilla-JS-Frontend (kein Framework). Einziger vorgebauter Teil: das Schreibfeld der Notizen
+(Quill + Yjs, `public/vendor/kollab.min.js`, fest versioniert und mitgeliefert — neu bauen nur mit
+`node scripts/kollab-buendeln.js`).
 
 ---
 
@@ -1436,6 +1460,15 @@ alle Daten unwiderruflich – nur für versehentlich angelegte Konten gedacht).
 Das **Admin-Konto** ist ein reines Verwaltungskonto und gilt nicht als Mitarbeiter – es erscheint
 nicht in Zeiterfassung, Statistik oder Stundensalden. Nur Mitarbeiter, Chef und Buchhalter führen
 ein Stundenkonto. (Beispiel: 13 Konten = 1 Admin + 12 Mitarbeiter-Konten mit Saldo.)
+
+**Ein Gast kommt nicht in die Notiz.**
+Was er sieht, sagt den Grund: *„Das Passwort stimmt nicht"* — Tippfehler, oder es wurde inzwischen ein
+neues vergeben (dann steht dort *„Das Passwort wurde geändert"*). *„Zu viele falsche Passwörter"* — nach
+5 Fehlversuchen 15 Minuten gesperrt; die Eigentümerin hat eine Push-Meldung bekommen und kann mit
+„Neues Passwort" sofort entsperren. *„Dieser Zugang ist abgelaufen"* — „Gültig bis" liegt zurück.
+*„Gastzugänge sind derzeit abgeschaltet"* — Schalter in den Einstellungen. *„Dieser Link gilt nicht
+(mehr)"* — Gast entfernt, Notiz gelöscht oder der Link unvollständig kopiert (der Teil hinter dem `#`
+gehört dazu). Ist die Eigentümerin ausgestellt, gelten ihre Gastzugänge ebenfalls nicht mehr.
 
 **Daten weg nach Neuinstallation?**
 Die Daten liegen in `data/`, `uploads/`, `storage/`. Beim Klonen/Neuaufsetzen diese Ordner aus dem
