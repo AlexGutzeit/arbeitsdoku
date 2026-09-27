@@ -326,6 +326,19 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 - **Entscheidung Alex:** Uhr wie früher; das Symbol rechts bleibt. Umsetzung: beim Antippen
   `showPicker()` — nur Android mit Chrome-artigem Browser und nur bei Berührung, sonst unverändert.
 - **Gelöst (25.09.):** so umgesetzt, Test `tests/uhr-hilfe-ui.js` (9), Gegenproben greifen.
+
+### [x] R26 · Neue Freigabe einer Notiz leuchtet bei allen bisherigen Empfängern wieder auf — erledigt in `727e248`
+*(gefunden 27.09.2026 beim Nachstellen für Alex' Frage, ob neue Freigaben weiter Push, Zähler und Hervorhebung bekommen — ja)*
+- **Was passiert:** Anna gibt Tom eine Notiz frei, Tom schaut sie an. Später gibt Anna zusätzlich Rita frei
+  (oder stellt bei jemandem Lesen ↔ Schreiben um) — bei Tom steht wieder „1" am Menüpunkt und die Notiz ist
+  hervorgehoben, obwohl sich für ihn nichts geändert hat. Eine Push-Meldung bekam er nicht.
+- **Ursache:** `PUT /api/notes/:id/shares` löscht alle Freigaben und legt sie neu an — mit neuem
+  `created_at`. Zähler und Hervorhebung lesen daran „neu freigegeben" ab. Schon vor den Live-Notizen so.
+- **Entscheidung Alex:** Bisherige Empfänger behalten ihr Datum; Lesen → Schreiben zählt nicht als neu
+  (wie beim Push). Entfernen und wieder hinzufügen gilt als neu.
+- **Gelöst (27.09.):** so umgesetzt, Test `tests/notiz-freigabe-datum.js` (11); Gegenprobe (altes Verhalten)
+  → 5 Prüfungen rot. Dabei im eigenen Test gefunden: `GET …/shares` liefert kein Datum — der erste Vergleich
+  war `undefined === undefined` und grün; das Datum kommt jetzt aus der Liste des Empfängers und muss da sein.
 ---
 
 ## Geprüft und in Ordnung

@@ -3605,3 +3605,18 @@ deutscher Zeit. Datenbank vorher/nachher: 50 von 50 Tabellen gleich (Etappe B ä
 Vorher zusätzlich alle 12 echten Notizen (Lesekopie) in alle drei Formate umgewandelt und zurückgelesen:
 jede Zeile wiedergefunden. Rückweg: Code auf `vor-notizen-export-deploy`, an der Datenbank ist nichts
 zurückzudrehen.
+
+## Neue Freigabe leuchtet nur beim neuen Empfänger (R26, 27.09.2026)
+
+Gefunden beim Nachstellen für Alex' Frage, ob eine neue Freigabe weiter Push, Zähler und
+Hervorhebung auslöst (ja — unverändert seit vor den Live-Notizen). Dabei fiel auf: Kam später jemand
+dazu, leuchtete die Notiz auch bei allen, die schon Zugriff hatten, wieder als neu auf (ohne Push).
+`PUT /api/notes/:id/shares` löscht alle Freigaben und legt sie neu an; `created_at` bekam dabei
+jedes Mal „jetzt", und genau daran lesen `routes/badges.js` und die Liste „neu freigegeben" ab.
+Jetzt übernimmt das Neuanlegen das alte Datum (`COALESCE(?, now)`). Lesen → Schreiben zählt nicht als
+neu (Alex, wie beim Push); Entfernen und wieder Hinzufügen schon.
+
+`tests/notiz-freigabe-datum.js` (11). Gegenprobe mit dem alten Verhalten: 5 Prüfungen rot. **Messfalle
+im eigenen Test:** Das Datum las ich zuerst aus `GET …/shares` — die Route liefert es gar nicht; der
+Vergleich `undefined === undefined` war grün. Jetzt aus der Liste des Empfängers, und ohne Datum ist
+die Prüfung rot.
