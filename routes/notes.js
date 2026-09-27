@@ -313,19 +313,24 @@ router.put('/:id/shares', authenticate, (req, res) => {
   const { shares } = req.body;
   if (!Array.isArray(shares)) return res.status(400).json({ error: 'shares muss ein Array sein' });
 
-  // Vorher bestehende Empfaenger merken, um nur NEU hinzugekommene zu benachrichtigen.
-  const prevShareIds = new Set(
-    db.prepare('SELECT user_id FROM note_shares WHERE note_id = ?').all(note.id).map(r => r.user_id)
+  // Vorher bestehende Empfaenger merken, um nur NEU hinzugekommene zu benachrichtigen — und ihr
+  // Freigabe-Datum zu behalten: Zaehler und Hervorhebung werten es als „neu freigegeben" aus. Wurde es
+  // bei jedem Speichern neu gesetzt, leuchtete bei ALLEN bisherigen Empfaengern wieder „neu", sobald
+  // jemand dazukam oder ein Recht umgestellt wurde (gefunden 27.09.2026). Lesen → Schreiben zaehlt
+  // bewusst nicht als neu (Alex) — wie beim Push, der auch nur an neu Hinzugekommene geht.
+  const vorher = new Map(
+    db.prepare('SELECT user_id, created_at FROM note_shares WHERE note_id = ?').all(note.id).map(r => [r.user_id, r.created_at])
   );
+  const prevShareIds = new Set(vorher.keys());
 
   db.prepare('DELETE FROM note_shares WHERE note_id = ?').run(note.id);
 
-  const insert = db.prepare("INSERT INTO note_shares (note_id, user_id, permission, created_at) VALUES (?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))");
+  const insert = db.prepare("INSERT INTO note_shares (note_id, user_id, permission, created_at) VALUES (?, ?, ?, COALESCE(?, strftime('%Y-%m-%d %H:%M:%f', 'now')))");
   const newlyAdded = [];
   for (const s of shares) {
     if (!s.user_id || s.user_id === note.user_id) continue;
     const perm = s.permission === 'write' ? 'write' : 'read';
-    insert.run(note.id, s.user_id, perm);
+    insert.run(note.id, s.user_id, perm, vorher.get(s.user_id) || null);
     if (!prevShareIds.has(s.user_id)) newlyAdded.push(s.user_id);
   }
 
