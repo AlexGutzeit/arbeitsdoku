@@ -98,6 +98,8 @@ function req(server, method, p, token, body) {
   app.use('/api/orders', require('../routes/orders'));
   app.use('/api/bulletin', require('../routes/bulletin'));
   app.use('/api/notes', require('../routes/notes'));
+  app.use('/api/notes', require('../routes/notiz-gaeste').verwaltung);
+  app.use('/api/gast', require('../routes/notiz-gaeste').gast);
   app.use('/api/absences', require('../routes/absences'));
   app.use('/api/push', require('../routes/push'));
   const server = app.listen(0);
@@ -295,6 +297,28 @@ function req(server, method, p, token, body) {
     if (SENT.length === 1) { pass++; console.log('  ✓ … eine, nicht zwei'); } else { fail++; console.log(`  ✗ ${SENT.length} Meldungen`); }
     await act('PUT', `/api/notes/${noteId}`, 'lisa', { title: 'Übergabe' });
     expectTargets('Umbenennen ohne offene Notiz → sofort an Eigentümer', ['max']);
+
+    // Gast von außerhalb (Etappe C): Seine Bearbeitungsrunde meldet sich wie die eines Mitarbeiters —
+    // an Eigentümer UND Mitleser, mit „(Gast)" im Text. Ein Gast selbst bekommt nie etwas.
+    const gastAnlegen = await req(server, 'POST', `/api/notes/${noteId}/gaeste`, tokens.max, { name: 'Herr Maier', passwort: 'Geheim123', permission: 'write' });
+    const gastAnm = await req(server, 'POST', '/api/gast/anmelden', null, { token: gastAnlegen.body.gast.token, passwort: 'Geheim123' });
+    const gastTicket = (await req(server, 'GET', '/api/gast/ticket', gastAnm.body.token)).body.ticket;
+    g = await geraetOeffnen({ port: server.address().port, ticket: gastTicket, token: gastAnm.body.token, basis: '/api/gast' });
+    SENT = [];
+    await g.schreibe(t => t.insert(0, 'Vom Gast. '));
+    await verlassen(g);
+    expectTargets('Gast bearbeitet, Runde vorbei → Eigentümer und Mitleser', ['max', 'lisa']);
+    const gastMeldung = SENT[0] && SENT[0].payload;
+    if (gastMeldung && /^Herr Maier \(Gast\) hat „Übergabe" bearbeitet$/.test(gastMeldung.body)) { pass++; console.log(`  ✓ … Text nennt den Gast als Gast  → „${gastMeldung.body}"`); }
+    else { fail++; console.log('  ✗ Meldungstext Gast: ' + JSON.stringify(gastMeldung)); }
+    SENT = [];
+    for (let i = 0; i < 5; i++) await req(server, 'POST', '/api/gast/anmelden', null, { token: gastAnlegen.body.gast.token, passwort: 'falsch' + i });
+    await sleep(80);
+    expectTargets('5 falsche Gast-Passwörter → Sperre, Meldung NUR an den Eigentümer', ['max']);
+    if (SENT[0] && SENT[0].payload.title === 'Gastzugang gesperrt' && /Herr Maier/.test(SENT[0].payload.body)) { pass++; console.log(`  ✓ … „${SENT[0].payload.body}"`); }
+    else { fail++; console.log('  ✗ Sperr-Meldung: ' + JSON.stringify(SENT[0] && SENT[0].payload)); }
+    await req(server, 'DELETE', `/api/notes/${noteId}/gaeste/${gastAnlegen.body.gast.id}`, tokens.max);
+    SENT = [];
 
     // Kategorie-Schalter greift auch hier: max schaltet Notizen ab → keine Meldung mehr an ihn.
     await req(server, 'PUT', '/api/push/prefs', tokens.max, { notes: false });

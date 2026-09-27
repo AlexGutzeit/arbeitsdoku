@@ -3623,3 +3623,67 @@ die Prüfung rot.
 
 **Deployt:** Prod 27.09.2026 (`2e705e5`), Sicherung `arbeitsdoku_backup_20260927-145612.adbk` (dreifach, Rückspielprobe ok),
 Datenbank vorher/nachher 50 von 50 Tabellen gleich; Rückkehrpunkt `vor-r26-deploy`.
+
+## Gemeinsame Notizen — Etappe C: Gäste von außerhalb (27.09.2026)
+
+Alex' Wunsch (26.09.): Leute ohne Konto in eine Notiz holen — erst zwei Sammel-Links (Lesen/Schreiben),
+dann „noch besser": **benannte Gäste**, jeder mit eigenem Link, eigenem Passwort, Lesen oder Schreiben,
+einzeln entziehbar. Entschieden: alle dürfen für eigene Notizen einladen, Firmenschalter; Gäste sehen
+nur Vornamen; Ablaufdatum freiwillig; Kopie/Weitergeben ohne Gäste; Gäste drucken und laden herunter.
+Selbst festgelegt (Alex vorab genannt): Gäste nur Text (kein Titel, kein Projekt, keine Kopie), 5
+Fehlversuche → 15 min Sperre + Push an die Eigentümerin, Schalter standardmäßig an und Aus behält die
+Zugänge, ausgestellte Eigentümerin → ihre Gastzugänge gelten nicht mehr, Umbenennen gilt ab der
+nächsten Verbindung.
+
+**Server (Schritt 10).** `note_gaeste` (Schema in `database/init.js`, auch im Rückspiel-Pfad), Regeln in
+`notiz-gaeste.js`, Wege in `routes/notiz-gaeste.js` (Verwaltung unter `/api/notes/:id/gaeste`, Gast
+unter `/api/gast`).
+* **Zwei getrennte Welten.** Die Anmeldung eines Gasts ist ein eigenes Token (`gast`), das Ticket
+  seines Ereignisstroms ebenso (`gastTicket`). `middleware/auth.js` führt beide auf der Verbotsliste;
+  `/api/events` verlangt jetzt eine Nutzernummer — **vorher prüfte der App-Ereignisstrom nur die
+  Unterschrift**, ein Gast-Token wäre durchgekommen (Gegenprobe ohne die Zeile: rot). Umgekehrt
+  verlangt jeder Gast-Weg `gast` bzw. `gastTicket`.
+* **Kennung hinter dem #.** Sie erreicht nie ein Server-Protokoll und keine Messenger-Vorschau; zum
+  Server geht sie nur beim Anmelden, im Körper der Anfrage. Sie bleibt lesbar gespeichert, damit die
+  Eigentümerin den Link später erneut kopieren kann — allein nützt sie nichts. Das Passwort nur als
+  Hash; `pw_stand` zählt bei jedem neuen Passwort hoch und entwertet genau die Anmeldungen dieses Gasts.
+* **Live-Raum** (`notizen-live.js`): Teilnehmer haben jetzt eine Kennung `wer` — Nutzernummer oder
+  `'g<Nummer>'`. Gäste zählen nicht beim „gesehen"-Merker, bekommen keine Meldungen, und ihr Name
+  landet in `notes.updated_by_gast` (`updated_by` verweist auf Nutzer). **Vornamen:** Die Anwesenheit
+  (Cursor mit Namen) wird für Gäste eigens kodiert — `encodeAwarenessUpdate(aw, ids, states)` mit einer
+  Kopie der Zustände, in der Mitarbeiter nur ihren Vornamen tragen. Den Namen setzt weiter der Server.
+  Kopf für Gäste nur mit Titel. Ein Minutentakt prüft Gäste nach (Ablauf um Mitternacht auch für den,
+  der nur mitliest); `nutzerRauswerfen` (Ausstellen) prüft die Gäste mit.
+* **Fehlversuch-Bremse** je Gast (5 → 15 min, auch mit dem richtigen Passwort), dazu je Adresse
+  `express-rate-limit`. Unbekannte Kennung wird gleich lange geprüft (Dummy-Hash).
+* **Umbenennen live?** Verworfen: Eine Anwesenheit mit gleichem Takt übernimmt y-protocols nicht, und
+  den Takt vom Server aus hochzusetzen brächte die eigenen Takte des Gasts durcheinander.
+
+`tests/notiz-gaeste.js` (43) — auch mit einem zweiten Teil direkt an der Datenbank, nachdem der
+Testserver beendet ist (Ablauf vorbei, Eigentümerin ausgestellt; so läuft nie ein zweiter Prozess auf
+derselben Datei). Gegenproben (14): 12 rot, **zwei grün**:
+* „Gast-Änderung zählt nicht als neu" blieb grün, weil der Test nur Tom (Empfänger) prüfte — für ihn
+  zählte es auch ohne Korrektur („nicht Tom" reicht). Der eigentliche Fall ist die **Eigentümerin**:
+  leeres `updated_by` hieß bisher „sie selbst". Test ergänzt, beide Stellen (Zähler, Hervorhebung) → rot.
+* „Gast in fremder Notiz" bleibt grün — über die Wege nicht auslösbar (die Gast-Routen nehmen immer
+  die eigene Notiz des Gasts); die Prüfung in `zugriffVon` ist die zweite Absicherung.
+
+**Oberfläche (Schritt 11).**
+* **Gästeseite** `public/gast.html` + `js/gast.js`, erreichbar unter `/gast` (eigene Route vor dem
+  SPA-Rückfall, `noindex`, `no-store`). Sie lädt die App **nicht**: `app-1-core.js` liest die Anmeldung
+  eines Mitarbeiters und meldet bei 401 ab — ein Gast auf einem Firmen-Handy stünde sonst halb in der App.
+  Kleine Helfer (Meldung, Dialog, Download) sind dort nachgebaut.
+* **Dieselbe Sitzung**: `notizSitzungStarten(id, weg)` — alles, was zwischen App und Gästeseite
+  verschieden ist (Adressen, Anmeldung, Rauswurf, Menü, Titel speichern), steckt im Weg-Objekt
+  (`notizWegeApp`); der gemeinsame Editor-Teil in `notizFeldHtml()`. Die App verhält sich unverändert
+  (`notizen-live-ui` 51, `notizen-export-ui` 23).
+* **Eigentümerin**: 🔗 an der Karte, „🔗 n Gäste", Dialog; im Editor „⋯ → Gäste verwalten".
+  Einstellungen: Schalter mit Rückfrage beim Ausschalten. Cache 430; `gast.html` trägt die Nummer mit
+  (der Oberflächen-Test prüft das — beim nächsten Anheben sonst leicht vergessen).
+* Zwei Test-Fallen: Ohne Fokus meldet das Schreibfeld keine Auswahl — Annas Cursor kam beim Gast nie
+  an, bis ihr Fenster nach vorn geholt wurde (im Live-Test tippen alle, dort fiel es nicht auf). Und
+  die Meldung „Gast eingeladen" lag über „⋯" — der Test wartet sie ab wie ein Mensch.
+
+`tests/notiz-gaeste-ui.js` (30). `notizen-export-ui` erwartete „genau fünf Menüeinträge" — für die
+Eigentümerin sind es jetzt sechs; der Test prüft nun zusätzlich, dass Rita (Leserecht) „Gäste
+verwalten" nicht hat.
