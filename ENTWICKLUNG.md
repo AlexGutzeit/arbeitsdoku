@@ -3596,3 +3596,12 @@ kein `filename*`, Kopie ohne Projekt.
 dabei; danach alles wie vorher), Downloads abgefangen (Name, Typ, Inhalt per pdftotext samt eine
 Sekunde vorher Getipptem), kein Druckfenster → Hinweis + PDF, Funkloch + „Nochmal versuchen",
 Leserecht und Kopie. Gegenproben Oberfläche (7) und Word-Nummerierung (1): alle rot.
+
+**Deploy Etappe B (27.09.2026, `a1ade4f`, Cache 429).** Komplette Suite vorher 242/242. Vollsicherung
+`arbeitsdoku_backup_20260927-144040.adbk` auf VPS, Mini-PC und Laptop (gleiche Prüfsumme), Rückspielprobe
+auf dem Mini-PC; Rückkehrpunkt `vor-notizen-export-deploy` (= `3938112`). `npm install` brachte das
+Schriftpaket (auch auf der Zweitanlage); auf dem Server einmal PDF, Word und ODT erzeugt, Stand-Zeit in
+deutscher Zeit. Datenbank vorher/nachher: 50 von 50 Tabellen gleich (Etappe B ändert keine Daten).
+Vorher zusätzlich alle 12 echten Notizen (Lesekopie) in alle drei Formate umgewandelt und zurückgelesen:
+jede Zeile wiedergefunden. Rückweg: Code auf `vor-notizen-export-deploy`, an der Datenbank ist nichts
+zurückzudrehen.
