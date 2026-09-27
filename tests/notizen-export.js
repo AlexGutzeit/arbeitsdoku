@@ -133,6 +133,8 @@ const ERWARTET_PDF = ['Material für Montag', 'Kabel NYM-J 3×1,5 → 2 Ringe �
     ok('mit Leserecht: Kopie angelegt, gehört Rita, Titel mit „(Stand TT.MM.JJJJ, HH:MM)", Projekt übernommen',
       k.status === 201 && kopie.user_id === n.rita.id && /^Zählerstände: Halle\/2 \(Stand \d\d\.\d\d\.\d{4}, \d\d:\d\d\)$/.test(kopie.title) && kopie.project_id === projektId,
       JSON.stringify(k.body).slice(0, 200));
+    // Die Kopie nimmt den Stand VON EBEN (Raum); das Original steht erst nach dem Speichertakt (1,5 s) in der Liste.
+    await sleep(2500);
     const original = ((await req('GET', '/api/notes', n.olga.token)).body.notes || []).find(x => x.id === note.id);
     ok('gleicher Inhalt und gleiche Formatierung wie das Original von eben (samt „Gerade getippt")',
       kopie.body === original.body && kopie.body_delta === original.body_delta && /Gerade getippt/.test(kopie.body), JSON.stringify([kopie.body.slice(-30), original.body.slice(-30)]));
