@@ -40,7 +40,9 @@ async function cursorSichtbar(p, farbe) {
     const b = c.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height };
   });
   if (!r || r.h < 4) return { sichtbar: false, grund: 'kein Cursor ' + JSON.stringify(r) };
-  const bild = await p.screenshot({ clip: { x: Math.max(0, r.x - 1), y: r.y + 2, width: r.w + 2, height: Math.max(4, r.h - 4) } });
+  // Ganzes sichtbares Bild, dann zuschneiden — ein clip-Foto löst ein resize aus (siehe farbeSichtbar)
+  const ganz = await p.screenshot({ captureBeyondViewport: false });
+  const bild = await sharp(ganz).extract({ left: Math.max(0, Math.round(r.x - 1)), top: Math.round(r.y + 2), width: Math.round(r.w + 2), height: Math.max(4, Math.round(r.h - 4)) }).toBuffer();
   const { data, info } = await sharp(bild).raw().toBuffer({ resolveWithObject: true });
   const [zr, zg, zb] = [1, 3, 5].map(i => parseInt(farbe.slice(i, i + 2), 16));
   let treffer = 0;
@@ -200,6 +202,41 @@ async function cursorSichtbar(p, farbe) {
     await A.keyboard.press('Enter'); await A.keyboard.type('Abzweigdosen');
     await sleep(900);
     ok('… liest aber live mit', /Abzweigdosen/.test(await editorText(R) || ''), await editorText(R));
+
+    console.log('\nZwei Cursor an derselben Stelle (Fähnchen stapeln sich)');
+    // Beide Namensfähnchen müssen zu SEHEN sein — nicht nur da (Alex am Bildschirmfoto, 27.09.2026)
+    const fahnen = (p) => p.evaluate(() => [...document.querySelectorAll('.notiz-editor .ql-cursor-flag')].map(f => {
+      const r = f.getBoundingClientRect(); const cs = getComputedStyle(f);
+      return { name: f.textContent.trim(), o: cs.opacity, farbe: cs.backgroundColor, x: r.x, y: r.y, w: r.width, h: r.height, b: r.bottom, rechts: r.right,
+        oben: document.querySelector('.notiz-editor .ql-editor').getBoundingClientRect().top };
+    }));
+    // EIN Foto des sichtbaren Bereichs, ohne Umgröße, dann zuschneiden. Ein Ausschnitt-Foto
+    // (clip) vergrößert die Seite kurz (captureBeyondViewport) — das löst ein resize aus, die Fähnchen
+    // werden mitten im Foto neu gestapelt, und das Foto zeigt den Zwischenzustand (gemessen
+    // 27.09.2026; echte Größenänderungen wie Tastatur auf oder Drehen stapeln korrekt).
+    const farbeSichtbar = async (p, f) => {
+      const ganz = await p.screenshot({ captureBeyondViewport: false });
+      const bild = await sharp(ganz).extract({ left: Math.round(f.x + 2), top: Math.round(f.y + 2), width: Math.max(4, Math.round(f.w - 4)), height: Math.max(4, Math.round(f.h - 4)) }).toBuffer();
+      const { data, info } = await sharp(bild).raw().toBuffer({ resolveWithObject: true });
+      const [zr, zg, zb] = f.farbe.match(/\d+/g).map(Number);
+      let n = 0; for (let i = 0; i < data.length; i += info.channels) if (Math.abs(data[i] - zr) < 30 && Math.abs(data[i + 1] - zg) < 30 && Math.abs(data[i + 2] - zb) < 30) n++;
+      return n > (data.length / info.channels) * 0.3;
+    };
+    const beideAn = async (index) => {
+      for (const p of [A, T]) await p.evaluate((i) => _notizSitzung.quill.setSelection(i, 0, 'user'), index);
+      await sleep(700);
+      const f = (await fahnen(R)).filter(x => x.o === '1');
+      const getrennt = f.length === 2 && !(f[0].x < f[1].rechts && f[1].x < f[0].rechts && f[0].y < f[1].b && f[1].y < f[0].b);
+      const farben = f.length === 2 && (await farbeSichtbar(R, f[0])) && (await farbeSichtbar(R, f[1]));
+      return { f, getrennt, farben };
+    };
+    const mitte = await beideAn(await A.evaluate(() => _notizSitzung.quill.getText().indexOf('Wago') + 4));
+    ok('mitten im Text: beide Fähnchen sichtbar, überdecken sich nicht, beide Farben zu sehen',
+      mitte.getrennt && mitte.farben && mitte.f.map(x => x.name).sort().join('|') === 'Anna Berger|Tom Kraus', JSON.stringify(mitte.f.map(x => [x.name, Math.round(x.y), Math.round(x.h)])));
+    await sleep(3200);   // Fähnchen blenden aus
+    const zeile1 = await beideAn(2);
+    ok('in der ersten Zeile: ebenso — und keins ragt über den Anfang des Schreibfelds hinaus',
+      zeile1.getrennt && zeile1.farben && zeile1.f.every(x => x.y >= x.oben - 4), JSON.stringify({ getrennt: zeile1.getrennt, farben: zeile1.farben, f: zeile1.f.map(x => [x.name, Math.round(x.y), Math.round(x.h), Math.round(x.oben), x.farbe]) }));
 
     console.log('\nTitel');
     await A.evaluate(() => { const t = document.getElementById('notiz-titel'); t.focus(); t.select(); });

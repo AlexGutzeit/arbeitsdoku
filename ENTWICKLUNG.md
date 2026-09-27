@@ -3491,3 +3491,14 @@ ist ein Netz, keine Reparatur.
   Attribut und war deshalb grün. Jetzt eine eigene `[hidden]`-Regel, und der Test prüft
   `checkVisibility()` (Probe ohne die Regel → rot). Tippen konnte Rita auch vorher nicht — das Feld
   war gesperrt —, aber die Leiste versprach etwas, das nicht ging.
+* **Namensfähnchen stapeln sich** (Alex am Bildschirmfoto: zwei Cursor an derselben Stelle, ein
+  Fähnchen verdeckte das andere). `faehnchenStapeln()` verschiebt überlappende sichtbare Fähnchen über
+  `margin-top` (quill-cursors setzt bei jeder Bewegung Position und Breite neu, den Außenabstand nicht)
+  nach oben; in der ersten Zeile, wo oben kein Platz ist, weichen sie unter die Zeile aus. Neu
+  gerechnet nach jeder Bewegung, jedem Tippen, Ein-/Ausblenden und `resize`. Zwei Messfallen dabei:
+  Ein Ausschnitt-Foto (`screenshot({clip})`) vergrößert die Seite kurz (captureBeyondViewport) — das
+  löste ein `resize` aus, und das Foto zeigte den Zwischenzustand; echte Größenänderungen (Tastatur,
+  Drehen) stapeln korrekt, geprüft im Nachbau. Die Farbprüfung nimmt jetzt ein Foto des sichtbaren
+  Bereichs und schneidet zu. Und „mitten im Text" suchte „Dosen" mit großem D — der Text hat
+  „Abzweigdosen", der Test stand also auch dort in der ersten Zeile. Gegenproben: ohne Stapeln rot,
+  ohne Ausweichen nach unten rot.

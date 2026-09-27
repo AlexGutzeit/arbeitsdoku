@@ -207,7 +207,11 @@ function notizSitzungStarten(id) {
   // 'start'). Vorher ist das Dokument leer, Quill hat aber schon sein eigenes Schluss-Zeilenende —
   // kommt der Stand dann hinzu, bleibt dieses zusätzlich stehen: eine Leerzeile zu viel am Ende, in
   // die man hineintippt (gemessen 26.09.2026, dasselbe wie beim leeren Start in Schritt 2).
-  const anbinden = () => { if (!s.binding) s.binding = new K.QuillBinding(s.doc.getText('notiz'), s.quill, s.aw); };
+  const anbinden = () => {
+    if (s.binding) return;
+    s.binding = new K.QuillBinding(s.doc.getText('notiz'), s.quill, s.aw);
+    s.quill.on('editor-change', () => stapelnBald());
+  };
 
   // Eigene Änderungen → Warteschlange → Server (während eine Sendung läuft, sammeln sich die
   // nächsten Tastendrücke und gehen gebündelt hinterher).
@@ -284,11 +288,47 @@ function notizSitzungStarten(id) {
       setTimeout(() => {   // y-quill legt den Cursor im selben Ereignis an — danach einblenden
         if (!s.offen) return;
         cursors.toggleFlag(String(cid), true);
+        faehnchenStapeln();
         clearTimeout(s.faehnchen.get(cid));
-        s.faehnchen.set(cid, setTimeout(() => { if (s.offen) cursors.toggleFlag(String(cid), false); }, 3000));
+        s.faehnchen.set(cid, setTimeout(() => { if (s.offen) { cursors.toggleFlag(String(cid), false); faehnchenStapeln(); } }, 3000));
       }, 0);
     }
   });
+
+  // Stehen zwei an derselben Stelle, lägen ihre Namensfähnchen genau übereinander (Alex am
+  // Bildschirmfoto, 27.09.2026). Sichtbare Fähnchen, die sich überdecken würden, stapeln sich
+  // deshalb nach oben; in der ersten Zeile ist oben kein Platz — dort weichen sie unter die Zeile aus.
+  // Verschoben wird über margin-top: Position und Breite setzt quill-cursors bei jeder Bewegung neu,
+  // den Außenabstand fasst es nicht an.
+  function faehnchenStapeln() {
+    const feld = $('notiz-feld'); if (!feld || !s.offen) return;
+    const alle = [...feld.querySelectorAll('.ql-cursor')].map(c => ({
+      f: c.querySelector('.ql-cursor-flag'), caret: c.querySelector('.ql-cursor-caret-container') })).filter(x => x.f && x.caret);
+    for (const x of alle) x.f.style.marginTop = '';
+    const oben = (feld.querySelector('.ql-editor') || feld).getBoundingClientRect().top;
+    const sichtbar = alle.filter(x => x.caret.classList.contains('hover') && x.f.offsetParent)
+      .map(x => ({ ...x, r: x.f.getBoundingClientRect(), zeile: x.caret.getBoundingClientRect().height }))
+      .sort((a, b) => (a.r.top - b.r.top) || (a.r.left - b.r.left));
+    const belegt = [];
+    const schneidet = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const um = (r, dy) => ({ left: r.left, right: r.right, top: r.top + dy, bottom: r.bottom + dy });
+    for (const x of sichtbar) {
+      const h = x.r.height + 2;
+      let dy = 0;
+      while (belegt.some(b => schneidet(um(x.r, dy), b)) || x.r.top + dy < oben - 4) {
+        if (x.r.top + dy - h >= oben - 4 && dy <= 0) dy -= h;       // nach oben stapeln, solange Platz ist
+        else dy = dy <= 0 ? x.zeile + x.r.height : dy + h;          // sonst unter die Zeile ausweichen
+        if (Math.abs(dy) > 20 * h) break;                            // Notbremse
+      }
+      if (dy) x.f.style.marginTop = dy + 'px';
+      belegt.push(um(x.r, dy));
+    }
+  }
+  // Nach jeder Bewegung im Text (quill-cursors setzt die Fähnchen dabei neu) und bei neuer Breite
+  let stapelnGeplant = false;
+  const stapelnBald = () => { if (stapelnGeplant) return; stapelnGeplant = true;
+    requestAnimationFrame(() => { stapelnGeplant = false; faehnchenStapeln(); }); };
+  window.addEventListener('resize', stapelnBald);
   function anwesendeZeigen() {
     const el = $('notiz-anwesend'); if (!el) return;
     const leute = new Map();
@@ -477,6 +517,7 @@ function notizSitzungStarten(id) {
     document.removeEventListener('visibilitychange', sichtbarkeit);
     window.removeEventListener('online', wiederOnline);
     window.removeEventListener('pagehide', seiteWeg);
+    window.removeEventListener('resize', stapelnBald);
     if (verwerfen) { try { localStorage.removeItem(speicherKey); } catch (_) {} }
     else if (s.warteschlange.length) {
       // Letzter Versuch beim Verlassen — VOR dem Schließen des Stroms, solange der Server die
