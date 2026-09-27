@@ -1185,6 +1185,8 @@ function renderNoteList(notes) {
     const sharesInfo = (n.shares && n.shares.length)
       ? `<span>Geteilt mit: ${n.shares.map(s => esc(s.user_name)).join(', ')}</span>` : '';
     const accessBadge = !isOwner ? `<span class="badge badge-${n.access_level === 'write' ? 'chef' : 'mitarbeiter'}">${n.access_level === 'write' ? 'Schreibzugriff' : 'Lesezugriff'}</span>` : '';
+    // Gäste von außerhalb (Etappe C) — nur die Eigentümerin bekommt die Zahl
+    const gaesteBadge = isOwner && n.gaeste ? `<span class="badge notiz-gaeste-badge" title="Gäste von außerhalb der Firma">&#128279; ${n.gaeste} ${n.gaeste === 1 ? 'Gast' : 'Gäste'}</span>` : '';
     const isExpanded = _expandedNoteId === n.id;
     // Wer gerade in der Notiz ist (ersetzt das frühere „🔒 gesperrt"). Man selbst zählt hier nicht —
     // in der Übersicht ist man ja gerade NICHT drin.
@@ -1196,7 +1198,7 @@ function renderNoteList(notes) {
     return `<div class="note-card${n.is_unread ? ' note-card--unread' : ''}${isExpanded ? ' note-card-expanded' : ''}" data-id="${n.id}">
       <div class="note-card-row">
         <div class="note-content" style="flex:1;min-width:0">
-          <div class="note-title">${esc(n.title)} ${accessBadge} ${drinBadge}</div>
+          <div class="note-title">${esc(n.title)} ${accessBadge} ${gaesteBadge} ${drinBadge}</div>
           ${projDisplay}
           ${isExpanded
             ? `<div class="note-body-full">${notizHtml(n.body_delta, n.body)}</div>
@@ -1211,6 +1213,7 @@ function renderNoteList(notes) {
         <div class="note-actions">
           ${oeffnenBtn}
           ${isOwner ? `<button class="btn btn-sm note-share-btn" data-id="${n.id}" title="Freigabe">&#128101;</button>` : ''}
+          ${isOwner ? `<button class="btn btn-sm note-gaeste-btn" data-id="${n.id}" title="Gäste von außerhalb" aria-label="Gäste von außerhalb">&#128279;</button>` : ''}
           ${isOwner ? `<button class="btn btn-sm note-offer-btn" data-id="${n.id}" title="Weitergeben">&#10145;</button>` : ''}
           ${isOwner ? `<button class="btn btn-sm btn-danger note-del-btn" data-id="${n.id}" title="L\u00f6schen">&times;</button>` : ''}
           ${!isOwner ? `<button class="btn btn-sm note-leave-btn" data-id="${n.id}" title="Freigabe verlassen (aus meiner Liste entfernen)">&#128682;</button>` : ''}
@@ -1262,6 +1265,13 @@ function bindNoteEvents() {
       e.stopPropagation();
       const n = _notizen.find(x => x.id === Number(btn.dataset.id));
       if (n) showShareDialog(n);
+    });
+  });
+  document.querySelectorAll('.note-gaeste-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const n = _notizen.find(x => x.id === Number(btn.dataset.id));
+      if (n) notizGaesteDialog(n);
     });
   });
   document.querySelectorAll('.note-offer-btn').forEach(btn => {
@@ -1444,6 +1454,152 @@ async function showShareDialog(note) {
       renderNotizen();
     } catch (err) { toast(err.message, 'error'); }
   });
+}
+
+// ─── Gäste von außerhalb (Etappe C, 27.09.2026) ─────────────────────────────────────────────
+//
+// Die Eigentümerin lädt Leute ohne Konto ein: Name, Lesen oder Schreiben, Passwort, freiwillig ein
+// Ablaufdatum. Jeder Gast bekommt einen eigenen Link (/gast#<Kennung>). Das Passwort wird nur beim
+// Setzen angezeigt — gespeichert ist es nur als Hash; später geht nur ein NEUES.
+function gastLink(token) { return location.origin + '/gast#' + token; }
+
+// Lesbares Zufallspasswort ohne verwechselbare Zeichen (0/O, 1/l/I)
+function gastPasswortVorschlag() {
+  const zeichen = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const z = new Uint32Array(12); crypto.getRandomValues(z);
+  return Array.from(z, x => zeichen[x % zeichen.length]).join('').replace(/(.{4})(?=.)/g, '$1-');
+}
+
+async function kopieren(text, feld) {
+  try { await navigator.clipboard.writeText(text); toast('Kopiert', 'success'); }
+  catch (_) {
+    if (feld) { feld.focus(); feld.select(); }
+    toast('Bitte von Hand kopieren (der Browser erlaubt es hier nicht automatisch)', 'error');
+  }
+}
+
+async function notizGaesteDialog(note) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal notiz-gaeste-dialog" style="max-width:560px">
+      <div class="modal-header"><h3>Gäste: ${esc(note.title)}</h3></div>
+      <div class="modal-body" id="gaeste-inhalt"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="modal-footer" style="display:flex;justify-content:flex-end;padding:1rem">
+        <button class="btn btn-outline" id="gaeste-zu">Schließen</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const aufraeumen = dialogBarrierefrei(overlay);
+  const schliessen = () => { overlay.remove(); aufraeumen(); if (getRoute() === '/notes') notizenAuffrischen(); };   // 🔗-Zahl an der Karte
+  klickDanebenSchliesst(overlay, schliessen);
+  overlay.querySelector('#gaeste-zu').addEventListener('click', schliessen);
+  const inhalt = overlay.querySelector('#gaeste-inhalt');
+  const pfad = (x) => `/api/notes/${note.id}/gaeste${x || ''}`;
+
+  // Link + Passwort EINMAL zeigen (nach dem Einladen oder einem neuen Passwort)
+  let zugang = null;
+  const zugangHtml = () => !zugang ? '' : `
+    <div class="gast-zugang" role="status">
+      <p><strong>Zugang für ${esc(zugang.name)}</strong></p>
+      <label class="gast-zugang-zeile">Link <input class="form-control" id="gz-link" readonly value="${esc(gastLink(zugang.token))}">
+        <button type="button" class="btn btn-outline btn-sm" data-kopie="gz-link">Kopieren</button>
+        ${navigator.share ? '<button type="button" class="btn btn-outline btn-sm" id="gz-teilen">Teilen</button>' : ''}</label>
+      <label class="gast-zugang-zeile">Passwort <input class="form-control" id="gz-pw" readonly value="${esc(zugang.passwort)}">
+        <button type="button" class="btn btn-outline btn-sm" data-kopie="gz-pw">Kopieren</button></label>
+      <p class="gast-hinweis">Schick Link und Passwort auf <strong>getrennten Wegen</strong> — z. B. den Link per E-Mail, das Passwort per SMS oder Anruf.
+        Das Passwort wird nur jetzt angezeigt; später kannst du nur ein neues vergeben.</p>
+    </div>`;
+
+  async function zeichnen() {
+    let d;
+    try { d = await api('GET', pfad()); } catch (e) { inhalt.innerHTML = `<p class="text-danger">${esc(e.message)}</p>`; return; }
+    if (!d) return;
+    const heute = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+    const zeile = (g) => {
+      const zustand = [g.gesperrt ? '<span class="badge badge-danger">gesperrt (falsche Passwörter)</span>' : '',
+        g.abgelaufen ? '<span class="badge badge-danger">abgelaufen</span>' : '',
+        g.zuletzt_da ? `<span>zuletzt da ${esc(formatDateTimeDE(g.zuletzt_da))}</span>` : '<span>noch nie da</span>'].filter(Boolean).join(' ');
+      return `<li class="gast-zeile" data-gid="${g.id}">
+        <div class="gast-zeile-kopf"><strong>${esc(g.name)}</strong> <span class="gast-zusatz">(Gast)</span> ${zustand}</div>
+        <div class="gast-zeile-felder">
+          <label>Darf <select class="form-control gast-recht" aria-label="Recht für ${esc(g.name)}">
+            <option value="read" ${g.permission === 'read' ? 'selected' : ''}>Lesen</option>
+            <option value="write" ${g.permission === 'write' ? 'selected' : ''}>Schreiben</option></select></label>
+          <label>Gültig bis <input type="date" class="form-control gast-ablauf" min="${heute}" value="${esc(g.ablauf || '')}" aria-label="Gültig bis für ${esc(g.name)}"></label>
+        </div>
+        <div class="gast-zeile-knoepfe">
+          <button type="button" class="btn btn-outline btn-sm gast-link-kopieren">Link kopieren</button>
+          <button type="button" class="btn btn-outline btn-sm gast-neues-pw">Neues Passwort</button>
+          <button type="button" class="btn btn-danger btn-sm gast-entfernen">Entfernen</button>
+        </div>
+      </li>`;
+    };
+    inhalt.innerHTML = `
+      ${zugangHtml()}
+      ${!d.erlaubt ? '<p class="gast-hinweis gast-hinweis--warnung">Gastzugänge sind in den Einstellungen der Firma abgeschaltet. Bestehende Zugänge gelten erst wieder, wenn sie eingeschaltet werden.</p>' : ''}
+      ${d.gaeste.length ? `<ul class="gast-liste">${d.gaeste.map(zeile).join('')}</ul>` : '<p class="gast-hinweis">Noch keine Gäste. Gäste brauchen kein Konto — sie bekommen einen Link und ein Passwort.</p>'}
+      ${d.erlaubt ? `<form class="gast-neu" id="gast-neu" autocomplete="off">
+        <h4>Gast einladen</h4>
+        <label>Name <input class="form-control" id="gn-name" maxlength="40" placeholder="z. B. Herr Maier (Architekt)" required></label>
+        <fieldset class="gast-recht-wahl"><legend>Darf</legend>
+          <label><input type="radio" name="gn-recht" value="read" checked> Lesen</label>
+          <label><input type="radio" name="gn-recht" value="write"> Schreiben</label></fieldset>
+        <label>Passwort <span class="gast-pw-zeile"><input class="form-control" id="gn-pw" minlength="${d.passwortMin}" required>
+          <button type="button" class="btn btn-outline btn-sm" id="gn-vorschlag">Vorschlagen</button></span></label>
+        <label>Gültig bis <small>(freiwillig)</small> <input type="date" class="form-control" id="gn-ablauf" min="${heute}"></label>
+        <button type="submit" class="btn btn-primary">Gast einladen</button>
+      </form>` : ''}`;
+
+    inhalt.querySelectorAll('[data-kopie]').forEach(b => b.addEventListener('click', () => {
+      const f = document.getElementById(b.dataset.kopie); kopieren(f.value, f);
+    }));
+    const teilen = inhalt.querySelector('#gz-teilen');
+    if (teilen) teilen.addEventListener('click', () => navigator.share({ title: note.title, url: gastLink(zugang.token) }).catch(() => {}));
+    const vorschlag = inhalt.querySelector('#gn-vorschlag');
+    if (vorschlag) vorschlag.addEventListener('click', () => { inhalt.querySelector('#gn-pw').value = gastPasswortVorschlag(); });
+    const form = inhalt.querySelector('#gast-neu');
+    if (form) form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const passwort = inhalt.querySelector('#gn-pw').value;
+      try {
+        const r = await api('POST', pfad(), { name: inhalt.querySelector('#gn-name').value.trim(),
+          permission: (inhalt.querySelector('input[name="gn-recht"]:checked') || {}).value || 'read',
+          passwort, ablauf: inhalt.querySelector('#gn-ablauf').value || null });
+        zugang = { name: r.gast.name, token: r.gast.token, passwort };
+        toast('Gast eingeladen', 'success');
+        zeichnen();
+      } catch (e) { toast(e.message, 'error'); }
+    });
+    for (const li of inhalt.querySelectorAll('.gast-zeile')) {
+      const g = d.gaeste.find(x => x.id === Number(li.dataset.gid));
+      const aendern = async (daten, meldung) => {
+        try { await api('PUT', pfad('/' + g.id), daten); toast(meldung, 'success'); zeichnen(); } catch (e) { toast(e.message, 'error'); zeichnen(); }
+      };
+      li.querySelector('.gast-recht').addEventListener('change', (e) => aendern({ permission: e.target.value },
+        e.target.value === 'write' ? `${g.name} darf jetzt schreiben` : `${g.name} darf jetzt nur noch lesen`));
+      li.querySelector('.gast-ablauf').addEventListener('change', (e) => aendern({ ablauf: e.target.value || null },
+        e.target.value ? `Gültig bis ${formatDateDE(e.target.value)}` : 'Ohne Ablaufdatum'));
+      li.querySelector('.gast-link-kopieren').addEventListener('click', () => kopieren(gastLink(g.token)));
+      li.querySelector('.gast-neues-pw').addEventListener('click', async () => {
+        const pw = await promptModal(`Neues Passwort für ${g.name}. Wer gerade mit dem alten drin ist, fliegt sofort raus — nur dieser Gast.`,
+          { title: 'Neues Passwort', defaultValue: gastPasswortVorschlag(), multiline: false, okLabel: 'Passwort setzen', required: true });
+        if (!pw) return;
+        try {
+          await api('PUT', pfad('/' + g.id + '/passwort'), { passwort: pw });
+          zugang = { name: g.name, token: g.token, passwort: pw };
+          toast('Neues Passwort gesetzt', 'success');
+          zeichnen();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+      li.querySelector('.gast-entfernen').addEventListener('click', async () => {
+        if (!(await confirmModal(`${g.name} entfernen? Der Link gilt dann nicht mehr, und wer gerade drin ist, fliegt sofort raus.`, { title: 'Gast entfernen', okLabel: 'Entfernen' }))) return;
+        try { await api('DELETE', pfad('/' + g.id)); toast(`${g.name} entfernt`, 'success'); if (zugang && zugang.token === g.token) zugang = null; zeichnen(); }
+        catch (e) { toast(e.message, 'error'); }
+      });
+    }
+  }
+  zeichnen();
 }
 
 async function showOfferDialog(note) {

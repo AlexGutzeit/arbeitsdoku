@@ -114,6 +114,18 @@ async function renderNotizEditor(id) {
           <input type="text" id="notiz-projekt-text" class="form-control" placeholder="Projekt (Freitext), z.B. Baustelle XY">
         </div>
       </details>
+      ${notizFeldHtml()}
+    </div>`;
+  notizNamenSchalterBinden(mainEl.querySelector('.notiz-editor'));
+
+  if (_notizSitzung) _notizSitzung.beenden();
+  _notizSitzung = notizSitzungStarten(id);
+}
+
+// Der Teil des Editors, den App und Gästeseite (gast.js) gemeinsam haben: wer drin ist, Namensschilder,
+// Hinweis bei Leserecht, Knopfleiste, Schreibfeld. Die Sitzung findet alles über diese Kennungen.
+function notizFeldHtml() {
+  return `
       <div class="notiz-anwesend" id="notiz-anwesend" aria-label="Gerade in der Notiz"></div>
       <label class="notiz-namen-schalter" for="notiz-namen"><input type="checkbox" id="notiz-namen" ${notizNamenZeigen() ? 'checked' : ''}> Namensschilder anzeigen</label>
       <p class="notiz-nur-lesen" id="notiz-nur-lesen" hidden>&#128065; Du kannst diese Notiz nur lesen — Änderungen der anderen siehst du live.</p>
@@ -129,20 +141,17 @@ async function renderNotizEditor(id) {
           <button type="button" class="ql-list" value="check" title="Checkliste" aria-label="Checkliste"></button>
         </span>
       </div>
-      <div id="notiz-feld" class="notiz-feld"></div>
-    </div>`;
+      <div id="notiz-feld" class="notiz-feld"></div>`;
+}
 
-  // Namensschilder ein/aus (Alex, 27.09.2026: sie verdecken kurz den Text dahinter). Aus = nur der
-  // farbige Cursor-Strich; wer es ist, verrät die Farbe in der Anwesenheit. Gemerkt je Gerät.
-  const editorEl = mainEl.querySelector('.notiz-editor');
+// Namensschilder ein/aus (Alex, 27.09.2026: sie verdecken kurz den Text dahinter). Aus = nur der
+// farbige Cursor-Strich; wer es ist, verrät die Farbe in der Anwesenheit. Gemerkt je Gerät.
+function notizNamenSchalterBinden(editorEl) {
   editorEl.classList.toggle('ohne-namen', !notizNamenZeigen());
   document.getElementById('notiz-namen').addEventListener('change', (e) => {
     try { localStorage.setItem('notiz-namen-zeigen', e.target.checked ? 'ja' : 'nein'); } catch (_) {}
     editorEl.classList.toggle('ohne-namen', !e.target.checked);
   });
-
-  if (_notizSitzung) _notizSitzung.beenden();
-  _notizSitzung = notizSitzungStarten(id);
 }
 
 function notizNamenZeigen() {
@@ -152,6 +161,7 @@ function notizNamenZeigen() {
 // Kommt die Seite aus dem Zwischenspeicher des Browsers zurück (Handy: weg- und wieder hergewischt),
 // ist die Sitzung beim Verlassen beendet worden — auf der Editor-Seite dann neu aufbauen.
 window.addEventListener('pageshow', (e) => {
+  if (typeof getRoute !== 'function') return;   // Gästeseite (gast.js) — dort gibt es keinen Router
   if (e.persisted && !_notizSitzung && /^\/notes\/\d+$/.test(getRoute())) render();
 });
 
@@ -230,12 +240,68 @@ async function notizKopieAnlegen(id) {
   } catch (e) { toast(e.message, 'error'); }
 }
 
+// Drucken und Dateien — für Mitarbeiter UND Gäste
+const NOTIZ_MENUE_DATEI = [
+  { value: 'drucken', label: '🖨  Drucken' },
+  { value: 'pdf', label: '📄  Als PDF speichern' },
+  { value: 'docx', label: '📝  Als Word-Datei (.docx) speichern' },
+  { value: 'odt', label: '📝  Als OpenDocument (.odt) speichern' },
+];
+
+// ─── Die Wege einer Sitzung ─────────────────────────────────────────────────────────────────
+//
+// Dieselbe Sitzung läuft in der App (Mitarbeiter) und auf der Gästeseite (gast.js, Etappe C). Alles,
+// was zwischen beiden verschieden ist — Adressen, Anmeldung, wohin es nach einem Rauswurf geht —,
+// steckt in diesem Objekt. Hier die Wege der App; gast.js baut seine eigenen.
+function notizWegeApp(id) {
+  const aufSeite = () => getRoute() === '/notes/' + id;
+  return {
+    speicherKey: 'notiz-live:' + id,
+    ticket: async () => { const t = await api('GET', '/api/events/ticket'); return t && t.ticket; },
+    stromUrl: (ticket) => `/api/notes/${id}/live?ticket=${encodeURIComponent(ticket)}`,
+    senden: (art, daten) => api('POST', `/api/notes/${id}/live/${art}`, daten),
+    // Letzter Versuch beim Verlassen (fetch mit keepalive, ohne api()): Adresse und Anmeldung
+    zumSchluss: () => (S.token ? { url: `/api/notes/${id}/live/aenderung`, token: S.token } : null),
+    kopfSpeichern: (daten) => api('PUT', `/api/notes/${id}`, daten),
+    herunterladen: (format) => notizHerunterladen(id, format),
+    menue: (zugriff) => [
+      ...NOTIZ_MENUE_DATEI,
+      { value: 'kopie', label: '📋  Stand als eigene Notiz' },
+      // Gäste lädt nur die Eigentümerin ein (Etappe C)
+      ...(zugriff === 'owner' ? [{ value: 'gaeste', label: '🔗  Gäste verwalten' }] : []),
+    ],
+    menueExtra: (wahl) => { if (wahl === 'kopie') { notizKopieAnlegen(id); return true; } return false; },
+    gaeste: () => notizGaesteDialog({ id, title: (document.getElementById('notiz-titel') || {}).value || '' }),
+    // Nach einer Abweisung (Leserecht, zu groß, beschädigt) die Notiz neu öffnen
+    neuOeffnen: () => { if (aufSeite()) renderNotizEditor(id); },
+    raus: (grund) => {
+      toast(grund === 'geloescht' ? 'Diese Notiz wurde gelöscht.'
+        : grund === 'freigabe-entzogen' ? 'Die Freigabe dieser Notiz wurde dir entzogen.'
+        : grund === 'zurueckgespielt' ? 'Eine Sicherung wurde zurückgespielt. Bitte öffne die Notiz neu.'
+        : 'Du bist nicht mehr angemeldet.', 'error');
+      if (aufSeite()) notizZurueckZurListe();
+    },
+    // Strom kam nie an: Gibt es die Notiz noch, und darf ich hinein? (EventSource verrät den Grund nicht.)
+    // true = ja/unklar (später noch einmal), false = nein (dann ist `weg` schon erledigt)
+    nochDa: async () => {
+      const l = await api('GET', '/api/notes');
+      if (l && !(l.notes || []).some(n => n.id === id)) {
+        toast('Diese Notiz gibt es nicht mehr, oder sie ist nicht mehr für dich freigegeben.', 'error');
+        if (aufSeite()) notizZurueckZurListe();
+        return false;
+      }
+      return true;
+    },
+    fertig: () => notizZurueckZurListe(),
+  };
+}
+
 // ─── Die Sitzung ────────────────────────────────────────────────────────────────────────────
 
-function notizSitzungStarten(id) {
+function notizSitzungStarten(id, weg = notizWegeApp(id)) {
   const K = window.Kollab;
   const Y = K.Y, A = K.awarenessProtocol;
-  const speicherKey = 'notiz-live:' + id;
+  const speicherKey = weg.speicherKey;
   const s = {
     id, offen: true, doc: new Y.Doc(), aw: null, quill: null, binding: null,
     es: null, verbindung: null, zugriff: null, du: null,
@@ -313,11 +379,11 @@ function notizSitzungStarten(id) {
       try { localStorage.removeItem(speicherKey); } catch (_) {}
       toast('Diese Änderung ist zu groß (z. B. ein sehr langer eingefügter Text) und wurde nicht übernommen.', 'error');
       s.beenden({ verwerfen: true });
-      if (getRoute() === '/notes/' + id) renderNotizEditor(id);
+      weg.neuOeffnen();
       return;
     }
     try {
-      await api('POST', `/api/notes/${id}/live/aenderung`, { verbindung: s.verbindung, update: notizB64(update) });
+      await weg.senden('aenderung', { verbindung: s.verbindung, update: notizB64(update) });
       s.warteschlange.splice(0, anzahl);
       s.sendeFehler = false;
       lokalSichern();
@@ -329,9 +395,11 @@ function notizSitzungStarten(id) {
         try { localStorage.removeItem(speicherKey); } catch (_) {}
         toast(e.code === 'NUR_LESEN' ? 'Du kannst diese Notiz nur noch lesen. Deine letzte Änderung wurde nicht übernommen.' : e.message, 'error');
         s.beenden({ verwerfen: true });
-        if (getRoute() === '/notes/' + id) renderNotizEditor(id);
+        weg.neuOeffnen();
         return;
       }
+      // Gast: Anmeldung weg (neues Passwort, entfernt, abgeschaltet) — die Gästeseite übernimmt
+      if (e.gastAbgemeldet) { s.beenden({ verwerfen: false }); weg.raus(e.code); return; }
       // Funkloch: bleibt in der Warteschlange (und auf dem Gerät), in 3 s ein neuer Versuch —
       // der Ereignisstrom merkt das Funkloch oft erst viel später.
       s.sendeFehler = true;
@@ -353,7 +421,7 @@ function notizSitzungStarten(id) {
   function anwesenheitSenden() {
     s.timer.anwesenheit = null;
     if (!s.verbindung || !s.offen || !s.aw.getLocalState()) return;
-    api('POST', `/api/notes/${id}/live/anwesenheit`,
+    weg.senden('anwesenheit',
       { verbindung: s.verbindung, update: notizB64(A.encodeAwarenessUpdate(s.aw, [s.doc.clientID])) }).catch(() => {});
   }
 
@@ -430,7 +498,7 @@ function notizSitzungStarten(id) {
     s.quill.enable(!lesen);
     const leiste = $('notiz-leiste'); if (leiste) leiste.hidden = lesen;
     const hinweis = $('notiz-nur-lesen'); if (hinweis) hinweis.hidden = !lesen;
-    const titel = $('notiz-titel'); if (titel) titel.disabled = lesen;
+    const titel = $('notiz-titel'); if (titel) titel.disabled = lesen || !weg.kopfSpeichern;   // Gäste: Titel fest
     for (const x of ['notiz-projekt-wahl', 'notiz-projekt-text']) { const f = $(x); if (f) f.disabled = lesen; }
     if (ansage && vorher && vorher !== z) toast(lesen ? 'Du kannst diese Notiz jetzt nur noch lesen.' : 'Du kannst diese Notiz jetzt auch bearbeiten.', 'info');
     statusNachWarteschlange();
@@ -455,8 +523,9 @@ function notizSitzungStarten(id) {
     if (!titel.trim()) { status('Titel fehlt', 'fehler'); return; }
     const wahl = ($('notiz-projekt-wahl') || {}).value || '';
     const frei = ($('notiz-projekt-text') || {}).value || '';
+    if (!weg.kopfSpeichern) return;   // Gäste ändern den Titel nicht
     try {
-      const r = await api('PUT', `/api/notes/${id}`, { title: titel.trim(), project_id: wahl ? Number(wahl) : null,
+      const r = await weg.kopfSpeichern({ title: titel.trim(), project_id: wahl ? Number(wahl) : null,
         project_text: wahl ? '' : frei.trim(), verbindung: s.verbindung });
       if (r && r.note) kopfZeigen(r.note);
       statusNachWarteschlange();
@@ -473,10 +542,13 @@ function notizSitzungStarten(id) {
     if (!s.offen || s.es) return;
     status('Verbinde …', 'laeuft');
     let ticket;
-    try { const t = await api('GET', '/api/events/ticket'); ticket = t && t.ticket; } catch (_) { /* Funkloch */ }
+    try { ticket = await weg.ticket(); } catch (e) {
+      if (e && e.gastAbgemeldet) { s.beenden({ verwerfen: false }); weg.raus(e.code); return; }
+      /* sonst Funkloch */
+    }
     if (!s.offen) return;
     if (!ticket) { neuVerbinden(); return; }
-    const es = new EventSource(`/api/notes/${id}/live?ticket=${encodeURIComponent(ticket)}`);
+    const es = new EventSource(weg.stromUrl(ticket));
     s.es = es;
     let angekommen = false;
     es.addEventListener('start', (ev) => {
@@ -516,11 +588,7 @@ function notizSitzungStarten(id) {
       // Selbst schließen, BEVOR der Strom endet — sonst verbindet EventSource von sich aus neu.
       const grund = JSON.parse(ev.data).grund;
       s.beenden({ verwerfen: true });
-      toast(grund === 'geloescht' ? 'Diese Notiz wurde gelöscht.'
-        : grund === 'freigabe-entzogen' ? 'Die Freigabe dieser Notiz wurde dir entzogen.'
-        : grund === 'zurueckgespielt' ? 'Eine Sicherung wurde zurückgespielt. Bitte öffne die Notiz neu.'
-        : 'Du bist nicht mehr angemeldet.', 'error');
-      if (getRoute() === '/notes/' + id) notizZurueckZurListe();
+      weg.raus(grund);
     });
     es.onerror = async () => {
       if (s.es !== es) return;
@@ -529,15 +597,9 @@ function notizSitzungStarten(id) {
       if (!s.offen) return;
       if (!angekommen) {
         // Nie angekommen: gibt es die Notiz noch, und darf ich hinein? (EventSource verrät den Grund nicht.)
-        try {
-          const l = await api('GET', '/api/notes');
-          if (l && !(l.notes || []).some(n => n.id === id)) {
-            s.beenden({ verwerfen: true });
-            toast('Diese Notiz gibt es nicht mehr, oder sie ist nicht mehr für dich freigegeben.', 'error');
-            if (getRoute() === '/notes/' + id) notizZurueckZurListe();
-            return;
-          }
-        } catch (_) { /* Funkloch — einfach später noch einmal */ }
+        let da = true;
+        try { da = await weg.nochDa(); } catch (_) { /* Funkloch — einfach später noch einmal */ }
+        if (!da) { s.beenden({ verwerfen: true }); return; }
       }
       neuVerbinden();
     };
@@ -586,7 +648,7 @@ function notizSitzungStarten(id) {
         { title: 'Noch nicht alles übertragen', okLabel: 'Trotzdem schließen' });
       if (!ok) return;
     }
-    notizZurueckZurListe();
+    weg.fertig();
   });
 
   // Warten, bis alles beim Server ist (höchstens 3 s) — Datei und Kopie baut der Server aus SEINEM Stand
@@ -598,17 +660,12 @@ function notizSitzungStarten(id) {
   // „⋯": Drucken und Speichern als
   const mehr = $('notiz-mehr');
   if (mehr) mehr.addEventListener('click', async () => {
-    const wahl = await choiceModal('', [
-      { value: 'drucken', label: '🖨  Drucken' },
-      { value: 'pdf', label: '📄  Als PDF speichern' },
-      { value: 'docx', label: '📝  Als Word-Datei (.docx) speichern' },
-      { value: 'odt', label: '📝  Als OpenDocument (.odt) speichern' },
-      { value: 'kopie', label: '📋  Stand als eigene Notiz' },
-    ], { title: 'Drucken und Speichern' });
+    const wahl = await choiceModal('', typeof weg.menue === 'function' ? weg.menue(s.zugriff) : weg.menue, { title: 'Drucken und Speichern' });
     if (wahl) ausfuehren(wahl);
   });
   const ausfuehren = async (wahl) => {
     if (!s.offen) return;
+    if (wahl === 'gaeste') { if (weg.gaeste) weg.gaeste(); return; }   // braucht keinen gesendeten Stand
     if (wahl === 'drucken') {
       notizDrucken(($('notiz-titel') || {}).value || 'Notiz', JSON.stringify(s.doc.getText('notiz').toDelta()), () => ausfuehren('pdf'));
       return;
@@ -619,8 +676,8 @@ function notizSitzungStarten(id) {
         { text: 'Nochmal versuchen', beiKlick: () => ausfuehren(wahl) });
       return;
     }
-    if (wahl === 'kopie') notizKopieAnlegen(id);
-    else notizHerunterladen(id, wahl);
+    if (weg.menueExtra && weg.menueExtra(wahl)) return;
+    weg.herunterladen(wahl);
   };
 
   s.beenden = ({ verwerfen } = {}) => {
@@ -638,9 +695,10 @@ function notizSitzungStarten(id) {
       // Verbindung noch kennt. Klappt er nicht, liegt der Stand auf dem Gerät.
       const offen = warteschlangeAlsEine();
       try { localStorage.setItem(speicherKey, notizB64(offen)); } catch (_) {}
-      if (s.verbindung && S.token) {
-        fetch(`/api/notes/${id}/live/aenderung`, { method: 'POST', keepalive: true,
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.token },
+      const ziel = s.verbindung && weg.zumSchluss();
+      if (ziel) {
+        fetch(ziel.url, { method: 'POST', keepalive: true,
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ziel.token },
           body: JSON.stringify({ verbindung: s.verbindung, update: notizB64(offen) }) }).catch(() => {});
       }
     }

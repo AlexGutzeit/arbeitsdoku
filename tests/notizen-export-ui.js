@@ -107,8 +107,9 @@ const pdfText = (buf) => { const f = path.join(ORDNER, 'x.pdf'); fs.writeFileSyn
     ok('„⋯" steht sichtbar neben „← Fertig", Tippziel mindestens 36 × 44 px', knopf.sichtbar && knopf.nebenFertig && knopf.w >= 44 && knopf.h >= 36, JSON.stringify(knopf));
     await menue(A);
     const eintraege = await A.evaluate(() => [...document.querySelectorAll('.modal-overlay [data-val]')].map(b => b.dataset.val + ':' + b.textContent.trim()));
-    ok('fünf Einträge: Drucken, PDF, Word, OpenDocument, Stand als eigene Notiz',
-      JSON.stringify(eintraege.map(e => e.split(':')[0])) === '["drucken","pdf","docx","odt","kopie"]' && /Drucken/.test(eintraege[0]) && /eigene Notiz/.test(eintraege[4]), JSON.stringify(eintraege));
+    // Anna ist Eigentümerin: seit Etappe C (Gäste) zusätzlich „Gäste verwalten" — Rita sieht es nicht (unten)
+    ok('Einträge: Drucken, PDF, Word, OpenDocument, Stand als eigene Notiz (+ Gäste verwalten für die Eigentümerin)',
+      JSON.stringify(eintraege.map(e => e.split(':')[0])) === '["drucken","pdf","docx","odt","kopie","gaeste"]' && /Drucken/.test(eintraege[0]) && /eigene Notiz/.test(eintraege[4]), JSON.stringify(eintraege));
     await A.evaluate(() => document.querySelector('.modal-overlay [data-act="cancel"]').click()); await sleep(300);
     ok('Abbrechen: Menü zu, nichts gedruckt oder geladen, Sitzung offen', await A.evaluate(() =>
       !document.querySelector('.modal-overlay') && !document.getElementById('notiz-druck') && window.__dateien.length === 0 && _notizSitzung.offen));
@@ -209,9 +210,12 @@ const pdfText = (buf) => { const f = path.join(ORDNER, 'x.pdf'); fs.writeFileSyn
     console.log('\nLeserecht und „Stand als eigene Notiz"');
     await oeffnen(R, note.id);
     const nR = await R.evaluate(() => window.__dateien.length);
-    await menue(R); await waehle(R, 'odt');
+    await menue(R);
+    const rEintraege = await R.evaluate(() => [...document.querySelectorAll('.modal-overlay [data-val]')].map(b => b.dataset.val));
+    await waehle(R, 'odt');
     const rDatei = await datei(R, nR);
-    ok('Rita (nur lesen) hat das Menü und bekommt die Datei', !!rDatei && /\.odt$/.test(rDatei.name), rDatei && rDatei.name);
+    ok('Rita (nur lesen) hat das Menü — ohne „Gäste verwalten" — und bekommt die Datei',
+      !!rDatei && /\.odt$/.test(rDatei.name) && rEintraege.includes('kopie') && !rEintraege.includes('gaeste'), `${rDatei && rDatei.name} ${JSON.stringify(rEintraege)}`);
     await menue(R); await waehle(R, 'kopie');
     await R.waitForFunction((alt) => /^#\/notes\/\d+$/.test(location.hash) && location.hash !== alt, { timeout: 8000 }, '#/notes/' + note.id).catch(() => {});
     await R.waitForFunction(() => /Gespeichert/.test((document.getElementById('notiz-status') || {}).textContent || ''), { timeout: 8000 }).catch(() => {});

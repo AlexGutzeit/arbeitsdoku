@@ -146,6 +146,17 @@ async function renderSettings() {
       </div>
 
       <div class="card">
+        <h2 style="margin-bottom:1rem;">Gäste in Notizen</h2>
+        <p style="margin:0 0 0.75rem;color:var(--text-light)">Wer eine Notiz besitzt, kann Leute von außerhalb der Firma einladen —
+          mit eigenem Link, eigenem Passwort und Lesen oder Schreiben. Gäste sehen nur diese eine Notiz und
+          von den Mitarbeitern nur den Vornamen.</p>
+        <label class="notiz-namen-schalter" for="s-notiz-gaeste" style="font-size:1rem">
+          <input type="checkbox" id="s-notiz-gaeste" ${S.settings.notiz_gaeste !== 'aus' ? 'checked' : ''}> Gäste in Notizen erlauben</label>
+        <p style="margin:0.5rem 0 0;font-size:0.85rem;color:var(--text-light)">Ausschalten wirft alle Gäste sofort hinaus. Die
+          eingerichteten Zugänge bleiben gespeichert und gelten wieder, wenn du es wieder einschaltest.</p>
+      </div>
+
+      <div class="card">
         <h2 style="margin-bottom:1rem;">Rechtliches (Impressum &amp; Datenschutz)</h2>
         <div class="warning-box" style="margin-bottom:1rem;">
           Für den öffentlich erreichbaren Betrieb gesetzlich vorgeschrieben. Sobald ausgefüllt, erscheinen die Texte
@@ -474,6 +485,18 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
       // gelungen. Sonst glaubt der naechste Blick, die Pflicht sei aktiv.
       renderSettings();
     }
+  });
+
+  // Gäste in Notizen (Etappe C): sofort speichern; Ausschalten wirft alle Gäste hinaus → nachfragen
+  document.getElementById('s-notiz-gaeste')?.addEventListener('change', async (e) => {
+    const an = e.target.checked;
+    if (!an && !(await confirmModal('Gastzugänge abschalten? Alle Gäste, die gerade in einer Notiz sind, fliegen sofort hinaus, und niemand kann sich mehr als Gast anmelden.',
+      { title: 'Gäste abschalten', okLabel: 'Abschalten' }))) { e.target.checked = true; return; }
+    try {
+      const r = await api('PUT', '/api/settings', { notiz_gaeste: an ? 'an' : 'aus' });
+      if (r && r.settings) S.settings = r.settings;
+      toast(an ? 'Gäste in Notizen sind erlaubt' : 'Gastzugänge abgeschaltet', 'success');
+    } catch (err) { e.target.checked = !an; toast(err.message, 'error'); }
   });
 
   // Rechtstexte (Chef + Admin) speichern

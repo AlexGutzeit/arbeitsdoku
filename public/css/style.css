@@ -2676,3 +2676,40 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
   .pv-kat { gap: .3rem; }
   .pv-kat .form-control-sm { max-width: 100% !important; }
 }
+
+/* === Gäste in Notizen (Etappe C, 27.09.2026) === */
+.badge-danger { background: var(--danger-light); color: var(--danger); }
+.notiz-gaeste-badge { background: #e0f2fe; color: #075985; }
+/* Dialog der Eigentümerin */
+.notiz-gaeste-dialog .modal-body { display: flex; flex-direction: column; gap: 1rem; }
+.gast-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.gast-zeile { border: 1px solid var(--border, #e5e7eb); border-radius: var(--radius); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.gast-zeile-kopf { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
+.gast-zeile-kopf span:not(.badge) { color: var(--text-light, #6b7280); }
+.gast-zusatz { color: var(--text-light, #6b7280); }
+.gast-zeile-felder { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.gast-zeile-felder label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; flex: 1 1 10rem; }
+.gast-zeile-knoepfe { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.gast-neu { display: flex; flex-direction: column; gap: 0.6rem; border-top: 1px solid var(--border, #e5e7eb); padding-top: 1rem; }
+.gast-neu h4 { margin: 0; }
+.gast-neu label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9rem; }
+.gast-recht-wahl { border: 0; padding: 0; margin: 0; display: flex; gap: 1.25rem; align-items: center; font-size: 0.9rem; }
+.gast-recht-wahl legend { padding: 0; margin-right: 0.5rem; float: left; }
+.gast-recht-wahl label { flex-direction: row; align-items: center; gap: 0.35rem; }
+.gast-pw-zeile { display: flex; gap: 0.5rem; }
+.gast-pw-zeile .form-control { flex: 1; font-family: ui-monospace, monospace; }
+.gast-zugang { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.gast-zugang p { margin: 0; }
+.gast-zugang-zeile { display: grid; grid-template-columns: 4.5rem 1fr auto auto; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
+.gast-zugang-zeile .form-control { font-family: ui-monospace, monospace; font-size: 0.85rem; min-width: 0; }
+@media (max-width: 480px) { .gast-zugang-zeile { grid-template-columns: 1fr auto auto; } .gast-zugang-zeile > .form-control { grid-column: 1 / -1; order: -1; } }
+.gast-hinweis { font-size: 0.85rem; color: var(--text-light, #6b7280); margin: 0; }
+.gast-hinweis--warnung { color: #92400e; background: #fef3c7; padding: 0.5rem 0.75rem; border-radius: var(--radius); }
+/* Die Gästeseite selbst */
+.gast-main { max-width: 820px; }
+.gast-karte { max-width: 420px; margin: 2rem auto; display: flex; flex-direction: column; gap: 0.75rem; }
+.gast-karte h1 { font-size: 1.3rem; margin: 0; }
+.gast-karte p { margin: 0; }
+.gast-meldung { color: var(--danger); background: var(--danger-light); padding: 0.5rem 0.75rem; border-radius: var(--radius); }
+.gast-klein { font-size: 0.8rem; color: var(--text-light, #6b7280); }
+.gast-du { margin: 0 0 0.25rem; font-size: 0.85rem; color: var(--text-light, #6b7280); }
