@@ -3502,3 +3502,9 @@ ist ein Netz, keine Reparatur.
   Bereichs und schneidet zu. Und „mitten im Text" suchte „Dosen" mit großem D — der Text hat
   „Abzweigdosen", der Test stand also auch dort in der ersten Zeile. Gegenproben: ohne Stapeln rot,
   ohne Ausweichen nach unten rot.
+* **Haken „Namen am Cursor zeigen"** (Alex: die Fähnchen verdecken kurz den Text dahinter; halb
+  durchsichtig hätte Name und Text beide schlechter lesbar gemacht). Aus = nur der farbige Strich,
+  gemerkt je Gerät (`localStorage`, Standard an). Test aus Ritas Sicht: Haken aus → kein Fähnchen
+  sichtbar, beide Striche am Bildpunkt zu sehen (an VERSCHIEDENEN Stellen — an derselben lagen die
+  zwei 2-px-Striche übereinander und der Test zählte einen), nach Neuladen weiter aus, wieder an →
+  Fähnchen da. Gegenproben: Regel ohne Wirkung / nicht gemerkt → rot. `notizen-live-ui` 45.

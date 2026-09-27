@@ -238,6 +238,42 @@ async function cursorSichtbar(p, farbe) {
     ok('in der ersten Zeile: ebenso — und keins ragt über den Anfang des Schreibfelds hinaus',
       zeile1.getrennt && zeile1.farben && zeile1.f.every(x => x.y >= x.oben - 4), JSON.stringify({ getrennt: zeile1.getrennt, farben: zeile1.farben, f: zeile1.f.map(x => [x.name, Math.round(x.y), Math.round(x.h), Math.round(x.oben), x.farbe]) }));
 
+    console.log('\nHaken „Namen am Cursor zeigen"');
+    // Striche: Bildpunkte in der Farbe der Person an ihrem Cursor-Strich (Farbe steht am — auch
+    // ausgeblendeten — Fähnchen)
+    const striche = async (p) => {
+      const lagen = await p.evaluate(() => [...document.querySelectorAll('.notiz-editor .ql-cursor')].map(c => {
+        const r = c.querySelector('.ql-cursor-caret').getBoundingClientRect();
+        return { x: r.x, y: r.y, w: r.width, h: r.height, farbe: getComputedStyle(c.querySelector('.ql-cursor-flag')).backgroundColor };
+      }));
+      const ganz = await p.screenshot({ captureBeyondViewport: false });
+      let sichtbar = 0;
+      for (const l of lagen) {
+        if (l.h < 4) continue;
+        const { data, info } = await sharp(ganz).extract({ left: Math.max(0, Math.round(l.x - 1)), top: Math.round(l.y + 2), width: Math.round(l.w + 2), height: Math.round(l.h - 4) }).raw().toBuffer({ resolveWithObject: true });
+        const [zr, zg, zb] = l.farbe.match(/\d+/g).map(Number);
+        let n = 0; for (let i = 0; i < data.length; i += info.channels) if (Math.abs(data[i] - zr) < 40 && Math.abs(data[i + 1] - zg) < 40 && Math.abs(data[i + 2] - zb) < 40) n++;
+        if (n >= 3) sichtbar++;
+      }
+      return sichtbar;
+    };
+    const fahnenSichtbar = (p) => p.evaluate(() => [...document.querySelectorAll('.notiz-editor .ql-cursor-flag')].filter(f => f.checkVisibility({ checkOpacity: true })).length);
+    await sleep(3200);
+    await R.tap('#notiz-namen');
+    // an verschiedene Stellen — an derselben lägen die zwei 2-px-Striche übereinander
+    await A.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(q.getText().indexOf('Wago') + 1, 0, 'user'); });
+    await T.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(q.getText().indexOf('Wago') + 8, 0, 'user'); });
+    await sleep(700);
+    ok('Haken aus: kein Namensfähnchen zu sehen, beide farbigen Striche schon', (await fahnenSichtbar(R)) === 0 && (await striche(R)) === 2,
+      JSON.stringify({ fahnen: await fahnenSichtbar(R), striche: await striche(R) }));
+    await R.reload({ waitUntil: 'domcontentloaded' }); await R.waitForSelector('.notiz-editor .ql-editor'); await bereit(R);
+    ok('… nach dem Neuladen bleibt der Haken aus (auf dem Gerät gemerkt)',
+      await R.evaluate(() => !document.getElementById('notiz-namen').checked && document.querySelector('.notiz-editor').classList.contains('ohne-namen')));
+    await R.tap('#notiz-namen');
+    for (const p of [A, T]) await p.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(q.getText().indexOf('Abzweig') + 3, 0, 'user'); });
+    await sleep(700);
+    ok('Haken wieder an: die Fähnchen erscheinen wieder', (await fahnenSichtbar(R)) === 2, String(await fahnenSichtbar(R)));
+
     console.log('\nTitel');
     await A.evaluate(() => { const t = document.getElementById('notiz-titel'); t.focus(); t.select(); });
     await A.keyboard.type('Material Dienstag');
