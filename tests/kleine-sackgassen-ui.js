@@ -133,7 +133,9 @@ function req(m, p, t, b) {
     const quellen = fs.readdirSync(path.join(APP, 'public', 'js')).filter(f => f.endsWith('.js'))
       .map(f => [f, fs.readFileSync(path.join(APP, 'public', 'js', f), 'utf8')]);
     const downloadStellen = quellen.flatMap(([f, s]) => (s.match(/\.download\s*=/g) || []).map(() => f));
-    ok('das Download-Muster steht nur noch im Baustein (app-1-core)', downloadStellen.length === 1 && downloadStellen[0] === 'app-1-core.js', JSON.stringify(downloadStellen));
+    // Seit Etappe C (Gäste) ist der Baustein eine eigene Datei: Die Gästeseite lädt app-1-core nicht,
+    // braucht den Download aber auch — eine Kopie dort hätte die Regel wieder aufgeweicht.
+    ok('das Download-Muster steht nur noch im Baustein (datei-laden.js, für App und Gästeseite)', downloadStellen.length === 1 && downloadStellen[0] === 'datei-laden.js', JSON.stringify(downloadStellen));
 
     // ─────────────────────────────────────────────────────────────────────────────────────────
     console.log('\nR7 — Abmelden ohne Hintergrunddienst');

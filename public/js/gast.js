@@ -9,7 +9,7 @@
 // Die gemeinsame Bearbeitung ist DIESELBE wie in der App (notiz-sitzung.js) — nur über andere Wege
 // (/api/gast/…) und ohne Titel ändern, Projekt, Kopie.
 //
-// Die kleinen Helfer unten (esc, toast, Dialoge, Download) entsprechen denen der App (app-1-core.js),
+// Die kleinen Helfer unten (esc, toast, Dialoge) entsprechen denen der App (app-1-core.js),
 // die hier bewusst NICHT geladen wird: Sie liest die Anmeldung eines Mitarbeiters und hängt die
 // ganze App mit an — ein Gast auf einem Firmen-Handy wäre sonst plötzlich halb in der App.
 'use strict';
@@ -74,19 +74,7 @@ function confirmModal(message, opts = {}) {
     </div>`, (w) => fertig(w === 'ja')));
 }
 
-function dateiHerunterladen(blob, dateiname) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = dateiname; a.style.display = 'none';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);   // Safari liest die Datei erst danach
-}
-function dateinameAus(antwort, ersatz) {
-  const kopf = antwort.headers.get('Content-Disposition') || '';
-  const utf8 = (kopf.match(/filename\*=UTF-8''([^;]+)/i) || [])[1];
-  if (utf8) { try { return decodeURIComponent(utf8); } catch (_) { /* weiter */ } }
-  return (kopf.match(/filename="([^"]+)"/) || [])[1] || ersatz;
-}
+// dateiHerunterladen() und dateinameAus() kommen aus js/datei-laden.js — derselbe Baustein wie in der App (R18).
 
 // ─── Anmeldung ───────────────────────────────────────────────────────────────────────────────
 
