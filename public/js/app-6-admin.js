@@ -150,7 +150,7 @@ async function renderSettings() {
         <p style="margin:0 0 0.75rem;color:var(--text-light)">Wer eine Notiz besitzt, kann Leute von außerhalb der Firma einladen —
           mit eigenem Link, eigenem Passwort und Lesen oder Schreiben. Gäste sehen nur diese eine Notiz und
           von den Mitarbeitern nur den Vornamen.</p>
-        <label class="notiz-namen-schalter" for="s-notiz-gaeste" style="font-size:1rem">
+        <label class="gaeste-schalter" for="s-notiz-gaeste">
           <input type="checkbox" id="s-notiz-gaeste" ${S.settings.notiz_gaeste !== 'aus' ? 'checked' : ''}> Gäste in Notizen erlauben</label>
         <p style="margin:0.5rem 0 0;font-size:0.85rem;color:var(--text-light)">Ausschalten wirft alle Gäste sofort hinaus. Die
           eingerichteten Zugänge bleiben gespeichert und gelten wieder, wenn du es wieder einschaltest.</p>

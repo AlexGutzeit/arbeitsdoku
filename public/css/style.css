@@ -2712,4 +2712,7 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .gast-karte p { margin: 0; }
 .gast-meldung { color: var(--danger); background: var(--danger-light); padding: 0.5rem 0.75rem; border-radius: var(--radius); }
 .gast-klein { font-size: 0.8rem; color: var(--text-light, #6b7280); }
-.gast-du { margin: 0 0 0.25rem; font-size: 0.85rem; color: var(--text-light, #6b7280); }
+.gast-du { margin: 0 1rem 0.5rem; font-size: 0.85rem; color: var(--text-light, #6b7280); }
+/* Einstellungen: Schalter „Gäste in Notizen erlauben" */
+.gaeste-schalter { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 1rem; cursor: pointer; width: fit-content; }
+.gaeste-schalter input { width: 20px; height: 20px; margin: 0; accent-color: var(--primary); }

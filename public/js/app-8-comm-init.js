@@ -1541,7 +1541,7 @@ async function notizGaesteDialog(note) {
       ${d.gaeste.length ? `<ul class="gast-liste">${d.gaeste.map(zeile).join('')}</ul>` : '<p class="gast-hinweis">Noch keine Gäste. Gäste brauchen kein Konto — sie bekommen einen Link und ein Passwort.</p>'}
       ${d.erlaubt ? `<form class="gast-neu" id="gast-neu" autocomplete="off">
         <h4>Gast einladen</h4>
-        <label>Name <input class="form-control" id="gn-name" maxlength="40" placeholder="z. B. Herr Maier (Architekt)" required></label>
+        <label>Name <input class="form-control" id="gn-name" maxlength="40" placeholder="z. B. Herr Maier, Architekt" required></label>
         <fieldset class="gast-recht-wahl"><legend>Darf</legend>
           <label><input type="radio" name="gn-recht" value="read" checked> Lesen</label>
           <label><input type="radio" name="gn-recht" value="write"> Schreiben</label></fieldset>
