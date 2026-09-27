@@ -8,6 +8,7 @@
 //     Was eben getippt wurde, wird mitgedruckt. Danach ist alles wie vorher.
 //   * PDF/Word/ODT: die Datei kommt mit dem richtigen Namen (Umlaute) und Inhalt — auch das,
 //     was eine Sekunde vorher getippt wurde.
+//   * Öffnet sich kein Druckfenster, sagt die App es und bietet das PDF an.
 //   * Im Funkloch keine Datei ohne die letzten Änderungen, sondern eine klare Meldung.
 //   * Leserecht: Menü geht; „Stand als eigene Notiz" legt Rita eine eigene Notiz an und öffnet sie
 //     zum Schreiben. Anna sieht die Kopie nicht.
@@ -117,6 +118,7 @@ const pdfText = (buf) => { const f = path.join(ORDNER, 'x.pdf'); fs.writeFileSyn
     await A.emulateMediaType('print');
     await A.evaluate(() => {
       window.print = () => {
+        window.dispatchEvent(new Event('beforeprint'));   // wie ein echter Browser, der sein Druckfenster öffnet
         const d = document.getElementById('notiz-druck');
         const sichtbar = (sel) => [...document.querySelectorAll(sel)].some(e => e.checkVisibility());
         window.__druck = {
@@ -149,6 +151,24 @@ const pdfText = (buf) => { const f = path.join(ORDNER, 'x.pdf'); fs.writeFileSyn
     const bildschirm = await A.evaluate(() => { const d = document.createElement('div'); d.id = 'notiz-druck'; d.textContent = 'x'; document.body.appendChild(d);
       const s = d.checkVisibility(); d.remove(); return s; });
     ok('am Bildschirm ist der Druckbereich nie zu sehen', bildschirm === false);
+    await sleep(2800);
+    ok('Druckfenster kam: kein Hinweis hinterher', await A.evaluate(() => !document.querySelector('.toast.show')),
+      await A.evaluate(() => (document.querySelector('.toast.show') || {}).textContent));
+
+    console.log('\nDrucken ohne Druckfenster');
+    // Nicht jeder Browser öffnet eins (als App vom Startbildschirm nicht überall sicher) — dann darf
+    // nicht einfach nichts passieren
+    const nOhne = await A.evaluate(() => { window.print = () => {}; return window.__dateien.length; });
+    await menue(A); await waehle(A, 'drucken');
+    await A.waitForFunction(() => /kein Druckfenster/.test((document.querySelector('.toast.show') || {}).textContent || ''), { timeout: 5000 }).catch(() => {});
+    const hinweis = await A.evaluate(() => { const t = document.querySelector('.toast.show'); const b = t && t.querySelector('.toast-aktion');
+      return { text: t ? t.textContent : '', knopf: b ? b.textContent : null, druckt: document.body.classList.contains('notiz-druckt') }; });
+    ok('kein Druckfenster: Hinweis mit Knopf „Als PDF speichern"; der Druckbereich bleibt (falls das Fenster doch offen ist)',
+      /kein Druckfenster/.test(hinweis.text) && hinweis.knopf === 'Als PDF speichern' && hinweis.druckt, JSON.stringify(hinweis));
+    await A.evaluate(() => document.querySelector('.toast.show .toast-aktion').click());
+    const ersatzPdf = await datei(A, nOhne);
+    ok('… der Knopf lädt das PDF', !!ersatzPdf && /\.pdf$/.test(ersatzPdf.name) && ersatzPdf.buf.slice(0, 4).toString() === '%PDF', ersatzPdf && ersatzPdf.name);
+    await A.evaluate(() => window.dispatchEvent(new Event('afterprint'))); await sleep(200);
 
     console.log('\nSpeichern als PDF, Word, OpenDocument');
     for (const [format, magie] of [['pdf', '%PDF'], ['docx', 'PK'], ['odt', 'PK']]) {

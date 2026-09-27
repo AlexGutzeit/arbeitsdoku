@@ -177,7 +177,7 @@ function notizStandText(d = new Date()) {
   return d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function notizDrucken(titel, deltaJson) {
+function notizDrucken(titel, deltaJson, alsPdf) {
   document.getElementById('notiz-druck')?.remove();
   const bereich = document.createElement('div');
   bereich.id = 'notiz-druck';
@@ -186,7 +186,24 @@ function notizDrucken(titel, deltaJson) {
   document.body.classList.add('notiz-druckt');
   const aufraeumen = () => { document.body.classList.remove('notiz-druckt'); bereich.remove(); window.removeEventListener('afterprint', aufraeumen); };
   window.addEventListener('afterprint', aufraeumen);
+  // Nicht jeder Browser öffnet auf window.print() ein Druckfenster (als App vom Startbildschirm ist
+  // das nicht überall sicher) — dann passierte einfach nichts. Kam kein Druckfenster, sagt die App
+  // es und bietet das PDF an. Das Aufräumen bleibt bei „afterprint": Ist das Fenster doch offen,
+  // darf der Druckbereich nicht verschwinden.
+  let fensterKam = false;
+  const kam = () => { fensterKam = true; };
+  const druckMedium = window.matchMedia ? window.matchMedia('print') : null;
+  const medium = (e) => { if (e.matches) kam(); };
+  window.addEventListener('beforeprint', kam);
+  if (druckMedium && druckMedium.addEventListener) druckMedium.addEventListener('change', medium);
   window.print();
+  setTimeout(() => {
+    window.removeEventListener('beforeprint', kam);
+    if (druckMedium && druckMedium.removeEventListener) druckMedium.removeEventListener('change', medium);
+    if (fensterKam) return;
+    toast('Falls sich kein Druckfenster geöffnet hat: als PDF speichern und die Datei drucken.', 'warning', 15000,
+      alsPdf ? { text: 'Als PDF speichern', beiKlick: alsPdf } : undefined);
+  }, 2500);
   // Manche Handy-Browser melden „afterprint" nicht — spätestens nach einer Minute aufräumen
   setTimeout(() => { if (document.body.contains(bereich)) aufraeumen(); }, 60000);
 }
@@ -593,7 +610,7 @@ function notizSitzungStarten(id) {
   const ausfuehren = async (wahl) => {
     if (!s.offen) return;
     if (wahl === 'drucken') {
-      notizDrucken(($('notiz-titel') || {}).value || 'Notiz', JSON.stringify(s.doc.getText('notiz').toDelta()));
+      notizDrucken(($('notiz-titel') || {}).value || 'Notiz', JSON.stringify(s.doc.getText('notiz').toDelta()), () => ausfuehren('pdf'));
       return;
     }
     if (!(await s.bisGesendet())) {

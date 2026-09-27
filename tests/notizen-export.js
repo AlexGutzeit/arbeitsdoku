@@ -145,6 +145,9 @@ const ERWARTET_PDF = ['Material für Montag', 'Kabel NYM-J 3×1,5 → 2 Ringe �
     ok('Rita kann ihre Kopie öffnen und darin schreiben (Eigentümerin)', g3.zugriff === 'owner' && (await g3.schreibe(t => t.insert(0, 'Meins: '))).status === 200);
     await sleep(300);
     ok('… das Original bleibt davon unberührt', !/Meins:/.test(g2.text()));
+    const k2 = await req('POST', `/api/notes/${kopie.id}/kopie`, n.rita.token);
+    ok('Kopie der Kopie: der alte „(Stand …)" wird ersetzt, nicht angehängt',
+      k2.status === 201 && /^Zählerstände: Halle\/2 \(Stand \d\d\.\d\d\.\d{4}, \d\d:\d\d\)$/.test(k2.body.note.title), k2.body && k2.body.note && k2.body.note.title);
     const kFremd = await req('POST', `/api/notes/${note.id}/kopie`, n.xaver.token);
     ok('ohne Freigabe: keine Kopie (403)', kFremd.status === 403, String(kFremd.status));
   } catch (e) {

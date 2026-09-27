@@ -438,7 +438,9 @@ router.post('/:id/kopie', authenticate, (req, res) => {
   const n = aktuellerStand(db, note.id);
   const kopie = zeileAusDelta(n.body_delta, n.body);
   const projekt = n.project_id && db.prepare('SELECT id FROM projects WHERE id = ?').get(n.project_id) ? n.project_id : null;
-  const titel = `${n.title} (Stand ${exporte.standText()})`;
+  // Kopie einer Kopie: den alten „(Stand …)" ersetzen, nicht anhängen
+  const basis = n.title.replace(/\s*\(Stand \d\d\.\d\d\.\d{4}, \d\d:\d\d\)$/, '') || n.title;
+  const titel = `${basis} (Stand ${exporte.standText()})`;
   const r = db.prepare(
     "INSERT INTO notes (user_id, updated_by, title, body, body_delta, ydoc, project_id, project_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
   ).run(req.user.id, req.user.id, titel, kopie.body, kopie.body_delta, kopie.ydoc, projekt, n.project_text || '');
