@@ -3716,3 +3716,12 @@ Mitarbeiter-Änderung mit altem Code noch ein Gast als letzter Bearbeiter da.
 * **Ein Download-Baustein für beide Seiten:** `kleine-sackgassen-ui` (R18: EINE Stelle für Downloads)
   war rot — die Gästeseite hatte eine eigene Kopie von `dateiHerunterladen`. Jetzt
   `public/js/datei-laden.js`, geladen von `index.html` (vor app-1-core) und `gast.html`.
+
+**Deploy Etappe C (27.09.2026 abends, `67b51cf`, Cache 430).** Vorher: komplette Suite 245/245 auf dem
+Endstand, dann noch einmal 245/245 gegen einen **frischen Prod-Klon** (Vorlage `/tmp/prodklon.db` neu aus
+einer Lesekopie von 19:24; `/tmp/prodklon-echt.db` bleibt bewusst der Stand vor Etappe A — der
+Umstellungs-Test braucht ihn). Vollsicherung `arbeitsdoku_backup_20260927-204654.adbk` (VPS, Mini-PC,
+Laptop, gleiche Prüfsumme; Rückspielprobe auf dem Mini-PC), Rückkehrpunkt `vor-notizen-gaeste-deploy`
+(= `2e705e5`). Nachher: `/gast` mit `noindex` und `no-store`, lädt keine App; Gast-Wege ohne Anmeldung
+401/404; keine Fehler im Protokoll; Datenbank vorher/nachher: neu nur `note_gaeste` und
+`notes.updated_by_gast`, 50 von 50 Tabellen und alle 12 Notizen zeichengleich.
