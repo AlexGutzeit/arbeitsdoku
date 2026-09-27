@@ -1499,6 +1499,8 @@ async function notizGaesteDialog(note) {
 
   // Link + Passwort EINMAL zeigen (nach dem Einladen oder einem neuen Passwort)
   let zugang = null;
+  // Welche Gäste gerade zum Bearbeiten aufgeklappt sind — bleibt über das Neuzeichnen erhalten
+  const offen = new Set();
   const zugangHtml = () => !zugang ? '' : `
     <div class="gast-zugang" role="status">
       <p><strong>Zugang für ${esc(zugang.name)}</strong></p>
@@ -1516,12 +1518,20 @@ async function notizGaesteDialog(note) {
     try { d = await api('GET', pfad()); } catch (e) { inhalt.innerHTML = `<p class="text-danger">${esc(e.message)}</p>`; return; }
     if (!d) return;
     const heute = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+    // Übersicht: je Gast EINE Zeile; Antippen klappt genau diesen Gast zum Bearbeiten auf
+    // (Alex, 27.09.2026: „Wie und wo kann ich Gäste auswählen und dann bearbeiten?")
     const zeile = (g) => {
       const zustand = [g.gesperrt ? '<span class="badge badge-danger">gesperrt (falsche Passwörter)</span>' : '',
         g.abgelaufen ? '<span class="badge badge-danger">abgelaufen</span>' : '',
-        g.zuletzt_da ? `<span>zuletzt da ${esc(formatDateTimeDE(g.zuletzt_da))}</span>` : '<span>noch nie da</span>'].filter(Boolean).join(' ');
-      return `<li class="gast-zeile" data-gid="${g.id}">
-        <div class="gast-zeile-kopf"><strong>${esc(g.name)}</strong> <span class="gast-zusatz">(Gast)</span> ${zustand}</div>
+        g.zuletzt_da ? `<span>zuletzt da ${esc(formatDateTimeDE(g.zuletzt_da))}</span>` : '<span>noch nie da</span>',
+        g.ablauf && !g.abgelaufen ? `<span>gültig bis ${esc(formatDateDE(g.ablauf))}</span>` : ''].filter(Boolean).join(' · ');
+      return `<li class="gast-zeile" data-gid="${g.id}"><details${offen.has(g.id) ? ' open' : ''}>
+        <summary class="gast-zeile-kopf">
+          <span class="gast-zeile-name"><strong>${esc(g.name)}</strong> <span class="gast-zusatz">(Gast)</span>
+            <span class="badge ${g.permission === 'write' ? 'badge-chef' : 'badge-mitarbeiter'}">${g.permission === 'write' ? 'Schreiben' : 'Lesen'}</span></span>
+          <span class="gast-zeile-zustand">${zustand}</span>
+        </summary>
+        <div class="gast-zeile-bearbeiten">
         <div class="gast-zeile-felder">
           <label>Darf <select class="form-control gast-recht" aria-label="Recht für ${esc(g.name)}">
             <option value="read" ${g.permission === 'read' ? 'selected' : ''}>Lesen</option>
@@ -1533,13 +1543,17 @@ async function notizGaesteDialog(note) {
           <button type="button" class="btn btn-outline btn-sm gast-neues-pw">Neues Passwort</button>
           <button type="button" class="btn btn-danger btn-sm gast-entfernen">Entfernen</button>
         </div>
-      </li>`;
+        </div>
+      </details></li>`;
     };
     inhalt.innerHTML = `
       ${zugangHtml()}
       ${!d.erlaubt ? '<p class="gast-hinweis gast-hinweis--warnung">Gastzugänge sind in den Einstellungen der Firma abgeschaltet. Bestehende Zugänge gelten erst wieder, wenn sie eingeschaltet werden.</p>' : ''}
-      ${d.gaeste.length ? `<ul class="gast-liste">${d.gaeste.map(zeile).join('')}</ul>` : '<p class="gast-hinweis">Noch keine Gäste. Gäste brauchen kein Konto — sie bekommen einen Link und ein Passwort.</p>'}
-      ${d.erlaubt ? `<form class="gast-neu" id="gast-neu" autocomplete="off">
+      ${d.gaeste.length ? `<div class="gast-liste-kopf"><h4>Gäste dieser Notiz (${d.gaeste.length})</h4><span class="gast-hinweis">Zum Bearbeiten auf einen Gast tippen.</span></div>
+        <ul class="gast-liste">${d.gaeste.map(zeile).join('')}</ul>` : '<p class="gast-hinweis">Noch keine Gäste. Gäste brauchen kein Konto — sie bekommen einen Link und ein Passwort.</p>'}
+      ${d.erlaubt ? `<details class="gast-neu-klappe"${d.gaeste.length ? '' : ' open'}>
+        <summary class="btn btn-outline btn-sm">＋ ${d.gaeste.length ? 'Weiteren Gast einladen' : 'Gast einladen'}</summary>
+        <form class="gast-neu" id="gast-neu" autocomplete="off">
         <h4>Gast einladen</h4>
         <label>Name <input class="form-control" id="gn-name" maxlength="40" placeholder="z. B. Herr Maier, Architekt" required></label>
         <fieldset class="gast-recht-wahl"><legend>Darf</legend>
@@ -1549,7 +1563,11 @@ async function notizGaesteDialog(note) {
           <button type="button" class="btn btn-outline btn-sm" id="gn-vorschlag">Vorschlagen</button></span></label>
         <label>Gültig bis <small>(freiwillig)</small> <input type="date" class="form-control" id="gn-ablauf" min="${heute}"></label>
         <button type="submit" class="btn btn-primary">Gast einladen</button>
-      </form>` : ''}`;
+      </form></details>` : ''}`;
+    inhalt.querySelectorAll('.gast-zeile details').forEach(det => det.addEventListener('toggle', () => {
+      const id = Number(det.closest('.gast-zeile').dataset.gid);
+      if (det.open) offen.add(id); else offen.delete(id);
+    }));
 
     inhalt.querySelectorAll('[data-kopie]').forEach(b => b.addEventListener('click', () => {
       const f = document.getElementById(b.dataset.kopie); kopieren(f.value, f);
@@ -1594,7 +1612,7 @@ async function notizGaesteDialog(note) {
       });
       li.querySelector('.gast-entfernen').addEventListener('click', async () => {
         if (!(await confirmModal(`${g.name} entfernen? Der Link gilt dann nicht mehr, und wer gerade drin ist, fliegt sofort raus.`, { title: 'Gast entfernen', okLabel: 'Entfernen' }))) return;
-        try { await api('DELETE', pfad('/' + g.id)); toast(`${g.name} entfernt`, 'success'); if (zugang && zugang.token === g.token) zugang = null; zeichnen(); }
+        try { await api('DELETE', pfad('/' + g.id)); toast(`${g.name} entfernt`, 'success'); offen.delete(g.id); if (zugang && zugang.token === g.token) zugang = null; zeichnen(); }
         catch (e) { toast(e.message, 'error'); }
       });
     }

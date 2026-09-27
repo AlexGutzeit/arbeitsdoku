@@ -4,6 +4,7 @@
 // OHNE Konto (eigenes Handy). Geprüft wird, was Alex und der Gast erleben:
 //   * Dialog: Name, Recht, Passwort (Vorschlag), freiwillig Ablauf → Link + Passwort EINMAL angezeigt,
 //     mit Hinweis „getrennt schicken". Karte zeigt „🔗 1 Gast". Tom (nur Mitarbeiter mit Schreibrecht): kein 🔗.
+//   * Gästeübersicht: je Gast eine Zeile, Antippen klappt zum Bearbeiten auf; „＋ Weiteren Gast einladen".
 //   * Gästeseite: Passwort-Maske → falsches Passwort erklärt → richtig → Notiz; lädt KEINE App.
 //     „Du bist als Gast dabei: …", Titel fest, Knopfleiste bei Schreibrecht, ⋯ ohne Kopie/Gäste.
 //   * Live mit Anna: Text kommt an; Anna sieht „Herr Maier (Gast)", der Gast sieht nur „Anna".
@@ -102,6 +103,22 @@ function req(m, p, t, b) {
       JSON.stringify(zugang).slice(0, 200));
     ok('… und in der Liste: „Herr Maier (Gast)", Schreiben, noch nie da', /Herr Maier/.test(zugang.zeile) && /noch nie da/.test(zugang.zeile)
       && await A.evaluate(() => document.querySelector('.gast-zeile .gast-recht').value === 'write'));
+
+    console.log('\nGästeübersicht: auswählen und bearbeiten');
+    // Alex: „Wie und wo kann ich Gäste auswählen und dann bearbeiten?" — je Gast eine Zeile, Antippen klappt auf
+    const uebersicht = await A.evaluate(() => ({ titel: (document.querySelector('.gast-liste-kopf h4') || {}).textContent,
+      zu: !document.querySelector('.gast-zeile details').open, rechtSichtbar: document.querySelector('.gast-zeile .gast-recht').checkVisibility(),
+      zeile: document.querySelector('.gast-zeile summary').innerText.replace(/\s+/g, ' '),
+      formSichtbar: document.getElementById('gast-neu').checkVisibility(), weiterer: (document.querySelector('.gast-neu-klappe > summary') || {}).textContent }));
+    ok('„Gäste dieser Notiz (1)": Gast als EINE Zeile (Name, Recht, Zustand), zugeklappt; Formular eingeklappt hinter „＋ Weiteren Gast einladen"',
+      /Gäste dieser Notiz \(1\)/.test(uebersicht.titel) && uebersicht.zu && !uebersicht.rechtSichtbar && /Herr Maier.*Schreiben.*noch nie da/.test(uebersicht.zeile)
+        && !uebersicht.formSichtbar && /Weiteren Gast einladen/.test(uebersicht.weiterer), JSON.stringify(uebersicht));
+    await A.tap('.gast-zeile summary'); await sleep(200);
+    const aufgeklappt = await A.evaluate(() => ['.gast-recht', '.gast-ablauf', '.gast-link-kopieren', '.gast-neues-pw', '.gast-entfernen']
+      .map(sel => document.querySelector('.gast-zeile ' + sel).checkVisibility()));
+    ok('Antippen klappt den Gast auf: Darf, Gültig bis, Link kopieren, Neues Passwort, Entfernen', aufgeklappt.every(Boolean), JSON.stringify(aufgeklappt));
+    await A.tap('.gast-neu-klappe > summary'); await sleep(200);
+    ok('„＋ Weiteren Gast einladen" öffnet das Formular', await A.evaluate(() => document.getElementById('gast-neu').checkVisibility() && document.getElementById('gn-name').value === ''));
     await A.evaluate(() => document.getElementById('gaeste-zu').click());
     await A.waitForFunction(() => /1 Gast/.test((document.querySelector('.notiz-gaeste-badge') || {}).textContent || ''), { timeout: 5000 }).catch(() => {});
     ok('Karte zeigt „🔗 1 Gast"', /1 Gast/.test(await A.evaluate(() => (document.querySelector('.notiz-gaeste-badge') || {}).textContent || '')));
