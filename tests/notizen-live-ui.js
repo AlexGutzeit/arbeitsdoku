@@ -190,6 +190,38 @@ async function cursorSichtbar(p, farbe) {
     const fahneSpaeter = await A.evaluate(() => getComputedStyle(document.querySelector('.notiz-editor .ql-cursor-flag')).opacity);
     ok('… das nach 3 s wieder ausgeblendet wird', fahneSpaeter === '0', fahneSpaeter);
 
+    console.log('\nDieselbe Person mit zwei Geräten in derselben Notiz');
+    const T2 = await seite('tom');
+    await T2.evaluate((i) => { location.hash = '/notes/' + i; }, note.id);
+    await T2.waitForSelector('.notiz-editor .ql-editor'); await bereit(T2);
+    await T.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(3, 0, 'user'); });
+    await T2.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(q.getText().indexOf('Wago') + 2, 0, 'user'); });
+    await sleep(700);
+    const zweiBeiAnna = await A.evaluate(() => {
+      const c = [...document.querySelectorAll('.notiz-editor .ql-cursor')].map(x => ({
+        name: x.querySelector('.ql-cursor-name').textContent.trim(), farbe: getComputedStyle(x.querySelector('.ql-cursor-flag')).backgroundColor }));
+      const chips = [...document.querySelectorAll('#notiz-anwesend .notiz-person')].map(x => x.textContent.trim());
+      return { tom: c.filter(x => x.name === 'Tom Kraus'), chips };
+    });
+    ok('Anna sieht zwei Cursor mit Toms Namen, in derselben Farbe — aber nur einmal „Tom Kraus" in der Anwesenheit',
+      zweiBeiAnna.tom.length === 2 && zweiBeiAnna.tom[0].farbe === zweiBeiAnna.tom[1].farbe
+        && zweiBeiAnna.chips.filter(x => x === 'Tom Kraus').length === 1, JSON.stringify(zweiBeiAnna));
+    const tomSelbst = await T.evaluate(() => [...document.querySelectorAll('#notiz-anwesend .notiz-person')].map(x => x.textContent.trim()));
+    ok('Tom selbst steht auf beiden Geräten nur als „Du“ in der Leiste', tomSelbst.filter(x => x === 'Du').length === 1 && !tomSelbst.includes('Tom Kraus'), JSON.stringify(tomSelbst));
+    await T2.keyboard.type('X2 ');
+    await T.keyboard.type('X1 ');
+    await sleep(1200);
+    const beide = await editorText(A);
+    ok('er kann auf beiden Geräten an verschiedenen Stellen schreiben — beides kommt an', /X1 /.test(beide) && /X2 /.test(beide) && (await editorText(T)) === beide && (await editorText(T2)) === beide, beide);
+    await T2.tap('#notiz-fertig'); await T2.waitForSelector('#note-list'); await sleep(800);
+    const nachEinem = await A.evaluate(() => ({
+      cursor: [...document.querySelectorAll('.notiz-editor .ql-cursor')].filter(x => x.querySelector('.ql-cursor-name').textContent.trim() === 'Tom Kraus' && getComputedStyle(x).display !== 'none').length,
+      chip: [...document.querySelectorAll('#notiz-anwesend .notiz-person')].some(x => x.textContent.trim() === 'Tom Kraus') }));
+    ok('ein Gerät verlässt die Notiz → sein Cursor verschwindet, Tom bleibt über das andere drin', nachEinem.cursor === 1 && nachEinem.chip, JSON.stringify(nachEinem));
+    // die Test-Tippereien wieder entfernen
+    await T.evaluate(() => { const q = _notizSitzung.quill; for (const w of ['X1 ', 'X2 ']) { const i = q.getText().indexOf(w); if (i >= 0) q.deleteText(i, w.length, 'user'); } });
+    await sleep(800);
+
     console.log('\nLeserecht');
     await R.evaluate((i) => { location.hash = '/notes/' + i; }, note.id);
     await R.waitForSelector('.notiz-editor .ql-editor'); await bereit(R);
