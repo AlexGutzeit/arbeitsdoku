@@ -175,9 +175,16 @@ const pdfText = (buf) => { const f = path.join(ORDNER, 'x.pdf'); fs.writeFileSyn
     ok('ohne Netz: keine Datei ohne die letzten Änderungen, sondern eine klare Meldung', /noch nicht beim Server/.test(funk.toast) && funk.dateien === nFunk, JSON.stringify(funk));
     await A.setOfflineMode(false);
     await A.waitForFunction(() => /Gespeichert/.test(document.getElementById('notiz-status').textContent), { timeout: 30000 }).catch(() => {});
-    await menue(A); await waehle(A, 'pdf');
+    // Die Meldung liegt oben über „⋯" (gemessen: elementFromPoint traf die Meldung) — deshalb hat sie
+    // selbst den Knopf „Nochmal versuchen"
+    const knopfInMeldung = await A.evaluate(() => { const b = document.querySelector('.toast.show .toast-aktion'); return b ? b.textContent : null; });
+    await A.evaluate(() => { const b = document.querySelector('.toast.show .toast-aktion'); if (b) b.click(); });
     const nachFunk = await datei(A, nFunk);
-    ok('… wieder mit Netz: die Datei kommt, mit „offline"', !!nachFunk && /offline/.test(pdfText(nachFunk.buf)), nachFunk && nachFunk.name);
+    ok('… wieder mit Netz: „Nochmal versuchen" in der Meldung holt die Datei, mit „offline"',
+      knopfInMeldung === 'Nochmal versuchen' && !!nachFunk && /offline/.test(pdfText(nachFunk.buf)), `${knopfInMeldung} | ${nachFunk && nachFunk.name}`);
+    await sleep(300);
+    ok('… und die Meldung ist danach weg, „⋯" wieder frei', await A.evaluate(() => { const b = document.getElementById('notiz-mehr').getBoundingClientRect();
+      return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2).closest('#notiz-mehr') !== null; }));
 
     console.log('\nLeserecht und „Stand als eigene Notiz"');
     await oeffnen(R, note.id);

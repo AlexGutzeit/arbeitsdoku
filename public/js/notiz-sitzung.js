@@ -588,18 +588,23 @@ function notizSitzungStarten(id) {
       { value: 'odt', label: '📝  Als OpenDocument (.odt) speichern' },
       { value: 'kopie', label: '📋  Stand als eigene Notiz' },
     ], { title: 'Drucken und Speichern' });
-    if (!wahl || !s.offen) return;
+    if (wahl) ausfuehren(wahl);
+  });
+  const ausfuehren = async (wahl) => {
+    if (!s.offen) return;
     if (wahl === 'drucken') {
       notizDrucken(($('notiz-titel') || {}).value || 'Notiz', JSON.stringify(s.doc.getText('notiz').toDelta()));
       return;
     }
     if (!(await s.bisGesendet())) {
-      toast('Deine letzten Änderungen sind noch nicht beim Server (keine Verbindung) — die Datei würde sie nicht enthalten. Bitte gleich noch einmal versuchen.', 'error');
+      // Die Meldung liegt oben über „⋯" — der Knopf in ihr erspart den Umweg über das Menü
+      toast('Deine letzten Änderungen sind noch nicht beim Server (keine Verbindung) — die Datei würde sie nicht enthalten.', 'error', 15000,
+        { text: 'Nochmal versuchen', beiKlick: () => ausfuehren(wahl) });
       return;
     }
     if (wahl === 'kopie') notizKopieAnlegen(id);
     else notizHerunterladen(id, wahl);
-  });
+  };
 
   s.beenden = ({ verwerfen } = {}) => {
     if (!s.offen) return;
