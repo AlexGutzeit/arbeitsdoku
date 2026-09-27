@@ -328,6 +328,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 - **Gelöst (25.09.):** so umgesetzt, Test `tests/uhr-hilfe-ui.js` (9), Gegenproben greifen.
 
 ### [x] R26 · Neue Freigabe einer Notiz leuchtet bei allen bisherigen Empfängern wieder auf — erledigt in `727e248`
+- **Deployt:** Prod 27.09.2026 (`2e705e5`, Cache 429 unverändert — nur Server); Rückkehrpunkt `vor-r26-deploy`.
 *(gefunden 27.09.2026 beim Nachstellen für Alex' Frage, ob neue Freigaben weiter Push, Zähler und Hervorhebung bekommen — ja)*
 - **Was passiert:** Anna gibt Tom eine Notiz frei, Tom schaut sie an. Später gibt Anna zusätzlich Rita frei
   (oder stellt bei jemandem Lesen ↔ Schreiben um) — bei Tom steht wieder „1" am Menüpunkt und die Notiz ist

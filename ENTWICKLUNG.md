@@ -3620,3 +3620,6 @@ neu (Alex, wie beim Push); Entfernen und wieder Hinzufügen schon.
 im eigenen Test:** Das Datum las ich zuerst aus `GET …/shares` — die Route liefert es gar nicht; der
 Vergleich `undefined === undefined` war grün. Jetzt aus der Liste des Empfängers, und ohne Datum ist
 die Prüfung rot.
+
+**Deployt:** Prod 27.09.2026 (`2e705e5`), Sicherung `arbeitsdoku_backup_20260927-145612.adbk` (dreifach, Rückspielprobe ok),
+Datenbank vorher/nachher 50 von 50 Tabellen gleich; Rückkehrpunkt `vor-r26-deploy`.
