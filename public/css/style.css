@@ -2066,6 +2066,19 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .notiz-editor { max-width: 900px; margin: 0 auto; padding: 0; }
 .notiz-editor-kopf { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.85rem 1rem 0.5rem; }
 .notiz-status { font-size: 0.8rem; color: var(--text-light); text-align: right; }
+.notiz-kopf-knoepfe { display: flex; gap: 0.5rem; align-items: center; }
+.notiz-editor .notiz-mehr { min-width: 44px; min-height: 36px; font-size: 1.2rem; line-height: 1; padding: 0.2rem 0.6rem; }
+
+/* Drucken (notizDrucken): nur die Notiz — kein Menü, keine Knöpfe, keine fremden Cursor */
+#notiz-druck { display: none; }
+@media print {
+  body.notiz-druckt > *:not(#notiz-druck) { display: none !important; }
+  body.notiz-druckt { background: #fff !important; }
+  body.notiz-druckt #notiz-druck { display: block; color: #111; font-size: 11pt; line-height: 1.45; }
+  #notiz-druck h1 { font-size: 18pt; margin: 0 0 2pt; }
+  #notiz-druck .druck-stand { font-size: 9pt; color: #555; margin: 0 0 12pt; }
+  #notiz-druck .notiz-inhalt li.erledigt { color: #555; }
+}
 .notiz-status[data-art="ok"]::before { content: "\2713  "; color: var(--success); font-weight: 700; }
 .notiz-status[data-art="fehler"] { color: var(--danger); font-weight: 600; }
 .notiz-editor .notiz-titel { margin: 0 1rem; width: calc(100% - 2rem); font-size: 1.15rem; font-weight: 600; }

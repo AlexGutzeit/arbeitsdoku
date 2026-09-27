@@ -99,7 +99,10 @@ async function renderNotizEditor(id) {
   mainEl.innerHTML = `
     <div class="card notiz-editor">
       <div class="notiz-editor-kopf">
-        <button type="button" class="btn btn-outline btn-sm" id="notiz-fertig">&larr; Fertig</button>
+        <div class="notiz-kopf-knoepfe">
+          <button type="button" class="btn btn-outline btn-sm" id="notiz-fertig">&larr; Fertig</button>
+          <button type="button" class="btn btn-outline btn-sm notiz-mehr" id="notiz-mehr" title="Drucken und Speichern als" aria-label="Drucken und Speichern als">&#8943;</button>
+        </div>
         <span class="notiz-status" id="notiz-status" role="status" aria-live="polite">Verbinde …</span>
       </div>
       <label class="sr-only" for="notiz-titel">Titel</label>
@@ -162,6 +165,52 @@ function notizZurueckZurListe() {
   // und die Zurück-Taste des Handys öffnete die Notiz gleich wieder.
   if (_notizListeZurueck && _notizListeZurueck.ausListe && history.length > 1) history.back();
   else navigate('/notes');
+}
+
+// ─── Drucken und „Speichern als" (Etappe B, 27.09.2026) ──────────────────────────────────────
+//
+// Drucken geschieht im Browser, aus dem Stand, der gerade im Schreibfeld steht: nur die Notiz, kein
+// Menü, keine fremden Cursor. PDF, Word und ODT baut der Server (notiz-export.js), aus dem Stand
+// von eben. Kopf überall gleich (Alex): Titel und darunter klein „Stand: TT.MM.JJJJ, HH:MM".
+
+function notizStandText(d = new Date()) {
+  return d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function notizDrucken(titel, deltaJson) {
+  document.getElementById('notiz-druck')?.remove();
+  const bereich = document.createElement('div');
+  bereich.id = 'notiz-druck';
+  bereich.innerHTML = `<h1>${esc(titel)}</h1><p class="druck-stand">Stand: ${esc(notizStandText())}</p>${notizHtml(deltaJson)}`;
+  document.body.appendChild(bereich);
+  document.body.classList.add('notiz-druckt');
+  const aufraeumen = () => { document.body.classList.remove('notiz-druckt'); bereich.remove(); window.removeEventListener('afterprint', aufraeumen); };
+  window.addEventListener('afterprint', aufraeumen);
+  window.print();
+  // Manche Handy-Browser melden „afterprint" nicht — spätestens nach einer Minute aufräumen
+  setTimeout(() => { if (document.body.contains(bereich)) aufraeumen(); }, 60000);
+}
+
+async function notizHerunterladen(id, format) {
+  let antwort;
+  try {
+    antwort = await fetch(`/api/notes/${id}/export/${format}`, { headers: { Authorization: 'Bearer ' + S.token } });
+  } catch (_) { toast('Keine Verbindung zum Server — die Datei konnte nicht geholt werden.', 'error'); return; }
+  if (!antwort.ok) {
+    let text = 'Die Datei konnte nicht erstellt werden.';
+    try { const d = await antwort.json(); if (d && d.error) text = d.error; } catch (_) {}
+    toast(text, 'error'); return;
+  }
+  dateiHerunterladen(await antwort.blob(), dateinameAus(antwort, 'Notiz.' + format));
+}
+
+async function notizKopieAnlegen(id) {
+  try {
+    const r = await api('POST', `/api/notes/${id}/kopie`);
+    if (!r || !r.note) return;
+    toast('Eigene Notiz angelegt: ' + r.note.title, 'success');
+    navigate('/notes/' + r.note.id);
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 // ─── Die Sitzung ────────────────────────────────────────────────────────────────────────────
@@ -521,6 +570,35 @@ function notizSitzungStarten(id) {
       if (!ok) return;
     }
     notizZurueckZurListe();
+  });
+
+  // Warten, bis alles beim Server ist (höchstens 3 s) — Datei und Kopie baut der Server aus SEINEM Stand
+  s.bisGesendet = async () => {
+    for (let i = 0; i < 30 && (s.warteschlange.length || s.sendet) && s.verbindung; i++) await new Promise(r => setTimeout(r, 100));
+    return !(s.warteschlange.length || s.sendet);
+  };
+
+  // „⋯": Drucken und Speichern als
+  const mehr = $('notiz-mehr');
+  if (mehr) mehr.addEventListener('click', async () => {
+    const wahl = await choiceModal('', [
+      { value: 'drucken', label: '🖨  Drucken' },
+      { value: 'pdf', label: '📄  Als PDF speichern' },
+      { value: 'docx', label: '📝  Als Word-Datei (.docx) speichern' },
+      { value: 'odt', label: '📝  Als OpenDocument (.odt) speichern' },
+      { value: 'kopie', label: '📋  Stand als eigene Notiz' },
+    ], { title: 'Drucken und Speichern' });
+    if (!wahl || !s.offen) return;
+    if (wahl === 'drucken') {
+      notizDrucken(($('notiz-titel') || {}).value || 'Notiz', JSON.stringify(s.doc.getText('notiz').toDelta()));
+      return;
+    }
+    if (!(await s.bisGesendet())) {
+      toast('Deine letzten Änderungen sind noch nicht beim Server (keine Verbindung) — die Datei würde sie nicht enthalten. Bitte gleich noch einmal versuchen.', 'error');
+      return;
+    }
+    if (wahl === 'kopie') notizKopieAnlegen(id);
+    else notizHerunterladen(id, wahl);
   });
 
   s.beenden = ({ verwerfen } = {}) => {

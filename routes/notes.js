@@ -6,6 +6,7 @@ const { broadcast } = require('../sse');
 const push = require('../push');
 const live = require('../notizen-live');
 const { zeileAusKlartext, zeileAusDelta } = require('../notiz-dokument');
+const exporte = require('../notiz-export');
 
 const router = express.Router();
 
@@ -386,6 +387,65 @@ router.post('/:id/offer', authenticate, (req, res) => {
       url: '/#/notes',
     }, req.user.id);
   }
+});
+
+// --- Drucken und „Speichern als" (Etappe B, siehe notiz-export.js) ---
+
+// Stand einer Notiz: Ist sie gerade offen, der von eben (auch noch nicht gespeichert), sonst der gespeicherte.
+function aktuellerStand(db, id) {
+  const n = db.prepare('SELECT id, user_id, title, body, body_delta, project_id, project_text FROM notes WHERE id = ?').get(id);
+  if (!n) return null;
+  const offen = live.offenerStand(id);
+  return offen ? { ...n, body: offen.body, body_delta: offen.body_delta } : n;
+}
+
+// Dateiname für den Kopf: UTF-8 in filename*, dazu eine ASCII-Fassung für alte Programme.
+// (Ein „ä" oder „–" direkt in filename="…" lässt Node gar nicht erst durch.)
+function anhang(res, name) {
+  const ascii = name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/ß/g, 'ss').replace(/[^\x20-\x7e]/g, '-').replace(/"/g, '');
+  res.setHeader('Content-Disposition', `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`);
+}
+
+// Notiz als PDF, Word oder OpenDocument — für jeden mit Zugriff, auch mit Leserecht (Alex, 26.09.2026).
+router.get('/:id/export/:format', authenticate, async (req, res) => {
+  const format = exporte.FORMATE[req.params.format];
+  if (!format) return res.status(404).json({ error: 'Unbekanntes Format' });
+  const db = getDb();
+  const { note, access } = canAccessNote(db, req.params.id, req.user.id);
+  if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
+  if (!access) return res.status(403).json({ error: 'Keine Berechtigung' });
+  const n = aktuellerStand(db, note.id);
+  const jetzt = new Date();
+  try {
+    const datei = await format.bauen({ titel: n.title, deltaJson: n.body_delta, klartext: n.body, stand: exporte.standText(jetzt), jetzt });
+    res.setHeader('Content-Type', format.typ);
+    anhang(res, exporte.dateiname(n.title, req.params.format, jetzt));
+    res.send(datei);
+  } catch (e) {
+    console.error('Notiz-Export fehlgeschlagen:', e);
+    res.status(500).json({ error: 'Die Datei konnte nicht erstellt werden.' });
+  }
+});
+
+// „Stand als eigene Notiz": Kopie des Stands von eben, gehört dem, der klickt — für jeden mit
+// Zugriff, auch mit Leserecht (Alex, 26.09.2026: wirkt wie ein Ausdruck). Projekt wird übernommen,
+// Freigaben nicht. Aus der Formatierung neu gebaut, ohne den Bearbeitungsverlauf des Originals.
+router.post('/:id/kopie', authenticate, (req, res) => {
+  const db = getDb();
+  const { note, access } = canAccessNote(db, req.params.id, req.user.id);
+  if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
+  if (!access) return res.status(403).json({ error: 'Keine Berechtigung' });
+  const n = aktuellerStand(db, note.id);
+  const kopie = zeileAusDelta(n.body_delta, n.body);
+  const projekt = n.project_id && db.prepare('SELECT id FROM projects WHERE id = ?').get(n.project_id) ? n.project_id : null;
+  const titel = `${n.title} (Stand ${exporte.standText()})`;
+  const r = db.prepare(
+    "INSERT INTO notes (user_id, updated_by, title, body, body_delta, ydoc, project_id, project_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+  ).run(req.user.id, req.user.id, titel, kopie.body, kopie.body_delta, kopie.ydoc, projekt, n.project_text || '');
+  const neu = notizAusgeben(db, r.lastInsertRowid);
+  neu.shares = []; neu.live = [];
+  broadcast('notes', req.headers['x-tab-id']);
+  res.status(201).json({ note: neu });
 });
 
 // --- Live-Betrieb (siehe notizen-live.js) ---

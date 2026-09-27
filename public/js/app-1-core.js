@@ -1307,7 +1307,11 @@ function dateiHerunterladen(blob, dateiname) {
 }
 // Dateiname aus der Server-Antwort (Content-Disposition), sonst der Ersatzname.
 function dateinameAus(antwort, ersatz) {
-  return ((antwort.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || ersatz;
+  const kopf = antwort.headers.get('Content-Disposition') || '';
+  // Zuerst die UTF-8-Fassung (filename*): Umlaute und „–" gehen nur so heil durch (Notiz-Export, 27.09.2026)
+  const utf8 = (kopf.match(/filename\*=UTF-8''([^;]+)/i) || [])[1];
+  if (utf8) { try { return decodeURIComponent(utf8); } catch (_) { /* weiter mit der einfachen Fassung */ } }
+  return (kopf.match(/filename="([^"]+)"/) || [])[1] || ersatz;
 }
 
 // Klick neben ein Fenster schließt es — aber nur, solange darin nichts eingegeben wurde (R20).
