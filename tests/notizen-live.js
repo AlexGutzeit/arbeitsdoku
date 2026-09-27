@@ -259,6 +259,16 @@ async function beenden() {
     const nachNeustart = await notiz(id);
     ok('der letzte Tastendruck vor dem Neustart ist gespeichert', /^Kurz vor dem Neustart /.test(nachNeustart.body), JSON.stringify(nachNeustart.body));
 
+    console.log('\nTür („Freigabe verlassen"), während dieselbe Person die Notiz woanders offen hat');
+    await req('PUT', `/api/notes/${id}/shares`, olga.token, { shares: [{ user_id: wim.id, permission: 'write' }, { user_id: rita.id, permission: 'read' }] });
+    const ritaWoanders = await oeffnen(rita, id);
+    const tuer = await req('DELETE', `/api/notes/${id}/share/self`, rita.token);
+    const ritaRaus = await ritaWoanders.warte('raus');
+    ok('Rita verlässt die Freigabe → ihr offenes Gerät fliegt sofort raus, die Notiz fehlt in ihrer Liste',
+      tuer.status === 200 && ritaRaus && ritaRaus.grund === 'freigabe-entzogen' && !ritaWoanders.offen
+        && !((await req('GET', '/api/notes', rita.token)).body.notes || []).some(n => n.id === id),
+      JSON.stringify([tuer.status, ritaRaus]));
+
     console.log('\nAusstellen');
     const W2 = await oeffnen(wim, id);
     const ausgestellt = await req('POST', `/api/users/${wim.id}/deactivate`, admin, { employed_until: '2026-01-31' });
