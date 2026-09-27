@@ -3570,19 +3570,29 @@ Projekt, ohne Freigaben; Gäste (Etappe C) dürfen später ebenfalls drucken und
 Meldung (R14), das Menü ging nicht auf — gemessen mit `elementFromPoint`. Die Meldung hat jetzt selbst
 den Knopf „Nochmal versuchen".
 
+**Kein Druckfenster?** Ob `window.print()` in jeder Umgebung ein Druckfenster öffnet (z. B. als App
+vom Startbildschirm des iPhones), ließ sich hier nicht prüfen. Damit nicht still nichts passiert,
+horcht `notizDrucken` auf `beforeprint` und `matchMedia('print')`; kam nach 2,5 s keins von beiden,
+erscheint „Falls sich kein Druckfenster geöffnet hat: …" mit dem Knopf „Als PDF speichern". Der
+Druckbereich wird dabei NICHT abgeräumt — war das Fenster doch offen (Browser ohne diese Ereignisse),
+würde sonst die App gedruckt. Gegenproben: nie Hinweis / immer Hinweis → jeweils rot.
+
+**Kopie einer Kopie** ersetzt den alten „(Stand …)" im Titel, statt einen zweiten anzuhängen.
+
 **Ein Fehler im eigenen Test:** Der Vergleich „Kopie = Original" las das Original aus der Liste,
 bevor der Speichertakt (1,5 s) gelaufen war — die Kopie (aus dem Raum) war aktueller als das
 gespeicherte Original. Der Test wartet jetzt den Takt ab; dass die Kopie den ungespeicherten Stand
 trägt, prüft er gesondert.
 
-`tests/notizen-export.js` (15): Dateien werden wieder GELESEN (pdftotext, LibreOffice) und Zeile für
+`tests/notizen-export.js` (16): Dateien werden wieder GELESEN (pdftotext, LibreOffice) und Zeile für
 Zeile verglichen — Umlaute, „→", „✓", Nummerierung, Checklisten, `& < > "`; Schrift eingebettet;
 Rechte (Leserecht ja, fremd 403, fehlend/unbekanntes Format 404, ohne Anmeldung 401); ungespeicherte
 Änderung steht schon in der Datei; Kopie gehört dem Leser, ohne Freigaben, Original unberührt.
 Gegenproben (9, alle rot): Stand aus der DB statt aus dem Raum, `&` nicht maskiert, Export bzw.
 Kopie ohne Rechteprüfung, Kopie gehört dem Eigentümer, Emojis ungefiltert, Nummerierung läuft durch,
 kein `filename*`, Kopie ohne Projekt.
-`tests/notizen-export-ui.js` (20, Handy mit Touch): Menü, Abbrechen, Druck im Druck-Medium gemessen
+`tests/notizen-export-ui.js` (23, Handy mit Touch): Menü, Abbrechen, Druck im Druck-Medium gemessen
 (nur `#notiz-druck` sichtbar, kein Editor, keine Knopfleiste, kein fremder Cursor; eben Getipptes
 dabei; danach alles wie vorher), Downloads abgefangen (Name, Typ, Inhalt per pdftotext samt eine
-Sekunde vorher Getipptem), Funkloch + „Nochmal versuchen", Leserecht und Kopie.
+Sekunde vorher Getipptem), kein Druckfenster → Hinweis + PDF, Funkloch + „Nochmal versuchen",
+Leserecht und Kopie. Gegenproben Oberfläche (7) und Word-Nummerierung (1): alle rot.
