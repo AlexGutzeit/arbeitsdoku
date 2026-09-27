@@ -148,6 +148,18 @@ const namenIn = (g) => [...g.aw.getStates()].filter(([cid]) => cid !== g.doc.cli
     ok('gespeichert mit „Bearbeitet von Herr Maier (Gast)"; für Tom (nicht drin) neu: Zähler +1, hervorgehoben',
       nachher.updated_by_name === 'Herr Maier (Gast)' && nachher.updated_by == null && nachher.is_unread === true && tomNachher === tomVorher + 1,
       JSON.stringify([nachher.updated_by_name, nachher.updated_by, nachher.is_unread, tomVorher, tomNachher]));
+    // Die EIGENTÜMERIN ist der eigentliche Fall: `updated_by` bleibt bei Gast-Änderungen leer, und
+    // „leer" hieß bisher „die Eigentümerin selbst" — sie hätte die Änderung des Gasts nie als neu gesehen.
+    // (Tom als Empfänger zählte auch ohne die Korrektur — die erste Gegenprobe blieb deshalb grün.)
+    gAnna.schliessen(); await sleep(300);
+    await req('POST', '/api/badges/notes', t.anna); await sleep(30);
+    const annaVorher = (await req('GET', '/api/badges', t.anna)).body.notes;
+    await gMaier.schreibe(txt => txt.insert(txt.length - 1, ' Nachtrag vom Gast'));
+    await sleep(2200);
+    const annaNachher = (await req('GET', '/api/badges', t.anna)).body.notes;
+    const annaListe = ((await req('GET', '/api/notes', t.anna)).body.notes || []).find(n => n.id === note.id);
+    ok('Eigentümerin nicht drin, Gast ändert → bei ihr Zähler +1 und hervorgehoben',
+      annaNachher === annaVorher + 1 && annaListe.is_unread === true && annaListe.updated_by_name === 'Herr Maier (Gast)', JSON.stringify([annaVorher, annaNachher, annaListe.is_unread]));
     gLang = await geraetOeffnen({ port: PORT, ticket: await gastTicket(tokenLang), token: tokenLang, basis: '/api/gast' }); offen.push(gLang);
     const lw = await gLang.schreibe(txt => txt.insert(0, 'Darf ich?'));
     ok('Frau Lang (Lesen) ist drin, darf aber nicht schreiben (403 NUR_LESEN)', gLang.zugriff === 'read' && lw.status === 403 && lw.body.code === 'NUR_LESEN', JSON.stringify([gLang.zugriff, lw.status, lw.body]));
