@@ -3530,3 +3530,59 @@ neue Stand eingespielt, gewinnt das dann veraltete `ydoc` über inzwischen geän
 `UPDATE notes SET ydoc = NULL` (die Umstellung baut die Dokumente dann neu aus `body`), oder die
 Sicherung `arbeitsdoku_backup_20260927-123033.adbk` zurückspielen.
 
+
+## Gemeinsame Notizen — Etappe B: Drucken und „Speichern als" (27.09.2026)
+
+Alex' Wunsch: ein Druckknopf, der nur die Notiz im jetzigen Zustand druckt, und „Speichern als: PDF /
+DOCX / ODT / Stand als eigene Notiz". Entschieden (Alex): Kopf = Titel + kleine Stand-Zeile, kein
+Firmenname; die Kopie darf jeder mit Zugriff anlegen (auch Leserecht), sie gehört dem, der klickt, mit
+Projekt, ohne Freigaben; Gäste (Etappe C) dürfen später ebenfalls drucken und herunterladen.
+
+**Wo:** Knopf „⋯" neben „← Fertig" im Kopf der geöffneten Notiz → `choiceModal` mit fünf Einträgen.
+
+* **Drucken im Browser**, nicht als Server-PDF: Das Handy bietet so seinen eigenen Druckdialog (samt
+  „Als PDF sichern"). `notizDrucken()` baut `#notiz-druck` aus dem **lokalen** Dokument (also auch
+  eben Getipptes) mit derselben sicheren Umwandlung wie die Vorschau (`notizHtml`), setzt
+  `body.notiz-druckt`; `@media print` blendet alles andere aus. `@page { margin: 20mm }` — es ist die
+  einzige Druckansicht der App. Aufgeräumt wird bei `afterprint`, spätestens nach einer Minute
+  (manche Handy-Browser melden `afterprint` nicht).
+* **PDF/DOCX/ODT baut der Server** (`notiz-export.js`, `GET /api/notes/:id/export/:format`) aus dem
+  Stand im offenen Raum (`live.offenerStand`), sonst aus der Datenbank. Der Browser wartet vorher bis
+  zu 3 s, bis seine Warteschlange beim Server ist (`s.bisGesendet`); gelingt das nicht (Funkloch),
+  gibt es keine Datei ohne die letzten Änderungen, sondern eine Meldung.
+  * PDF: pdfkit mit eingebetteter DejaVu Sans (Paket `dejavu-fonts-ttf`, Laufzeit-Abhängigkeit) —
+    die Standardschrift von pdfkit kann weder „→" noch „✓". Zeichen, die die Schrift nicht hat
+    (Emojis), werden „□" statt Zeichensalat. Kästchen der Checkliste als Vektor gezeichnet,
+    Seitenzahlen ab zwei Seiten. Der Schriftpfad wird erst beim ersten PDF aufgelöst: Fehlt das
+    Paket, scheitert nur das PDF — `routes/notes.js` lädt die Datei beim Serverstart, und ein
+    fehlendes Paket hätte sonst den ganzen Server am Starten gehindert (einmal nachgestellt:
+    Paket weggenommen → Laden ok, PDF sauber abgewiesen, Word weiter ok).
+  * DOCX und ODT ohne neue Bibliothek, als ZIP mit `archiver` (schon da). ODT: `mimetype` als erster
+    Eintrag, unkomprimiert — sonst erkennt LibreOffice die Datei nicht. Nummerierte Listen beginnen
+    nach einer Zwischenzeile wieder bei 1 (Word: eigene `numId` je Lauf mit `startOverride`).
+  * Dateiname „Titel – Stand 2026-09-27 14-32.pdf": `filename*=UTF-8''…` für Umlaute, dazu ein
+    ASCII-Rückfall; `dateinameAus()` bevorzugt jetzt `filename*`.
+* **„Stand als eigene Notiz"** (`POST /api/notes/:id/kopie`): gleicher Weg wie „Weitergeben
+  annehmen" (`zeileAusDelta` aus dem Stand von eben), Eigentümer = Klicker, Titel
+  „… (Stand TT.MM.JJJJ, HH:MM)", Projekt nur, wenn es das Projekt noch gibt; öffnet sich sofort.
+
+**Am Test gefunden: Die Funkloch-Meldung lag genau über „⋯".** Der nächste Tipp schloss nur die
+Meldung (R14), das Menü ging nicht auf — gemessen mit `elementFromPoint`. Die Meldung hat jetzt selbst
+den Knopf „Nochmal versuchen".
+
+**Ein Fehler im eigenen Test:** Der Vergleich „Kopie = Original" las das Original aus der Liste,
+bevor der Speichertakt (1,5 s) gelaufen war — die Kopie (aus dem Raum) war aktueller als das
+gespeicherte Original. Der Test wartet jetzt den Takt ab; dass die Kopie den ungespeicherten Stand
+trägt, prüft er gesondert.
+
+`tests/notizen-export.js` (15): Dateien werden wieder GELESEN (pdftotext, LibreOffice) und Zeile für
+Zeile verglichen — Umlaute, „→", „✓", Nummerierung, Checklisten, `& < > "`; Schrift eingebettet;
+Rechte (Leserecht ja, fremd 403, fehlend/unbekanntes Format 404, ohne Anmeldung 401); ungespeicherte
+Änderung steht schon in der Datei; Kopie gehört dem Leser, ohne Freigaben, Original unberührt.
+Gegenproben (9, alle rot): Stand aus der DB statt aus dem Raum, `&` nicht maskiert, Export bzw.
+Kopie ohne Rechteprüfung, Kopie gehört dem Eigentümer, Emojis ungefiltert, Nummerierung läuft durch,
+kein `filename*`, Kopie ohne Projekt.
+`tests/notizen-export-ui.js` (20, Handy mit Touch): Menü, Abbrechen, Druck im Druck-Medium gemessen
+(nur `#notiz-druck` sichtbar, kein Editor, keine Knopfleiste, kein fremder Cursor; eben Getipptes
+dabei; danach alles wie vorher), Downloads abgefangen (Name, Typ, Inhalt per pdftotext samt eine
+Sekunde vorher Getipptem), Funkloch + „Nochmal versuchen", Leserecht und Kopie.

@@ -2072,8 +2072,10 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 /* Drucken (notizDrucken): nur die Notiz — kein Menü, keine Knöpfe, keine fremden Cursor */
 #notiz-druck { display: none; }
 @media print {
+  /* Rand wie im PDF-Export (2 cm) — die einzige Druckansicht der App, darum darf @page global sein */
+  @page { margin: 20mm; }
   body.notiz-druckt > *:not(#notiz-druck) { display: none !important; }
-  body.notiz-druckt { background: #fff !important; }
+  body.notiz-druckt { background: #fff !important; padding: 0 !important; margin: 0 !important; }
   body.notiz-druckt #notiz-druck { display: block; color: #111; font-size: 11pt; line-height: 1.45; }
   #notiz-druck h1 { font-size: 18pt; margin: 0 0 2pt; }
   #notiz-druck .druck-stand { font-size: 9pt; color: #555; margin: 0 0 12pt; }

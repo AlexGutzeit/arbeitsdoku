@@ -17,7 +17,9 @@ const archiver = require('archiver');
 const PDFDocument = require('pdfkit');
 const { ZONE } = require('./zeit');
 
-const SCHRIFTEN = path.join(path.dirname(require.resolve('dejavu-fonts-ttf/package.json')), 'ttf');
+// Erst beim ersten PDF aufgelöst: Fehlt das Schriftpaket, scheitert nur das PDF (mit Meldung) — nicht
+// der Start des Servers, der diese Datei über routes/notes.js schon beim Hochfahren lädt.
+const schriften = () => path.join(path.dirname(require.resolve('dejavu-fonts-ttf/package.json')), 'ttf');
 
 // ─── Gemeinsamer Zwischenschritt ─────────────────────────────────────────────────────────────
 
@@ -67,6 +69,7 @@ function pdf({ titel, deltaJson, klartext, stand }) {
     doc.on('data', b => stuecke.push(b));
     doc.on('end', () => fertig(Buffer.concat(stuecke)));
     doc.on('error', fehler);
+    const SCHRIFTEN = schriften();
     doc.registerFont('R', path.join(SCHRIFTEN, 'DejaVuSans.ttf'));
     doc.registerFont('B', path.join(SCHRIFTEN, 'DejaVuSans-Bold.ttf'));
     doc.registerFont('I', path.join(SCHRIFTEN, 'DejaVuSans-Oblique.ttf'));
