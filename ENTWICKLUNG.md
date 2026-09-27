@@ -3515,3 +3515,18 @@ ist ein Netz, keine Reparatur.
   Toms Stelle nach dem Zeilenumbruch eine Bildschirmzeile tiefer, dann bewegte sich Anna nicht (sie
   stand schon dort) — ihr Schild erschien nie, es gab nichts zu stapeln. Die Stelle wird jetzt in der
   Ansicht gemessen, und die Prüfung verlangt beide Schilder sichtbar. Danach rot.
+
+**Deploy Etappe A (27.09.2026, `3938112`, Cache 428).** Vorher: zwei Vollsicherungen (11:06 und
+12:30, je auf VPS, Mini-PC und Laptop mit gleicher Prüfsumme, Rückspielprobe auf dem Mini-PC), frischer
+Prod-Klon, Tabellenvergleich vor/nach Umstellung (47 von 49 Tabellen zeilen- und spaltengleich,
+entfernt nur 17 Freigaben + 1 Angebot zu gelöschten Notizen), Durchgang mit allen 12 aktiven Konten
+(jede Notizliste mit Rechten zeichengleich) und einer echten Notiz im Browser, komplette Suite 240/240
+gegen den frischen Klon. Nachher dieselbe Prüfung an der echten Produktivdatenbank: identisches Bild,
+13 von 13 Dokumenten enthalten exakt den bisherigen Text.
+
+**Rückweg, falls nötig:** Code auf `vor-notizen-live-deploy` zurück ist mit der umgestellten Datenbank
+verträglich (der alte Stand ignoriert `ydoc`/`body_delta`/`note_gesehen`). ABER: Wird später wieder der
+neue Stand eingespielt, gewinnt das dann veraltete `ydoc` über inzwischen geänderten Klartext — vorher
+`UPDATE notes SET ydoc = NULL` (die Umstellung baut die Dokumente dann neu aus `body`), oder die
+Sicherung `arbeitsdoku_backup_20260927-123033.adbk` zurückspielen.
+

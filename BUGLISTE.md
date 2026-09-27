@@ -195,7 +195,8 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
 - **Gelöst (26.09.2026, Entscheidung Alex):** Statt die Sperre zu verlängern, gibt es keine Sperre mehr —
   mehrere bearbeiten eine Notiz gleichzeitig (Yjs + Quill). Damit entfallen Ablauf, fehlender Name und das
   synchrone XHR beim Schließen. Ein alter Programmstand bekommt beim Sperren/Speichern „bitte neu laden".
-  Tests `tests/notizen-live*.js`. Noch nicht deployt.
+  Tests `tests/notizen-live*.js`.
+**Deployt:** Prod 27.09.2026 (`3938112`, Cache 428) — Etappe A der Live-Notizen; Rückkehrpunkt `vor-notizen-live-deploy`.
 - **Wo:** `routes/notes.js:8` (`LOCK_TIMEOUT_MINUTES = 15`), kein Herzschlag im Client
   (`app-8-comm-init.js:1181`), Freigabe per synchronem XHR in `beforeunload` (`:2336`)
 - **Was passiert:** Wer länger schreibt, kann von einem Kollegen überholt werden und bekommt beim
