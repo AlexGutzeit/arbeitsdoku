@@ -112,7 +112,7 @@ async function renderNotizEditor(id) {
         </div>
       </details>
       <div class="notiz-anwesend" id="notiz-anwesend" aria-label="Gerade in der Notiz"></div>
-      <label class="notiz-namen-schalter" for="notiz-namen"><input type="checkbox" id="notiz-namen" ${notizNamenZeigen() ? 'checked' : ''}> Namen am Cursor zeigen</label>
+      <label class="notiz-namen-schalter" for="notiz-namen"><input type="checkbox" id="notiz-namen" ${notizNamenZeigen() ? 'checked' : ''}> Namensschilder anzeigen</label>
       <p class="notiz-nur-lesen" id="notiz-nur-lesen" hidden>&#128065; Du kannst diese Notiz nur lesen — Änderungen der anderen siehst du live.</p>
       <div class="notiz-leiste" id="notiz-leiste" role="toolbar" aria-label="Formatierung">
         <span class="ql-formats">
@@ -129,7 +129,7 @@ async function renderNotizEditor(id) {
       <div id="notiz-feld" class="notiz-feld"></div>
     </div>`;
 
-  // Namensfähnchen ein/aus (Alex, 27.09.2026: sie verdecken kurz den Text dahinter). Aus = nur der
+  // Namensschilder ein/aus (Alex, 27.09.2026: sie verdecken kurz den Text dahinter). Aus = nur der
   // farbige Cursor-Strich; wer es ist, verrät die Farbe in der Anwesenheit. Gemerkt je Gerät.
   const editorEl = mainEl.querySelector('.notiz-editor');
   editorEl.classList.toggle('ohne-namen', !notizNamenZeigen());

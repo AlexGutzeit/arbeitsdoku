@@ -2078,7 +2078,7 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .notiz-person--du { font-weight: 600; }
 .notiz-namen-schalter { display: flex; align-items: center; gap: 8px; margin: -0.2rem 1rem 0.4rem; min-height: 32px; font-size: 0.82rem; color: var(--text-light); cursor: pointer; width: fit-content; }
 .notiz-namen-schalter input { width: 18px; height: 18px; margin: 0; accent-color: var(--primary); }
-/* Haken „Namen am Cursor zeigen" aus: nur der farbige Strich, keine Fähnchen */
+/* Haken „Namensschilder anzeigen" aus: nur der farbige Cursor-Strich, keine Namensschilder */
 .notiz-editor.ohne-namen .ql-cursor .ql-cursor-flag { display: none; }
 .notiz-punkt { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 .notiz-nur-lesen { margin: 0 1rem 0.5rem; font-size: 0.85rem; color: var(--text-light); background: var(--bg); border-radius: 6px; padding: 0.45rem 0.6rem; }

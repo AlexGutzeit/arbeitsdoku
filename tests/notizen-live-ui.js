@@ -237,8 +237,44 @@ async function cursorSichtbar(p, farbe) {
     const zeile1 = await beideAn(2);
     ok('in der ersten Zeile: ebenso — und keins ragt über den Anfang des Schreibfelds hinaus',
       zeile1.getrennt && zeile1.farben && zeile1.f.every(x => x.y >= x.oben - 4), JSON.stringify({ getrennt: zeile1.getrennt, farben: zeile1.farben, f: zeile1.f.map(x => [x.name, Math.round(x.y), Math.round(x.h), Math.round(x.oben), x.farbe]) }));
+    await sleep(3200);
+    // Nicht an derselben Stelle, aber so nah, dass die Schilder sich berühren würden (Alex, 27.09.2026)
+    const nah = await (async () => {
+      const i = await A.evaluate(() => _notizSitzung.quill.getText().indexOf('Wago') + 1);
+      await A.evaluate((x) => _notizSitzung.quill.setSelection(x, 0, 'user'), i);
+      await T.evaluate((x) => _notizSitzung.quill.setSelection(x, 0, 'user'), i + 2);
+      await sleep(700);
+      const f = (await fahnen(R)).filter(x => x.o === '1');
+      return { f, getrennt: f.length === 2 && !(f[0].x < f[1].rechts && f[1].x < f[0].rechts && f[0].y < f[1].b && f[1].y < f[0].b),
+        farben: f.length === 2 && (await farbeSichtbar(R, f[0])) && (await farbeSichtbar(R, f[1])) };
+    })();
+    ok('zwei Zeichen auseinander: Schilder würden sich berühren → sie stapeln sich, beide lesbar', nah.getrennt && nah.farben,
+      JSON.stringify(nah.f.map(x => [x.name, Math.round(x.x), Math.round(x.y)])));
+    await sleep(3200);
+    // Weit auseinander in derselben Zeile: nichts verschieben, was nicht muss
+    // Die Stelle wird in Ritas Ansicht GEMESSEN: dieselbe Bildschirmzeile, mindestens 170 px weiter
+    // rechts. (Erste Fassung nahm das Zeilenende — die Zeile bricht am Handy um, Tom stand eine
+    // Bildschirmzeile tiefer, und die Probe „in derselben Zeile immer stapeln" blieb grün.)
+    const weit = await (async () => {
+      const [ia, it] = await R.evaluate(() => {
+        // +3, nicht +1: Anna stand vom Fall davor schon auf +1 — ohne Bewegung erscheint ihr Schild nicht,
+        // und die Prüfung hätte nur ein Schild gesehen (Probe „immer stapeln" blieb deshalb grün)
+        const q = _notizSitzung.quill, a = q.getText().indexOf('Wago') + 3, ba = q.getBounds(a);
+        let b = -1;
+        for (let i = a + 1; i < q.getLength(); i++) { const bi = q.getBounds(i); if (bi.top !== ba.top) break; if (bi.left - ba.left >= 170) { b = i; break; } }
+        return [a, b];
+      });
+      await A.evaluate((x) => _notizSitzung.quill.setSelection(x, 0, 'user'), ia);
+      await T.evaluate((x) => _notizSitzung.quill.setSelection(x, 0, 'user'), it);
+      await sleep(700);
+      const f = await fahnen(R);
+      return { it, rand: await R.evaluate(() => [...document.querySelectorAll('.notiz-editor .ql-cursor-flag')].map(x => x.style.marginTop)),
+        gleicheZeile: f.length === 2 && Math.abs(f[0].y - f[1].y) < 2, beideSichtbar: f.length === 2 && f.every(x => x.o === '1') };
+    })();
+    ok('weit auseinander in derselben Bildschirmzeile: kein Schild wird verschoben',
+      weit.it > 0 && weit.beideSichtbar && weit.rand.length === 2 && weit.rand.every(m => !m) && weit.gleicheZeile, JSON.stringify(weit));
 
-    console.log('\nHaken „Namen am Cursor zeigen"');
+    console.log('\nHaken „Namensschilder anzeigen"');
     // Striche: Bildpunkte in der Farbe der Person an ihrem Cursor-Strich (Farbe steht am — auch
     // ausgeblendeten — Fähnchen)
     const striche = async (p) => {
