@@ -159,6 +159,13 @@ function altlastenAufraeumen(db) {
 
   const summe = { planungen: 0, eintraege: 0, abwesenheiten: 0, notizen: 0, werkzeug: 0 };
   const konten = [];
+  // Beim Löschen der Planungen räumt reste.nachLoeschen ALLE Einteilungen ohne Planung mit ab — beim ersten
+  // Lauf auch die seit Monaten liegengebliebenen. Damit das Protokoll jede entfernte Zeile erklärt, wird der
+  // Stand der Anhängsel-Tabellen vorher und nachher gezählt.
+  const namen = {};
+  for (const a of reste.ANHAENGSEL) if (!namen[a.tabelle]) namen[a.tabelle] = a.text.replace(/ (zu|an|gelöschter|gelöschten|gelöschte)\b.*$/, '');
+  const stand = () => Object.fromEntries(Object.keys(namen).map(t => [t, zahl(db, `SELECT COUNT(*) AS n FROM ${t}`)]));
+  const vorher = stand();
   db.transaction(() => {
     for (const id of fehlend) {
       if (sperre(db, id)) continue;
@@ -172,7 +179,10 @@ function altlastenAufraeumen(db) {
     db.prepare("INSERT INTO settings (key, value) VALUES (?, strftime('%Y-%m-%d %H:%M', 'now'))").run(MERKER);
   })();
   if (konten.length) {
-    const details = `Inhalt früh gelöschter Konten (Nr. ${konten.join(', ')}): ${beschreiben(summe)}`;
+    const nachher = stand();
+    const dabei = Object.keys(namen).filter(t => vorher[t] > nachher[t]).map(t => `${vorher[t] - nachher[t]} ${namen[t]}`);
+    const details = `Inhalt früh gelöschter Konten (Nr. ${konten.join(', ')}): ${beschreiben(summe)}`
+      + (dabei.length ? ` — dabei mit weggeräumt: ${dabei.join(', ')}` : '');
     console.log('[reste] ' + details);
     require('./audit').logAudit(db, { userId: null, username: 'System', action: 'reste_aufgeraeumt', details });
   }

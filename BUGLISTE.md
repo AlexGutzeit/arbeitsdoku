@@ -375,7 +375,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
     weg (2642 Einteilungen, 7 Soll-Zeilen, 2 Merker, 6 Test-Einträge, 2 Test-Planungen), jede andere Zeile
     zeichengleich; kein Eintrag und keine sichtbare Planung eines vorhandenen Kontos fehlt. In der App ändert
     sich genau eine Planung (26.03., nur ein Testkonto eingeteilt). Tests: `reste` (32), `reste-prodklon`
-    (17), `konto-loeschen` (35), `konto-loeschen-ui` (11); Gegenproben 13 + 11, alle rot an ihrer Stelle.
+    (18, prüft auch, dass das Protokoll jede entfernte Zeile erklärt), `konto-loeschen` (35), `konto-loeschen-ui` (11); Gegenproben 13 + 11, alle rot an ihrer Stelle.
 
 ---
 

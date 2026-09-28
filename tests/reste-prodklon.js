@@ -171,6 +171,11 @@ const alsListe = (text) => { const j = JSON.parse(text); return Array.isArray(j)
     ok('Protokoll: je ein Eintrag „System" für Altlasten und Anhängsel, Merker gesetzt',
       protokoll.length === 2 && protokoll.every(p => p[1] === 'System') && /^Inhalt früh gelöschter Konten/.test(protokoll[0][2])
         && /^Start: /.test(protokoll[1][2]) && merker.length === 1, JSON.stringify(protokoll));
+    // Das Protokoll muss jede entfernte Zeile erklären (Verlauf zählt mit seinem Eintrag, nicht einzeln)
+    const imProtokoll = protokoll.map(p => p[2].replace(/\(Nr\.[^)]*\)/, '')).join(' ').match(/\d+/g) || [];
+    const erklaert = imProtokoll.reduce((s, x) => s + Number(x), 0);
+    const ohneVerlauf = entfernt - ['entry_history', 'absence_history'].reduce((s, t) => s + ((erwartet[t] || new Set()).size), 0);
+    ok(`das Protokoll erklärt jede entfernte Zeile (${erklaert} von ${ohneVerlauf})`, erklaert === ohneVerlauf, JSON.stringify(protokoll.map(p => p[2])));
     ok('danach Verweise ins Leere nur noch bei Inhalt, der bleibt (Einträge/Planungen gelöschter Projekte)',
       verstoesseNachher.every(t => ['entries', 'planning_entries'].includes(t)), JSON.stringify([...new Set(verstoesseNachher)]));
     const zweit = start(kopie);
