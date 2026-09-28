@@ -341,15 +341,28 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   → 5 Prüfungen rot. Dabei im eigenen Test gefunden: `GET …/shares` liefert kein Datum — der erste Vergleich
   war `undefined === undefined` und grün; das Datum kommt jetzt aus der Liste des Empfängers und muss da sein.
 
-### [ ] R27 · Verwaiste Zeilen in den Produktivdaten (Fremdschlüssel nicht durchgesetzt) *(niedrig, Entscheidung offen)*
-*(gefunden 28.09.2026 beim Prod-Klon-Test zum Umbau der Notiz-Tabelle; hat mit Notizen nichts zu tun)*
-- **Was:** `PRAGMA foreign_key_check` am Prod-Klon: **2631 von 3627** Planungs-Zuweisungen zeigen auf
-  Planungen, die es nicht mehr gibt; **6** Zeiteinträge auf gelöschte Konten, **32** auf gelöschte
-  Projekte; dazu einzelne in `planning_entries`, `user_target_hours`, `user_seen`, Erinnerungen.
-- **Folge heute:** keine sichtbare — die Zeilen hängen an nichts mehr und werden nirgends angezeigt.
-  Vermutlich aus einer Zeit, in der gelöscht wurde, ohne dass die Datenbank die Fremdschlüssel durchsetzte.
-- **Offen:** Aufräumen (mit Sicherung, Prod-Klon-Vergleich) oder so lassen — Alex entscheidet.
-  Vorher klären, ob die 6 Zeiteinträge ohne Konto noch in einer Abrechnung stecken.
+### [ ] R27 · Fremdschlüssel-Schutz fällt nach dem ersten Speichern weg — Löschen hinterlässt Reste *(niedrig, Entscheidung offen)*
+*(gefunden 28.09.2026 beim Prod-Klon-Test zum Umbau der Notiz-Tabelle; Ursache am selben Tag gefunden)*
+- **Ursache:** Die App schaltet beim Start `PRAGMA foreign_keys = ON` ein. sql.js öffnet die Datenbank beim
+  Speichern (`export()`, alle paar Sekunden) intern neu — danach ist der Schutz **aus**, bis zum nächsten
+  Neustart. Nachgestellt: vor dem Speichern greift `ON DELETE CASCADE`, danach nicht mehr. Die App läuft
+  also praktisch ohne Fremdschlüssel-Schutz. (So entstanden auch die 17 verwaisten Notiz-Freigaben.)
+- **Was in den Daten liegt (Lesekopie 28.09.):**
+  - **2635 Planungs-Zuweisungen** („wer war eingeteilt") zu **2325 Planungen, die gelöscht sind** (von Hand oder
+    durch Serien-Änderungen). Sie enthalten nur zwei Nummern, kein Datum, keinen Inhalt; nirgends sichtbar.
+    Die **680 vorhandenen Planungen** (auch alle vergangenen) sind vollständig — keine ohne Zuweisung.
+    Wächst weiter (27.09.: 2631, 28.09.: 2635), weil jedes Löschen einer Planung ihre Zuweisungen liegen lässt.
+  - **32 Zeiteinträge** und **59 Planungen**, deren Projekt endgültig gelöscht wurde: **echte Daten, bleiben.**
+    Der Projektname steht bei allen 32 Zeiteinträgen und 56 der 59 Planungen als Text dabei (3 stammen von vor
+    dieser Namenssicherung und zeigen kein Projekt).
+  - **6 Zeiteinträge** (19.–25.03.2026) von Konten 3, 4, 5, die es nicht mehr gibt — vermutlich Testkonten vom Start.
+  - Kleinkram: 8 Planungs-Zuweisungen an gelöschte Konten, 7 Soll-Stunden-Zeilen gelöschter Konten, 2 Merker.
+- **Achtung beim Beheben:** Den Schutz einfach dauerhaft einzuschalten kann Speichern **verhindern** — z. B.
+  beim Bearbeiten eines der 32 Zeiteinträge, dessen Projektnummer ins Leere zeigt, und beim endgültigen
+  Löschen eines Projekts, auf das noch Zeiteinträge zeigen. Erst alle Lösch-Wege und Verweise prüfen.
+- **Offen (Alex):** (1) Lösch-Wege räumen selbst auf (Planung löschen → ihre Zuweisungen mit) — ändert für
+  niemanden etwas Sichtbares; (2) die 2635 Zuweisungs-Reste + Kleinkram entfernen (mit Sicherung) oder liegen
+  lassen; (3) später den Schutz richtig einschalten, nach Prüfung. Echte Einträge/Planungen werden NICHT gelöscht.
 ---
 
 ## Geprüft und in Ordnung
