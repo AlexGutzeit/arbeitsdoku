@@ -20,7 +20,10 @@ let pass = 0, fail = 0; const fails = [];
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, fails.push(n), console.log('  ✗ ' + n + (e ? '  → ' + e : '')));
 const summe = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 
-const VORLAGEN = ['/tmp/prodklon.db', '/tmp/prodklon-echt.db'].filter(p => fs.existsSync(p));
+// /tmp/prodklon.db wird von älteren Prod-Klon-Tests direkt beschrieben — in der Suite ist sie oft schon
+// umgebaut, bevor dieser Test drankommt. Deshalb zusätzlich die ROHEN Kopien (werden hier nie verändert):
+// die frische vor einem Deploy (/tmp/prodklon-frisch-roh.db) und die alte von vor Etappe A.
+const VORLAGEN = ['/tmp/prodklon.db', '/tmp/prodklon-frisch-roh.db', '/tmp/prodklon-echt.db'].filter(p => fs.existsSync(p));
 // Fremdschlüssel-Verstöße je „Tabelle→Elterntabelle"
 const verstoesse = (db) => { const r = db.exec('PRAGMA foreign_key_check'); const m = {};
   if (r.length) for (const v of r[0].values) m[v[0] + '→' + v[2]] = (m[v[0] + '→' + v[2]] || 0) + 1; return m; };
