@@ -74,8 +74,10 @@ function req(m, p, t, b, roh) {
     const wTom = await gTom.schreibe(x => x.insert(0, 'Tom war hier'));
     ok('Tom schreiben → 403 NUR_LESEN', wTom.status === 403 && wTom.body.code === 'NUR_LESEN', JSON.stringify(wTom));
     const wAnna = await gAnna.schreibe(x => x.insert(0, 'Material bestellt'));
-    await gTom.warte('aenderung');
-    ok('Anna schreibt → Tom sieht es live', wAnna.status === 200 && gTom.text().startsWith('Material bestellt'), gTom.text());
+    await gBea.warte('aenderung');
+    // An Beas Gerät prüfen: Toms Gerät trägt seinen abgewiesenen Versuch noch bei sich (der echte Browser
+    // öffnet danach neu) — je nach Reihenfolge im Dokument stünde Annas Text dort vorn oder hinten.
+    ok('Anna schreibt → die anderen sehen es live', wAnna.status === 200 && gBea.text().startsWith('Material bestellt'), gBea.text());
     await sleep(2200);
     const board1 = ((await req('GET', '/api/projects', t.tom)).body.projects || []).find(p => p.id === projekt.id);
     ok('Board: 📝 (hat Inhalt), zuletzt von Anna, wer drin ist', board1.notiz && board1.notiz.hat_inhalt && board1.notiz.von === 'Anna Berger' && board1.notiz.live.length === 4, JSON.stringify(board1.notiz));
@@ -140,7 +142,17 @@ function req(m, p, t, b, roh) {
   } finally {
     for (const g of offen) g.schliessen();
     srv.kill();
+    await new Promise(r => { if (srv.exitCode !== null) r(); else srv.once('exit', r); });
   }
+  // Teil 2: direkt in der Datenbank (Server beendet) — „endgültig" heißt: die Zeile ist weg, nicht nur unerreichbar
+  try {
+    const initSqlJs = require('sql.js');
+    const SQL = await initSqlJs();
+    const db = new SQL.Database(fs.readFileSync(DB));
+    const reste = db.exec("SELECT COUNT(*) FROM notes WHERE projekt_notiz_fuer IS NOT NULL")[0].values[0][0];
+    const gaesteReste = db.exec('SELECT COUNT(*) FROM note_gaeste WHERE note_id NOT IN (SELECT id FROM notes)')[0].values[0][0];
+    ok('in der Datenbank: keine Projektnotiz und kein Gast mehr übrig', reste === 0 && gaesteReste === 0, JSON.stringify({ reste, gaesteReste }));
+  } catch (e) { fail++; fails.push('Teil 2: ' + e.message); console.log('  ✗ Teil 2: ' + e.message); }
   console.log(`\nProjektnotiz (Server): ${pass} bestanden, ${fail} fehlgeschlagen`);
   if (fail) { console.log('Fehlgeschlagen:\n  - ' + fails.join('\n  - ')); process.exit(1); }
   process.exit(0);
