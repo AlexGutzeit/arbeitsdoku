@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**250 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**252 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -136,6 +136,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `katalog-spiegel-ui.js` | Der Katalog-Spiegel auf dem Gerät (Alex, 09.09.2026). |
 | `kleine-sackgassen-ui.js` | Kleine Sackgassen: Downloads, abgelaufener Zwei-Faktor-Schritt, Abmelden, neue Rechte |
 | `kollab-buendel.js` | Das Bündel für die gemeinsamen Notizen (Etappe A, Schritt 2 — 26.09.2026). |
+| `konto-loeschen-ui.js` | Mitarbeiter endgültig löschen — Oberfläche (Alex, 28.09.2026). |
+| `konto-loeschen.js` | Mitarbeiter endgültig löschen — Server (Alex, 28.09.2026; Regel in konto-loeschen.js). |
 | `konto-pdf-ui.js` | Der PDF-Nachweis ist für Mitarbeiter nach „Mein Konto" gezogen (Alex, 23.08.2026). |
 | `konto-rechte-ui.js` | „Zusätzliche Rechte" auf Mein Konto (Alex, 16.09.2026) |
 | `konto-sitzung-daten.js` | „Auf allen Geräten abmelden" und die Datenauskunft (Art. 15 DSGVO). |
@@ -228,7 +230,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `push-summaries.js` | API-Test der geplanten Zusammenfassungen (Digest-Push): CRUD, Validierung, Ownership, Rollenfilter |
 | `push-sw.js` | Service-Worker-Push-Test: lädt public/sw.js in einer Sandbox (kein Browser nötig) und prüft die |
 | `push-targeting.js` | Push-Targeting-Test (in-process). Mockt web-push.sendNotification und prueft fuer jedes |
-| `reste-prodklon.js` | Reste aufräumen an echten Daten (R27, Prod-Klon, 28.09.2026). |
+| `reste-prodklon.js` | Reste aufräumen an echten Daten (R27 + Altlasten gelöschter Konten, Prod-Klon, 28.09.2026). |
 | `reste.js` | Reste beim Löschen (R27, 28.09.2026). |
 | `restpause-firmenwert-ui.js` | Was passiert mit der Restpause, wenn die Firmenpause MITTEN im Betrieb umgestellt wird? |
 | `restpause-ui.js` | Restpausen-Vorbelegung (#13): Die Pause wird nur noch mit dem REST zur Firmenpause vorbelegt. |
