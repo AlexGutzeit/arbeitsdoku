@@ -3774,3 +3774,14 @@ Reihenfolge im Dokument, weil Toms Testgerät seinen abgewiesenen Versuch bei si
 Gerät geprüft); (2) „endgültig löschen" prüfte nur, dass niemand mehr hineinkommt — nicht, dass die Zeile
 weg ist (Teil 2 sieht in der Datenbank nach). Danach alle an ihrer Stelle rot. Und der UI-Test griff
 zuerst die erste Kachel — die frische Datenbank bringt ein Beispielprojekt mit.
+
+**Deploy Projektnotiz + Meldungen im Editor (28.09.2026 morgens, `766c353`, Cache 431).** Suite 248/248
+gegen einen frischen Prod-Klon (Lesekopie 06:37; der Umbau-Test prüfte zusätzlich an der frischen
+Rohkopie). Vollsicherung `arbeitsdoku_backup_20260928-080103.adbk` (VPS, Mini-PC, Laptop, gleiche
+Prüfsumme; Rückspielprobe auf dem Mini-PC), Rückkehrpunkt `vor-projektnotiz-deploy` (= `67b51cf`).
+Server-Protokoll: „notes neu aufgebaut … 12 Notizen übernommen", keine Fehler. Datenbank vorher/nachher:
+51 von 51 Tabellen gleich (auch der eine echte Gastzugang), alle 12 Notizen gleich, neu nur
+`projekt_notiz_fuer`; keine neuen Fremdschlüssel-Verstöße, keiner auf Notizen; `user_id` jetzt ohne
+NOT NULL; Nummernzähler 43 → 43; Datei heil. **Rückweg:** Code auf `vor-projektnotiz-deploy` verträgt
+die umgebaute Tabelle (Projektnotizen haben kein `user_id` und tauchen in keiner Liste auf); Sicherung
+von 08:01 zurückspielen stellt auch die alte Tabellenform wieder her.
