@@ -2742,5 +2742,6 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .proj-notiz-vorschau { max-height: 9.5rem; overflow: hidden; position: relative; font-size: 0.88rem; }
 .proj-notiz-vorschau::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1.6rem; background: linear-gradient(transparent, var(--card)); pointer-events: none; }
 .proj-notiz-leer { color: var(--text-light); font-style: italic; }
-.proj-notiz-oeffnen { align-self: flex-start; min-height: 36px; }
+/* Die Board-Spalten sind am Handy schmal — der Knopf nimmt die ganze Breite und darf umbrechen */
+.proj-notiz-oeffnen { width: 100%; min-height: 36px; white-space: normal; line-height: 1.25; padding-top: 0.35rem; padding-bottom: 0.35rem; }
 .notiz-projekt-hinweis { margin: 0.35rem 1rem 0; font-size: 0.82rem; color: var(--text-light); }
