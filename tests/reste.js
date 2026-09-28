@@ -7,6 +7,7 @@
 //      nennt einen Verweis, den es nicht gibt. Eine neue Tabelle mit Verweis macht diesen Test rot.
 //   C. aufraeumen(): entfernt genau die Anhängsel ohne Gegenstück (auch zweite Stufe), lässt Gültiges und
 //      ALLEN Inhalt stehen, protokolliert einmal; zweiter Lauf findet nichts. nachLoeschen() nur das Betroffene.
+//      Beim Zurückspielen wird die Sicherung vor dem Einsetzen ebenso aufgeräumt.
 //   D. Quelltext-Wächter: `DELETE FROM planning_entries` nur in planungenLoeschen; jeder Weg, der eine Tabelle
 //      mit Anhängseln hart löscht, räumt sie mit ab.
 //   E. Über die Schnittstelle (Server ohne Neustart, Tageslauf ruht): Planung löschen (einzeln, Gruppe, Gruppe
@@ -146,6 +147,24 @@ function starteInit(dbPfad, nachher) {
       eins(d, 'SELECT COUNT(*) FROM planning_reminders WHERE user_id = 777') === 0 && eins(d, "SELECT COUNT(*) FROM planning_reminder_sent WHERE occ_key = 'b'") === 0
         && eins(d, 'SELECT COUNT(*) FROM user_target_hours WHERE user_id = 777') === 0 && eins(d, 'SELECT COUNT(*) FROM entries WHERE user_id = 777') === 1, JSON.stringify(w3));
     d.close();
+  }
+  // Zurückspielen: Eine Sicherung mit Resten wird beim Vorbereiten (vor dem Einsetzen) aufgeräumt
+  {
+    const { d } = baue();
+    const sicherung = '/tmp/reste-sicherung.db';
+    fs.writeFileSync(sicherung, Buffer.from(d.export())); d.close();
+    const skript = `process.env.DB_PATH=${JSON.stringify(LEER)};process.env.JWT_SECRET='x'.repeat(40);
+      const m = require(${JSON.stringify(path.join(WURZEL, 'database', 'init'))});
+      m.initDatabase().then(() => { const neu = m.datenbankVorbereiten(require('fs').readFileSync(${JSON.stringify(sicherung)}));
+        const z = (s) => neu.prepare(s).get().n;
+        console.log('ERG=' + JSON.stringify({ zuw: z('SELECT COUNT(*) AS n FROM planning_assignments'), soll: z('SELECT COUNT(*) AS n FROM user_target_hours WHERE user_id = 777'),
+          eintr: z('SELECT COUNT(*) AS n FROM entries WHERE user_id = 777'),
+          prot: neu.prepare("SELECT details FROM audit_logs WHERE action = 'reste_aufgeraeumt'").all().map(r => r.details) })); process.exit(0); });`;
+    const r = spawnSync('node', ['-e', skript], { encoding: 'utf8', timeout: 120000 });
+    const erg = JSON.parse(((r.stdout || '').match(/ERG=(.*)/) || [])[1] || 'null');
+    ok('Zurückspielen: Reste der Sicherung weg, Inhalt bleibt, Protokoll „Zurückspielen: …" in der neuen Datenbank',
+      erg && erg.zuw === 1 && erg.soll === 0 && erg.eintr === 1 && erg.prot.length === 1 && /^Zurückspielen: /.test(erg.prot[0]), JSON.stringify(erg) + (r.stderr || '').slice(0, 200));
+    try { fs.unlinkSync(sicherung); } catch (_) {}
   }
   leer.close();
 
