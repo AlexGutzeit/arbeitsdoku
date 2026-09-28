@@ -27,6 +27,7 @@ const { Y, TEXT, laden, felder, zulaessig } = require('./notiz-dokument');
 const { broadcast } = require('./sse');
 const push = require('./push');
 const notizGaeste = require('./notiz-gaeste');
+const projektNotiz = require('./projekt-notiz');
 
 const SPEICHERN_NACH_MS = 1500;       // Ruhe, nach der gespeichert wird
 const SPEICHERN_SPAETESTENS_MS = 10000; // … und spätestens so oft, auch wenn ununterbrochen getippt wird
@@ -56,13 +57,15 @@ const gastNr = (wer) => (typeof wer === 'string' && /^g\d+$/.test(wer)) ? Number
  * → undefined). `wer` = Nutzernummer oder 'g<Nummer>' (Gast).
  */
 function zugriffVon(db, noteId, wer) {
-  const n = db.prepare('SELECT user_id FROM notes WHERE id = ?').get(noteId);
+  const n = db.prepare('SELECT user_id, projekt_notiz_fuer FROM notes WHERE id = ?').get(noteId);
   if (!n) return undefined;
   const g = gastNr(wer);
   if (g !== null) {
     const z = notizGaeste.zugriff(db, g);
     return (z.zugriff && z.gast.note_id === Number(noteId)) ? z.zugriff : null;
   }
+  // Projektnotiz: kein Eigentümer — Rolle und Zuteilung entscheiden (projekt-notiz.js)
+  if (n.projekt_notiz_fuer) return projektNotiz.zugriff(db, n, wer);
   if (n.user_id === wer) return 'owner';
   const s = db.prepare('SELECT permission FROM note_shares WHERE note_id = ? AND user_id = ?').get(noteId, wer);
   return s ? (s.permission === 'write' ? 'write' : 'read') : null;
@@ -92,6 +95,14 @@ function anwesenheitFuer(raum, empfaenger, ids) {
 }
 function anwesenheitAnAlle(raum, ids, ausser) {
   for (const v of raum.verbindungen.values()) if (v !== ausser) senden(v, 'anwesenheit', { update: anwesenheitFuer(raum, v, ids) });
+}
+// Kopf einer Notiz: Titel, Projekt — und bei einer Projektnotiz das Projekt, dem sie gehört
+function kopfVon(db, noteId) {
+  const k = db.prepare(`SELECT n.title, n.project_id, n.project_text, n.projekt_notiz_fuer, p.name AS projekt_name
+    FROM notes n LEFT JOIN projects p ON p.id = n.projekt_notiz_fuer WHERE n.id = ?`).get(noteId);
+  if (!k) return null;
+  return { title: k.title, project_id: k.project_id, project_text: k.project_text,
+    projekt: k.projekt_notiz_fuer ? { id: k.projekt_notiz_fuer, name: k.projekt_name } : null };
 }
 // Kopf (Titel, Projekt): Gäste sehen nur den Titel
 const kopfFuer = (v, kopf) => (v.gast ? { title: kopf.title } : kopf);
@@ -141,7 +152,7 @@ function jetztSpeichern(raum) {
   // Datenbank; diese Sperre hält auch, falls die Reihenfolge je umgedreht wird (geprüft 27.09.2026).
   if (raum.verworfen) return;
   const db = getDb();
-  const alt = db.prepare('SELECT body, body_delta FROM notes WHERE id = ?').get(raum.noteId);
+  const alt = db.prepare('SELECT body, body_delta, projekt_notiz_fuer FROM notes WHERE id = ?').get(raum.noteId);
   if (!alt) return;   // inzwischen gelöscht
   const f = felder(raum.doc);
   const stand = Y.encodeStateAsUpdate(raum.doc);
@@ -154,6 +165,8 @@ function jetztSpeichern(raum) {
       .run(stand, f.body, f.body_delta, gast ? null : raum.zuletztGeaendertVon, gast ? raum.zuletztGeaendertName : null, raum.noteId);
     gesehenVermerken(raum.noteId);   // vor der Meldung: sonst zählt der Zähler der Anwesenden kurz hoch
     broadcast('notes', null);
+    // Projektnotiz: Das Board zeigt 📝, sobald sie Inhalt hat — nur dann auffrischen, nicht bei jedem Tippen
+    if (alt.projekt_notiz_fuer && !(alt.body || '').trim() !== !(f.body || '').trim()) broadcast('projects', null);
   } else {
     db.prepare('UPDATE notes SET ydoc = ? WHERE id = ?').run(stand, raum.noteId);
   }
@@ -204,16 +217,21 @@ function rundeBeenden(raum, wer) {
   if (r.vorher === inhalt(raum)) return;   // hin und zurück geändert — nichts zu melden
   jetztSpeichern(raum);
   const db = getDb();
-  const note = db.prepare('SELECT user_id, title FROM notes WHERE id = ?').get(raum.noteId);
+  const note = db.prepare('SELECT user_id, title, projekt_notiz_fuer FROM notes WHERE id = ?').get(raum.noteId);
   if (!note) return;
   const drin = new Set([...raum.verbindungen.values()].filter(v => !v.gast).map(v => v.userId));
-  const empfaenger = [note.user_id,
-    ...db.prepare('SELECT user_id FROM note_shares WHERE note_id = ?').all(raum.noteId).map(s => s.user_id)]
-    .filter(id => !drin.has(id));
+  // Projektnotiz: nur die Zugeteilten (Alex, 28.09.2026); sonst Eigentümer + Freigaben
+  const empfaenger = (note.projekt_notiz_fuer ? projektNotiz.empfaenger(db, note.projekt_notiz_fuer)
+    : [note.user_id, ...db.prepare('SELECT user_id FROM note_shares WHERE note_id = ?').all(raum.noteId).map(s => s.user_id)])
+    .filter(id => id != null && !drin.has(id));
   const gast = gastNr(wer) !== null;
   const nutzer = gast ? null : db.prepare('SELECT name FROM users WHERE id = ?').get(wer);
   const name = gast ? r.name : (nutzer ? nutzer.name : null);
-  push.notifyUsers(db, empfaenger, 'notes', {
+  push.notifyUsers(db, empfaenger, 'notes', note.projekt_notiz_fuer ? {
+    title: 'Projektnotiz bearbeitet',
+    body: `${name || 'Jemand'} hat die Projektnotiz „${note.title}" bearbeitet`,
+    url: '/#/projects',
+  } : {
     title: 'Notiz bearbeitet',
     body: `${name || 'Jemand'} hat „${note.title}" bearbeitet`,
     url: '/#/notes',
@@ -252,7 +270,7 @@ function verbinden(noteId, nutzer, req, res) {
   v.ping = setInterval(() => { try { res.write(': ping\n\n'); } catch (_) {} }, PING_MS);
 
   const fremde = [...raum.aw.getStates().keys()];
-  const kopf = db.prepare('SELECT title, project_id, project_text FROM notes WHERE id = ?').get(noteId);
+  const kopf = kopfVon(db, noteId);
   senden(v, 'start', {
     verbindung: v.id,
     zugriff,
@@ -392,13 +410,17 @@ function zugriffAbgleichen(noteId) {
   const raum = raeume.get(Number(noteId));
   if (!raum) return;
   const db = getDb();
+  const istProjektNotiz = !!(db.prepare('SELECT projekt_notiz_fuer FROM notes WHERE id = ?').get(raum.noteId) || {}).projekt_notiz_fuer;
   for (const v of [...raum.verbindungen.values()]) {
     const z = zugriffVon(db, raum.noteId, v.wer);
-    if (z === undefined) rauswerfen(v, 'geloescht');
+    if (z === undefined) rauswerfen(v, istProjektNotiz ? 'projekt-geloescht' : 'geloescht');
     else if (!z) rauswerfen(v, v.gast ? (notizGaeste.zugriff(db, v.gastId).grund || 'gast-entfernt') : 'freigabe-entzogen');
     else if (z !== v.zugriff) { v.zugriff = z; senden(v, 'zugriff', { zugriff: z }); }
   }
 }
+
+/** Alle offenen Notizen neu prüfen (z. B. nach einer Rollenänderung — sie entscheidet über Projektnotizen). */
+function alleAbgleichen() { for (const raum of [...raeume.values()]) zugriffAbgleichen(raum.noteId); }
 
 /** Einen Gast aus seiner Notiz werfen (entfernt, neues Passwort). */
 function gastRauswerfen(gastId, grund) {
@@ -492,6 +514,6 @@ function offenerStand(noteId) {
 function allesSpeichern() { for (const raum of raeume.values()) jetztSpeichern(raum); }
 
 module.exports = { verbinden, aenderung, anwesenheit, zugriffAbgleichen, notizGeloescht, nutzerRauswerfen,
-  gastRauswerfen, gaesteAbgleichen,
+  gastRauswerfen, gaesteAbgleichen, alleAbgleichen, kopfVon,
   kopfGeaendert, inhaltVon, anwesende, offenerStand, allesSpeichern, allesVerwerfen, gesehenVermerken, zugriffVon, FARBEN,
   zeiten, _intern: { raeume } };

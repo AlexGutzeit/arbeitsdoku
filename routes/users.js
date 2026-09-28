@@ -618,6 +618,9 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
 
   const updated = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(req.params.id);
   const _changes = userAuditDiff(user, updated);
+  // Die Rolle entscheidet über das Schreiben in Projektnotizen (Chef/Admin) — wer gerade drin ist,
+  // bekommt die Änderung sofort (sonst erst beim nächsten Öffnen)
+  if (updated.role !== user.role) require('../notizen-live').alleAbgleichen();
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_update',
     details: `${updated.username} (id=${req.params.id}): ` + (_changes.length ? _changes.join('; ') : 'keine Änderung'),
     ip: req.ip });

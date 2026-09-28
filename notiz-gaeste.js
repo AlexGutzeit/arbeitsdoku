@@ -48,8 +48,11 @@ function zugriff(db, gastId) {
   if (!g) return { zugriff: null, grund: 'gast-entfernt' };
   if (!erlaubt(db)) return { zugriff: null, grund: 'gaeste-aus', gast: g };
   if (abgelaufen(g)) return { zugriff: null, grund: 'gast-abgelaufen', gast: g };
-  const n = db.prepare('SELECT n.id, n.user_id, COALESCE(u.active, 1) AS aktiv FROM notes n LEFT JOIN users u ON u.id = n.user_id WHERE n.id = ?').get(g.note_id);
+  const n = db.prepare(`SELECT n.id, n.user_id, COALESCE(u.active, 1) AS aktiv, n.projekt_notiz_fuer, p.id AS pid, p.deleted_at AS p_geloescht
+    FROM notes n LEFT JOIN users u ON u.id = n.user_id LEFT JOIN projects p ON p.id = n.projekt_notiz_fuer WHERE n.id = ?`).get(g.note_id);
   if (!n) return { zugriff: null, grund: 'geloescht', gast: g };
+  // Projektnotiz: Projekt im Papierkorb oder weg → wie gelöscht
+  if (n.projekt_notiz_fuer && (!n.pid || n.p_geloescht)) return { zugriff: null, grund: 'geloescht', gast: g };
   // Ausgestellter Eigentümer: Seine Einladungen gelten nicht weiter.
   if (n.aktiv === 0) return { zugriff: null, grund: 'gast-entfernt', gast: g };
   return { zugriff: g.permission === 'write' ? 'write' : 'read', gast: g, eigentuemer: n.user_id };

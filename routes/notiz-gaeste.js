@@ -14,6 +14,7 @@ const { broadcast } = require('../sse');
 const push = require('../push');
 const gaeste = require('../notiz-gaeste');
 const live = require('../notizen-live');
+const projektNotiz = require('../projekt-notiz');
 
 // ─── Verwaltung ──────────────────────────────────────────────────────────────────────────────
 
@@ -21,8 +22,14 @@ const verwaltung = express.Router();
 
 function eigeneNotiz(req, res) {
   const db = getDb();
-  const note = db.prepare('SELECT id, user_id, title FROM notes WHERE id = ?').get(req.params.id);
+  const note = db.prepare('SELECT id, user_id, title, projekt_notiz_fuer FROM notes WHERE id = ?').get(req.params.id);
   if (!note) { res.status(404).json({ error: 'Notiz nicht gefunden' }); return null; }
+  // Projektnotiz: Gäste laden Chef und Admin ein (Alex, 28.09.2026); Projekt im Papierkorb → wie weg
+  if (note.projekt_notiz_fuer) {
+    if (projektNotiz.zugriff(db, note, req.user.id) === undefined) { res.status(404).json({ error: 'Notiz nicht gefunden' }); return null; }
+    if (!projektNotiz.darfGaeste(req.user)) { res.status(403).json({ error: 'Gäste in eine Projektnotiz laden Chef und Admin ein.' }); return null; }
+    return { db, note };
+  }
   if (note.user_id !== req.user.id) { res.status(403).json({ error: 'Nur der Eigentümer kann Gäste verwalten.' }); return null; }
   return { db, note };
 }

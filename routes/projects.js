@@ -5,6 +5,9 @@ const { broadcast } = require('../sse');
 const { logAudit, berlinNow } = require('../audit');
 
 const { csvZelle, csvDatei } = require('../csv');
+const projektNotiz = require('../projekt-notiz');
+// Erst bei Gebrauch laden: notizen-live zieht die Notiz-Bausteine nach sich
+const live = () => require('../notizen-live');
 
 /**
  * Vergleichsform eines Namens — klein, ohne Leerzeichen und Satzzeichen.
@@ -48,7 +51,17 @@ function milestonesOf(db, projectId) {
   return db.prepare('SELECT id, title, est_days, status, sort_order FROM project_milestones WHERE project_id = ? ORDER BY sort_order, id').all(projectId);
 }
 const withDetails = (db, project) => ({ ...project, assigned_users: assignmentsOf(db, project.id),
-  categories: categoriesOf(db, project.id), milestones: milestonesOf(db, project.id) });
+  categories: categoriesOf(db, project.id), milestones: milestonesOf(db, project.id), notiz: notizKurz(db, project.id) });
+
+// Projektnotiz in Kurzform für Board und Kachel: gibt es Inhalt (📝), wer ist gerade drin, wer zuletzt?
+// Ohne Notiz (noch nie geöffnet): null — für alle sieht es trotzdem aus, als sei sie da (leer).
+function notizKurz(db, projectId) {
+  const n = db.prepare(`SELECT n.id, n.body, n.updated_at, n.updated_by_gast, u.name AS von
+    FROM notes n LEFT JOIN users u ON u.id = n.updated_by WHERE n.projekt_notiz_fuer = ?`).get(projectId);
+  if (!n) return null;
+  return { id: n.id, hat_inhalt: !!(n.body || '').trim(), updated_at: n.updated_at,
+    von: n.updated_by_gast ? n.updated_by_gast + ' (Gast)' : (n.von || null), live: live().anwesende()[n.id] || [] };
+}
 
 function isAssigned(db, projectId, userId) {
   return !!db.prepare('SELECT 1 FROM project_assignments WHERE project_id = ? AND user_id = ?').get(projectId, userId);
@@ -206,6 +219,29 @@ router.delete('/kategorien/:id', authenticate, authorize('chef'), (req, res) => 
   res.json({ ok: true, ohne_kategorie: anzahl });
 });
 
+// Projektnotiz ansehen (Vorschau in der Kachel) — legt NICHTS an
+router.get('/:id/notiz', authenticate, (req, res) => {
+  const db = getDb();
+  const p = db.prepare('SELECT id, name FROM projects WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Projekt nicht gefunden' });
+  const n = projektNotiz.notizVon(db, p.id);
+  const zugriff = projektNotiz.zugriff(db, n || { projekt_notiz_fuer: p.id }, req.user.id);
+  if (!zugriff) return res.status(403).json({ error: 'Keine Berechtigung' });
+  res.json({ notiz: n ? { ...notizKurz(db, p.id), body: n.body, body_delta: n.body_delta } : null,
+    darf_schreiben: zugriff === 'write', darf_gaeste: projektNotiz.darfGaeste(req.user) });
+});
+
+// Projektnotiz öffnen: beim ersten Mal anlegen (leer). Liefert die Notiznummer für den Editor.
+router.post('/:id/notiz', authenticate, (req, res) => {
+  const db = getDb();
+  const p = db.prepare('SELECT id FROM projects WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Projekt nicht gefunden' });
+  if (!projektNotiz.zugriff(db, { projekt_notiz_fuer: p.id }, req.user.id)) return res.status(403).json({ error: 'Keine Berechtigung' });
+  const n = projektNotiz.holenOderAnlegen(db, p.id);
+  if (!n) return res.status(404).json({ error: 'Projekt nicht gefunden' });
+  res.json({ notiz: { id: n.id, title: n.title } });
+});
+
 router.get('/:id', authenticate, (req, res) => {
   const db = getDb();
   const project = db.prepare('SELECT * FROM projects WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
@@ -254,6 +290,16 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   if (req.body.category_ids !== undefined) setCategories(db, project.id, req.body.category_ids);
   if (req.body.milestones !== undefined) setMilestones(db, project.id, req.body.milestones);
   const updated = db.prepare('SELECT * FROM projects WHERE id = ?').get(project.id);
+  // Projektnotiz: Titel = Projektname; Zuteilung entscheidet übers Schreiben — beides gilt sofort,
+  // auch für die, die gerade in der Notiz sind
+  const notiz = projektNotiz.notizVon(db, project.id);
+  if (notiz) {
+    if (updated.name !== notiz.title) {
+      db.prepare('UPDATE notes SET title = ? WHERE id = ?').run(updated.name, notiz.id);
+      live().kopfGeaendert(notiz.id, live().kopfVon(db, notiz.id), null, null, null);
+    }
+    live().zugriffAbgleichen(notiz.id);
+  }
   broadcast('projects', req.headers['x-tab-id']);
   res.json({ project: withDetails(db, updated) });
 });
@@ -366,6 +412,9 @@ router.delete('/:id', authenticate, authorize('chef'), (req, res) => {
   db.prepare(`UPDATE tool_checkouts SET project_text = ? WHERE project_id = ? AND (project_text IS NULL OR project_text = '')`).run(project.name, project.id);
   db.prepare(`UPDATE notes SET project_text = ? WHERE project_id = ? AND (project_text IS NULL OR project_text = '')`).run(project.name, project.id);
   db.prepare("UPDATE projects SET deleted_at = strftime('%Y-%m-%d %H:%M:%f','now'), deleted_by = ? WHERE id = ?").run(req.user.id, project.id);
+  // Projektnotiz geht mit in den Papierkorb: Wer drin ist (auch Gäste), fliegt raus
+  const notiz = projektNotiz.notizVon(db, project.id);
+  if (notiz) live().zugriffAbgleichen(notiz.id);
   broadcast('projects', req.headers['x-tab-id']);
   res.json({ success: true });
 });
@@ -397,6 +446,13 @@ router.delete('/:id/purge', authenticate, authorize('chef'), (req, res) => {
 
   db.prepare('DELETE FROM project_assignments WHERE project_id = ?').run(project.id);
   db.prepare('DELETE FROM project_milestones WHERE project_id = ?').run(project.id);
+  // Projektnotiz endgültig weg — samt Gästen und Gesehen-Merkern (Freigaben/Angebote gibt es bei ihr nicht)
+  const notiz = projektNotiz.notizVon(db, project.id);
+  if (notiz) {
+    live().notizGeloescht(notiz.id);
+    for (const t of ['note_shares', 'note_offers', 'note_gesehen', 'note_gaeste']) db.prepare(`DELETE FROM ${t} WHERE note_id = ?`).run(notiz.id);
+    db.prepare('DELETE FROM notes WHERE id = ?').run(notiz.id);
+  }
   db.prepare('DELETE FROM projects WHERE id = ?').run(project.id);
   broadcast('projects', req.headers['x-tab-id']);
   res.json({ success: true });

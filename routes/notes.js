@@ -7,6 +7,7 @@ const push = require('../push');
 const live = require('../notizen-live');
 const { zeileAusKlartext, zeileAusDelta } = require('../notiz-dokument');
 const exporte = require('../notiz-export');
+const projektNotiz = require('../projekt-notiz');
 
 const router = express.Router();
 
@@ -34,6 +35,11 @@ function resolveProject(db, project_id, project_text) {
 function canAccessNote(db, noteId, userId) {
   const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(noteId);
   if (!note) return { note: null, access: null };
+  // Projektnotiz: Rolle und Zuteilung (projekt-notiz.js); Projekt gelöscht → wie nicht vorhanden
+  if (note.projekt_notiz_fuer) {
+    const z = projektNotiz.zugriff(db, note, userId);
+    return z === undefined ? { note: null, access: null } : { note, access: z };
+  }
   if (note.user_id === userId) return { note, access: 'owner' };
   const share = db.prepare('SELECT permission FROM note_shares WHERE note_id = ? AND user_id = ?').get(noteId, userId);
   if (!share) return { note, access: null };
@@ -41,7 +47,8 @@ function canAccessNote(db, noteId, userId) {
 }
 
 function notizAusgeben(db, id) {
-  return db.prepare(`SELECT ${SPALTEN}, u.name as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?`).get(id);
+  // LEFT JOIN: Projektnotizen haben keinen Eigentümer
+  return db.prepare(`SELECT ${SPALTEN}, n.projekt_notiz_fuer, u.name as owner_name FROM notes n LEFT JOIN users u ON n.user_id = u.id WHERE n.id = ?`).get(id);
 }
 
 // --- Offers-Routen VOR /:id ---
@@ -215,6 +222,7 @@ router.put('/:id', authenticate, (req, res) => {
   const { note, access } = canAccessNote(db, req.params.id, req.user.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (!access || access === 'read') return res.status(403).json({ error: 'Keine Berechtigung' });
+  if (note.projekt_notiz_fuer) return res.status(403).json({ error: 'Der Titel einer Projektnotiz ist der Projektname — umbenennen geht beim Projekt.' });
 
   const { title, project_id, project_text, verbindung } = req.body;
   if (!title || !title.trim()) {
@@ -404,7 +412,7 @@ router.post('/:id/offer', authenticate, (req, res) => {
 
 // Stand einer Notiz: Ist sie gerade offen, der von eben (auch noch nicht gespeichert), sonst der gespeicherte.
 function aktuellerStand(db, id) {
-  const n = db.prepare('SELECT id, user_id, title, body, body_delta, project_id, project_text FROM notes WHERE id = ?').get(id);
+  const n = db.prepare('SELECT id, user_id, title, body, body_delta, project_id, project_text, projekt_notiz_fuer FROM notes WHERE id = ?').get(id);
   if (!n) return null;
   const offen = live.offenerStand(id);
   return offen ? { ...n, body: offen.body, body_delta: offen.body_delta } : n;
@@ -455,7 +463,9 @@ router.post('/:id/kopie', authenticate, (req, res) => {
   if (!access) return res.status(403).json({ error: 'Keine Berechtigung' });
   const n = aktuellerStand(db, note.id);
   const kopie = zeileAusDelta(n.body_delta, n.body);
-  const projekt = n.project_id && db.prepare('SELECT id FROM projects WHERE id = ?').get(n.project_id) ? n.project_id : null;
+  // Kopie einer Projektnotiz: gehört dem Klickenden und hängt am Projekt
+  const quelleProjekt = n.projekt_notiz_fuer || n.project_id;
+  const projekt = quelleProjekt && db.prepare('SELECT id FROM projects WHERE id = ?').get(quelleProjekt) ? quelleProjekt : null;
   // Kopie einer Kopie: den alten „(Stand …)" ersetzen, nicht anhängen
   const basis = n.title.replace(/\s*\(Stand \d\d\.\d\d\.\d{4}, \d\d:\d\d\)$/, '') || n.title;
   const titel = `${basis} (Stand ${exporte.standText()})`;
