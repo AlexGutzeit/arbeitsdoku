@@ -341,7 +341,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   → 5 Prüfungen rot. Dabei im eigenen Test gefunden: `GET …/shares` liefert kein Datum — der erste Vergleich
   war `undefined === undefined` und grün; das Datum kommt jetzt aus der Liste des Empfängers und muss da sein.
 
-### [x] R27 · Fremdschlüssel-Schutz fällt nach dem ersten Speichern weg — Löschen hinterlässt Reste *(gebaut 28.09.2026, noch nicht deployt)*
+### [x] R27 · Fremdschlüssel-Schutz fällt nach dem ersten Speichern weg — Löschen hinterlässt Reste *(DEPLOYED 28.09.2026 abends, b192c0d, Cache 432)*
 *(gefunden 28.09.2026 beim Prod-Klon-Test zum Umbau der Notiz-Tabelle; Ursache am selben Tag gefunden)*
 - **Ursache:** Die App schaltete beim Start `PRAGMA foreign_keys = ON` ein. sql.js öffnet die Datenbank beim
   Speichern (`export()`, alle paar Sekunden) intern neu — danach war der Schutz **aus**, bis zum nächsten

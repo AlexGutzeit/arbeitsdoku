@@ -3854,3 +3854,22 @@ und schlug genau bei dieser Planung an. Und er baut sich seinen Klon selbst: Auf
 `/tmp/prodklon.db` hatte ein Test aus einem abgebrochenen Suite-Lauf schon aufgeräumt, und die Nullprobe
 maß dort nichts mehr. `tests/abschluss-haerte.js` Abschnitt 4 hielt die alte Entscheidung „bewusst nicht
 gesperrt" fest und prüft jetzt die Sperre.
+
+**Deploy R27 + endgültig löschen (28.09.2026, 22:13, `b192c0d`, Cache 432).** Suite 252/252. Vollsicherung
+`arbeitsdoku_backup_20260928-220151.adbk` (VPS, Mini-PC, Laptop, gleiche Prüfsumme; Rückspielprobe auf dem
+Mini-PC); die Datenbank war beim Deploy bytegleich mit dem Stand der Sicherung. Rückkehrpunkt `vor-r27-deploy`
+(= `766c353`). Trockenlauf des Prod-Klon-Tests auf genau diesem Stand, danach der Deploy. Server-Protokoll wie
+im Trockenlauf: „Inhalt früh gelöschter Konten (Nr. 3, 4, 5): 6 Zeiteinträge, 2 Planungen — dabei mit
+weggeräumt: 2640 Planungs-Zuweisungen, 1 Versand-Merker" und „Start: 2 Planungs-Zuweisungen an gelöschte
+Konten, 7 Soll-Stunden …, 1 Gesehen-Merker …".
+**Vorher/nachher an den echten Daten** (Alex: „Stelle sicher, dass sich an den Produktivdaten und den Stunden
+der MA nichts ändert"): (1) Zeile für Zeile, Erwartung unabhängig vom Code berechnet. Weg sind genau die 2659
+freigegebenen Zeilen, sonst fehlt oder ändert sich keine Zeile in allen 51 Tabellen, neu sind nur zwei
+Protokolleinträge und der Merker. Zeiteinträge vorhandener Konten 1429 → 1429, Datei heil. (2) Stunden: der
+alte Code auf den Daten von vorher gegen den neuen auf den Daten von nachher, 130 Statistik-Abfragen, 39
+Überstundenstände und 8 Monate Lohn-Export zeichengleich. **Gegenprobe:** Die erste Fassung verlängerte die
+gespeicherte Netto-Spalte eines Eintrags von heute und blieb GRÜN. Die App rechnet aus Beginn/Ende/Pause, die
+Spalte liest sie dafür nicht. Mit einem um eine Stunde verlängerten Arbeitsende (03.08.) schlugen alle drei
+Prüfungen an. **Rückweg:** Code auf `vor-r27-deploy` läuft mit der aufgeräumten Datenbank. Die Sicherung von
+22:01 zurückspielen bringt auch die entfernten Zeilen zurück; der nächste Start räumt sie dann wieder weg,
+außer man bleibt auf dem alten Code.
