@@ -9,6 +9,7 @@ const { ROLLEN_MIT_PRODUKTRECHT } = require('../produktrecht');
 const { pruefeSperre, pruefeSperreGlobal, protokolliereEingriff, abgerechnetBis } = require('../abschluss');
 const { istUhrzeit } = require('../zeit');
 const zweiFaktor = require('../zweifaktor');
+const reste = require('../reste');
 const { austrittsdatumSetzen, austrittsdatumAufheben, ausstellenVollziehen, berlinHeute } = require('../ausstellen');
 
 const router = express.Router();
@@ -816,8 +817,11 @@ router.post('/:id/reactivate', authenticate, authorize('chef'), (req, res) => {
   res.json({ success: true });
 });
 
-// Benutzer ENDGUELTIG löschen (Hard-Delete inkl. aller Daten per Cascade). Nur Admin und nur,
-// wenn der Mitarbeiter zuvor ausgestellt wurde — schuetzt vor versehentlichem Datenverlust.
+// Benutzer ENDGUELTIG löschen. Nur Admin und nur, wenn der Mitarbeiter zuvor ausgestellt wurde — schuetzt
+// vor versehentlichem Datenverlust. Mit dem Konto gehen seine Anhängsel (Einstellungen, Zuweisungen,
+// Soll-Stunden, Profilbild …, s. reste.js). INHALT bleibt stehen: Zeiteinträge, Abwesenheiten, Planungen,
+// Notizen. Das „ON DELETE CASCADE" im Schema, auf das sich dieser Weg verließ, hat nie gewirkt (R27) — so war
+// es in der Praxis also immer; ob der Inhalt künftig mitgehen soll, ist eine offene Entscheidung.
 router.delete('/:id', authenticate, authorize('admin'), (req, res) => {
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
@@ -829,12 +833,12 @@ router.delete('/:id', authenticate, authorize('admin'), (req, res) => {
     return res.status(400).json({ error: 'Mitarbeiter muss zuerst ausgestellt werden, bevor er endgültig gelöscht werden kann' });
   }
 
-  // Der Hard-Delete loescht per Kaskade ALLE Eintraege des Nutzers — auch bereits abgerechnete.
-  // Eine Sperre waere hier Vortaeuschung (das Werkzeug ist bewusst der letzte Ausweg), aber der
-  // Vermerk muss im Protokoll stehen. Der Beleg selbst ueberlebt: payroll_closure_rows haengt
+  // Der Vermerk zu abgerechneten Zeiträumen gehört ins Protokoll; eine Sperre wäre hier Vortäuschung
+  // (das Werkzeug ist bewusst der letzte Ausweg). Der Beleg selbst ueberlebt: payroll_closure_rows haengt
   // bewusst NICHT an users (Name und Personalnummer stehen als Kopie darin).
   const abgerechnet = abgerechnetBis(db);
   db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  reste.nachLoeschen(db, 'users');
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_delete',
     details: `Endgültig gelöscht: ${user.username} (${user.role}, id=${req.params.id})`
       + (abgerechnet ? ` — BETRIFFT ABGERECHNETE ZEITRÄUME (bis ${abgerechnet})` : ''), ip: req.ip });

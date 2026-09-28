@@ -6,6 +6,7 @@ const { logAudit, berlinNow } = require('../audit');
 
 const { csvZelle, csvDatei } = require('../csv');
 const projektNotiz = require('../projekt-notiz');
+const reste = require('../reste');
 // Erst bei Gebrauch laden: notizen-live zieht die Notiz-Bausteine nach sich
 const live = () => require('../notizen-live');
 
@@ -454,6 +455,7 @@ router.delete('/:id/purge', authenticate, authorize('chef'), (req, res) => {
     db.prepare('DELETE FROM notes WHERE id = ?').run(notiz.id);
   }
   db.prepare('DELETE FROM projects WHERE id = ?').run(project.id);
+  reste.nachLoeschen(db, 'projects'); // auch die Kategorie-Zuordnungen (fehlten hier bis R27)
   broadcast('projects', req.headers['x-tab-id']);
   res.json({ success: true });
 });

@@ -5,8 +5,17 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const recur = require('../planning-recurrence');
 const { berlinHeute } = require('../zeit');
+const reste = require('../reste');
 
 const router = express.Router();
+
+// Planungen hart löschen — IMMER hierüber: Ihre Zuweisungen gehen mit. Der Fremdschlüssel-Schutz ist aus,
+// „ON DELETE CASCADE" wirkt nicht (R27, reste.js); jede Löschung ohne diesen Weg ließ die Zuweisungen liegen.
+function planungenLoeschen(db, bedingung, ...werte) {
+  const r = db.prepare(`DELETE FROM planning_entries WHERE ${bedingung}`).run(...werte);
+  if (r.changes) reste.nachLoeschen(db, 'planning_entries');
+  return r;
+}
 
 // ——— Serientermine (Wiederholungen) ———
 // „Heute" in Europe/Berlin wie im Rest der App (audit.js, scheduler.js, users.js). Mit UTC lieferte das
@@ -278,6 +287,7 @@ function pruneOrphanReminders(db) {
     db.prepare(`DELETE FROM planning_reminders WHERE
       (group_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM planning_entries pe WHERE pe.group_id = planning_reminders.group_id))
       OR (entry_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM planning_entries pe WHERE pe.id = planning_reminders.entry_id))`).run();
+    reste.nachLoeschen(db, 'planning_reminders'); // ihre Versand-Merker mit
   } catch (_) {}
 }
 
@@ -338,6 +348,7 @@ router.delete('/reminders/:id', authenticate, (req, res) => {
   if (row.series_id && scope === 'following') n = db.prepare('DELETE FROM planning_reminders WHERE user_id = ? AND reminder_group = ? AND occurrence_date >= ?').run(req.user.id, row.reminder_group, row.occurrence_date).changes;
   else if (row.series_id && scope === 'all') n = db.prepare('DELETE FROM planning_reminders WHERE user_id = ? AND reminder_group = ?').run(req.user.id, row.reminder_group).changes;
   else n = db.prepare('DELETE FROM planning_reminders WHERE id = ?').run(row.id).changes;
+  reste.nachLoeschen(db, 'planning_reminders'); // ihre Versand-Merker mit
   res.json({ success: true, deleted: n });
 });
 
@@ -630,8 +641,8 @@ router.put('/group/:groupId', authenticate, canPlan, (req, res) => {
     // Ursprünglichen Ersteller merken: Die Gruppe wird zum Aktualisieren gelöscht und neu angelegt — ohne das
     // stünde danach der Bearbeiter als Ersteller drin (falsche Herkunft in Anzeige/Protokoll).
     const origCreator = (db.prepare('SELECT created_by FROM planning_entries WHERE group_id = ? LIMIT 1').get(groupId) || {}).created_by || req.user.id;
-    // Alte Einträge der Gruppe löschen (CASCADE löscht auch assignments)
-    db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(groupId);
+    // Alte Einträge der Gruppe löschen (samt Zuweisungen, s. planungenLoeschen)
+    planungenLoeschen(db, 'group_id = ?', groupId);
 
     // Entscheide ob weiterhin Gruppe oder Einzeleintrag. Ein Serien-Vorkommen behält die group_id auch
     // eintägig (sonst verwaist die daran hängende Erinnerung + die Serien-Vorkommen-Identität geht verloren).
@@ -695,7 +706,7 @@ router.put('/:id', authenticate, canPlan, (req, res) => {
     const originalCreatedAt = entry.created_at;
 
     const convert = db.transaction(() => {
-      db.prepare('DELETE FROM planning_entries WHERE id = ?').run(req.params.id);
+      planungenLoeschen(db, 'id = ?', req.params.id);
       const ids = [];
       for (const day of days) {
         if (!day.date || !day.time_from || !day.time_to) continue;
@@ -822,10 +833,10 @@ router.delete('/series/:seriesId', authenticate, canPlan, (req, res) => {
   const tx = db.transaction(() => {
     if (scope === 'occurrence') {
       if (!occ) return { error: 'occurrence_date fehlt' };
-      db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date = ?').run(series.series_id, occ);
+      planungenLoeschen(db, 'series_id = ? AND occurrence_date = ?', series.series_id, occ);
     } else if (scope === 'following') {
       if (!occ) return { error: 'occurrence_date fehlt' };
-      db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, occ);
+      planungenLoeschen(db, 'series_id = ? AND occurrence_date >= ?', series.series_id, occ);
       if (occ <= series.anchor_date) {
         db.prepare('DELETE FROM planning_series WHERE series_id = ?').run(series.series_id); // nichts bleibt übrig
       } else {
@@ -833,7 +844,7 @@ router.delete('/series/:seriesId', authenticate, canPlan, (req, res) => {
           .run(addDaysISO(occ, -1), addDaysISO(occ, -1), series.series_id);
       }
     } else { // ganze Serie
-      db.prepare('DELETE FROM planning_entries WHERE series_id = ?').run(series.series_id);
+      planungenLoeschen(db, 'series_id = ?', series.series_id);
       db.prepare('DELETE FROM planning_series WHERE series_id = ?').run(series.series_id);
     }
     return { ok: true };
@@ -892,7 +903,7 @@ router.put('/series/:seriesId', authenticate, canPlan, (req, res) => {
     const insE = db.prepare(`INSERT INTO planning_entries (created_by, date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, group_id, color, series_id, occurrence_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     const insA = db.prepare('INSERT INTO planning_assignments (planning_id, user_id) VALUES (?, ?)');
     const txr = db.transaction(() => {
-      db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, fromDate);
+      planungenLoeschen(db, 'series_id = ? AND occurrence_date >= ?', series.series_id, fromDate);
       for (const start of starts) {
         const gid = crypto.randomUUID();
         for (const td of tplNew.tplDays) {
@@ -995,8 +1006,8 @@ router.post('/to-series', authenticate, canPlan, (req, res) => {
     let oldRem = [];
     if (req.body.group_id) oldRem = db.prepare('SELECT * FROM planning_reminders WHERE group_id = ?').all(req.body.group_id);
     else if (req.body.entry_id) oldRem = db.prepare('SELECT * FROM planning_reminders WHERE entry_id = ?').all(Number(req.body.entry_id));
-    if (req.body.group_id) db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(req.body.group_id);
-    else if (req.body.entry_id) db.prepare('DELETE FROM planning_entries WHERE id = ?').run(Number(req.body.entry_id));
+    if (req.body.group_id) planungenLoeschen(db, 'group_id = ?', req.body.group_id);
+    else if (req.body.entry_id) planungenLoeschen(db, 'id = ?', Number(req.body.entry_id));
     const res2 = createSeriesFrom(db, req.user.id, rule, template, assigned, null);
     // Erinnerungen auf die neue Serie umhängen (pro-Vorkommen, Scope wie gewählt). „following" == „all",
     // da die Einzelplanung zum ersten Vorkommen wird.
@@ -1012,6 +1023,7 @@ router.post('/to-series', authenticate, canPlan, (req, res) => {
       }
       const ids = oldRem.map(x => x.id);
       db.prepare(`DELETE FROM planning_reminders WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
+      reste.nachLoeschen(db, 'planning_reminders');
     }
     return res2;
   });
@@ -1050,7 +1062,7 @@ router.post('/series/:seriesId/retakt', authenticate, canPlan, (req, res) => {
         AND series_id IN (SELECT series_id FROM planning_series WHERE lineage_id = ?)`).all(lineageLast, lineage);
     } catch (_) {}
     // Alle Vorkommen der Herkunft ab boundary löschen (inkl. überholter Folge-Serien).
-    db.prepare('DELETE FROM planning_entries WHERE lineage_id = ? AND occurrence_date >= ?').run(lineage, boundary);
+    planungenLoeschen(db, 'lineage_id = ? AND occurrence_date >= ?', lineage, boundary);
     // Regeln der Herkunft ohne verbleibende Vorkommen entfernen; den Rest (Vergangenheit) deaktivieren.
     db.prepare('DELETE FROM planning_series WHERE lineage_id = ? AND NOT EXISTS (SELECT 1 FROM planning_entries pe WHERE pe.series_id = planning_series.series_id)').run(lineage);
     db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE lineage_id = ?").run(addDaysISO(boundary, -1), addDaysISO(boundary, -1), lineage);
@@ -1082,11 +1094,11 @@ router.post('/series/:seriesId/stop', authenticate, canPlan, (req, res) => {
   const today = todayISO();
   const tx = db.transaction(() => {
     if (after) {
-      db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date > ?').run(series.series_id, after);
+      planungenLoeschen(db, 'series_id = ? AND occurrence_date > ?', series.series_id, after);
       db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE series_id=?")
         .run(after, after, series.series_id);
     } else {
-      db.prepare('DELETE FROM planning_entries WHERE series_id = ? AND occurrence_date >= ?').run(series.series_id, today);
+      planungenLoeschen(db, 'series_id = ? AND occurrence_date >= ?', series.series_id, today);
       db.prepare("UPDATE planning_series SET active=0, end_type='until', end_until=?, materialized_until=? WHERE series_id=?")
         .run(addDaysISO(today, -1), addDaysISO(today, -1), series.series_id);
     }
@@ -1110,7 +1122,7 @@ router.post('/series/:seriesId/keep-single', authenticate, canPlan, (req, res) =
     || series.lineage_id || series.series_id;
   const tx = db.transaction(() => {
     // ALLE Vorkommen derselben Herkunft löschen — außer dem einen, das behalten wird.
-    db.prepare('DELETE FROM planning_entries WHERE lineage_id = ? AND NOT (series_id = ? AND occurrence_date = ?)').run(lineage, series.series_id, occ);
+    planungenLoeschen(db, 'lineage_id = ? AND NOT (series_id = ? AND occurrence_date = ?)', lineage, series.series_id, occ);
     db.prepare('DELETE FROM planning_series WHERE lineage_id = ?').run(lineage); // alle Regeln der Herkunft weg
     pruneOrphanReminders(db);                     // Erinnerungen der gelöschten Vorkommen weg
     detachEndedSeries(db, series.series_id);       // das eine verbleibende Vorkommen wird Einzelplanung
@@ -1141,7 +1153,7 @@ router.delete('/group/:groupId', authenticate, canPlan, (req, res) => {
     // nur ihm zugewiesen → ganze Gruppe löschen (unten)
   }
 
-  const result = db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(req.params.groupId);
+  const result = planungenLoeschen(db, 'group_id = ?', req.params.groupId);
   if (result.changes === 0) return res.status(404).json({ error: 'Gruppe nicht gefunden' });
   pruneOrphanReminders(db);
   broadcast('planning', req.headers['x-tab-id']);
@@ -1174,9 +1186,9 @@ router.delete('/:id', authenticate, canPlan, (req, res) => {
 
   // Wenn Gruppeneintrag: gesamte Gruppe löschen
   if (entry.group_id) {
-    db.prepare('DELETE FROM planning_entries WHERE group_id = ?').run(entry.group_id);
+    planungenLoeschen(db, 'group_id = ?', entry.group_id);
   } else {
-    db.prepare('DELETE FROM planning_entries WHERE id = ?').run(req.params.id);
+    planungenLoeschen(db, 'id = ?', req.params.id);
   }
   pruneOrphanReminders(db);
   broadcast('planning', req.headers['x-tab-id']);

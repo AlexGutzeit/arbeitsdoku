@@ -257,6 +257,7 @@ function extendSeries(db, now = new Date()) {
 let timer = null;
 let lastExtendDate = null;
 let lastAustrittDate = null;
+let lastResteDate = null;
 /**
  * Vorgemerkte Austritte vollziehen — einmal am Tag.
  *
@@ -310,12 +311,17 @@ function austritteVollziehen(db, heute) {
 
 function start(getDb) {
   if (timer) return;
+  // Der Start hat heute schon aufgeräumt (database/init.js) — der Tageslauf ist erst morgen wieder dran.
+  // Liefe er 15 s nach dem Booten gleich noch einmal, verdeckte er im Test einen Lösch-Weg ohne Aufräumen.
+  lastResteDate = berlinParts().date;
   const run = () => {
     try { tick(getDb()); } catch (e) { console.error('summary tick fehlgeschlagen:', e && e.message); }
     try { const d = berlinParts().date; if (d !== lastExtendDate) { lastExtendDate = d; extendSeries(getDb()); } } catch (e) { console.error('series extend fehlgeschlagen:', e && e.message); }
     // Eigener Tagesmerker: Faellt die Serien-Verlaengerung mit einem Fehler aus, darf der Austritt
     // trotzdem vollzogen werden — ein offen bleibendes Konto ist das groessere Problem.
     try { const d = berlinParts().date; if (d !== lastAustrittDate) { lastAustrittDate = d; austritteVollziehen(getDb()); } } catch (e) { console.error('austritte vollziehen fehlgeschlagen:', e && e.message); }
+    // Sicherheitsnetz: was ein Lösch-Weg liegen ließ, räumt der Tageslauf ab (R27, reste.js)
+    try { const d = berlinParts().date; if (d !== lastResteDate) { lastResteDate = d; require('./reste').aufraeumen(getDb(), 'Tageslauf'); } } catch (e) { console.error('reste aufraeumen fehlgeschlagen:', e && e.message); }
   };
   setTimeout(run, 15000);            // kurz nach Boot einmal
   timer = setInterval(run, 60 * 1000); // dann minütlich (Serien-Verlängerung nur 1×/Tag)

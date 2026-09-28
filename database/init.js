@@ -158,7 +158,11 @@ async function initDatabase() {
   }
 
   db = wrapDb(rawDb);
-  db.pragma('foreign_keys = ON');
+  // Fremdschlüssel-Schutz bewusst AUS (R27): sql.js schaltet ihn beim Speichern (export) ohnehin ab —
+  // er galt nur bis zum ersten Autosave, das Verhalten hing an der Uhrzeit. Ihn dauerhaft einzuschalten,
+  // ließe das Speichern alter Zeilen scheitern, deren Verweis ins Leere zeigt. Was beim Löschen mit
+  // abhängigen Zeilen geschieht, regelt reste.js — „ON DELETE CASCADE" im Schema wirkt nicht.
+  db.pragma('foreign_keys = OFF');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -846,7 +850,6 @@ async function initDatabase() {
       db.exec('DROP TABLE absences');
       db.exec('ALTER TABLE absences_new RENAME TO absences');
       db.exec('COMMIT');
-      db.exec('PRAGMA foreign_keys=ON');
       markDirty();
       console.log('Migration: dienstreise aus absences-CHECK entfernt (Tabelle neu aufgebaut).');
     }
@@ -915,6 +918,8 @@ async function initDatabase() {
   // Nach dem Seed erneut sicherstellen: frisch angelegte Seed-User brauchen ihren offenen
   // Anstellungszeitraum (der erste Aufruf oben lief, bevor es ueberhaupt User gab). Idempotent.
   ensureEmploymentSchema(db);
+  // Liegengebliebene Anhängsel gelöschter Zeilen entfernen — zuletzt, nach allen Umstellungen (R27)
+  require('../reste').aufraeumen(db, 'Start');
 }
 
 // Stellt sicher, dass die Revisionssicherheits-Objekte existieren — wichtig nach einem
@@ -1026,6 +1031,8 @@ function ensureAuditSchema(targetDb) {
   ensureNotizLiveSchema(targetDb);
   ensureNotizGaesteSchema(targetDb);
   ensureProjektNotizSchema(targetDb);
+  // Nur beim Zurückspielen: der Start räumt selbst auf, nach seinen übrigen Umstellungen (R27)
+  if (targetDb !== db) require('../reste').aufraeumen(targetDb, 'Zurückspielen');
 }
 
 // Live-Notizen (26.09.2026): Der Inhalt einer Notiz ist ein Yjs-Dokument (`ydoc`), `body` (Klartext)
@@ -1136,8 +1143,6 @@ function ensureProjektNotizSchema(targetDb) {
       } catch (e) {
         targetDb.exec('ROLLBACK');
         throw e;
-      } finally {
-        targetDb.exec('PRAGMA foreign_keys=ON');
       }
       console.log(`Migration: notes neu aufgebaut (Notiz ohne Eigentümer möglich), ${vorher} Notizen übernommen.`);
     }
@@ -1876,7 +1881,7 @@ function ensureEmploymentSchema(targetDb) {
 // scheitern kann, bevor es den Bestand anfasst; das Einsetzen selbst ist dann nur noch setDb() (R3).
 function datenbankVorbereiten(buffer) {
   const neu = wrapDb(new SQL.Database(buffer));
-  neu.pragma('foreign_keys = ON');
+  neu.pragma('foreign_keys = OFF'); // bewusst, s. initDatabase (R27)
   ensureAuditSchema(neu);
   return neu;
 }

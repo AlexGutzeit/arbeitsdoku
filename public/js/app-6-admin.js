@@ -964,6 +964,7 @@ const AUDIT_LABELS = {
   user_austritt_aufgehoben: 'Vormerkung aufgehoben',
   user_reactivate: 'Mitarbeiter wiedereingestellt',
   user_delete: 'Benutzer gelöscht',
+  reste_aufgeraeumt: 'Datenreste aufgeräumt',
   vacation_create: 'Urlaubsanspruch angelegt',
   vacation_update: 'Urlaubsanspruch geändert',
   vacation_delete: 'Urlaubsanspruch gelöscht',
