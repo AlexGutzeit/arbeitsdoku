@@ -28,9 +28,9 @@ router.get('/', authenticate, (req, res) => {
   const db = getDb();
   cleanup(db);
   const orders = db.prepare(`
-    SELECT o.*, u.name as user_name
+    SELECT o.*, COALESCE(u.name, 'Gelöschtes Konto') as user_name
     FROM orders o
-    JOIN users u ON o.user_id = u.id
+    LEFT JOIN users u ON o.user_id = u.id
     WHERE o.ordered_at IS NULL
     ORDER BY o.created_at ASC
   `).all();
@@ -42,9 +42,9 @@ router.get('/ordered', authenticate, (req, res) => {
   const db = getDb();
   cleanup(db);
   const orders = db.prepare(`
-    SELECT o.*, u.name as user_name, ob.name as ordered_by_name
+    SELECT o.*, COALESCE(u.name, 'Gelöschtes Konto') as user_name, ob.name as ordered_by_name
     FROM orders o
-    JOIN users u ON o.user_id = u.id
+    LEFT JOIN users u ON o.user_id = u.id
     LEFT JOIN users ob ON o.ordered_by = ob.id
     WHERE o.ordered_at IS NOT NULL
     ORDER BY o.ordered_at DESC
@@ -92,8 +92,8 @@ router.post('/', authenticate, (req, res) => {
   ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, req.user.id, loc.project_id, loc.location_text, pid);
 
   const order = db.prepare(`
-    SELECT o.*, u.name as user_name
-    FROM orders o JOIN users u ON o.user_id = u.id
+    SELECT o.*, COALESCE(u.name, 'Gelöschtes Konto') as user_name
+    FROM orders o LEFT JOIN users u ON o.user_id = u.id
     WHERE o.id = ?
   `).get(result.lastInsertRowid);
   broadcast('orders', req.headers['x-tab-id']);
@@ -151,8 +151,8 @@ router.put('/:id', authenticate, (req, res) => {
   ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, loc.project_id, loc.location_text, pruefeProduktId(db, product_id), req.params.id);
 
   const updated = db.prepare(`
-    SELECT o.*, u.name as user_name
-    FROM orders o JOIN users u ON o.user_id = u.id
+    SELECT o.*, COALESCE(u.name, 'Gelöschtes Konto') as user_name
+    FROM orders o LEFT JOIN users u ON o.user_id = u.id
     WHERE o.id = ?
   `).get(req.params.id);
   broadcast('orders', req.headers['x-tab-id']);

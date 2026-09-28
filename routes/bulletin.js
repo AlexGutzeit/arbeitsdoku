@@ -38,9 +38,9 @@ router.get('/', authenticate, (req, res) => {
   cleanExpired(db);
 
   const entries = db.prepare(`
-    SELECT b.*, u.name as author_name
+    SELECT b.*, COALESCE(u.name, 'Gelöschtes Konto') as author_name
     FROM bulletin_entries b
-    JOIN users u ON b.created_by = u.id
+    LEFT JOIN users u ON b.created_by = u.id
     ORDER BY b.created_at DESC
   `).all();
 
@@ -68,8 +68,8 @@ router.post('/', authenticate, canBulletin, (req, res) => {
   `).run(req.user.id, req.user.id, title.trim(), text || '', event_date || null, auto_delete_date || null);
 
   const entry = db.prepare(`
-    SELECT b.*, u.name as author_name
-    FROM bulletin_entries b JOIN users u ON b.created_by = u.id
+    SELECT b.*, COALESCE(u.name, 'Gelöschtes Konto') as author_name
+    FROM bulletin_entries b LEFT JOIN users u ON b.created_by = u.id
     WHERE b.id = ?
   `).get(result.lastInsertRowid);
 
@@ -109,8 +109,8 @@ router.put('/:id', authenticate, canBulletin, (req, res) => {
 
   if (unveraendert) {
     const unbewegt = db.prepare(`
-      SELECT b.*, u.name as author_name
-      FROM bulletin_entries b JOIN users u ON b.created_by = u.id
+      SELECT b.*, COALESCE(u.name, 'Gelöschtes Konto') as author_name
+      FROM bulletin_entries b LEFT JOIN users u ON b.created_by = u.id
       WHERE b.id = ?
     `).get(req.params.id);
     return res.json({ entry: unbewegt, unchanged: true });
@@ -122,8 +122,8 @@ router.put('/:id', authenticate, canBulletin, (req, res) => {
   `).run(neuTitel, neuText, neuEvent, neuAuto, req.user.id, req.params.id);
 
   const updated = db.prepare(`
-    SELECT b.*, u.name as author_name
-    FROM bulletin_entries b JOIN users u ON b.created_by = u.id
+    SELECT b.*, COALESCE(u.name, 'Gelöschtes Konto') as author_name
+    FROM bulletin_entries b LEFT JOIN users u ON b.created_by = u.id
     WHERE b.id = ?
   `).get(req.params.id);
 

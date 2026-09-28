@@ -1390,7 +1390,7 @@ function confirmModal(message, opts = {}) {
         <div class="modal-header"><h3>${esc(opts.title || 'Bestätigen')}</h3></div>
         <div class="modal-body"><p style="margin:0;white-space:pre-line">${esc(message)}</p></div>
         <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem">
-          <button class="btn btn-outline" data-act="cancel">${esc(opts.cancelLabel || 'Abbrechen')}</button>
+          ${opts.nurOk ? '' : `<button class="btn btn-outline" data-act="cancel">${esc(opts.cancelLabel || 'Abbrechen')}</button>`}
           <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-act="ok">${esc(opts.okLabel || 'OK')}</button>
         </div>
       </div>`;
@@ -1402,10 +1402,11 @@ function confirmModal(message, opts = {}) {
     const onKey = (e) => { if (e.key === 'Escape') finish(false); else if (e.key === 'Enter' && !danger) finish(true); };
     document.addEventListener('keydown', onKey);
     klickDanebenSchliesst(overlay, () => finish(false));
-    overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => finish(false));
+    const abbrechen = overlay.querySelector('[data-act="cancel"]');
+    if (abbrechen) abbrechen.addEventListener('click', () => finish(false));
     overlay.querySelector('[data-act="ok"]').addEventListener('click', () => finish(true));
     // Fokus bei destruktiven Dialogen auf „Abbrechen" (sichere Vorauswahl), sonst auf OK.
-    overlay.querySelector(danger ? '[data-act="cancel"]' : '[data-act="ok"]').focus();
+    overlay.querySelector(danger && abbrechen ? '[data-act="cancel"]' : '[data-act="ok"]').focus();
   });
 }
 // choiceModal: Mehrfach-Auswahl. choices: [{ value, label, danger?, primary? }]. Liefert value oder null (Abbruch).
@@ -1434,7 +1435,8 @@ function choiceModal(message, choices, opts = {}) {
   });
 }
 // promptModal: Promise<string|null> — String bei OK, null bei Abbrechen/Esc (wie natives prompt()).
-// opts: { title, defaultValue, multiline (default true), required, requiredMsg, okLabel, placeholder }
+// opts: { title, defaultValue, multiline (default true), required, requiredMsg, okLabel, placeholder,
+//         pruefen (Wert → Fehlertext oder null; hält den Dialog offen), danger (rote OK-Taste) }
 function promptModal(message, opts = {}) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -1455,7 +1457,7 @@ function promptModal(message, opts = {}) {
         </div>
         <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem">
           <button class="btn btn-outline" data-act="cancel">Abbrechen</button>
-          <button class="btn btn-primary" data-act="ok">${esc(opts.okLabel || 'OK')}</button>
+          <button class="btn ${opts.danger ? 'btn-danger' : 'btn-primary'}" data-act="ok">${esc(opts.okLabel || 'OK')}</button>
         </div>
       </div>`;
     document.body.appendChild(overlay);
@@ -1464,8 +1466,10 @@ function promptModal(message, opts = {}) {
     const errEl = overlay.querySelector('#pm-error');
     const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); resolve(val); };
     const submit = () => {
-      if (opts.required && !input.value.trim()) {
-        errEl.textContent = opts.requiredMsg || 'Pflichtfeld – bitte ausfüllen.';
+      const fehler = (opts.required && !input.value.trim()) ? (opts.requiredMsg || 'Pflichtfeld – bitte ausfüllen.')
+        : (opts.pruefen ? opts.pruefen(input.value) : null);
+      if (fehler) {
+        errEl.textContent = fehler;
         errEl.style.display = '';
         input.setAttribute('aria-invalid', 'true');
         input.setAttribute('aria-describedby', 'pm-error');

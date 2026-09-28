@@ -102,9 +102,9 @@ router.get('/', authenticate, (req, res) => {
   const { date_from, date_to, project_id } = req.query;
 
   let sql = `
-    SELECT pe.*, u.name as created_by_name, p.name as project_name
+    SELECT pe.*, COALESCE(u.name, 'Gelöschtes Konto') as created_by_name, p.name as project_name
     FROM planning_entries pe
-    JOIN users u ON pe.created_by = u.id
+    LEFT JOIN users u ON pe.created_by = u.id
     LEFT JOIN projects p ON pe.project_id = p.id
     WHERE 1=1
   `;
@@ -136,9 +136,9 @@ router.get('/', authenticate, (req, res) => {
 router.get('/group/:groupId', authenticate, (req, res) => {
   const db = getDb();
   const entries = db.prepare(`
-    SELECT pe.*, u.name as created_by_name, p.name as project_name
+    SELECT pe.*, COALESCE(u.name, 'Gelöschtes Konto') as created_by_name, p.name as project_name
     FROM planning_entries pe
-    JOIN users u ON pe.created_by = u.id
+    LEFT JOIN users u ON pe.created_by = u.id
     LEFT JOIN projects p ON pe.project_id = p.id
     WHERE pe.group_id = ?
     ORDER BY pe.date ASC
@@ -355,9 +355,9 @@ router.delete('/reminders/:id', authenticate, (req, res) => {
 router.get('/:id', authenticate, (req, res) => {
   const db = getDb();
   const entry = db.prepare(`
-    SELECT pe.*, u.name as created_by_name, p.name as project_name
+    SELECT pe.*, COALESCE(u.name, 'Gelöschtes Konto') as created_by_name, p.name as project_name
     FROM planning_entries pe
-    JOIN users u ON pe.created_by = u.id
+    LEFT JOIN users u ON pe.created_by = u.id
     LEFT JOIN projects p ON pe.project_id = p.id
     WHERE pe.id = ?
   `).get(req.params.id);
@@ -774,8 +774,8 @@ router.put('/:id', authenticate, canPlan, (req, res) => {
   update();
 
   const updated = db.prepare(`
-    SELECT pe.*, u.name as created_by_name, p.name as project_name
-    FROM planning_entries pe JOIN users u ON pe.created_by = u.id LEFT JOIN projects p ON pe.project_id = p.id
+    SELECT pe.*, COALESCE(u.name, 'Gelöschtes Konto') as created_by_name, p.name as project_name
+    FROM planning_entries pe LEFT JOIN users u ON pe.created_by = u.id LEFT JOIN projects p ON pe.project_id = p.id
     WHERE pe.id = ?
   `).get(req.params.id);
   const assigned = db.prepare(`
@@ -1196,3 +1196,7 @@ router.delete('/:id', authenticate, canPlan, (req, res) => {
 });
 
 module.exports = router;
+// Für „Mitarbeiter endgültig löschen" (konto-loeschen.js): derselbe Lösch-Weg, dieselbe Erinnerungs-Pflege.
+// Als Eigenschaften am Router mitgegeben, wie routes/users.js es mit passwordPolicyError vormacht.
+module.exports.planungenLoeschen = planungenLoeschen;
+module.exports.pruneOrphanReminders = pruneOrphanReminders;

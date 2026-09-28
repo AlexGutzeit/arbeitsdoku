@@ -6,10 +6,12 @@ const { logAudit } = require('../audit');
 const { ROLLEN_MIT_BESTELLRECHT, bestellmeldungenAufraeumen } = require('../bestellrecht');
 const { ROLLEN_MIT_EINLERNRECHT } = require('../barcoderecht');
 const { ROLLEN_MIT_PRODUKTRECHT } = require('../produktrecht');
-const { pruefeSperre, pruefeSperreGlobal, protokolliereEingriff, abgerechnetBis } = require('../abschluss');
+const { pruefeSperre, pruefeSperreGlobal, protokolliereEingriff } = require('../abschluss');
 const { istUhrzeit } = require('../zeit');
 const zweiFaktor = require('../zweifaktor');
 const reste = require('../reste');
+const kontoLoeschen = require('../konto-loeschen');
+const { broadcast } = require('../sse');
 const { austrittsdatumSetzen, austrittsdatumAufheben, ausstellenVollziehen, berlinHeute } = require('../ausstellen');
 
 const router = express.Router();
@@ -817,32 +819,48 @@ router.post('/:id/reactivate', authenticate, authorize('chef'), (req, res) => {
   res.json({ success: true });
 });
 
-// Benutzer ENDGUELTIG löschen. Nur Admin und nur, wenn der Mitarbeiter zuvor ausgestellt wurde — schuetzt
-// vor versehentlichem Datenverlust. Mit dem Konto gehen seine Anhängsel (Einstellungen, Zuweisungen,
-// Soll-Stunden, Profilbild …, s. reste.js). INHALT bleibt stehen: Zeiteinträge, Abwesenheiten, Planungen,
-// Notizen. Das „ON DELETE CASCADE" im Schema, auf das sich dieser Weg verließ, hat nie gewirkt (R27) — so war
-// es in der Praxis also immer; ob der Inhalt künftig mitgehen soll, ist eine offene Entscheidung.
+// Benutzer ENDGUELTIG löschen — die Regel steht in konto-loeschen.js (was geht, was bleibt, wann gesperrt).
+// Nur Admin und nur, wenn der Mitarbeiter zuvor ausgestellt wurde; gedacht für Testkonten.
+function loeschbar(db, req, res) {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) { res.status(404).json({ error: 'Benutzer nicht gefunden' }); return null; }
+  if (Number(req.params.id) === req.user.id) { res.status(400).json({ error: 'Sich selbst kann man nicht löschen' }); return null; }
+  if (user.active !== 0) {
+    res.status(400).json({ error: 'Mitarbeiter muss zuerst ausgestellt werden, bevor er endgültig gelöscht werden kann' });
+    return null;
+  }
+  return user;
+}
+
+// Was ginge, was bliebe, ob gesperrt — für den Bestätigungsdialog
+router.get('/:id/loeschen-vorschau', authenticate, authorize('admin'), (req, res) => {
+  const db = getDb();
+  const user = loeschbar(db, req, res);
+  if (!user) return;
+  res.json({ name: user.name, gesperrt: kontoLoeschen.sperre(db, user.id), ...kontoLoeschen.vorschau(db, user.id) });
+});
+
 router.delete('/:id', authenticate, authorize('admin'), (req, res) => {
   const db = getDb();
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
-  if (Number(req.params.id) === req.user.id) {
-    return res.status(400).json({ error: 'Sich selbst kann man nicht löschen' });
-  }
-  if (user.active !== 0) {
-    return res.status(400).json({ error: 'Mitarbeiter muss zuerst ausgestellt werden, bevor er endgültig gelöscht werden kann' });
-  }
+  const user = loeschbar(db, req, res);
+  if (!user) return;
+  // Wer schon abgerechnet ist, bleibt (Alex): sonst käme die Abrechnung durcheinander
+  const gesperrt = kontoLoeschen.sperre(db, user.id);
+  if (gesperrt) return res.status(409).json({ error: gesperrt });
 
-  // Der Vermerk zu abgerechneten Zeiträumen gehört ins Protokoll; eine Sperre wäre hier Vortäuschung
-  // (das Werkzeug ist bewusst der letzte Ausweg). Der Beleg selbst ueberlebt: payroll_closure_rows haengt
-  // bewusst NICHT an users (Name und Personalnummer stehen als Kopie darin).
-  const abgerechnet = abgerechnetBis(db);
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-  reste.nachLoeschen(db, 'users');
+  let weg;
+  db.transaction(() => {
+    weg = kontoLoeschen.inhaltLoeschen(db, user.id);
+    db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+    reste.nachLoeschen(db, 'users');
+  })();
+  kontoLoeschen.profilbildWeg(user.id);
+  const live = require('../notizen-live');
+  for (const id of weg.notizen) live.notizGeloescht(id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_delete',
-    details: `Endgültig gelöscht: ${user.username} (${user.role}, id=${req.params.id})`
-      + (abgerechnet ? ` — BETRIFFT ABGERECHNETE ZEITRÄUME (bis ${abgerechnet})` : ''), ip: req.ip });
-  res.json({ success: true });
+    details: `Endgültig gelöscht: ${user.username} (${user.role}, id=${user.id}) — ${kontoLoeschen.beschreiben(weg.zahlen)}`, ip: req.ip });
+  for (const k of ['planning', 'notes', 'tools', 'absences']) broadcast(k, req.headers['x-tab-id']);
+  res.json({ success: true, geloescht: weg.zahlen });
 });
 
 module.exports = router;

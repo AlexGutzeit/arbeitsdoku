@@ -918,7 +918,10 @@ async function initDatabase() {
   // Nach dem Seed erneut sicherstellen: frisch angelegte Seed-User brauchen ihren offenen
   // Anstellungszeitraum (der erste Aufruf oben lief, bevor es ueberhaupt User gab). Idempotent.
   ensureEmploymentSchema(db);
-  // Liegengebliebene Anhängsel gelöschter Zeilen entfernen — zuletzt, nach allen Umstellungen (R27)
+  // Zuletzt, nach allen Umstellungen (R27): erst EINMAL der Inhalt früh gelöschter Konten, dann die
+  // liegengebliebenen Anhängsel. In dieser Reihenfolge — sonst sähe eine Planung, in der nur ein gelöschtes
+  // Konto eingeteilt war, nach dem Aufräumen aus wie eine ohne Einteilung und würde nicht mehr erkannt.
+  require('../konto-loeschen').altlastenAufraeumen(db);
   require('../reste').aufraeumen(db, 'Start');
 }
 
@@ -1032,7 +1035,10 @@ function ensureAuditSchema(targetDb) {
   ensureNotizGaesteSchema(targetDb);
   ensureProjektNotizSchema(targetDb);
   // Nur beim Zurückspielen: der Start räumt selbst auf, nach seinen übrigen Umstellungen (R27)
-  if (targetDb !== db) require('../reste').aufraeumen(targetDb, 'Zurückspielen');
+  if (targetDb !== db) {
+    require('../konto-loeschen').altlastenAufraeumen(targetDb);
+    require('../reste').aufraeumen(targetDb, 'Zurückspielen');
+  }
 }
 
 // Live-Notizen (26.09.2026): Der Inhalt einer Notiz ist ein Yjs-Dokument (`ydoc`), `body` (Klartext)

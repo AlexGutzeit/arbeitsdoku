@@ -1295,7 +1295,7 @@ async function renderDeletedUsers() {
       <td>${esc(u.deactivated_by_name || '—')}</td>
       <td class="actions" style="white-space:nowrap;">
         <button class="btn btn-outline btn-sm reactivate-user" data-id="${u.id}" data-name="${esc(u.name)}" type="button">Wiedereinstellen</button>
-        <button class="btn btn-danger btn-sm purge-user" data-id="${u.id}" data-name="${esc(u.name)}" type="button">Endgültig löschen</button>
+        ${isAdmin() ? `<button class="btn btn-danger btn-sm purge-user" data-id="${u.id}" data-name="${esc(u.name)}" type="button">Endgültig löschen</button>` : ''}
       </td>
     </tr>`).join('');
 
@@ -1339,14 +1339,43 @@ async function renderDeletedUsers() {
     });
   });
 
+  // Endgültig löschen (nur Admin, gedacht für Testkonten — Regel in konto-loeschen.js): Der Dialog nennt,
+  // was verschwindet und was bleibt; bestätigt wird durch Eintippen des Namens, ein Klick reicht nicht.
   mainEl.querySelectorAll('.purge-user').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!(await confirmModal(
-        `"${btn.dataset.name}" wirklich ENDGÜLTIG löschen?\n\nDas Konto wird unwiderruflich entfernt — samt Zugang, Einstellungen, Profilbild, Soll-Stunden, Urlaubsansprüchen und Einteilungen in Planungen. Seine Zeiteinträge, Abwesenheiten, Planungen und Notizen bleiben in der Datenbank erhalten. Rückgängig nur über ein vollständiges Backup.`,
-        { title: 'Endgültig löschen', okLabel: 'Endgültig löschen', danger: true }))) return;
+      let v;
+      try { v = await api('GET', '/api/users/' + btn.dataset.id + '/loeschen-vorschau'); }
+      catch (err) { toast(err.message, 'error'); return; }
+      if (v.gesperrt) {
+        await confirmModal(v.gesperrt, { title: 'Endgültig löschen nicht möglich', okLabel: 'Verstanden', danger: false, nurOk: true });
+        return;
+      }
+      const zeile = (n, eins, viele, zusatz) => n ? `· ${n} ${n === 1 ? eins : viele}${zusatz ? ' ' + zusatz : ''}` : null;
+      const geht = [
+        zeile(v.geht.eintraege, 'Zeiteintrag', 'Zeiteinträge', '(auch im Papierkorb)'),
+        zeile(v.geht.abwesenheiten, 'Abwesenheit', 'Abwesenheiten'),
+        zeile(v.geht.notizen, 'Notiz', 'Notizen', '(auch bei denen, mit denen sie geteilt ist)'),
+        zeile(v.geht.planungen, 'Planung, in der nur diese Person eingeteilt ist', 'Planungen, in denen nur diese Person eingeteilt ist'),
+        zeile(v.geht.werkzeug, 'Werkzeug-Ausleihe', 'Werkzeug-Ausleihen'),
+        '· das Konto mit Zugang, Einstellungen, Soll-Stunden, Urlaubsanspruch und Profilbild',
+      ].filter(Boolean);
+      const bleibt = [
+        zeile(v.bleibt.planungenMitAnderen, 'Planung mit anderen', 'Planungen mit anderen', '(die Person wird ausgetragen)'),
+        zeile(v.bleibt.planungenFuerAndere, 'Planung, die sie für andere angelegt hat', 'Planungen, die sie für andere angelegt hat'),
+        zeile(v.bleibt.bestellungen, 'Bestellung', 'Bestellungen'),
+        zeile(v.bleibt.aushaenge, 'Aushang', 'Aushänge'),
+      ].filter(Boolean);
+      const name = v.name || btn.dataset.name;
+      const text = `„${name}" endgültig löschen?\n\nDanach ist weg:\n${geht.join('\n')}`
+        + (bleibt.length ? `\n\nEs bleibt (als „Gelöschtes Konto"):\n${bleibt.join('\n')}` : '')
+        + `\n\nRückgängig nur über eine Sicherung. Zum Bestätigen den Namen eintippen:`;
+      const eingabe = await promptModal(text, { title: 'Endgültig löschen', okLabel: 'Endgültig löschen', danger: true,
+        multiline: false, placeholder: name,
+        pruefen: (w) => w.trim() === name.trim() ? null : `Der Name stimmt nicht — bitte genau „${name}" eintippen.` });
+      if (eingabe === null) return;
       try {
         await api('DELETE', '/api/users/' + btn.dataset.id);
-        toast('Mitarbeiter endgültig gelöscht', 'success');
+        toast(`„${name}" endgültig gelöscht`, 'success');
         renderDeletedUsers();
       } catch (err) { toast(err.message, 'error'); }
     });
