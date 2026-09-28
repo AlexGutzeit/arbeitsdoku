@@ -340,6 +340,16 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 - **Gelöst (27.09.):** so umgesetzt, Test `tests/notiz-freigabe-datum.js` (11); Gegenprobe (altes Verhalten)
   → 5 Prüfungen rot. Dabei im eigenen Test gefunden: `GET …/shares` liefert kein Datum — der erste Vergleich
   war `undefined === undefined` und grün; das Datum kommt jetzt aus der Liste des Empfängers und muss da sein.
+
+### [ ] R27 · Verwaiste Zeilen in den Produktivdaten (Fremdschlüssel nicht durchgesetzt) *(niedrig, Entscheidung offen)*
+*(gefunden 28.09.2026 beim Prod-Klon-Test zum Umbau der Notiz-Tabelle; hat mit Notizen nichts zu tun)*
+- **Was:** `PRAGMA foreign_key_check` am Prod-Klon: **2631 von 3627** Planungs-Zuweisungen zeigen auf
+  Planungen, die es nicht mehr gibt; **6** Zeiteinträge auf gelöschte Konten, **32** auf gelöschte
+  Projekte; dazu einzelne in `planning_entries`, `user_target_hours`, `user_seen`, Erinnerungen.
+- **Folge heute:** keine sichtbare — die Zeilen hängen an nichts mehr und werden nirgends angezeigt.
+  Vermutlich aus einer Zeit, in der gelöscht wurde, ohne dass die Datenbank die Fremdschlüssel durchsetzte.
+- **Offen:** Aufräumen (mit Sicherung, Prod-Klon-Vergleich) oder so lassen — Alex entscheidet.
+  Vorher klären, ob die 6 Zeiteinträge ohne Konto noch in einer Abrechnung stecken.
 ---
 
 ## Geprüft und in Ordnung

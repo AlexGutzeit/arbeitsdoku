@@ -438,6 +438,8 @@ async function initDatabase() {
   ensureNotizLiveSchema(db);
   // Gäste in Notizen (idempotent, hier UND im Restore-Pfad)
   ensureNotizGaesteSchema(db);
+  // Projektnotiz: Notiz ohne persönlichen Eigentümer, gehört einem Projekt (idempotent, hier UND im Restore-Pfad)
+  ensureProjektNotizSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -1023,6 +1025,7 @@ function ensureAuditSchema(targetDb) {
   ensureProduktSchema(targetDb);
   ensureNotizLiveSchema(targetDb);
   ensureNotizGaesteSchema(targetDb);
+  ensureProjektNotizSchema(targetDb);
 }
 
 // Live-Notizen (26.09.2026): Der Inhalt einer Notiz ist ein Yjs-Dokument (`ydoc`), `body` (Klartext)
@@ -1096,6 +1099,53 @@ function ensureNotizGaesteSchema(targetDb) {
     if (weg) console.log(`Migration: ${weg} Gastzugang/-zugänge zu gelöschten Notizen entfernt.`);
   } catch (e) {
     console.error('ensureNotizGaesteSchema fehlgeschlagen:', e.message);
+  }
+}
+
+// Projektnotiz (28.09.2026, Alex): Jedes Projekt hat eine gemeinsame Notiz. Sie gehört keiner Person —
+// deshalb darf `notes.user_id` leer sein (bisher NOT NULL; SQLite kann das nur per Neuaufbau ändern).
+// `projekt_notiz_fuer` = das Projekt, dem die Notiz gehört (höchstens eine je Projekt). Das ist bewusst
+// NICHT `project_id`: Das ist die Verknüpfung einer PERSÖNLICHEN Notiz mit einem Projekt.
+//
+// Der Neuaufbau leitet die Tabelle aus der bestehenden Beschreibung ab (alle später ergänzten Spalten
+// bleiben), kopiert alle Zeilen mit ihren Nummern und hält den Nummernzähler (AUTOINCREMENT) fest —
+// sonst bekäme eine neue Notiz die Nummer einer früher gelöschten, und ein Handy mit alten, noch nicht
+// gesendeten Änderungen zu dieser Nummer schöbe sie in die neue Notiz. Freigaben, Angebote, Gesehen-
+// Merker und Gäste zeigen über die Nummer auf die Notiz und bleiben unberührt.
+function ensureProjektNotizSchema(targetDb) {
+  try {
+    const nutzer = targetDb.prepare('PRAGMA table_info(notes)').all().find(c => c.name === 'user_id');
+    if (nutzer && nutzer.notnull) {
+      const row = targetDb.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='notes'").get();
+      const neu = row.sql.replace(/\bnotes\b/, 'notes_neu').replace(/user_id\s+INTEGER\s+NOT\s+NULL/i, 'user_id INTEGER');
+      if (!/notes_neu/.test(neu) || /user_id\s+INTEGER\s+NOT\s+NULL/i.test(neu)) throw new Error('Tabellenbeschreibung von notes unerwartet — kein Umbau');
+      const zaehler = (targetDb.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'notes'").get() || {}).seq || 0;
+      const vorher = targetDb.prepare('SELECT COUNT(*) AS n FROM notes').get().n;
+      targetDb.exec('PRAGMA foreign_keys=OFF');
+      targetDb.exec('BEGIN');
+      try {
+        targetDb.exec('DROP TABLE IF EXISTS notes_neu');
+        targetDb.exec(neu);
+        targetDb.exec('INSERT INTO notes_neu SELECT * FROM notes');
+        const kopiert = targetDb.prepare('SELECT COUNT(*) AS n FROM notes_neu').get().n;
+        if (kopiert !== vorher) throw new Error(`nur ${kopiert} von ${vorher} Notizen kopiert`);
+        targetDb.exec('DROP TABLE notes');
+        targetDb.exec('ALTER TABLE notes_neu RENAME TO notes');
+        targetDb.prepare("UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'notes'").run(zaehler);
+        targetDb.exec('COMMIT');
+      } catch (e) {
+        targetDb.exec('ROLLBACK');
+        throw e;
+      } finally {
+        targetDb.exec('PRAGMA foreign_keys=ON');
+      }
+      console.log(`Migration: notes neu aufgebaut (Notiz ohne Eigentümer möglich), ${vorher} Notizen übernommen.`);
+    }
+    const cols = targetDb.prepare('PRAGMA table_info(notes)').all().map(c => c.name);
+    if (!cols.includes('projekt_notiz_fuer')) targetDb.exec('ALTER TABLE notes ADD COLUMN projekt_notiz_fuer INTEGER');
+    targetDb.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_projektnotiz ON notes(projekt_notiz_fuer) WHERE projekt_notiz_fuer IS NOT NULL');
+  } catch (e) {
+    console.error('ensureProjektNotizSchema fehlgeschlagen:', e.message);
   }
 }
 
