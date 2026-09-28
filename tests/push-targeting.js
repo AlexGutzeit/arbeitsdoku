@@ -100,6 +100,7 @@ function req(server, method, p, token, body) {
   app.use('/api/notes', require('../routes/notes'));
   app.use('/api/notes', require('../routes/notiz-gaeste').verwaltung);
   app.use('/api/gast', require('../routes/notiz-gaeste').gast);
+  app.use('/api/projects', require('../routes/projects'));
   app.use('/api/absences', require('../routes/absences'));
   app.use('/api/push', require('../routes/push'));
   const server = app.listen(0);
@@ -318,6 +319,31 @@ function req(server, method, p, token, body) {
     if (SENT[0] && SENT[0].payload.title === 'Gastzugang gesperrt' && /Herr Maier/.test(SENT[0].payload.body)) { pass++; console.log(`  ✓ … „${SENT[0].payload.body}"`); }
     else { fail++; console.log('  ✗ Sperr-Meldung: ' + JSON.stringify(SENT[0] && SENT[0].payload)); }
     await req(server, 'DELETE', `/api/notes/${noteId}/gaeste/${gastAnlegen.body.gast.id}`, tokens.max);
+    SENT = [];
+
+    // Projektnotiz (28.09.2026): Meldung NUR an die Zugeteilten (Alex) — nicht an alle Leser, nicht an
+    // Chef/Admin, wenn sie nicht zugeteilt sind; nie an den Bearbeiter, nie an wer gerade drin ist.
+    const pr = (await req(server, 'POST', '/api/projects', tokens.chef, { name: 'Halle 3', assigned_user_ids: [ids.lisa] })).body.project;
+    const pnid = (await req(server, 'POST', `/api/projects/${pr.id}/notiz`, tokens.max)).body.notiz.id;
+    const oeffneP = async (uname) => geraetOeffnen({ port: server.address().port, noteId: pnid, token: tokens[uname],
+      ticket: jwt.sign({ userId: ids[uname], sse: true }, process.env.JWT_SECRET, { expiresIn: '60s' }) });
+    g = await oeffneP('chef'); SENT = [];
+    await g.schreibe(t => t.insert(0, 'Gerüst steht. '));
+    await verlassen(g);
+    expectTargets('Projektnotiz: Chef (nicht zugeteilt) bearbeitet → nur die Zugeteilte (nicht Max, nicht Buchhaltung)', ['lisa']);
+    const pm = SENT[0] && SENT[0].payload;
+    if (pm && pm.title === 'Projektnotiz bearbeitet' && /hat die Projektnotiz „Halle 3" bearbeitet/.test(pm.body) && pm.url === '/#/projects') { pass++; console.log(`  ✓ … Text und Ziel: „${pm.body}" → ${pm.url}`); }
+    else { fail++; console.log('  ✗ Meldung Projektnotiz: ' + JSON.stringify(pm)); }
+    g = await oeffneP('lisa'); SENT = [];
+    await g.schreibe(t => t.insert(0, 'Strom ist da. '));
+    await verlassen(g);
+    expectTargets('Projektnotiz: Lisa (zugeteilt) bearbeitet → niemand (sie selbst nicht, Chef nicht zugeteilt)', []);
+    const lisaDrinP = await oeffneP('lisa');
+    g = await oeffneP('chef'); SENT = [];
+    await g.schreibe(t => t.insert(0, 'Abnahme Freitag. '));
+    await verlassen(g);
+    expectTargets('Projektnotiz: Lisa ist gerade drin → keine Meldung an sie', []);
+    await verlassen(lisaDrinP);
     SENT = [];
 
     // Kategorie-Schalter greift auch hier: max schaltet Notizen ab → keine Meldung mehr an ihn.
