@@ -3735,3 +3735,42 @@ sonst unverändert, Gästeseite ebenfalls (ohne App-Kopf liegt sie schon darunte
 prüft per `elementFromPoint`, dass beide Knöpfe antippbar bleiben — erst nach der 0,3-s-Einblendung
 gemessen; mittendrin lag die Meldung noch oberhalb, und „frei" wäre Zufall gewesen. Gegenprobe: rot.
 Cache 431.
+
+## Projektnotiz: eine gemeinsame Live-Notiz je Auftrag (28.09.2026)
+
+Alex' Idee: jeder Auftrag hat automatisch eine (anfangs leere) Notiz, erreichbar unter Projekte; lesen
+alle, schreiben Chef, Admin und die Zugeteilten. Entschieden: altes Feld „Notiz" heißt „Kurzinfo" und
+bleibt; Meldungen nur an die Zugeteilten; erledigt weiter beschreibbar; Gäste laden Chef und Admin ein.
+
+**Die Notiz gehört keiner Person.** `notes.user_id` war NOT NULL (mit Fremdschlüssel und ON DELETE
+CASCADE auf das Konto) — eine Projektnotiz einer Person unterzuschieben hätte sie beim endgültigen
+Löschen dieses Kontos mitgelöscht. Deshalb einmaliger **Neuaufbau der Tabelle** (`ensureProjektNotizSchema`):
+Beschreibung aus der bestehenden abgeleitet (wie beim `absences`-Umbau), alle Zeilen mit Nummern kopiert,
+Zählung geprüft, und der **AUTOINCREMENT-Zähler festgehalten** — sonst bekäme eine neue Notiz die Nummer
+einer gelöschten, und ein Handy mit alten, ungesendeten Änderungen zu dieser Nummer (`notiz-live:<id>`)
+schöbe sie in die neue. Neue Spalte `projekt_notiz_fuer` mit eindeutigem Index (höchstens eine je
+Projekt) — bewusst nicht `project_id`, das ist die Verknüpfung einer PERSÖNLICHEN Notiz.
+`tests/projektnotiz-umbau-prodklon.js` (18) an Vorlage und alter Rohkopie (vor Etappe A).
+
+**Nebenfund R27:** Die Produktivdaten haben alte Fremdschlüssel-Verstöße (2631 von 3627 Planungs-
+Zuweisungen zu gelöschten Planungen u. a.). Mit dem Umbau haben sie nichts zu tun; der Test prüft
+deshalb „keine NEUEN Verstöße, keiner auf Notizen" statt „keine". In der Bugliste, Entscheidung offen.
+
+**Die Regel an EINER Stelle:** `projekt-notiz.js` (Zugriff, Gäste, Empfänger, Anlegen). Live-Raum
+(`zugriffVon`), `canAccessNote`, Gäste-Verwaltung und Projekt-Routen fragen sie. Folgen, die der Test
+prüft: Zuteilung ändern → `zugriffAbgleichen`; Rolle ändern → `alleAbgleichen`; umbenennen → Titel +
+`kopfGeaendert`; Papierkorb → alle raus (Grund `projekt-geloescht`, Gäste `geloescht`); endgültig →
+Notiz, Gäste, Merker weg. Über die Notiz-Wege ist sie weder umbenenn-, lösch- noch teilbar. Angelegt
+wird sie beim ersten Öffnen (`POST /api/projects/:id/notiz`); das Ansehen (`GET`) legt nichts an.
+Das Board frischt nur auf, wenn die Notiz von leer zu nicht leer wechselt (📝) — nicht bei jedem Tippen.
+
+**Oberfläche:** Bereich in der aufgeklappten Kachel mit Vorschau, Route `#/projects/<id>/notiz`
+(`renderNotizEditor(null, { projektId })`, Menü „Projekte" aktiv), `notizWegeApp(id, projektId)`:
+Titel fest, Hinweis statt Projektfeld, „Gäste verwalten" für Chef/Admin, „← Fertig" zurück aufs Board.
+
+Tests: `projektnotiz` (23), `projektnotiz-ui` (11), `push-targeting` (57, Meldung nur an Zugeteilte).
+Gegenproben Server 12: zwei blieben zuerst grün bzw. wacklig — (1) „live bei Tom" hing an der zufälligen
+Reihenfolge im Dokument, weil Toms Testgerät seinen abgewiesenen Versuch bei sich behielt (jetzt an Beas
+Gerät geprüft); (2) „endgültig löschen" prüfte nur, dass niemand mehr hineinkommt — nicht, dass die Zeile
+weg ist (Teil 2 sieht in der Datenbank nach). Danach alle an ihrer Stelle rot. Und der UI-Test griff
+zuerst die erste Kachel — die frische Datenbank bringt ein Beispielprojekt mit.
