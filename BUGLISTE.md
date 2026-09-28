@@ -362,11 +362,20 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   - **Lösch-Wege räumen selbst auf:** Planung (alle 15 Stellen über `planungenLoeschen`), Erinnerungen
     (Versand-Merker), Projekt endgültig (auch Kategorie-Zuordnungen — fehlten), Konto endgültig.
   - **Sicherheitsnetz:** Aufräumen beim Start, beim Zurückspielen und einmal am Tag, mit Protokoll.
-  - **Nichts an Inhalt wird gelöscht.** Prod-Klon (`tests/reste-prodklon.js`): genau die 2650 Anhängsel weg,
-    jede andere Zeile jeder Tabelle zeichengleich; 698 Abfragen der App zeigen vorher wie nachher dasselbe.
   - **Nebenfund:** „Mitarbeiter endgültig löschen" versprach „alle Zeiteinträge, Abwesenheiten, Planungen und
-    Notizen werden entfernt" — wegen R27 blieben sie immer stehen. Text in Dialog und README jetzt wahr;
-    das Verhalten ist unverändert. **Offen (Alex):** Soll der Inhalt künftig wirklich mitgehen?
+    Notizen werden entfernt" — wegen R27 blieben sie immer stehen (so bei den Testkonten vom März).
+  - **Alex (28.09., Entscheidung):** Endgültig löschen (nur Admin, für Testkonten) nimmt den Inhalt wirklich
+    mit; Bestellungen und Aushänge bleiben; wer in einer Abrechnung steht, ist gesperrt; die alten Reste der
+    Testkonten „können weg, waren Testläufe". Gebaut in `konto-loeschen.js`: geht — Zeiteinträge (auch
+    Papierkorb) samt Verlauf, Abwesenheiten, eigene Notizen, Planungen nur mit ihr, Werkzeug-Ausleihen,
+    Anhängsel, Profilbild; bleibt — Planungen mit anderen, für andere angelegte Planungen/Serien, Bestellungen,
+    Aushänge (sichtbar als „Gelöschtes Konto", vorher verschwanden sie mit dem Konto für alle). Dialog mit
+    Vorschau und Namenseingabe; Chef sieht den Knopf nicht. Altlasten EINMAL beim Start (Merker).
+  - **Nachweis am Prod-Klon** (`tests/reste-prodklon.js`, unabhängig berechnete Erwartung): genau 2659 Zeilen
+    weg (2642 Einteilungen, 7 Soll-Zeilen, 2 Merker, 6 Test-Einträge, 2 Test-Planungen), jede andere Zeile
+    zeichengleich; kein Eintrag und keine sichtbare Planung eines vorhandenen Kontos fehlt. In der App ändert
+    sich genau eine Planung (26.03., nur ein Testkonto eingeteilt). Tests: `reste` (32), `reste-prodklon`
+    (17), `konto-loeschen` (35), `konto-loeschen-ui` (11); Gegenproben 13 + 11, alle rot an ihrer Stelle.
 
 ---
 

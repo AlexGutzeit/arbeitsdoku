@@ -3829,3 +3829,28 @@ auf denselben Daten: 698 Abfragen zeichengleich, mit Gegenprobe.
 **Nebenfund.** „Mitarbeiter endgültig löschen" versprach im Dialog und im README, alle Zeiteinträge,
 Abwesenheiten, Planungen und Notizen zu entfernen. Wegen R27 blieben sie immer stehen (so bei den Konten
 vom März). Text jetzt wahr, Verhalten unverändert. Ob der Inhalt mitgehen soll, ist Alex' Entscheidung.
+
+**Und dann wirklich löschen (Alex, 28.09.2026 abends).** Der Nebenfund führte zur Entscheidung: „Endgültig
+löschen" (nur Admin, nach dem Ausstellen, für Testkonten) nimmt den Inhalt mit, Bestellungen und Aushänge
+bleiben, wer abgerechnet ist, ist gesperrt. `konto-loeschen.js` hält die Regel: `sperre`, `vorschau`
+(für den Dialog), `inhaltLoeschen` (ohne eigene Transaktion, der Aufrufer fasst alles in eine),
+`altlastenAufraeumen` (einmal, mit Merker in `settings`). Drei Dinge waren nicht offensichtlich:
+- **„Bleibt" heißt auch „bleibt sichtbar".** Aushänge, Bestellungen und Planungen verknüpften ihren
+  Verfasser fest (`JOIN users`). Mit dem Konto verschwanden sie für **alle**, obwohl sie in der Datenbank
+  standen. Das stimmt jetzt über `LEFT JOIN` und `COALESCE(u.name, 'Gelöschtes Konto')` (Gegenproben K4/K5).
+- **Serien leben weiter.** Eine Serie, die sie für Tom angelegt hat, materialisiert der Zeitplaner aus der
+  Vorlage (`template.assigned_user_ids`). Stünde sie dort noch, teilte er sie jeden Tag wieder ein. Deshalb wird
+  sie aus der Vorlage genommen. Steht niemand mehr darin, wird die Serie angehalten, ohne Termine ist sie weg.
+- **Reihenfolge beim Start.** Erst die Altlasten, dann die Anhängsel. Umgekehrt nimmt das Aufräumen einer
+  Planung, in der nur ein gelöschtes Konto stand, erst die Einteilung weg. Danach sieht sie aus wie eine ohne
+  Einteilung und wird nicht mehr als dessen Planung erkannt (Gegenprobe K9 im Prod-Klon-Test).
+
+Die Altlasten folgen der Regel mit einer Ausnahme: Planungen, die ein längst gelöschtes Konto **angelegt** hat,
+gehen mit, auch wenn noch jemand eingeteilt ist. Sie waren seit Monaten für niemanden sichtbar (fester
+Ersteller-JOIN) und tauchten mit dem `LEFT JOIN` sonst plötzlich wieder auf. Alex hatte sie als Test-Planung
+freigegeben. Der Prod-Klon-Test berechnet seine Erwartung selbst, ohne den Code zu fragen. Seine harte
+Zusicherung „keine **sichtbare** Planung eines vorhandenen Kontos fehlt" war zuerst ohne „sichtbar" formuliert
+und schlug genau bei dieser Planung an. Und er baut sich seinen Klon selbst: Auf dem geteilten
+`/tmp/prodklon.db` hatte ein Test aus einem abgebrochenen Suite-Lauf schon aufgeräumt, und die Nullprobe
+maß dort nichts mehr. `tests/abschluss-haerte.js` Abschnitt 4 hielt die alte Entscheidung „bewusst nicht
+gesperrt" fest und prüft jetzt die Sperre.
