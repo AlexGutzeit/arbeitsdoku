@@ -341,28 +341,33 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   → 5 Prüfungen rot. Dabei im eigenen Test gefunden: `GET …/shares` liefert kein Datum — der erste Vergleich
   war `undefined === undefined` und grün; das Datum kommt jetzt aus der Liste des Empfängers und muss da sein.
 
-### [ ] R27 · Fremdschlüssel-Schutz fällt nach dem ersten Speichern weg — Löschen hinterlässt Reste *(niedrig, Entscheidung offen)*
+### [x] R27 · Fremdschlüssel-Schutz fällt nach dem ersten Speichern weg — Löschen hinterlässt Reste *(gebaut 28.09.2026, noch nicht deployt)*
 *(gefunden 28.09.2026 beim Prod-Klon-Test zum Umbau der Notiz-Tabelle; Ursache am selben Tag gefunden)*
-- **Ursache:** Die App schaltet beim Start `PRAGMA foreign_keys = ON` ein. sql.js öffnet die Datenbank beim
-  Speichern (`export()`, alle paar Sekunden) intern neu — danach ist der Schutz **aus**, bis zum nächsten
-  Neustart. Nachgestellt: vor dem Speichern greift `ON DELETE CASCADE`, danach nicht mehr. Die App läuft
-  also praktisch ohne Fremdschlüssel-Schutz. (So entstanden auch die 17 verwaisten Notiz-Freigaben.)
-- **Was in den Daten liegt (Lesekopie 28.09.):**
-  - **2635 Planungs-Zuweisungen** („wer war eingeteilt") zu **2325 Planungen, die gelöscht sind** (von Hand oder
-    durch Serien-Änderungen). Sie enthalten nur zwei Nummern, kein Datum, keinen Inhalt; nirgends sichtbar.
-    Die **680 vorhandenen Planungen** (auch alle vergangenen) sind vollständig — keine ohne Zuweisung.
-    Wächst weiter (27.09.: 2631, 28.09.: 2635), weil jedes Löschen einer Planung ihre Zuweisungen liegen lässt.
-  - **32 Zeiteinträge** und **59 Planungen**, deren Projekt endgültig gelöscht wurde: **echte Daten, bleiben.**
-    Der Projektname steht bei allen 32 Zeiteinträgen und 56 der 59 Planungen als Text dabei (3 stammen von vor
-    dieser Namenssicherung und zeigen kein Projekt).
-  - **6 Zeiteinträge** (19.–25.03.2026) von Konten 3, 4, 5, die es nicht mehr gibt — vermutlich Testkonten vom Start.
-  - Kleinkram: 8 Planungs-Zuweisungen an gelöschte Konten, 7 Soll-Stunden-Zeilen gelöschter Konten, 2 Merker.
-- **Achtung beim Beheben:** Den Schutz einfach dauerhaft einzuschalten kann Speichern **verhindern** — z. B.
-  beim Bearbeiten eines der 32 Zeiteinträge, dessen Projektnummer ins Leere zeigt, und beim endgültigen
-  Löschen eines Projekts, auf das noch Zeiteinträge zeigen. Erst alle Lösch-Wege und Verweise prüfen.
-- **Offen (Alex):** (1) Lösch-Wege räumen selbst auf (Planung löschen → ihre Zuweisungen mit) — ändert für
-  niemanden etwas Sichtbares; (2) die 2635 Zuweisungs-Reste + Kleinkram entfernen (mit Sicherung) oder liegen
-  lassen; (3) später den Schutz richtig einschalten, nach Prüfung. Echte Einträge/Planungen werden NICHT gelöscht.
+- **Ursache:** Die App schaltete beim Start `PRAGMA foreign_keys = ON` ein. sql.js öffnet die Datenbank beim
+  Speichern (`export()`, alle paar Sekunden) intern neu — danach war der Schutz **aus**, bis zum nächsten
+  Neustart. „ON DELETE CASCADE" hat also praktisch nie gewirkt. (So entstanden auch die 17 verwaisten
+  Notiz-Freigaben.)
+- **Was in den Daten lag (Lesekopie 28.09. abends):** 2636 Planungs-Zuweisungen zu gelöschten Planungen,
+  5 an gelöschte Konten, 7 Soll-Stunden-Zeilen und 1 Gesehen-Merker gelöschter Konten, 1 Versand-Merker
+  einer gelöschten Erinnerung. Dazu **Inhalt** mit Verweis ins Leere: 32 Zeiteinträge und 59 Planungen zu
+  endgültig gelöschten Projekten (Name als Text dabei), 6 Zeiteinträge (19.–25.03.2026) der früh gelöschten
+  Konten 3, 4, 5, 1 Planung eines gelöschten Kontos.
+- **Alex (28.09.):** „So lange wir kein Datenverlust an Produktivdaten haben, mach ein full backup und du
+  darfst aufräumen und zukünftige Regeln erstellen, so dass es passt."
+- **Gebaut:**
+  - Schutz **bewusst und verlässlich aus** (`database/init.js`) statt je nach Uhrzeit an oder aus. Ihn wirklich
+    einzuschalten hätte das Speichern der 32 Zeiteinträge u. a. scheitern lassen.
+  - **`reste.js`** ordnet jeden Verweis ein: **Anhängsel** (ohne Gegenstück sinnlos, geht mit) oder **Inhalt**
+    (bleibt immer). `tests/reste.js` wird rot bei einem neuen, nicht eingeordneten Verweis.
+  - **Lösch-Wege räumen selbst auf:** Planung (alle 15 Stellen über `planungenLoeschen`), Erinnerungen
+    (Versand-Merker), Projekt endgültig (auch Kategorie-Zuordnungen — fehlten), Konto endgültig.
+  - **Sicherheitsnetz:** Aufräumen beim Start, beim Zurückspielen und einmal am Tag, mit Protokoll.
+  - **Nichts an Inhalt wird gelöscht.** Prod-Klon (`tests/reste-prodklon.js`): genau die 2650 Anhängsel weg,
+    jede andere Zeile jeder Tabelle zeichengleich; 698 Abfragen der App zeigen vorher wie nachher dasselbe.
+  - **Nebenfund:** „Mitarbeiter endgültig löschen" versprach „alle Zeiteinträge, Abwesenheiten, Planungen und
+    Notizen werden entfernt" — wegen R27 blieben sie immer stehen. Text in Dialog und README jetzt wahr;
+    das Verhalten ist unverändert. **Offen (Alex):** Soll der Inhalt künftig wirklich mitgehen?
+
 ---
 
 ## Geprüft und in Ordnung

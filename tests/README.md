@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**248 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**250 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -228,6 +228,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `push-summaries.js` | API-Test der geplanten Zusammenfassungen (Digest-Push): CRUD, Validierung, Ownership, Rollenfilter |
 | `push-sw.js` | Service-Worker-Push-Test: lädt public/sw.js in einer Sandbox (kein Browser nötig) und prüft die |
 | `push-targeting.js` | Push-Targeting-Test (in-process). Mockt web-push.sendNotification und prueft fuer jedes |
+| `reste-prodklon.js` | Reste aufräumen an echten Daten (R27, Prod-Klon, 28.09.2026). |
+| `reste.js` | Reste beim Löschen (R27, 28.09.2026). |
 | `restpause-firmenwert-ui.js` | Was passiert mit der Restpause, wenn die Firmenpause MITTEN im Betrieb umgestellt wird? |
 | `restpause-ui.js` | Restpausen-Vorbelegung (#13): Die Pause wird nur noch mit dem REST zur Firmenpause vorbelegt. |
 | `robustheit-v6-ui.js` | Test der Robustheits-Runde (letzte offene Punkte der Bugliste v6): |

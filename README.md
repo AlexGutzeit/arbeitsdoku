@@ -712,7 +712,7 @@ Revisionssicheres Protokoll: An-/Abmeldungen (Login erfolgreich/fehlgeschlagen, 
 
 #### 🗑️ Papierkorb
 
-Gelöschte Einträge und Abwesenheiten bleiben mit Begründung erhalten (GoBD). **Gelöschte Zeit­einträge** können wiederhergestellt werden – jeder sieht/stellt wieder her, was er selbst gelöscht hat; Chef/Admin alles. **Gelöschte Abwesenheiten** werden für Chef/Mitarbeiter/Buchhalter **nicht** wiederhergestellt (das brächte sie als bereits genehmigt zurück und könnte mit zwischenzeitlicher Planung kollidieren) – stattdessen „**Neu beantragen**": ein frischer Antrag mit den alten Daten, der wieder durch die Genehmigung läuft. Nur der **Admin** kann eine Abwesenheit echt **wiederherstellen** (Ausnahme für versehentliche Löschungen). Im Unterreiter **Mitarbeiter** liegen ausgestellte Mitarbeiter zum Wiedereinstellen (**Chef/Admin** – Mitarbeiter haben darauf keinen Zugriff); endgültiges Löschen (mit allen Daten) ist dort nur als Admin und nur für zuvor ausgestellte Mitarbeiter möglich. Im Unterreiter **Projekte** liegen gelöschte Aufträge (inkl. Zuweisungen/Zwischenziele); **Chef/Admin** können sie **wiederherstellen** oder **endgültig löschen** (mit Bestätigung).
+Gelöschte Einträge und Abwesenheiten bleiben mit Begründung erhalten (GoBD). **Gelöschte Zeit­einträge** können wiederhergestellt werden – jeder sieht/stellt wieder her, was er selbst gelöscht hat; Chef/Admin alles. **Gelöschte Abwesenheiten** werden für Chef/Mitarbeiter/Buchhalter **nicht** wiederhergestellt (das brächte sie als bereits genehmigt zurück und könnte mit zwischenzeitlicher Planung kollidieren) – stattdessen „**Neu beantragen**": ein frischer Antrag mit den alten Daten, der wieder durch die Genehmigung läuft. Nur der **Admin** kann eine Abwesenheit echt **wiederherstellen** (Ausnahme für versehentliche Löschungen). Im Unterreiter **Mitarbeiter** liegen ausgestellte Mitarbeiter zum Wiedereinstellen (**Chef/Admin** – Mitarbeiter haben darauf keinen Zugriff); endgültiges Löschen ist dort nur als Admin und nur für zuvor ausgestellte Mitarbeiter möglich — es entfernt das Konto samt Zugang, Einstellungen, Soll-Stunden, Urlaubsansprüchen und Einteilungen; seine Zeiteinträge, Abwesenheiten, Planungen und Notizen bleiben in der Datenbank erhalten. Im Unterreiter **Projekte** liegen gelöschte Aufträge (inkl. Zuweisungen/Zwischenziele); **Chef/Admin** können sie **wiederherstellen** oder **endgültig löschen** (mit Bestätigung).
 
 ---
 
@@ -1412,6 +1412,17 @@ scp <server>:<pfad>/data/arbeitsdoku.db /tmp/prodklon-frisch-roh.db
 node scripts/prodklon-vorbereiten.js /tmp/prodklon-frisch-roh.db /tmp/prodklon.db
 ```
 
+**Löschen und abhängige Zeilen.** Die Datenbank läuft **ohne Fremdschlüssel-Schutz** — bewusst: `sql.js`
+schaltet ihn beim Speichern ohnehin ab, und die `ON DELETE CASCADE`-Angaben im Schema wirken deshalb
+**nicht**. Was beim Löschen mit abhängigen Zeilen geschieht, steht an einer Stelle, in `reste.js`: Jeder
+Verweis ist dort entweder ein **Anhängsel** (Zuweisung, Merker, Einstellung — ohne Gegenstück sinnlos, geht
+mit) oder **Inhalt** (Zeiteinträge, Abwesenheiten, Planungen, Notizen … — bleibt immer). Wer eine Tabelle mit
+Anhängseln hart löscht, ruft danach `reste.nachLoeschen(db, '<tabelle>')`; Planungen löscht man nur über
+`planungenLoeschen` in `routes/planning.js`. Als Sicherheitsnetz räumt die App beim Start, beim
+Zurückspielen einer Sicherung und einmal am Tag auf, was trotzdem liegen blieb (Audit-Log: „Datenreste
+aufgeräumt"). `tests/reste.js` wird rot, sobald eine neue Tabelle einen Verweis hat, der in keiner der beiden
+Listen steht, oder ein Lösch-Weg nicht aufräumt.
+
 Technik-Stack: Node.js/Express · `sql.js` (SQLite in WASM) · `pdfkit` (PDF) mit der Schrift aus
 `dejavu-fonts-ttf` · `archiver`/`adm-zip` (Sicherungen, Word/ODT) · `sharp` (Bilder) · `bcryptjs` ·
 `jsonwebtoken` · `express-rate-limit` · `multer` · `web-push` (Push) · `yjs`/`y-protocols` (gemeinsame
@@ -1456,7 +1467,8 @@ kann sich nicht mehr anmelden, alle Zeiten/Abwesenheiten/Planungen bleiben aber 
 für den Anstellungszeitraum weiter in Statistik und PDF berücksichtigt. Ausgestellte Mitarbeiter
 liegen im *Papierkorb → Mitarbeiter*; dort kann man sie **wiedereinstellen** (Wiedereintrittsdatum;
 die Lücke zählt 0 Soll-Stunden – auch mehrfach möglich) oder als Admin **endgültig löschen** (entfernt
-alle Daten unwiderruflich – nur für versehentlich angelegte Konten gedacht).
+das Konto samt Zugang, Einstellungen und Einteilungen unwiderruflich; Zeiteinträge, Abwesenheiten, Planungen
+und Notizen bleiben in der Datenbank erhalten – gedacht für versehentlich angelegte Konten).
 
 **Warum hat der Admin kein Stundenkonto?**
 Das **Admin-Konto** ist ein reines Verwaltungskonto und gilt nicht als Mitarbeiter – es erscheint

@@ -3785,3 +3785,47 @@ Server-Protokoll: „notes neu aufgebaut … 12 Notizen übernommen", keine Fehl
 NOT NULL; Nummernzähler 43 → 43; Datei heil. **Rückweg:** Code auf `vor-projektnotiz-deploy` verträgt
 die umgebaute Tabelle (Projektnotizen haben kein `user_id` und tauchen in keiner Liste auf); Sicherung
 von 08:01 zurückspielen stellt auch die alte Tabellenform wieder her.
+
+## R27: Reste beim Löschen — die Regel an einer Stelle (28.09.2026)
+
+**Der Befund.** Die App schaltete beim Start `PRAGMA foreign_keys = ON` ein, und das Schema ist voller
+`ON DELETE CASCADE`. Gewirkt hat es fast nie: sql.js öffnet die Datenbank beim Speichern (`export()`, der
+Autosave alle 5 s) intern neu, danach ist der Schutz aus, bis zum nächsten Neustart. Nachgestellt: Die
+Kaskade greift vor dem ersten Speichern, danach nicht. In den Produktivdaten lagen 2636 Planungs-Zuweisungen
+zu gelöschten Planungen, weil jedes Löschen einer Planung sie liegen ließ. Dazu kam Kleinkram gelöschter
+Konten. Und Inhalt mit Verweis ins Leere: Zeiteinträge und Planungen endgültig gelöschter Projekte, 6
+Zeiteinträge früh gelöschter Konten.
+
+**Warum nicht einfach einschalten.** Nach jedem `export()` den Schutz wieder anzuschalten wäre eine Zeile.
+Dann aber scheitert jedes `UPDATE`, das eine Verweis-Spalte setzt, an einer Zeile, deren Verweis schon ins
+Leere zeigt. Das Bearbeiten eines der 32 Zeiteinträge eines gelöschten Projekts wäre damit unmöglich. Und die
+Kaskaden im Schema sind nicht alle gewollt: `planning_entries.created_by … CASCADE` hätte beim endgültigen
+Löschen eines Kontos die Planungen **anderer** Leute mitgenommen, `entries.project_id … SET NULL` hätte dem
+Projekt-Purge widersprochen, der die Nummer bewusst stehen lässt. Einschalten hätte also Verhalten erfunden,
+das nie jemand entschieden hat.
+
+**Die Entscheidung:** Schutz **bewusst und verlässlich aus**. Das war die Wirklichkeit, jetzt aber nicht
+mehr je nach Uhrzeit. `reste.js` sagt für **jeden** Verweis, was gilt:
+**Anhängsel** (Zuweisung, Merker, Einstellung, Verknüpfung: ohne Gegenstück sinnlos, geht mit) oder
+**Inhalt** (bleibt immer, auch mit Verweis ins Leere). Lösch-Wege rufen `nachLoeschen(db, '<tabelle>')`, und
+die Planung hat dafür eine eigene Funktion `planungenLoeschen` (15 Stellen). Als Netz dient `aufraeumen()`
+beim Start, beim Zurückspielen (vor dem Einsetzen) und einmal am Tag, mit Audit-Eintrag „Datenreste
+aufgeräumt". Der Tageslauf setzt erst am Folgetag ein: Liefe er 15 s nach dem Booten, verdeckte er im
+Test einen Lösch-Weg ohne Aufräumen.
+
+**Tests.** `tests/reste.js` (32): (A) Schutz aus, gemessen am **zweiten** Start. Beim ersten legt init an
+und speichert, das Speichern schaltet ihn schon ab, und der alte Stand fiel dort nicht auf (Gegenprobe R5
+blieb zuerst grün). (B) Jeder Verweis des Schemas steht genau einmal in einer Liste. (C) Aufräumen an
+gebauten Daten, zweite Stufe inklusive, Inhalt zeichengleich, Zurückspielen. (D) Quelltext-Wächter **je
+Stelle**: Im Umfeld jedes `DELETE FROM <tabelle mit Anhängseln>` muss aufgeräumt werden. Die erste,
+dateiweite Fassung war zu großzügig (`DELETE FROM planning_reminder_sent` an ganz anderer Stelle ließ die
+Gegenprobe R8 grün). (E) Die Wege über die Schnittstelle, ohne Neustart.
+`tests/reste-prodklon.js` (15) an der frischen Rohkopie: Weg ist genau das, was SQLite selbst als
+Anhängsel-Verstoß meldet (2650 Zeilen). Jede andere Zeile jeder Tabelle ist zeichengleich. Die Liste der
+Tabellen, die sich ändern dürfen, steht **fest im Test**, unabhängig von `reste.js`, sonst bliebe eine
+Fehl-Einordnung dort grün (Gegenprobe P2). Die Nullprobe vergleicht zwei Server, alter und neuer Stand
+auf denselben Daten: 698 Abfragen zeichengleich, mit Gegenprobe.
+
+**Nebenfund.** „Mitarbeiter endgültig löschen" versprach im Dialog und im README, alle Zeiteinträge,
+Abwesenheiten, Planungen und Notizen zu entfernen. Wegen R27 blieben sie immer stehen (so bei den Konten
+vom März). Text jetzt wahr, Verhalten unverändert. Ob der Inhalt mitgehen soll, ist Alex' Entscheidung.

@@ -1342,7 +1342,7 @@ async function renderDeletedUsers() {
   mainEl.querySelectorAll('.purge-user').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!(await confirmModal(
-        `"${btn.dataset.name}" wirklich ENDGÜLTIG löschen?\n\nAlle Zeiteinträge, Abwesenheiten, Planungen und Notizen dieses Mitarbeiters werden unwiderruflich entfernt. Das kann nur über ein vollständiges Backup rückgängig gemacht werden.`,
+        `"${btn.dataset.name}" wirklich ENDGÜLTIG löschen?\n\nDas Konto wird unwiderruflich entfernt — samt Zugang, Einstellungen, Profilbild, Soll-Stunden, Urlaubsansprüchen und Einteilungen in Planungen. Seine Zeiteinträge, Abwesenheiten, Planungen und Notizen bleiben in der Datenbank erhalten. Rückgängig nur über ein vollständiges Backup.`,
         { title: 'Endgültig löschen', okLabel: 'Endgültig löschen', danger: true }))) return;
       try {
         await api('DELETE', '/api/users/' + btn.dataset.id);
