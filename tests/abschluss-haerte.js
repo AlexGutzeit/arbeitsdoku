@@ -2,8 +2,9 @@
 //
 // Die vorhandenen Tests zeigen, dass der Normalfall stimmt. Hier wird das Gegenteil versucht:
 // Zeiträume wieder öffnen, nachdem eine Differenz übernommen wurde; Stunden im bezahlten Monat
-// LÖSCHEN statt nachtragen; Mitarbeiter, die es zum Stichtag noch gar nicht gab oder heute nicht
-// mehr gibt; ein rückwirkender Feiertag, der alle gleichzeitig trifft.
+// LÖSCHEN statt nachtragen; Mitarbeiter, die es zum Stichtag noch gar nicht gab oder die man
+// endgültig löschen will (gesperrt, sobald sie abgerechnet sind); ein rückwirkender Feiertag, der alle
+// gleichzeitig trifft.
 //
 // Jedes Szenario läuft auf einer FRISCHEN Datenbank. Abschlüsse sind firmenweit — liefen die
 // Szenarien nacheinander auf demselben Bestand, würden sie sich gegenseitig verdecken.
