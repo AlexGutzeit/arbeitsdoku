@@ -1928,6 +1928,16 @@ function scheduleInfo(p, showDone, holidaySet) {
 // Auftrags-Board: Mitarbeiter waagerecht, darunter ihre Aufträge nach Dringlichkeit (rot oben), tie = ältester oben.
 let _boardShowDone = false; // Chef/Admin: Archiv (erledigte Aufträge) einblenden
 
+// Vorschau der Projektnotiz in einer aufgeklappten Kachel (formatiert, sicher über notizHtml)
+async function projektNotizVorschau(tile) {
+  const feld = tile.querySelector('.proj-notiz-vorschau');
+  if (!feld) return;
+  let d;
+  try { d = await api('GET', `/api/projects/${tile.dataset.id}/notiz`); } catch (_) { return; }
+  if (!d || !tile.isConnected) return;
+  feld.innerHTML = d.notiz && d.notiz.hat_inhalt ? notizHtml(d.notiz.body_delta, d.notiz.body) : '<span class="proj-notiz-leer">Noch leer.</span>';
+}
+
 async function renderProjects() {
   const manage = isChefOrAdmin();
   const showDone = _boardShowDone && manage;
@@ -2085,8 +2095,12 @@ async function renderProjects() {
         : `<span class="ms-dot" style="background:${meta.color}" title="${meta.label}"></span>`;
       return `<div class="ms-row">${ctrl}<span class="ms-title">${esc(m.title)}</span><span class="ms-days" title="Arbeitstage">${String(m.est_days).replace('.', ',')} AT</span></div>`;
     }).join('');
+    // Projektnotiz (28.09.2026): 📝 an der Kachel, sobald sie Inhalt hat; ✎ wer gerade drin ist
+    const pn = p.notiz;
+    const pnDrin = pn ? (pn.live || []).filter(n => n !== S.user.name) : [];
+    const pnMarke = `${pn && pn.hat_inhalt ? '<span class="proj-notiz-marke" title="Projektnotiz vorhanden" aria-label="Projektnotiz vorhanden">&#128221;</span>' : ''}${pnDrin.length ? `<span class="badge notiz-drin" title="Gerade in der Projektnotiz">&#9998; ${pnDrin.map(esc).join(', ')}</span>` : ''}`;
     return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}${expanded ? ' expanded' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
-      <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${flag}</div>
+      <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${pnMarke}${flag}</div>
       ${p.client ? `<div class="proj-client">${esc(p.client)}</div>` : ''}
       ${(plakMA.length || plakKats.length)
         ? `<div class="proj-kats">${
@@ -2097,7 +2111,12 @@ async function renderProjects() {
       ${sched ? `<div class="proj-due" style="color:${sched.color}">&#128197; ${sched.label}</div>` : ''}
       ${prog ? msBar(prog, 'ms-bar-slim', goal, fill) : ''}
       <div class="proj-detail" style="display:${expanded ? 'block' : 'none'}">
-        ${p.note ? `<p class="proj-note">${esc(p.note)}</p>` : ''}
+        ${p.note ? `<p class="proj-note"><span class="proj-note-label">Kurzinfo</span> ${esc(p.note)}</p>` : ''}
+        <div class="proj-notiz" data-id="${p.id}">
+          <div class="proj-notiz-kopf"><span>&#128221; Projektnotiz</span>${pn && pn.updated_at && pn.hat_inhalt ? `<span class="proj-notiz-stand">bearbeitet ${formatDateTimeDE(pn.updated_at)}${pn.von ? ' von ' + esc(pn.von) : ''}</span>` : ''}</div>
+          <div class="proj-notiz-vorschau" data-id="${p.id}">${pn && pn.hat_inhalt ? '<span class="proj-notiz-leer">…</span>' : '<span class="proj-notiz-leer">Noch leer.</span>'}</div>
+          <button type="button" class="btn btn-xs btn-primary proj-notiz-oeffnen" data-id="${p.id}">${canMs ? '&#9998; Öffnen und mitschreiben' : '&#128065; Öffnen und mitlesen'}</button>
+        </div>
         ${p.address ? `<div class="proj-addr">&#128205; ${esc(p.address)} <button class="btn btn-xs proj-nav" data-addr="${esc(p.address)}" title="Navigieren">&#128506;</button></div>` : ''}
         <div class="proj-meta">Dringlichkeit: ${u.label} · erstellt ${formatDateTimeDE(p.created_at)}${showDone && p.done_at ? ' · erledigt ' + formatDateTimeDE(p.done_at) : ''}</div>
         <div class="proj-meta">Für: ${(p.assigned_users && p.assigned_users.length) ? p.assigned_users.map(x => esc(x.name)).join(', ') : '– (nicht zugewiesen)'}</div>
@@ -2166,8 +2185,16 @@ async function renderProjects() {
       det.style.display = open ? 'block' : 'none';
       tile.classList.toggle('expanded', open);
       if (open) _expandedProjects.add(String(tile.dataset.id)); else _expandedProjects.delete(String(tile.dataset.id));
+      if (open) projektNotizVorschau(tile);
     });
   });
+  // Projektnotiz: Vorschau in schon aufgeklappten Kacheln, Öffnen führt in die Live-Notiz
+  mainEl.querySelectorAll('.proj-tile.expanded').forEach(projektNotizVorschau);
+  mainEl.querySelectorAll('.proj-notiz-oeffnen').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _notizListeZurueck = { ausBoard: true, scroll: window.scrollY || 0 };
+    navigate(`/projects/${b.dataset.id}/notiz`);
+  }));
   const pid = (b) => b.dataset.id;
   const at = document.getElementById('board-archive-toggle');
   if (at) at.addEventListener('click', () => { _boardShowDone = !_boardShowDone; renderProjects(); });
@@ -2316,7 +2343,7 @@ async function renderProjectForm(project) {
           <input class="form-control" id="pf2-address" value="${esc(p.address || '')}" placeholder="z.B. Musterstraße 1, 12345 Berlin">
           <button type="button" class="btn btn-outline" id="pf2-nav" title="Navigieren">&#128506;</button>
         </div></div>
-      <div class="form-group"><label>Notiz</label><textarea class="form-control" id="pf2-note" rows="3">${esc(p.note || '')}</textarea></div>
+      <div class="form-group"><label for="pf2-note">Kurzinfo <small>(kurz — wird beim Übernehmen in Planung und Zeitnachweis mitgenommen; Ausführliches gehört in die Projektnotiz)</small></label><textarea class="form-control" id="pf2-note" rows="3">${esc(p.note || '')}</textarea></div>
       <div class="form-group"><label>Dringlichkeit</label>
         <select class="form-control" id="pf2-urgency">
           ${PROJECT_URGENCY.map(u => `<option value="${u.key}" ${p.urgency === u.key ? 'selected' : ''}>${u.label}</option>`).join('')}

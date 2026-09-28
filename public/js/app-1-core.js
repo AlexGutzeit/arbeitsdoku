@@ -1896,6 +1896,8 @@ function render() {
   else if (route === '/orders') renderOrders();
   else if (route === '/notes') renderNotizen();
   else if (route.startsWith('/notes/')) renderNotizEditor(route.split('/').pop());
+  // Projektnotiz: dieselbe Live-Notiz, erreichbar über das Projekt (legt sie beim ersten Öffnen an)
+  else if (/^\/projects\/\d+\/notiz$/.test(route)) renderNotizEditor(null, { projektId: route.split('/')[2] });
   else if (route === '/absences') renderAbsences();
   else if (route.startsWith('/absences/')) renderAbsenceType(route.split('/')[2]);
   else if (route === '/bulletin') renderBulletin();

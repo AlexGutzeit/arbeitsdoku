@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**247 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**248 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -220,6 +220,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `project-workdays-ui.js` | UI-Test: Fälligkeit rechnet in ARBEITSTAGEN — Sa/So UND globale Feiertage zählen nicht. |
 | `projects-board-ui.js` | UI-Test (Puppeteer) Auftrags-Board: FAB-Formular, Spalten je MA + „Nicht zugewiesen", Dringlichkeits- |
 | `projects-board.js` | API-Test Auftrags-Board: projects mit Kunde/Notiz/Dringlichkeit/Zuweisung/Erledigt; Rollen-Gating; |
+| `projektnotiz-ui.js` | Projektnotiz — Oberfläche (28.09.2026): die gemeinsame Notiz eines Projekts, im Board unter Projekte. |
 | `projektnotiz-umbau-prodklon.js` | Projektnotiz: Umbau der Notiz-Tabelle an echten Daten (Prod-Klon, 28.09.2026). |
 | `projektnotiz.js` | Projektnotiz — Server (28.09.2026): eine gemeinsame Live-Notiz je Projekt. |
 | `push-api.js` | Push-API-Test: startet einen echten Server (Kind-Prozess), meldet sich an und prueft |

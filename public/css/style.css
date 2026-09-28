@@ -2732,3 +2732,15 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 /* Einstellungen: Schalter „Gäste in Notizen erlauben" */
 .gaeste-schalter { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 1rem; cursor: pointer; width: fit-content; }
 .gaeste-schalter input { width: 20px; height: 20px; margin: 0; accent-color: var(--primary); }
+
+/* === Projektnotiz im Board (28.09.2026) === */
+.proj-notiz-marke { margin-left: 0.35rem; font-size: 0.95rem; }
+.proj-note-label { font-weight: 600; color: var(--text-light); margin-right: 0.25rem; }
+.proj-notiz { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.6rem 0.7rem; margin: 0.5rem 0; display: flex; flex-direction: column; gap: 0.45rem; background: var(--card); }
+.proj-notiz-kopf { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; justify-content: space-between; font-weight: 600; font-size: 0.9rem; }
+.proj-notiz-stand { font-weight: 400; font-size: 0.78rem; color: var(--text-light); }
+.proj-notiz-vorschau { max-height: 9.5rem; overflow: hidden; position: relative; font-size: 0.88rem; }
+.proj-notiz-vorschau::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1.6rem; background: linear-gradient(transparent, var(--card)); pointer-events: none; }
+.proj-notiz-leer { color: var(--text-light); font-style: italic; }
+.proj-notiz-oeffnen { align-self: flex-start; min-height: 36px; }
+.notiz-projekt-hinweis { margin: 0.35rem 1rem 0; font-size: 0.82rem; color: var(--text-light); }

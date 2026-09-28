@@ -66,6 +66,7 @@ function req(m, p, t, b) {
       '/users', '/projects', '/settings', '/audit',
       '/deleted-entries', '/deleted-absences', '/deleted-projects', '/deleted-users',
       '/documents', '/pdf', '/statistics', '/produkte', '/tools', '/notes', '/notes/' + notiz.id,
+      '/projects/' + projekt.id + '/notiz',   // Projektnotiz (28.09.2026)
       '/absences', '/absences/urlaub', '/bulletin', '/bulletin/edit/' + aushang.id,
       '/impressum', '/datenschutz',
     ];

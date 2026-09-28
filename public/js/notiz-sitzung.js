@@ -79,19 +79,26 @@ function notizHtml(deltaJson, klartext) {
 
 // ─── Seite „Notiz geöffnet" ─────────────────────────────────────────────────────────────────
 
-async function renderNotizEditor(id) {
+// opts.projektId: die Projektnotiz eines Projekts (28.09.2026) — Öffnen legt sie beim ersten Mal an
+async function renderNotizEditor(id, opts = {}) {
+  const projektId = opts.projektId ? Number(opts.projektId) : null;
   id = Number(id);
-  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'notes');
+  $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', projektId ? 'projects' : 'notes');
   bindLayout();
   const fab = document.getElementById('fab-new'); if (fab) fab.remove();   // „+" gehört zur Übersicht
 
   const geladen = await seiteLaden(async () => {
-    const [ok, pData] = await Promise.all([notizEditorLaden(), api('GET', '/api/projects')]);
+    const [ok, pData, pn] = await Promise.all([notizEditorLaden(), api('GET', '/api/projects'),
+      projektId ? api('POST', `/api/projects/${projektId}/notiz`) : null]);
     if (!ok) throw new Error('Das Schreibfeld konnte nicht geladen werden. Sobald wieder Empfang da ist, noch einmal versuchen.');
-    return pData ? { pData } : null;
-  }, () => renderNotizEditor(id));
+    return pData ? { pData, pn } : null;
+  }, () => renderNotizEditor(id, opts));
   if (!geladen) return;
   if (geladen.pData) S.projects = geladen.pData.projects;
+  if (projektId) {
+    if (!geladen.pn || !geladen.pn.notiz) return;
+    id = geladen.pn.notiz.id;
+  }
   const mainEl = document.querySelector('.main');
   if (!mainEl) return;
 
@@ -107,19 +114,19 @@ async function renderNotizEditor(id) {
       </div>
       <label class="sr-only" for="notiz-titel">Titel</label>
       <input type="text" id="notiz-titel" class="form-control notiz-titel" placeholder="Titel" autocomplete="off" disabled>
-      <details class="notiz-projekt" id="notiz-projekt">
+      ${projektId ? `<p class="notiz-projekt-hinweis">&#128221; Projektnotiz — lesen alle, schreiben Chef, Admin und die Zugeteilten</p>` : `<details class="notiz-projekt" id="notiz-projekt">
         <summary id="notiz-projekt-zeile">Projekt: –</summary>
         <div class="notiz-projekt-felder">
           <select id="notiz-projekt-wahl" class="form-control"><option value="">-- Kein Projekt --</option>${projOpts}</select>
           <input type="text" id="notiz-projekt-text" class="form-control" placeholder="Projekt (Freitext), z.B. Baustelle XY">
         </div>
-      </details>
+      </details>`}
       ${notizFeldHtml()}
     </div>`;
   notizNamenSchalterBinden(mainEl.querySelector('.notiz-editor'));
 
   if (_notizSitzung) _notizSitzung.beenden();
-  _notizSitzung = notizSitzungStarten(id);
+  _notizSitzung = notizSitzungStarten(id, notizWegeApp(id, projektId));
 }
 
 // Der Teil des Editors, den App und Gästeseite (gast.js) gemeinsam haben: wer drin ist, Namensschilder,
@@ -253,8 +260,13 @@ const NOTIZ_MENUE_DATEI = [
 // Dieselbe Sitzung läuft in der App (Mitarbeiter) und auf der Gästeseite (gast.js, Etappe C). Alles,
 // was zwischen beiden verschieden ist — Adressen, Anmeldung, wohin es nach einem Rauswurf geht —,
 // steckt in diesem Objekt. Hier die Wege der App; gast.js baut seine eigenen.
-function notizWegeApp(id) {
-  const aufSeite = () => getRoute() === '/notes/' + id;
+function notizWegeApp(id, projektId = null) {
+  const seite = projektId ? `/projects/${projektId}/notiz` : '/notes/' + id;
+  const aufSeite = () => getRoute() === seite;
+  // Zurück: aus der Übersicht bzw. vom Board gekommen → dorthin zurück (Scrollstelle bleibt)
+  const zurueck = () => (projektId
+    ? ((_notizListeZurueck && _notizListeZurueck.ausBoard && history.length > 1) ? history.back() : navigate('/projects'))
+    : notizZurueckZurListe());
   return {
     speicherKey: 'notiz-live:' + id,
     ticket: async () => { const t = await api('GET', '/api/events/ticket'); return t && t.ticket; },
@@ -262,28 +274,39 @@ function notizWegeApp(id) {
     senden: (art, daten) => api('POST', `/api/notes/${id}/live/${art}`, daten),
     // Letzter Versuch beim Verlassen (fetch mit keepalive, ohne api()): Adresse und Anmeldung
     zumSchluss: () => (S.token ? { url: `/api/notes/${id}/live/aenderung`, token: S.token } : null),
-    kopfSpeichern: (daten) => api('PUT', `/api/notes/${id}`, daten),
+    // Projektnotiz: der Titel ist der Projektname (ändern nur beim Projekt)
+    kopfSpeichern: projektId ? undefined : (daten) => api('PUT', `/api/notes/${id}`, daten),
     herunterladen: (format) => notizHerunterladen(id, format),
     menue: (zugriff) => [
       ...NOTIZ_MENUE_DATEI,
       { value: 'kopie', label: '📋  Stand als eigene Notiz' },
-      // Gäste lädt nur die Eigentümerin ein (Etappe C)
-      ...(zugriff === 'owner' ? [{ value: 'gaeste', label: '🔗  Gäste verwalten' }] : []),
+      // Gäste: eigene Notiz → die Eigentümerin; Projektnotiz → Chef und Admin
+      ...((projektId ? ['chef', 'admin'].includes(S.user && S.user.role) : zugriff === 'owner') ? [{ value: 'gaeste', label: '🔗  Gäste verwalten' }] : []),
     ],
     menueExtra: (wahl) => { if (wahl === 'kopie') { notizKopieAnlegen(id); return true; } return false; },
     gaeste: () => notizGaesteDialog({ id, title: (document.getElementById('notiz-titel') || {}).value || '' }),
     // Nach einer Abweisung (Leserecht, zu groß, beschädigt) die Notiz neu öffnen
-    neuOeffnen: () => { if (aufSeite()) renderNotizEditor(id); },
+    neuOeffnen: () => { if (aufSeite()) renderNotizEditor(id, projektId ? { projektId } : {}); },
     raus: (grund) => {
       toast(grund === 'geloescht' ? 'Diese Notiz wurde gelöscht.'
+        : grund === 'projekt-geloescht' ? 'Das Projekt wurde gelöscht — seine Notiz liegt mit im Papierkorb.'
         : grund === 'freigabe-entzogen' ? 'Die Freigabe dieser Notiz wurde dir entzogen.'
         : grund === 'zurueckgespielt' ? 'Eine Sicherung wurde zurückgespielt. Bitte öffne die Notiz neu.'
         : 'Du bist nicht mehr angemeldet.', 'error');
-      if (aufSeite()) notizZurueckZurListe();
+      if (aufSeite()) zurueck();
     },
     // Strom kam nie an: Gibt es die Notiz noch, und darf ich hinein? (EventSource verrät den Grund nicht.)
     // true = ja/unklar (später noch einmal), false = nein (dann ist `weg` schon erledigt)
     nochDa: async () => {
+      if (projektId) {
+        try { await api('GET', `/api/projects/${projektId}/notiz`); return true; }
+        catch (e) {
+          if (e.verbindung) throw e;
+          toast('Dieses Projekt gibt es nicht mehr — seine Notiz ist nicht mehr erreichbar.', 'error');
+          if (aufSeite()) zurueck();
+          return false;
+        }
+      }
       const l = await api('GET', '/api/notes');
       if (l && !(l.notes || []).some(n => n.id === id)) {
         toast('Diese Notiz gibt es nicht mehr, oder sie ist nicht mehr für dich freigegeben.', 'error');
@@ -292,7 +315,7 @@ function notizWegeApp(id) {
       }
       return true;
     },
-    fertig: () => notizZurueckZurListe(),
+    fertig: () => zurueck(),
   };
 }
 
