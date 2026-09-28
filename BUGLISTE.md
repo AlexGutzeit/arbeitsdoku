@@ -374,7 +374,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   - **Nachweis am Prod-Klon** (`tests/reste-prodklon.js`, unabhängig berechnete Erwartung): genau 2659 Zeilen
     weg (2642 Einteilungen, 7 Soll-Zeilen, 2 Merker, 6 Test-Einträge, 2 Test-Planungen), jede andere Zeile
     zeichengleich; kein Eintrag und keine sichtbare Planung eines vorhandenen Kontos fehlt. In der App ändert
-    sich genau eine Planung (26.03., nur ein Testkonto eingeteilt). Tests: `reste` (32), `reste-prodklon`
+    sich nichts Sichtbares: Die Planung vom 26.03. (nur ein Testkonto eingeteilt) stand in keiner Zeile mehr. Tests: `reste` (32), `reste-prodklon`
     (18, prüft auch, dass das Protokoll jede entfernte Zeile erklärt), `konto-loeschen` (35), `konto-loeschen-ui` (11); Gegenproben 13 + 11, alle rot an ihrer Stelle.
 
 ---
