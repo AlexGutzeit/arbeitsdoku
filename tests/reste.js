@@ -282,7 +282,8 @@ function starteInit(dbPfad, nachher) {
     ok('Olafs Anhängsel weg (Freigabe, Urlaubsanspruch, Soll-Stunden, Anstellung, Planungs-Zuweisung)',
       ['note_shares', 'vacation_entitlements', 'user_target_hours', 'employment_periods', 'planning_assignments']
         .every(tb => eins(d, `SELECT COUNT(*) FROM ${tb} WHERE user_id = ?`, [id.olaf]) === 0));
-    ok('Olafs INHALT bleibt: sein Zeiteintrag steht (wie bisher in der Praxis)', eins(d, 'SELECT COUNT(*) FROM entries WHERE user_id = ?', [id.olaf]) === 1);
+    // Seit 28.09.2026 geht der Inhalt mit (Alex; Regel und eigener Test: konto-loeschen.js, tests/konto-loeschen.js)
+    ok('Olafs Inhalt geht mit: sein Zeiteintrag ist weg', eins(d, 'SELECT COUNT(*) FROM entries WHERE user_id = ?', [id.olaf]) === 0);
     ok('kein Protokolleintrag „Datenreste aufgeräumt" — die Wege räumen selbst auf, nicht der Start',
       eins(d, "SELECT COUNT(*) FROM audit_logs WHERE action = 'reste_aufgeraeumt'") === 0);
     d.close();
