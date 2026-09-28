@@ -167,8 +167,11 @@ const perioden = async (t) => (await req('GET', '/api/closure', t)).body.periode
       ok('im Lohn-Export des Folgemonats ist er dabei', /Spät Eingetreten/.test(csv), csv.slice(0, 120));
     }
 
-    // ══ 4. Endgültig gelöschter Mitarbeiter — der Beleg muss ihn überleben ═══════════════
-    console.log('\n4) Mitarbeiter endgültig gelöscht (Beleg muss bleiben):');
+    // ══ 4. Abgerechneter Mitarbeiter — endgültig löschen ist gesperrt ═══════════════════════
+    // Bis 28.09.2026 bewusst NICHT gesperrt (nur ein Vermerk im Protokoll). Seit „endgültig löschen" den
+    // Inhalt wirklich mitnimmt, gilt Alex' Regel: Wer in einer Abrechnung steht, bleibt — sonst käme die
+    // Abrechnung durcheinander. Ausstellen genügt (konto-loeschen.js).
+    console.log('\n4) Abgerechneter Mitarbeiter: endgültig löschen gesperrt (Beleg und Daten bleiben):');
     {
       const { admin, chef } = await frischerServer();
       const weg = (await req('POST', '/api/users', admin, {
@@ -186,18 +189,21 @@ const perioden = async (t) => (await req('GET', '/api/closure', t)).body.periode
       const ausAdmin = await req('POST', `/api/users/${weg.id}/deactivate`, admin, { employed_until: `${JAHR}-01-15`, reason: GRUND });
       ok('der Admin darf es mit Begründung', ausAdmin.status === 200, `${ausAdmin.status} ${ausAdmin.body?.error || ''}`);
 
+      const standVorher = await stand(admin, weg.id);
       const hart = await req('DELETE', `/api/users/${weg.id}`, admin, {});
-      ok('endgültiges Löschen ist möglich (bewusst nicht gesperrt)', hart.status === 200, String(hart.status));
+      ok('endgültiges Löschen ist gesperrt (409, Grund: abgeschlossene Abrechnung)',
+        hart.status === 409 && /abgeschlossenen Abrechnung/.test(hart.body?.error || ''), `${hart.status} ${hart.body?.error || ''}`);
 
       const danach = (await perioden(chef))[0];
-      ok('der Beleg überlebt das Löschen', danach && danach.zeilen.some(z => z.name === 'Geht Bald'),
+      ok('der Beleg steht unverändert', danach && danach.zeilen.some(z => z.name === 'Geht Bald'),
         JSON.stringify(danach?.zeilen || []).slice(0, 160));
       ok('mit Personalnummer', danach.zeilen.some(z => z.personnel_no === '9999'));
+      ok('das Konto und seine Zahlen sind noch da', (await stand(admin, weg.id)) === standVorher && Number.isFinite(standVorher), String(standVorher));
       const abw = await req('GET', `/api/closure/${jan.id}/abweichung`, chef);
-      ok('die Abweichungs-Ansicht stürzt nicht ab', abw.status === 200, `${abw.status} ${abw.text.slice(0, 120)}`);
-      ok('sie meldet ihn als entfernt', (abw.body.abweichungen || []).some(a => a.entfernt), JSON.stringify(abw.body).slice(0, 200));
+      ok('die Abweichungs-Ansicht meldet ihn NICHT als entfernt', abw.status === 200 && !(abw.body.abweichungen || []).some(a => a.entfernt),
+        JSON.stringify(abw.body).slice(0, 200));
       const audit = (await req('GET', '/api/audit?limit=100', admin)).text;
-      ok('das Protokoll vermerkt „betrifft abgerechnete Zeiträume"', /ABGERECHNETE ZEITR/.test(audit), audit.slice(0, 120));
+      ok('im Protokoll kein „Endgültig gelöscht"', !/Endgültig gelöscht/.test(audit), audit.slice(0, 120));
     }
 
     // ══ 5. Rückwirkender Feiertag — trifft ALLE gleichzeitig ═════════════════════════════

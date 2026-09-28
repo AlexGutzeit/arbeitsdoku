@@ -1354,14 +1354,14 @@ async function renderDeletedUsers() {
       const geht = [
         zeile(v.geht.eintraege, 'Zeiteintrag', 'Zeiteinträge', '(auch im Papierkorb)'),
         zeile(v.geht.abwesenheiten, 'Abwesenheit', 'Abwesenheiten'),
-        zeile(v.geht.notizen, 'Notiz', 'Notizen', '(auch bei denen, mit denen sie geteilt ist)'),
+        zeile(v.geht.notizen, 'eigene Notiz', 'eigene Notizen', '(auch für alle, mit denen sie geteilt wurden)'),
         zeile(v.geht.planungen, 'Planung, in der nur diese Person eingeteilt ist', 'Planungen, in denen nur diese Person eingeteilt ist'),
         zeile(v.geht.werkzeug, 'Werkzeug-Ausleihe', 'Werkzeug-Ausleihen'),
         '· das Konto mit Zugang, Einstellungen, Soll-Stunden, Urlaubsanspruch und Profilbild',
       ].filter(Boolean);
       const bleibt = [
         zeile(v.bleibt.planungenMitAnderen, 'Planung mit anderen', 'Planungen mit anderen', '(die Person wird ausgetragen)'),
-        zeile(v.bleibt.planungenFuerAndere, 'Planung, die sie für andere angelegt hat', 'Planungen, die sie für andere angelegt hat'),
+        zeile(v.bleibt.planungenFuerAndere, 'Planung, die diese Person für andere angelegt hat', 'Planungen, die diese Person für andere angelegt hat'),
         zeile(v.bleibt.bestellungen, 'Bestellung', 'Bestellungen'),
         zeile(v.bleibt.aushaenge, 'Aushang', 'Aushänge'),
       ].filter(Boolean);
