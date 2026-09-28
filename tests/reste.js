@@ -51,9 +51,12 @@ function starteInit(dbPfad, nachher) {
   // ── A: Schutz verlässlich aus ───────────────────────────────────────────────────────────────────
   console.log('A. Fremdschlüssel-Schutz');
   try { fs.unlinkSync(LEER); } catch (_) {}
+  starteInit(LEER);
+  // Gemessen wird der ZWEITE Start: Beim ersten legt init an und speichert — das Speichern schaltet den
+  // Schutz schon ab, ein alter Stand fiele dort nicht auf. Im Betrieb startet die App immer auf Bestand.
   const lauf = starteInit(LEER);
   const fk = JSON.parse(((lauf.stdout || '').match(/FK=(.*)/) || [])[1] || 'null');
-  ok('nach dem Start aus und nach dem Speichern aus (nicht mehr: an bis zum ersten Autosave)',
+  ok('Start auf Bestand: aus, und nach dem Speichern aus (nicht mehr: an bis zum ersten Autosave)',
     fk && fk[0].foreign_keys === 0 && fk[1].foreign_keys === 0, JSON.stringify(fk) + ' ' + (lauf.stderr || '').slice(0, 200));
 
   // ── B: jeder Fremdschlüssel eingeordnet ─────────────────────────────────────────────────────────
@@ -160,19 +163,23 @@ function starteInit(dbPfad, nachher) {
     planungsStellen.length === 1 && planungsStellen[0].f === path.join('routes', 'planning.js')
       && /function planungenLoeschen/.test(quelle[path.join('routes', 'planning.js')].split('\n').slice(planungsStellen[0].i - 2, planungsStellen[0].i).join('\n')),
     planungsStellen.map(x => `${x.f}:${x.i + 1}`).join(', '));
+  // Jede einzelne Stelle, die eine Tabelle mit Anhängseln hart löscht, muss in ihrer Nähe (8 Zeilen davor
+  // bis 4 danach) aufräumen: nachLoeschen(db, '<tabelle>') ODER jedes Anhängsel ausdrücklich mitlöschen.
   const eltern = [...new Set(reste.ANHAENGSEL.map(a => a.auf))];
   const luecken = [];
   for (const [f, s] of Object.entries(quelle)) {
     if (f === 'reste.js' || f.startsWith('database')) continue;
-    for (const p of eltern) {
-      if (!new RegExp(`DELETE FROM ${p}\\b`).test(s)) continue;
-      if (p === 'planning_entries' && /reste\.nachLoeschen\(db, 'planning_entries'\)/.test(s)) continue;
-      if (s.includes(`nachLoeschen(db, '${p}')`)) continue;
-      // oder ausdrücklich jedes Anhängsel dieser Tabelle mitgelöscht
-      const kinder = reste.ANHAENGSEL.filter(a => a.auf === p).map(a => a.tabelle);
-      const fehlt = kinder.filter(k => !new RegExp(`DELETE FROM ${k}\\b|'${k}'`).test(s));
-      if (fehlt.length) luecken.push(`${f}: löscht ${p}, lässt ${fehlt.join('/')} liegen`);
-    }
+    const zeilen = s.split('\n');
+    zeilen.forEach((z, i) => {
+      for (const p of eltern) {
+        if (!new RegExp(`DELETE FROM ${p}\\b`).test(z)) continue;
+        const umfeld = zeilen.slice(Math.max(0, i - 8), i + 5).join('\n');
+        if (umfeld.includes(`nachLoeschen(db, '${p}')`)) continue;
+        const kinder = [...new Set(reste.ANHAENGSEL.filter(a => a.auf === p).map(a => a.tabelle))];
+        const fehlt = kinder.filter(k => !new RegExp(`DELETE FROM ${k}\\b|'${k}'`).test(umfeld));
+        if (fehlt.length) luecken.push(`${f}:${i + 1} löscht ${p}, lässt ${fehlt.join('/')} liegen`);
+      }
+    });
   }
   ok('jeder Weg, der eine Tabelle mit Anhängseln hart löscht, räumt sie mit ab', luecken.length === 0, luecken.join(' | '));
 
