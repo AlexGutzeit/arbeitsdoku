@@ -3725,3 +3725,13 @@ Laptop, gleiche Prüfsumme; Rückspielprobe auf dem Mini-PC), Rückkehrpunkt `vo
 (= `2e705e5`). Nachher: `/gast` mit `noindex` und `no-store`, lädt keine App; Gast-Wege ohne Anmeldung
 401/404; keine Fehler im Protokoll; Datenbank vorher/nachher: neu nur `note_gaeste` und
 `notes.updated_by_gast`, 50 von 50 Tabellen und alle 12 Notizen zeichengleich.
+
+## Meldungen in der geöffneten Notiz unter der Knopfreihe (28.09.2026)
+
+Die Meldungen stehen seit R24 oben — in der geöffneten Notiz genau über „⋯" und „← Fertig". Wer direkt
+danach tippte, schloss nur die Meldung (R14), das Menü ging nicht auf (aufgefallen im Test zu Etappe B,
+Alex zugestimmt). Jetzt rückt sie dort unter die Knopfreihe (`body:has(.notiz-editor) .toast`); überall
+sonst unverändert, Gästeseite ebenfalls (ohne App-Kopf liegt sie schon darunter). `notizen-export-ui`
+prüft per `elementFromPoint`, dass beide Knöpfe antippbar bleiben — erst nach der 0,3-s-Einblendung
+gemessen; mittendrin lag die Meldung noch oberhalb, und „frei" wäre Zufall gewesen. Gegenprobe: rot.
+Cache 431.

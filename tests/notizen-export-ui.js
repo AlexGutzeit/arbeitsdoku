@@ -194,6 +194,13 @@ const pdfText = (buf) => { const f = path.join(ORDNER, 'x.pdf'); fs.writeFileSyn
     await A.waitForFunction(() => /noch nicht beim Server/.test((document.querySelector('.toast') || {}).textContent || ''), { timeout: 8000 }).catch(() => {});
     const funk = await A.evaluate(() => ({ toast: (document.querySelector('.toast') || {}).textContent || '', dateien: window.__dateien.length }));
     ok('ohne Netz: keine Datei ohne die letzten Änderungen, sondern eine klare Meldung', /noch nicht beim Server/.test(funk.toast) && funk.dateien === nFunk, JSON.stringify(funk));
+    // Die Meldung darf „⋯" und „← Fertig" nicht verdecken (vorher: der nächste Tipp schloss nur sie).
+    // Erst messen, wenn sie ausgefahren ist (0,3 s Bewegung) — mittendrin lag sie noch oberhalb, und „frei" wäre Zufall.
+    await sleep(600);
+    const frei = await A.evaluate(() => ['notiz-mehr', 'notiz-fertig'].map(k => { const r = document.getElementById(k).getBoundingClientRect();
+      return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2).closest('#' + k) !== null; }));
+    const sichtbar = await A.evaluate(() => { const t = document.querySelector('.toast.show'); if (!t) return null; const r = t.getBoundingClientRect(); return { oben: Math.round(r.top), unten: Math.round(r.bottom) }; });
+    ok('… und sie liegt unter der Knopfreihe: „⋯" und „← Fertig" bleiben antippbar, die Meldung ist zu sehen', frei.every(Boolean) && sichtbar && sichtbar.oben >= 110, JSON.stringify({ frei, sichtbar }));
     await A.setOfflineMode(false);
     await A.waitForFunction(() => /Gespeichert/.test(document.getElementById('notiz-status').textContent), { timeout: 30000 }).catch(() => {});
     // Die Meldung liegt oben über „⋯" (gemessen: elementFromPoint traf die Meldung) — deshalb hat sie
