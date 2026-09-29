@@ -41,7 +41,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   Eingaben sind noch da". Zusätzlich gleitende Sitzung: Server erneuert das Token, wenn nur noch
   wenige Stunden übrig sind.
 
-### [x] R2 · Server kann bei bestimmten Fehlern komplett abstürzen — erledigt in `3617bb4` *(noch nicht deployt)*
+### [x] R2 · Server kann bei bestimmten Fehlern komplett abstürzen — erledigt in `3617bb4` · **DEPLOYED 29.09.2026** (`4c0f81c`, Cache 435)
 - **Wo:**
   - `scheduler.js:314` — die minütliche Aufgabe `tick()` ist async, wird aber **ohne `await`** in
     `try/catch` gesetzt; das Fangnetz fängt dadurch nichts.
@@ -242,20 +242,20 @@ Nach 5 Minuten scheitert jeder weitere Code mit „abgelaufen", raus nur über �
 Dauer nach Textlänge.
 **Gelöst (25.09.):** Dauer nach Textlänge (Fehler 6–15 s), Antippen schließt. Test `tests/lesbar-und-sicher-ui.js`.
 
-### [x] R15 · Auszahlungen: Name und Datumsprüfung uneinheitlich — erledigt in `e80fec0` *(noch nicht deployt)*
+### [x] R15 · Auszahlungen: Name und Datumsprüfung uneinheitlich — erledigt in `e80fec0` · **DEPLOYED 29.09.2026** (`4c0f81c`, Cache 435)
 Beim Anlegen wird der Anzeigename gespeichert, beim Bestätigen/Ablehnen/Zurückziehen der
 Benutzername (`routes/payouts.js:207, 239`) — der Kommentar bei `:138` will genau das vermeiden.
 „Wirksam ab" nur per Muster geprüft (`:117`), „2026-02-31" wird angenommen.
 **Gelöst (29.09.):** `anzeigenameVon()` an allen drei Stellen; `zeit.istDatum()` prüft kalendarisch. Gegenprobe
 zeigt die Folge des alten Stands: Der angenommene 31.02. blockierte danach jede weitere Auszahlung („bereits offen").
 
-### [x] R16 · Urlaubsübersicht „Stand:" zeigt nachts den Vortag — erledigt in `e80fec0` *(noch nicht deployt)*
+### [x] R16 · Urlaubsübersicht „Stand:" zeigt nachts den Vortag — erledigt in `e80fec0` · **DEPLOYED 29.09.2026** (`4c0f81c`, Cache 435)
 `routes/absences.js:262` (`toISOString`) — zwischen 0 und 2 Uhr. Die Berechnung selbst nutzt
 korrekt Ortszeit (`berlinHeute`).
 **Gelöst (29.09.):** `berlinHeute(now)`. Getestet mit einem Server, dessen Uhr auf 00:30 Uhr steht
 (`tests/hilfen/uhr-stellen.js`, per `node --require`) — nur dann zeigt sich der Fehler.
 
-### [x] R17 · Löschen ohne Protokolleintrag — erledigt in `e80fec0` *(noch nicht deployt)*
+### [x] R17 · Löschen ohne Protokolleintrag — erledigt in `e80fec0` · **DEPLOYED 29.09.2026** (`4c0f81c`, Cache 435)
 Schwarzes Brett (`routes/bulletin.js:141`) und Bestellungen (`routes/orders.js:156`) löschen hart,
 ohne Eintrag im Protokoll.
 **Gelöst (29.09.):** Löschen per Knopf (`bulletin_delete`, `order_delete` — mit Titel bzw. Menge/Produkt, für wen,
@@ -266,7 +266,7 @@ vom „System") stehen im Audit-Log. Test `tests/bugliste-r15-r16-r17.js` (13), 
 **Deployt:** Prod 26.09.2026 (`ed69b7a`, Cache 427).
 `app-8-comm-init.js:2298` — `URL.revokeObjectURL` direkt nach dem Klick. → verzögert freigeben.
 
-### [x] R19 · Mitarbeiter anlegen ohne Transaktion — erledigt in `3617bb4` *(mit R2, noch nicht deployt)*
+### [x] R19 · Mitarbeiter anlegen ohne Transaktion — erledigt in `3617bb4` · **DEPLOYED 29.09.2026** (`4c0f81c`, Cache 435)
 `routes/users.js:495–505` — drei Inserts (Nutzer, Soll-Stunden, Anstellung) ohne Transaktion;
 scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
 **Gelöst (29.09., mit R2):** alle drei in einer Transaktion, die Namensprüfung darin (Wettlauf). Geprüft mit einem
@@ -448,5 +448,4 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 
 ## Stand der Liste
 
-**Alle Punkte R1–R28 sind erledigt** (29.09.2026). Deployt bis einschließlich R23/R28 (`3dd39fe`, Cache 434);
-R2, R15, R16, R17, R19 liegen auf `develop` und warten auf den nächsten Deploy.
+**Alle Punkte R1–R28 sind erledigt und deployt** (29.09.2026, zuletzt R2/R15/R16/R17/R19 mit `4c0f81c`, Cache 435).

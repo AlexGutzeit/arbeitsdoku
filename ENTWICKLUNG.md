@@ -3992,3 +3992,11 @@ automatische Aufräumen (`bulletin_ablauf`, `order_aufgeraeumt`, als „System�
 direkt in die Datenbank, weil die Oberfläche ihn nicht herstellen kann.
 Test `tests/bugliste-r15-r16-r17.js` (13), Gegenproben 8/8 rot. **Damit ist die Bugliste v7 (R1 bis R28)
 vollständig abgearbeitet.**
+
+**Deploy R2 + R19 + R15 + R16 + R17 (29.09.2026, 19:22, `4c0f81c`, Cache 435).** Suite 255/256. Der eine rote
+Test, `auszahlung-ablehnung`, erwartete beim Ablehnen noch den Benutzernamen, das Verhalten vor R15. Jetzt
+erwartet er den Anzeigenamen und ist grün. Die Cache-Nummer ging vor dem Deploy noch auf 435, weil die neuen
+Protokoll-Beschriftungen die Oberfläche ändern. Vollsicherung `arbeitsdoku_backup_20260929-192152.adbk`
+(dreifach, gleiche Prüfsumme, Rückspielprobe). Rückkehrpunkt `vor-r2-r19-r15-deploy` (= `3dd39fe`). Die Datenbank
+ist vorher/nachher in allen 51 Tabellen gleich, es gibt keine Umstellung. `absturzschutz.js` liegt auf dem
+Server und ist eingebunden.
