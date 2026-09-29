@@ -244,6 +244,12 @@ async function start() {
 function offeneNotizenSichern() {
   try { require('./notizen-live').allesSpeichern(); } catch (e) { console.error('Live-Notizen nicht gesichert:', e.message); }
 }
+// Absturz-Schutz (R2): async-Routen antworten mit 500 statt den Server zu beenden; unbehandelte Fehler
+// werden protokolliert, bei echten Programmfehlern erst gesichert, dann neu gestartet.
+const absturzschutz = require('./absturzschutz');
+absturzschutz.asyncRoutenAbsichern();
+absturzschutz.prozessWaechter({ sichern: () => { offeneNotizenSichern(); saveToFile(); } });
+
 process.on('SIGINT', () => {
   console.log('\nServer wird beendet...');
   offeneNotizenSichern();

@@ -315,7 +315,8 @@ function start(getDb) {
   // Liefe er 15 s nach dem Booten gleich noch einmal, verdeckte er im Test einen Lösch-Weg ohne Aufräumen.
   lastResteDate = berlinParts().date;
   const run = () => {
-    try { tick(getDb()); } catch (e) { console.error('summary tick fehlgeschlagen:', e && e.message); }
+    // tick() ist async: try/catch allein fängt nur den synchronen Teil — die Ablehnung braucht .catch (R2)
+    try { tick(getDb()).catch(e => console.error('summary tick fehlgeschlagen:', e && e.message)); } catch (e) { console.error('summary tick fehlgeschlagen:', e && e.message); }
     try { const d = berlinParts().date; if (d !== lastExtendDate) { lastExtendDate = d; extendSeries(getDb()); } } catch (e) { console.error('series extend fehlgeschlagen:', e && e.message); }
     // Eigener Tagesmerker: Faellt die Serien-Verlaengerung mit einem Fehler aus, darf der Austritt
     // trotzdem vollzogen werden — ein offen bleibendes Konto ist das groessere Problem.

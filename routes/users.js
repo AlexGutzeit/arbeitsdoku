@@ -495,20 +495,36 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   if (geburtNeu === null) return res.status(400).json({ error: GEBURT_FEHLER });
 
   let hash;
-  try { hash = await bcrypt.hash(password, 10); } // kooperativ (blockiert den Event-Loop nicht)
+  // bcryptjs rechnet trotz Promise praktisch am Stück (gemessen 24.09., R2) — der Kommentar „blockiert den
+  // Event-Loop nicht", der hier stand, stimmte nicht. Auf die Reihenfolge verlassen wir uns trotzdem nicht:
+  try { hash = await bcrypt.hash(password, 10); }
   catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }
-  const result = db.prepare(
-    "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, personnel_no, work_start, birth_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-  ).run(username, hash, name, role, hpw, Number(start_overtime) || 0, planSelf, planAll, bulletin, upload, order, produkte, einlernen, normPersonalNr(personnel_no) ?? null, beginnNeu || null, geburtNeu || null);
 
-  const userId = result.lastInsertRowid;
+  // R2 + R19: Konto, Soll-Stunden und Anstellung GANZ oder GAR NICHT (vorher entstand beim Scheitern der
+  // zweiten Zeile ein Mitarbeiter ohne Soll-Stunden). Der Name wird darin noch einmal geprüft — während des
+  // Hashens hätte ein zweiter Aufruf ihn anlegen können; der UNIQUE-Fehler wäre sonst unbehandelt geblieben.
   // B6: „heute" in Europe/Berlin (wie im Rest der App) statt UTC — sonst nahe Mitternacht 1 Tag daneben.
   const today = berlinHeute();
-  db.prepare(
-    'INSERT INTO user_target_hours (user_id, hours_per_week, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(userId, hpw, hMon, hTue, hWed, hThu, hFri, today);
-  // Offener Anstellungszeitraum ab heute (Basis fuer die Soll-Stunden-Anrechnung)
-  db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, NULL)').run(userId, today);
+  let userId;
+  try {
+    userId = db.transaction(() => {
+      if (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) return null;
+      const result = db.prepare(
+        "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, personnel_no, work_start, birth_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(username, hash, name, role, hpw, Number(start_overtime) || 0, planSelf, planAll, bulletin, upload, order, produkte, einlernen, normPersonalNr(personnel_no) ?? null, beginnNeu || null, geburtNeu || null);
+      const id = result.lastInsertRowid;
+      db.prepare(
+        'INSERT INTO user_target_hours (user_id, hours_per_week, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(id, hpw, hMon, hTue, hWed, hThu, hFri, today);
+      // Offener Anstellungszeitraum ab heute (Basis fuer die Soll-Stunden-Anrechnung)
+      db.prepare('INSERT INTO employment_periods (user_id, start_date, end_date) VALUES (?, ?, NULL)').run(id, today);
+      return id;
+    })();
+  } catch (e) {
+    if (!/UNIQUE/.test(e.message)) throw e;   // alles andere: Fehlerbehandlung (500), nichts angelegt
+    userId = null;
+  }
+  if (userId === null) return res.status(409).json({ error: 'Benutzername bereits vergeben' });
 
   const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(userId);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_create',
@@ -652,7 +668,7 @@ router.post('/:id/reset-password', authenticate, authorize('chef'), async (req, 
   const pwErr = passwordPolicyError(password, user.username);
   if (pwErr) return res.status(400).json({ error: pwErr });
   let hash;
-  try { hash = await bcrypt.hash(password, 10); } // kooperativ (blockiert den Event-Loop nicht)
+  try { hash = await bcrypt.hash(password, 10); }
   catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }
   db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(hash, req.params.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_password_reset',
