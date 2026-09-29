@@ -1,6 +1,6 @@
 // Der 18. Geburtstag am ECHTEN Datenstand: Kippt die Pausenregel am richtigen Tag?
 //
-// Anlass: Jakob Wolf (*19.08.2008) wird demnächst 18. Bis dahin gilt § 11 JArbSchG (30 min ab 4½,
+// Anlass: Ein Mitarbeiter wird demnächst 18. Bis dahin gilt § 11 JArbSchG (30 min ab 4½,
 // 60 min ab 6 Std), ab seinem Geburtstag § 4 ArbZG (30 min ab 6, 45 min ab 9 Std).
 //
 // Geprüft wird gegen eine ARBEITSKOPIE der Produktivdaten, mit VORGESTELLTER BROWSER-UHR — sonst

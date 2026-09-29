@@ -427,7 +427,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 ---
 
 ### [x] R29 · Ausgeschiedene erscheinen außerhalb ihrer Anstellung (Statistik u. a.) *(gemeldet von Alex 29.09.2026 · **DEPLOYED 29.09.2026**, `4f02efb`, Cache 436)*
-- **Gemeldet:** Tim Nagengast (ausgestellt zum 31.07.2026) stand in der Statistik in **allen** Ansichten.
+- **Gemeldet:** Ein ausgestellter Mitarbeiter (letzter Tag 31.07.2026) stand in der Statistik in **allen** Ansichten.
   Regel (Alex): angezeigt wird, wer im gewählten Zeitraum **ganz oder teilweise angestellt** war.
 - **Ursache Statistik:** Die Seite schickte ohne Auswahl trotzdem ALLE Mitarbeiter-Nummern mit; der Server hielt
   das für eine bewusste Auswahl, und eine Auswahl prüfte er nicht. Die Auswahlknöpfe boten ebenfalls alle an.
@@ -445,6 +445,26 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   Angestellte, Ausgeschiedene mit „(ausgestellt)". Abwesenheit: nur Aktive. PDF-Auswahl folgt dem Zeitraum.
   Unverändert: Wer im Zeitraum noch Stunden gebucht hat, bleibt in der Statistik sichtbar.
   Test `tests/ausgeschiedene-zeitraum-ui.js` (24), Gegenproben 7/7 rot.
+
+### [x] R30 · Meldung antippen landet nicht beim Gemeinten *(gemeldet von Alex 29.09.2026, gebaut 29.09., noch nicht deployt)*
+- **Gemeldet:** Die Meldung „… (Gast) hat … bearbeitet" angetippt → Willkommensseite statt „Notizen". Gewohnt war:
+  Notizen, die Notiz hervorgehoben. Alex: „Prüfe bitte auch die anderen Push-Notifications."
+- **Ursachen:**
+  - Der Service Worker nahm das **erste** offene Fenster. War daneben die **Gästeseite** offen (`/gast`), bekam sie
+    die Nachricht bzw. wurde umgeleitet — die App blieb, wo sie war.
+  - War man **abgemeldet**, ging es nach der Anmeldung immer zur Willkommensseite; das Ziel war verloren.
+  - Die Meldungen trugen nur das Menü, nicht das Element: nichts hervorgehoben, eine Erinnerung landete auf
+    „heute" statt am Tag des Termins.
+- **Durchgesehen:** alle Meldungen — Notiz bearbeitet/geteilt/angeboten, Gast hat bearbeitet, Gastzugang gesperrt,
+  Projektnotiz, Aushang neu/geändert, Bestellung, Abwesenheit (Antrag, Entscheidung, vom Chef geändert),
+  Planungs-Erinnerung. Zusammenfassung und Testmeldung haben kein Ziel und holen nur die App nach vorn.
+- **Gelöst:** Jede Meldung trägt ihr genaues Ziel (`ziel: { art, id[, datum] }`, `push.js`). Der Service Worker
+  wählt ein App-Fenster (nie `/gast`; das mit Fokus, sonst ein sichtbares), sonst öffnet er `/?meldung=…#/…`.
+  Die App merkt sich das Ziel über die Anmeldung hinweg; jede Seite scrollt hin und hebt kurz hervor
+  (Projektkachel aufgeklappt, Erinnerung → Tagesansicht am Tag des Termins).
+  Tests `meldung-ziel` (20), `meldung-sw` (11, Service Worker in `node:vm`), `meldung-springen-ui` (16),
+  `meldung-klick-ui` (8); Gegenproben 8/8 rot an ihrer Stelle — der alte Service Worker schickt die Meldung an die
+  Gästeseite (Alex' Fall).
 
 ## Geprüft und in Ordnung
 
@@ -469,3 +489,4 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 ## Stand der Liste
 
 **Alle Punkte R1–R29 sind erledigt und deployt** (29.09.2026, zuletzt R29 mit `4f02efb`, Cache 436).
+R30 (Meldung antippen → genau dorthin, von Alex gemeldet) ist gebaut und wartet auf den Deploy (Cache 437).

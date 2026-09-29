@@ -1,6 +1,6 @@
 // Ausgeschiedene nur im Zeitraum ihrer Anstellung (29.09.2026).
 //
-// Alex: „Tim Nagengast, ein inzwischen ausgestellter Mitarbeiter, wird noch in der Statistik in allen Ansichten
+// Alex: „[Ein] inzwischen ausgestellter Mitarbeiter wird noch in der Statistik in allen Ansichten
 // angezeigt. Es sollen nur die Mitarbeiter angezeigt werden, die in dem ausgewählten Zeitraum ganz oder
 // teilweise angestellt waren." Die Suche fand dasselbe an vier weiteren Stellen. Aufbau: Tim war im VORJAHR
 // vom 01.01. bis 30.06. angestellt (ausgestellt), Anna durchgehend, Nora fängt erst heute an. Geprüft:

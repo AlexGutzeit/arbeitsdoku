@@ -1650,7 +1650,7 @@ Alex: „Was wenn jemand etwas in der Vergangenheit noch nicht akzeptiert oder q
 abschluss gemacht wurde? Dann verschwindet dieser Eintrag nie mehr aus dem Posteingang."
 
 **Der Fall war längst da, nicht nur denkbar.** Abschluss bis 30.06.2026, und zwei Innung-Einträge
-von Jakob Wolf (26.–28.05. und 01.06.) warteten dauerhaft auf seine Quittierung.
+eines Mitarbeiters (26.–28.05. und 01.06.) warteten dauerhaft auf seine Quittierung.
 
 **Die Frage, die niemand gestellt hatte:** Wovor schützt der Abschluss eigentlich? Vor verschobenen
 **Zahlen** — nicht vor Vorgängen. Gezählt werden nur Abwesenheiten mit Status `active` oder
@@ -4040,3 +4040,17 @@ verliert diese Leerzeile, das ist offen und klein. Vollsicherung `arbeitsdoku_ba
 vorher/nachher in allen 51 Tabellen gleich. Die Lohn-CSV filterte schon vorher nach Anstellung
 (`routes/payroll.js`), an echten Daten nachgemessen: Ein Ausgeschiedener steht bis zum Austrittsmonat drin, ein
 Neuer ab dem Eintrittsmonat.
+
+**R30: Meldung antippen → genau dorthin (29.09.2026, abends).** Alex tippte die Meldung „Gast hat bearbeitet“ an
+und landete auf der Willkommensseite. Der Service Worker nahm das erste offene Fenster; das war die daneben offene
+Gästeseite. Die bekam die Nachricht, und die App blieb stehen. Nach einer Anmeldung ging das Ziel ohnehin
+verloren. Jetzt trägt jede Meldung ihr genaues Ziel. Der Service Worker meidet `/gast`, und die App hebt das
+Gemeinte hervor. Den Service Worker prüft `tests/meldung-sw.js` ohne Browser: `public/sw.js` läuft in `node:vm` mit
+nachgebauten Fenstern, denn eine echte Systemmeldung lässt sich im Test nicht antippen.
+
+**Nebenbei am selben Abend:** Die Notiz-Umwandlung aus Klartext hängt jetzt immer genau ein Zeilenende an, als
+Umkehrung von `felder()`. Vorher ging eine Leerzeile am Schluss verloren, gefunden am frischen Prod-Klon.
+`tests/lohn-export.js` prüft jetzt auch, dass jemand vor dem Eintritt und nach dem Austritt nicht in der Lohn-CSV
+steht. Echte Namen (ein Ausgeschiedener, ein Jugendlicher mit Geburtsdatum) standen in Bugliste, Werkstattbuch und
+Testkommentaren. Das Repo ist öffentlich, sie sind jetzt neutral formuliert. In der Git-Geschichte stehen sie
+weiter.

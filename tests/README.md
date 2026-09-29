@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**257 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**259 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -159,6 +159,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `manager-rights-api.js` | API-Test (#9): Beim Anlegen/Bearbeiten werden die Einzelrecht-Flags (can_plan/can_plan_all/ |
 | `manager-rights-normalize.js` | Unit-Test (#9): normalizeManagerRights() nullt die redundanten Einzelrecht-Flags von Chef/Admin |
 | `meldung-klick-ui.js` | Der Klick auf eine Meldung landet im richtigen Menü — die Seite des Clients (Alex, 27.08.2026). |
+| `meldung-springen-ui.js` | Meldung antippen → genau dorthin, hervorgehoben (Alex, 29.09.2026). |
+| `meldung-sw.js` | Der Service Worker beim Antippen einer Meldung (29.09.2026). |
 | `meldung-ziel.js` | Ein Klick auf die Meldung muss in dem Menue landen, aus dem sie kam (Alex, 27.08.2026). |
 | `meldungen-deutsch.js` | Meldungen auf Deutsch und ohne Innereien — Server und Oberfläche (R9, 25.09.2026). |
 | `menue-abrechnung-ui.js` | Der Menüpunkt hinter #/pdf gehört Chef, Admin und Buchhaltung — und heißt „Abrechnung". |

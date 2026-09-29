@@ -53,7 +53,7 @@ async function loginPage(browser, base, user, pw) {
     const apw = (fs.readFileSync('/tmp/board-live-buffer-srv.log','utf8').match(/admin\s+->\s+(\S+)/)||[])[1];
     const admin = await tok('admin', apw);
     await req('POST','/api/users', admin, { username:'chefliv', password:'Test1234!', name:'Chefin Live', role:'chef', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 });
-    const jakob = (await req('POST','/api/users', admin, { username:'jakobliv', password:'Test1234!', name:'Jakob Wolf', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
+    const jakob = (await req('POST','/api/users', admin, { username:'jakobliv', password:'Test1234!', name:'Jakob Live', role:'mitarbeiter', hours_mon:8,hours_tue:8,hours_wed:8,hours_thu:8,hours_fri:8 })).body.user;
     // Frist in 30 ARBEITSTAGEN, 2 offene Ziele à 10 AT → Rest 20 AT, Puffer vorhanden (Luft ~33%).
     // Nach „Ziel 1 erledigt": Rest 10 AT → mehr Luft (~50%) + grünes Segment erscheint.
     const pr = (await req('POST','/api/projects', admin, { name:'Live-Balken', assigned_user_ids:[jakob.id], due_date:dueInWorkdays(30), milestones:[{title:'Ziel 1', est_days:10},{title:'Ziel 2', est_days:10}] })).body.project;

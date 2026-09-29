@@ -825,6 +825,13 @@ an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweilig
 Pro Nutzer lassen sich die Kategorien (Abwesenheiten / Schwarzes Brett / Notizen / **Planung**, für Chef/Admin
 zusätzlich Bestellungen) einzeln ein- und ausschalten (wird sofort gespeichert).
 
+**Meldung antippen:** Man landet genau bei dem, worum es geht, und es ist kurz **hervorgehoben**: die Notiz
+(auch nach einer Änderung durch einen Gast), die Projektkachel (aufgeklappt, bei einer Projektnotiz), der
+Aushang, die Bestellung, der Abwesenheitsantrag, bei einer Planungs-Erinnerung die **Tagesansicht am Tag des
+Termins** mit dem Termin. Das gilt auch, wenn die App gerade zu war (sie öffnet sich direkt dort) oder man
+abgemeldet war (nach der Anmeldung geht es dorthin statt zur Willkommensseite). Ist neben der App eine
+**Gästeseite** offen, bleibt die unberührt. Zusammenfassung und Testmeldung holen nur die App nach vorn.
+
 **Planungs-Erinnerungen:** Ist der Kategorie-Schalter **„Planung"** an, erscheint in der Tagesansicht im
 **⋮-Menü** eines Termins der Punkt **„🔔 Benachrichtigung"** – auch für Mitarbeiter **ohne** Planungsrecht (die
 bekommen dadurch überhaupt erst das Menü, mit nur diesem einen Punkt), aber nur an **eigenen** Terminen;

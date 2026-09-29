@@ -4,7 +4,7 @@
 // abschluss gemacht wurde? Dann verschwindet dieser Eintrag nie mehr aus dem Posteingang."
 //
 // Der Fall war in den Produktivdaten bereits da: Abschluss bis 30.06.2026, und zwei Innung-Einträge
-// von Jakob Wolf (26.–28.05. und 01.06.) warteten dauerhaft auf seine Quittierung.
+// eines Mitarbeiters (26.–28.05. und 01.06.) warteten dauerhaft auf seine Quittierung.
 //
 // DIE REGEL, um die es hier geht: Der Abschluss schützt BEZAHLTE ZAHLEN, nicht Vorgänge. Gezählt
 // werden nur Abwesenheiten mit Status 'active' oder 'approved' (routes/absence-days.js). Also:
@@ -81,7 +81,7 @@ const DANACH  = `${JAHR}-12-15`;   // nach dem Stichtag, dient als Gegenprobe
     ok('… und nennt den Grund', verweigert.status === 409 && /nicht entschieden/i.test(verweigert.text),
       verweigert.status + ' ' + verweigert.text.slice(0, 110));
     // ABER: Quittierungen sieht sie NICHT — genau die rutschen durch (in den Produktivdaten waren
-    // es zwei von Jakob Wolf). Deshalb muss Quittieren danach weiter möglich sein.
+    // es zwei eines Mitarbeiters). Deshalb muss Quittieren danach weiter möglich sein.
     ok('… Quittierungen hält sie dagegen NICHT auf', !/innung/i.test(verweigert.text), verweigert.text.slice(0, 160));
 
     await req('POST', `/api/absences/${stoerer.id}/reject`, chef);
