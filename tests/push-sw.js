@@ -71,8 +71,10 @@ sandbox.self.self = sandbox.self;
   ok('notificationclick ohne Fenster → openWindow', openedUrl === '/#/absences', String(openedUrl));
 
   // 4. notificationclick mit offenem Fenster → focus + navigate
+  // Das Fenster trägt seine Adresse wie jedes echte Fenster: Seit R30 (29.09.2026) sortiert sw.js daran die
+  // Gästeseite (/gast) aus — ein Fenster ohne Adresse zählt nicht als App.
   let navigatedTo = null;
-  fakeClients.push({ focus: () => { focusedClient = 'focused'; return Promise.resolve(); }, navigate: (u) => { navigatedTo = u; return Promise.resolve(); } });
+  fakeClients.push({ url: 'https://arbeitsdoku.example/#/welcome', focus: () => { focusedClient = 'focused'; return Promise.resolve(); }, navigate: (u) => { navigatedTo = u; return Promise.resolve(); } });
   openedUrl = null;
   const waits4 = [];
   listeners.notificationclick({ notification: { data: { url: '/#/bulletin' }, close() {} }, waitUntil: (p) => waits4.push(p) });
