@@ -108,7 +108,8 @@ function werktage(v, b) { const o = []; const d = new Date(heute); d.setUTCDate(
     const beimChef = (await req('GET', `/api/payouts?user_id=${u.id}`, chef)).body.auszahlungen[0];
     ok('der Chef sieht den Status „abgelehnt"', beimChef.status === 'abgelehnt', JSON.stringify(beimChef.status));
     ok('… und die Begründung im Wortlaut', beimChef.grund === GRUND, JSON.stringify(beimChef.grund));
-    ok('… und wer entschieden hat', beimChef.entschieden_von_name === 'ablehner', JSON.stringify(beimChef.entschieden_von_name));
+    // Anzeigename wie beim Anlegen (R15, 29.09.2026) — vorher stand hier der Benutzername „ablehner"
+    ok('… und wer entschieden hat', beimChef.entschieden_von_name === 'Anton Ablehner', JSON.stringify(beimChef.entschieden_von_name));
     const prot = db.prepare("SELECT details FROM audit_logs WHERE action = 'overtime_payout_reject' ORDER BY id DESC LIMIT 1").get();
     ok('… und es steht im Protokoll', !!prot && prot.details.includes(GRUND), JSON.stringify(prot));
 
