@@ -8,7 +8,8 @@
 //   2  Nach normalem Schließen wechselt das nächste Zurück wie gewohnt die Seite (kein toter Tastendruck).
 //   3  OK, das auf eine andere Seite springt: Der Sprung bleibt (das Entfernen des Dialog-Schritts macht ihn
 //      nicht rückgängig), und Zurück führt danach auf die Seite davor.
-//   4  Dialog auf Dialog (Bestätigen → gleich danach Begründung): Zurück schließt nur den oberen.
+//   4  Dialog auf Dialog (Bestätigen → gleich danach Begründung): Zurück schließt nur den oberen; normal zu Ende
+//      geführt, wechselt das nächste Zurück die Seite (der zweite Schritt wartete auf das Entfernen des ersten).
 //   5  Abwesenheits-Formular: Zurück sichert den Entwurf („Entwurf gesichert"), er wird beim nächsten Öffnen
 //      angeboten; „Abbrechen" verwirft ihn — danach wird nichts mehr angeboten.
 //   6  Seitenwechsel bei offenem Dialog (Link, Programm): Dialog geht zu; ein späteres Zurück landet in EINEM
@@ -110,6 +111,15 @@ function req(m, p, t, b) {
       JSON.stringify({ offen: await offen(), adr: await adr() }));
     await zurueck();
     ok('nächstes Zurück → Willkommensseite', (await adr()) === '#/welcome', await adr());
+    // …und die Kette normal zu Ende: Bestätigen → Begründung → OK. Das Zurück danach muss die Seite wechseln.
+    await hin('/welcome'); await hin('/bulletin');
+    await seite.evaluate(() => { confirmModal('Wiederherstellen?', { danger: false }).then(ok => { if (ok) promptModal('Begründung?'); }); });
+    await seite.waitForSelector('.dialog-modal [data-act="ok"]');
+    await seite.click('.dialog-modal [data-act="ok"]');
+    await seite.waitForSelector('#pm-input'); await seite.type('#pm-input', 'x');
+    await seite.click('.dialog-modal [data-act="ok"]'); await sleep(700);
+    await zurueck();
+    ok('Kette normal beendet: das nächste Zurück wechselt auf die Willkommensseite (kein toter Tastendruck)', (await adr()) === '#/welcome', await adr());
 
     console.log('5. Abwesenheits-Formular: Zurück sichert, Abbrechen verwirft');
     const formAuf = async () => { await seite.click('#absence-new-btn'); await seite.waitForSelector('#abs-comment'); await sleep(300); };
