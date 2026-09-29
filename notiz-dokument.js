@@ -24,12 +24,18 @@ function zeilenendeSichern(text) {
   if (text.length === 0 || text.toString().slice(-1) !== '\n') text.insert(text.length, '\n');
 }
 
-/** Neues Dokument aus Klartext (neue Notiz, Umstellung alter Notizen, alte Programmstände). */
+/**
+ * Neues Dokument aus Klartext (neue Notiz, Umstellung alter Notizen, alte Programmstände).
+ *
+ * Hängt IMMER genau ein Zeilenende an — die Umkehrung von felder(), das genau eins abschneidet.
+ * Nur „fehlendes ergänzen" (zeilenendeSichern) verlor eine Leerzeile am Schluss: Klartext „…\n" blieb
+ * „…\n", und felder() machte daraus „…". Gefunden am Prod-Klon 29.09.2026 (tests/notizen-live-prodklon.js,
+ * eine Notiz endete auf eine Leerzeile) — betrifft die Umstellung, also auch den Rückweg ydoc = NULL.
+ */
 function ausKlartext(klartext) {
   const doc = new Y.Doc();
   const text = doc.getText(TEXT);
-  if (klartext) text.insert(0, String(klartext));
-  zeilenendeSichern(text);
+  text.insert(0, String(klartext || '') + '\n');
   const stand = Y.encodeStateAsUpdate(doc);
   doc.destroy();
   return stand;
