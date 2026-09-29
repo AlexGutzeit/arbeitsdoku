@@ -7,6 +7,7 @@ const push = require('../push');
 const { computeAbsenceSummary, countUrlaubDaysInYear, vacationAccount, countUrlaubPendingInYear } = require('./absence-days');
 const { recordAbsenceHistory, berlinNow } = require('../audit');
 const { pruefeSperre, protokolliereEingriff } = require('../abschluss');
+const { berlinHeute } = require('../zeit');
 
 // Abrechnungs-Abschluss: Fast jede Aktion auf einer Abwesenheit verschiebt die Soll-Stunden —
 // Genehmigen und Ablehnen genauso wie Anlegen oder Loeschen, denn erst der Status entscheidet, ob
@@ -259,7 +260,8 @@ router.get('/vacation-overview', authenticate, (req, res) => {
   const db = getDb();
   const year = parseInt(req.query.year, 10) || new Date().getFullYear();
   const now = new Date();
-  res.json({ year, stand: now.toISOString().slice(0, 10), rows: buildVacationOverview(db, year, now) });
+  // „Stand" in deutscher Ortszeit — toISOString() ist UTC und zeigte zwischen 0 und 2 Uhr den Vortag (R16)
+  res.json({ year, stand: berlinHeute(now), rows: buildVacationOverview(db, year, now) });
 });
 
 // GET /api/absences/vacation-overview.pdf?year=YYYY — dieselbe Tabelle als echtes Server-PDF (Download).

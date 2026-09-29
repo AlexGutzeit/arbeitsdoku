@@ -32,6 +32,13 @@ function istUhrzeit(s) {
  */
 const ZONE = 'Europe/Berlin';
 
+/** 'JJJJ-MM-TT' und kalendarisch gültig — „2026-02-31" ist es nicht (R15). */
+function istDatum(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + 'T12:00:00Z');
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
 /** 'JJJJ-MM-TT' in deutscher Ortszeit. */
 function berlinHeute(d) {
   return (d || new Date()).toLocaleString('sv-SE', { timeZone: ZONE }).slice(0, 10);
@@ -48,4 +55,4 @@ function berlinWochentag(d) {
   return { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[kurz];
 }
 
-module.exports = { ZEIT_RE, istUhrzeit, ZONE, berlinHeute, berlinJetzt, berlinWochentag };
+module.exports = { ZEIT_RE, istUhrzeit, istDatum, ZONE, berlinHeute, berlinJetzt, berlinWochentag };

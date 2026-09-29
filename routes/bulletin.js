@@ -3,6 +3,7 @@ const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const push = require('../push');
+const { logAudit } = require('../audit');
 const { berlinHeute } = require('../zeit');
 
 const router = express.Router();
@@ -29,7 +30,14 @@ function cleanExpired(db) {
   // Stunden zu lange stehen geblieben. Wer ihn löschen sieht, denkt in seiner Uhrzeit, nicht in
   // der von Greenwich.
   const today = berlinHeute();
+  // Welche jetzt ablaufen, steht im Protokoll — sonst verschwänden sie spurlos (R17)
+  const ab = db.prepare("SELECT title FROM bulletin_entries WHERE auto_delete_date IS NOT NULL AND auto_delete_date != '' AND auto_delete_date < ?").all(today);
+  if (!ab.length) return;
   db.prepare('DELETE FROM bulletin_entries WHERE auto_delete_date IS NOT NULL AND auto_delete_date != \'\' AND auto_delete_date < ?').run(today);
+  const beschreibung = `${ab.length} ${ab.length === 1 ? 'Aushang' : 'Aushänge'} nach Ablauf entfernt: `
+    + ab.map(a => `„${a.title}"`).join(', ');
+  logAudit(db, { userId: null, username: 'System', action: 'bulletin_ablauf',
+    details: beschreibung });
 }
 
 // Alle Einträge abrufen (für alle sichtbar)
@@ -144,6 +152,10 @@ router.delete('/:id', authenticate, canBulletin, (req, res) => {
   if (!entry) return res.status(404).json({ error: 'Eintrag nicht gefunden' });
 
   db.prepare('DELETE FROM bulletin_entries WHERE id = ?').run(req.params.id);
+  // Vorher ohne Spur im Protokoll (R17)
+  const beschreibung = `Aushang gelöscht: „${entry.title}"`;
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'bulletin_delete',
+    details: beschreibung, ip: req.ip });
   broadcast('bulletin', req.headers['x-tab-id']);
   res.json({ success: true });
 });

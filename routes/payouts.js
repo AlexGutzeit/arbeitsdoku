@@ -27,7 +27,12 @@ const {
 const router = express.Router();
 
 const istManager = (u) => u && (u.role === 'admin' || u.role === 'chef');
-const { berlinHeute } = require('../zeit');
+const { berlinHeute, istDatum } = require('../zeit');
+
+// Der ANZEIGENAME, nicht der Benutzername: In der Karte des Mitarbeiters stand sonst „chef möchte dir …".
+// Gilt für alle drei Stellen, an denen ein Name gespeichert wird — Anlegen, Entscheiden, Zurückziehen (R15;
+// vorher nahmen die beiden letzten den Benutzernamen). Das Protokoll bekommt weiterhin den Benutzernamen.
+const anzeigenameVon = (db, user) => (db.prepare('SELECT name FROM users WHERE id = ?').get(user.id) || {}).name || user.username;
 const heuteIso = () => berlinHeute();
 
 function nutzer(db, id) {
@@ -114,7 +119,7 @@ router.post('/', authenticate, (req, res) => {
   const u = nutzer(db, uid);
   if (!u) return res.status(404).json({ error: 'Mitarbeiter nicht gefunden' });
   if (!(stunden > 0)) return res.status(400).json({ error: 'Bitte eine Stundenzahl größer als 0 angeben.' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(wunsch)) return res.status(400).json({ error: 'Ungültiges Datum.' });
+  if (!istDatum(wunsch)) return res.status(400).json({ error: 'Ungültiges Datum.' });   // auch „2026-02-31" (R15)
   if (db.prepare('SELECT id FROM overtime_payouts WHERE user_id = ? AND status = ?').get(uid, OFFEN)) {
     return res.status(409).json({ error: 'Für diesen Mitarbeiter ist bereits eine Auszahlung offen.' });
   }
@@ -135,10 +140,7 @@ router.post('/', authenticate, (req, res) => {
   }
 
   const jetzt = berlinNow();
-  // Der ANZEIGENAME, nicht der Benutzername: In der Karte des Mitarbeiters stand sonst
-  // "chef moechte dir ...". Das Protokoll bekommt weiterhin den Benutzernamen (logAudit).
-  const anzeigename = (db.prepare('SELECT name FROM users WHERE id = ?').get(req.user.id) || {}).name
-    || req.user.username;
+  const anzeigename = anzeigenameVon(db, req.user);
   // Unterschriftsweg: Die Zustimmung liegt schon vor, es gibt nichts mehr zu bestätigen. Sie wird
   // aber ÜBERALL als solche gekennzeichnet — belegweg bleibt 'unterschrift'.
   const direkt = belegweg === BELEG_UNTERSCHRIFT;
@@ -204,7 +206,7 @@ function entscheiden(req, res, neuerStatus) {
 
   db.prepare(
     'UPDATE overtime_payouts SET status = ?, grund = ?, entschieden_am = ?, entschieden_von = ?, entschieden_von_name = ? WHERE id = ?'
-  ).run(neuerStatus, neuerStatus === ABGELEHNT ? grund : null, berlinNow(), req.user.id, req.user.username, z.id);
+  ).run(neuerStatus, neuerStatus === ABGELEHNT ? grund : null, berlinNow(), req.user.id, anzeigenameVon(db, req.user), z.id);
 
   logAudit(db, {
     userId: req.user.id, username: req.user.username,
@@ -236,7 +238,7 @@ router.post('/:id/zurueckziehen', authenticate, (req, res) => {
 
   db.prepare(
     'UPDATE overtime_payouts SET status = ?, entschieden_am = ?, entschieden_von = ?, entschieden_von_name = ? WHERE id = ?'
-  ).run(ZURUECKGEZOGEN, berlinNow(), req.user.id, req.user.username, z.id);
+  ).run(ZURUECKGEZOGEN, berlinNow(), req.user.id, anzeigenameVon(db, req.user), z.id);
 
   logAudit(db, {
     userId: req.user.id, username: req.user.username, action: 'overtime_payout_withdraw',

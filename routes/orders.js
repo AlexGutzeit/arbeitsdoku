@@ -4,6 +4,7 @@ const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const push = require('../push');
 const { darfBestellen, SQL_BESTELLBERECHTIGT, SQL_BESTELLROLLEN } = require('../bestellrecht');
+const { logAudit } = require('../audit');
 
 const router = express.Router();
 
@@ -13,7 +14,12 @@ const canManage = (user) => darfBestellen(user);
 
 // Alte bestellte Einträge aufräumen (> 1 Monat)
 function cleanup(db) {
-  db.prepare("DELETE FROM orders WHERE ordered_at IS NOT NULL AND ordered_at < datetime('now', '-1 month')").run();
+  const weg = db.prepare("DELETE FROM orders WHERE ordered_at IS NOT NULL AND ordered_at < datetime('now', '-1 month')").run().changes;
+  if (!weg) return;
+  // Vorher ohne Spur im Protokoll (R17)
+  const beschreibung = `${weg} bestellte ${weg === 1 ? 'Bestellung' : 'Bestellungen'} nach einem Monat entfernt`;
+  logAudit(db, { userId: null, username: 'System', action: 'order_aufgeraeumt',
+    details: beschreibung });
 }
 
 function resolveLocation(db, project_id) {
@@ -176,6 +182,12 @@ router.delete('/:id', authenticate, (req, res) => {
   }
 
   db.prepare('DELETE FROM orders WHERE id = ?').run(req.params.id);
+  // Vorher ohne Spur im Protokoll (R17)
+  const fuer = (db.prepare('SELECT name FROM users WHERE id = ?').get(order.user_id) || {}).name || 'Gelöschtes Konto';
+  const beschreibung = `Bestellung gelöscht: ${[order.quantity, order.unit, order.product].filter(x => x !== null && x !== undefined && x !== '').join(' ')}`
+    + ` (für ${fuer}, ${order.ordered_at ? 'schon bestellt' : 'noch offen'})`;
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'order_delete',
+    details: beschreibung, ip: req.ip });
   broadcast('orders', req.headers['x-tab-id']);
   res.json({ success: true });
 });
