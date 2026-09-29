@@ -708,7 +708,7 @@ Zur Häufigkeit: Der Code wird beim **Anmelden** abgefragt, und eine Anmeldung b
 
 #### 📜 Audit-Log
 
-Revisionssicheres Protokoll: An-/Abmeldungen (Login erfolgreich/fehlgeschlagen, manuelle Abmeldung, Sitzungs-Timeout), Benutzeränderungen, Einstellungs-/Branding-Änderungen, Backups, **Gäste in Notizen** (eingeladen, geändert, neues Passwort, entfernt, Anmeldung mit Passwort, falsche Passwörter, Sperre — jeweils mit Gastname und Notiz) u. a. Benutzeranlage mit allen Parametern, Änderungen feldgenau als „alt → neu" (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)*
+Revisionssicheres Protokoll: An-/Abmeldungen (Login erfolgreich/fehlgeschlagen, manuelle Abmeldung, Sitzungs-Timeout), Benutzeränderungen, Einstellungs-/Branding-Änderungen, Backups, **Gäste in Notizen** (eingeladen, geändert, neues Passwort, entfernt, Anmeldung mit Passwort, falsche Passwörter, Sperre — jeweils mit Gastname und Notiz), **gelöschte Aushänge und Bestellungen** (per Knopf ebenso wie das automatische Aufräumen abgelaufener Aushänge und erledigter Bestellungen, dann als „System"), **aufgeräumte Datenreste** u. a. Benutzeranlage mit allen Parametern, Änderungen feldgenau als „alt → neu" (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)*
 
 #### 🗑️ Papierkorb
 

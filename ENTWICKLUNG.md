@@ -3975,3 +3975,20 @@ warum beide Stufen nötig sind: Der Wächter rettet den Prozess, nicht die Anfra
 **R19** sitzt an derselben Stelle: Konto, Soll-Stunden und Anstellung stehen jetzt in einer Transaktion,
 die Namensprüfung darin schließt den Wettlauf aus R2 (UNIQUE → 409). Der Kommentar „bcrypt blockiert den
 Event-Loop nicht“ stimmte nicht (gemessen 24.09.) und ist berichtigt.
+
+## R15, R16, R17: die letzten kleinen Punkte der Bugliste v7 (29.09.2026)
+
+**R15** Auszahlungen: Beim Anlegen stand der Anzeigename, beim Bestätigen, Ablehnen und Zurückziehen der
+Benutzername. Jetzt gilt `anzeigenameVon()` an allen drei Stellen. „Wirksam ab“ prüft `zeit.istDatum()`
+kalendarisch; vorher ging der „2026-02-31“ durch, und die Gegenprobe zeigt die Folge: Die so angelegte
+Auszahlung blockierte jede weitere („bereits offen“).
+**R16** Urlaubsübersicht: `toISOString()` → `berlinHeute(now)`. Der Fehler zeigt sich nur zwischen 0 und 2 Uhr.
+Getestet wird deshalb mit einem Server, dessen Uhr steht: `node --require tests/hilfen/uhr-stellen.js` mit
+`FESTE_UHR='2026-09-30T22:30:00Z'` ersetzt `Date` durch eine Unterklasse mit Versatz. SQLites
+`datetime('now')` bleibt echt. Gegenprobe K1 beweist zugleich, dass die gestellte Uhr greift.
+**R17** Löschen im Protokoll: Aushang und Bestellung per Knopf (`bulletin_delete`, `order_delete`) und das
+automatische Aufräumen (`bulletin_ablauf`, `order_aufgeraeumt`, als „System“). Den Altbestand fürs Aufräumen
+(ein Aushang mit abgelaufenem Datum, eine vor Monaten bestellte Bestellung) legt der Test vor dem Start
+direkt in die Datenbank, weil die Oberfläche ihn nicht herstellen kann.
+Test `tests/bugliste-r15-r16-r17.js` (13), Gegenproben 8/8 rot. **Damit ist die Bugliste v7 (R1 bis R28)
+vollständig abgearbeitet.**

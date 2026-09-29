@@ -242,18 +242,25 @@ Nach 5 Minuten scheitert jeder weitere Code mit „abgelaufen", raus nur über �
 Dauer nach Textlänge.
 **Gelöst (25.09.):** Dauer nach Textlänge (Fehler 6–15 s), Antippen schließt. Test `tests/lesbar-und-sicher-ui.js`.
 
-### [ ] R15 · Auszahlungen: Name und Datumsprüfung uneinheitlich
+### [x] R15 · Auszahlungen: Name und Datumsprüfung uneinheitlich — erledigt in `e80fec0` *(noch nicht deployt)*
 Beim Anlegen wird der Anzeigename gespeichert, beim Bestätigen/Ablehnen/Zurückziehen der
 Benutzername (`routes/payouts.js:207, 239`) — der Kommentar bei `:138` will genau das vermeiden.
 „Wirksam ab" nur per Muster geprüft (`:117`), „2026-02-31" wird angenommen.
+**Gelöst (29.09.):** `anzeigenameVon()` an allen drei Stellen; `zeit.istDatum()` prüft kalendarisch. Gegenprobe
+zeigt die Folge des alten Stands: Der angenommene 31.02. blockierte danach jede weitere Auszahlung („bereits offen").
 
-### [ ] R16 · Urlaubsübersicht „Stand:" zeigt nachts den Vortag
+### [x] R16 · Urlaubsübersicht „Stand:" zeigt nachts den Vortag — erledigt in `e80fec0` *(noch nicht deployt)*
 `routes/absences.js:262` (`toISOString`) — zwischen 0 und 2 Uhr. Die Berechnung selbst nutzt
 korrekt Ortszeit (`berlinHeute`).
+**Gelöst (29.09.):** `berlinHeute(now)`. Getestet mit einem Server, dessen Uhr auf 00:30 Uhr steht
+(`tests/hilfen/uhr-stellen.js`, per `node --require`) — nur dann zeigt sich der Fehler.
 
-### [ ] R17 · Löschen ohne Protokolleintrag
+### [x] R17 · Löschen ohne Protokolleintrag — erledigt in `e80fec0` *(noch nicht deployt)*
 Schwarzes Brett (`routes/bulletin.js:141`) und Bestellungen (`routes/orders.js:156`) löschen hart,
 ohne Eintrag im Protokoll.
+**Gelöst (29.09.):** Löschen per Knopf (`bulletin_delete`, `order_delete` — mit Titel bzw. Menge/Produkt, für wen,
+offen/bestellt) und das automatische Aufräumen (`bulletin_ablauf` mit Titeln, `order_aufgeraeumt` mit Anzahl,
+vom „System") stehen im Audit-Log. Test `tests/bugliste-r15-r16-r17.js` (13), Gegenproben 8/8 rot.
 
 ### [x] R18 · PDF-Download kann in Safari/iOS abbrechen — erledigt in `3c8e4cb`, Test `tests/kleine-sackgassen-ui.js`
 **Deployt:** Prod 26.09.2026 (`ed69b7a`, Cache 427).
@@ -439,10 +446,7 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 
 ---
 
-## Vorgeschlagene Reihenfolge
+## Stand der Liste
 
-1. **R1** — Datenverlust
-2. **R2** — Absturz
-3. ~~**R4 + R5** gemeinsam über eine Seiten-Hülle~~ erledigt
-4. **R9 + R10** — Meldungen (lässt sich gut bündeln)
-5. Rest nach Belieben
+**Alle Punkte R1–R28 sind erledigt** (29.09.2026). Deployt bis einschließlich R23/R28 (`3dd39fe`, Cache 434);
+R2, R15, R16, R17, R19 liegen auf `develop` und warten auf den nächsten Deploy.

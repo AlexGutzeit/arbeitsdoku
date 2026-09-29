@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**254 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**256 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -58,6 +58,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `absence-conflict.js` | Test: Doppelbuchung innerhalb derselben Stufe wird verhindert, stufenübergreifend bleibt erlaubt. |
 | `absence-overlap.js` | Regressionstest: prioritätsbewusste Abwesenheits-Zählung (gemeinsame Quelle für |
 | `absence-reapply-ui.js` | UI-Smoke (Puppeteer): Abwesenheits-Papierkorb bietet „Neu beantragen" (kein „Wiederherstellen"), |
+| `absturzschutz.js` | Absturz-Schutz (R2) und Mitarbeiter-Anlage ganz oder gar nicht (R19), 29.09.2026. |
 | `abwesenheitskalender-ui.js` | Abwesenheitskalender: wer fehlt wann, alle Mitarbeiter auf einen Blick (Alex, 28.08.2026). |
 | `alle-abmelden-ui.js` | „Auf allen Geräten abmelden" — der Knopf darf einen NICHT selbst hinauswerfen (Alex, 23.08.2026). |
 | `altdb-spalten.js` | Ein sehr altes Backup einspielen — und trotzdem hineinkommen. |
@@ -110,6 +111,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `board-stelle-halten-ui.js` | Bleibt die Stelle, an der ich arbeite? (Alex, 15.09.2026) |
 | `browser-absences.js` | Headless-Browser-Test (Puppeteer) für die Abwesenheits-Logik — echte UI-Klicks. |
 | `browser-smoke.js` | Headless-Browser-Smoke-Test (Puppeteer) — klickt echte UI-Abläufe durch, rollenbasiert. |
+| `bugliste-r15-r16-r17.js` | Drei kleine Punkte der Bugliste v7 (29.09.2026): |
 | `bugliste-v6-api.js` | API-Test Bugliste v6: |
 | `bugliste-v6-ui.js` | Puppeteer-Test Bugliste v6 (Frontend): |
 | `bugliste-v6b-api.js` | Unit/API-Test Bugliste v6, Runde 2: |
