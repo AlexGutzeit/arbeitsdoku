@@ -8,7 +8,9 @@ async function renderPlanning() {
   // die inzwischen geoeffnete (R5). Fehler wurden hier ausserdem still
   // geschluckt; jetzt gibt es die Fehleranzeige.
   const geladen = await seiteLaden(async () => {
-    const [pData, uData] = await Promise.all([api('GET', '/api/projects'), api('GET', '/api/users/list')]);
+    // ?all=1: auch Ausgeschiedene — wer in welchem Zeitraum eine Spalte bekommt, sagt der Server je Zeitraum
+    // (angestellt). Vorher kamen nur Aktive: Ausgeschiedene fehlten auch dort, wo sie noch angestellt waren.
+    const [pData, uData] = await Promise.all([api('GET', '/api/projects'), api('GET', '/api/users/list?all=1')]);
     return (pData && uData) ? { pData, uData } : null;
   }, () => renderPlanning());
   if (!geladen) return;
@@ -74,6 +76,7 @@ async function renderPlanningContent() {
       api('GET', `/api/absences/by-date?from=${r.from}&to=${r.to}&scope=planning`),
     ]);
     if (planData) entries = planData.entries;
+    S.planungAngestellt = planData && planData.angestellt ? new Set(planData.angestellt) : null;
     if (absData) absences = filterApprovedAbsences(absData.absences);
   } catch (e) {
     if (renderStale(_tok)) return;
@@ -417,6 +420,12 @@ async function openReminderDialog(e) {
   renderList();
 }
 
+// Bekommt dieser Mitarbeiter im angezeigten Zeitraum eine Spalte? Nur, wer darin ganz oder teilweise angestellt
+// war (Server: `angestellt` zur Planungsabfrage). Ohne diese Angabe (alter Server): wie früher nur Aktive.
+function imPlanungszeitraum(u) {
+  return S.planungAngestellt ? S.planungAngestellt.has(u.id) : u.active !== 0;
+}
+
 function renderPlanningTimeline(entries, absences, canEdit) {
   const currentDay = formatDateISO(S.planningDate || new Date());
   const dayAbsencesAll = (absences || []).filter(a => a.date_from <= currentDay && a.date_to >= currentDay);
@@ -473,9 +482,8 @@ function renderPlanningTimeline(entries, absences, canEdit) {
   const byUser = {};
   // 1) Alle echten Mitarbeiter als Spalte (auch ohne Planung) — die an diesem Tag angestellt sind. Wie in der
   //    Wochen-/Monatsansicht (renderPlanningGrid); vorher stand hier jeder, auch längst Ausgeschiedene.
-  const tag = formatDateISO(S.planningDate || new Date());
   (S.users || [])
-    .filter(u => u.role === 'mitarbeiter' && employedInRange(u, tag, tag))
+    .filter(u => u.role === 'mitarbeiter' && imPlanungszeitraum(u))
     .forEach(u => { byUser[u.id] = { id: u.id, name: u.name, entries: [] }; });
   // 2) Zusätzlich: User aus Planungen (z.B. Chef/Buchhalter, falls verplant)
   entries.forEach(e => {
@@ -596,7 +604,7 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
   // Spalten = im Zeitraum angestellte Mitarbeiter + zusätzlich verplante/abwesende (auch ausgestellte mit Bezug)
   const colMap = {};
   (S.users || [])
-    .filter(u => u.role === 'mitarbeiter' && (!range || employedInRange(u, range.from, range.to)))
+    .filter(u => u.role === 'mitarbeiter' && imPlanungszeitraum(u))
     .forEach(u => { colMap[u.id] = { id: u.id, name: u.name }; });
   entries.forEach(e => {
     e.assigned_users.forEach(u => {

@@ -129,7 +129,15 @@ router.get('/', authenticate, (req, res) => {
     return { ...e, assigned_users: assigned };
   });
 
-  res.json({ entries: result });
+  // Wer im Zeitraum ganz oder teilweise angestellt war — für die Spalten der Planung (29.09.2026). NUR die
+  // Nummern: Anstellungs- und Austrittsdaten der Kollegen gehen niemanden etwas an, die Planung sehen alle.
+  let angestellt;
+  if (date_from && date_to) {
+    const { getEmploymentPeriods, employmentOverlaps } = require('./statistics');
+    angestellt = db.prepare("SELECT id FROM users WHERE role != 'admin'").all().map(u => u.id)
+      .filter(uid => employmentOverlaps(getEmploymentPeriods(db, uid), date_from, date_to));
+  }
+  res.json({ entries: result, angestellt });
 });
 
 // Alle Einträge einer Gruppe laden (MUSS vor /:id stehen!)
