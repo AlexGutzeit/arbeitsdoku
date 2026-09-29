@@ -29,6 +29,9 @@ function req(port, m, p, t, b) {
     const r = http.request({ agent: false, host: 'localhost', port, path: p, method: m,
       headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}), ...(d ? { 'Content-Length': Buffer.byteLength(d) } : {}) } },
       x => { let s = ''; x.on('data', c => s += c); x.on('end', () => { let j = null; try { j = JSON.parse(s); } catch (_) {} res({ status: x.statusCode, body: j }); }); });
+    // Zeitgrenze: Ohne Routen-Schutz überlebt der Server dank Prozess-Wächter, aber die Anfrage bekommt NIE eine
+    // Antwort — das soll als Fehler zählen, nicht den Test aufhängen.
+    r.setTimeout(10000, () => { r.destroy(); res({ status: 'keine Antwort', body: null }); });
     r.on('error', rej); if (d) r.write(d); r.end(); });
 }
 const gesund = (port) => req(port, 'GET', '/health').then(r => r.status === 200, () => false);
