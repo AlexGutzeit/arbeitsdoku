@@ -3947,3 +3947,9 @@ alte Weg, den R23 jetzt verhindert) und wechselt nun vorher auf die Übersicht.
 Suite danach 253/254. Rot war nur `avatar-zuschnitt-ui`: Der Test klickte am Ende auf „Abbrechen“ im
 **allerersten** Zuschnitt-Fenster, das drei Seitenwechsel überlebt hatte. Das war genau der Fehler. Jetzt
 öffnet er für die Abbrechen-Probe ein eigenes Fenster.
+
+**Deploy R23 + R28 (29.09.2026, 17:14, `3dd39fe`, Cache 434).** Suite 253/254 (der eine rote Test war
+`avatar-zuschnitt-ui` mit dem alten Weg, danach grün). Vollsicherung `arbeitsdoku_backup_20260929-171259.adbk`
+(VPS, Mini-PC, Laptop, gleiche Prüfsumme; Rückspielprobe auf dem Mini-PC). Rückkehrpunkt `vor-r23-r28-deploy`
+(= `b192c0d`). Reine Oberflächen-Änderung: Die Datenbank ist vorher/nachher in allen 51 Tabellen gleich, das
+Server-Protokoll ohne Fehler. Ausgeliefert sind `seitenWachenEinrichten` und `dialogImVerlauf`.

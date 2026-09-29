@@ -279,7 +279,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   der Test legt einen Urlaub ohne Datum an und bricht ab. Die App verhält sich korrekt.
 - **Vorschlag:** ein Fenster wählen, das garantiert Werktage enthält.
 
-### [x] R23 · Neuzeichnen nach dem Speichern trifft die inzwischen geöffnete Seite — erledigt in `85cbffd` *(noch nicht deployt)*
+### [x] R23 · Neuzeichnen nach dem Speichern trifft die inzwischen geöffnete Seite — erledigt in `85cbffd` · **DEPLOYED 29.09.2026** (`3dd39fe`, Cache 434)
 *(gefunden beim Bau von R4 + R5, 25.09.2026)*
 - **Wo:** überall, wo ein Knopf nach `await api(…)` direkt die Seite neu zeichnet — z. B. Dokumente
   umbenennen/verschieben/löschen (`app-6-admin.js`, `renderDocuments()`), Werkzeuge
@@ -305,7 +305,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   wird neu gezeichnet; wechselt man, bleibt die neue Seite), echte Klicks mit verzögerter Antwort
   (Ordner umbenennen wie in der Messung, Werkzeug, Papierkorb), Live-Meldung. Gegenproben 5/5 rot.
 
-### [x] R28 · Dialoge bleiben beim Seitenwechsel stehen *(gefunden 29.09.2026 beim Bau von R23; gebaut 29.09., noch nicht deployt)*
+### [x] R28 · Dialoge bleiben beim Seitenwechsel stehen *(gefunden 29.09.2026 beim Bau von R23; DEPLOYED 29.09.2026, `3dd39fe`, Cache 434)*
 - **Wo:** Dialoge und das Abwesenheits-Formular hängen an `<body>` (`confirmModal`/`promptModal`/…,
   `showAbsenceForm` → `.absence-form-overlay`), der Router räumt sie bei einem Seitenwechsel nicht weg.
 - **Was passiert:** Am Handy mit der **Zurück-Taste** (oder Wischgeste) wechselt die Seite darunter, der
