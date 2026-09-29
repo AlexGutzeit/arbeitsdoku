@@ -4027,3 +4027,16 @@ fängt heute an. So hängt der Test nicht vom Datum ab, an dem er läuft. Eine F
 Planung zeigt an Tagen **ohne jede** Planung bewusst gar keine Spalten. Die erste Fassung fand deshalb nichts,
 auch nicht die Spalte für Anna, und wurde mit einer Planung je Prüftag gebaut. Gegenprobe A0 stellt den alten
 Zustand komplett nach (Seite schickt alle, Server prüft die Auswahl nicht).
+
+**Deploy R29 (29.09.2026, 22:45, `4f02efb`, Cache 436).** Ausgeschiedene erscheinen nur noch im Zeitraum ihrer
+Anstellung (Statistik, Planung, Urlaubsübersicht und -PDF, Abwesenheit „Für", PDF-Auswahl). Die Suite lief
+257/257. Erstmals liefen die Prod-Klon-Tests vor dem Deploy noch einmal auf einer frischen Kopie (22:13): 19/21.
+Die zwei roten Tests scheitern genauso auf dem vorher deployten `main`, sie kommen also nicht von R29.
+`reste-prodklon` hielt den Stand vor dem Aufräumen vom 28.09. fest und zählte die alten Protokolleinträge mit.
+Jetzt zählt er nur, was sein eigener Start schreibt (Gegenprobe mit eingebauten Resten). `notizen-live-prodklon`
+fand eine Notiz, die mit einer Leerzeile endet. Die Umstellung aus Klartext (nur auf dem Rückweg `ydoc = NULL`)
+verliert diese Leerzeile, das ist offen und klein. Vollsicherung `arbeitsdoku_backup_20260929-224438.adbk`
+(dreifach, gleiche Prüfsumme, Rückspielprobe). Rückkehrpunkt `vor-r29-deploy` (= `4c0f81c`). Die Datenbank ist
+vorher/nachher in allen 51 Tabellen gleich. Die Lohn-CSV filterte schon vorher nach Anstellung
+(`routes/payroll.js`), an echten Daten nachgemessen: Ein Ausgeschiedener steht bis zum Austrittsmonat drin, ein
+Neuer ab dem Eintrittsmonat.
