@@ -41,7 +41,7 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   Eingaben sind noch da". Zusätzlich gleitende Sitzung: Server erneuert das Token, wenn nur noch
   wenige Stunden übrig sind.
 
-### [ ] R2 · Server kann bei bestimmten Fehlern komplett abstürzen *(herabgestuft, s. Neubewertung)*
+### [x] R2 · Server kann bei bestimmten Fehlern komplett abstürzen — erledigt in `3617bb4` *(noch nicht deployt)*
 - **Wo:**
   - `scheduler.js:314` — die minütliche Aufgabe `tick()` ist async, wird aber **ohne `await`** in
     `try/catch` gesetzt; das Fangnetz fängt dadurch nichts.
@@ -61,6 +61,14 @@ Neue Funde kommen unten mit der nächsten freien Nummer dazu.
   nicht" in `routes/users.js:493` stimmt nicht. Die beiden anderen Stellen bräuchten einen Fehler,
   der sich nicht herbeiführen lässt. Bleibt eine **Absicherung gegen künftige Fehler** — sinnvoll,
   aber keine akute Gefahr. Herabgestuft auf **Mittel**.
+- **Gelöst (29.09.):** `absturzschutz.js` — (1) async-Routen: ein Fehler geht an die Fehlerbehandlung (500)
+  wie bei gewöhnlichen Routen, der Server läuft weiter (Express' `Layer.handle_request` um Promises ergänzt,
+  wie es `express-async-errors` tut); (2) unbehandelte Ablehnung anderswo: protokollieren, sichern,
+  weiterlaufen; (3) unerwartete Ausnahme (Zustand ungewiss): ERST Datenbank und offene Live-Notizen sichern,
+  dann Ende mit Code 1 — systemd startet neu. Zeitplaner: `tick(…).catch`. Der Wettlauf beim Anlegen ist mit
+  R19 geschlossen (Namensprüfung in der Transaktion, Dopplung → 409). Test `tests/absturzschutz.js` (15):
+  Fehler per Sabotage-Trigger im ECHTEN Server ausgelöst; Gegenproben 7/7 rot — ganz ohne Schutz stirbt der
+  Server an genau dieser Stelle, nur mit Prozess-Wächter überlebt er, aber die Anfrage bekommt keine Antwort.
 
 ### [x] R3 · Sicherung zurückspielen: halber Abbruch hinterlässt unbestimmten Zustand — erledigt in `3dadfd4`
 - **Deployt:** Prod 25.09.2026 (`db4c4b0`, Cache 419).
@@ -251,9 +259,11 @@ ohne Eintrag im Protokoll.
 **Deployt:** Prod 26.09.2026 (`ed69b7a`, Cache 427).
 `app-8-comm-init.js:2298` — `URL.revokeObjectURL` direkt nach dem Klick. → verzögert freigeben.
 
-### [ ] R19 · Mitarbeiter anlegen ohne Transaktion
+### [x] R19 · Mitarbeiter anlegen ohne Transaktion — erledigt in `3617bb4` *(mit R2, noch nicht deployt)*
 `routes/users.js:495–505` — drei Inserts (Nutzer, Soll-Stunden, Anstellung) ohne Transaktion;
 scheitert einer, entsteht ein Mitarbeiter ohne Soll-Stunden.
+**Gelöst (29.09., mit R2):** alle drei in einer Transaktion, die Namensprüfung darin (Wettlauf). Geprüft mit einem
+Sabotage-Trigger, der die Soll-Stunden scheitern lässt: kein halber Mitarbeiter, 500, Server läuft.
 
 ### [x] R20 · Eingabedialog verwirft Text bei Klick daneben — erledigt in `3c6fdb1`
 **Deployt:** Prod 25.09.2026 (`6712d7d`, Cache 424) — Meldungen dabei nach oben verlegt (Entscheidung Alex).

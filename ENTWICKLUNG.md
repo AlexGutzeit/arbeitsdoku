@@ -3953,3 +3953,25 @@ Suite danach 253/254. Rot war nur `avatar-zuschnitt-ui`: Der Test klickte am End
 (VPS, Mini-PC, Laptop, gleiche Prüfsumme; Rückspielprobe auf dem Mini-PC). Rückkehrpunkt `vor-r23-r28-deploy`
 (= `b192c0d`). Reine Oberflächen-Änderung: Die Datenbank ist vorher/nachher in allen 51 Tabellen gleich, das
 Server-Protokoll ohne Fehler. Ausgeliefert sind `seitenWachenEinrichten` und `dialogImVerlauf`.
+
+## R2 + R19: Absturz-Schutz und Mitarbeiter-Anlage ganz oder gar nicht (29.09.2026)
+
+**R2** war herabgestuft: Nachgemessen war kein Auslöser erreichbar. Gebaut ist also ein Netz für künftige
+Fehler, `absturzschutz.js`. Express 4 reicht Fehler aus `async`-Routen nicht an die Fehlerbehandlung weiter,
+daraus wird eine unbehandelte Ablehnung, und an der beendet sich Node. Die Absicherung ergänzt
+`Layer.handle_request` um Promises (wie `express-async-errors`), dazu kommen zwei Prozess-Wächter:
+Ablehnungen werden protokolliert und gesichert, der Server läuft weiter. Bei echten Ausnahmen wird erst
+gesichert, dann neu gestartet.
+
+**Wie man einen Fehler auslöst, den es nicht gibt:** Sabotage-Trigger in der Test-Datenbank
+(`RAISE(ABORT, …)` beim Einfügen der Soll-Stunden bzw. eines bestimmten Namens). So scheitert der **echte**
+Server-Code an der richtigen Stelle, nach dem `await` des Passwort-Hashs, ohne Testhaken im Produktivcode.
+
+**Gegenproben mit Lehre:** Ganz ohne Schutz stirbt der Server (S0). Mit Prozess-Wächter, aber ohne
+Routen-Schutz (S1), überlebt er, doch die Anfrage bekommt **nie** eine Antwort, und der Test hing sich
+dabei auf. Jetzt hat jede Anfrage eine Zeitgrenze, und „keine Antwort“ zählt als Fehler. Das Beispiel zeigt,
+warum beide Stufen nötig sind: Der Wächter rettet den Prozess, nicht die Anfrage.
+
+**R19** sitzt an derselben Stelle: Konto, Soll-Stunden und Anstellung stehen jetzt in einer Transaktion,
+die Namensprüfung darin schließt den Wettlauf aus R2 (UNIQUE → 409). Der Kommentar „bcrypt blockiert den
+Event-Loop nicht“ stimmte nicht (gemessen 24.09.) und ist berichtigt.
