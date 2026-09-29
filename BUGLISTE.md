@@ -469,3 +469,4 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 ## Stand der Liste
 
 **Alle Punkte R1–R28 sind erledigt und deployt** (29.09.2026, zuletzt R2/R15/R16/R17/R19 mit `4c0f81c`, Cache 435).
+R29 (Ausgeschiedene außerhalb ihrer Anstellung, von Alex gemeldet) ist gebaut und wartet auf den Deploy.
