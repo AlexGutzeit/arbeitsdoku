@@ -3873,3 +3873,39 @@ Spalte liest sie dafür nicht. Mit einem um eine Stunde verlängerten Arbeitsend
 Prüfungen an. **Rückweg:** Code auf `vor-r27-deploy` läuft mit der aufgeräumten Datenbank. Die Sicherung von
 22:01 zurückspielen bringt auch die entfernten Zeilen zurück; der nächste Start räumt sie dann wieder weg,
 außer man bleibt auf dem alten Code.
+
+## R23: Neu zeichnen nur auf der eigenen Seite (29.09.2026)
+
+**Der Befund** (25.09., beim Bau von R4 + R5): Ordner umbenennen, die Antwort kommt 2 s später, inzwischen ist
+„Mein Konto" offen. Danach steht in der Adresse `#/konto`, zu sehen sind die Dokumente, und das Menü springt
+mit auf „Dokumente". `seiteLaden()` hilft hier nicht. Der Aufruf `renderDocuments()` nach `await api(…)` ist
+frisch, nicht veraltet.
+
+**Zentral statt an jeder Stelle.** Die Suche fand rund hundert Aufrufe von Seiten-Funktionen nach einem
+`await api(…)`, nach Abzug der Fehlalarme etwa sechzig echte. Sie einzeln auf einen Helfer umzustellen wäre
+fehleranfällig gewesen, und der nächste neue Knopf hätte das Problem wieder. Jetzt weiß die Seite selbst,
+ob sie noch dran ist: `render()` ruft `seiteWaehlen()` mit `_imRouter = true`. Jede Seiten-Funktion in
+`SEITEN` wird beim Start durch eine Wache ersetzt (`window[name]`, möglich, weil die klassischen Skripte ihre
+Funktionen global ablegen). Ruft der Router sie auf, merkt sie sich die Adresse. Jeder spätere Aufruf zeichnet
+nur, solange genau diese Adresse gilt. Teil-Zeichner, die in die ganze `.main` schreiben
+(`renderDashboardContent`, `renderPlanningContent`, `renderStatisticsContent`, `renderProjectForm`), hängen an
+ihrer Seite (`SEITEN_TEILE`).
+
+**Warum die Adresse und nicht der Zähler von `seiteLaden()`.** Den zählen auch Live-Aktualisierungen derselben
+Seite hoch. Ein Speichern, dessen Antwort nach einer Live-Meldung kommt, hätte dann nicht mehr neu gezeichnet.
+Die Adresse ändert sich nur beim echten Wechsel, und das nur über den Router (geprüft: kein `pushState` /
+`replaceState` in der App). Wer weg- und wieder zurückgeht, ist wieder auf der Seite und bekommt die frische
+Fassung.
+
+**Vorher geprüft:** alle Aufrufe von Seiten-Funktionen außerhalb ihrer eigenen Seite. Der einzige Fall, der
+absichtlich eine fremde Seite zeichnet, ist `renderAbsenceType` (`#/absences/urlaub`), das die Übersicht
+**innerhalb** des Router-Aufrufs zeichnet. Dort merkt sich die Übersicht also genau diese Adresse. Nebenwirkung,
+gewollt: „Neu beantragen" aus dem Papierkorb malte nach dem Speichern die Abwesenheiten über den Papierkorb.
+
+**Test** `tests/neuzeichnen-ui.js` (14). A: Die Liste wird gegen den Quelltext des Routers geprüft
+(`seiteWaehlen.toString()`), denn zwei parallele Listen laufen sonst auseinander. B: Jede Seite in **beide**
+Richtungen. Bleibt man, muss derselbe Aufruf neu zeichnen, sonst wäre die Wache ein Ausschalter; Gegenprobe
+G3 legt dann die ganze App lahm. Wechselt man, bleibt „Mein Konto". C: echte Klicks mit 1,5 s verzögerter
+Antwort, darunter die Messung aus der Bugliste. D: Live-Meldungen zeichnen weiter. Gegenproben 5/5 rot.
+**Nebenfund R28:** Dialoge hängen an `<body>` und bleiben bei einem Seitenwechsel (Zurück-Taste) stehen.
+Der Test räumt sie zwischen den Schritten weg.

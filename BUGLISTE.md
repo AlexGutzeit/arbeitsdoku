@@ -279,7 +279,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   der Test legt einen Urlaub ohne Datum an und bricht ab. Die App verhält sich korrekt.
 - **Vorschlag:** ein Fenster wählen, das garantiert Werktage enthält.
 
-### [ ] R23 · Neuzeichnen nach dem Speichern trifft die inzwischen geöffnete Seite
+### [x] R23 · Neuzeichnen nach dem Speichern trifft die inzwischen geöffnete Seite — erledigt in `85cbffd` *(noch nicht deployt)*
 *(gefunden beim Bau von R4 + R5, 25.09.2026)*
 - **Wo:** überall, wo ein Knopf nach `await api(…)` direkt die Seite neu zeichnet — z. B. Dokumente
   umbenennen/verschieben/löschen (`app-6-admin.js`, `renderDocuments()`), Werkzeuge
@@ -294,6 +294,25 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   springt mit auf „Dokumente".
 - **Vorschlag:** ein Helfer, der nur neu zeichnet, wenn die Adresse noch dieselbe ist wie beim
   Klick, und die Stellen darauf umstellen; Test nach dem Muster von `tests/seite-laden-ui.js`.
+- **Gelöst (29.09.):** nicht an den rund sechzig Stellen einzeln, sondern **zentral**: Der Router merkt
+  sich, für welche Adresse er eine Seite geöffnet hat (`seiteWaehlen()` läuft mit `_imRouter`); jede
+  Seiten-Funktion ist bewacht (`SEITEN`, `seitenWachenEinrichten()` in `app-1-core.js`) und zeichnet bei
+  späteren Aufrufen — Knopf nach dem Speichern, Live-Meldung — nur, solange diese Adresse gilt. Auch
+  Teil-Zeichner, die in die ganze Seite schreiben (Übersicht, Planung, Statistik, Projektformular), gehören
+  zu ihrer Seite. Künftige Knöpfe sind damit automatisch erfasst. Nebenwirkung, gewollt: „Neu beantragen"
+  aus dem Papierkorb zeichnete nach dem Speichern die Abwesenheiten über den Papierkorb — jetzt nicht mehr.
+  Test `tests/neuzeichnen-ui.js` (14): Liste gegen den Router, jede Seite in beide Richtungen (bleibt man,
+  wird neu gezeichnet; wechselt man, bleibt die neue Seite), echte Klicks mit verzögerter Antwort
+  (Ordner umbenennen wie in der Messung, Werkzeug, Papierkorb), Live-Meldung. Gegenproben 5/5 rot.
+
+### [ ] R28 · Dialoge bleiben beim Seitenwechsel stehen *(niedrig, gefunden 29.09.2026 beim Bau von R23)*
+- **Wo:** Dialoge und das Abwesenheits-Formular hängen an `<body>` (`confirmModal`/`promptModal`/…,
+  `showAbsenceForm` → `.absence-form-overlay`), der Router räumt sie bei einem Seitenwechsel nicht weg.
+- **Was passiert:** Am Handy mit der **Zurück-Taste** (oder Wischgeste) wechselt die Seite darunter, der
+  Dialog bleibt oben stehen. Speichern darin wirkt noch (seit R23 ohne die alte Seite darüberzumalen).
+  Wer „Zurück" drückt, erwartet aber meist, dass der Dialog zugeht.
+- **Vorschlag (Entscheidung Alex):** Zurück schließt einen offenen Dialog, statt die Seite zu wechseln —
+  mit derselben Entwurfs-Sicherung wie bei Formularen.
 
 
 ### [x] R24 · Erklärung am Warnzeichen („!") verschwindet zu schnell — erledigt in `3c6fdb1`

@@ -771,7 +771,9 @@ Darauf ist sie ausgelegt:
   **„Erneut versuchen"** – kein ewig drehender Kreisel und keine leere Liste, die so aussieht, als gäbe
   es nichts. Menü und Adresszeile bleiben bedienbar. Wer bei langsamem Netz schon zur nächsten Seite
   weitertippt, bleibt auch dort: Die verspätete Antwort der vorigen Seite wird verworfen, statt die neue
-  zu überschreiben. Mit Absicht anders: Die **Bestellungen** erscheinen auch ohne Netz, mit dem Katalog
+  zu überschreiben. Dasselbe gilt fürs **Speichern und gleich weiter**: Wer nach „Umbenennen", „Hinzufügen"
+  oder „Wiederherstellen" schon die nächste Seite öffnet, bevor die Antwort da ist, bleibt dort — gespeichert
+  wird trotzdem, nur die alte Seite zeichnet sich nicht mehr darüber. Mit Absicht anders: Die **Bestellungen** erscheinen auch ohne Netz, mit dem Katalog
   aus dem Gerätespeicher.
 * **Uhrzeit per Uhr, Datum per Kalender:** Antippen eines Uhrzeit-, Datums- oder Monatsfelds öffnet
   Uhr bzw. Kalender – auch in neueren Chrome-Versionen auf Android, die das von sich aus nicht mehr
