@@ -3909,3 +3909,38 @@ G3 legt dann die ganze App lahm. Wechselt man, bleibt „Mein Konto". C: echte K
 Antwort, darunter die Messung aus der Bugliste. D: Live-Meldungen zeichnen weiter. Gegenproben 5/5 rot.
 **Nebenfund R28:** Dialoge hängen an `<body>` und bleiben bei einem Seitenwechsel (Zurück-Taste) stehen.
 Der Test räumt sie zwischen den Schritten weg.
+
+## R28: Zurück schließt den Dialog (29.09.2026)
+
+Gefunden beim Bau von R23: Dialoge hängen an `<body>`, der Router räumte sie nicht weg. Am Handy wechselte
+Zurück die Seite **darunter**, der Dialog blieb stehen. Alex entschied: Zurück schließt den Dialog und sichert
+den Entwurf, **Abbrechen verwirft** ihn, abgelaufene Entwürfe verschwinden beim Start.
+
+**Mechanik** (`app-1-core.js`, vor `dialogBarrierefrei`): Alle 17 Dialoge laufen durch
+`dialogBarrierefrei(overlay, schliessen)`. Das zweite Argument ist neu, der Weg, auf dem der Dialog auf
+„Abbrechen“ zugeht. `dialogImVerlauf()` legt dafür einen Verlaufsschritt an (`pushState({dialog: id})`,
+gleiche Adresse). `popstate` erkennt „Schritt des obersten Dialogs verlassen“, sichert Entwürfe und ruft
+`schliessen()`. Beim normalen Schließen entfernt `history.back()` den Schritt wieder, sonst wäre das nächste
+Zurück ein toter Tastendruck.
+
+**Die Falle:** `history.back()` wirkt zeitversetzt. Ein `navigate()` gleich nach dem Schließen (OK → andere
+Seite) würde vom verspäteten Zurück wieder rückgängig gemacht. Deshalb reihen sich `navigate()` und neue
+Verlaufsschritte hinter das eigene Zurück ein (`_nachEigenemZurueck`). Das zweite ist nötig bei Dialog-Ketten
+(Bestätigen → gleich die Begründung): Ohne Warten läge der neue Schritt hinter dem noch nicht entfernten
+alten, und nach normalem Ende wäre das nächste Zurück wieder tot. Gefunden erst beim Durchdenken der
+Gegenprobe Z10, der Test prüfte die Kette zunächst nur mit Zurück, nicht mit normalem Ende.
+
+**Chrome-Eigenheit:** `popstate` kommt auch bei einem gewöhnlichen Adresswechsel, etwa über einen Link im
+Dialog. Der Wächter schließt den Dialog dann schon, bevor der Router ihn erreicht. Gegenprobe Z4 (Router
+schließt nicht) blieb deshalb zuerst grün. Jetzt prüft der Test den Router mit `render()` ohne Adresswechsel,
+also dem Fall, in dem der Browser nichts meldet. Ungefährlich ist die Eigenheit, weil kein Dialog springt,
+solange er offen ist (per Skript über alle Dialog-Funktionen geprüft).
+
+**Werkzeug-Verlauf** liegt **in** der Seite (`#app`). `dialogBarrierefrei()` würde ihn mit der Seite für
+Screenreader ausblenden, deshalb bekommt er nur den Verlaufsschritt. **Nebenfund:** Zwei Produkt-Dialoge
+riefen `dialogBarrierefrei()` auf, räumten aber nie auf, und nach dem Schließen blieben Tab-Falle und
+`aria-hidden` hängen.
+
+Test `tests/zurueck-dialog-ui.js` (22) mit echtem `history.back()` wie die Handy-Taste; Gegenproben 11/11
+rot. Bestandstest `longpress-prodklon` malte per Direktaufruf die Übersicht über die Willkommensseite (der
+alte Weg, den R23 jetzt verhindert) und wechselt nun vorher auf die Übersicht.

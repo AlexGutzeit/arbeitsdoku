@@ -305,7 +305,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   wird neu gezeichnet; wechselt man, bleibt die neue Seite), echte Klicks mit verzögerter Antwort
   (Ordner umbenennen wie in der Messung, Werkzeug, Papierkorb), Live-Meldung. Gegenproben 5/5 rot.
 
-### [ ] R28 · Dialoge bleiben beim Seitenwechsel stehen *(niedrig, gefunden 29.09.2026 beim Bau von R23)*
+### [x] R28 · Dialoge bleiben beim Seitenwechsel stehen *(gefunden 29.09.2026 beim Bau von R23; gebaut 29.09., noch nicht deployt)*
 - **Wo:** Dialoge und das Abwesenheits-Formular hängen an `<body>` (`confirmModal`/`promptModal`/…,
   `showAbsenceForm` → `.absence-form-overlay`), der Router räumt sie bei einem Seitenwechsel nicht weg.
 - **Was passiert:** Am Handy mit der **Zurück-Taste** (oder Wischgeste) wechselt die Seite darunter, der
@@ -313,6 +313,17 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   Wer „Zurück" drückt, erwartet aber meist, dass der Dialog zugeht.
 - **Vorschlag (Entscheidung Alex):** Zurück schließt einen offenen Dialog, statt die Seite zu wechseln —
   mit derselben Entwurfs-Sicherung wie bei Formularen.
+- **Alex (29.09.):** so machen; dazu „Abbrechen verwirft, Zurück sichert" und abgelaufene Entwürfe beim Start
+  wegräumen (Datenmüll vermeiden — die Entwürfe liegen nur im Gerät, nie auf dem Server).
+- **Gebaut:** Jeder Dialog legt beim Öffnen einen Schritt in den Browser-Verlauf (gleiche Adresse,
+  `history.pushState`); Zurück schließt den obersten wie „Abbrechen", die Seite bleibt, Formulare mit
+  Entwurfs-Sicherung werden vorher gesichert. Normal geschlossen, wird der Schritt wieder entfernt — damit
+  der Sprung auf eine andere Seite danach nicht rückgängig gemacht wird, warten `navigate()` und neue
+  Schritte, bis das angekommen ist. Seitenwechsel schließen offene Dialoge; ein liegengebliebener Schritt
+  wird beim Zurück übersprungen (kein toter Tastendruck). Alle 17 Dialoge + Werkzeug-Verlauf.
+  „Abbrechen" verwirft den Entwurf bei Abwesenheit, Bestellung und Notiz. Nebenbei: Zwei Produkt-Dialoge
+  räumten nie auf (Tab-Falle und `aria-hidden` blieben nach dem Schließen hängen).
+  Test `tests/zurueck-dialog-ui.js` (22), Gegenproben 11/11 rot.
 
 
 ### [x] R24 · Erklärung am Warnzeichen („!") verschwindet zu schnell — erledigt in `3c6fdb1`

@@ -147,6 +147,14 @@ function req(m, p, t, b) {
     ok('ein Zurück → „Aushänge" (der liegengebliebene Dialog-Schritt wird übersprungen)', (await adr()) === '#/bulletin', await adr());
     await zurueck();
     ok('noch ein Zurück → Willkommensseite (kein toter Tastendruck)', (await adr()) === '#/welcome', await adr());
+    // Neu aufbauen OHNE Adresswechsel (z. B. geänderte Rolle → render()): Dann meldet der Browser nichts, und
+    // es ist der Router, der den Dialog schließt. (Beim Adresswechsel meldet Chrome ihn als verlassenen
+    // Verlaufsschritt — dort schließt ihn schon der Zurück-Wächter.)
+    await hin('/bulletin');
+    await seite.evaluate(() => { promptModal('Grund?'); });
+    await seite.waitForSelector('#pm-input');
+    await seite.evaluate(() => render()); await sleep(600);
+    ok('Seite neu aufgebaut ohne Adresswechsel: der Router schließt den Dialog', (await offen()) === 0 && (await adr()) === '#/bulletin');
 
     console.log('7. Werkzeug-Verlauf');
     await hin('/welcome'); await hin('/tools');

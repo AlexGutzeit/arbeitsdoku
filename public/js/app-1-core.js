@@ -1381,7 +1381,11 @@ window.addEventListener('popstate', (e) => {
   }
   const oben = _dialoge[_dialoge.length - 1];
   const hier = e.state && e.state.dialog;
-  // Zurück bei offenem Dialog: dessen Schritt ist verlassen → er geht zu, die Seite bleibt
+  // Zurück bei offenem Dialog: dessen Schritt ist verlassen → er geht zu, die Seite bleibt.
+  // Gut zu wissen: Chrome meldet auch einen gewöhnlichen Adresswechsel (Link im Dialog, navigate) hier als
+  // verlassenen Schritt — dann schließt der Dialog schon an dieser Stelle, ehe der Router ihn erreicht.
+  // Unschädlich, weil kein Dialog springt, solange er offen ist (geprüft 29.09.2026); Sprünge NACH dem
+  // Schließen warten in _nachEigenemZurueck.
   if (oben && oben.imVerlauf && hier !== oben.id) {
     oben.imVerlauf = false;                                 // sein Schritt ist schon weg
     if (entwuerfeSichern()) toast('Entwurf gesichert', 'success');

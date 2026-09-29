@@ -775,6 +775,11 @@ Darauf ist sie ausgelegt:
   oder „Wiederherstellen" schon die nächste Seite öffnet, bevor die Antwort da ist, bleibt dort — gespeichert
   wird trotzdem, nur die alte Seite zeichnet sich nicht mehr darüber. Mit Absicht anders: Die **Bestellungen** erscheinen auch ohne Netz, mit dem Katalog
   aus dem Gerätespeicher.
+* **Zurück schließt den Dialog:** Ist ein Fenster offen (Bestätigen, Begründung, Abwesenheitsantrag …),
+  schließt die Zurück-Taste bzw. die Wischgeste am Handy **das Fenster** — die Seite darunter bleibt. Was
+  in einem Formular schon getippt war, wird dabei als Entwurf gesichert und beim nächsten Öffnen angeboten;
+  **„Abbrechen" verwirft** ihn dagegen. Entwürfe liegen nur im Gerät, gelten 24 Stunden und werden beim
+  Speichern, beim Abmelden und beim nächsten App-Start nach Ablauf gelöscht.
 * **Uhrzeit per Uhr, Datum per Kalender:** Antippen eines Uhrzeit-, Datums- oder Monatsfelds öffnet
   Uhr bzw. Kalender – auch in neueren Chrome-Versionen auf Android, die das von sich aus nicht mehr
   tun (dort markiert Antippen sonst nur Stunde, Tag oder Monat zum Eintippen). Das Symbol rechts im
