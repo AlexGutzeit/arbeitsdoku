@@ -4054,3 +4054,7 @@ Umkehrung von `felder()`. Vorher ging eine Leerzeile am Schluss verloren, gefund
 steht. Echte Namen (ein Ausgeschiedener, ein Jugendlicher mit Geburtsdatum) standen in Bugliste, Werkstattbuch und
 Testkommentaren. Das Repo ist öffentlich, sie sind jetzt neutral formuliert. In der Git-Geschichte stehen sie
 weiter.
+Die Suite für R30 lief auf der frischen Kopie von 22:56 mit 258 von 259. Rot war `push-sw`, weil sein
+nachgebautes Fenster keine Adresse hatte. An der Adresse erkennt sw.js jetzt die Gästeseite. Das Fenster hat
+jetzt eine Adresse wie jedes echte. Gegenprobe: Der alte sw.js ist grün (gleiches Ziel), eine Fensterwahl ohne
+Treffer ist rot.
