@@ -171,6 +171,26 @@ const tag = (d) => `${MONAT}-${String(d).padStart(2, '0')}`;
         u ? `CSV ist/soll/saldo/ges ${zeile[spalte('Ist-Stunden')]}/${zeile[spalte('Soll-Stunden')]}/${zeile[spalte('Saldo')]}/${zeile[spalte('Überstunden gesamt')]} vs API ${u.ist}/${u.soll}/${u.ueber}/${u.ueber_gesamt}` : 'kein Nutzer in der Statistik');
     }
 
+    // ── Nur, wer im Monat angestellt war (Alex, 29.09.2026) ─────────────────
+    // Bisher war nur belegt, dass C im Austrittsmonat noch drinsteht. Jetzt auch die andere Hälfte: Im Monat
+    // danach fehlt C, und vor dem Eintritt (alle drei sind heute angelegt) fehlen alle.
+    console.log('Nur, wer im Monat angestellt war:');
+    const namenIm = async (monat) => {
+      const r = await req('GET', `/api/payroll/monat.csv?month=${monat}`, admin);
+      return r.status === 200 ? parseCsv(r.text).slice(1).map(z => z[1]) : null;
+    };
+    const monatVersetzt = (monat, n) => {
+      const d = new Date(Date.UTC(Number(monat.slice(0, 4)), Number(monat.slice(5)) - 1 + n, 1));
+      return d.toISOString().slice(0, 7);
+    };
+    const heuteMonat = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 7);
+    const vorEintritt = await namenIm(monatVersetzt(heuteMonat, -1));
+    ok('Monat vor dem Eintritt: keiner der drei in der Datei',
+      vorEintritt && !['AA Vollfall', 'BB Ohne alles', 'CC Ausgestellt'].some(n => vorEintritt.includes(n)), JSON.stringify(vorEintritt));
+    const danach = await namenIm(monatVersetzt(MONAT, 1));
+    ok('Monat nach dem Austritt: C fehlt, A und B stehen drin',
+      danach && !danach.includes('CC Ausgestellt') && danach.includes('AA Vollfall') && danach.includes('BB Ohne alles'), JSON.stringify(danach));
+
     // ── Rechte ────────────────────────────────────────────────────────────
     console.log('Rechte:');
     const maTok = (await req('POST', '/api/auth/login', null, { username: 'lohn_a', password: 'Test1234!' })).body.token;
