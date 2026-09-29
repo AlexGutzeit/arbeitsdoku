@@ -3944,3 +3944,6 @@ riefen `dialogBarrierefrei()` auf, räumten aber nie auf, und nach dem Schließe
 Test `tests/zurueck-dialog-ui.js` (22) mit echtem `history.back()` wie die Handy-Taste; Gegenproben 11/11
 rot. Bestandstest `longpress-prodklon` malte per Direktaufruf die Übersicht über die Willkommensseite (der
 alte Weg, den R23 jetzt verhindert) und wechselt nun vorher auf die Übersicht.
+Suite danach 253/254. Rot war nur `avatar-zuschnitt-ui`: Der Test klickte am Ende auf „Abbrechen“ im
+**allerersten** Zuschnitt-Fenster, das drei Seitenwechsel überlebt hatte. Das war genau der Fehler. Jetzt
+öffnet er für die Abbrechen-Probe ein eigenes Fenster.

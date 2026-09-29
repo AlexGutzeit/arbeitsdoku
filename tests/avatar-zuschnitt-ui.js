@@ -172,6 +172,10 @@ async function farbeInDerMitte(buf) {
     await req('DELETE', '/api/avatare', max.token);
 
     console.log('\n── Abbrechen lädt nichts hoch ──');
+    // Eigenes Fenster öffnen: Bis R28 überlebte das allererste Fenster die Seitenwechsel in der Schleife
+    // darüber (genau der Fehler), und hier wurde auf SEINEN Abbrechen-Knopf geklickt. Jetzt schließt ein
+    // Seitenwechsel offene Fenster.
+    await konto(); await dialogOeffnen();
     await page.click('.zuschnitt-modal [data-act="cancel"]');
     await sleep(900);
     ok('das Fenster ist zu', !(await page.$('#zs-buehne')));
