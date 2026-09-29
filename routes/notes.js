@@ -263,6 +263,7 @@ router.put('/:id', authenticate, (req, res) => {
     title: 'Notiz bearbeitet',
     body: `${bearbeiter ? bearbeiter.name : 'Jemand'} hat „${updated.title}" bearbeitet`,
     url: '/#/notes',
+    ziel: { art: 'notiz', id: updated.id },
   }, req.user.id);
 });
 
@@ -366,6 +367,7 @@ router.put('/:id/shares', authenticate, (req, res) => {
       title: 'Notiz geteilt',
       body: `${sharer ? sharer.name : 'Jemand'} hat „${note.title}" mit dir geteilt`,
       url: '/#/notes',
+      ziel: { art: 'notiz', id: note.id },
     }, req.user.id);
   }
 });
@@ -404,6 +406,7 @@ router.post('/:id/offer', authenticate, (req, res) => {
       title: 'Notiz angeboten',
       body: `${from ? from.name : 'Jemand'} bietet dir „${note.title}" an`,
       url: '/#/notes',
+      ziel: { art: 'notiz', id: note.id },   // beim Empfänger das Angebot zu dieser Notiz
     }, req.user.id);
   }
 });

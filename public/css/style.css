@@ -2469,6 +2469,9 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 /* Angetippter Eintrag aus dem Kalender — dieselbe Sprache wie ein Termin, den man auf der
    Willkommensseite antippt (.tl-plan-entry--hervor). */
 .absence-card--hervor { outline: 3px solid var(--primary); outline-offset: 2px; }
+/* Aus einer Meldung angesprungen (29.09.2026): Notiz, Angebot, Projektkachel, Bestellung — derselbe Rahmen */
+.ziel-hervor { outline: 3px solid var(--primary); outline-offset: 2px; transition: outline-color 0.4s; }
+@media (prefers-reduced-motion: reduce) { .ziel-hervor { transition: none; } }
 
 /* Posteingang -> Kalender: Beim Ueberfahren einer Anfrage zeigt das Raster, WANN sie liegt.
    Kraeftiger Umriss statt Farbwechsel — die Farbe traegt hier schon die Art der Abwesenheit. */

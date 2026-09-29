@@ -1939,6 +1939,8 @@ async function projektNotizVorschau(tile) {
 }
 
 async function renderProjects() {
+  // Aus einer Meldung (Projektnotiz) gekommen: die Kachel aufgeklappt zeichnen (29.09.2026)
+  if (S._projektZiel != null) _expandedProjects.add(String(S._projektZiel));
   const manage = isChefOrAdmin();
   const showDone = _boardShowDone && manage;
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'projects');
@@ -2300,6 +2302,11 @@ async function renderProjects() {
     if (!(await confirmModal('Projekt in den Papierkorb verschieben? Es lässt sich von dort (Chef/Admin) wiederherstellen.', { title: 'In den Papierkorb', okLabel: 'Löschen' }))) return;
     try { await api('DELETE', '/api/projects/' + pid(b)); toast('In den Papierkorb verschoben', 'success'); renderProjects(); } catch (err) { toast(err.message, 'error'); }
   }));
+  // … und hervorheben (in der Kategorie-Ansicht kann ein Auftrag mehrfach stehen: die erste Kachel)
+  if (S._projektZiel != null) {
+    const id = S._projektZiel; S._projektZiel = null;
+    hervorheben(mainEl.querySelector(`.proj-tile[data-id="${id}"]`));
+  }
 }
 
 // Projekt-Formular (Chef/Admin) — via FAB (neu) oder „Bearbeiten" (mit Projekt).

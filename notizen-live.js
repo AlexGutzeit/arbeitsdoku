@@ -231,10 +231,12 @@ function rundeBeenden(raum, wer) {
     title: 'Projektnotiz bearbeitet',
     body: `${name || 'Jemand'} hat die Projektnotiz „${note.title}" bearbeitet`,
     url: '/#/projects',
+    ziel: { art: 'projekt', id: note.projekt_notiz_fuer },
   } : {
     title: 'Notiz bearbeitet',
     body: `${name || 'Jemand'} hat „${note.title}" bearbeitet`,
     url: '/#/notes',
+    ziel: { art: 'notiz', id: raum.noteId },
   }, gast ? null : wer);
 }
 

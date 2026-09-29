@@ -197,6 +197,11 @@ async function renderOrders() {
 
   bindOrderEvents(orders, manage);
   bindHaendlerAusklapper();
+  // Aus einer Meldung („Neue Bestellung") gekommen: zu dieser Bestellung und hervorheben (29.09.2026)
+  if (S._bestellungZiel != null) {
+    const id = S._bestellungZiel; S._bestellungZiel = null;
+    hervorheben(mainEl.querySelector(`.order-item[data-id="${id}"]`));
+  }
 }
 
 /**
@@ -1018,7 +1023,7 @@ async function renderNotizen() {
     offersHtml = `<div class="note-offers-section">
       <h3>Eingehende Notizen</h3>
       ${offers.map(o => `
-        <div class="note-offer-item" data-offer-id="${o.id}">
+        <div class="note-offer-item" data-offer-id="${o.id}" data-note-id="${o.note_id}">
           <div>
             <strong>${esc(o.title)}</strong>
             <span class="note-meta">von ${esc(o.from_user_name)}</span>
@@ -1124,6 +1129,11 @@ async function renderNotizen() {
     window.scrollTo(0, z.scroll || 0);
     _viewState.frisch = false;   // der Sprung nach oben eines Seitenwechsels ist damit erledigt
     viewStateSave();
+  }
+  // Aus einer Meldung gekommen: zu dieser Notiz (oder dem Angebot dazu) und hervorheben (29.09.2026)
+  if (S._notizZiel != null) {
+    const id = S._notizZiel; S._notizZiel = null;
+    hervorheben(mainEl.querySelector(`.note-card[data-id="${id}"]`) || mainEl.querySelector(`.note-offer-item[data-note-id="${id}"]`));
   }
 }
 
@@ -2577,6 +2587,16 @@ window.addEventListener('DOMContentLoaded', () => {
   _entwurfAufraeumen();     // abgelaufene Entwürfe (> 24 h) weg — nicht erst, wenn wieder ein Formular aufgeht (R28)
   seitenWachenEinrichten(); // R23: erst jetzt sind alle Seiten-Funktionen geladen (app-2 … app-9)
   initViewStateKeeper();   // Scrollposition + aufgeklappte Bereiche über Neuaufbauten hinweg erhalten
+  // Aus einer Meldung geöffnet, als die App zu war: Das genaue Ziel steht in ?meldung= (sw.js). Merken und
+  // aus der Adresse nehmen (sonst griffe es beim nächsten Neuladen wieder). Nicht angemeldet: nach der Anmeldung.
+  try {
+    const m = new URLSearchParams(window.location.search).get('meldung');
+    if (m) {
+      zielVormerken(JSON.parse(m));
+      if (!S.token) S._nachAnmeldung = window.location.hash.slice(1) || null;
+      history.replaceState(history.state, '', window.location.pathname + window.location.hash);
+    }
+  } catch (_) { /* kaputtes Ziel: einfach normal starten */ }
   if (!S.token) navigate('/login');
   render();
   loadLegalFlags(); // öffentlich; blendet Impressum/Datenschutz-Links ein (auch ausgeloggt)

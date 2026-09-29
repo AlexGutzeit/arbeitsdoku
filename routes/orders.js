@@ -119,6 +119,7 @@ router.post('/', authenticate, (req, res) => {
     title: 'Neue Bestellung',
     body: `${qty ? qty + '× ' : ''}${order.product} — von ${order.user_name}`,
     url: '/#/orders',
+    ziel: { art: 'bestellung', id: order.id },
   }, req.user.id);
 });
 

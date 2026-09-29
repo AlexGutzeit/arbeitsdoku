@@ -38,7 +38,7 @@ self.addEventListener('push', (event) => {
       badge: '/icons/badge-96x96.png',
       // KEIN gemeinsames tag → jede Meldung bleibt einzeln stehen (sonst wuerde die naechste
       // Meldung derselben Route die vorige ersetzen).
-      data: { url },
+      data: { url, ziel: data.ziel || null },   // ziel: was genau gemeint ist (29.09.2026)
     })
   );
 });
@@ -59,22 +59,39 @@ self.addEventListener('push', (event) => {
 //   1. Der offenen App direkt sagen, wohin — sie routet selbst, ohne Neuladen.
 //   2. `navigate()` als Rueckfall fuer eine alte, noch gecachte Programmfassung ohne den
 //      Empfaenger aus Schritt 1. Steht die App danach schon richtig, ist es ein Leerlauf.
+// Welches offene Fenster? NUR App-Fenster: Die Gästeseite (/gast) liegt unter derselben Adresse, versteht die
+// Nachricht aber nicht — der Rückfall luede dort die App und beendete nebenbei die Sitzung des Gasts. Das war
+// wahrscheinlich, warum eine Meldung „Gast hat bearbeitet" auf der Willkommensseite endete (Alex, 29.09.2026).
+// Vorzug: das Fenster mit Fokus, dann ein sichtbares, dann irgendeins.
+function appFenster(wins) {
+  const app = wins.filter(w => { try { return !new URL(w.url).pathname.startsWith('/gast'); } catch (_) { return false; } });
+  return app.find(w => w.focused) || app.find(w => w.visibilityState === 'visible') || app[0] || null;
+}
+// Ist die App zu, reist das genaue Ziel in der Adresse mit (?meldung=), die App liest es beim Start (app-8).
+function oeffnenAdresse(url, genau) {
+  const raute = url.indexOf('#');
+  if (!genau || raute < 0) return url;
+  return '/?meldung=' + encodeURIComponent(JSON.stringify(genau)) + url.slice(raute);
+}
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const ziel = (event.notification.data && event.notification.data.url) || '/';
+  const daten = event.notification.data || {};
+  const ziel = daten.url || '/';
+  const genau = daten.ziel || null;
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const w of wins) {
+    const w = appFenster(wins);
+    if (w) {
       // '/' ist das Ziel der Zusammenfassung und der Testmeldung — die haben kein eigenes Menue.
       // Wer gerade mitten in einem Formular steckt, soll davon nicht weggerissen werden.
       if (ziel !== '/') {
-        try { w.postMessage({ typ: 'meldung-geklickt', url: ziel }); } catch (_) {}
+        try { w.postMessage({ typ: 'meldung-geklickt', url: ziel, ziel: genau }); } catch (_) {}
         if ('navigate' in w) { try { await w.navigate(ziel); } catch (_) {} }
       }
       if ('focus' in w) { try { return await w.focus(); } catch (_) {} }
       return;
     }
-    if (self.clients.openWindow) return self.clients.openWindow(ziel);
+    if (self.clients.openWindow) return self.clients.openWindow(oeffnenAdresse(ziel, genau));
   })());
 });
 

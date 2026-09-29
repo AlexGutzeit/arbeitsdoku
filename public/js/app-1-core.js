@@ -1627,6 +1627,45 @@ function standardTag() {
   return { von: fmt(startMin), bis: fmt(endeMin), pause: Number(a.break_minutes_default) };
 }
 
+// --- Meldung angetippt: hinspringen und hervorheben (29.09.2026) ---------------------------------------
+// Eine Push-Meldung bringt ihr genaues Ziel mit ({ art, id[, datum] }, push.js). Es setzt dieselben Merker,
+// die schon die Willkommensseite für ihre Sprünge nutzt (S._aushangZiel, S._planungZiel, S._abwesenheitZiel),
+// dazu neue für Notiz, Projekt und Bestellung. Die jeweilige Seite liest ihren Merker beim Zeichnen, scrollt
+// hin und hebt kurz hervor. Vorher landete man nur im Menü (und bei einer Erinnerung auf „heute").
+function zielVormerken(ziel) {
+  if (!ziel || !ziel.art) return;
+  const id = Number(ziel.id);
+  if (ziel.art === 'notiz') S._notizZiel = id;
+  else if (ziel.art === 'projekt') S._projektZiel = id;
+  else if (ziel.art === 'aushang') S._aushangZiel = id;
+  else if (ziel.art === 'bestellung') S._bestellungZiel = id;
+  else if (ziel.art === 'abwesenheit') {
+    S._abwesenheitZiel = id;
+    if (typeof _absTab !== 'undefined') _absTab = 'list';   // die Karte steht nur in der Liste
+  } else if (ziel.art === 'termin') {
+    S._planungZiel = id;
+    S.planningView = 'day';
+    if (ziel.datum) S.planningDate = new Date(ziel.datum + 'T12:00:00');
+  }
+}
+// Vom Service Worker (sw-register.js) und beim Start aus ?meldung= (app-8). Nicht angemeldet: Das Ziel
+// überlebt die Anmeldung (S._nachAnmeldung) — vorher sprang die App danach auf die Willkommensseite.
+function meldungAnsteuern(hash, ziel) {
+  zielVormerken(ziel);
+  if (!S.token) { S._nachAnmeldung = hash; return; }
+  if (window.location.hash.slice(1) === hash) { render(); return; }   // schon dort: neu zeichnen, hervorheben
+  window.location.hash = hash;
+}
+// Ein Element hinscrollen und kurz hervorheben (derselbe Rahmen wie bei den Sprüngen der Willkommensseite).
+function hervorheben(el) {
+  if (!el) return;
+  const huelle = el.closest('details');
+  if (huelle && !huelle.open) huelle.open = true;
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.classList.add('ziel-hervor');
+  setTimeout(() => el.classList.remove('ziel-hervor'), 2500);
+}
+
 // --- Router ---
 function navigate(hash) {
   // Steht das Entfernen eines Dialog-Schritts noch aus (R28), erst danach — sonst machte es den Sprung rückgängig

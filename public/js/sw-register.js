@@ -53,6 +53,8 @@ if ('serviceWorker' in navigator) {
     if (raute < 0) return;
     const hash = ziel.slice(raute + 1);
     if (!hash.startsWith('/')) return;
+    // Mit genauem Ziel (29.09.2026): hinspringen und hervorheben — auch, wenn man schon im Menü steht
+    if (typeof meldungAnsteuern === 'function') { meldungAnsteuern(hash, d.ziel || null); return; }
     if (window.location.hash.slice(1) === hash) return;   // steht schon richtig
     window.location.hash = hash;
   });

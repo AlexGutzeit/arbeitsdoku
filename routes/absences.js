@@ -494,17 +494,17 @@ router.post('/', authenticate, (req, res) => {
     if (created_by !== uid && status === 'pending' && APPROVAL_REQUIRED.includes(type)) {
       // Manager hat für einen MA eingetragen → der MA muss bestätigen.
       push.notifyUsers(db, [uid], 'absences', {
-        title: `${label} eingetragen`, body: `Bitte bestätigen: ${range}`, url: '/#/absences',
+        title: `${label} eingetragen`, body: `Bitte bestätigen: ${range}`, url: '/#/absences', ziel: { art: 'abwesenheit', id: absence.id },
       }, req.user.id);
     } else if (status === 'pending' && APPROVAL_REQUIRED.includes(type)) {
       // Selbstantrag → alle Manager.
       push.notifyUsers(db, push.managerIds(db, req.user.id), 'absences', {
-        title: `Neuer Antrag: ${label}`, body: `${absence.user_name}: ${range}`, url: '/#/absences',
+        title: `Neuer Antrag: ${label}`, body: `${absence.user_name}: ${range}`, url: '/#/absences', ziel: { art: 'abwesenheit', id: absence.id },
       }, req.user.id);
     } else if (status === 'active' && NOTIFY_CHEF.includes(type)) {
       // Krank/Berufsschule/Innung gemeldet → alle Manager.
       push.notifyUsers(db, push.managerIds(db, req.user.id), 'absences', {
-        title: `${label} gemeldet`, body: `${absence.user_name}: ${range}`, url: '/#/absences',
+        title: `${label} gemeldet`, body: `${absence.user_name}: ${range}`, url: '/#/absences', ziel: { art: 'abwesenheit', id: absence.id },
       }, req.user.id);
     }
   }
@@ -626,7 +626,7 @@ router.put('/:id', authenticate, (req, res) => {
     const fromD = updated.proposed_date_from || updated.date_from;
     const toD = updated.proposed_date_to || updated.date_to;
     push.notifyUsers(db, [updated.user_id], 'absences', {
-      title: 'Abwesenheit bearbeitet', body: `Bitte bestätigen: ${label} ${fmtRange(fromD, toD)}`, url: '/#/absences',
+      title: 'Abwesenheit bearbeitet', body: `Bitte bestätigen: ${label} ${fmtRange(fromD, toD)}`, url: '/#/absences', ziel: { art: 'abwesenheit', id: updated.id },
     }, req.user.id);
   }
 });
@@ -755,7 +755,7 @@ router.post('/:id/approve', authenticate, (req, res) => {
   if (updated.user_id && updated.user_id !== req.user.id) {
     const label = TYPE_LABELS[updated.type] || updated.type;
     push.notifyUsers(db, [updated.user_id], 'absences', {
-      title: `${label} genehmigt`, body: fmtRange(updated.date_from, updated.date_to), url: '/#/absences',
+      title: `${label} genehmigt`, body: fmtRange(updated.date_from, updated.date_to), url: '/#/absences', ziel: { art: 'abwesenheit', id: updated.id },
     }, req.user.id);
   }
 });
@@ -788,7 +788,7 @@ router.post('/:id/reject', authenticate, (req, res) => {
   if (updated.user_id && updated.user_id !== req.user.id) {
     const label = TYPE_LABELS[updated.type] || updated.type;
     push.notifyUsers(db, [updated.user_id], 'absences', {
-      title: `${label} abgelehnt`, body: fmtRange(updated.date_from, updated.date_to), url: '/#/absences',
+      title: `${label} abgelehnt`, body: fmtRange(updated.date_from, updated.date_to), url: '/#/absences', ziel: { art: 'abwesenheit', id: updated.id },
     }, req.user.id);
   }
 });

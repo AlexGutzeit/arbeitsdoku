@@ -91,7 +91,9 @@ function anmeldungAbschliessen(data) {
   entwuerfeFremderLoeschen(data.user.id);
   const ziel = rueckkehrZiel(data.user.id);
   S.anmeldeHinweis = null;
-  navigate(ziel || '/welcome');
+  // Aus einer Meldung gekommen (abgemeldet angetippt)? Dann dorthin — die Meldung ist das, was man wollte
+  const ausMeldung = S._nachAnmeldung; S._nachAnmeldung = null;
+  navigate(ausMeldung || ziel || '/welcome');
   initSSE();
   loadBadges();
   syncPushSubscription();

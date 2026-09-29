@@ -128,16 +128,19 @@ function reminderParts(db, r, occKey, startWall) {
   const label = (e && (e.client || e.description)) || 'Termin';
   const names = e ? db.prepare('SELECT u.name FROM planning_assignments pa JOIN users u ON u.id = pa.user_id WHERE pa.planning_id = ?').all(e.id).map(x => x.name) : [];
   const assignedIds = e ? db.prepare('SELECT user_id FROM planning_assignments WHERE planning_id = ?').all(e.id).map(x => x.user_id) : [];
-  return { label, names, own: assignedIds.includes(r.user_id), when: fmtWall(startWall) };
+  return { label, names, own: assignedIds.includes(r.user_id), when: fmtWall(startWall),
+    termin: e ? { id: e.id, datum: e.date || String(startWall).slice(0, 10) } : null };
 }
 // Einzel-Push (eine Erinnerung).
 function buildReminderPush(db, r, occKey, startWall) {
-  const { label, names, own, when } = reminderParts(db, r, occKey, startWall);
+  const { label, names, own, when, termin } = reminderParts(db, r, occKey, startWall);
   const body = own ? `Am ${when}: ${label}` : `${(names.join(', ') || 'Mitarbeiter')} hat am ${when} einen Termin: ${label}`;
   // '/#/planning', NICHT '/planning': Die App ist eine Hash-Anwendung. Ohne die Raute liefert
   // der Server nur die Startseite aus, und die Erinnerung landete auf „Willkommen" statt beim
   // Termin (Alex, 27.08.2026). Alle anderen Meldungen machen es seit jeher richtig.
-  return { title: '🔔 Erinnerung', body, url: '/#/planning' };
+  // Ziel: der Tag des Termins in der Tagesansicht, der Termin hervorgehoben (29.09.2026) — vorher „heute".
+  return { title: '🔔 Erinnerung', body, url: '/#/planning',
+    ziel: termin ? { art: 'termin', id: termin.id, datum: termin.datum } : null };
 }
 function markSent(db, reminderId, occKey) {
   db.prepare('INSERT OR IGNORE INTO planning_reminder_sent (reminder_id, occ_key) VALUES (?, ?)').run(reminderId, occKey);

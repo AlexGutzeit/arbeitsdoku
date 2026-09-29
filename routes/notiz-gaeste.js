@@ -113,6 +113,7 @@ gast.post('/anmelden', anmeldeBremse, async (req, res) => {
         title: 'Gastzugang gesperrt',
         body: `${gaeste.FEHLVERSUCHE_BIS_SPERRE} falsche Passwörter für „${r.gast.name}" (Notiz „${n.title}") — für ${gaeste.SPERRE_MS / 60000} Minuten gesperrt.`,
         url: '/#/notes',
+        ziel: { art: 'notiz', id: r.gast.note_id },
       });
     }
     return res.status(r.status).json({ error: r.fehler, code: r.code });

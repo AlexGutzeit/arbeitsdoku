@@ -88,6 +88,7 @@ router.post('/', authenticate, canBulletin, (req, res) => {
     title: 'Schwarzes Brett',
     body: entry.title,
     url: '/#/bulletin',
+    ziel: { art: 'aushang', id: entry.id },
   }, req.user.id);
 });
 
@@ -142,6 +143,7 @@ router.put('/:id', authenticate, canBulletin, (req, res) => {
     title: 'Schwarzes Brett aktualisiert',
     body: updated.title,
     url: '/#/bulletin',
+    ziel: { art: 'aushang', id: updated.id },
   }, req.user.id);
 });
 

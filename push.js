@@ -97,6 +97,9 @@ async function notifyUsers(db, userIds, category, payload, excludeUserId) {
       title: payload.title || 'Arbeitsdoku',
       body: payload.body || '',
       url: payload.url || '/',
+      // Was genau gemeint ist ({ art, id[, datum] }) — die App springt beim Antippen dorthin und hebt es
+      // hervor (29.09.2026). Ohne Ziel (Zusammenfassung, Testmeldung) nur ins Menü bzw. gar nicht.
+      ziel: payload.ziel || null,
       icon,
     });
 
