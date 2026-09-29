@@ -1570,6 +1570,40 @@ function getRoute() {
   return window.location.hash.slice(1) || '/welcome';
 }
 
+// --- Neu zeichnen nur auf der eigenen Seite (R23) -------------------------------------------------
+// Ein Knopf, der nach dem Speichern seine Seite neu zeichnet (`await api(…); renderDocuments();`),
+// überschrieb die inzwischen geöffnete Seite, wenn man währenddessen woanders hingegangen war: Adresse
+// und Menü „Mein Konto", zu sehen die Dokumente (gemessen am 25.09.2026). Dasselbe Bild wie R5, nur ist
+// der Aufruf hier frisch, nicht veraltet — seiteLaden() hilft nicht. Statt rund sechzig solcher Stellen
+// einzeln zu hüten, wacht die Seite selbst: Der Router merkt sich, für welche Adresse er sie geöffnet
+// hat. Ruft sie später jemand anderes auf (ein Knopf, eine Live-Meldung), zeichnet sie nur, solange diese
+// Adresse noch gilt — sonst lässt sie die neue Seite in Ruhe. Auch künftige Knöpfe sind damit erfasst.
+// Teil-Zeichner, die in die ganze Seite schreiben, gehören zu ihrer Seite.
+// Jede Seite, die seiteWaehlen() aufruft, MUSS in SEITEN stehen — tests/neuzeichnen-ui.js prüft das.
+const SEITEN = ['renderWelcome', 'renderDashboard', 'renderKonto', 'renderEntryForm', 'renderUsers', 'renderProjects',
+  'renderSettings', 'renderAudit', 'renderDeletedEntries', 'renderDeletedAbsences', 'renderDeletedProjects',
+  'renderDeletedUsers', 'renderDocuments', 'renderPdfExport', 'renderStatistics', 'renderPlanning', 'renderPlanningForm',
+  'renderProdukte', 'renderTools', 'renderOrders', 'renderNotizen', 'renderNotizEditor', 'renderAbsences',
+  'renderAbsenceType', 'renderBulletin', 'renderBulletinForm'];
+const SEITEN_TEILE = { renderDashboardContent: 'renderDashboard', renderPlanningContent: 'renderPlanning',
+  renderStatisticsContent: 'renderStatistics', renderProjectForm: 'renderProjects' };
+let _imRouter = false;
+const _geoeffnetFuer = {};
+function seitenWachenEinrichten() {
+  const alle = [...SEITEN.map(n => [n, n]), ...Object.entries(SEITEN_TEILE)];
+  for (const [name, seite] of alle) {
+    const fn = window[name];
+    if (typeof fn !== 'function' || fn._seitenWache) continue;
+    const wache = function (...args) {
+      if (_imRouter) { if (name === seite) _geoeffnetFuer[seite] = getRoute(); }
+      else if (!S.token || _geoeffnetFuer[seite] !== getRoute()) return undefined;   // man ist woanders
+      return fn.apply(this, args);
+    };
+    wache._seitenWache = true;
+    window[name] = wache;
+  }
+}
+
 // --- Render Engine ---
 const $app = () => document.getElementById('app');
 
@@ -1855,6 +1889,13 @@ function render() {
   // Eine offene Notiz (gemeinsame Bearbeitung) endet mit jedem Seitenwechsel — auch zurück in die
   // Übersicht oder beim Abmelden. Ist es dieselbe Notiz, baut ihre Seite die Sitzung gleich neu auf.
   if (typeof notizSitzungVerlassen === 'function') notizSitzungVerlassen();
+  // Was jetzt aufgerufen wird, öffnet der Router — die Seite merkt sich ihre Adresse (R23)
+  _imRouter = true;
+  try { seiteWaehlen(); } finally { _imRouter = false; }
+}
+
+// Welche Seite gehört zu welcher Adresse. Jede hier aufgerufene Seite MUSS in SEITEN stehen (R23).
+function seiteWaehlen() {
   const r0 = getRoute();
   // Rechtsseiten sind bewusst OHNE Login erreichbar (Impressumspflicht) → vor dem Auth-Guard behandeln.
   if (r0 === '/impressum' || r0 === '/datenschutz') { renderLegal(r0.slice(1)); return; }

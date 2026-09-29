@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**252 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**253 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -161,6 +161,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `menue-abrechnung-ui.js` | Der Menüpunkt hinter #/pdf gehört Chef, Admin und Buchhaltung — und heißt „Abrechnung". |
 | `milestone-days-input.js` | Test: Zwischenziel-Dauer akzeptiert Komma UND Punkt (1,5 === 1.5), ungültige Werte werden abgefangen |
 | `nav-chooser.js` | Navigations-Auswahl-Test (Puppeteer, headless). Prüft Plattform-Optionen, URL-Builder, Auswahl-Dialog, |
+| `neuzeichnen-ui.js` | Neu zeichnen nur auf der eigenen Seite (R23, 29.09.2026). |
 | `note-leave-ui.js` | UI-Test (Puppeteer): Empfänger sieht bei einer geteilten Notiz den „Freigabe verlassen"-Button und |
 | `note-leave.js` | API-Test „Freigabe verlassen": Empfänger entfernt sich selbst aus einer geteilten Notiz; beim |
 | `notiz-freigabe-datum.js` | Neue Freigabe leuchtet nur beim NEUEN Empfänger auf — nicht bei allen bisherigen (27.09.2026). |

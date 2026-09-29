@@ -2567,6 +2567,7 @@ window.addEventListener('hashchange', () => {
   render();
 });
 window.addEventListener('DOMContentLoaded', () => {
+  seitenWachenEinrichten(); // R23: erst jetzt sind alle Seiten-Funktionen geladen (app-2 … app-9)
   initViewStateKeeper();   // Scrollposition + aufgeklappte Bereiche über Neuaufbauten hinweg erhalten
   if (!S.token) navigate('/login');
   render();
