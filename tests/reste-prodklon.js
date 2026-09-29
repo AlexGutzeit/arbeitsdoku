@@ -128,6 +128,11 @@ const alsListe = (text) => { const j = JSON.parse(text); return Array.isArray(j)
       WHERE pe.created_by IN (SELECT id FROM users) AND EXISTS
       (SELECT 1 FROM planning_assignments pa JOIN users u ON u.id = pa.user_id WHERE pa.planning_id = pe.id) ORDER BY rowid`).map(zeile));
     const inhaltAlt = inhaltVorhandener(alt), planungAlt = planungMitVorhandenen(alt);
+    // Seit dem Deploy (28.09.2026) ist Produktion schon aufgeräumt: Die Kopie bringt die Protokolleinträge von
+    // damals und den Merker mit. Zählen darf nur, was DIESER Start schreibt — sonst „erklärt" das alte
+    // Protokoll Zeilen, die hier gar nicht weg sind (am 29.09. rot: „2659 von 0").
+    const protokollVorher = new Set(werte(alt, "SELECT id FROM audit_logs WHERE action = 'reste_aufgeraeumt'").map(v => v[0]));
+    const schonAufgeraeumt = werte(alt, "SELECT 1 FROM settings WHERE key = 'altlasten_geloeschte_konten'").length > 0;
     alt.close();
 
     const kopie = '/tmp/reste-prodklon-' + path.basename(vorlage);
@@ -138,7 +143,8 @@ const alsListe = (text) => { const j = JSON.parse(text); return Array.isArray(j)
 
     const neu = new SQL.Database(fs.readFileSync(kopie));
     const nachher = bestand(neu);
-    const protokoll = werte(neu, "SELECT id, username, details FROM audit_logs WHERE action = 'reste_aufgeraeumt' ORDER BY id");
+    const protokoll = werte(neu, "SELECT id, username, details FROM audit_logs WHERE action = 'reste_aufgeraeumt' ORDER BY id")
+      .filter(p => !protokollVorher.has(p[0]));
     const merker = werte(neu, "SELECT rowid FROM settings WHERE key = 'altlasten_geloeschte_konten'").map(v => v[0]);
     const inhaltNeu = inhaltVorhandener(neu), planungNeu = planungMitVorhandenen(neu);
     const verstoesseNachher = werte(neu, 'PRAGMA foreign_key_check').map(v => v[0]);
@@ -168,9 +174,17 @@ const alsListe = (text) => { const j = JSON.parse(text); return Array.isArray(j)
     ok('KEINE sichtbare Planung (Ersteller vorhanden), in der ein vorhandenes Konto eingeteilt ist, fehlt oder ist verändert', planungNeu === planungAlt);
     ok('keine Konten verändert, keine Abrechnung verändert', ['users', 'payroll_closures', 'payroll_closure_rows']
       .every(t => JSON.stringify([...vorher[t]]) === JSON.stringify([...nachher[t]])));
-    ok('Protokoll: je ein Eintrag „System" für Altlasten und Anhängsel, Merker gesetzt',
-      protokoll.length === 2 && protokoll.every(p => p[1] === 'System') && /^Inhalt früh gelöschter Konten/.test(protokoll[0][2])
-        && /^Start: /.test(protokoll[1][2]) && merker.length === 1, JSON.stringify(protokoll));
+    if (!schonAufgeraeumt) {
+      ok('Protokoll: je ein Eintrag „System" für Altlasten und Anhängsel, Merker gesetzt',
+        protokoll.length === 2 && protokoll.every(p => p[1] === 'System') && /^Inhalt früh gelöschter Konten/.test(protokoll[0][2])
+          && /^Start: /.test(protokoll[1][2]) && merker.length === 1, JSON.stringify(protokoll));
+    } else {
+      // Schon aufgeräumt: Die Altlasten kommen nie ein zweites Mal; ein Eintrag „Start" nur, wenn etwas weg ist.
+      ok(`Protokoll (Kopie war schon aufgeräumt): keine Altlasten mehr, ${entfernt ? 'ein Eintrag „Start"' : 'kein neuer Eintrag'}, Merker bleibt`,
+        protokoll.every(p => p[1] === 'System') && !protokoll.some(p => /^Inhalt früh gelöschter Konten/.test(p[2]))
+          && (entfernt ? protokoll.length === 1 && /^Start: /.test(protokoll[0][2]) : protokoll.length === 0) && merker.length === 1,
+        JSON.stringify(protokoll));
+    }
     // Das Protokoll muss jede entfernte Zeile erklären (Verlauf zählt mit seinem Eintrag, nicht einzeln)
     const imProtokoll = protokoll.map(p => p[2].replace(/\(Nr\.[^)]*\)/, '')).join(' ').match(/\d+/g) || [];
     const erklaert = imProtokoll.reduce((s, x) => s + Number(x), 0);
