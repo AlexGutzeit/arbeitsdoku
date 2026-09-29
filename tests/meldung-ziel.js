@@ -21,6 +21,9 @@
 //
 // In-Process mit eigenem Port (listen(0)), damit der Test neben einer laufenden Suite arbeiten kann.
 //
+// Seit 29.09.2026 auch: Jede Meldung nennt ihr genaues Ziel ({ art, id }), die Erinnerung den Tag des
+// Termins, und der Fangzaun verlangt es von jeder künftigen Meldung.
+//
 //   node tests/meldung-ziel.js
 const fs = require('fs');
 const http = require('http');
@@ -117,6 +120,10 @@ function req(server, method, p, token, body) {
     return r;
   };
   const ziele = () => [...new Set(SENT.map(s => s.payload.url))];
+  // Seit 29.09.2026 nennt jede Meldung auch, WAS genau gemeint ist — die App springt dorthin und hebt hervor
+  const genau = () => [...new Set(SENT.map(s => JSON.stringify(s.payload.ziel)))];
+  const zeigtAuf = (was, art, id) => ok(`${was}: zeigt genau auf ${art} ${id}`,
+    SENT.length > 0 && SENT.every(s => s.payload.ziel && s.payload.ziel.art === art && Number(s.payload.ziel.id) === Number(id)), JSON.stringify(genau()));
 
   try {
     console.log('── Jede Meldung nennt ihr Menü ──');
@@ -125,25 +132,30 @@ function req(server, method, p, token, body) {
     ok('Bestellung angelegt', r.status === 201, r.status + ' ' + r.text.slice(0, 80));
     ok('… und sie hat überhaupt jemanden erreicht', SENT.length > 0, JSON.stringify(ziele()));
     for (const z of ziele()) zielPruefen('neue Bestellung', z);
+    zeigtAuf('neue Bestellung', 'bestellung', (r.body.order || r.body).id);
 
     r = await ausloesen('POST', '/api/bulletin', 'admin', { title: 'Betriebsversammlung', content: 'Freitag 15 Uhr' });
     ok('Aushang angelegt', r.status === 201 || r.status === 200, r.status + ' ' + r.text.slice(0, 80));
     for (const z of ziele()) zielPruefen('neuer Aushang', z);
+    zeigtAuf('neuer Aushang', 'aushang', (r.body.entry || r.body).id);
 
     const heute = new Date().toLocaleDateString('sv-SE');
     r = await ausloesen('POST', '/api/absences', 'max', { type: 'urlaub', date_from: heute, date_to: heute });
     ok('Abwesenheit beantragt', r.status === 201 || r.status === 200, r.status + ' ' + r.text.slice(0, 80));
     for (const z of ziele()) zielPruefen('Abwesenheits-Antrag', z);
+    zeigtAuf('Abwesenheits-Antrag', 'abwesenheit', (r.body.absence || r.body).id);
 
     const notiz = (await req(server, 'POST', '/api/notes', tok.admin, { title: 'Übergabe', content: 'Schlüssel im Büro' })).body;
     const nid = notiz && (notiz.note ? notiz.note.id : notiz.id);
     r = await ausloesen('PUT', `/api/notes/${nid}/shares`, 'admin', { shares: [{ user_id: ids.max, can_edit: 0 }] });
     ok('Notiz freigegeben', r.status === 200, r.status + ' ' + r.text.slice(0, 80));
     for (const z of ziele()) zielPruefen('geteilte Notiz', z);
+    zeigtAuf('geteilte Notiz', 'notiz', nid);
 
     r = await ausloesen('POST', '/api/push/test', 'max');
     ok('Testmeldung verschickt', r.status === 200, r.status + ' ' + r.text.slice(0, 80));
     for (const z of ziele()) zielPruefen('Testmeldung', z);
+    ok('Testmeldung: kein genaues Ziel (bleibt, wo man ist)', SENT.every(s => !s.payload.ziel), JSON.stringify(genau()));
 
     console.log('\n── Die Planungs-Erinnerung (der eigentliche Fund) ──');
     // Sie laeuft nicht ueber eine Route, sondern ueber den Zeitplaner — deshalb direkt geprueft.
@@ -153,12 +165,18 @@ function req(server, method, p, token, body) {
     // faellt auf „Termin" zurueck. Das Ziel haengt daran nicht — genau darum geht es hier.
     const erinnerung = buildReminderPush(db, { user_id: ids.max, entry_id: null, group_id: null }, 'x', '2026-08-28 07:00');
     zielPruefen('Planungs-Erinnerung', erinnerung.url);
+    // … und mit echtem Termin: der Tag des Termins, nicht „heute" (29.09.2026)
+    const pid = db.prepare("INSERT INTO planning_entries (created_by, date, time_from, time_to, client) VALUES (?, '2026-10-12', '07:00', '15:00', 'Halle 3')")
+      .run(ids.max).lastInsertRowid;
+    const mitTermin = buildReminderPush(db, { user_id: ids.max, entry_id: pid, group_id: null }, 'e:' + pid, '2026-10-12 07:00');
+    ok('Erinnerung zeigt auf den Termin und seinen Tag', mitTermin.ziel && mitTermin.ziel.art === 'termin'
+      && Number(mitTermin.ziel.id) === Number(pid) && mitTermin.ziel.datum === '2026-10-12', JSON.stringify(mitTermin.ziel));
 
     console.log('\n── Kein Ziel im Code darf die Raute vergessen ──');
     // Der Fangzaun: Die Prüfungen oben treffen nur, was der Test wirklich auslöst. Eine später
     // ergänzte Meldung mit falschem Ziel käme sonst ungeprüft durch.
     const quellen = ['routes/orders.js', 'routes/bulletin.js', 'routes/absences.js',
-                     'routes/notes.js', 'routes/push.js', 'scheduler.js'];
+                     'routes/notes.js', 'routes/push.js', 'scheduler.js', 'notizen-live.js', 'routes/notiz-gaeste.js'];
     const schlechte = [];
     for (const datei of quellen) {
       const txt = fs.readFileSync(path.join(__dirname, '..', datei), 'utf8');
@@ -169,6 +187,17 @@ function req(server, method, p, token, body) {
       }
     }
     ok('alle Ziele im Quelltext sind „/" oder „/#/…"', schlechte.length === 0, schlechte.join(', '));
+    // Und jede Meldung mit eigenem Menü nennt, WAS gemeint ist: Nach jedem `url: '/#/…'` in einer Meldung
+    // muss ein `ziel:` folgen (Zusammenfassung und Testmeldung zeigen auf „/" und brauchen keins).
+    const ohneZiel = [];
+    for (const datei of quellen) {
+      const zeilen = fs.readFileSync(path.join(__dirname, '..', datei), 'utf8').split('\n');
+      zeilen.forEach((z, i) => {
+        if (!/\burl:\s*'\/#\//.test(z)) return;
+        if (!zeilen.slice(i, i + 4).join('\n').includes('ziel:')) ohneZiel.push(`${datei}:${i + 1}`);
+      });
+    }
+    ok('jede Meldung mit Menü bringt ein genaues Ziel mit (ziel:)', ohneZiel.length === 0, ohneZiel.join(', '));
   } catch (e) {
     console.error(e); fail++; fails.push('Ausnahme: ' + e.message);
   } finally {
