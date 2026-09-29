@@ -569,7 +569,7 @@ async function scannerOeffnen() {
           Licht an</button>
       </div>`;
     document.body.appendChild(overlay);
-    const aufraeumen = typeof dialogBarrierefrei === 'function' ? dialogBarrierefrei(overlay) : () => {};
+    const aufraeumen = typeof dialogBarrierefrei === 'function' ? dialogBarrierefrei(overlay, () => schliessen(null)) : () => {};
 
     const $s = (id) => overlay.querySelector('#' + id);
     const melde = (t) => { $s('sc-status').textContent = t; };

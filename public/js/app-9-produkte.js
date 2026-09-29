@@ -799,7 +799,9 @@ function pvNeuesProduktDialog(hKarte) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  if (typeof dialogBarrierefrei === 'function') dialogBarrierefrei(overlay);
+  // Aufräumen fehlte bis R28: Nach dem Schließen hingen Tab-Falle und aria-hidden am Hintergrund fest.
+  const aufraeumen = typeof dialogBarrierefrei === 'function' ? dialogBarrierefrei(overlay, () => zu()) : () => {};
+  const zu = () => { overlay.remove(); aufraeumen(); };
   overlay.querySelector('#pnp-name').focus();
 
   // Abgetippte Ziffern gegen die Pruefziffer halten — dieselbe Hilfe wie in der Scan-Maske.
@@ -822,9 +824,9 @@ function pvNeuesProduktDialog(hKarte) {
     if (neu) overlay.querySelector('#pnp-katname').focus();
   });
 
-  klickDanebenSchliesst(overlay, () => overlay.remove());   // R20: nur ohne Eingaben
+  klickDanebenSchliesst(overlay, () => zu());   // R20: nur ohne Eingaben
   overlay.addEventListener('click', async (ev) => {
-    if (ev.target.dataset.act === 'cancel') return overlay.remove();
+    if (ev.target.dataset.act === 'cancel') return zu();
     if (ev.target.dataset.act !== 'ok') return;
     const fehler = overlay.querySelector('#pnp-fehler');
     try {
@@ -849,7 +851,7 @@ function pvNeuesProduktDialog(hKarte) {
         category_id: katId || null,
       });
       if (hKarte) await api('PUT', `/api/products/${r.produkt.id}/haendler/${hKarte.dataset.id}`, {});
-      overlay.remove();
+      zu();
       toast(hKarte ? `„${r.produkt.name}" angelegt und angehängt.` : `„${r.produkt.name}" angelegt.`,
         'success');
       // Kein Neuaufbau der Seite: Der wuerde die Haendlerkarte zuklappen, in der man gerade
@@ -934,9 +936,9 @@ async function pvMergeDialog(zielId, vorschlagVonId) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  if (typeof dialogBarrierefrei === 'function') dialogBarrierefrei(overlay);
+  const aufraeumen = typeof dialogBarrierefrei === 'function' ? dialogBarrierefrei(overlay, () => zu()) : () => {};
 
-  const zu = () => overlay.remove();
+  const zu = () => { overlay.remove(); aufraeumen(); };   // Aufräumen fehlte bis R28
   const zielSel = overlay.querySelector('#pm-ziel');
   const nameFeld = overlay.querySelector('#pm-name');
   zielSel.addEventListener('change', () => {

@@ -339,7 +339,7 @@ async function openReminderDialog(e) {
   document.body.appendChild(overlay);
   let changed = false; // beim Schließen die Planung neu rendern (🔔 aktualisieren)
   let editingId = null;
-  const aufraeumen = dialogBarrierefrei(overlay);
+  const aufraeumen = dialogBarrierefrei(overlay, () => finish());
   const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); if (changed) renderPlanningContent(); };
   const onKey = (ev) => { if (ev.key === 'Escape') finish(); };
   document.addEventListener('keydown', onKey);
@@ -1439,6 +1439,15 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
 }
 
 // --- Werkzeugliste ---
+let _werkzeugVerlaufZu = null;
+function werkzeugVerlaufSchliessen() {
+  const m = document.getElementById('tool-history-modal');
+  if (m) m.style.display = 'none';
+  const ausVerlauf = _werkzeugVerlaufZu;
+  _werkzeugVerlaufZu = null;
+  if (ausVerlauf) ausVerlauf();
+}
+
 async function renderTools() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'tools');
   bindLayout();
@@ -1677,6 +1686,9 @@ async function renderTools() {
       document.getElementById('history-title').textContent = `Historie: ${btn.dataset.name}`;
       document.getElementById('history-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
       modal.style.display = '';
+      // Zurück schließt ihn (R28). Nur der Verlaufsschritt, nicht dialogBarrierefrei(): Das Fenster liegt
+      // IN der Seite (#app), und die würde es mitsamt der Seite für Screenreader ausblenden.
+      if (!_werkzeugVerlaufZu) _werkzeugVerlaufZu = dialogImVerlauf(werkzeugVerlaufSchliessen);
       try {
         const data = await api('GET', `/api/tools/${toolId}/history`);
         if (data && data.history.length > 0) {
@@ -1712,11 +1724,9 @@ async function renderTools() {
   });
 
   // Modal schließen
-  document.getElementById('history-close')?.addEventListener('click', () => {
-    document.getElementById('tool-history-modal').style.display = 'none';
-  });
+  document.getElementById('history-close')?.addEventListener('click', werkzeugVerlaufSchliessen);
   document.getElementById('tool-history-modal')?.addEventListener('click', (e) => {
-    if (e.target.id === 'tool-history-modal') e.target.style.display = 'none';
+    if (e.target.id === 'tool-history-modal') werkzeugVerlaufSchliessen();
   });
 }
 

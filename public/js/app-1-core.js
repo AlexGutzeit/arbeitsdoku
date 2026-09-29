@@ -792,7 +792,7 @@ function chooseNavModal(address, options) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  const aufraeumen = dialogBarrierefrei(overlay);
+  const aufraeumen = dialogBarrierefrei(overlay, () => finish());
   const finish = () => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); };
   const onKey = (e) => { if (e.key === 'Escape') finish(); };
   document.addEventListener('keydown', onKey);
@@ -1335,6 +1335,65 @@ function wirePwField(input, list) {
 // --- Gestylte Dialoge (ersetzen native confirm()/prompt()) ---
 // confirmModal: Promise<boolean> — true bei OK, false bei Abbrechen/Esc/Outside-Klick.
 // ================================================================
+// Zurück schließt den Dialog (R28)
+// ================================================================
+// Dialoge hängen an <body>. Die Zurück-Taste am Handy (oder die Wischgeste) wechselte bisher die Seite
+// DARUNTER, der Dialog blieb oben stehen. Jetzt legt jeder Dialog beim Öffnen einen Schritt in den
+// Browser-Verlauf (gleiche Adresse, history.pushState). Zurück nimmt ihn weg und schließt den Dialog wie
+// „Abbrechen" — vorher werden Formulare mit Entwurfs-Sicherung gesichert (Alex: „Abbrechen verwirft,
+// Zurück sichert"). Schließt man den Dialog selbst, wird sein Schritt wieder entfernt (history.back()),
+// damit das nächste Zurück wie gewohnt die Seite wechselt.
+// Die Falle dabei: history.back() wirkt ZEITVERSETZT. Springt ein Knopf gleich nach dem Schließen auf eine
+// andere Seite (navigate), käme das Zurück danach und machte den Sprung rückgängig. Deshalb warten
+// navigate() und neue Verlaufsschritte, bis das eigene Zurück angekommen ist (_nachEigenemZurueck).
+const _dialoge = [];                       // offene Dialoge, oberster zuletzt
+let _eigenesZurueck = 0;                   // eigene history.back(), deren popstate noch aussteht
+let _wartetAufZurueck = [];
+let _dialogVerlaufNr = 0;
+function _nachEigenemZurueck(fn) { if (_eigenesZurueck) _wartetAufZurueck.push(fn); else fn(); }
+function _eigenesZurueckAusloesen() { _eigenesZurueck++; history.back(); }
+function dialogImVerlauf(schliessen) {
+  // Kennung über Neuladen hinweg eindeutig: Ein alter Verlaufsschritt darf nie einen neuen Dialog treffen
+  const eintrag = { id: Date.now().toString(36) + '-' + (++_dialogVerlaufNr), schliessen, imVerlauf: false };
+  _dialoge.push(eintrag);
+  _nachEigenemZurueck(() => {
+    if (!_dialoge.includes(eintrag)) return;              // inzwischen schon zu
+    history.pushState({ dialog: eintrag.id }, '');
+    eintrag.imVerlauf = true;
+  });
+  return () => {                                           // beim Schließen (aus dem Aufräumen)
+    const i = _dialoge.indexOf(eintrag);
+    if (i >= 0) _dialoge.splice(i, 1);
+    // Nur den EIGENEN, noch aktuellen Schritt entfernen. Hat inzwischen ein Seitenwechsel stattgefunden
+    // (Link im Dialog), bleibt er liegen — ein späteres Zurück überspringt ihn (s. popstate).
+    if (eintrag.imVerlauf && history.state && history.state.dialog === eintrag.id) _eigenesZurueckAusloesen();
+    eintrag.imVerlauf = false;
+  };
+}
+// Alle offenen Dialoge schließen — beim Seitenwechsel (Router), sonst blieben sie über der neuen Seite stehen
+function dialogeAlleSchliessen() {
+  for (const d of [..._dialoge].reverse()) { try { d.schliessen(); } catch (_) {} }
+}
+window.addEventListener('popstate', (e) => {
+  if (_eigenesZurueck) {
+    if (--_eigenesZurueck === 0) { const f = _wartetAufZurueck; _wartetAufZurueck = []; f.forEach(fn => fn()); }
+    return;
+  }
+  const oben = _dialoge[_dialoge.length - 1];
+  const hier = e.state && e.state.dialog;
+  // Zurück bei offenem Dialog: dessen Schritt ist verlassen → er geht zu, die Seite bleibt
+  if (oben && oben.imVerlauf && hier !== oben.id) {
+    oben.imVerlauf = false;                                 // sein Schritt ist schon weg
+    if (entwuerfeSichern()) toast('Entwurf gesichert', 'success');
+    oben.schliessen();
+    return;
+  }
+  // Auf einem liegengebliebenen Schritt eines längst geschlossenen Dialogs gelandet: überspringen,
+  // sonst wäre dieses Zurück ein „toter" Tastendruck (gleiche Adresse, nichts passiert)
+  if (hier && !_dialoge.some(d => d.id === hier)) _eigenesZurueckAusloesen();
+});
+
+// ================================================================
 // Dialoge barrierefrei machen (B8b)
 // ================================================================
 // Bisher konnte man mit der Tabulatortaste AUS einem offenen Dialog heraus in die Seite dahinter
@@ -1344,10 +1403,12 @@ function wirePwField(input, list) {
 // Diese Funktion ergaenzt: Rolle + Beschriftung, Fokus bleibt im Dialog, Hintergrund wird fuer
 // Screenreader ausgeblendet, und beim Schliessen kehrt der Fokus dorthin zurueck, wo er herkam.
 // Rueckgabe: Aufraeum-Funktion, die NACH dem Entfernen des Overlays aufgerufen werden muss.
+// `schliessen` (R28): wie der Dialog auf „Abbrechen" zugeht — dann schließt ihn auch die Zurück-Taste.
 let _dialogNr = 0;
 const FOKUSIERBAR = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-function dialogBarrierefrei(overlay) {
+function dialogBarrierefrei(overlay, schliessen) {
   const vorher = document.activeElement;
+  const ausVerlauf = typeof schliessen === 'function' ? dialogImVerlauf(schliessen) : () => {};
   const box = overlay.querySelector('.modal, .absence-form-card, .card') || overlay.firstElementChild || overlay;
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-modal', 'true');
@@ -1371,6 +1432,7 @@ function dialogBarrierefrei(overlay) {
   const app = document.getElementById('app');
   if (app) app.setAttribute('aria-hidden', 'true');
   return () => {
+    ausVerlauf();
     document.removeEventListener('keydown', onTab, true);
     // Erst freigeben, wenn wirklich KEIN Dialog mehr offen ist (Dialog auf Dialog kommt vor).
     if (app && !document.querySelector('[role="dialog"]')) app.removeAttribute('aria-hidden');
@@ -1395,7 +1457,7 @@ function confirmModal(message, opts = {}) {
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    const aufraeumen = dialogBarrierefrei(overlay);
+    const aufraeumen = dialogBarrierefrei(overlay, () => finish(false));   // Zurück = Abbrechen (R28)
     const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); resolve(val); };
     // Enter bestätigt NUR harmlose Dialoge. Bei destruktiven (danger) würde ein versehentliches Enter —
     // etwa direkt nach dem Tippen in einem Formular — sonst „Löschen" auslösen. Dort ist bewusst ein Klick nötig.
@@ -1423,7 +1485,7 @@ function choiceModal(message, choices, opts = {}) {
           <button class="btn btn-outline" data-act="cancel">${esc(opts.cancelLabel || 'Abbrechen')}</button>
         </div>`;
     document.body.appendChild(overlay);
-    const aufraeumen = dialogBarrierefrei(overlay);
+    const aufraeumen = dialogBarrierefrei(overlay, () => finish(null));
     const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); resolve(val); };
     const onKey = (e) => { if (e.key === 'Escape') finish(null); };
     document.addEventListener('keydown', onKey);
@@ -1461,7 +1523,7 @@ function promptModal(message, opts = {}) {
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    const aufraeumen = dialogBarrierefrei(overlay);
+    const aufraeumen = dialogBarrierefrei(overlay, () => finish(null));
     const input = overlay.querySelector('#pm-input');
     const errEl = overlay.querySelector('#pm-error');
     const finish = (val) => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); resolve(val); };
@@ -1563,7 +1625,8 @@ function standardTag() {
 
 // --- Router ---
 function navigate(hash) {
-  window.location.hash = hash;
+  // Steht das Entfernen eines Dialog-Schritts noch aus (R28), erst danach — sonst machte es den Sprung rückgängig
+  _nachEigenemZurueck(() => { window.location.hash = hash; });
 }
 
 function getRoute() {
@@ -1889,6 +1952,9 @@ function render() {
   // Eine offene Notiz (gemeinsame Bearbeitung) endet mit jedem Seitenwechsel — auch zurück in die
   // Übersicht oder beim Abmelden. Ist es dieselbe Notiz, baut ihre Seite die Sitzung gleich neu auf.
   if (typeof notizSitzungVerlassen === 'function') notizSitzungVerlassen();
+  // Dialoge hängen an <body> und blieben sonst über der neuen Seite stehen (R28). Entwürfe sind schon
+  // gesichert (hashchange-Wächter oben).
+  dialogeAlleSchliessen();
   // Was jetzt aufgerufen wird, öffnet der Router — die Seite merkt sich ihre Adresse (R23)
   _imRouter = true;
   try { seiteWaehlen(); } finally { _imRouter = false; }

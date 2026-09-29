@@ -393,7 +393,7 @@ function showOrderForm(editOrder, orders, manage) {
   `;
 
   document.getElementById('of-product').focus();
-  document.getElementById('of-cancel').addEventListener('click', () => { area.innerHTML = ''; });
+  document.getElementById('of-cancel').addEventListener('click', () => { entwurfLoeschen(ofEntwurf); area.innerHTML = ''; });   // Abbrechen verwirft (R28)
   produktSucheBinden();
   document.getElementById('of-scan').addEventListener('click', scanInsFormular);
 
@@ -762,7 +762,7 @@ function produktAnlegenMaske(code) {
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    const aufraeumen = dialogBarrierefrei(overlay);
+    const aufraeumen = dialogBarrierefrei(overlay, () => zu(null));
     const $n = (id) => overlay.querySelector('#' + id);
     const zu = (wert) => { document.removeEventListener('keydown', taste); overlay.remove(); aufraeumen(); fertig(wert); };
     const taste = (e) => { if (e.key === 'Escape') zu(null); };
@@ -1347,7 +1347,7 @@ function showNoteForm() {
     }
   });
 
-  document.getElementById('nf-cancel').addEventListener('click', () => renderNotizen());
+  document.getElementById('nf-cancel').addEventListener('click', () => { entwurfLoeschen(nfEntwurf); renderNotizen(); });   // Abbrechen verwirft (R28)
   const nfEntwurf = 'notiz:neu';
   initDraftKeeper(document.getElementById('note-form'), nfEntwurf);
 
@@ -1434,7 +1434,7 @@ async function showShareDialog(note) {
     });
   });
 
-  const aufraeumen = dialogBarrierefrei(overlay);
+  const aufraeumen = dialogBarrierefrei(overlay, () => close());
   const close = () => { overlay.remove(); aufraeumen(); };
   klickDanebenSchliesst(overlay, () => close());
   overlay.querySelector('#share-cancel').addEventListener('click', close);
@@ -1490,7 +1490,7 @@ async function notizGaesteDialog(note) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  const aufraeumen = dialogBarrierefrei(overlay);
+  const aufraeumen = dialogBarrierefrei(overlay, () => schliessen());
   const schliessen = () => { overlay.remove(); aufraeumen(); if (getRoute() === '/notes') notizenAuffrischen(); };   // 🔗-Zahl an der Karte
   klickDanebenSchliesst(overlay, schliessen);
   overlay.querySelector('#gaeste-zu').addEventListener('click', schliessen);
@@ -1654,7 +1654,7 @@ async function showOfferDialog(note) {
   `;
   document.body.appendChild(overlay);
 
-  const aufraeumen = dialogBarrierefrei(overlay);
+  const aufraeumen = dialogBarrierefrei(overlay, () => close());
   const close = () => { overlay.remove(); aufraeumen(); };
   klickDanebenSchliesst(overlay, () => close());
   overlay.querySelector('#offer-cancel').addEventListener('click', close);
@@ -2013,7 +2013,11 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
   const overlay = document.createElement('div');
   overlay.innerHTML = formHtml;
   document.body.appendChild(overlay.firstElementChild);
-  const absAufraeumen = dialogBarrierefrei(document.getElementById('absence-form-overlay'));
+  // Zurück schließt wie Abbrechen, aber OHNE den Entwurf zu verwerfen (Alex: „Zurück sichert") (R28)
+  const absAufraeumen = dialogBarrierefrei(document.getElementById('absence-form-overlay'), () => {
+    document.removeEventListener('keydown', absOnKey);
+    absSchliessen();
+  });
   const absSchliessen = () => { document.getElementById('absence-form-overlay')?.remove(); absAufraeumen(); };
   // Escape schliesst den Dialog — wie bei allen anderen auch.
   const absOnKey = (e) => {
@@ -2029,8 +2033,10 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
     if (us) us.value = String(preUser);
   }
 
+  // „Abbrechen" ist eine Entscheidung: Der Entwurf ist dann weg (Alex, 29.09.2026). Zurück sichert ihn.
   document.getElementById('abs-cancel').addEventListener('click', () => {
     document.removeEventListener('keydown', absOnKey);
+    entwurfLoeschen(absEntwurf);
     absSchliessen();
   });
 
@@ -2567,6 +2573,7 @@ window.addEventListener('hashchange', () => {
   render();
 });
 window.addEventListener('DOMContentLoaded', () => {
+  _entwurfAufraeumen();     // abgelaufene Entwürfe (> 24 h) weg — nicht erst, wenn wieder ein Formular aufgeht (R28)
   seitenWachenEinrichten(); // R23: erst jetzt sind alle Seiten-Funktionen geladen (app-2 … app-9)
   initViewStateKeeper();   // Scrollposition + aufgeklappte Bereiche über Neuaufbauten hinweg erhalten
   if (!S.token) navigate('/login');

@@ -1416,7 +1416,7 @@ async function showUserModal(user) {
 
   document.body.appendChild(overlay);
 
-  const umAufraeumen = dialogBarrierefrei(overlay);
+  const umAufraeumen = dialogBarrierefrei(overlay, () => umSchliessen());
   const umSchliessen = () => { overlay.remove(); umAufraeumen(); };
   document.getElementById('um-cancel').addEventListener('click', umSchliessen);
   klickDanebenSchliesst(overlay, () => umSchliessen());
@@ -2551,7 +2551,7 @@ function avatarZuschnittDialog(quelle) {
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    const aufraeumen = dialogBarrierefrei(overlay);
+    const aufraeumen = dialogBarrierefrei(overlay, () => fertig(null));
 
     const buehne = overlay.querySelector('#zs-buehne');
     const bild = overlay.querySelector('#zs-bild');
@@ -2945,7 +2945,7 @@ async function auszahlungAnlegen(userId, name) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  const aufraeumen = dialogBarrierefrei(overlay);
+  const aufraeumen = dialogBarrierefrei(overlay, () => schliessen());
   const schliessen = () => { document.removeEventListener('keydown', onKey); overlay.remove(); aufraeumen(); };
   const onKey = (e) => { if (e.key === 'Escape') schliessen(); };
   document.addEventListener('keydown', onKey);
