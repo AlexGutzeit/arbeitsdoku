@@ -239,8 +239,6 @@ router.get('/', authenticate, (req, res) => {
   const { user_ids, period, date } = req.query;
   const role = req.user.role;
 
-  // Explizite Auswahl (vom User gewaehlt) wird immer angezeigt; die automatische "alle
-  // Mitarbeiter"-Sicht blendet ausgestellte MA ohne Bezug zum Zeitraum aus.
   const explicitUsers = role !== 'mitarbeiter' && !!user_ids;
   let targetUserIds = [];
   if (role === 'mitarbeiter') {
@@ -287,6 +285,22 @@ router.get('/', authenticate, (req, res) => {
   // Zeitverlauf
   let timeline = [];
   const mainRange = ranges[0];
+
+  // Wer gehört in diesen Zeitraum? Nur, wer darin ganz oder teilweise angestellt war — oder dort Einträge
+  // hat (sonst verschwänden gebuchte Stunden). Das gilt für die „alle"-Sicht UND für eine Auswahl
+  // (Alex, 29.09.2026): Ein ausgestellter Mitarbeiter stand in JEDER Ansicht, weil die Seite immer alle
+  // Nummern als „Auswahl" mitschickte und die Auswahl früher nicht geprüft wurde. `angestellt` bekommt die
+  // Seite mit, um nur diese zur Auswahl anzubieten. Bleibt von einer Auswahl im Zeitraum niemand übrig
+  // (z. B. zu einem Monat geblättert, in dem die Gewählten nicht mehr da waren), gilt wieder „alle".
+  const imZeitraum = (uid) => employmentOverlaps(getEmploymentPeriods(db, uid), mainRange.from, mainRange.to)
+    || !!db.prepare('SELECT 1 FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL LIMIT 1')
+      .get(uid, mainRange.from, mainRange.to);
+  const angestellt = role === 'mitarbeiter' ? [req.user.id]
+    : db.prepare("SELECT id FROM users WHERE role != 'admin' ORDER BY name").all().map(u => u.id).filter(imZeitraum);
+  if (role !== 'mitarbeiter') {
+    const gewaehlt = targetUserIds.filter(id => angestellt.includes(id));
+    targetUserIds = explicitUsers && gewaehlt.length ? gewaehlt : angestellt;
+  }
 
   if (period === 'year') {
     const y = refDate.getFullYear();
@@ -336,19 +350,6 @@ router.get('/', authenticate, (req, res) => {
     const user = db.prepare('SELECT id, name, role, start_overtime, active FROM users WHERE id = ?').get(uid);
     if (!user) continue;
 
-    // Automatische "alle"-Sicht: einen MA nur zeigen, wenn sein Anstellungszeitraum den gewaehlten
-    // Bereich beruehrt ODER er dort Eintraege hat. So verschwinden im Zeitraum (noch) nicht bzw. nicht
-    // mehr angestellte MA aus der Periode (auch aktive, die erst spaeter eingestellt wurden).
-    // Explizit gewaehlte MA werden immer gezeigt.
-    if (!explicitUsers) {
-      const periods = getEmploymentPeriods(db, uid);
-      if (!employmentOverlaps(periods, mainRange.from, mainRange.to)) {
-        const hasEntry = db.prepare(
-          'SELECT 1 FROM entries WHERE user_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL LIMIT 1'
-        ).get(uid, mainRange.from, mainRange.to);
-        if (!hasEntry) continue;
-      }
-    }
 
     // Soll/Ist/Saldo kommen aus der GEMEINSAMEN Funktion — dieselbe, die auch das
     // Arbeitsnachweis-PDF und der Lohn-Export benutzen (routes/user-hours.js).
@@ -443,6 +444,7 @@ router.get('/', authenticate, (req, res) => {
 
   res.json({
     range: mainRange,
+    angestellt,
     period: period || 'total',
     users: userStats,
     combined,

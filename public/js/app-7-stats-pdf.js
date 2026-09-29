@@ -65,11 +65,30 @@ function pdfFormularBinden() {
   const feld = (id) => document.getElementById(id);
   if (!feld('pdf-form')) return;
 
+  // Zur Wahl stehen nur Mitarbeiter, die im gewählten Zeitraum ganz oder teilweise angestellt waren — wie in
+  // Statistik und Planung (29.09.2026). Wechselt der Zeitraum, zieht die Liste nach; fällt der Gewählte heraus,
+  // steht wieder „Alle Mitarbeiter" da.
+  const mitarbeiterZumZeitraum = () => {
+    const wahl = feld('pdf-user');
+    if (!wahl) return;
+    const r = RANGES[feld('pdf-period').value] || { from: feld('pdf-from').value, to: feld('pdf-to').value };
+    if (!r.from || !r.to) return;
+    const vorher = wahl.value;
+    const passend = getWorkerUsers().filter(u => employedInRange(u, r.from, r.to));
+    wahl.innerHTML = '<option value="">Alle Mitarbeiter</option>'
+      + passend.map(u => `<option value="${u.id}">${workerLabel(u)}</option>`).join('');
+    wahl.value = passend.some(u => String(u.id) === vorher) ? vorher : '';
+  };
+  mitarbeiterZumZeitraum();
+
   feld('pdf-period').addEventListener('change', (e) => {
     feld('pdf-custom-dates').style.display = e.target.value === 'custom' ? 'grid' : 'none';
     const r = RANGES[e.target.value];
     if (r) { feld('pdf-from').value = r.from; feld('pdf-to').value = r.to; }
+    mitarbeiterZumZeitraum();
   });
+  feld('pdf-from').addEventListener('change', mitarbeiterZumZeitraum);
+  feld('pdf-to').addEventListener('change', mitarbeiterZumZeitraum);
 
   feld('pdf-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -208,9 +227,9 @@ async function renderStatisticsContent() {
     userIds = [S.user.id];
   } else if (S.statsSelectedUsers.size > 0) {
     userIds = [...S.statsSelectedUsers];
-  } else {
-    userIds = getWorkerUsers().map(u => u.id);
   }
+  // Ohne Auswahl KEINE Liste mitschicken: Dann nimmt der Server nur, wer im Zeitraum angestellt war. Früher
+  // gingen hier alle Nummern als „Auswahl" mit — so stand ein Ausgeschiedener in jeder Ansicht (29.09.2026).
 
   const dateStr = formatDateISO(refDate);
   const params = new URLSearchParams({ period, date: dateStr });
@@ -239,13 +258,16 @@ async function renderStatisticsContent() {
     else if (period === 'year') S.statsDate.setFullYear(S.statsDate.getFullYear() + dir);
   }
 
-  // Mitarbeiter-Chips
+  // Mitarbeiter-Chips: nur, wer im Zeitraum ganz oder teilweise angestellt war (sagt der Server). Eine
+  // Auswahl, von der hier niemand mehr dabei ist, zählt wie „alle" — so macht es auch der Server.
+  const imZeitraum = new Set(stats.angestellt || getWorkerUsers().map(u => u.id));
+  const auswahl = [...S.statsSelectedUsers].filter(id => imZeitraum.has(id));
   let chipsHtml = '';
   if (canViewAll()) {
-    const workers = getWorkerUsers();
+    const workers = getWorkerUsers().filter(u => imZeitraum.has(u.id));
     chipsHtml = '<div class="emp-chips stats-chips">';
     workers.forEach((u, i) => {
-      const active = S.statsSelectedUsers.size === 0 || S.statsSelectedUsers.has(u.id);
+      const active = auswahl.length === 0 || auswahl.includes(u.id);
       const color = colorFor(u.id);
       chipsHtml += `<button class="emp-chip ${active ? '' : 'inactive'}" data-uid="${u.id}" style="background:${color}">${workerLabel(u)}</button>`;
     });
@@ -338,8 +360,7 @@ async function renderStatisticsContent() {
   // keine explizite Auswahl = alle) + globale Feiertage. Behebt das Einblenden fremder Abwesenheiten.
   if (period !== 'total') {
     try {
-      const selExplicit = S.statsSelectedUsers && S.statsSelectedUsers.size > 0;
-      const userQ = selExplicit ? `&user_id=${[...S.statsSelectedUsers].join(',')}` : '';
+      const userQ = auswahl.length ? `&user_id=${auswahl.join(',')}` : '';
       const byDate = await api('GET', `/api/absences/by-date?from=${stats.range.from}&to=${stats.range.to}${userQ}`);
       const absenceColors = {
         krank: '#dc2626', urlaub: '#1d4ed8', freizeitausgleich: '#7c3aed',

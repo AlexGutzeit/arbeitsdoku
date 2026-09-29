@@ -237,15 +237,19 @@ function anyVacationConfigured(db) {
   } catch (_) { return false; }
 }
 
-// Urlaubskonto je aktivem Nicht-Admin-Nutzer (gemeinsame Quelle für JSON- und PDF-Ausgabe).
+// Urlaubskonto je Nicht-Admin-Nutzer, der im Jahr ganz oder teilweise angestellt war (gemeinsame Quelle für
+// JSON- und PDF-Ausgabe). Früher nur AKTIVE: Wer im Juli ging, fehlte schon im laufenden Jahr, obwohl sein
+// Urlaubskonto genau dann zählt (Abgeltung beim Austritt) — und wer zurückkam, stand in Jahren ohne Anstellung.
 function buildVacationOverview(db, year, now) {
-  const users = db.prepare("SELECT id, name FROM users WHERE role != 'admin' AND COALESCE(active,1) = 1 ORDER BY name").all();
+  const { getEmploymentPeriods, employmentOverlaps } = require('./statistics');   // erst hier: keine Ringabhängigkeit
   const from = `${year}-01-01`, to = `${year}-12-31`;
+  const users = db.prepare("SELECT id, name, COALESCE(active,1) AS active FROM users WHERE role != 'admin' ORDER BY name").all()
+    .filter(u => employmentOverlaps(getEmploymentPeriods(db, u.id), from, to));
   return users.map(u => {
     const v = vacationAccount(db, u.id, year, now);
     const { summary } = computeAbsenceSummary(db, u.id, from, to);
     return {
-      user_id: u.id, name: u.name, configured: v.configured,
+      user_id: u.id, name: u.name, ausgestellt: u.active === 0, configured: v.configured,
       anspruch: v.anspruch, uebertrag: v.uebertrag, gesamtanspruch: v.verfuegbar,
       genommen: v.genommen, geplant: v.geplant, nochZuPlanen: v.nochZuPlanen,
       beantragt: countUrlaubPendingInYear(db, u.id, year),
@@ -312,7 +316,7 @@ router.get('/vacation-overview.pdf', authenticate, (req, res) => {
     y += rowH;
   };
   drawRow(cols.reduce((o, c) => { o[c.k] = c.label; return o; }, {}), true);
-  for (const r of rows) drawRow(r, false);
+  for (const r of rows) drawRow(r.ausgestellt ? { ...r, name: r.name + ' (ausgestellt)' } : r, false);
 
   doc.end();
 });

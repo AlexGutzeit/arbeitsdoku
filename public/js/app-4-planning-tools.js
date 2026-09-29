@@ -471,9 +471,11 @@ function renderPlanningTimeline(entries, absences, canEdit) {
 
   // Gruppiere nach zugewiesenem Mitarbeiter (Planungseinträge)
   const byUser = {};
-  // 1) Alle echten Mitarbeiter immer als Spalte (auch ohne Planung)
+  // 1) Alle echten Mitarbeiter als Spalte (auch ohne Planung) — die an diesem Tag angestellt sind. Wie in der
+  //    Wochen-/Monatsansicht (renderPlanningGrid); vorher stand hier jeder, auch längst Ausgeschiedene.
+  const tag = formatDateISO(S.planningDate || new Date());
   (S.users || [])
-    .filter(u => u.role === 'mitarbeiter')
+    .filter(u => u.role === 'mitarbeiter' && employedInRange(u, tag, tag))
     .forEach(u => { byUser[u.id] = { id: u.id, name: u.name, entries: [] }; });
   // 2) Zusätzlich: User aus Planungen (z.B. Chef/Buchhalter, falls verplant)
   entries.forEach(e => {

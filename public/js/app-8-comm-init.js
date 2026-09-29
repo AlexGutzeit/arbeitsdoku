@@ -1957,7 +1957,8 @@ function showAbsenceForm(editId, preType, preFrom, preTo, preComment, preUser) {
   // Mitarbeiterauswahl nur für Chef/Admin (Buchhalter trägt nur für sich selbst ein)
   let userSelectHtml = '';
   if (isChefOrAdmin() && !editId) {
-    const allOtherUsers = S.users.filter(u => u.id !== S.user.id).sort((a, b) => a.name.localeCompare(b.name));
+    // Nur aktive: Neues trägt man nicht für Ausgestellte ein — wie im Zeiteintrag (getActiveWorkerUsers)
+    const allOtherUsers = S.users.filter(u => u.id !== S.user.id && u.active !== 0).sort((a, b) => a.name.localeCompare(b.name));
     const isFeiertag = preType === 'feiertag';
     userSelectHtml = `
       <div class="form-group" id="abs-user-group"${isFeiertag ? ' style="display:none"' : ''}>
@@ -2517,7 +2518,7 @@ async function renderVacationOverview() {
         </tr></thead>
         <tbody>
           ${rows.length ? rows.map(r => { const cfg = r.configured; const d = '–'; return `<tr data-name="${esc(r.name.toLowerCase())}">
-            <td class="vac-ov-name">${esc(r.name)}</td>
+            <td class="vac-ov-name">${esc(r.name)}${r.ausgestellt ? ' <span class="vac-ov-aus">(ausgestellt)</span>' : ''}</td>
             <td>${cfg ? r.anspruch : d}</td><td>${cfg ? r.uebertrag : d}</td><td><strong>${cfg ? r.gesamtanspruch : d}</strong></td>
             <td>${r.genommen}</td><td>${r.geplant}</td>
             <td class="${cfg && r.nochZuPlanen < 0 ? 'vac-ov-neg' : ''}"><strong>${cfg ? r.nochZuPlanen : d}</strong></td>
