@@ -1472,7 +1472,13 @@ Eintrittstag – auch rückwirkend, um Altzeiten korrekt einzurechnen.
 **Wie entferne ich einen ausgeschiedenen Mitarbeiter?**
 Nicht löschen, sondern **ausstellen**: *Mitarbeiter → Ausstellen*, Austrittsdatum wählen. Der Account
 kann sich nicht mehr anmelden, alle Zeiten/Abwesenheiten/Planungen bleiben aber erhalten und werden
-für den Anstellungszeitraum weiter in Statistik und PDF berücksichtigt. Ausgestellte Mitarbeiter
+für den Anstellungszeitraum weiter in Statistik und PDF berücksichtigt. **Überall, wo Mitarbeiter je Zeitraum
+aufgelistet werden** — Statistik (Tag/Woche/Monat/Jahr/Gesamt samt Auswahlknöpfen), Planung, Urlaubsübersicht
+(auch als PDF), Abwesenheitskalender, Lohn-Export, PDF-Nachweis-Auswahl —, steht jemand genau dann, wenn er im
+gewählten Zeitraum **ganz oder teilweise angestellt** war: im Austrittsjahr also noch (mit „(ausgestellt)"), danach
+nicht mehr, und wer neu anfängt, erst ab seinem Beginn. In der Statistik bleibt er außerdem sichtbar, wo er noch
+Stunden gebucht hat, damit keine verschwinden. Für Neues (Zeiteintrag, Abwesenheit, Planung) stehen nur aktive
+Mitarbeiter zur Wahl. Ausgestellte Mitarbeiter
 liegen im *Papierkorb → Mitarbeiter*; dort kann man sie **wiedereinstellen** (Wiedereintrittsdatum;
 die Lücke zählt 0 Soll-Stunden – auch mehrfach möglich) oder als Admin **endgültig löschen** (für Testkonten:
 entfernt alles, was nur dieser Person gehört, unwiderruflich — gesperrt, sobald sie in einer abgeschlossenen

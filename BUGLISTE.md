@@ -426,6 +426,26 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 
 ---
 
+### [x] R29 · Ausgeschiedene erscheinen außerhalb ihrer Anstellung (Statistik u. a.) *(gemeldet von Alex 29.09.2026, gebaut 29.09., noch nicht deployt)*
+- **Gemeldet:** Tim Nagengast (ausgestellt zum 31.07.2026) stand in der Statistik in **allen** Ansichten.
+  Regel (Alex): angezeigt wird, wer im gewählten Zeitraum **ganz oder teilweise angestellt** war.
+- **Ursache Statistik:** Die Seite schickte ohne Auswahl trotzdem ALLE Mitarbeiter-Nummern mit; der Server hielt
+  das für eine bewusste Auswahl, und eine Auswahl prüfte er nicht. Die Auswahlknöpfe boten ebenfalls alle an.
+- **Durchsucht (Alex: „anderswo zu finden?"):** jede Stelle, die Mitarbeiter auflistet.
+  - **Planung** (Tag, Woche, Monat): lud nur Aktive ohne Anstellungsdaten — die vorhandene Zeitraum-Prüfung griff
+    nie. Folge: Ausgeschiedene fehlten auch dort, wo sie noch angestellt waren, und Neue standen schon vor ihrem Beginn.
+  - **Urlaubsübersicht** (+ PDF): nur Aktive — Ausgeschiedene fehlten im Austrittsjahr, Neue standen in Vorjahren.
+  - **Abwesenheits-Formular „Für":** bot Ausgestellte an (der Zeiteintrag tat es nicht).
+  - **PDF-Nachweis:** Auswahlliste unabhängig vom gewählten Zeitraum.
+  - In Ordnung: Übersicht, Abwesenheitskalender, Lohn-Export, Monatsabschluss, Auftrags-Board, Notiz teilen,
+    Zeiteintrag-/Planungsformular (nur Aktive), Geburtstage (nur Aktive, gilt für heute), PDF-Inhalt.
+- **Gelöst:** Statistik-Server prüft die Regel auch für eine Auswahl (bleibt niemand übrig → alle) und liefert
+  `angestellt` für die Knöpfe; die Seite schickt ohne Auswahl keine Liste mehr. Planung: Server liefert zur Planungs-
+  abfrage die Nummern der im Zeitraum Angestellten (ohne Daten — die Planung sehen alle). Urlaubsübersicht: im Jahr
+  Angestellte, Ausgeschiedene mit „(ausgestellt)". Abwesenheit: nur Aktive. PDF-Auswahl folgt dem Zeitraum.
+  Unverändert: Wer im Zeitraum noch Stunden gebucht hat, bleibt in der Statistik sichtbar.
+  Test `tests/ausgeschiedene-zeitraum-ui.js` (24), Gegenproben 7/7 rot.
+
 ## Geprüft und in Ordnung
 
 Damit diese Punkte nicht ein zweites Mal untersucht werden:

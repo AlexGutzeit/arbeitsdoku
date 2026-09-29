@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**256 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**257 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -70,6 +70,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `audit-events.js` | Audit-Events-Test: prüft, dass login_success, logout (manuell), session_expired (abgelaufenes |
 | `auftrags-kategorien-ui.js` | Die drei Board-Ansichten: Alle · Mitarbeiter · Kategorien (Alex, 15.09.2026). |
 | `auftrags-kategorien.js` | Auftrags-Kategorien: „Kleinarbeiten", „PV", „Zählerschrank" … (Alex, 15.09.2026) |
+| `ausgeschiedene-zeitraum-ui.js` | Ausgeschiedene nur im Zeitraum ihrer Anstellung (29.09.2026). |
 | `aushang-mitternacht-ui.js` | Ein Aushang, der kurz nach Mitternacht geschrieben wurde, muss auf der Willkommensseite stehen. |
 | `aushang-sprung-ui.js` | Aushänge auf der Willkommensseite sind anklickbar (Alex, 07.08.2026). |
 | `aussperren-prodklon.js` | Kann sich jemand aussperren? Gegen eine KOPIE der echten Produktivdaten (Alex, 23.08.2026). |

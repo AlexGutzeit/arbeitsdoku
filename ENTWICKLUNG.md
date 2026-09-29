@@ -4000,3 +4000,30 @@ Protokoll-Beschriftungen die Oberfläche ändern. Vollsicherung `arbeitsdoku_bac
 (dreifach, gleiche Prüfsumme, Rückspielprobe). Rückkehrpunkt `vor-r2-r19-r15-deploy` (= `3dd39fe`). Die Datenbank
 ist vorher/nachher in allen 51 Tabellen gleich, es gibt keine Umstellung. `absturzschutz.js` liegt auf dem
 Server und ist eingebunden.
+
+## R29: Ausgeschiedene nur im Zeitraum ihrer Anstellung (29.09.2026)
+
+Gemeldet von Alex: Ein ausgestellter Mitarbeiter stand in **allen** Statistik-Ansichten. Die Regel gibt es
+längst (`employmentOverlaps` im Server, `employedInRange` in der Oberfläche). Sie griff an fünf Stellen nicht,
+und jedes Mal lag es an einem anderen Weg:
+
+- **Statistik:** Der Server blendete Ausgeschiedene aus, aber nur in der „alle“-Sicht. Die Seite schickte die
+  Nummern aller Mitarbeiter mit, auch wenn niemand ausgewählt war, und damit galt jede Anfrage als „Auswahl“.
+  Jetzt prüft der Server die Regel auch für eine Auswahl. Bleibt davon niemand übrig, gelten wieder alle. Die
+  Nummern der im Zeitraum Angestellten gehen als `angestellt` mit, und daraus baut die Seite ihre Knöpfe.
+- **Planung:** Die Prüfung stand im Code, lief aber ins Leere. Die Seite lädt `/api/users/list`, und das liefert
+  nur Aktive, **ohne** Anstellungsdaten. `employedInRange` antwortet ohne Daten mit „ja“. Anstellungsdaten
+  aller Kollegen an jeden Mitarbeiter zu schicken wäre ein Datenschutz-Leck, denn die Planung sehen alle. Deshalb
+  liefert der Server zur Planungsabfrage nur die **Nummern** der im Zeitraum Angestellten mit, und die Seite lädt
+  die Namensliste mit `?all=1`.
+- **Urlaubsübersicht:** filterte auf `active = 1`, die umgekehrte Abweichung. Im Austrittsjahr fehlte der
+  Ausgeschiedene (dabei ist sein Konto gerade dann wichtig, Stichwort Abgeltung), und wer neu anfing, stand schon
+  in den Vorjahren.
+- **Abwesenheits-Formular „Für“** bot Ausgestellte an, anders als der Zeiteintrag. **PDF-Nachweis:** Die
+  Auswahlliste folgt jetzt dem gewählten Zeitraum.
+
+Test `tests/ausgeschiedene-zeitraum-ui.js` (24): Tim war im Vorjahr vom 01.01. bis 30.06. angestellt, Nora
+fängt heute an. So hängt der Test nicht vom Datum ab, an dem er läuft. Eine Falle beim Bau: Die Tagesansicht der
+Planung zeigt an Tagen **ohne jede** Planung bewusst gar keine Spalten. Die erste Fassung fand deshalb nichts,
+auch nicht die Spalte für Anna, und wurde mit einer Planung je Prüftag gebaut. Gegenprobe A0 stellt den alten
+Zustand komplett nach (Seite schickt alle, Server prüft die Auswahl nicht).
