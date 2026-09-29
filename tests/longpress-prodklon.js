@@ -53,6 +53,11 @@ const blase = p => p.evaluate(() => { const t = document.querySelector('.entry-t
     await p.goto(BASE, { waitUntil: 'networkidle2' }); await sleep(2500);
     ok('mit echten Daten angemeldet', await p.evaluate(() => !!document.querySelector('a[href="#/planning"]')));
 
+    // Erst auf die Übersicht wechseln, wie ein Mensch: Seit R23 zeichnet die Zeitleiste nur auf IHRER Seite
+    // (vorher malte dieser Aufruf die Übersicht über die Willkommensseite).
+    await p.evaluate(() => { location.hash = '/dashboard'; });
+    await p.waitForFunction(() => location.hash === '#/dashboard' && document.querySelector('.main') && !document.querySelector('.main .spinner'));
+    await sleep(800);
     await p.evaluate(d => { S.currentDate = new Date(d + 'T12:00:00'); renderDashboardContent(); }, TAG);
     await sleep(3000);
     await p.evaluate(() => hideTooltip());
