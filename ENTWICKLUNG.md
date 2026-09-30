@@ -4175,3 +4175,12 @@ ohne Spur. Die Eigentümerin hatte sie gelöscht, und dieser Weg schrieb nichts 
 `notiz_geloescht` („Notiz gelöscht“): mit Titel, wie er beim Löschen hieß, mit der Zahl der Freigaben und
 Gäste, ohne Inhalt, denn das Protokoll liest der Admin. `notiz-gaeste.js` prüft es an einer geteilten Notiz
 mit Gast; ohne den Eintrag wird er rot. Cache 439.
+
+**Deploy Notiz-Protokoll (30.09.2026, 18:11, `33b8f97`, Cache 439).** Die Suite lief 266 von 266 auf der Kopie von
+16:43. Vollsicherung `arbeitsdoku_backup_20260930-181038.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe; darin
+schon 3 Meldungs-Themen und 2 Meldungen). Rückkehrpunkt `vor-notiz-protokoll-deploy` (= `e586bde`). Die Datenbank
+ist vorher/nachher in allen 57 Tabellen gleich, die Datei heil.
+
+Aufgefallen ist, dass die Sicherung mit 588 KB kleiner war als die um 15:47 (610 KB). Die Datenbankdatei war aber
+gleich groß, und zwischen den Ständen kam nur normaler Betrieb dazu (Zeiteinträge, Themen, Meldungen,
+Protokoll). Es fiel nichts weg. Der Unterschied liegt nur in der Kompression.
