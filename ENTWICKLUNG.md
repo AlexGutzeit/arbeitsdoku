@@ -4212,3 +4212,13 @@ Protokoll). Es fiel nichts weg. Der Unterschied liegt nur in der Kompression.
 - **Tests:** `arbeitstage.js` (17, Sollwerte von Hand: Pause, genau 8:00, Mittagslücke, Überlappung, Samstag,
   gelöscht, krank) und `arbeitstage-ui.js` (7). Gegenproben 6/6 rot, darunter: genau 8:00 als „mehr“,
   reine Arbeitszeit statt Beginn bis Ende, Spalten nicht hinten, gelöschte Einträge zählen mit. Cache 440.
+
+**Deploy gearbeitete Tage (30.09.2026, 23:01, `76de33d`, Cache 440).** Die Suite lief 268 von 268 auf der Kopie von
+21:33. Vollsicherung `arbeitsdoku_backup_20260930-230124.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe).
+Rückkehrpunkt `vor-arbeitstage-deploy` (= `33b8f97`). Die Datenbank ist vorher/nachher in allen 57 Tabellen
+gleich, die Datei heil. Es gibt keine Umstellung, die Zahlen werden nur gerechnet.
+
+Die Probe auf echten Daten für 2026 zeigt: Bei 169 von 907 Arbeitstagen macht erst „Beginn bis Ende“ den Tag
+zu „mehr als 8 Std.“. Meist ist das der Normaltag 07:00–15:30 mit 30 Min. Pause (8:00 gearbeitet, 8:30
+anwesend), selten ein Tag mit großer Lücke. Das folgt der getroffenen Entscheidung und ist Alex zur Kenntnis
+gegeben.
