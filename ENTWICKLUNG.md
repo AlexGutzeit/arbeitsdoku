@@ -4156,3 +4156,16 @@ in drei Etappen.
   nicht mit `SELECT` beginnt, sahen für den Test aus wie Text. Die Kennungen heißen jetzt `antwort`,
   `widerrufen` und `entfernen`, die Status-Werte stehen als Parameter. Danach war er grün, ebenso alle
   Meldungs-Tests.
+
+**Deploy Meldungen (30.09.2026, 15:48, `e586bde`, Cache 438).** Die Suite lief 266 von 266 auf der Kopie von
+14:19. Vollsicherung `arbeitsdoku_backup_20260930-154731.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe).
+Rückkehrpunkt `vor-meldungen-deploy` (= `8ca3263`). Der Datenbank-Vergleich mit Umstellung ist ein eigenes Skript:
+Es vergleicht alte Tabellen nur in ihren alten Spalten Zeile für Zeile.
+- **Ergebnis:** 51 → 57 Tabellen, neu sind die sechs `meldung*`-Tabellen, leer. Neue Spalten sind
+  `users.can_meldungen` (Vorgabe 0) und `push_prefs.meldungen` (Vorgabe 1), beide in allen Zeilen auf
+  ihrer Vorgabe. Keine alte Zeile ist verändert, die Datei ist heil.
+- **Server:** Das Protokoll meldet „Migration: can_meldungen Spalte hinzugefügt“ und keine Fehler.
+  `app-10-meldungen.js` und das Megafon-Symbol werden ausgeliefert.
+- **Nebenbefund:** Heute früh gab es 13 Notizen, beim Deploy 10. Die Eigentümerin selbst hat drei eigene
+  Notizen gelöscht. Nur sie darf das, und dieser Weg schreibt keinen Protokolleintrag (`routes/notes.js`),
+  deshalb fand sich keine Spur.
