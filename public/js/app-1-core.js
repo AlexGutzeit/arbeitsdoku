@@ -1689,7 +1689,7 @@ function getRoute() {
 const SEITEN = ['renderWelcome', 'renderDashboard', 'renderKonto', 'renderEntryForm', 'renderUsers', 'renderProjects',
   'renderSettings', 'renderAudit', 'renderDeletedEntries', 'renderDeletedAbsences', 'renderDeletedProjects',
   'renderDeletedUsers', 'renderDocuments', 'renderPdfExport', 'renderStatistics', 'renderPlanning', 'renderPlanningForm',
-  'renderProdukte', 'renderTools', 'renderOrders', 'renderNotizen', 'renderNotizEditor', 'renderAbsences',
+  'renderProdukte', 'renderTools', 'renderOrders', 'renderMeldungen', 'renderNotizen', 'renderNotizEditor', 'renderAbsences',
   'renderAbsenceType', 'renderBulletin', 'renderBulletinForm'];
 const SEITEN_TEILE = { renderDashboardContent: 'renderDashboard', renderPlanningContent: 'renderPlanning',
   renderStatisticsContent: 'renderStatistics', renderProjectForm: 'renderProjects' };
@@ -2048,6 +2048,7 @@ function seiteWaehlen() {
   else if (route.startsWith('/produkte/')) renderProdukte(route.split('/').pop());
   else if (route === '/tools') renderTools();
   else if (route === '/orders') renderOrders();
+  else if (route === '/meldungen') renderMeldungen();
   else if (route === '/notes') renderNotizen();
   else if (route.startsWith('/notes/')) renderNotizEditor(route.split('/').pop());
   // Projektnotiz: dieselbe Live-Notiz, erreichbar über das Projekt (legt sie beim ersten Öffnen an)

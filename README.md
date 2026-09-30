@@ -65,6 +65,7 @@ es geht; die Abschnitte darunter beschreiben es im Einzelnen.
 - [📁 Projekte und Aufträge](#-projekte-und-aufträge) — Auftrags-Board mit Zuweisung, Kategorien, Zwischenzielen, Fristen, Statistik und einer gemeinsamen Projektnotiz je Auftrag.
 - [🔧 Werkzeugliste](#-werkzeugliste) — Wer hat welches Werkzeug — mit Ausleih-Historie.
 - [🛒 Bestellungen](#-bestellungen) — Was fehlt auf der Baustelle; Chef und Admin sehen es sofort.
+- [📣 Meldungen](#-meldungen) — Probleme zu festen Themen melden („Auto 2 → Ölwechsel", „Papiermüll → voll"), mit Stand, Rückmeldung und History.
 - [📦 Produktverzeichnis](#-produktverzeichnis-nur-mit-dem-recht-lagerdaten-pflegen) *(mit dem Recht „Lagerdaten pflegen")* — Artikel per Barcode, mit Hersteller und Großhändlern; Grundlage für schnelles Bestellen.
 
 **Zusammenarbeit**
@@ -639,6 +640,35 @@ Mensch geschrieben hat.
 (`shop.sonepar.de/123`) wird ergänzt; ein `javascript:`-Link wird abgewiesen, weil er beim Klick
 Code im Anmelde-Kontext des Klickenden ausführen würde.
 
+#### 📣 Meldungen
+
+Probleme zu festen **Themen** melden: *Auto 2 → Ölwechsel*, *Papiermüll → voll*. Die Themen legen
+**Chef und Admin** an (*Themen verwalten*: anlegen, umbenennen, mit ↑/↓ sortieren, löschen). Sie
+stehen **nebeneinander** wie beim Auftrags-Board, die Meldungen darunter; am Handy wischt man
+seitlich von Thema zu Thema.
+
+- **Melden darf jeder** — über „+ Melden“ am Thema: Text und auf Wunsch **🔴 dringend**. Dringende
+  stehen oben. Jede Karte zeigt **von wem, wann, was** und den **Stand** (*offen*, *in Arbeit · Name*,
+  *erledigt · Name*).
+- **Alle sehen alle offenen Meldungen** — so meldet niemand „Papiermüll voll“ doppelt, und jeder
+  sieht, dass schon jemand dran ist.
+- **Die eigene Meldung** lässt sich ändern oder **zurückziehen**, solange sie *offen* ist.
+- **Chef und Admin** — und wer das Einzelrecht **„Meldungen bearbeiten“** hat (bei den
+  Mitarbeitern, z. B. für einen Vorarbeiter) — ändern alle Meldungen, setzen sie auf **„in Arbeit“**
+  oder **„erledigt“** (auch zurück: *wieder öffnen*) und schreiben eine **Rückmeldung**
+  („Werkstatt am 05.10.“), die auf der Karte steht. Themen verwalten bleibt bei Chef und Admin.
+- **Verlauf:** Jede Meldung trägt aufklappbar, wer sie gemeldet, geändert (mit dem vorherigen
+  Text), auf welchen Stand gesetzt oder zurückgemeldet hat — und wann.
+- **History:** Erledigte und zurückgezogene Meldungen stehen dort, **für immer**, mit Filter nach
+  Thema und Suche (Text, Rückmeldung oder Name). **Wird ein Thema gelöscht**, das schon Meldungen
+  hat, bleibt es mit ihnen in der History — auch mit noch offenen, die dort den Vermerk *Thema
+  gelöscht* tragen und nur noch zu lesen sind. Ein Thema ohne Meldungen ist einfach weg.
+- **Endgültig löschen** kann nur der **Admin** (zum Testen), mit Rückfrage; im Protokoll bleibt ein
+  Vermerk mit dem Text.
+- Alles aktualisiert sich **live** auf allen Geräten; jede Aktion steht im **Audit-Log**. Wird ein
+  Konto endgültig gelöscht, **bleiben seine Meldungen** (als „Gelöschtes Konto“) — sie sind die
+  Geschichte eines Autos oder einer Tonne.
+
 ### Zusammenarbeit
 
 #### 📌 Schwarzes Brett
@@ -916,8 +946,11 @@ doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusamm
   Barcodes umhängen oder entfernen, Großhändler pflegen, zusammenführen, löschen – und als
   einziger ein Produkt **ohne Barcode** anlegen. **Schließt „Artikel einlernen" ein**; das Häkchen
   dort bleibt deshalb leer, damit nicht zwei Quellen dasselbe behaupten.
+- **Meldungen bearbeiten** – darf alle [Meldungen](#-meldungen) ändern, auf *in Arbeit* oder
+  *erledigt* setzen, wieder öffnen und eine Rückmeldung schreiben – z. B. ein Vorarbeiter. Themen
+  anlegen und löschen bleibt bei Chef und Admin. **Melden darf jeder**, dafür braucht es kein Recht.
 
-> Diese Einzelrechte gelten nur für **Mitarbeiter/Buchhalter**. **Chef und Admin** haben Planung, Schwarzes Brett und Datei-Upload ohnehin über ihre Rolle – im Bearbeiten-Formular werden die Checkboxen für sie darum ausgeblendet (und die Flags nicht gespeichert). Beim **Buchhalter** laufen die beiden letzten Rechte auseinander: *Bestellungen abschließen* hat er über seine Rolle, *Lagerdaten pflegen* **nicht** – mit dem Lager hat er nichts zu tun, wer ihn trotzdem braucht, bekommt das Häkchen wie jeder andere.
+> Diese Einzelrechte gelten nur für **Mitarbeiter/Buchhalter**. **Chef und Admin** haben Planung, Schwarzes Brett und Datei-Upload ohnehin über ihre Rolle – im Bearbeiten-Formular werden die Checkboxen für sie darum ausgeblendet (und die Flags nicht gespeichert). Beim **Buchhalter** laufen die Rechte auseinander: *Bestellungen abschließen* hat er über seine Rolle, *Lagerdaten pflegen* und *Meldungen bearbeiten* **nicht** – wer ihn dafür braucht, gibt ihm das Häkchen wie jedem anderen.
 
 > Geänderte Rechte greifen für den betroffenen Nutzer **ohne Ab-/Anmelden** – ein Seiten-Reload (F5) bzw. das Zurückkehren zum Tab genügt.
 

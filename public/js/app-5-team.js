@@ -1336,6 +1336,15 @@ async function showUserModal(user) {
             Einträge zusammenführen und löschen. <strong>Anlegen darf jeder</strong> – wer im Lager
             vor einem unbekannten Barcode steht, soll ihn eintragen können.
           </p>
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-top:0.6rem;">
+            <input type="checkbox" id="um-can-meldungen" ${user?.can_meldungen ? 'checked' : ''}>
+            Meldungen bearbeiten
+          </label>
+          <p class="push-hint" style="margin:0.25rem 0 0;">
+            Darf alle Meldungen ändern, auf „in Arbeit" oder „erledigt" setzen und eine Rückmeldung
+            schreiben – z. B. ein Vorarbeiter. Themen und regelmäßige Meldungen bleiben bei Chef und Admin.
+            <strong>Melden darf jeder.</strong>
+          </p>
         </div>
         <!-- Bewusst eine EIGENE Gruppe: Beim Bestellen hat auch der Buchhalter das Recht per
              Rolle, bei Planung/Brett/Upload nicht. Die beiden Bloecke werden deshalb nach
@@ -1586,6 +1595,7 @@ async function showUserModal(user) {
       can_upload: document.getElementById('um-can-upload').checked,
       can_products_edit: document.getElementById('um-can-products-edit').checked,
       can_products_add: document.getElementById('um-can-products-add').checked,
+      can_meldungen: document.getElementById('um-can-meldungen').checked,
     };
     // Bei neuem User Tages-Stunden setzen
     if (!isEdit) {
@@ -3104,6 +3114,7 @@ async function kontoStammdatenKarte() {
     bestellungen_abschliessen: 'Bestellungen abschließen',
     produktverzeichnis_pflegen: 'Lagerdaten pflegen',
     artikel_einlernen: 'Artikel einlernen',
+    meldungen_bearbeiten: 'Meldungen bearbeiten',
   };
   // Zwei Rechte schliessen jeweils ein kleineres ein (barcoderecht.js: „das groessere Recht
   // schliesst das kleinere ein"). Beide nebeneinander zu nennen liest sich wie zwei Dinge, obwohl

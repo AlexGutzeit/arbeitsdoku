@@ -289,6 +289,9 @@ function _sseOnMessage(e) {
   if (p.originTab === S.tabId) return;
   const route = getRoute();
   if (p.type === 'orders'   && route === '/orders' && !_editorBusy('#order-form-area'))   renderOrders();
+  // Meldungen: offene Dialoge (Melden, Detail, Themen) liegen ÜBER der Seite — die Liste dahinter darf nicht
+  // neu gezeichnet werden, solange einer offen ist (sonst verlöre der Dialog seine Grundlage).
+  if (p.type === 'meldungen' && route === '/meldungen' && !document.querySelector('.modal-overlay') && !_editorBusy()) renderMeldungen();
   // Notizen: leise auffrischen statt neu aufbauen — seit den Live-Notizen kommen diese Meldungen
   // im Sekundentakt (jemand tippt, jemand öffnet). Ein offenes „Neue Notiz"-Formular bleibt stehen.
   if ((p.type === 'notes' || p.type === 'notes-anwesend') && route === '/notes' && !_editorBusy('#note-form-area')) notizenAuffrischen();
@@ -441,6 +444,9 @@ function layout(content, activeNav) {
         <a href="#/orders" class="${activeNav === 'orders' ? 'active' : ''}">
           <span class="icon">&#128722;</span> Bestellungen
           ${darfBestellen() ? `<span class="nav-badge" id="nav-badge-orders"${S.badges.orders ? '' : ' style="display:none"'}>${S.badges.orders || ''}</span>` : ''}
+        </a>
+        <a href="#/meldungen" class="${activeNav === 'meldungen' ? 'active' : ''}">
+          <span class="icon">&#128227;</span> Meldungen
         </a>
         ${darfProduktePflegen() ? `<a href="#/produkte" class="${activeNav === 'produkte' ? 'active' : ''}">
           <span class="icon">&#128230;</span> Produktverzeichnis

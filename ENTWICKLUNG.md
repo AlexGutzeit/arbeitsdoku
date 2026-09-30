@@ -4070,3 +4070,33 @@ Prüfsumme) aus.
 **Hinweis zum Service Worker:** Der neue sw.js wirkt erst, wenn die App einmal vollständig neu gestartet wurde
 (Aktualisieren-Knopf bzw. App schließen und öffnen). Vorher entscheidet am Handy noch der alte Worker, wohin ein
 Antippen führt.
+
+## Meldungen (ab 30.09.2026)
+
+**Anlass (Alex):** ein neuer Hauptpunkt „Meldungen“. Chef und Admin legen Themen an (Allgemein, Auto 1,
+Papiermüll …), jeder meldet Probleme dazu. Dazu kommen Stand, History, Coin, Push, Zusammenfassung und
+regelmäßige Meldungen („Auto 1 → alle zwei Jahre am 1. März → TÜV“). 32 Rückfragen vorab. Entschieden
+wurde: Dringlichkeit ja, Foto nein. Die Themen stehen nebeneinander wie beim Auftrags-Board. Offene
+Meldungen eines gelöschten Themas wandern mit in die History. Den Coin sehen alle Chefs und Admins außer
+dem, der die Änderung gemacht hat. Regelmäßige Meldungen legen nur Chef und Admin an, mit mehreren
+Auslösern (1. und 3. Montag). Das Einzelrecht „Meldungen bearbeiten“ wird gleich mitgebaut. Der Bau läuft
+in drei Etappen.
+
+**Etappe 1: Themen, Meldungen, Stand, History, Einzelrecht.**
+- **Eine Regel:** `meldungrecht.js` beantwortet zwei Fragen: *bearbeiten* (Chef/Admin oder
+  `can_meldungen`) und *verwalten* (nur Chef/Admin). Die Oberfläche fragt nichts selbst nach, der Server
+  schickt `darf` mit.
+- **Tabellen:** `meldung_themen` (weich gelöscht, sobald eine Meldung daranhängt), `meldungen` und
+  `meldung_verlauf` (Name zum Zeitpunkt, bleibt lesbar nach einer Kontolöschung).
+- **Einordnung:** Die Verweise stehen in `reste.js`: Der Verlauf ist ein Anhängsel, die Meldung selbst
+  Inhalt und bleibt wie Bestellungen.
+- **Gefunden beim Bau:**
+  - Die Suche in der History läuft in JavaScript. SQLite vergleicht Groß/klein nur bei ASCII, „BLÄTTER“
+    fand „blätter“ nicht.
+  - Der UI-Test fand einen toten Knopf: Ohne Themen sieht der Chef zwei Knöpfe zum Themen-Dialog, und
+    `a || b` band nur den ersten.
+  - `konto-loeschen.js` verglich die Löschvorschau Feld für Feld. Er bekam eine Meldung dazu, statt nur
+    die neue Zahl zu erwarten.
+- **Tests:** `meldungen.js` (76), `meldungen-ui.js` (36) sowie `seite-laden-ui` mit der neuen Seite.
+  Gegenproben 10/10 rot an ihrer Stelle, darunter: Einzelrecht wirkungslos, Beschriftung fehlt, Thema
+  immer hart gelöscht, Live-Signal fehlt, Verlauf nicht eingeordnet, Knöpfe ohne Rechte-Prüfung.
