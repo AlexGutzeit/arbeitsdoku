@@ -4220,5 +4220,5 @@ gleich, die Datei heil. Es gibt keine Umstellung, die Zahlen werden nur gerechne
 
 Die Probe auf echten Daten für 2026 zeigt: Bei 169 von 907 Arbeitstagen macht erst „Beginn bis Ende“ den Tag
 zu „mehr als 8 Std.“. Meist ist das der Normaltag 07:00–15:30 mit 30 Min. Pause (8:00 gearbeitet, 8:30
-anwesend), selten ein Tag mit großer Lücke. Das folgt der getroffenen Entscheidung und ist Alex zur Kenntnis
-gegeben.
+anwesend), selten ein Tag mit großer Lücke. Das folgt der getroffenen Entscheidung. Alex hat es
+nach Ansicht der Zahlen bestätigt („Passt so.“, 30.09.2026).
