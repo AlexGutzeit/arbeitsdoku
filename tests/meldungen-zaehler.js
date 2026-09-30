@@ -149,6 +149,29 @@ function req(server, method, p, token, body) {
     ok('abgeschaltet: der Admin bekommt keine Push, die Chefs schon', !SENT.some(s => s.endpoint === 'sub://adam') && SENT.some(s => s.endpoint === 'sub://carla') && SENT.some(s => s.endpoint === 'sub://chris'),
       JSON.stringify(SENT.map(s => s.endpoint)));
     ok('Kategorie-Symbol (Megafon)', SENT.every(s => /cat-meldungen\.png$/.test(s.payload.icon || '')), JSON.stringify(SENT.map(s => s.payload.icon)));
+    console.log('Recht entzogen (Alex, 30.09.2026: „wird auch die Push entzogen?")');
+    await req(server, 'PUT', '/api/push/prefs', tok.adam, { meldungen: true });
+    const veraMeldung = (await req(server, 'POST', '/api/meldungen', tok.vera, { thema_id: th['Auto 2'], text: 'Warndreieck fehlt' })).body.meldung;
+    db.prepare('UPDATE users SET can_meldungen = 0 WHERE id = ?').run(ids.vera);   // wie das Häkchen im Formular
+    SENT = [];
+    await req(server, 'POST', '/api/meldungen', tok.anna, { thema_id: th['Auto 2'], text: 'Verbandskasten abgelaufen' });
+    await sleep(150);
+    ok('ohne Recht: keine Push mehr für fremde neue Meldungen', !SENT.some(s => s.endpoint === 'sub://vera') && SENT.some(s => s.endpoint === 'sub://carla'), JSON.stringify(SENT.map(s => s.endpoint)));
+    await gesehen('vera');
+    await req(server, 'POST', '/api/meldungen', tok.moritz, { thema_id: th['Auto 2'], text: 'Spiegel locker' });
+    ok('… und kein Coin mehr dafür', (await req(server, 'GET', '/api/badges', tok.vera)).body.meldungen === 0);
+    SENT = [];
+    await req(server, 'POST', `/api/meldungen/${veraMeldung.id}/status`, tok.carla, { status: 'in_arbeit' });
+    await sleep(150);
+    ok('… zur EIGENEN Meldung aber weiter (der Schalter bleibt dafür sinnvoll)', SENT.some(s => s.endpoint === 'sub://vera'), JSON.stringify(SENT.map(s => s.endpoint)));
+    ok('… und der Coin dafür auch', (await req(server, 'GET', '/api/badges', tok.vera)).body.meldungen === 1);
+    const pv = (await req(server, 'GET', '/api/push/prefs', tok.vera)).body;
+    ok('der Schalter „Meldungen" bleibt, wie er war (an)', pv.meldungen === true, JSON.stringify(pv));
+    const { buildSummaryText } = require('../scheduler');
+    const zaehler = (await req(server, 'GET', '/api/badges', tok.vera)).body;
+    ok('Zusammenfassung spricht jetzt von „deinen Meldungen", nicht mehr von allen offenen',
+      buildSummaryText(['meldungen'], zaehler) === 'Du hast noch 1 Neuigkeit zu deinen Meldungen zu bearbeiten.', buildSummaryText(['meldungen'], zaehler));
+
     const plan = await req(server, 'POST', '/api/push/summaries', tok.anna, { name: 'Meldungen', weekdays: [1], time: '07:00', cats: ['meldungen'] });
     ok('Zusammenfassung „nur Meldungen" lässt sich anlegen (auch als Mitarbeiterin)', plan.status < 300, plan.status + ' ' + plan.text.slice(0, 120));
   } catch (e) {
