@@ -150,7 +150,7 @@ function req(m, p, t, b) {
     ok('„In Arbeit" → Karte zeigt „in Arbeit · Carla Chef"', await C.evaluate(() => [...document.querySelectorAll('.mld-karte')]
       .some(k => k.textContent.includes('Ölwechsel') && k.querySelector('.mld-status').textContent.trim() === 'in Arbeit · Carla Chef')));
     await karteOeffnen(C, 'Ölwechsel');
-    await C.evaluate(() => document.querySelector('.mld-detail [data-act="rueck"]').click());
+    await C.evaluate(() => document.querySelector('.mld-detail [data-act="antwort"]').click());
     await C.waitForSelector('#pm-input'); await C.type('#pm-input', 'Werkstatt am 05.10.');
     await C.evaluate(() => document.querySelector('.modal-overlay:last-of-type [data-act="ok"]').click()); await sleep(900);
     ok('Rückmeldung steht auf der Karte', await C.evaluate(() => [...document.querySelectorAll('.mld-rueck')].some(r => r.textContent.includes('Werkstatt am 05.10.'))));
@@ -208,7 +208,7 @@ function req(m, p, t, b) {
     await klick(AD, '[data-mld-ansicht="history"]');
     await karteOeffnen(AD, 'Ölwechsel');
     ok('Admin: „Endgültig löschen"', (await knoepfe(AD)).includes('Endgültig löschen'));
-    await AD.evaluate(() => document.querySelector('.mld-detail [data-act="loeschen"]').click());
+    await AD.evaluate(() => document.querySelector('.mld-detail [data-act="entfernen"]').click());
     await AD.waitForFunction(() => [...document.querySelectorAll('.modal p')].some(p => /endgültig löschen/.test(p.textContent)));
     await AD.evaluate(() => [...document.querySelectorAll('.modal-overlay')].pop().querySelector('[data-act="ok"]').click()); await sleep(900);
     ok('… gelöscht, auch aus der History', await AD.evaluate(() => ![...document.querySelectorAll('.mld-karte')].some(k => k.textContent.includes('Ölwechsel'))));

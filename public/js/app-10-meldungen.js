@@ -273,9 +273,9 @@ async function _mldDetail(id, themen) {
         ${knoepfe.length ? `<div class="mld-knoepfe">${knoepfe.map(([s, t, k]) => `<button class="btn btn-sm ${k}" data-status="${s}">${t}</button>`).join('')}</div>` : ''}
         <div class="mld-knoepfe">
           ${bearbeiter || eigenOffen ? '<button class="btn btn-sm btn-outline" data-act="bearbeiten">Bearbeiten</button>' : ''}
-          ${bearbeiter ? `<button class="btn btn-sm btn-outline" data-act="rueck">${m.rueckmeldung ? 'Rückmeldung ändern' : 'Rückmeldung schreiben'}</button>` : ''}
-          ${eigenOffen ? '<button class="btn btn-sm btn-outline" data-act="zurueck">Zurückziehen</button>' : ''}
-          ${darf.loeschen ? '<button class="btn btn-sm btn-danger" data-act="loeschen">Endgültig löschen</button>' : ''}
+          ${bearbeiter ? `<button class="btn btn-sm btn-outline" data-act="antwort">${m.rueckmeldung ? 'Rückmeldung ändern' : 'Rückmeldung schreiben'}</button>` : ''}
+          ${eigenOffen ? '<button class="btn btn-sm btn-outline" data-act="widerrufen">Zurückziehen</button>' : ''}
+          ${darf.loeschen ? '<button class="btn btn-sm btn-danger" data-act="entfernen">Endgültig löschen</button>' : ''}
         </div>
         <details class="mld-verlauf"><summary>Verlauf (${d.verlauf.length})</summary>
           <ul>${d.verlauf.map(_mldVerlaufZeile).join('')}</ul></details>
@@ -300,7 +300,7 @@ async function _mldDetail(id, themen) {
   }));
   const bearb = overlay.querySelector('[data-act="bearbeiten"]');
   if (bearb) bearb.addEventListener('click', () => { schliessen(); _mldFormular(m, themen); });
-  const rueck = overlay.querySelector('[data-act="rueck"]');
+  const rueck = overlay.querySelector('[data-act="antwort"]');
   if (rueck) rueck.addEventListener('click', async () => {
     const text = await promptModal('Was soll der Melder erfahren? (z. B. „Werkstatt am 05.10.")',
       { title: 'Rückmeldung', defaultValue: m.rueckmeldung || '', okLabel: 'Speichern' });
@@ -310,7 +310,7 @@ async function _mldDetail(id, themen) {
       if (r) nachher('Rückmeldung gespeichert.');
     } catch (e) { toast(e.message, 'error'); }
   });
-  const zurueck = overlay.querySelector('[data-act="zurueck"]');
+  const zurueck = overlay.querySelector('[data-act="widerrufen"]');
   if (zurueck) zurueck.addEventListener('click', async () => {
     if (!await confirmModal('Meldung zurückziehen? Sie steht danach als „zurückgezogen" in der History.', { okLabel: 'Zurückziehen' })) return;
     try {
@@ -318,7 +318,7 @@ async function _mldDetail(id, themen) {
       if (r) nachher('Zurückgezogen.');
     } catch (e) { toast(e.message, 'error'); }
   });
-  const loeschen = overlay.querySelector('[data-act="loeschen"]');
+  const loeschen = overlay.querySelector('[data-act="entfernen"]');
   if (loeschen) loeschen.addEventListener('click', async () => {
     if (!await confirmModal('Diese Meldung endgültig löschen — mit ihrem Verlauf? Das lässt sich nicht rückgängig machen '
       + '(nur über eine Sicherung). Im Protokoll bleibt ein Vermerk.', { okLabel: 'Endgültig löschen', danger: true })) return;

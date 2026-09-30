@@ -122,8 +122,8 @@ router.get('/', authenticate, (req, res) => {
 // History: erledigt, zurückgezogen, oder das Thema ist gelöscht. Neueste zuerst, seitenweise.
 router.get('/history', authenticate, (req, res) => {
   const db = getDb();
-  const wo = [`(m.status IN ('erledigt', 'zurueckgezogen') OR t.deleted_at IS NOT NULL)`];
-  const p = [];
+  const wo = ['(m.status IN (?, ?) OR t.deleted_at IS NOT NULL)'];
+  const p = ['erledigt', 'zurueckgezogen'];
   if (req.query.thema_id) { wo.push('m.thema_id = ?'); p.push(Number(req.query.thema_id)); }
   const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
   const offset = Math.max(Number(req.query.offset) || 0, 0);
