@@ -2817,3 +2817,5 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .mld-rf-zahl { width: 4.5rem; flex: 0 0 auto; }
 .mld-rf-klein { width: auto; flex: 0 1 auto; }
 .mld-rf-vorschau { font-size: 0.85rem; background: var(--bg-soft, #f5f6f8); border-radius: 8px; padding: 0.5rem 0.6rem; min-height: 1.2em; }
+/* Themen verwalten: alle Knöpfe gleich hoch (das Mülleimer-Symbol ist höher als die Pfeile) */
+.mld-themen-liste .btn-xs { height: 30px; min-width: 34px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
