@@ -446,7 +446,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   Unverändert: Wer im Zeitraum noch Stunden gebucht hat, bleibt in der Statistik sichtbar.
   Test `tests/ausgeschiedene-zeitraum-ui.js` (24), Gegenproben 7/7 rot.
 
-### [x] R30 · Meldung antippen landet nicht beim Gemeinten *(gemeldet von Alex 29.09.2026, gebaut 29.09., noch nicht deployt)*
+### [x] R30 · Meldung antippen landet nicht beim Gemeinten *(gemeldet von Alex 29.09.2026 · **DEPLOYED 30.09.2026**, `8ca3263`, Cache 437)*
 - **Gemeldet:** Die Meldung „… (Gast) hat … bearbeitet" angetippt → Willkommensseite statt „Notizen". Gewohnt war:
   Notizen, die Notiz hervorgehoben. Alex: „Prüfe bitte auch die anderen Push-Notifications."
 - **Ursachen:**
@@ -488,5 +488,4 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 
 ## Stand der Liste
 
-**Alle Punkte R1–R29 sind erledigt und deployt** (29.09.2026, zuletzt R29 mit `4f02efb`, Cache 436).
-R30 (Meldung antippen → genau dorthin, von Alex gemeldet) ist gebaut und wartet auf den Deploy (Cache 437).
+**Alle Punkte R1–R30 sind erledigt und deployt** (30.09.2026, zuletzt R30 mit `8ca3263`, Cache 437).

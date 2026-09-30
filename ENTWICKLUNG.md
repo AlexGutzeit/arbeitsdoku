@@ -4058,3 +4058,15 @@ Die Suite für R30 lief auf der frischen Kopie von 22:56 mit 258 von 259. Rot wa
 nachgebautes Fenster keine Adresse hatte. An der Adresse erkennt sw.js jetzt die Gästeseite. Das Fenster hat
 jetzt eine Adresse wie jedes echte. Gegenprobe: Der alte sw.js ist grün (gleiches Ziel), eine Fensterwahl ohne
 Treffer ist rot.
+
+**Deploy R30 (30.09.2026, 05:48, `8ca3263`, Cache 437).** Mit dabei: die Notiz-Umwandlung (Leerzeile am Schluss)
+und die Test-Ergänzungen vom Vorabend. Die Suite lief mit 259 Tests auf der Kopie von 22:56. Weil bis zum Deploy
+eine Nacht verging, liefen die 21 Prod-Klon-Tests noch einmal auf der Rohkopie von 05:38: alle grün.
+Vollsicherung `arbeitsdoku_backup_20260930-053835.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe).
+Rückkehrpunkt `vor-r30-deploy` (= `4f02efb`). Die Datenbank ist vorher/nachher in allen 51 Tabellen gleich. Der
+Server liefert `sw.js` mit `appFenster`, `app-1-core.js` mit `meldungAnsteuern` und `notiz-dokument.js` (gleiche
+Prüfsumme) aus.
+
+**Hinweis zum Service Worker:** Der neue sw.js wirkt erst, wenn die App einmal vollständig neu gestartet wurde
+(Aktualisieren-Knopf bzw. App schließen und öffnen). Vorher entscheidet am Handy noch der alte Worker, wohin ein
+Antippen führt.
