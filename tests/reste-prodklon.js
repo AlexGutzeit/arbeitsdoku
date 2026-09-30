@@ -48,11 +48,24 @@ const summe = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).dige
 const werte = (db, sql) => { const r = db.exec(sql); return r.length ? r[0].values : []; };
 const zeile = (v) => JSON.stringify(v.map(x => x instanceof Uint8Array ? 'b64:' + Buffer.from(x).toString('base64') : x));
 
-function bestand(db) {
+// Tabellen → Spalten (in ihrer Reihenfolge)
+function schema(db) {
+  const s = {};
+  for (const [t] of werte(db, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")) {
+    s[t] = werte(db, `PRAGMA table_info(${t})`).map(v => v[1]);
+  }
+  return s;
+}
+// Der Inhalt jeder Tabelle. Mit `nur` (Schema von VORHER): nur die Tabellen und Spalten, die es vorher gab —
+// bringt der neue Programmstand eine Umstellung mit (neue Tabelle, neue Spalte), zählt die nicht als Änderung.
+// Dass neue Spalten in alten Zeilen nur ihren Vorgabewert tragen, prüft der Test eigens (30.09.2026).
+function bestand(db, nur) {
   const b = {};
   for (const [t] of werte(db, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")) {
+    if (nur && !nur[t]) continue;
+    const spalten = nur ? nur[t].join(', ') : '*';
     const ohneRowid = /WITHOUT ROWID/i.test(werte(db, `SELECT sql FROM sqlite_master WHERE name='${t}'`)[0][0]);
-    b[t] = new Map(werte(db, ohneRowid ? `SELECT * FROM ${t}` : `SELECT rowid, * FROM ${t}`)
+    b[t] = new Map(werte(db, ohneRowid ? `SELECT ${spalten} FROM ${t}` : `SELECT rowid, ${spalten} FROM ${t}`)
       .map((v, i) => ohneRowid ? [String(i) + zeile(v), zeile(v)] : [v[0], zeile(v.slice(1))]));
   }
   return b;
@@ -118,7 +131,7 @@ const alsListe = (text) => { const j = JSON.parse(text); return Array.isArray(j)
     console.log(`\n1. Zeile für Zeile: ${vorlage}`);
     const summeVorlage = summe(vorlage);
     const alt = new SQL.Database(fs.readFileSync(vorlage));
-    const vorher = bestand(alt);
+    const vorher = bestand(alt), schemaVorher = schema(alt);
     const { weg: erwartet } = erwartung(alt);
     const inhaltVorhandener = (db) => ['entries', 'absences', 'notes'].map(t =>
       t + ':' + zeile(werte(db, `SELECT rowid, * FROM ${t} WHERE user_id IN (SELECT id FROM users) ORDER BY rowid`).map(zeile))).join('|');
@@ -142,7 +155,19 @@ const alsListe = (text) => { const j = JSON.parse(text); return Array.isArray(j)
     for (const m of (lauf.stdout || '').match(/\[reste\] .*/g) || []) console.log('    ' + m);
 
     const neu = new SQL.Database(fs.readFileSync(kopie));
-    const nachher = bestand(neu);
+    const nachher = bestand(neu, schemaVorher), schemaNachher = schema(neu);
+    // Umstellungen des neuen Programmstands: neue Spalten in alten Tabellen — tragen sie nur ihren Vorgabewert?
+    const neueTabellen = Object.keys(schemaNachher).filter(t => !schemaVorher[t]);
+    const neueSpalten = [], spaltenMitDaten = [];
+    for (const t of Object.keys(schemaVorher)) {
+      for (const [, name, , , dflt] of werte(neu, `PRAGMA table_info(${t})`)) {
+        if (schemaVorher[t].includes(name)) continue;
+        neueSpalten.push(`${t}.${name}`);
+        if (dflt != null && /\(/.test(String(dflt))) continue;   // Vorgabe ist ein Ausdruck (Zeitstempel): nicht vergleichbar
+        const n = werte(neu, `SELECT COUNT(*) FROM ${t} WHERE ${name} IS NOT ${dflt == null ? 'NULL' : dflt}`)[0][0];
+        if (n) spaltenMitDaten.push(`${t}.${name} (${n} Zeilen)`);
+      }
+    }
     const protokoll = werte(neu, "SELECT id, username, details FROM audit_logs WHERE action = 'reste_aufgeraeumt' ORDER BY id")
       .filter(p => !protokollVorher.has(p[0]));
     const merker = werte(neu, "SELECT rowid FROM settings WHERE key = 'altlasten_geloeschte_konten'").map(v => v[0]);
@@ -150,7 +175,10 @@ const alsListe = (text) => { const j = JSON.parse(text); return Array.isArray(j)
     const verstoesseNachher = werte(neu, 'PRAGMA foreign_key_check').map(v => v[0]);
     neu.close();
 
-    ok('dieselben Tabellen wie vorher', JSON.stringify(Object.keys(nachher)) === JSON.stringify(Object.keys(vorher)));
+    ok('alle Tabellen von vorher sind noch da' + (neueTabellen.length ? ` (neu dazu: ${neueTabellen.join(', ')})` : ''),
+      JSON.stringify(Object.keys(nachher)) === JSON.stringify(Object.keys(vorher)));
+    if (neueSpalten.length) console.log('    neue Spalten: ' + neueSpalten.join(', '));
+    ok('neue Spalten tragen in den alten Zeilen nur ihren Vorgabewert (die Umstellung schreibt keine Daten)', spaltenMitDaten.length === 0, spaltenMitDaten.join(', '));
     const abweichung = []; let entfernt = 0;
     for (const t of Object.keys(vorher)) {
       const v = vorher[t], n = nachher[t] || new Map(), w = erwartet[t] || new Set();

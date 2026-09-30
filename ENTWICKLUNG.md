@@ -4146,3 +4146,8 @@ in drei Etappen.
     Lauf 15 s nach dem Start an, und sie erscheint live im Board.
 - **Gegenproben 12/12**, darunter: Monatsende wandert, „letzter“ wird „erster“, immer neu statt „erneut fällig“,
   Nachholen der ersten statt der letzten Fälligkeit, Zeitplaner ohne Regel-Aufruf, Regeln ohne Rechte-Prüfung.
+- **Prod-Klon:** `reste-prodklon` verglich jede Zeile vor und nach dem Start und nahm an, dass der Start nur
+  aufräumt. Mit neuen Tabellen und Spalten (`users.can_meldungen`, `push_prefs.meldungen`) sah jede Zeile
+  „geändert“ aus. Jetzt vergleicht der Test nur Tabellen und Spalten von vorher. Er verlangt zusätzlich,
+  dass neue Spalten in alten Zeilen nur ihren Vorgabewert tragen, dass die Umstellung also keine Daten
+  schreibt. Gegenproben: Die Umstellung schreibt in die neue Spalte → rot; sie ändert echte Namen → rot.
