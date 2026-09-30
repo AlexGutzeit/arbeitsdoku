@@ -444,6 +444,8 @@ async function initDatabase() {
   ensureNotizGaesteSchema(db);
   // Projektnotiz: Notiz ohne persönlichen Eigentümer, gehört einem Projekt (idempotent, hier UND im Restore-Pfad)
   ensureProjektNotizSchema(db);
+  // Meldungen: Themen, Meldungen, Verlauf (idempotent, hier UND im Restore-Pfad)
+  ensureMeldungenSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -501,6 +503,15 @@ async function initDatabase() {
     if (!colsOrd.some(c => c.name === 'can_order')) {
       db.exec("ALTER TABLE users ADD COLUMN can_order INTEGER DEFAULT 0");
       console.log('Migration: can_order Spalte hinzugefügt.');
+    }
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile für Kontext):', e.message); }
+
+  // Migration: can_meldungen Spalte (Recht, alle Meldungen zu bearbeiten — meldungrecht.js).
+  try {
+    const colsMld = db.prepare("PRAGMA table_info(users)").all();
+    if (!colsMld.some(c => c.name === 'can_meldungen')) {
+      db.exec("ALTER TABLE users ADD COLUMN can_meldungen INTEGER DEFAULT 0");
+      console.log('Migration: can_meldungen Spalte hinzugefügt.');
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile für Kontext):', e.message); }
 
@@ -982,6 +993,7 @@ function ensureAuditSchema(targetDb) {
     addCol('users', 'can_order', 'INTEGER DEFAULT 0');
     addCol('users', 'can_products_edit', 'INTEGER DEFAULT 0');
     addCol('users', 'can_products_add', 'INTEGER DEFAULT 0');
+    addCol('users', 'can_meldungen', 'INTEGER DEFAULT 0');
     // ALLE Spalten, die routes/products.js namentlich liest — nicht nur die zuletzt dazugekommene.
     // Der Barcode-Haertetest (tests/barcode-haerte.js) hat gezeigt, dass hier nur `hersteller`
     // stand: Die Regel „was die Routen lesen, muss der Restore-Pfad nachziehen" war halb
@@ -1034,6 +1046,7 @@ function ensureAuditSchema(targetDb) {
   ensureNotizLiveSchema(targetDb);
   ensureNotizGaesteSchema(targetDb);
   ensureProjektNotizSchema(targetDb);
+  ensureMeldungenSchema(targetDb);
   // Nur beim Zurückspielen: der Start räumt selbst auf, nach seinen übrigen Umstellungen (R27)
   if (targetDb !== db) {
     require('../konto-loeschen').altlastenAufraeumen(targetDb);
@@ -1160,6 +1173,61 @@ function ensureProjektNotizSchema(targetDb) {
   }
 }
 
+// Meldungen (30.09.2026): Chef/Admin legen Themen an (Auto 1, Papiermüll …), jeder meldet ein Problem dazu,
+// Chef/Admin (oder wer das Einzelrecht hat) setzen „in Arbeit"/„erledigt". Regeln in meldungrecht.js.
+//   meldung_themen  weich gelöscht (deleted_at), sobald eine Meldung daran hängt — die History braucht den Namen
+//   meldungen       status offen | in_arbeit | erledigt | zurueckgezogen; created_by NULL = automatisch
+//                   (regelmäßige Meldung, Etappe 3); updated_at/updated_by = letzte Änderung (Zähler, Hervorheben)
+//   meldung_verlauf jede Änderung mit Name zum Zeitpunkt (bleibt lesbar, wenn das Konto später gelöscht wird)
+// Idempotent — läuft bei Init UND nach dem Zurückspielen einer alten Sicherung.
+function ensureMeldungenSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS meldung_themen (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT NOT NULL,
+        sort       INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        created_by INTEGER,
+        deleted_at TEXT,
+        deleted_by INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS meldungen (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        thema_id     INTEGER NOT NULL,
+        text         TEXT NOT NULL,
+        dringend     INTEGER NOT NULL DEFAULT 0,
+        status       TEXT NOT NULL DEFAULT 'offen',
+        rueckmeldung TEXT,
+        created_by   INTEGER,
+        created_at   TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        updated_at   TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        updated_by   INTEGER,
+        status_at    TEXT,
+        status_by    INTEGER,
+        FOREIGN KEY (thema_id) REFERENCES meldung_themen(id),
+        FOREIGN KEY (created_by) REFERENCES users(id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_meldungen_thema ON meldungen(thema_id);
+      CREATE INDEX IF NOT EXISTS idx_meldungen_status ON meldungen(status);
+      CREATE TABLE IF NOT EXISTS meldung_verlauf (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        meldung_id INTEGER NOT NULL,
+        art        TEXT NOT NULL,
+        user_id    INTEGER,
+        user_name  TEXT,
+        at         TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        vorher     TEXT,
+        nachher    TEXT,
+        FOREIGN KEY (meldung_id) REFERENCES meldungen(id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_meldung_verlauf ON meldung_verlauf(meldung_id);
+    `);
+  } catch (e) {
+    console.error('ensureMeldungenSchema fehlgeschlagen:', e.message);
+  }
+}
+
 // Planungsrecht-Stufe „alle": can_plan_all. can_plan allein bedeutet seither nur noch „sich selbst planen".
 // Beim ERSTEN Anlegen der Spalte werden Bestandsplaner (can_plan=1) auf can_plan_all=1 gehoben, damit sie
 // ihr bisheriges Recht (alle planen) behalten. Idempotent (Guard auf Spalten-Existenz) — laeuft bei Init
@@ -1184,10 +1252,10 @@ function ensurePlanAll(targetDb) {
 function normalizeManagerRights(targetDb) {
   try {
     const n = targetDb.prepare(
-      "SELECT COUNT(*) AS c FROM users WHERE role IN ('chef','admin') AND (can_plan=1 OR can_plan_all=1 OR can_bulletin=1 OR can_upload=1 OR can_products_edit=1 OR can_products_add=1)"
+      "SELECT COUNT(*) AS c FROM users WHERE role IN ('chef','admin') AND (can_plan=1 OR can_plan_all=1 OR can_bulletin=1 OR can_upload=1 OR can_products_edit=1 OR can_products_add=1 OR can_meldungen=1)"
     ).get().c;
     if (n > 0) {
-      targetDb.exec("UPDATE users SET can_plan=0, can_plan_all=0, can_bulletin=0, can_upload=0, can_products_edit=0, can_products_add=0 WHERE role IN ('chef','admin')");
+      targetDb.exec("UPDATE users SET can_plan=0, can_plan_all=0, can_bulletin=0, can_upload=0, can_products_edit=0, can_products_add=0, can_meldungen=0 WHERE role IN ('chef','admin')");
       console.log(`Normalisierung: ${n} Chef/Admin-Konto/-Konten von redundanten Einzelrechten bereinigt (#9).`);
     }
     // can_order EXTRA, weil hier auch der Buchhalter das Recht per Rolle hat. Die Zeile oben darf

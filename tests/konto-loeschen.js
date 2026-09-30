@@ -87,9 +87,12 @@ function starteInit(dbPfad) {
     const ausleihe = await req('POST', `/api/tools/${werkzeugId}/checkout`, t.tina, {});
     const aushang = await req('POST', '/api/bulletin', t.tina, { title: 'Grillfest', text: 'Freitag' });
     const bestellung = await req('POST', '/api/orders', t.tina, { product: 'Kabelbinder', quantity: 2 });
+    // Meldungen (30.09.2026) bleiben wie Bestellungen und Aushänge — sie sind die Geschichte eines Autos, einer Tonne
+    const mThema = (await req('POST', '/api/meldungen/themen', t.carla, { name: 'Auto 1' })).body.thema;
+    const meldung = await req('POST', '/api/meldungen', t.tina, { thema_id: mThema && mThema.id, text: 'Bremse quietscht' });
     await req('POST', '/api/entries', t.anna, { date: tag(-5), time_from: '07:00', time_to: '15:00', break_minutes: 30 });
     ok('alles angelegt', e1 && e2 && abw.status < 300 && tNotizId && aNotizId && solo && soloSerie.series_id && gemSerie.series_id
-      && erinnerung.status < 300 && ausleihe.status < 300 && aushang.status < 300 && bestellung.status < 300,
+      && erinnerung.status < 300 && ausleihe.status < 300 && aushang.status < 300 && bestellung.status < 300 && meldung.status === 201,
       JSON.stringify({ abw: abw.status, er: erinnerung.status, aus: ausleihe.status, ah: aushang.status, be: bestellung.status, bb: bestellung.body }).slice(0, 300));
 
     console.log('Paul: abgerechnet');
@@ -116,10 +119,10 @@ function starteInit(dbPfad) {
     const v = (await req('GET', `/api/users/${id.tina}/loeschen-vorschau`, admin)).body;
     ok('nicht gesperrt, Name dabei', v.gesperrt === null && v.name === 'Tina Test', JSON.stringify(v));
     const erwGeht = { eintraege: 2, abwesenheiten: 1, notizen: 1, planungen: 4, werkzeug: 1 };
-    const erwBleibt = { planungenMitAnderen: 4, planungenFuerAndere: 1, bestellungen: 1, aushaenge: 1 };
+    const erwBleibt = { planungenMitAnderen: 4, planungenFuerAndere: 1, bestellungen: 1, aushaenge: 1, meldungen: 1 };
     ok('geht: 2 Zeiteinträge (einer im Papierkorb), 1 Abwesenheit, 1 Notiz, 4 Planungen (1 + Serie 3), 1 Ausleihe',
       JSON.stringify(v.geht) === JSON.stringify(erwGeht), JSON.stringify(v.geht));
-    ok('bleibt: 4 Planungen mit anderen (1 + Serie 3), 1 für Tom, 1 Bestellung, 1 Aushang',
+    ok('bleibt: 4 Planungen mit anderen (1 + Serie 3), 1 für Tom, 1 Bestellung, 1 Aushang, 1 Meldung',
       JSON.stringify(v.bleibt) === JSON.stringify(erwBleibt), JSON.stringify(v.bleibt));
 
     console.log('Löschen');
@@ -140,6 +143,8 @@ function starteInit(dbPfad) {
     const best = (await req('GET', '/api/orders', t.carla)).body;
     const bs = JSON.stringify(best);
     ok('Bestellung bleibt sichtbar, für „Gelöschtes Konto"', /Kabelbinder/.test(bs) && /Gelöschtes Konto/.test(bs), bs.slice(0, 200));
+    const mld = ((await req('GET', '/api/meldungen', t.anna)).body.meldungen || []).find(m => m.text === 'Bremse quietscht');
+    ok('Meldung bleibt sichtbar, gemeldet von „Gelöschtes Konto"', mld && mld.created_by_name === 'Gelöschtes Konto', JSON.stringify(mld).slice(0, 200));
     const annasNotizen = JSON.stringify((await req('GET', '/api/notes', t.anna)).body);
     ok('Tinas geteilte Notiz ist aus Annas Liste verschwunden, Annas eigene steht',
       !annasNotizen.includes('Tinas Notiz') && annasNotizen.includes('Annas Notiz'), annasNotizen.slice(0, 200));

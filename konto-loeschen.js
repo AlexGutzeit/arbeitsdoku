@@ -8,7 +8,7 @@
 //             Ausleihen — und alle Anhängsel des Kontos (Einstellungen, Soll-Stunden, Urlaub, Einteilungen …,
 //             reste.js) samt Profilbild-Dateien.
 //   bleibt:   Planungen mit anderen (sie wird ausgetragen), Planungen und Serien, die sie für andere angelegt
-//             hat, Bestellungen und Aushänge (die löschen sich nach ihrer Frist selbst), Projektnotizen,
+//             hat, Bestellungen und Aushänge (die löschen sich nach ihrer Frist selbst), Meldungen (History), Projektnotizen,
 //             Dokumente, Audit-Log. Wo der Name fehlt, zeigt die App „Gelöschtes Konto".
 //   gesperrt: Wer in einer abgeschlossenen Abrechnung, einem übernommenen Nachtrag oder einer Überstunden-
 //             Auszahlung steht — sonst käme die Abrechnung durcheinander (Alex). Dort bleibt es beim Ausstellen.
@@ -64,6 +64,7 @@ function vorschau(db, userId) {
         AND id NOT IN (SELECT planning_id FROM planning_assignments WHERE user_id = ?)`, userId, userId),
       bestellungen: zahl(db, 'SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', userId),
       aushaenge: zahl(db, 'SELECT COUNT(*) AS n FROM bulletin_entries WHERE created_by = ?', userId),
+      meldungen: zahl(db, 'SELECT COUNT(*) AS n FROM meldungen WHERE created_by = ?', userId),
     },
   };
 }

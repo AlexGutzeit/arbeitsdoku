@@ -1368,6 +1368,7 @@ async function renderDeletedUsers() {
         zeile(v.bleibt.planungenFuerAndere, 'Planung, die diese Person für andere angelegt hat', 'Planungen, die diese Person für andere angelegt hat'),
         zeile(v.bleibt.bestellungen, 'Bestellung', 'Bestellungen'),
         zeile(v.bleibt.aushaenge, 'Aushang', 'Aushänge'),
+        zeile(v.bleibt.meldungen, 'Meldung', 'Meldungen'),
       ].filter(Boolean);
       const name = v.name || btn.dataset.name;
       const text = `„${name}" endgültig löschen?\n\nDanach ist weg:\n${geht.join('\n')}`
