@@ -4151,3 +4151,8 @@ in drei Etappen.
   „geändert“ aus. Jetzt vergleicht der Test nur Tabellen und Spalten von vorher. Er verlangt zusätzlich,
   dass neue Spalten in alten Zeilen nur ihren Vorgabewert tragen, dass die Umstellung also keine Daten
   schreibt. Gegenproben: Die Umstellung schreibt in die neue Spalte → rot; sie ändert echte Namen → rot.
+- **Suite (Kopie 30.09. 08:49):** 265 von 266. Rot war `umlaute-in-texten`: Drei Knopf-Kennungen in
+  `querySelector`-Zeichenketten (`rueck`, `zurueck`, `loeschen`) und ein Status-Wert in einem SQL-Stück, das
+  nicht mit `SELECT` beginnt, sahen für den Test aus wie Text. Die Kennungen heißen jetzt `antwort`,
+  `widerrufen` und `entfernen`, die Status-Werte stehen als Parameter. Danach war er grün, ebenso alle
+  Meldungs-Tests.
