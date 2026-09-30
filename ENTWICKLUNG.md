@@ -4234,3 +4234,9 @@ Gegenprobe ohne Regel: rot.
   (touchStart/touchMove/touchEnd) scrollt richtig.
 - **Echte Daten, Handyformat:** Keine andere Tabelle der Statistik ist abgeschnitten. Die Suche findet ohne
   Regel genau die Tagestabellen, mit Regel keine.
+
+**Deploy Handy-Wischen (01.10.2026, 01:24, `18b8852`, Cache 441).** Die Suite lief 268 von 268 auf der Kopie von
+23:57. Vollsicherung `arbeitsdoku_backup_20261001-012415.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe).
+Rückkehrpunkt `vor-handy-wischen-deploy` (= `76de33d`). Die Datenbank ist vorher/nachher in allen 57 Tabellen
+gleich, die Datei heil. Die Notizen gingen seit 23:01 von 11 auf 10 zurück. Das Protokoll zeigt drei
+Löschungen durch den Eigentümer selbst. Damit ist auch das neue `notiz_geloescht` im Echtbetrieb belegt.
