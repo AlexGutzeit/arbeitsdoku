@@ -4119,3 +4119,30 @@ in drei Etappen.
 - **Tests:** `meldungen-zaehler.js` (18, im Prozess), `meldungen-hervor-ui.js` (18) und `meldung-ziel.js`
   (Meldungen im Fangzaun). `benachrichtigungen-umzug.js` bekam den neuen Schalter, ausgeschaltet.
   Gegenproben 10/10.
+
+**Etappe 3: regelmäßige Meldungen** (`meldung-regeln.js`).
+- **Warum eigene Rechnung:** Die Planung kennt „jährlich“, aber kein „alle 2 Jahre“, und ihr Monatsschritt
+  wandert (31.01. + 1 Monat = 03.03.). Deshalb rechnet `meldung-regeln.js` selbst.
+- **Aufbau:** Eine Regel ist eine Vorlage mit beliebig vielen Auslösern: „alle N Tage/Wochen/Monate/Jahre ab
+  Datum“ sowie „n-ter oder letzter Wochentag alle N Monate“. Monatsschritte zählen immer vom Start aus, so
+  wandert nichts.
+- **Zeitplaner (minütlich):**
+  - Je Regel entsteht höchstens eine Meldung pro Lauf, nämlich die letzte fällige. Verpasste Fälligkeiten
+    kommen nur als „übersprungen“ in den Merker `meldung_regel_lauf`, keine Flut nach einem Ausfall.
+  - Ist die letzte Meldung der Regel noch offen, bekommt sie „erneut fällig“.
+  - Beim festen Takt gilt `gueltig_ab` = Tag des Anlegens. Vergangenes kommt nie, eine Auslösung von heute
+    schon.
+- **Gefunden beim Bau:**
+  - Bei „ab Erledigung“ gibt es immer nur eine nächste Fälligkeit. Die `gueltig_ab`-Sperre hätte einen
+    überfälligen Ölwechsel für immer verschluckt. Dieser Takt ist deshalb davon ausgenommen.
+  - Die Vorschau rechnete fest sechs Jahre voraus und zeigte bei „alle 2 Jahre“ nur vier statt fünf
+    Termine. Jetzt rechnet sie so weit voraus, bis fünf da sind.
+  - Der Test mit gestellter Uhr lief anfangs zeitlich rückwärts. Der Zeitplaner hatte beim Sprung auf
+    „Tag 38“ den TÜV (Tag 12) schon ausgelöst. Die gestellte Uhr darf nur vorwärts laufen.
+- **Tests:**
+  - `meldung-regeln.js` (39, reine Rechnung gegen unabhängig geprüfte Sollwerte)
+  - `meldung-regeln-api.js` (40, gestellte Uhr)
+  - `meldung-regeln-ui.js` (17): Der echte Zeitplaner des Servers legt eine heute fällige Meldung beim ersten
+    Lauf 15 s nach dem Start an, und sie erscheint live im Board.
+- **Gegenproben 12/12**, darunter: Monatsende wandert, „letzter“ wird „erster“, immer neu statt „erneut fällig“,
+  Nachholen der ersten statt der letzten Fälligkeit, Zeitplaner ohne Regel-Aufruf, Regeln ohne Rechte-Prüfung.

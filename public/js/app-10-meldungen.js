@@ -40,7 +40,8 @@ function _mldKarte(m, mitThema) {
       ${marke ? `<span class="mld-marke">${marke}</span>` : ''}
       ${mitThema ? `<div class="mld-thema">${esc(m.thema_name)}${m.thema_geloescht ? ' <span class="mld-geloescht">(Thema gelöscht)</span>' : ''}</div>` : ''}
       <div class="mld-text">${m.dringend ? '<span class="mld-dringend-zeichen" title="dringend">🔴</span> ' : ''}${esc(m.text)}</div>
-      <div class="mld-meta">${esc(m.created_by_name)} · ${esc(formatDateTimeDE(m.created_at))}</div>
+      <div class="mld-meta">${m.regel_id ? '🔁 ' : ''}${esc(m.created_by_name)} · ${esc(formatDateTimeDE(m.created_at))}</div>
+      ${m.faellig_am ? `<div class="mld-faellig">fällig am ${esc(formatDateDE(m.faellig_am))}${m.erneut_faellig ? ` · <strong>erneut fällig am ${esc(formatDateDE(m.erneut_faellig))}</strong>` : ''}</div>` : ''}
       ${_mldStatusPill(m)}
       ${m.rueckmeldung ? `<div class="mld-rueck">↩ ${esc(m.rueckmeldung)}</div>` : ''}
     </div>`;
@@ -103,11 +104,14 @@ async function renderMeldungen() {
   } else {
     const spalten = d.themen.map(t => {
       const liste = d.meldungen.filter(m => m.thema_id === t.id);
+      const regelnT = (d.regeln || []).filter(r => r.thema_id === t.id);
       return `
         <div class="board-col mld-col" data-thema-id="${t.id}">
-          <div class="board-col-head">${esc(t.name)}${liste.length ? ` <span class="board-count">${liste.length}</span>` : ''}</div>
+          <div class="board-col-head mld-col-head">${esc(t.name)}${liste.length ? ` <span class="board-count">${liste.length}</span>` : ''}${
+            d.darf.verwalten ? `<button class="mld-regel-knopf" data-thema-id="${t.id}" title="Regelmäßige Meldungen" aria-label="Regelmäßige Meldungen für ${esc(t.name)}">🔁</button>` : ''}</div>
           <div class="board-col-body">
             <button class="btn btn-sm btn-outline mld-melden" data-thema-id="${t.id}">+ Melden</button>
+            ${regelnT.length ? `<div class="mld-regeln">${regelnT.map(r => `<div class="mld-regel-zeile" title="${esc(r.beschreibung.join(' + '))}">🔁 ${esc(r.text.length > 30 ? r.text.slice(0, 29) + '…' : r.text)} · ${_mldRegelStand(r)}</div>`).join('')}</div>` : ''}
             ${liste.map(m => _mldKarte(m, false)).join('')}
           </div>
         </div>`;
@@ -129,6 +133,8 @@ async function renderMeldungen() {
   }
   mainEl.querySelectorAll('.mld-melden').forEach(b => b.addEventListener('click', () =>
     _mldFormular(null, d.themen, Number(b.dataset.themaId))));
+  mainEl.querySelectorAll('.mld-regel-knopf').forEach(b => b.addEventListener('click', () =>
+    _mldRegelnDialog(Number(b.dataset.themaId), d.themen)));
   mainEl.querySelectorAll('.mld-karte').forEach(k => {
     const oeffnen = () => _mldDetail(Number(k.dataset.id), d.themen);
     k.addEventListener('click', oeffnen);
@@ -231,6 +237,7 @@ function _mldVerlaufZeile(v) {
   else if (v.art === 'status') was = v.nachher === 'zurueckgezogen' ? 'hat die Meldung zurückgezogen'
     : v.nachher === 'offen' ? 'hat die Meldung wieder geöffnet'
     : `Stand: ${MLD_STATUS[v.vorher] || esc(v.vorher)} → ${MLD_STATUS[v.nachher] || esc(v.nachher)}`;
+  else if (v.art === 'erneut_faellig') was = `erneut fällig am ${esc(formatDateDE(v.nachher))} — die Meldung war noch offen (fällig am ${esc(formatDateDE(v.vorher))})`;
   else if (v.art === 'thema_geloescht') was = `hat das Thema ${zit(v.vorher)} gelöscht — die Meldung steht jetzt in der History`;
   else was = esc(v.art);
   return `<li><span class="mld-v-zeit">${esc(formatDateTimeDE(v.at))}</span> ${wer} ${was}</li>`;
@@ -259,6 +266,7 @@ async function _mldDetail(id, themen) {
       <div class="modal-body">
         <div class="mld-detail-kopf">${_mldStatusPill(m)}${m.dringend ? ' <span class="mld-dringend-etikett">🔴 dringend</span>' : ''}</div>
         <p class="mld-detail-text">${esc(m.text)}</p>
+        ${m.faellig_am ? `<p class="mld-faellig">🔁 Regelmäßige Meldung · fällig am ${esc(formatDateDE(m.faellig_am))}${m.erneut_faellig ? ` · <strong>erneut fällig am ${esc(formatDateDE(m.erneut_faellig))}</strong>` : ''}</p>` : ''}
         <p class="mld-meta">Gemeldet von ${esc(m.created_by_name)} am ${esc(formatDateTimeDE(m.created_at))}${
           m.updated_by_name && m.updated_at !== m.created_at ? ` · zuletzt geändert von ${esc(m.updated_by_name)} am ${esc(formatDateTimeDE(m.updated_at))}` : ''}</p>
         ${m.rueckmeldung ? `<div class="mld-rueck-block"><strong>Rückmeldung:</strong> ${esc(m.rueckmeldung)}</div>` : ''}
@@ -405,4 +413,207 @@ function _mldThemenDialog(themenStart) {
   neuFeld.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); hinzu(); } });
   zeichnen();
   neuFeld.focus();
+}
+
+// ── Regelmäßige Meldungen (Etappe 3; nur Chef/Admin verwalten, alle sehen „demnächst") ────────────────────
+const MLD_EINHEIT = { tag: ['Tag', 'Tage'], woche: ['Woche', 'Wochen'], monat: ['Monat', 'Monate'], jahr: ['Jahr', 'Jahre'] };
+const MLD_WT = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+
+function _mldRegelStand(r) {
+  if (r.pausiert) return 'pausiert';
+  if (r.wartet_auf_erledigung) return 'nach Erledigung';
+  return r.naechste ? esc(formatDateDE(r.naechste.faellig)) : 'beendet';
+}
+
+async function _mldRegelnDialog(themaId, themen) {
+  const thema = themen.find(t => t.id === themaId) || { name: '' };
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay dialog-modal';
+  overlay.innerHTML = `
+    <div class="modal mld-regeln-dialog" style="max-width:560px">
+      <div class="modal-header"><h3>Regelmäßige Meldungen: ${esc(thema.name)}</h3></div>
+      <div class="modal-body">
+        <div id="mld-r-liste"><div class="loading">Laden…</div></div>
+        <button class="btn btn-primary" id="mld-r-neu" style="margin-top:0.75rem">+ Regel</button>
+        <p class="mld-hinweis">Eine Regel legt die Meldung von selbst an — zum Beispiel „TÜV" alle 2 Jahre, oder „Restmüll" am
+          1. und 3. Montag. Ist die letzte noch offen, wird sie „erneut fällig" statt doppelt.</p>
+      </div>
+      <div class="modal-footer" style="display:flex;justify-content:flex-end;padding:1rem">
+        <button class="btn btn-outline" data-act="zu">Fertig</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  let geaendert = false;
+  const schliessen = () => { overlay.remove(); aufraeumen(); if (geaendert) renderMeldungen(); };
+  const aufraeumen = dialogBarrierefrei(overlay, schliessen);
+  overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.querySelector('.mld-regel-form')) schliessen(); });
+  overlay.querySelector('[data-act="zu"]').addEventListener('click', schliessen);
+  const liste = overlay.querySelector('#mld-r-liste');
+  const laden = async () => {
+    let d;
+    try { d = await api('GET', '/api/meldungen/regeln?thema_id=' + themaId); } catch (e) { liste.innerHTML = `<p class="mld-fehler">${esc(e.message)}</p>`; return; }
+    if (!d) return;
+    liste.innerHTML = d.regeln.length ? d.regeln.map(r => `
+      <div class="mld-regel" data-id="${r.id}">
+        <div class="mld-regel-kopf"><strong>${r.dringend ? '🔴 ' : ''}${esc(r.text)}</strong>${r.pausiert ? ' <span class="mld-status mld-status-zurueckgezogen">pausiert</span>' : ''}</div>
+        <div class="mld-meta">${r.beschreibung.map(esc).join(' + ')}${r.vorlauf_zahl ? ` · ${r.vorlauf_zahl} ${MLD_EINHEIT[r.vorlauf_einheit][r.vorlauf_zahl === 1 ? 0 : 1]} vorher` : ''} · ${esc(r.uhrzeit)} Uhr${r.takt === 'ab_erledigung' ? ' · zählt ab Erledigung' : ''}</div>
+        <div class="mld-meta">Nächste: ${r.pausiert ? '— (pausiert)' : r.wartet_auf_erledigung ? 'erst nach Erledigung der offenen Meldung'
+          : r.naechste ? `fällig am ${esc(formatDateDE(r.naechste.faellig))} (Meldung am ${esc(formatDateDE(r.naechste.ausloesung.slice(0, 10)))}, ${esc(r.naechste.ausloesung.slice(11))} Uhr)` : 'keine mehr (Ende erreicht)'}</div>
+        <div class="mld-knoepfe">
+          <button class="btn btn-xs btn-outline" data-r="bearbeiten">Bearbeiten</button>
+          <button class="btn btn-xs btn-outline" data-r="pause">${r.pausiert ? 'Fortsetzen' : 'Pausieren'}</button>
+          <button class="btn btn-xs btn-outline" data-r="loeschen">Löschen</button>
+        </div>
+      </div>`).join('') : '<p class="mld-leer">Noch keine regelmäßige Meldung für dieses Thema.</p>';
+    liste.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', async () => {
+      const r = d.regeln.find(x => x.id === Number(b.closest('.mld-regel').dataset.id));
+      try {
+        if (b.dataset.r === 'bearbeiten') {
+          if (await _mldRegelFormular(r, themaId, themen)) { geaendert = true; laden(); }
+        } else if (b.dataset.r === 'pause') {
+          await api('POST', `/api/meldungen/regeln/${r.id}/pause`, { pausiert: !r.pausiert });
+          geaendert = true; laden();
+        } else if (await confirmModal(`Regel „${r.text}" löschen? Schon angelegte Meldungen bleiben stehen.`, { okLabel: 'Löschen' })) {
+          await api('DELETE', '/api/meldungen/regeln/' + r.id);
+          geaendert = true; laden();
+        }
+      } catch (e) { toast(e.message, 'error'); }
+    }));
+  };
+  overlay.querySelector('#mld-r-neu').addEventListener('click', async () => {
+    if (await _mldRegelFormular(null, themaId, themen)) { geaendert = true; laden(); }
+  });
+  laden();
+}
+
+// Formular für eine Regel. Liefert true, wenn gespeichert wurde.
+function _mldRegelFormular(regel, themaId, themen) {
+  return new Promise((fertig) => {
+    const heute = formatDateISO(new Date());
+    let ausl = regel ? regel.ausloeser.map(a => ({ ...a })) : [{ art: 'intervall', einheit: 'jahr', n: 1, start_datum: heute, nth: 1, wochentag: 1 }];
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay dialog-modal mld-regel-form';
+    const opt = (werte, aktiv) => werte.map(([w, t]) => `<option value="${w}"${String(w) === String(aktiv) ? ' selected' : ''}>${t}</option>`).join('');
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:600px">
+        <div class="modal-header"><h3>${regel ? 'Regel bearbeiten' : 'Neue regelmäßige Meldung'}</h3></div>
+        <div class="modal-body mld-form">
+          <label>Thema <select id="mld-rf-thema" class="form-control">${opt(themen.map(t => [t.id, esc(t.name)]), regel ? regel.thema_id : themaId)}</select></label>
+          <label>Was soll gemeldet werden? <input id="mld-rf-text" class="form-control" maxlength="2000" placeholder="z. B. TÜV, Ölwechsel, Restmüll rausstellen" value="${regel ? esc(regel.text) : ''}"></label>
+          <label class="mld-f-dringend"><input type="checkbox" id="mld-rf-dringend"${regel && regel.dringend ? ' checked' : ''}> 🔴 dringend</label>
+          <fieldset class="mld-rf-gruppe"><legend>Wann? (mehrere Auslöser möglich, z. B. 1. und 3. Montag)</legend>
+            <div id="mld-rf-ausl"></div>
+            <button type="button" class="btn btn-xs btn-outline" id="mld-rf-ausl-neu">+ Auslöser</button>
+          </fieldset>
+          <div class="mld-rf-zeile">Meldung <input id="mld-rf-vz" type="number" min="0" max="365" class="form-control mld-rf-zahl" value="${regel ? regel.vorlauf_zahl : 0}" aria-label="Vorlauf">
+            <select id="mld-rf-ve" class="form-control mld-rf-klein" aria-label="Vorlauf-Einheit">${opt([['tag', 'Tage'], ['woche', 'Wochen'], ['monat', 'Monate']], regel ? regel.vorlauf_einheit : 'tag')}</select>
+            vorher, um <input id="mld-rf-uhr" type="time" class="form-control mld-rf-klein" value="${regel ? esc(regel.uhrzeit) : '07:00'}" aria-label="Uhrzeit"> Uhr</div>
+          <fieldset class="mld-rf-gruppe"><legend>Takt</legend>
+            <label class="mld-rf-radio"><input type="radio" name="mld-rf-takt" value="fest"${!regel || regel.takt === 'fest' ? ' checked' : ''}> fest (z. B. TÜV)</label>
+            <label class="mld-rf-radio"><input type="radio" name="mld-rf-takt" value="ab_erledigung"${regel && regel.takt === 'ab_erledigung' ? ' checked' : ''}> ab Erledigung neu zählen (z. B. Ölwechsel)</label>
+          </fieldset>
+          <fieldset class="mld-rf-gruppe"><legend>Ende</legend>
+            <label class="mld-rf-radio"><input type="radio" name="mld-rf-ende" value="nie"${!regel || regel.ende_typ === 'nie' ? ' checked' : ''}> nie</label>
+            <label class="mld-rf-radio"><input type="radio" name="mld-rf-ende" value="anzahl"${regel && regel.ende_typ === 'anzahl' ? ' checked' : ''}> nach
+              <input id="mld-rf-anzahl" type="number" min="1" max="999" class="form-control mld-rf-zahl" value="${regel && regel.ende_anzahl ? regel.ende_anzahl : 5}" aria-label="Anzahl"> Mal</label>
+            <label class="mld-rf-radio"><input type="radio" name="mld-rf-ende" value="datum"${regel && regel.ende_typ === 'datum' ? ' checked' : ''}> am
+              <input id="mld-rf-bis" type="date" class="form-control mld-rf-klein" value="${regel && regel.ende_datum ? esc(regel.ende_datum) : ''}" aria-label="Ende am"></label>
+          </fieldset>
+          <div class="mld-rf-vorschau" id="mld-rf-vorschau" aria-live="polite"></div>
+          <div id="mld-rf-fehler" class="mld-fehler" style="display:none"></div>
+        </div>
+        <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem">
+          <button class="btn btn-outline" data-act="cancel">Abbrechen</button>
+          <button class="btn btn-primary" data-act="ok">Speichern</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const $ = (sel) => overlay.querySelector(sel);
+    const schliessen = (gespeichert) => { overlay.remove(); aufraeumen(); fertig(!!gespeichert); };
+    const aufraeumen = dialogBarrierefrei(overlay, () => schliessen(false));
+    klickDanebenSchliesst(overlay, () => schliessen(false));
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); schliessen(false); } });
+    $('[data-act="cancel"]').addEventListener('click', () => schliessen(false));
+
+    const auslZeichnen = () => {
+      $('#mld-rf-ausl').innerHTML = ausl.map((a, i) => `
+        <div class="mld-rf-ausl" data-i="${i}">
+          <select class="form-control mld-rf-klein" data-f="art" aria-label="Art">${opt([['intervall', 'alle …'], ['wochentag', 'jeden n-ten Wochentag']], a.art)}</select>
+          ${a.art === 'intervall' ? `
+            <input type="number" min="1" max="120" class="form-control mld-rf-zahl" data-f="n" value="${a.n || 1}" aria-label="alle N">
+            <select class="form-control mld-rf-klein" data-f="einheit" aria-label="Einheit">${opt([['tag', 'Tage'], ['woche', 'Wochen'], ['monat', 'Monate'], ['jahr', 'Jahre']], a.einheit || 'jahr')}</select>
+            ab <input type="date" class="form-control mld-rf-klein" data-f="start_datum" value="${esc(a.start_datum || heute)}" aria-label="ab (erste Fälligkeit)">` : `
+            <select class="form-control mld-rf-klein" data-f="nth" aria-label="der wievielte">${opt([[1, '1.'], [2, '2.'], [3, '3.'], [4, '4.'], [-1, 'letzten']], a.nth || 1)}</select>
+            <select class="form-control mld-rf-klein" data-f="wochentag" aria-label="Wochentag">${opt(MLD_WT.slice(1).map((w, j) => [j + 1, w]), a.wochentag || 1)}</select>
+            alle <input type="number" min="1" max="120" class="form-control mld-rf-zahl" data-f="n" value="${a.n || 1}" aria-label="alle N Monate"> Monate ab
+            <input type="date" class="form-control mld-rf-klein" data-f="start_datum" value="${esc(a.start_datum || heute)}" aria-label="ab">`}
+          ${ausl.length > 1 ? `<button type="button" class="btn btn-xs btn-outline" data-weg="${i}" aria-label="Auslöser entfernen">✕</button>` : ''}
+        </div>`).join('');
+      $('#mld-rf-ausl').querySelectorAll('[data-f]').forEach(el => el.addEventListener('change', () => {
+        const a = ausl[Number(el.closest('.mld-rf-ausl').dataset.i)];
+        const f = el.dataset.f;
+        a[f] = ['n', 'nth', 'wochentag'].includes(f) ? Number(el.value) : el.value;
+        if (f === 'art') { if (a.art === 'intervall' && !a.einheit) a.einheit = 'jahr'; auslZeichnen(); }
+        pruefen();
+      }));
+      $('#mld-rf-ausl').querySelectorAll('[data-weg]').forEach(b => b.addEventListener('click', () => { ausl.splice(Number(b.dataset.weg), 1); auslZeichnen(); pruefen(); }));
+    };
+    const daten = () => ({
+      thema_id: Number($('#mld-rf-thema').value), text: $('#mld-rf-text').value.trim(), dringend: $('#mld-rf-dringend').checked,
+      ausloeser: ausl.map(a => a.art === 'intervall'
+        ? { art: 'intervall', einheit: a.einheit || 'jahr', n: Number(a.n) || 1, start_datum: a.start_datum }
+        : { art: 'wochentag', nth: Number(a.nth) || 1, wochentag: Number(a.wochentag) || 1, n: Number(a.n) || 1, start_datum: a.start_datum }),
+      vorlauf_zahl: Number($('#mld-rf-vz').value) || 0, vorlauf_einheit: $('#mld-rf-ve').value, uhrzeit: $('#mld-rf-uhr').value,
+      takt: (overlay.querySelector('input[name="mld-rf-takt"]:checked') || {}).value || 'fest',
+      ende_typ: (overlay.querySelector('input[name="mld-rf-ende"]:checked') || {}).value || 'nie',
+      ende_anzahl: Number($('#mld-rf-anzahl').value) || null, ende_datum: $('#mld-rf-bis').value || null,
+    });
+    // „ab Erledigung" gibt es nur mit genau einem „alle …"-Auslöser
+    const taktSperre = () => {
+      const moeglich = ausl.length === 1 && ausl[0].art === 'intervall';
+      const r = overlay.querySelector('input[name="mld-rf-takt"][value="ab_erledigung"]');
+      r.disabled = !moeglich;
+      if (!moeglich && r.checked) overlay.querySelector('input[name="mld-rf-takt"][value="fest"]').checked = true;
+    };
+    let warte = null, nr = 0;
+    const pruefen = () => {
+      taktSperre();
+      clearTimeout(warte);
+      warte = setTimeout(async () => {
+        const meine = ++nr;
+        const b = daten();
+        if (!b.text) b.text = '…';   // die Vorschau braucht nur die Zeiten
+        try {
+          const v = await api('POST', '/api/meldungen/regeln/vorschau', b);
+          if (meine !== nr || !v) return;
+          $('#mld-rf-vorschau').innerHTML = `<strong>${v.beschreibung.map(esc).join(' + ')}</strong><br>`
+            + (v.naechste.length ? 'Nächste: ' + v.naechste.map(x => `${esc(formatDateDE(x.faellig))}${x.ausloesung.slice(0, 10) !== x.faellig ? ` <span class="mld-v-zeit">(Meldung am ${esc(formatDateDE(x.ausloesung.slice(0, 10)))})</span>` : ''}`).join(' · ')
+              : 'Es kommt keine Fälligkeit mehr.');
+          $('#mld-rf-fehler').style.display = 'none';
+        } catch (e) {
+          if (meine !== nr) return;
+          $('#mld-rf-vorschau').innerHTML = '';
+          $('#mld-rf-fehler').textContent = e.message; $('#mld-rf-fehler').style.display = '';
+        }
+      }, 300);
+    };
+    overlay.querySelectorAll('input, select').forEach(el => { if (!el.closest('#mld-rf-ausl')) el.addEventListener('change', pruefen); });
+    $('#mld-rf-ausl-neu').addEventListener('click', () => {
+      const letzter = ausl[ausl.length - 1] || {};
+      ausl.push({ art: letzter.art || 'wochentag', einheit: letzter.einheit || 'jahr', n: letzter.n || 1, start_datum: letzter.start_datum || heute,
+                  nth: Math.min((letzter.nth || 1) + 2, 4), wochentag: letzter.wochentag || 1 });
+      auslZeichnen(); pruefen();
+    });
+    $('[data-act="ok"]').addEventListener('click', async () => {
+      const b = daten();
+      try {
+        const r = regel ? await api('PUT', '/api/meldungen/regeln/' + regel.id, b) : await api('POST', '/api/meldungen/regeln', b);
+        if (!r) return;
+        toast(regel ? 'Regel gespeichert.' : 'Regel angelegt.', 'success');
+        schliessen(true);
+      } catch (e) { $('#mld-rf-fehler').textContent = e.message; $('#mld-rf-fehler').style.display = ''; }
+    });
+    auslZeichnen(); pruefen();
+    $('#mld-rf-text').focus();
+  });
 }

@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**265 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**266 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -160,6 +160,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `manager-rights-normalize.js` | Unit-Test (#9): normalizeManagerRights() nullt die redundanten Einzelrecht-Flags von Chef/Admin |
 | `meldung-klick-ui.js` | Der Klick auf eine Meldung landet im richtigen Menü — die Seite des Clients (Alex, 27.08.2026). |
 | `meldung-regeln-api.js` | Regelmäßige Meldungen — Server und Zeitplaner (Etappe 3, 30.09.2026). |
+| `meldung-regeln-ui.js` | Regelmäßige Meldungen — Oberfläche und echter Zeitplaner (Etappe 3, 30.09.2026). |
 | `meldung-regeln.js` | Regelmäßige Meldungen — die Rechnung (Etappe 3, 30.09.2026). |
 | `meldung-springen-ui.js` | Meldung antippen → genau dorthin, hervorgehoben (Alex, 29.09.2026). |
 | `meldung-sw.js` | Der Service Worker beim Antippen einer Meldung (29.09.2026). |

@@ -680,6 +680,31 @@ seitlich von Thema zu Thema.
 - **Geplante Zusammenfassung:** Kategorie **„Meldungen“** — wer bearbeitet, bekommt *„5 offene
   Meldungen (davon 2 neu)“*, alle anderen *„1 Neuigkeit zu deinen Meldungen“*.
 
+**🔁 Regelmäßige Meldungen** (nur Chef und Admin, über **🔁** am Thema): Die App trägt eine Meldung zum
+gewählten Termin **von selbst** ein — *„Auto 1 → alle 2 Jahre ab 01.03.2026 → TÜV“*. Eine Regel hat
+**beliebig viele Auslöser**, jeder von einer der beiden Arten:
+
+- **„alle N Tage / Wochen / Monate / Jahre ab Datum“** — ein Monatsende bleibt Monatsende (31.01. →
+  28.02. → 31.03.), ein 29.02. wird im Folgejahr zum 28.02.;
+- **„jeden 1. / 2. / 3. / 4. / letzten Wochentag, alle N Monate“** — für *1. und 3. Montag* also zwei
+  Auslöser; mit „alle 12 Monate“ wird daraus *„jedes Jahr am 1. Montag im Februar“*.
+
+Dazu **Vorlauf** (*„4 Wochen vorher“*, die Meldung nennt trotzdem den Fälligkeitstag), **Uhrzeit**
+(Vorgabe 07:00), **Ende** (nie / nach N Mal / am Datum) und der **Takt**: *fest* (TÜV) oder *ab Erledigung
+neu zählen* (Ölwechsel: 12 Monate nach dem letzten; nur mit genau einem „alle …“-Auslöser). Das Formular
+zeigt beim Eintippen die nächsten fünf Fälligkeiten. Am Thema sehen **alle**, was demnächst kommt
+(*„🔁 TÜV · 01.03.2028“*).
+
+- Die Meldung kommt als **„🔁 automatisch“** mit *„fällig am …“* — Zähler, Push und Hervorheben wie
+  jede andere, an alle, die bearbeiten dürfen.
+- **Keine Doppelten:** Ist die letzte Meldung der Regel noch offen, wenn die nächste fällig wird, bekommt
+  sie *„erneut fällig am …“*, leuchtet wieder auf und schickt eine Push.
+- **Nach einem Ausfall** (Server aus, Neustart) kommt nur die **letzte** verpasste Fälligkeit, keine
+  Flut; das Protokoll nennt die übersprungenen. **Vergangenes vor dem Anlegen** wird beim festen Takt
+  nie nachgeholt; bei *ab Erledigung* ist eine zurückliegende Fälligkeit überfällig und kommt sofort.
+- **Pausieren** hält die Regel an (beim Fortsetzen zählt es ab dem Tag des Fortsetzens), **Löschen**
+  beendet sie — schon angelegte Meldungen bleiben. Wird das **Thema gelöscht**, enden seine Regeln.
+
 ### Zusammenarbeit
 
 #### 📌 Schwarzes Brett

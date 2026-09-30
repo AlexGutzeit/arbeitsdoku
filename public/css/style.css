@@ -2800,3 +2800,20 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .mld-karte.mld-markiert { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); position: relative; }
 .mld-marke { align-self: flex-end; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
   background: var(--primary-light); color: #2f6b12; border-radius: 999px; padding: 0.02rem 0.45rem; }
+/* Regelmäßige Meldungen (Etappe 3) */
+.mld-col-head { display: flex; align-items: center; gap: 0.3rem; }
+.mld-regel-knopf { margin-left: auto; border: 1px solid var(--border); background: #fff; border-radius: 6px; cursor: pointer;
+  padding: 0.05rem 0.35rem; font-size: 0.85rem; min-height: 28px; min-width: 32px; }
+.mld-regel-knopf:focus-visible { outline: 3px solid var(--primary); outline-offset: 1px; }
+.mld-regeln { display: flex; flex-direction: column; gap: 0.15rem; }
+.mld-regel-zeile { font-size: 0.76rem; color: var(--text-light); overflow-wrap: anywhere; }
+.mld-faellig { font-size: 0.78rem; color: #374151; margin: 0; }
+.mld-regel { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.6rem; margin-bottom: 0.5rem; }
+.mld-regel-kopf { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; overflow-wrap: anywhere; }
+.mld-rf-gruppe { border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.6rem 0.6rem; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.mld-rf-gruppe legend { font-size: 0.85rem; padding: 0 0.3rem; }
+.mld-rf-ausl, .mld-rf-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; font-size: 0.9rem; }
+.mld-form label.mld-rf-radio { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 0.35rem; cursor: pointer; }
+.mld-rf-zahl { width: 4.5rem; flex: 0 0 auto; }
+.mld-rf-klein { width: auto; flex: 0 1 auto; }
+.mld-rf-vorschau { font-size: 0.85rem; background: var(--bg-soft, #f5f6f8); border-radius: 8px; padding: 0.5rem 0.6rem; min-height: 1.2em; }
