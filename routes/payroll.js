@@ -13,7 +13,7 @@ const { getDb } = require('../database/init');
 const { authenticate, authorize } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { csvZelle, csvDatei } = require('../csv');
-const { stundenFuerZeitraum } = require('./user-hours');
+const { stundenFuerZeitraum, arbeitstage } = require('./user-hours');
 const { computeAbsenceSummary } = require('./absence-days');
 const { getEmploymentPeriods, employmentOverlaps } = require('./statistics');
 const { nachtraegeImZeitraum, monatLabel } = require('../abschluss');
@@ -58,6 +58,10 @@ const SPALTEN = [
   // selbst kommt, darf nirgends wie eine aussehen.
   'Auszahlung Stunden', 'Auszahlung Beleg',
   'Beschäftigt bis',
+  // Für die Spesen (Alex, 30.09.2026): Tage mit gebuchter Arbeitszeit, aufgeteilt nach der Zeit vom
+  // ersten Beginn bis zum letzten Ende (Pausen eingerechnet); genau 8:00 zählt zu „bis 8". Hinten
+  // angefügt, damit keine vorhandene Spalte ihren Platz wechselt.
+  'Arbeitstage', 'davon mehr als 8 Std.', 'davon bis 8 Std.',
 ];
 
 // Sammelt die Zeilen — auch fuer Tests direkt nutzbar, ohne HTTP.
@@ -74,6 +78,7 @@ function lohnZeilen(db, von, bis, titel) {
     if (!employmentOverlaps(zeitraeume, von, bis)) continue;   // im Monat gar nicht angestellt
 
     const h = stundenFuerZeitraum(db, u.id, von, bis, u.start_overtime);
+    const tage = h.ausserhalb ? { anzahl: 0, ueber8: 0, bis8: 0, tage: [] } : arbeitstage(db, u.id, h.vonEffektiv, bis);
     const { summary } = computeAbsenceSummary(db, u.id, von, bis);
     const tag = (k) => Number(summary[k] || 0);
 
@@ -121,6 +126,7 @@ function lohnZeilen(db, von, bis, titel) {
       nachtragStunden, nachtragHerkunft,
       auszahlungStunden, auszahlungBeleg,
       beschaeftigtBis: bisDatum,
+      arbeitstage: tage.anzahl, tageUeber8: tage.ueber8, tageBis8: tage.bis8,
     });
   }
   return zeilen;
@@ -128,7 +134,8 @@ function lohnZeilen(db, von, bis, titel) {
 
 function baueCsv(zeilen, titel) {
   const lines = [SPALTEN.map(csvZelle).join(';')];
-  const summe = { soll: 0, ist: 0, saldo: 0, urlaub: 0, krank: 0, fza: 0, sonderurlaub: 0, berufsschule: 0, innung: 0, feiertage: 0, nachtragStunden: 0, auszahlungStunden: 0 };
+  const summe = { soll: 0, ist: 0, saldo: 0, urlaub: 0, krank: 0, fza: 0, sonderurlaub: 0, berufsschule: 0, innung: 0, feiertage: 0, nachtragStunden: 0, auszahlungStunden: 0,
+                  arbeitstage: 0, tageUeber8: 0, tageBis8: 0 };
   for (const z of zeilen) {
     for (const k of Object.keys(summe)) summe[k] += Number(z[k]) || 0;
     lines.push([
@@ -139,6 +146,7 @@ function baueCsv(zeilen, titel) {
       zahlDe(z.nachtragStunden), z.nachtragHerkunft || '',
       zahlDe(z.auszahlungStunden), z.auszahlungBeleg || '',
       z.beschaeftigtBis,
+      z.arbeitstage, z.tageUeber8, z.tageBis8,
     ].map(csvZelle).join(';'));
   }
   // Summenzeile zum Gegenrechnen. „Überstunden gesamt" wird bewusst NICHT summiert — ein
@@ -151,6 +159,7 @@ function baueCsv(zeilen, titel) {
     zahlDe(summe.nachtragStunden), '',
     zahlDe(summe.auszahlungStunden), '',
     '',
+    summe.arbeitstage, summe.tageUeber8, summe.tageBis8,
   ].map(csvZelle).join(';'));
   return csvDatei(lines);
 }

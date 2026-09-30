@@ -337,9 +337,20 @@ Krank, Urlaub, Freizeitausgleich, Sonderurlaub, Feiertag, Berufsschule, Innung. 
 
 Soll-/Ist-Stunden und Überstunden je Zeitraum und Mitarbeiter, mit Diagrammen.
 
+**Gearbeitete Tage (für die Spesen):** Eine Karte zeigt die **Arbeitstage** im Zeitraum, darunter je Mitarbeiter
+eine aufklappbare Zeile *„18 Arbeitstage · mehr als 8 Std.: 12 · bis 8 Std.: 6“* — aufgeklappt jeder Tag mit
+Wochentag, Beginn – Ende, Anwesenheit, gearbeiteten Stunden und der Spesen-Einordnung.
+- **Arbeitstag** = ein Tag mit gebuchter Arbeitszeit (mehr als 0 Stunden). Urlaub, Krank, Berufsschule sind keine
+  Zeiteinträge und zählen nicht; Wochenenden und Feiertage zählen, wenn gearbeitet wurde.
+- Für die **8-Stunden-Grenze** zählt die Zeit vom **ersten Beginn bis zum letzten Ende** des Tages — Pausen und
+  Lücken eingerechnet, denn die Verpflegungspauschale richtet sich nach der Abwesenheit, nicht nach der reinen
+  Arbeitszeit. **Genau 8:00** zählt zu „bis 8 Std.“ (die Grenze heißt „mehr als 8 Stunden“).
+- Dieselben Zahlen stehen in der **Lohn-CSV** (drei Spalten ganz hinten) und im **PDF-Nachweis**; alle drei
+  rechnen mit derselben Funktion (`routes/user-hours.js`, `arbeitstage`). Mitarbeiter sehen ihre eigenen Tage.
+
 #### 🧾 Abrechnung
 
-Der Menüpunkt ist **Chef, Admin und Buchhaltung vorbehalten**. Für einen Mitarbeiter war die Seite nur der PDF-Download seiner eigenen Zeiten — das ist eine persönliche Sache und sitzt deshalb seit dem 23.08.2026 als Karte **„Zeitnachweis als PDF" auf [👤 Mein Konto](#-mein-konto)**; die Adresse `#/pdf` führt ihn dorthin, alte Lesezeichen bleiben also heil. Sammelt beide Ausgabewege. **PDF:** druckfertiger Arbeitsnachweis (Einträge + Abwesenheiten + Stunden-Zusammenfassung), gefiltert nach Zeitraum/Mitarbeiter/Projekt. **Lohn-Export (CSV)** *(Chef/Admin/Buchhalter)*: Monat wählen (voreingestellt der Vormonat) → eine Tabelle mit **einer Zeile je Mitarbeiter** — Personalnummer, Soll-/Ist-Stunden, Saldo, Überstunden gesamt sowie Urlaubs-, Krank-, FZA-, Sonderurlaubs-, Berufsschul-, Innungs- und Feiertage, dazu eine Summenzeile. Semikolon-getrennt mit UTF-8-BOM, öffnet sich direkt in Excel. Enthalten sind alle Rollen außer Admin, die im Monat angestellt waren — **auch bereits ausgeschiedene**, mit Austrittsdatum in der Spalte „Beschäftigt bis" (sonst fehlte der letzte Monat in der Abrechnung). Der Export wird im Audit-Log vermerkt. Spart das monatliche Abtippen aus dem PDF — dort erscheinen Urlaubs-/Krank-/FZA-Tage nämlich nur, wenn man **einen einzelnen** Mitarbeiter auswählt. Die **Personalnummer** wird je Mitarbeiter unter *👥 Mitarbeiter* gepflegt (optional).
+Der Menüpunkt ist **Chef, Admin und Buchhaltung vorbehalten**. Für einen Mitarbeiter war die Seite nur der PDF-Download seiner eigenen Zeiten — das ist eine persönliche Sache und sitzt deshalb seit dem 23.08.2026 als Karte **„Zeitnachweis als PDF" auf [👤 Mein Konto](#-mein-konto)**; die Adresse `#/pdf` führt ihn dorthin, alte Lesezeichen bleiben also heil. Sammelt beide Ausgabewege. **PDF:** druckfertiger Arbeitsnachweis (Einträge + Abwesenheiten + Stunden-Zusammenfassung), gefiltert nach Zeitraum/Mitarbeiter/Projekt. **Lohn-Export (CSV)** *(Chef/Admin/Buchhalter)*: Monat wählen (voreingestellt der Vormonat) → eine Tabelle mit **einer Zeile je Mitarbeiter** — Personalnummer, Soll-/Ist-Stunden, Saldo, Überstunden gesamt sowie Urlaubs-, Krank-, FZA-, Sonderurlaubs-, Berufsschul-, Innungs- und Feiertage, dazu eine Summenzeile. Semikolon-getrennt mit UTF-8-BOM, öffnet sich direkt in Excel. Enthalten sind alle Rollen außer Admin, die im Monat angestellt waren — **auch bereits ausgeschiedene**, mit Austrittsdatum in der Spalte „Beschäftigt bis" (sonst fehlte der letzte Monat in der Abrechnung). Ganz hinten stehen für die **Spesen** die **Arbeitstage** und davon die Tage mit **mehr als 8 Std.** bzw. **bis 8 Std.** (Beginn bis Ende, siehe [📈 Statistik](#-statistik)) — hinten angefügt, damit keine vorhandene Spalte ihren Platz wechselt. Der Export wird im Audit-Log vermerkt. Spart das monatliche Abtippen aus dem PDF — dort erscheinen Urlaubs-/Krank-/FZA-Tage nämlich nur, wenn man **einen einzelnen** Mitarbeiter auswählt. Die **Personalnummer** wird je Mitarbeiter unter *👥 Mitarbeiter* gepflegt (optional).
 
 #### 🔒 Abrechnungs-Abschluss
 

@@ -213,6 +213,38 @@ async function renderStatistics() {
   renderStatisticsContent();
 }
 
+// Gearbeitete Tage je Mitarbeiter (Alex, 30.09.2026): Anzahl und für die Spesen die Aufteilung in Tage mit
+// mehr als 8 Std. und bis 8 Std. — gezählt vom ersten Beginn bis zum letzten Ende des Tages, Pausen eingerechnet.
+// Die Rechnung macht der Server (routes/user-hours.js, arbeitstage) — dieselbe wie Lohn-CSV und PDF.
+function _statsArbeitstageHtml(stats) {
+  const wt = (iso) => ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date(iso + 'T12:00:00').getDay()];
+  const bloecke = stats.users.map(u => {
+    const a = u.arbeitstage || { anzahl: 0, ueber8: 0, bis8: 0, tage: [] };
+    return `
+      <details class="stats-tage" data-user-id="${u.user_id}">
+        <summary>${stats.users.length > 1 ? `<strong>${esc(u.user_name)}</strong> · ` : ''}<strong>${a.anzahl}</strong> ${a.anzahl === 1 ? 'Arbeitstag' : 'Arbeitstage'}
+          · mehr als 8 Std.: <strong>${a.ueber8}</strong> · bis 8 Std.: <strong>${a.bis8}</strong></summary>
+        ${a.tage.length ? `<div class="table-scroll"><table class="data-table stats-tage-tabelle">
+          <tr><th>Tag</th><th>Beginn – Ende</th><th>Anwesend</th><th>Gearbeitet</th><th>Spesen</th></tr>
+          ${a.tage.map(t => `<tr>
+            <td>${wt(t.datum)} ${esc(formatDateDE(t.datum))}</td>
+            <td>${esc(t.beginn)} – ${esc(t.ende)}</td>
+            <td>${fmtH(t.anwesend)}</td>
+            <td>${fmtH(t.ist)}</td>
+            <td>${t.ueber8 ? 'mehr als 8 Std.' : 'bis 8 Std.'}</td>
+          </tr>`).join('')}
+        </table></div>` : '<p class="stats-hinweis">Keine gearbeiteten Tage im Zeitraum.</p>'}
+      </details>`;
+  }).join('');
+  return `
+      <div class="stats-user-details stats-arbeitstage">
+        <h3>&#128197; Gearbeitete Tage</h3>
+        <p class="stats-hinweis">Arbeitstag = ein Tag mit gebuchter Arbeitszeit. Für die Spesen zählt die Zeit vom ersten Beginn
+          bis zum letzten Ende des Tages, Pausen eingerechnet; genau 8:00 Std. zählt zu „bis 8 Std.“.</p>
+        ${bloecke}
+      </div>`;
+}
+
 async function renderStatisticsContent() {
   const _tok = renderToken();
   const mainEl = document.querySelector('.main');
@@ -314,6 +346,10 @@ async function renderStatisticsContent() {
           <div class="value">${c.ueber_gesamt >= 0 ? '+' : ''}${fmtH(c.ueber_gesamt)}</div>
           <div class="label">${c.start_overtime ? 'Gesamt (inkl. Start)' : 'Überstunden gesamt'}</div>
         </div>` : ''}
+        ${c.arbeitstage ? `<div class="summary-card" id="stats-arbeitstage-karte">
+          <div class="value">${c.arbeitstage.anzahl}</div>
+          <div class="label">Arbeitstage</div>
+        </div>` : ''}
       </div>
       <div class="stats-charts">
         <div class="stats-chart-card">
@@ -349,6 +385,7 @@ async function renderStatisticsContent() {
           `).join('')}
         </table>
       </div>` : ''}
+      ${_statsArbeitstageHtml(stats)}
       <div id="stats-absences-block"></div>
     </div>`;
 

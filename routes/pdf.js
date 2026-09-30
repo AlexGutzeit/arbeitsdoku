@@ -6,7 +6,7 @@ const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { calcTargetHours, calcActualHours, fmtDate, getEarliestTargetDate, clampFrom } = require('./statistics');
 const { computeAbsenceSummary, countUrlaubDaysInYear, vacationAccount } = require('./absence-days');
-const { stundenFuerZeitraum } = require('./user-hours');
+const { stundenFuerZeitraum, arbeitstage } = require('./user-hours');
 
 function fmtH(val) {
   const neg = val < 0;
@@ -309,7 +309,7 @@ router.get('/export', authenticate, (req, res) => {
       // Gemeinsame Funktion — dieselbe wie im Statistik-Bildschirm und im Lohn-Export.
       const h = stundenFuerZeitraum(db, uid, date_from, date_to, u.start_overtime);
       if (h.ausserhalb) {
-        userStats.push({ name: u.name, ist: 0, soll: 0, ueber: 0, ueber_gesamt: h.startUeberstunden });
+        userStats.push({ name: u.name, ist: 0, soll: 0, ueber: 0, ueber_gesamt: h.startUeberstunden, tage: { anzahl: 0, ueber8: 0, bis8: 0 } });
         continue;
       }
       // Ist-Stunden IMMER aus allen Eintraegen — auch bei gesetztem Projektfilter. Sonst stuende
@@ -319,6 +319,8 @@ router.get('/export', authenticate, (req, res) => {
         ueber: h.saldo, ueber_gesamt: h.ueberstundenGesamt,
         // Steckt in ueber_gesamt bereits abgezogen drin — hier nur, um die Zahl zu ERKLAEREN.
         ausgezahlt: h.ausgezahlt || 0,
+        // Gearbeitete Tage für die Spesen — wie die Ist-Stunden IMMER aus allen Einträgen
+        tage: arbeitstage(db, uid, h.vonEffektiv, date_to),
       });
     }
 
@@ -358,6 +360,11 @@ router.get('/export', authenticate, (req, res) => {
     const prefixG = totalUeberGesamt >= 0 ? '+' : '';
     ensureSpace(14);
     doc.text(`Überstunden gesamt: ${prefixG}${fmtH(totalUeberGesamt)}`, 40, y);
+    y += 14;
+    // Gearbeitete Tage und die Spesen-Aufteilung (Beginn bis Ende, Pausen eingerechnet; genau 8:00 = „bis 8")
+    const tageSumme = (k) => userStats.reduce((s, u) => s + ((u.tage && u.tage[k]) || 0), 0);
+    ensureSpace(14);
+    doc.text(`Arbeitstage: ${tageSumme('anzahl')} (mehr als 8 Std.: ${tageSumme('ueber8')}, bis 8 Std.: ${tageSumme('bis8')}; Beginn bis Ende)`, 40, y);
     y += 14;
 
     // Abwesenheitsblock (nur wenn konkreter User)

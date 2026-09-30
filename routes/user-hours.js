@@ -144,4 +144,41 @@ function stundenFuerZeitraum(db, userId, from, to, startUeberstunden) {
   };
 }
 
-module.exports = { stundenFuerZeitraum, kumulierteRohwerte };
+/**
+ * Gearbeitete Tage in [from, to] — für die Statistik, die Lohn-CSV und den PDF-Nachweis (Alex, 30.09.2026).
+ *
+ * Arbeitstag = ein Tag, an dem mehr als 0 Stunden gebucht sind (Ist nach Pausen, zeitgleiche Aufträge
+ * einmal — dieselbe Rechnung wie die Ist-Stunden). Urlaub, Krank, Berufsschule sind keine Zeiteinträge und
+ * zählen deshalb nicht.
+ *
+ * Für die Spesen je Tag die Zeit vom ERSTEN Beginn bis zum LETZTEN Ende, Pausen und Lücken eingerechnet
+ * (Alex: „Beginn bis Ende" — die Verpflegungspauschale richtet sich nach der Abwesenheit, nicht nach der
+ * reinen Arbeitszeit). „Mehr als 8 Stunden" heißt MEHR als 8:00 — genau 8:00 zählt zu „bis 8 Std.".
+ *
+ * Der Aufrufer gibt den Zeitraum so, wie er auch die Ist-Stunden rechnet (vonEffektiv aus
+ * stundenFuerZeitraum), damit beide Zahlen zu denselben Tagen gehören.
+ */
+function arbeitstage(db, userId, from, to) {
+  const { calcActualHoursRaw } = bausteine();
+  const jeTag = new Map();
+  for (const e of eintraege(db, userId, from, to)) {
+    if (!jeTag.has(e.date)) jeTag.set(e.date, []);
+    jeTag.get(e.date).push(e);
+  }
+  const minuten = (hhmm) => { const [h, m] = String(hhmm || '').split(':').map(Number); return h * 60 + m; };
+  const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  const tage = [];
+  for (const [datum, zeilen] of jeTag) {
+    const ist = calcActualHoursRaw(zeilen);
+    if (!(ist > 0)) continue;
+    const spannen = zeilen.map(e => [minuten(e.time_from), minuten(e.time_to)]).filter(([v, b]) => b > v);
+    const beginn = Math.min(...spannen.map(x => x[0])), ende = Math.max(...spannen.map(x => x[1]));
+    tage.push({ datum, beginn: hhmm(beginn), ende: hhmm(ende), anwesend: runde2((ende - beginn) / 60),
+                ist: runde2(ist), ueber8: ende - beginn > 8 * 60 });
+  }
+  tage.sort((a, b) => a.datum.localeCompare(b.datum));
+  const ueber8 = tage.filter(t => t.ueber8).length;
+  return { anzahl: tage.length, ueber8, bis8: tage.length - ueber8, tage };
+}
+
+module.exports = { stundenFuerZeitraum, kumulierteRohwerte, arbeitstage };

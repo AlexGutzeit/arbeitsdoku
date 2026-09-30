@@ -4184,3 +4184,31 @@ ist vorher/nachher in allen 57 Tabellen gleich, die Datei heil.
 Aufgefallen ist, dass die Sicherung mit 588 KB kleiner war als die um 15:47 (610 KB). Die Datenbankdatei war aber
 gleich groß, und zwischen den Ständen kam nur normaler Betrieb dazu (Zeiteinträge, Themen, Meldungen,
 Protokoll). Es fiel nichts weg. Der Unterschied liegt nur in der Kompression.
+
+## Gearbeitete Tage und Spesen-Aufteilung (30.09.2026)
+
+**Anlass (Alex):** In der Statistik sollen die gearbeiteten Tage aufgelistet werden (Arbeitstag = mehr als
+0 Stunden gebucht). Für die Spesen dazu die Tage mit mehr und mit weniger als 8 Stunden.
+
+**Entschieden:**
+- Für die Grenze zählt die Zeit vom ersten Beginn bis zum letzten Ende des Tages, mit Pausen und Lücken. Die
+  Pauschale richtet sich nach der Abwesenheit.
+- Genau 8:00 zählt zu „bis 8“.
+- Alle Arbeitstage zählen.
+- Angezeigt wird die Zahl, die Tagesliste lässt sich aufklappen.
+- Die Werte stehen auch in Lohn-CSV und PDF.
+
+**Gebaut:**
+- **Eine Funktion:** `arbeitstage()` in `routes/user-hours.js` rechnen Statistik, Lohn-CSV und PDF gemeinsam.
+  Sie gruppiert die Einträge je Tag, rechnet das Ist wie überall (zeitgleiche Aufträge einmal) und die Spanne
+  vom ersten Beginn bis zum letzten Ende.
+- **Lohn-CSV:** Die drei Spalten sind hinten angefügt, damit keine vorhandene Spalte ihren Platz wechselt. Den
+  Monatsabschluss berühren sie nicht: Er vergleicht nur seine festen Felder.
+- **Gefunden beim Test:**
+  - Einen Tag mit 0 Stunden kann man gar nicht buchen. Die App weist einen Eintrag ab, der nur aus Pause
+    besteht; der Test hält das fest.
+  - Ein fremder Eintrag lässt sich nur mit Grund löschen. Ohne Grund blieb er stehen und wurde zu Recht
+    mitgezählt.
+- **Tests:** `arbeitstage.js` (17, Sollwerte von Hand: Pause, genau 8:00, Mittagslücke, Überlappung, Samstag,
+  gelöscht, krank) und `arbeitstage-ui.js` (7). Gegenproben 6/6 rot, darunter: genau 8:00 als „mehr“,
+  reine Arbeitszeit statt Beginn bis Ende, Spalten nicht hinten, gelöschte Einträge zählen mit. Cache 440.

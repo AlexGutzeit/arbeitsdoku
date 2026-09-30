@@ -2819,3 +2819,11 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .mld-rf-vorschau { font-size: 0.85rem; background: var(--bg-soft, #f5f6f8); border-radius: 8px; padding: 0.5rem 0.6rem; min-height: 1.2em; }
 /* Themen verwalten: alle Knöpfe gleich hoch (das Mülleimer-Symbol ist höher als die Pfeile) */
 .mld-themen-liste .btn-xs { height: 30px; min-width: 34px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+/* Statistik: gearbeitete Tage (30.09.2026) */
+.stats-arbeitstage { margin-top: 1rem; }
+.stats-hinweis { font-size: 0.85rem; color: var(--text-light); margin: 0.25rem 0 0.6rem; }
+.stats-tage { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; background: #fff; }
+.stats-tage > summary { cursor: pointer; font-size: 0.95rem; line-height: 1.5; }
+.stats-tage > summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.stats-tage[open] > summary { margin-bottom: 0.5rem; }
+.stats-tage-tabelle td, .stats-tage-tabelle th { white-space: nowrap; font-variant-numeric: tabular-nums; }

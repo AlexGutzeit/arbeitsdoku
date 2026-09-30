@@ -2,7 +2,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { logAudit } = require('../audit');
-const { stundenFuerZeitraum } = require('./user-hours');
+const { stundenFuerZeitraum, arbeitstage } = require('./user-hours');
 const { pruefeSperre, pruefeSperreGlobal, protokolliereEingriff } = require('../abschluss');
 
 const router = express.Router();
@@ -362,7 +362,7 @@ router.get('/', authenticate, (req, res) => {
       userStats.push({
         user_id: uid, user_name: user.name, role: user.role,
         ist: 0, soll: 0, ueber: 0, start_overtime: startOvertime,
-        ueber_gesamt: startOvertime, projects: [],
+        ueber_gesamt: startOvertime, projects: [], arbeitstage: { anzahl: 0, ueber8: 0, bis8: 0, tage: [] },
         timeline: timeline.map(t => ({ label: t.label, ist: 0, soll: 0 })),
       });
       continue;
@@ -422,6 +422,8 @@ router.get('/', authenticate, (req, res) => {
       ausgezahlt: stunden.ausgezahlt || 0,
       projects: Object.values(projectMap).sort((a, b) => b.hours - a.hours),
       timeline: timelineData,
+      // Gearbeitete Tage + Spesen-Aufteilung (> 8 Std. / bis 8 Std., Beginn bis Ende) — gemeinsame Rechnung
+      arbeitstage: arbeitstage(db, uid, userFrom, mainRange.to),
     });
   }
 
@@ -432,6 +434,11 @@ router.get('/', authenticate, (req, res) => {
     start_overtime: Math.round(userStats.reduce((s, u) => s + u.start_overtime, 0) * 100) / 100,
     ueber_gesamt: Math.round(userStats.reduce((s, u) => s + u.ueber_gesamt, 0) * 100) / 100,
     ausgezahlt: Math.round(userStats.reduce((s, u) => s + (u.ausgezahlt || 0), 0) * 100) / 100,
+    arbeitstage: {
+      anzahl: userStats.reduce((s, u) => s + u.arbeitstage.anzahl, 0),
+      ueber8: userStats.reduce((s, u) => s + u.arbeitstage.ueber8, 0),
+      bis8: userStats.reduce((s, u) => s + u.arbeitstage.bis8, 0),
+    },
   };
 
   const combinedTimeline = timeline.map((t, i) => ({
