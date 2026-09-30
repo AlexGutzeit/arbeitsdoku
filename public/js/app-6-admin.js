@@ -889,6 +889,7 @@ const AUDIT_LABELS = {
   logout: 'Abmeldung (manuell)',
   session_expired: 'Sitzung abgelaufen (Timeout)',
   settings_update: 'Einstellungen geändert',
+  notiz_geloescht: 'Notiz gelöscht',
   notiz_gast_angelegt: 'Notiz: Gast eingeladen',
   notiz_gast_geaendert: 'Notiz: Gast geändert',
   notiz_gast_passwort: 'Notiz: neues Gast-Passwort',

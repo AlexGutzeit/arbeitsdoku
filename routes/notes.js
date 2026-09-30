@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { getDb } = require('../database/init');
 const { authenticate, JWT_SECRET } = require('../middleware/auth');
 const { broadcast } = require('../sse');
+const { logAudit } = require('../audit');
 const push = require('../push');
 const live = require('../notizen-live');
 const { zeileAusKlartext, zeileAusDelta } = require('../notiz-dokument');
@@ -270,9 +271,12 @@ router.put('/:id', authenticate, (req, res) => {
 // Notiz loeschen (nur Owner). Wer gerade drin ist, fliegt sofort raus.
 router.delete('/:id', authenticate, (req, res) => {
   const db = getDb();
-  const note = db.prepare('SELECT user_id FROM notes WHERE id = ?').get(req.params.id);
+  const note = db.prepare('SELECT user_id, title FROM notes WHERE id = ?').get(req.params.id);
   if (!note) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (note.user_id !== req.user.id) return res.status(403).json({ error: 'Nur der Eigentümer kann löschen' });
+  // Fürs Protokoll (Alex, 30.09.2026: drei Notizen waren weg, und nichts stand drin): mit wem sie geteilt war
+  const anzahl = (t) => { try { return db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE note_id = ?`).get(req.params.id).n; } catch (_) { return 0; } };
+  const geteilt = anzahl('note_shares'), gaeste = anzahl('note_gaeste');
 
   db.prepare('DELETE FROM notes WHERE id = ?').run(req.params.id);
   // Abhängiges ausdrücklich mitlöschen. Heute erledigt das auch ON DELETE CASCADE (die Gegenprobe
@@ -280,6 +284,11 @@ router.delete('/:id', authenticate, (req, res) => {
   // früherer Zeit. Das Netz kostet nichts.
   for (const t of ['note_shares', 'note_offers', 'note_gesehen', 'note_gaeste']) db.prepare(`DELETE FROM ${t} WHERE note_id = ?`).run(req.params.id);
   live.notizGeloescht(req.params.id);
+  // Nur der Titel, nie der Inhalt — das Protokoll liest der Admin, die Notiz war persönlich
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'notiz_geloescht',
+    details: `Notiz ${req.params.id} „${note.title || '(ohne Titel)'}"`
+      + (geteilt ? ` · war geteilt mit ${geteilt} ${geteilt === 1 ? 'Person' : 'Personen'}` : '')
+      + (gaeste ? ` · ${gaeste} ${gaeste === 1 ? 'Gast' : 'Gäste'}` : ''), ip: req.ip });
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
 });

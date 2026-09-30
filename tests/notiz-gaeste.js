@@ -237,6 +237,10 @@ const namenIn = (g) => [...g.aw.getStates()].filter(([cid]) => cid !== g.doc.cli
     const anmDel = await req('POST', '/api/gast/anmelden', null, { token: maier.body.gast.token, passwort: 'DrittesGeheim1' });
     ok('Notiz gelöscht → Gast raus („geloescht"), Anmeldung und Link ungültig', del.status === 200 && rausDel && rausDel.grund === 'geloescht' && nachDel.status === 401 && anmDel.status === 404,
       JSON.stringify([del.status, rausDel, nachDel.status, anmDel.status]));
+    // Löschen steht im Protokoll (Alex, 30.09.2026) — mit Titel und wer betroffen war, OHNE den Inhalt
+    const geloescht = ((await req('GET', '/api/audit?limit=50', admin)).body.logs || []).find(x => x.action === 'notiz_geloescht');
+    ok('Protokoll: „Notiz gelöscht" von Anna, mit Titel (wie er beim Löschen hieß), Freigabe und Gast', geloescht && geloescht.username === 'anna'
+      && geloescht.details.includes('„Übergabe Halle 2 (neu)"') && /geteilt mit 1 Person/.test(geloescht.details) && /1 Gast/.test(geloescht.details), JSON.stringify(geloescht));
   } catch (e) {
     fail++; fails.push('Absturz: ' + e.message); console.log('  ✗ Absturz: ' + e.stack);
   } finally {

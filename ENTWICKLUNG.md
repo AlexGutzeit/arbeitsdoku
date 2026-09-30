@@ -4169,3 +4169,9 @@ Es vergleicht alte Tabellen nur in ihren alten Spalten Zeile für Zeile.
 - **Nebenbefund:** Heute früh gab es 13 Notizen, beim Deploy 10. Die Eigentümerin selbst hat drei eigene
   Notizen gelöscht. Nur sie darf das, und dieser Weg schreibt keinen Protokolleintrag (`routes/notes.js`),
   deshalb fand sich keine Spur.
+
+**Notiz löschen im Protokoll (30.09.2026, nach dem Deploy der Meldungen).** Beim Deploy fehlten drei Notizen,
+ohne Spur. Die Eigentümerin hatte sie gelöscht, und dieser Weg schrieb nichts ins Protokoll. Jetzt entsteht
+`notiz_geloescht` („Notiz gelöscht“): mit Titel, wie er beim Löschen hieß, mit der Zahl der Freigaben und
+Gäste, ohne Inhalt, denn das Protokoll liest der Admin. `notiz-gaeste.js` prüft es an einer geteilten Notiz
+mit Gast; ohne den Eintrag wird er rot. Cache 439.
