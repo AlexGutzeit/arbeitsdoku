@@ -16,6 +16,7 @@ const CATEGORY_ICONS = {
   absences: '/icons/cat-absences.png',
   bulletin: '/icons/cat-bulletin.png',
   notes:    '/icons/cat-notes.png',
+  meldungen: '/icons/cat-meldungen.png',
   // planning: kein eigenes Symbol → faellt auf das Branding-Logo zurueck.
 };
 
@@ -55,7 +56,7 @@ function managerIds(db, excludeUserId) {
   }
 }
 
-// category: 'orders' | 'bulletin' | 'notes' | 'absences' — entspricht den Spalten in push_prefs.
+// category: 'orders' | 'bulletin' | 'notes' | 'absences' | 'planning' | 'meldungen' — entspricht den Spalten in push_prefs.
 // payload: { title, body, url } — url ist die App-Route (Hash) fuer notificationclick.
 // Sendet an alle Abos der Zielnutzer, die die Kategorie nicht abgeschaltet haben.
 // Abgelaufene Abos (404/410) werden entfernt.
@@ -67,7 +68,7 @@ async function notifyUsers(db, userIds, category, payload, excludeUserId) {
 
     // Kategorie-Schalter je Nutzer pruefen (fehlende Zeile = Standard „an").
     // Ohne Kategorie (z. B. Test-Push) wird nicht gefiltert. Nur erlaubte Spaltennamen zulassen.
-    const VALID = ['orders', 'bulletin', 'notes', 'absences', 'planning'];
+    const VALID = ['orders', 'bulletin', 'notes', 'absences', 'planning', 'meldungen'];
     const allowed = (category && VALID.includes(category))
       ? targets.filter(uid => {
           const pref = db.prepare('SELECT ' + category + ' AS v FROM push_prefs WHERE user_id = ?').get(uid);

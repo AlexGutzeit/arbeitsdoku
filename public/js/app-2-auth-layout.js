@@ -282,6 +282,8 @@ function _sseOnMessage(e) {
   let p; try { p = JSON.parse(e.data); } catch (_) { return; }
   // Bestellungs-Badge immer aktualisieren (live-Zähler, auch eigene Aktionen)
   if (p.type === 'orders') loadBadges();
+  // Meldungen: der Zähler läuft auf JEDER Seite mit (neue Meldung, Stand gesetzt …)
+  if (p.type === 'meldungen') loadBadges();
   // Auszahlungen: der Zaehler an „Mein Konto" muss auf JEDER Route mitlaufen — er haengt an einer
   // Entscheidung, die der Mitarbeiter treffen soll, nicht an einer Ansicht.
   if (p.type === 'payouts') loadBadges();
@@ -447,6 +449,7 @@ function layout(content, activeNav) {
         </a>
         <a href="#/meldungen" class="${activeNav === 'meldungen' ? 'active' : ''}">
           <span class="icon">&#128227;</span> Meldungen
+          <span class="nav-badge" id="nav-badge-meldungen"${S.badges.meldungen ? '' : ' style="display:none"'}>${S.badges.meldungen || ''}</span>
         </a>
         ${darfProduktePflegen() ? `<a href="#/produkte" class="${activeNav === 'produkte' ? 'active' : ''}">
           <span class="icon">&#128230;</span> Produktverzeichnis

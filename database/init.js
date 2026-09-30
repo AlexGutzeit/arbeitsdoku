@@ -1448,6 +1448,10 @@ function ensurePushSchema(targetDb) {
     if (!cols.some(c => c.name === 'planning')) {
       targetDb.exec("ALTER TABLE push_prefs ADD COLUMN planning INTEGER DEFAULT 1");
     }
+    // Meldungen (30.09.2026): eigener Kategorie-Schalter (fehlt = an).
+    if (!cols.some(c => c.name === 'meldungen')) {
+      targetDb.exec("ALTER TABLE push_prefs ADD COLUMN meldungen INTEGER DEFAULT 1");
+    }
     // name-Spalte nachziehen, falls die Tabelle aus einer Vorversion ohne name stammt (idempotent).
     const sCols = targetDb.prepare("PRAGMA table_info(summary_schedules)").all();
     if (sCols.length && !sCols.some(c => c.name === 'name')) {

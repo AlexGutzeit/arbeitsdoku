@@ -28,8 +28,8 @@ const addDaysISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d
 const addMonthsISO = (isoStr, n) => { const d = new Date(isoStr + 'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); };
 const SERIES_HORIZON_MONTHS = 24;
 
-const VALID_CATS = ['orders', 'absences', 'bulletin', 'notes'];
-const CAT_LABELS = { orders: 'Bestellungen', absences: 'Abwesenheiten', bulletin: 'Aushänge', notes: 'Notizen' };
+const VALID_CATS = ['orders', 'absences', 'bulletin', 'notes', 'meldungen'];
+const CAT_LABELS = { orders: 'Bestellungen', absences: 'Abwesenheiten', bulletin: 'Aushänge', notes: 'Notizen', meldungen: 'Meldungen' };
 
 // Berlin-Datum/Uhrzeit/Wochentag (1=Mo … 7=So) aus einem Date.
 function berlinParts(now = new Date()) {
@@ -51,6 +51,17 @@ function isDue(schedule, weekday, hhmm, dateStamp) {
 function buildSummaryText(cats, counts) {
   const parts = [];
   for (const c of cats) {
+    if (c === 'meldungen') {
+      // Wer bearbeitet: die offenen, und wie viele davon neu sind (Alex: „5 offene Meldungen, davon 2 neu").
+      // Alle anderen: was sich an den eigenen Meldungen getan hat (Stand, Rückmeldung).
+      if (counts.meldungenBearbeiter) {
+        const offen = counts.meldungenOffen || 0, neu = counts.meldungenOffenNeu || 0;
+        if (offen > 0) parts.push(`${offen} ${offen === 1 ? 'offene Meldung' : 'offene Meldungen'}${neu > 0 ? ` (davon ${neu} neu)` : ''}`);
+      } else if ((counts.meldungen || 0) > 0) {
+        parts.push(`${counts.meldungen} ${counts.meldungen === 1 ? 'Neuigkeit' : 'Neuigkeiten'} zu deinen Meldungen`);
+      }
+      continue;
+    }
     const n = counts[c] || 0;
     if (n > 0) parts.push(`${n} ${CAT_LABELS[c] || c}`);
   }
@@ -176,7 +187,8 @@ async function tick(db, now = new Date()) {
     if (!isDue(s, weekday, hhmm, dateStamp)) continue;
     // can_order MUSS mit: computeBadgeCounts entscheidet daran, ob Bestellungen mitzaehlen.
     // Ohne die Spalte stuende in der Zusammenfassung eines Rechteinhabers dauerhaft „0".
-    const user = db.prepare('SELECT id, role, active, can_order FROM users WHERE id = ?').get(s.user_id);
+    // Ebenso can_meldungen: Daran hängt, ob jemand alle Meldungen zählt oder nur die eigenen.
+    const user = db.prepare('SELECT id, role, active, can_order, can_meldungen FROM users WHERE id = ?').get(s.user_id);
     if (!user || user.active === 0) continue;
     const pref = db.prepare('SELECT summaries_paused FROM push_prefs WHERE user_id = ?').get(s.user_id);
     if (pref && pref.summaries_paused === 1) continue; // Global-Pause (Urlaub)

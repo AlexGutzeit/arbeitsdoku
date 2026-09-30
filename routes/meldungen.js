@@ -19,7 +19,8 @@ const { authenticate } = require('../middleware/auth');
 const { broadcast } = require('../sse');
 const { logAudit } = require('../audit');
 const reste = require('../reste');
-const { darfMeldungenBearbeiten, darfMeldungenVerwalten } = require('../meldungrecht');
+const push = require('../push');
+const { darfMeldungenBearbeiten, darfMeldungenVerwalten, SQL_MELDUNGSBERECHTIGT, SQL_MELDUNGSROLLEN } = require('../meldungrecht');
 
 const router = express.Router();
 
@@ -56,6 +57,24 @@ function verlauf(db, meldungId, user, art, vorher, nachher) {
       vorher == null ? null : String(vorher), nachher == null ? null : String(nachher));
 }
 
+// Push (Etappe 2): an alle, die bearbeiten dürfen, und an den Melder — dieselben, deren Zähler steigt
+// (routes/badges.js). Nie an den, der es getan hat (notifyUsers schließt ihn aus). Ein Antippen führt direkt
+// zur Meldung und hebt sie hervor (ziel, wie seit R30 überall).
+function pushSenden(db, m, akteur, titel, text) {
+  let ids = [];
+  try {
+    ids = db.prepare(`SELECT id FROM users WHERE ${SQL_MELDUNGSBERECHTIGT} AND COALESCE(active,1) = 1`)
+      .all(...SQL_MELDUNGSROLLEN).map(r => r.id);
+  } catch (_) { /* Altstand ohne Spalte: dann eben nur der Melder */ }
+  if (m.created_by != null) ids.push(m.created_by);
+  push.notifyUsers(db, ids, 'meldungen', {
+    title: titel, body: text,
+    url: '/#/meldungen',
+    ziel: { art: 'meldung', id: m.id },
+  }, akteur ? akteur.id : null);
+}
+const wer = (user) => (user && (user.name || user.username)) || 'automatisch';
+
 function geaendert(db, id, user) {
   db.prepare(`UPDATE meldungen SET updated_at = ${JETZT}, updated_by = ? WHERE id = ?`).run(user.id, id);
 }
@@ -88,7 +107,10 @@ router.get('/', authenticate, (req, res) => {
   const meldungen = db.prepare(MELDUNG_SQL + `
     WHERE m.status IN ('offen', 'in_arbeit') AND t.deleted_at IS NULL
     ORDER BY m.dringend DESC, m.created_at ASC`).all().map(m => ausgabe(m, req.user));
-  res.json({ themen, meldungen,
+  // Bis wann hat der Nutzer die Meldungen zuletzt gesehen? Daran markiert die Seite „neu"/„geändert" — BEVOR sie
+  // selbst „gesehen" meldet (Zähler, routes/badges.js).
+  const gesehen = db.prepare("SELECT seen_at FROM user_seen WHERE user_id = ? AND topic = 'meldungen'").get(req.user.id);
+  res.json({ themen, meldungen, gesehen_bis: gesehen ? gesehen.seen_at : null,
     darf: { bearbeiten: darfMeldungenBearbeiten(req.user), verwalten: darfMeldungenVerwalten(req.user),
             loeschen: req.user.role === 'admin' } });
 });
@@ -145,7 +167,9 @@ router.post('/', authenticate, (req, res) => {
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'meldung_create',
     details: `Nr. ${id} · ${thema.name}${dringend ? ' · dringend' : ''}: ${kurz(t.text)}`, ip: req.ip });
   broadcast('meldungen', req.headers['x-tab-id']);
-  res.status(201).json({ meldung: ausgabe(holen(db, id), req.user) });
+  const neu = holen(db, id);
+  res.status(201).json({ meldung: ausgabe(neu, req.user) });
+  pushSenden(db, neu, req.user, `Neue Meldung: ${thema.name}`, `${dringend ? '🔴 ' : ''}${kurz(t.text, 100)} — von ${wer(req.user)}`);
 });
 
 // Ändern: Text, Dringlichkeit, Thema — und (nur Bearbeiter) die Rückmeldung an den Melder.
@@ -198,7 +222,11 @@ router.put('/:id(\\d+)', authenticate, (req, res) => {
       : art === 'rueckmeldung' ? `Rückmeldung „${kurz(n, 40) || '(leer)'}"`
       : `${art === 'thema' ? 'Thema' : 'Dringlichkeit'} ${v} → ${n}`).join('; '), ip: req.ip });
   broadcast('meldungen', req.headers['x-tab-id']);
-  res.json({ meldung: ausgabe(holen(db, m.id), req.user) });
+  const nachher = holen(db, m.id);
+  res.json({ meldung: ausgabe(nachher, req.user) });
+  const nurRueck = aenderungen.every(([art]) => art === 'rueckmeldung');
+  if (nurRueck) pushSenden(db, nachher, req.user, `Rückmeldung: ${nachher.thema_name}`, `${wer(req.user)}: ${kurz(rueck || '(entfernt)', 100)} — zu „${kurz(nachher.text, 40)}"`);
+  else pushSenden(db, nachher, req.user, `Meldung geändert: ${nachher.thema_name}`, `${wer(req.user)}: ${kurz(nachher.text, 100)}`);
 });
 
 // Status setzen: offen / in Arbeit / erledigt (auch zurück — „wieder öffnen").
@@ -220,6 +248,7 @@ router.post('/:id(\\d+)/status', authenticate, (req, res) => {
     details: `Nr. ${m.id} · ${m.thema_name}: ${STATUS_TEXT[m.status]} → ${STATUS_TEXT[neu]} (${kurz(m.text, 40)})`, ip: req.ip });
   broadcast('meldungen', req.headers['x-tab-id']);
   res.json({ meldung: ausgabe(holen(db, m.id), req.user) });
+  pushSenden(db, m, req.user, `Meldung ${neu === 'offen' ? 'wieder offen' : STATUS_TEXT[neu]}: ${m.thema_name}`, `${wer(req.user)}: ${kurz(m.text, 100)}`);
 });
 
 // Zurückziehen: nur der Melder selbst, nur solange offen. Nichts verschwindet — sie steht in der History.
@@ -239,6 +268,7 @@ router.post('/:id(\\d+)/zurueckziehen', authenticate, (req, res) => {
     details: `Nr. ${m.id} · ${m.thema_name}: ${kurz(m.text)}`, ip: req.ip });
   broadcast('meldungen', req.headers['x-tab-id']);
   res.json({ meldung: ausgabe(holen(db, m.id), req.user) });
+  pushSenden(db, m, req.user, `Meldung zurückgezogen: ${m.thema_name}`, `${wer(req.user)}: ${kurz(m.text, 100)}`);
 });
 
 // Endgültig löschen — nur Admin (zum Testen). Mit Verlauf; der Protokolleintrag behält den Text.
@@ -307,6 +337,8 @@ router.put('/themen/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
   res.json({ thema: { ...t, name: n.name } });
 });
 
+// Bewusst OHNE Push: Das Löschen eines Themas ist Aufräumen, keine Neuigkeit — bei drei offenen Meldungen
+// kämen sonst drei Meldungen auf einmal. Zähler und Hervorheben zeigen es trotzdem (updated_at).
 // Löschen: Ohne Meldungen ist das Thema ganz weg. Mit Meldungen bleibt es weich gelöscht, und ALLES darauf
 // wandert in die History — auch noch offene Meldungen, mit Vermerk im Verlauf (Alex, 30.09.2026).
 router.delete('/themen/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {

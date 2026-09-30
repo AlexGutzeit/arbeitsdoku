@@ -53,7 +53,8 @@ function req(m, p, t, b) {
     console.log('── Nina stellt ihre Benachrichtigungen ein (wie bisher) ──');
     // Bewusst NICHT alles an und nicht alles aus — sonst waere ein Zuruecksetzen auf die Vorgabe
     // (alles an) von einem erhaltenen Zustand nicht zu unterscheiden.
-    const gewuenscht = { orders: false, bulletin: true, notes: false, absences: true, planning: true };
+    // meldungen (30.09.2026): aus — ein neuer Schalter muss seinen gespeicherten Stand genauso behalten
+    const gewuenscht = { orders: false, bulletin: true, notes: false, absences: true, planning: true, meldungen: false };
     const gesetzt = await req('PUT', '/api/push/prefs', nina, gewuenscht);
     ok('Kategorien gespeichert', gesetzt.status === 200, `${gesetzt.status} ${gesetzt.text.slice(0, 80)}`);
     ok('… und so zurueckgemeldet, wie gewuenscht',
@@ -134,7 +135,7 @@ function req(m, p, t, b) {
     ok('die Kategorie-Schalter sind da', schalter.length >= 4, JSON.stringify(schalter));
     // Und zwar mit NINAS Werten, nicht mit den Vorgabewerten — sonst zeigte die Karte etwas
     // anderes an, als gespeichert ist, und der erste Klick wuerde es festschreiben.
-    const erwartet = { orders: false, bulletin: true, notes: false, absences: true, planning: true };
+    const erwartet = { orders: false, bulletin: true, notes: false, absences: true, planning: true, meldungen: false };
     const abweichung = schalter.filter(s => s.an !== erwartet[s.cat]);
     ok('… und zeigen den GESPEICHERTEN Stand, nicht die Vorgabe',
       schalter.length >= 4 && abweichung.length === 0,

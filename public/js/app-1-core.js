@@ -471,14 +471,14 @@ function markSeen(topic) {
 }
 
 function refreshBadges() {
-  for (const key of ['bulletin', 'notes', 'orders', 'absences', 'konto', 'mitarbeiter']) {
+  for (const key of ['bulletin', 'notes', 'orders', 'absences', 'konto', 'mitarbeiter', 'meldungen']) {
     const el = document.getElementById('nav-badge-' + key);
     if (!el) continue;
     const n = S.badges[key] || 0;
     el.textContent = n > 99 ? '99+' : String(n);
     el.style.display = n ? '' : 'none';
   }
-  const total = (S.badges.bulletin || 0) + (S.badges.notes || 0) + (S.badges.orders || 0) + (S.badges.absences || 0) + (S.badges.konto || 0) + (S.badges.mitarbeiter || 0);
+  const total = (S.badges.bulletin || 0) + (S.badges.notes || 0) + (S.badges.orders || 0) + (S.badges.absences || 0) + (S.badges.konto || 0) + (S.badges.mitarbeiter || 0) + (S.badges.meldungen || 0);
   if ('setAppBadge' in navigator) {
     if (total > 0) navigator.setAppBadge(total).catch(() => {});
     else navigator.clearAppBadge().catch(() => {});
@@ -1639,6 +1639,10 @@ function zielVormerken(ziel) {
   else if (ziel.art === 'projekt') S._projektZiel = id;
   else if (ziel.art === 'aushang') S._aushangZiel = id;
   else if (ziel.art === 'bestellung') S._bestellungZiel = id;
+  else if (ziel.art === 'meldung') {
+    S._meldungZiel = id;
+    if (typeof _mldAnsicht !== 'undefined') _mldAnsicht = 'offen';   // erst im Board suchen, dann in der History
+  }
   else if (ziel.art === 'abwesenheit') {
     S._abwesenheitZiel = id;
     if (typeof _absTab !== 'undefined') _absTab = 'list';   // die Karte steht nur in der Liste

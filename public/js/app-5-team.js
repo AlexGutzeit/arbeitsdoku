@@ -236,6 +236,7 @@ const PUSH_CATS = [
   { key: 'bulletin', label: 'Schwarzes Brett' },
   { key: 'notes',    label: 'Notizen' },
   { key: 'planning', label: 'Planung' },
+  { key: 'meldungen', label: 'Meldungen' },
 ];
 
 // Beim Login/App-Start: wenn die Browser-Erlaubnis bereits erteilt ist, das Geraete-Abo

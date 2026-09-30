@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**261 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**263 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -163,7 +163,9 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `meldung-sw.js` | Der Service Worker beim Antippen einer Meldung (29.09.2026). |
 | `meldung-ziel.js` | Ein Klick auf die Meldung muss in dem Menue landen, aus dem sie kam (Alex, 27.08.2026). |
 | `meldungen-deutsch.js` | Meldungen auf Deutsch und ohne Innereien — Server und Oberfläche (R9, 25.09.2026). |
+| `meldungen-hervor-ui.js` | Meldungen — Coin, „neu/geändert" und der Sprung aus der Push-Meldung (Etappe 2, 30.09.2026). |
 | `meldungen-ui.js` | Meldungen — Oberfläche: Board, Melden, Knöpfe je Recht, Stand, History, Themen (Alex, 30.09.2026). |
+| `meldungen-zaehler.js` | Meldungen — Zähler, Zusammenfassung und Push-Schalter (Etappe 2, 30.09.2026). |
 | `meldungen.js` | Meldungen — Server: Themen, Melden, Rechte, Status, History (Alex, 30.09.2026). |
 | `menue-abrechnung-ui.js` | Der Menüpunkt hinter #/pdf gehört Chef, Admin und Buchhaltung — und heißt „Abrechnung". |
 | `milestone-days-input.js` | Test: Zwischenziel-Dauer akzeptiert Komma UND Punkt (1,5 === 1.5), ungültige Werte werden abgefangen |

@@ -10,6 +10,10 @@
 
 let _mldAnsicht = 'offen';                  // 'offen' | 'history'
 let _mldHist = { thema: '', q: '', offset: 0 };
+// Bis wann waren die Meldungen beim Betreten der Seite gesehen? Daran hängt „neu"/„geändert". Bleibt für den
+// ganzen Besuch stehen (Wechsel Offen/History, Live-Neuzeichnen), damit die Markierung nicht beim ersten
+// Neuzeichnen verschwindet — erst ein neues Betreten der Seite setzt sie neu.
+let _mldSeit = null;
 
 const MLD_STATUS = { offen: 'offen', in_arbeit: 'in Arbeit', erledigt: 'erledigt', zurueckgezogen: 'zurückgezogen' };
 
@@ -18,10 +22,22 @@ function _mldStatusPill(m) {
   return `<span class="mld-status mld-status-${m.status}">${MLD_STATUS[m.status] || esc(m.status)}${wer}</span>`;
 }
 
+// Neu oder geändert seit dem letzten Besuch — genau das, was der Zähler am Menü gezählt hat (routes/badges.js):
+// nur, was jemand ANDERES getan hat; wer nicht bearbeiten darf, sieht es nur an seinen eigenen Meldungen.
+function _mldMarke(m) {
+  if (!_mldSeit || !S.user) return null;
+  const vonAnderem = m.updated_by == null || m.updated_by !== S.user.id;
+  if (!(m.updated_at > _mldSeit) || !vonAnderem) return null;
+  if (!(S.meldungenDarf && S.meldungenDarf.bearbeiten) && !m.eigen) return null;
+  return (m.created_at > _mldSeit && m.created_by !== S.user.id) ? 'neu' : 'geändert';
+}
+
 function _mldKarte(m, mitThema) {
+  const marke = _mldMarke(m);
   return `
-    <div class="mld-karte${m.dringend ? ' mld-dringend' : ''}" data-id="${m.id}" tabindex="0" role="button"
+    <div class="mld-karte${m.dringend ? ' mld-dringend' : ''}${marke ? ' mld-markiert' : ''}" data-id="${m.id}" tabindex="0" role="button"
          aria-label="Meldung ${esc(m.thema_name)}: ${esc(m.text.slice(0, 80))}">
+      ${marke ? `<span class="mld-marke">${marke}</span>` : ''}
       ${mitThema ? `<div class="mld-thema">${esc(m.thema_name)}${m.thema_geloescht ? ' <span class="mld-geloescht">(Thema gelöscht)</span>' : ''}</div>` : ''}
       <div class="mld-text">${m.dringend ? '<span class="mld-dringend-zeichen" title="dringend">🔴</span> ' : ''}${esc(m.text)}</div>
       <div class="mld-meta">${esc(m.created_by_name)} · ${esc(formatDateTimeDE(m.created_at))}</div>
@@ -31,6 +47,7 @@ function _mldKarte(m, mitThema) {
 }
 
 async function renderMeldungen() {
+  const neuerBesuch = _imRouter || _mldSeit === null;   // vor dem ersten await lesen (R23)
   $app().innerHTML = layout('<div class="loading">Laden…</div>', 'meldungen');
   bindLayout();
   const geladen = await seiteLaden(async () => {
@@ -49,6 +66,10 @@ async function renderMeldungen() {
   if (!geladen) return;
   const { d, h } = geladen;
   S.meldungenDarf = d.darf;
+  if (neuerBesuch) _mldSeit = d.gesehen_bis || '2000-01-01 00:00:00';
+  markSeen('meldungen');   // erst wenn man die Meldungen wirklich zu sehen bekommt
+  S.badges.meldungen = 0;
+  refreshBadges();
 
   const mainEl = document.querySelector('.main');
   mainEl.classList.add('main-wide');
@@ -127,6 +148,18 @@ async function renderMeldungen() {
     });
     const mehr = document.getElementById('mld-hist-mehr');
     if (mehr) mehr.addEventListener('click', () => { _mldHist.offset += 50; renderMeldungen(); });
+  }
+
+  // Aus einer Push-Meldung (R30): hinspringen und kurz hervorheben. Steht sie nicht (mehr) im Board — erledigt,
+  // zurückgezogen, Thema gelöscht —, dann in der History.
+  if (S._meldungZiel != null) {
+    const karte = mainEl.querySelector(`.mld-karte[data-id="${S._meldungZiel}"]`);
+    if (!karte && _mldAnsicht === 'offen') {
+      _mldAnsicht = 'history'; _mldHist = { thema: '', q: '', offset: 0 };
+      return renderMeldungen();
+    }
+    S._meldungZiel = null;
+    if (karte) hervorheben(karte);
   }
 }
 

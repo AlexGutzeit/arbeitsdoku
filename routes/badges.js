@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
 const { darfBestellen } = require('../bestellrecht');
+const { darfMeldungenBearbeiten } = require('../meldungrecht');
 const { berlinJetzt } = require('../zeit');
 
 const router = express.Router();
@@ -139,7 +140,30 @@ function computeBadgeCounts(db, user) {
     } catch (_) { mitarbeiter = 0; }   // Tabelle fehlt (sehr alte Sicherung)
   }
 
-  return { bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount, konto, mitarbeiter };
+  // Meldungen (30.09.2026): alles Neue und Geänderte seit dem letzten Besuch, das jemand ANDERES getan hat.
+  // Wer bearbeiten darf (Chef, Admin, Einzelrecht), zählt JEDE Meldung — setzt ein Chef etwas auf „in Arbeit",
+  // leuchtet es beim Admin und beim zweiten Chef auf (Alex). Alle anderen zählen nur ihre EIGENEN Meldungen
+  // (Stand, Rückmeldung). Eine automatische Meldung (updated_by NULL, Etappe 3) war für jeden „jemand anderes".
+  // `meldungenOffen`/`meldungenOffenNeu` sind keine Zähler am Menü, sondern für die Zusammenfassung („5 offene, davon 2 neu").
+  const meldungenBearbeiter = darfMeldungenBearbeiten(user);
+  let meldungen = 0, meldungenOffen = 0, meldungenOffenNeu = 0;
+  try {
+    const seit = getSeenAt(db, uid, 'meldungen');
+    meldungen = meldungenBearbeiter
+      ? db.prepare('SELECT COUNT(*) AS n FROM meldungen WHERE updated_at > ? AND COALESCE(updated_by, 0) != ?').get(seit, uid).n
+      : db.prepare('SELECT COUNT(*) AS n FROM meldungen WHERE updated_at > ? AND COALESCE(updated_by, 0) != ? AND created_by = ?').get(seit, uid, uid).n;
+    if (meldungenBearbeiter) {
+      // „davon neu" nur unter den OFFENEN — sonst hieße es „2 offene Meldungen (davon 2 neu)", obwohl eine der
+      // beiden Neuigkeiten eine inzwischen erledigte Meldung ist.
+      const offen = `FROM meldungen m JOIN meldung_themen t ON t.id = m.thema_id
+        WHERE m.status IN ('offen', 'in_arbeit') AND t.deleted_at IS NULL`;
+      meldungenOffen = db.prepare(`SELECT COUNT(*) AS n ${offen}`).get().n;
+      meldungenOffenNeu = db.prepare(`SELECT COUNT(*) AS n ${offen} AND m.updated_at > ? AND COALESCE(m.updated_by, 0) != ?`).get(seit, uid).n;
+    }
+  } catch (_) { meldungen = 0; }   // Tabelle fehlt (sehr alte Sicherung)
+
+  return { bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount, konto, mitarbeiter,
+           meldungen, meldungenOffen, meldungenOffenNeu, meldungenBearbeiter };
 }
 
 router.get('/', authenticate, (req, res) => {
@@ -148,7 +172,7 @@ router.get('/', authenticate, (req, res) => {
 
 router.post('/:topic', authenticate, (req, res) => {
   const { topic } = req.params;
-  if (!['bulletin', 'notes', 'absences', 'absence_status', 'mitarbeiter'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
+  if (!['bulletin', 'notes', 'absences', 'absence_status', 'mitarbeiter', 'meldungen'].includes(topic)) return res.status(400).json({ error: 'Unbekanntes Topic' });
   const db = getDb();
   db.prepare(
     "INSERT INTO user_seen (user_id, topic, seen_at) VALUES (?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now')) " +

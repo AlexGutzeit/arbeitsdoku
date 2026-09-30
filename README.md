@@ -668,6 +668,17 @@ seitlich von Thema zu Thema.
 - Alles aktualisiert sich **live** auf allen Geräten; jede Aktion steht im **Audit-Log**. Wird ein
   Konto endgültig gelöscht, **bleiben seine Meldungen** (als „Gelöschtes Konto“) — sie sind die
   Geschichte eines Autos oder einer Tonne.
+- **Zähler (Coin) am Menüpunkt:** Wer bearbeiten darf, sieht jede neue oder geänderte Meldung seit
+  dem letzten Besuch — auch was der zweite Chef getan hat, nie das Eigene. Alle anderen sehen, was
+  ein anderer an **ihren eigenen** Meldungen getan hat (Stand, Rückmeldung). Beim **Betreten** der
+  Seite ist genau das mit **„neu“** bzw. **„geändert“** markiert, für den ganzen Besuch; beim
+  nächsten Betreten ist es gesehen.
+- **Push:** eigene Kategorie **„Meldungen“** unter *Mein Konto* — bei jeder neuen oder geänderten
+  Meldung an alle, die bearbeiten dürfen, und an den Melder (nie an den, der es getan hat). Antippen
+  führt direkt zur Meldung und hebt sie ein paar Sekunden hervor; ist sie schon erledigt, in der
+  History. Das Löschen eines Themas schickt bewusst **keine** Push (Aufräumen, keine Neuigkeit).
+- **Geplante Zusammenfassung:** Kategorie **„Meldungen“** — wer bearbeitet, bekommt *„5 offene
+  Meldungen (davon 2 neu)“*, alle anderen *„1 Neuigkeit zu deinen Meldungen“*.
 
 ### Zusammenarbeit
 
@@ -851,13 +862,14 @@ an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweilig
 | Gastzugang **gesperrt** (5 falsche Passwörter) | die Eigentümerin der Notiz |
 | Neuer Abwesenheitsantrag bzw. Krank-/Schule-/Innung-Meldung | alle Manager (Chef/Admin/Buchhalter) |
 | Urlaub genehmigt/abgelehnt bzw. Abwesenheit vom Chef bearbeitet | der betroffene Mitarbeiter |
+| Neue oder geänderte [Meldung](#-meldungen) (auch Stand, Rückmeldung, zurückgezogen) | alle, die Meldungen bearbeiten dürfen, und der Melder — außer dem, der es getan hat |
 
-Pro Nutzer lassen sich die Kategorien (Abwesenheiten / Schwarzes Brett / Notizen / **Planung**, für Chef/Admin
-zusätzlich Bestellungen) einzeln ein- und ausschalten (wird sofort gespeichert).
+Pro Nutzer lassen sich die Kategorien (Abwesenheiten / Schwarzes Brett / Notizen / **Planung** / **Meldungen**,
+für Chef/Admin zusätzlich Bestellungen) einzeln ein- und ausschalten (wird sofort gespeichert).
 
 **Meldung antippen:** Man landet genau bei dem, worum es geht, und es ist kurz **hervorgehoben**: die Notiz
 (auch nach einer Änderung durch einen Gast), die Projektkachel (aufgeklappt, bei einer Projektnotiz), der
-Aushang, die Bestellung, der Abwesenheitsantrag, bei einer Planungs-Erinnerung die **Tagesansicht am Tag des
+Aushang, die Bestellung, der Abwesenheitsantrag, die Meldung (eine erledigte in der History), bei einer Planungs-Erinnerung die **Tagesansicht am Tag des
 Termins** mit dem Termin. Das gilt auch, wenn die App gerade zu war (sie öffnet sich direkt dort) oder man
 abgemeldet war (nach der Anmeldung geht es dorthin statt zur Willkommensseite). Ist neben der App eine
 **Gästeseite** offen, bleibt die unberührt. Zusammenfassung und Testmeldung holen nur die App nach vorn.

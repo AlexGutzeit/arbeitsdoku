@@ -4100,3 +4100,22 @@ in drei Etappen.
 - **Tests:** `meldungen.js` (76), `meldungen-ui.js` (36) sowie `seite-laden-ui` mit der neuen Seite.
   Gegenproben 10/10 rot an ihrer Stelle, darunter: Einzelrecht wirkungslos, Beschriftung fehlt, Thema
   immer hart gelöscht, Live-Signal fehlt, Verlauf nicht eingeordnet, Knöpfe ohne Rechte-Prüfung.
+
+**Etappe 2: Coin, Hervorheben, Push, Zusammenfassung.**
+- **Coin:** Wer bearbeitet, zählt jede Meldung, die ein anderer seit dem letzten Besuch neu angelegt oder
+  geändert hat. Alle anderen zählen nur ihre eigenen. Die Regel steht in `routes/badges.js`, und die
+  Seite markiert „neu“ oder „geändert“ genau nach derselben Regel.
+- **Markierung:** Die Seite merkt sich beim Betreten den alten Gesehen-Stand (`gesehen_bis`) für den
+  ganzen Besuch. Sonst verschwänden die Markierungen beim ersten Live-Neuzeichnen.
+- **Push:** in der eigenen Kategorie „Meldungen“ mit Megafon-Symbol. Das Symbol ist eine Silhouette aus
+  Noto Color Emoji, erzeugt wie die übrigen. Empfänger sind die Bearbeiter und der Melder, nie der
+  Handelnde. Das Löschen eines Themas schickt bewusst keine Push.
+- **Zusammenfassung:** „davon neu“ zählt nur unter den offenen Meldungen. Beim ersten Stand hieß es
+  „2 offene Meldungen (davon 2 neu)“, obwohl eine Neuigkeit eine erledigte Meldung war. Das fiel dem
+  eigenen Test auf.
+- **Falle wie beim Bestellrecht:** Der Zeitplaner liest den Nutzer selbst aus der Datenbank. Ohne
+  `can_meldungen` in seiner Abfrage zählte die Zusammenfassung eines Rechteinhabers still „nichts zu
+  tun“. Die Gegenprobe beweist, dass der Test genau das findet.
+- **Tests:** `meldungen-zaehler.js` (18, im Prozess), `meldungen-hervor-ui.js` (18) und `meldung-ziel.js`
+  (Meldungen im Fangzaun). `benachrichtigungen-umzug.js` bekam den neuen Schalter, ausgeschaltet.
+  Gegenproben 10/10.

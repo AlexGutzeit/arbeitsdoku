@@ -56,7 +56,7 @@ const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, fails
 // es nicht gibt, landet der Nutzer auf der Startseite — genau der Fehler, um den es geht.
 const ECHTE_ROUTEN = ['/welcome', '/dashboard', '/orders', '/bulletin', '/notes', '/absences',
                       '/planning', '/projects', '/statistics', '/documents', '/tools', '/konto',
-                      '/users', '/settings', '/audit', '/pdf'];
+                      '/users', '/settings', '/audit', '/pdf', '/meldungen'];
 
 function zielPruefen(was, url) {
   if (url === '/') { ok(`${was}: Ziel „/" (Startseite, kein eigenes Menü)`, true); return; }
@@ -106,6 +106,7 @@ function req(server, method, p, token, body) {
   app.use('/api/absences', require('../routes/absences'));
   app.use('/api/notes', require('../routes/notes'));
   app.use('/api/push', require('../routes/push'));
+  app.use('/api/meldungen', require('../routes/meldungen'));
   const server = app.listen(0);
   await new Promise(r => server.once('listening', r));
 
@@ -152,6 +153,21 @@ function req(server, method, p, token, body) {
     for (const z of ziele()) zielPruefen('geteilte Notiz', z);
     zeigtAuf('geteilte Notiz', 'notiz', nid);
 
+    // Meldungen (30.09.2026): neue Meldung → Chef/Admin; Stand gesetzt → der Melder (und die anderen Bearbeiter)
+    const th = (await req(server, 'POST', '/api/meldungen/themen', tok.chef, { name: 'Auto 2' })).body.thema;
+    r = await ausloesen('POST', '/api/meldungen', 'max', { thema_id: th.id, text: 'Ölwechsel fällig' });
+    ok('Meldung angelegt', r.status === 201, r.status + ' ' + r.text.slice(0, 80));
+    for (const z of ziele()) zielPruefen('neue Meldung', z);
+    zeigtAuf('neue Meldung', 'meldung', r.body.meldung.id);
+    ok('neue Meldung: an Chef und Admin, nicht an den Melder', SENT.some(s => s.endpoint === 'sub://chef') && SENT.some(s => s.endpoint === 'sub://admin')
+      && !SENT.some(s => s.endpoint === 'sub://max') && !SENT.some(s => s.endpoint === 'sub://buchhalter'), JSON.stringify(SENT.map(s => s.endpoint)));
+    const mid = r.body.meldung.id;
+    r = await ausloesen('POST', `/api/meldungen/${mid}/status`, 'chef', { status: 'in_arbeit' });
+    zeigtAuf('Meldung in Arbeit', 'meldung', mid);
+    ok('Stand gesetzt: an den Melder und den Admin, nicht an den Chef selbst', SENT.some(s => s.endpoint === 'sub://max') && SENT.some(s => s.endpoint === 'sub://admin')
+      && !SENT.some(s => s.endpoint === 'sub://chef'), JSON.stringify(SENT.map(s => s.endpoint)));
+    ok('… mit sprechendem Titel', SENT.every(s => s.payload.title === 'Meldung in Arbeit: Auto 2'), JSON.stringify(SENT.map(s => s.payload.title)));
+
     r = await ausloesen('POST', '/api/push/test', 'max');
     ok('Testmeldung verschickt', r.status === 200, r.status + ' ' + r.text.slice(0, 80));
     for (const z of ziele()) zielPruefen('Testmeldung', z);
@@ -175,7 +191,7 @@ function req(server, method, p, token, body) {
     console.log('\n── Kein Ziel im Code darf die Raute vergessen ──');
     // Der Fangzaun: Die Prüfungen oben treffen nur, was der Test wirklich auslöst. Eine später
     // ergänzte Meldung mit falschem Ziel käme sonst ungeprüft durch.
-    const quellen = ['routes/orders.js', 'routes/bulletin.js', 'routes/absences.js',
+    const quellen = ['routes/orders.js', 'routes/bulletin.js', 'routes/absences.js', 'routes/meldungen.js',
                      'routes/notes.js', 'routes/push.js', 'scheduler.js', 'notizen-live.js', 'routes/notiz-gaeste.js'];
     const schlechte = [];
     for (const datei of quellen) {

@@ -7,10 +7,10 @@ const { darfBestellen } = require('../bestellrecht');
 const router = express.Router();
 
 // Digest-Kategorien (zaehlerbasiert) — waehlbar in den geplanten Zusammenfassungen.
-const CATEGORIES = ['orders', 'bulletin', 'notes', 'absences'];
+const CATEGORIES = ['orders', 'bulletin', 'notes', 'absences', 'meldungen'];
 // Kategorie-Schalter je Nutzer (push_prefs-Spalten). 'planning' = Planungs-Erinnerungen; es ist
 // ereignisbasiert (kein Zaehler) und daher KEINE Digest-Kategorie, aber ein eigener An/Aus-Schalter.
-const PREF_CATEGORIES = ['orders', 'bulletin', 'notes', 'absences', 'planning'];
+const PREF_CATEGORIES = ['orders', 'bulletin', 'notes', 'absences', 'planning', 'meldungen'];
 
 // Oeffentlicher VAPID-Key, den der Browser zum Abonnieren braucht. 503 wenn Push aus ist.
 router.get('/key', authenticate, (req, res) => {
@@ -48,7 +48,7 @@ router.post('/unsubscribe', authenticate, (req, res) => {
 // Kategorie-Schalter des Nutzers lesen (fehlende Zeile = alles an).
 router.get('/prefs', authenticate, (req, res) => {
   const db = getDb();
-  const row = db.prepare('SELECT orders, bulletin, notes, absences, planning FROM push_prefs WHERE user_id = ?').get(req.user.id);
+  const row = db.prepare('SELECT orders, bulletin, notes, absences, planning, meldungen FROM push_prefs WHERE user_id = ?').get(req.user.id);
   const out = {};
   for (const c of PREF_CATEGORIES) out[c] = row ? (row[c] === 1 || row[c] == null) : true;
   res.json(out);
@@ -58,18 +58,18 @@ router.get('/prefs', authenticate, (req, res) => {
 router.put('/prefs', authenticate, (req, res) => {
   const db = getDb();
   const body = req.body || {};
-  const cur = db.prepare('SELECT orders, bulletin, notes, absences, planning FROM push_prefs WHERE user_id = ?').get(req.user.id) || {};
+  const cur = db.prepare('SELECT orders, bulletin, notes, absences, planning, meldungen FROM push_prefs WHERE user_id = ?').get(req.user.id) || {};
   const val = (c) => {
     if (c in body) return body[c] ? 1 : 0;
     return cur[c] != null ? cur[c] : 1;
   };
   db.prepare(
-    `INSERT INTO push_prefs (user_id, orders, bulletin, notes, absences, planning)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO push_prefs (user_id, orders, bulletin, notes, absences, planning, meldungen)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET orders = excluded.orders,
        bulletin = excluded.bulletin, notes = excluded.notes, absences = excluded.absences,
-       planning = excluded.planning`
-  ).run(req.user.id, val('orders'), val('bulletin'), val('notes'), val('absences'), val('planning'));
+       planning = excluded.planning, meldungen = excluded.meldungen`
+  ).run(req.user.id, val('orders'), val('bulletin'), val('notes'), val('absences'), val('planning'), val('meldungen'));
   const out = {};
   for (const c of PREF_CATEGORIES) out[c] = val(c) === 1;
   res.json(out);
