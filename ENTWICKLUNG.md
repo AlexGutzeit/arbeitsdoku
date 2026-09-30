@@ -4222,3 +4222,15 @@ Die Probe auf echten Daten für 2026 zeigt: Bei 169 von 907 Arbeitstagen macht e
 zu „mehr als 8 Std.“. Meist ist das der Normaltag 07:00–15:30 mit 30 Min. Pause (8:00 gearbeitet, 8:30
 anwesend), selten ein Tag mit großer Lücke. Das folgt der getroffenen Entscheidung. Alex hat es
 nach Ansicht der Zahlen bestätigt („Passt so.“, 30.09.2026).
+
+**Handy: Tagesliste ließ sich nicht wischen (30.09.2026, Cache 441).** Alex meldete, dass auf dem Smartphone die
+Spalte „Spesen“ abgeschnitten war und seitliches Wischen nicht ging. Die Tabelle stand in einer `.table-scroll`,
+für die es keine CSS-Regel gab. Die Klasse stand nur in der Merkliste für Scrollpositionen (`_SCROLLBOX_SEL`).
+Die Tabelle ragte deshalb über ihren Kasten hinaus, und `.main` (`overflow-x: hidden`) schnitt sie ab. Die
+Regel steht jetzt neben `.table-wrap`. Der Oberflächentest prüft auf 390 px mit einer echten Fingerbewegung.
+Gegenprobe ohne Regel: rot.
+- **Werkzeug-Falle:** `Input.synthesizeScrollGesture` mit `gestureSourceType: 'touch'` scrollt in
+  chrome-headless-shell gar nichts, auch nicht auf einer nackten Probeseite. `page.touchscreen`
+  (touchStart/touchMove/touchEnd) scrollt richtig.
+- **Echte Daten, Handyformat:** Keine andere Tabelle der Statistik ist abgeschnitten. Die Suche findet ohne
+  Regel genau die Tagestabellen, mit Regel keine.

@@ -602,7 +602,7 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 }
 
 /* === Table === */
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-wrap, .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table.data-table {
   width: 100%;
   border-collapse: collapse;
