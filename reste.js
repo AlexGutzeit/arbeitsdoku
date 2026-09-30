@@ -53,6 +53,8 @@ const ANHAENGSEL = [
   ['twofa_secrets', 'user_id', 'users', 'Zwei-Faktor-Schlüssel gelöschter Konten'],
   ['twofa_devices', 'user_id', 'users', 'Gemerkte Geräte gelöschter Konten'],
   ['meldung_verlauf', 'meldung_id', 'meldungen', 'Verlauf gelöschter Meldungen'],
+  ['meldung_ausloeser', 'regel_id', 'meldung_regeln', 'Auslöser gelöschter Regeln'],
+  ['meldung_regel_lauf', 'regel_id', 'meldung_regeln', 'Auslöse-Merker gelöschter Regeln'],
   // zweite Stufe
   ['planning_reminder_sent', 'reminder_id', 'planning_reminders', 'Versand-Merker gelöschter Erinnerungen'],
 ].map(([tabelle, spalte, auf, text]) => ({ tabelle, spalte, auf, text }));
@@ -81,6 +83,7 @@ const BLEIBT = [
   ['tool_checkouts', 'project_id', 'projects', 'Ausleih-Verlauf; Projektname steht als Text dabei'],
   ['meldungen', 'thema_id', 'meldung_themen', 'Meldung — ihr Thema bleibt weich gelöscht erhalten (History)'],
   ['meldungen', 'created_by', 'users', 'Meldung (bleibt wie Bestellungen; Name „Gelöschtes Konto")'],
+  ['meldung_regeln', 'thema_id', 'meldung_themen', 'Regel — weich gelöscht mit ihrem Thema'],
 ].map(([tabelle, spalte, auf, grund]) => ({ tabelle, spalte, auf, grund }));
 
 const loeschSql = (a) =>

@@ -1222,7 +1222,56 @@ function ensureMeldungenSchema(targetDb) {
         FOREIGN KEY (meldung_id) REFERENCES meldungen(id)
       );
       CREATE INDEX IF NOT EXISTS idx_meldung_verlauf ON meldung_verlauf(meldung_id);
+      -- Regelmäßige Meldungen (Etappe 3, meldung-regeln.js): Vorlage + Auslöser + Merker, was schon ausgelöst ist
+      CREATE TABLE IF NOT EXISTS meldung_regeln (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        thema_id        INTEGER NOT NULL,
+        text            TEXT NOT NULL,
+        dringend        INTEGER NOT NULL DEFAULT 0,
+        vorlauf_zahl    INTEGER NOT NULL DEFAULT 0,
+        vorlauf_einheit TEXT NOT NULL DEFAULT 'tag',
+        uhrzeit         TEXT NOT NULL DEFAULT '07:00',
+        takt            TEXT NOT NULL DEFAULT 'fest',
+        ende_typ        TEXT NOT NULL DEFAULT 'nie',
+        ende_anzahl     INTEGER,
+        ende_datum      TEXT,
+        pausiert        INTEGER NOT NULL DEFAULT 0,
+        gueltig_ab      TEXT NOT NULL,
+        created_by      INTEGER,
+        created_at      TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        updated_at      TEXT,
+        updated_by      INTEGER,
+        deleted_at      TEXT,
+        deleted_by      INTEGER,
+        FOREIGN KEY (thema_id) REFERENCES meldung_themen(id)
+      );
+      CREATE TABLE IF NOT EXISTS meldung_ausloeser (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        regel_id    INTEGER NOT NULL,
+        art         TEXT NOT NULL,
+        einheit     TEXT,
+        n           INTEGER NOT NULL DEFAULT 1,
+        start_datum TEXT NOT NULL,
+        nth         INTEGER,
+        wochentag   INTEGER,
+        FOREIGN KEY (regel_id) REFERENCES meldung_regeln(id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_meldung_ausloeser ON meldung_ausloeser(regel_id);
+      CREATE TABLE IF NOT EXISTS meldung_regel_lauf (
+        regel_id   INTEGER NOT NULL,
+        faellig_am TEXT NOT NULL,
+        ergebnis   TEXT NOT NULL,
+        meldung_id INTEGER,
+        at         TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        PRIMARY KEY (regel_id, faellig_am),
+        FOREIGN KEY (regel_id) REFERENCES meldung_regeln(id)
+      );
     `);
+    // Meldungen aus einer Regel tragen die Regel und ihr Fälligkeitsdatum (auch „erneut fällig am …")
+    const spalten = targetDb.prepare('PRAGMA table_info(meldungen)').all().map(c => c.name);
+    for (const [spalte, typ] of [['regel_id', 'INTEGER'], ['faellig_am', 'TEXT'], ['erneut_faellig', 'TEXT']]) {
+      if (!spalten.includes(spalte)) targetDb.exec(`ALTER TABLE meldungen ADD COLUMN ${spalte} ${typ}`);
+    }
   } catch (e) {
     console.error('ensureMeldungenSchema fehlgeschlagen:', e.message);
   }

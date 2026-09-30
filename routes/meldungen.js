@@ -20,6 +20,7 @@ const { broadcast } = require('../sse');
 const { logAudit } = require('../audit');
 const reste = require('../reste');
 const push = require('../push');
+const regeln = require('../meldung-regeln');
 const { darfMeldungenBearbeiten, darfMeldungenVerwalten, SQL_MELDUNGSBERECHTIGT, SQL_MELDUNGSROLLEN } = require('../meldungrecht');
 
 const router = express.Router();
@@ -110,7 +111,10 @@ router.get('/', authenticate, (req, res) => {
   // Bis wann hat der Nutzer die Meldungen zuletzt gesehen? Daran markiert die Seite „neu"/„geändert" — BEVOR sie
   // selbst „gesehen" meldet (Zähler, routes/badges.js).
   const gesehen = db.prepare("SELECT seen_at FROM user_seen WHERE user_id = ? AND topic = 'meldungen'").get(req.user.id);
-  res.json({ themen, meldungen, gesehen_bis: gesehen ? gesehen.seen_at : null,
+  // Regelmäßige Meldungen mit ihrer nächsten Fälligkeit — alle sehen, was demnächst kommt (Rückfrage 30)
+  let regelListe = [];
+  try { regelListe = regeln.regelnLesen(db, new Date()); } catch (_) { /* Altstand ohne Tabellen */ }
+  res.json({ themen, meldungen, regeln: regelListe, gesehen_bis: gesehen ? gesehen.seen_at : null,
     darf: { bearbeiten: darfMeldungenBearbeiten(req.user), verwalten: darfMeldungenVerwalten(req.user),
             loeschen: req.user.role === 'admin' } });
 });
@@ -349,10 +353,16 @@ router.delete('/themen/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
   const offene = db.prepare("SELECT id FROM meldungen WHERE thema_id = ? AND status IN ('offen', 'in_arbeit')").all(t.id).map(r => r.id);
   db.transaction(() => {
     if (!anzahl) {
+      // Ohne Meldungen ist das Thema ganz weg — seine Regeln (die nie etwas ausgelöst haben) mit
+      const ids = db.prepare('SELECT id FROM meldung_regeln WHERE thema_id = ?').all(t.id).map(r => r.id);
+      for (const id of ids) db.prepare('DELETE FROM meldung_regeln WHERE id = ?').run(id);
       db.prepare('DELETE FROM meldung_themen WHERE id = ?').run(t.id);
+      if (ids.length) reste.nachLoeschen(db, 'meldung_regeln');
       return;
     }
     db.prepare(`UPDATE meldung_themen SET deleted_at = ${JETZT}, deleted_by = ? WHERE id = ?`).run(req.user.id, t.id);
+    // Seine regelmäßigen Meldungen enden mit ihm (Alex, Rückfrage 13)
+    db.prepare(`UPDATE meldung_regeln SET deleted_at = ${JETZT}, deleted_by = ? WHERE thema_id = ? AND deleted_at IS NULL`).run(req.user.id, t.id);
     for (const id of offene) {
       verlauf(db, id, req.user, 'thema_geloescht', t.name, null);
       geaendert(db, id, req.user);
@@ -364,6 +374,80 @@ router.delete('/themen/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
       : 'gelöscht (keine Meldungen)'), ip: req.ip });
   broadcast('meldungen', req.headers['x-tab-id']);
   res.json({ success: true, inHistory: anzahl, offen: offene.length });
+});
+
+// ── Regelmäßige Meldungen (nur Chef/Admin; Etappe 3, meldung-regeln.js) ────────────────────────────────
+
+const regelHolen = (db, id) => db.prepare('SELECT * FROM meldung_regeln WHERE id = ? AND deleted_at IS NULL').get(Number(id));
+const regelAusgabe = (db, id) => regeln.regelnLesen(db, new Date()).find(r => r.id === Number(id)) || null;
+const regelKurz = (r, thema) => `„${kurz(r.text, 40)}" (${thema}): ` + r.ausloeser.map(regeln.ausloeserText).join(' + ');
+
+router.get('/regeln', authenticate, (req, res) => {
+  const db = getDb();
+  res.json({ regeln: regeln.regelnLesen(db, new Date(), req.query.thema_id ? Number(req.query.thema_id) : null) });
+});
+
+// Vorschau der nächsten Fälligkeiten — noch ohne zu speichern (das Formular zeigt sie beim Eintippen)
+router.post('/regeln/vorschau', authenticate, nurVerwalter, (req, res) => {
+  const p = regeln.regelPruefen(req.body || {});
+  if (p.fehler) return res.status(400).json({ error: p.fehler });
+  res.json({ beschreibung: p.r.ausloeser.map(regeln.ausloeserText), naechste: regeln.vorschau(p.r, p.r.ausloeser, new Date(), 5, null) });
+});
+
+router.post('/regeln', authenticate, nurVerwalter, (req, res) => {
+  const db = getDb();
+  const thema = aktivesThema(db, (req.body || {}).thema_id);
+  if (!thema) return res.status(400).json({ error: 'Bitte wähle ein Thema.' });
+  const p = regeln.regelPruefen(req.body || {});
+  if (p.fehler) return res.status(400).json({ error: p.fehler });
+  const id = db.transaction(() => regeln.regelSpeichern(db, null, thema.id, p.r, req.user, new Date()))();
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'meldung_regel_create',
+    details: `Regel Nr. ${id} · ${regelKurz(p.r, thema.name)}`, ip: req.ip });
+  broadcast('meldungen', req.headers['x-tab-id']);
+  res.status(201).json({ regel: regelAusgabe(db, id) });
+});
+
+router.put('/regeln/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
+  const db = getDb();
+  const alt = regelHolen(db, req.params.id);
+  if (!alt) return res.status(404).json({ error: 'Diese Regel gibt es nicht (mehr).' });
+  const thema = aktivesThema(db, (req.body || {}).thema_id || alt.thema_id);
+  if (!thema) return res.status(400).json({ error: 'Dieses Thema gibt es nicht (mehr).' });
+  const p = regeln.regelPruefen(req.body || {});
+  if (p.fehler) return res.status(400).json({ error: p.fehler });
+  db.transaction(() => regeln.regelSpeichern(db, alt.id, thema.id, p.r, req.user, new Date()))();
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'meldung_regel_update',
+    details: `Regel Nr. ${alt.id} · ${regelKurz(p.r, thema.name)}`, ip: req.ip });
+  broadcast('meldungen', req.headers['x-tab-id']);
+  res.json({ regel: regelAusgabe(db, alt.id) });
+});
+
+// Pausieren / fortsetzen. Beim Fortsetzen zählt es ab heute — die Pause wird nicht nachgeholt.
+router.post('/regeln/:id(\\d+)/pause', authenticate, nurVerwalter, (req, res) => {
+  const db = getDb();
+  const r = regelHolen(db, req.params.id);
+  if (!r) return res.status(404).json({ error: 'Diese Regel gibt es nicht (mehr).' });
+  const pausiert = (req.body || {}).pausiert ? 1 : 0;
+  if (pausiert === r.pausiert) return res.json({ regel: regelAusgabe(db, r.id), unveraendert: true });
+  if (pausiert) db.prepare(`UPDATE meldung_regeln SET pausiert = 1, updated_at = ${JETZT}, updated_by = ? WHERE id = ?`).run(req.user.id, r.id);
+  else db.prepare(`UPDATE meldung_regeln SET pausiert = 0, gueltig_ab = ?, updated_at = ${JETZT}, updated_by = ? WHERE id = ?`)
+    .run(require('../zeit').berlinHeute() + ' 00:00', req.user.id, r.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'meldung_regel_pause',
+    details: `Regel Nr. ${r.id} „${kurz(r.text, 40)}" ${pausiert ? 'pausiert' : 'fortgesetzt'}`, ip: req.ip });
+  broadcast('meldungen', req.headers['x-tab-id']);
+  res.json({ regel: regelAusgabe(db, r.id) });
+});
+
+// Löschen: die Regel endet; schon erzeugte Meldungen bleiben stehen (Rückfrage 29).
+router.delete('/regeln/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
+  const db = getDb();
+  const r = regelHolen(db, req.params.id);
+  if (!r) return res.status(404).json({ error: 'Diese Regel gibt es nicht (mehr).' });
+  db.prepare(`UPDATE meldung_regeln SET deleted_at = ${JETZT}, deleted_by = ? WHERE id = ?`).run(req.user.id, r.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'meldung_regel_delete',
+    details: `Regel Nr. ${r.id} „${kurz(r.text, 40)}" gelöscht — erzeugte Meldungen bleiben`, ip: req.ip });
+  broadcast('meldungen', req.headers['x-tab-id']);
+  res.json({ success: true });
 });
 
 module.exports = router;

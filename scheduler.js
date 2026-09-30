@@ -332,6 +332,8 @@ function start(getDb) {
   const run = () => {
     // tick() ist async: try/catch allein fängt nur den synchronen Teil — die Ablehnung braucht .catch (R2)
     try { tick(getDb()).catch(e => console.error('summary tick fehlgeschlagen:', e && e.message)); } catch (e) { console.error('summary tick fehlgeschlagen:', e && e.message); }
+    // Regelmäßige Meldungen (meldung-regeln.js): minütlich prüfen, was fällig ist; danach live an alle Geräte
+    try { if (require('./meldung-regeln').regelnPruefen(getDb()).length) require('./sse').broadcast('meldungen'); } catch (e) { console.error('regelmäßige Meldungen fehlgeschlagen:', e && e.message); }
     try { const d = berlinParts().date; if (d !== lastExtendDate) { lastExtendDate = d; extendSeries(getDb()); } } catch (e) { console.error('series extend fehlgeschlagen:', e && e.message); }
     // Eigener Tagesmerker: Faellt die Serien-Verlaengerung mit einem Fehler aus, darf der Austritt
     // trotzdem vollzogen werden — ein offen bleibendes Konto ist das groessere Problem.

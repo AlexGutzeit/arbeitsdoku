@@ -191,7 +191,7 @@ function req(server, method, p, token, body) {
     console.log('\n── Kein Ziel im Code darf die Raute vergessen ──');
     // Der Fangzaun: Die Prüfungen oben treffen nur, was der Test wirklich auslöst. Eine später
     // ergänzte Meldung mit falschem Ziel käme sonst ungeprüft durch.
-    const quellen = ['routes/orders.js', 'routes/bulletin.js', 'routes/absences.js', 'routes/meldungen.js',
+    const quellen = ['routes/orders.js', 'routes/bulletin.js', 'routes/absences.js', 'routes/meldungen.js', 'meldung-regeln.js',
                      'routes/notes.js', 'routes/push.js', 'scheduler.js', 'notizen-live.js', 'routes/notiz-gaeste.js'];
     const schlechte = [];
     for (const datei of quellen) {
