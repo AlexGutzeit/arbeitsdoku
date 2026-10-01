@@ -293,7 +293,7 @@ async function _mldDetail(id, themen) {
   const schliessen = () => { overlay.remove(); aufraeumen(); if (erinnerungGeaendert) renderMeldungen(); };
   const aufraeumen = dialogBarrierefrei(overlay, schliessen);
   klickDanebenSchliesst(overlay, schliessen);
-  overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.querySelector('.mld-erinnerung-form')) schliessen(); });
+  overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') schliessen(); });   // das Formular darüber ist ein Geschwister: sein Escape kommt hier nicht an
   overlay.querySelector('[data-act="zu"]').addEventListener('click', schliessen);
   const nachher = (text) => { erinnerungGeaendert = false; schliessen(); if (text) toast(text, 'success'); renderMeldungen(); };
 

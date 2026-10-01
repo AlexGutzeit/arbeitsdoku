@@ -4240,3 +4240,60 @@ Gegenprobe ohne Regel: rot.
 Rückkehrpunkt `vor-handy-wischen-deploy` (= `76de33d`). Die Datenbank ist vorher/nachher in allen 57 Tabellen
 gleich, die Datei heil. Die Notizen gingen seit 23:01 von 11 auf 10 zurück. Das Protokoll zeigt drei
 Löschungen durch den Eigentümer selbst. Damit ist auch das neue `notiz_geloescht` im Echtbetrieb belegt.
+
+## Persönliche Erinnerungen an Meldungen (01.10.2026)
+
+Alex: „Was, wenn man die Nachricht bekommt und der Termin zur Reparatur oder zum TÜV erst in vier Wochen ist?
+Bis dahin habe ich den Termin vergessen.“ Gewünscht waren eine oder mehrere Erinnerungen mit Datum und
+Uhrzeit, danach wieder Coin, Erinnerungs-Push und Hervorheben. Bei „erledigt“ pausieren sie, beim
+Wiederöffnen sind sie wieder aktiv.
+
+**Entschieden (Rückfragen):** Erinnerungen gelten **immer nur für den, der sie stellt**. Stellen dürfen **nur
+Bearbeiter** (`darfMeldungenBearbeiten`). Fällt eine Erinnerung in die Pause, **verfällt** sie. Die Push läuft
+über den Schalter **„Meldungen“**, es gibt keinen eigenen. Daraus folgt: Erinnerungen stehen nicht im Verlauf
+der Meldung, den alle lesen, sondern nur im Protokoll. Wer das Recht verliert oder ausgestellt wird, bekommt
+keine mehr.
+
+- **`meldung-erinnerungen.js`** (neu, Stammdatei): Prüfen, eigene lesen, anlegen, ändern, löschen und
+  `faelligePruefen` für den Zeitplaner (minütlich in `scheduler.start`).
+  - **Zeiten:** `um` ist deutsche Ortszeit `JJJJ-MM-TT HH:MM`. `stand_am` ist UTC wie `updated_at`, weil der
+    Zähler es mit `user_seen` vergleicht.
+  - **Stand:** `stand` ist wartet, ausgeloest oder verpasst. `grund` ist „Meldung ruhte“ oder „ohne Recht“.
+    Ohne den Grund stünde beim entzogenen Recht fälschlich „in der Pause verpasst“.
+  - **Kein Doppelversand:** Erst wird der Stand vermerkt (`UPDATE … WHERE stand = 'wartet'`), dann
+    gesendet.
+  - **Server lief nicht:** Der nächste Lauf holt die Erinnerung nach, sofern die Meldung noch aktiv ist.
+- **Tabelle `meldung_erinnerungen`** (in `ensureMeldungenSchema`, also auch auf dem Rückspielweg). In `reste.js`
+  ist sie bei beiden Fremdschlüsseln als ANHAENGSEL eingetragen: Meldung gelöscht oder Konto gelöscht, dann
+  ist sie weg.
+- **Routen:**
+  - `POST /api/meldungen/:id/erinnerungen` nur, solange die Meldung aktiv ist (sonst 409); höchstens 20 je
+    Person und Meldung.
+  - `PUT` und `DELETE /api/meldungen/erinnerungen/:eid` wirken nur auf eigene Erinnerungen, fremde ergeben 404.
+    Ändern setzt die Erinnerung wieder auf „wartet“. Löschen geht auch ohne Recht.
+  - Listen und Detail liefern je Meldung die **eigenen** Erinnerungen mit.
+- **Zähler:** `computeBadgeCounts` zählt ausgelöste Erinnerungen seit dem letzten Besuch zu `meldungen` dazu
+  (`meldungenErinnerungen`). Die Zusammenfassung zieht sie wieder ab, weil ihre Push schon kam.
+- **Oberfläche (app-10):**
+  - **Karte:** zeigt *„🔔 nächste +N“* oder *„🔔 Erinnerung ruht“*. Ist eine Erinnerung seit dem Besuch
+    gekommen, trägt sie die Marke **„🔔 Erinnerung“**.
+  - **Detail:** Abschnitt „Meine Erinnerungen · nur für dich“, der an Ort und Stelle neu gezeichnet wird. Der
+    Dialog bleibt also offen; ein Schließen und Wiederöffnen wäre mit dem zeitversetzten `history.back()`
+    (R28) gefährlich.
+  - **Formular:** Datum mit Schnellwahl, Uhrzeit = Arbeitsbeginn, Hinweis. Escape schließt nur das Formular.
+- **Tests:**
+  - `meldung-erinnerungen.js` (43 Prüfungen, gestellte Uhr, die nur vorwärts geht).
+  - `meldung-erinnerungen-ui.js` (22 Prüfungen, Port 3364): Der **echte** Zeitplaner löst die Erinnerung
+    eines zweiten Chefs aus, gestellt auf die nächste Minute, während die anderen Teile laufen. Coin „1“
+    live, Marke an der Karte.
+  - **Falle:** Als Chef zählt der zweite Chef jede fremde Änderung mit. Eine „erledigt“-Änderung nach seinem
+    Besuch machte aus dem Coin „2“, deshalb liegt sie jetzt vor seinem ersten Besuch.
+- **Gegenproben 13 von 13 rot** (Skript im Scratchpad):
+  - **Server:** fremde Erinnerungen sichtbar; Pause nicht beachtet; Recht beim Auslösen nicht geprüft;
+    Push an alle Bearbeiter; bleibt wartend (Doppelversand); neues Datum macht nicht scharf; Zähler ohne
+    Erinnerungen; Zusammenfassung zieht nicht ab; Datenauskunft ohne; Stellen in der History.
+  - **Oberfläche:** Marke fehlt; Karte zeigt die nächste nicht; Formular ohne Escape.
+  - **Aufgefallen:** Die erste Escape-Gegenprobe blieb grün. Die Schutzbedingung im Detail („nicht schließen,
+    solange das Formular offen ist“) war wirkungslos: Formular und Detail sind Geschwister im `body`, ein
+    Escape im Formular erreicht das Detail nie. Die Bedingung ist entfernt; die Gegenprobe schaltet jetzt das
+    Escape des Formulars ab und wird rot.

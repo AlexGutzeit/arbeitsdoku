@@ -716,6 +716,24 @@ zeigt beim Eintippen die nächsten fünf Fälligkeiten. Am Thema sehen **alle**,
 - **Pausieren** hält die Regel an (beim Fortsetzen zählt es ab dem Tag des Fortsetzens), **Löschen**
   beendet sie — schon angelegte Meldungen bleiben. Wird das **Thema gelöscht**, enden seine Regeln.
 
+**🔔 Erinnern** — wenn der Termin erst in vier Wochen ist: Wer Meldungen bearbeitet (Chef, Admin,
+Einzelrecht), stellt sich im Detail einer Meldung unter **„Meine Erinnerungen“** eine oder mehrere
+Erinnerungen mit **Datum und Uhrzeit** (vorbelegt: morgen zum Arbeitsbeginn; Schnellwahl *morgen / in 1 Woche
+/ in 4 Wochen*) und auf Wunsch einem **Hinweis** (*„Werkstatt Müller, 9 Uhr“*).
+
+- **Nur für dich:** Eine Erinnerung bekommt und sieht nur, wer sie gestellt hat — nicht der zweite Chef,
+  nicht der Melder. Deshalb steht sie nicht im Verlauf der Meldung (den alle lesen), sondern nur im Protokoll.
+- **Zur Zeit** kommt eine Push *„🔔 Erinnerung: Auto 2“* mit Hinweis und Meldungstext (Schalter
+  **„Meldungen“**), der **Zähler** am Menü steigt, und die Karte trägt beim nächsten Betreten die Marke
+  **„🔔 Erinnerung“**. An der Karte steht sonst die nächste: *„🔔 Di 27.10.2026, 07:00 +1“*.
+- **Erledigt, zurückgezogen oder Thema gelöscht:** Die Erinnerungen **ruhen** (nichts wird gelöscht).
+  Fällt ihre Zeit in diese Pause, **verfällt** sie (*„in der Pause verpasst“*) und kommt beim Wiederöffnen
+  nicht nach; spätere sind nach dem Wiederöffnen wieder aktiv. **„Neues Datum“** macht eine verfallene oder
+  schon gekommene Erinnerung wieder scharf.
+- Wer das Recht verliert oder ausgestellt wird, bekommt keine mehr (*„verfallen — ohne Bearbeitungsrecht“*);
+  löschen kann man die eigenen immer. Einmalig — Wiederkehrendes sind die regelmäßigen Meldungen. Höchstens
+  20 je Person und Meldung. In der geplanten Zusammenfassung zählen Erinnerungen nicht mit (die Push kam schon).
+
 ### Zusammenarbeit
 
 #### 📌 Schwarzes Brett

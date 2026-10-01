@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**268 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**270 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -160,6 +160,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `longpress-prodklon.js` | Prod-Klon-Pruefung fuer B7 (langer Druck zeigt Details). |
 | `manager-rights-api.js` | API-Test (#9): Beim Anlegen/Bearbeiten werden die Einzelrecht-Flags (can_plan/can_plan_all/ |
 | `manager-rights-normalize.js` | Unit-Test (#9): normalizeManagerRights() nullt die redundanten Einzelrecht-Flags von Chef/Admin |
+| `meldung-erinnerungen-ui.js` | Persönliche Erinnerungen an Meldungen — Oberfläche und echter Zeitplaner (Alex, 01.10.2026). |
+| `meldung-erinnerungen.js` | Persönliche Erinnerungen an Meldungen — Server und Zeitplaner (Alex, 01.10.2026). |
 | `meldung-klick-ui.js` | Der Klick auf eine Meldung landet im richtigen Menü — die Seite des Clients (Alex, 27.08.2026). |
 | `meldung-regeln-api.js` | Regelmäßige Meldungen — Server und Zeitplaner (Etappe 3, 30.09.2026). |
 | `meldung-regeln-ui.js` | Regelmäßige Meldungen — Oberfläche und echter Zeitplaner (Etappe 3, 30.09.2026). |
