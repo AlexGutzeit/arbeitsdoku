@@ -4329,3 +4329,34 @@ GitGuardian meldete am 01.10.2026 einen privaten VAPID-Schlüssel in `AlexGutzei
 - **Nicht gemacht:** Die Git-Geschichte wurde nicht umgeschrieben. Das ginge nur per Force-Push und erreicht
   Kopien und Zwischenspeicher trotzdem nicht; der alte Schlüssel ist nach dem Tausch wertlos.
 - **Für Alex:** Die Meldung bei GitGuardian als erledigt markieren („revoked“).
+
+## R31: Anmelde-Schleife durch den Browser-Zwischenspeicher (01.10.2026)
+
+Alex' PWA (Chrome, Android) warf ihn ab 20:24 nach jeder Anmeldung sofort wieder heraus, auch mit
+Zwei-Faktor-Code. Vivaldi auf demselben Handy ging. Weder das Schließen der App noch das Löschen der
+Website-Daten half.
+
+**Spurensuche:**
+- **Protokoll:** Darin stand „Anmeldung erfolgreich“ und „Sitzung abgelaufen“ in derselben Sekunde
+  (20:30:16, 20:49:39, 21:09:41). Der letzte Fall kam nach dem Löschen der Website-Daten; die App hatte
+  wieder den Code verlangt.
+- **Server:** Ein frisch ausgestelltes Token mit Alex' echtem Kontostand (Zwei-Faktor wöchentlich,
+  Höchstdauer 7 Tage) ließ er in-process durch.
+- **Nachstellung:** Sie klappte erst mit dem Zwischenspeicher. Nach dem Neuladen lieferte der Server
+  `X-Neues-Token` mit, Chrome hob die Antworten mit ETag auf. Nach der Neuanmeldung kamen `304` für
+  `/api/badges`, `/api/auth/me` und `/api/avatare`, Chrome gab die gespeicherten Antworten mit dem alten
+  Token heraus, die App übernahm es, und es folgten `401` und `#/login`.
+
+**Lösung (zwei Sicherungen, je einzeln gegengeprüft):**
+- **Server:** `app.set('etag', false)` plus `Cache-Control: no-store` für `/api`. Eigene Regeln einzelner
+  Routen (Profilbilder `private, max-age=300`) setzen sich danach durch. Die statischen Dateien hatten schon
+  vorher kein ETag.
+- **App:** `istNeueresToken(neu, aktuell)` (app-1-core.js) lässt nur ein Token mit größerem `iat` und
+  `exp` in der Zukunft zu, für `X-Neues-Token` und für das `storage`-Ereignis anderer Tabs.
+- **Protokoll:** `session_expired` nennt Anfrage und Alter des Tokens. Die Sperre gegen Wiederholungen gilt
+  jetzt je Token statt je Nutzer.
+- **Test** `tests/sitzung-zwischenspeicher-ui.js` (12, Port 3365). **Gegenproben 5/5 rot:** Server-Sicherung,
+  App-Sicherung (Kopfzeile), App-Sicherung (Tab), beide (die Schleife: zurück auf `#/login`) und das
+  Protokoll. Ist nur eine Sicherung weg, bleibt die Schleife aus; das ist gewollt, darum prüft der Test
+  jede Sicherung auch einzeln.
+- **Sofortlösung bis zum Deploy:** Chrome → Browserdaten löschen → „Bilder und Dateien im Cache“.

@@ -466,6 +466,28 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   `meldung-klick-ui` (8); Gegenproben 8/8 rot an ihrer Stelle — der alte Service Worker schickt die Meldung an die
   Gästeseite (Alex' Fall).
 
+### [ ] R31 · Nach jeder Anmeldung sofort wieder „Sitzung abgelaufen“ *(gemeldet von Alex 01.10.2026 · gebaut `c569c8c`, Cache 443)*
+- **Gemeldet:** Alex' PWA am Handy (Chrome) warf ihn nach jeder Anmeldung, auch mit Zwei-Faktor-Code, sofort wieder auf
+  die Anmeldeseite: „Deine Sitzung ist abgelaufen". Website-Daten löschen half nicht, Vivaldi auf demselben Handy ging.
+- **Ursache:**
+  - Chrome hob API-Antworten auf (Express setzt ein ETag) und lieferte bei „304 — unverändert" die **gespeicherte**
+    Antwort samt ihrer alten Kopfzeilen aus, auch ein altes `X-Neues-Token` der gleitenden Sitzung (R1).
+  - `tokenUebernehmen` nahm es an, weil es zum selben Nutzer gehörte. Dessen Anmeldung lag über der Höchstdauer
+    (Alex: 7 Tage, Zwei-Faktor „wöchentlich“; seit dem 24.09. angemeldet), also 401 und sofort wieder abgemeldet.
+  - Im Protokoll stand dadurch „Anmeldung erfolgreich“ und „Sitzung abgelaufen“ in **derselben Sekunde**.
+  - „Website-Daten löschen" leert den Bild- und Datei-Cache nicht.
+- **Hätte jeden getroffen**, dessen Sitzung die Höchstdauer erreicht: bei 30 Tagen frühestens ab dem 24.10.2026,
+  bei „täglich“ schon nach einem Tag. Nachgestellt im Test (Schleife zurück auf `#/login`).
+- **Gelöst (zwei Sicherungen):**
+  - **Server:** API-Antworten ohne ETag und mit `Cache-Control: no-store` (`server.js`), also nie ein 304.
+  - **App:** `tokenUebernehmen` und der Abgleich zwischen Tabs nehmen nur ein **neueres**, noch gültiges Token
+    (`istNeueresToken`, app-1-core.js).
+  - `session_expired` nennt jetzt Anfrage und Alter des Tokens; ohne das war nur „abgelaufen“ zu sehen.
+  - **Test** `sitzung-zwischenspeicher-ui` (12). **Gegenproben 5/5 rot:** jede Sicherung einzeln, beide zusammen
+    (die Schleife), das Protokoll.
+- **Sofortlösung für Betroffene bis zum Deploy:** Chrome → Einstellungen → Datenschutz → Browserdaten löschen →
+  „Bilder und Dateien im Cache“.
+
 ## Geprüft und in Ordnung
 
 Damit diese Punkte nicht ein zweites Mal untersucht werden:
@@ -488,4 +510,5 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 
 ## Stand der Liste
 
-**Alle Punkte R1–R30 sind erledigt und deployt** (30.09.2026, zuletzt R30 mit `8ca3263`, Cache 437).
+**R1–R30 sind erledigt und deployt** (30.09.2026, zuletzt R30 mit `8ca3263`, Cache 437). **R31** (Anmelde-Schleife durch
+den Browser-Zwischenspeicher, 01.10.2026) ist gebaut, aber noch nicht deployt.
