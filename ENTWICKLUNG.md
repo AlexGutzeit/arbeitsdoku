@@ -4360,3 +4360,12 @@ Website-Daten half.
   Protokoll. Ist nur eine Sicherung weg, bleibt die Schleife aus; das ist gewollt, darum prüft der Test
   jede Sicherung auch einzeln.
 - **Sofortlösung bis zum Deploy:** Chrome → Browserdaten löschen → „Bilder und Dateien im Cache“.
+
+**Deploy R31 (01.10.2026, 22:06, `4f81a93`, Cache 443) — auf Alex' Wunsch VOR der Suite** („full backup, dann
+gleich den deploy … die Suite dann gerne hinterher“). Vorher liefen der neue Test (12/12) mit 5/5 Gegenproben
+und neun bestehende Sitzungs- und Anmeldetests grün. Die volle Suite auf der Kopie von 22:04 lief beim Deploy
+schon. `main` wurde per `git branch -f` gesetzt statt per `checkout` + `merge`, damit die laufende Suite nicht
+kurz den alten Stand sah. Vollsicherung `arbeitsdoku_backup_20261001-220603.adbk` (dreifach, Rückspielprobe).
+Rückkehrpunkt `vor-r31-deploy` (= `66f2a13`). Mit dem Deploy gingen auch die Teständerungen von heute mit
+(VAPID-Schlüssel, Wächter). Auf Prod: `/api` mit `cache-control: no-store`, ohne ETag, auch mit If-None-Match
+200. Datenbank 58/58 Tabellen gleich, Datei heil.

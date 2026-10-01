@@ -466,7 +466,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
   `meldung-klick-ui` (8); Gegenproben 8/8 rot an ihrer Stelle — der alte Service Worker schickt die Meldung an die
   Gästeseite (Alex' Fall).
 
-### [ ] R31 · Nach jeder Anmeldung sofort wieder „Sitzung abgelaufen“ *(gemeldet von Alex 01.10.2026 · gebaut `c569c8c`, Cache 443)*
+### [x] R31 · Nach jeder Anmeldung sofort wieder „Sitzung abgelaufen“ *(gemeldet von Alex 01.10.2026 · **DEPLOYED 01.10.2026 22:06**, `c569c8c`, Cache 443)*
 - **Gemeldet:** Alex' PWA am Handy (Chrome) warf ihn nach jeder Anmeldung, auch mit Zwei-Faktor-Code, sofort wieder auf
   die Anmeldeseite: „Deine Sitzung ist abgelaufen". Website-Daten löschen half nicht, Vivaldi auf demselben Handy ging.
 - **Ursache:**
@@ -511,4 +511,4 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 ## Stand der Liste
 
 **R1–R30 sind erledigt und deployt** (30.09.2026, zuletzt R30 mit `8ca3263`, Cache 437). **R31** (Anmelde-Schleife durch
-den Browser-Zwischenspeicher, 01.10.2026) ist gebaut, aber noch nicht deployt.
+den Browser-Zwischenspeicher) ist am 01.10.2026 um 22:06 deployt (`4f81a93`, Cache 443).
