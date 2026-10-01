@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**270 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**271 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -139,6 +139,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `hoechstzeit-prodklon.js` | Die Höchstarbeitszeit-Warnung an ECHTEN Daten: warnt sie nur — oder verändert sie etwas? |
 | `jugendschutz-uebergang-prodklon.js` | Der 18. Geburtstag am ECHTEN Datenstand: Kippt die Pausenregel am richtigen Tag? |
 | `katalog-spiegel-ui.js` | Der Katalog-Spiegel auf dem Gerät (Alex, 09.09.2026). |
+| `keine-geheimnisse.js` | Keine Geheimnisse im Repo (Alex, 01.10.2026). |
 | `kleine-sackgassen-ui.js` | Kleine Sackgassen: Downloads, abgelaufener Zwei-Faktor-Schritt, Abmelden, neue Rechte |
 | `kollab-buendel.js` | Das Bündel für die gemeinsamen Notizen (Etappe A, Schritt 2 — 26.09.2026). |
 | `konto-loeschen-ui.js` | Mitarbeiter endgültig löschen — Oberfläche (Alex, 28.09.2026). |

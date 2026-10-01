@@ -4303,3 +4303,29 @@ Kopie von 12:23. Vollsicherung `arbeitsdoku_backup_20261001-135117.adbk` (dreifa
 Rückspielprobe). Rückkehrpunkt `vor-meldung-erinnerungen-deploy` (= `18b8852`). Datenbank: 57 → 58 Tabellen,
 neu ist `meldung_erinnerungen` (leer). Alte Tabellen und Spalten sind unverändert, die Datei ist heil. Im
 Serverprotokoll steht nach mehreren Zeitplaner-Läufen kein Fehler.
+
+## GitGuardian: privater VAPID-Schlüssel im Repo (01.10.2026)
+
+GitGuardian meldete am 01.10.2026 einen privaten VAPID-Schlüssel in `AlexGutzeit/arbeitsdoku`.
+
+- **Befund:** Sieben Tests trugen seit dem 27.06.2026 (erster Push-Test) dasselbe Schlüsselpaar fest im
+  Code. Ausgelöst hat die Meldung die siebte Datei, der neue Test `meldung-erinnerungen.js`, weil er den
+  Kopf aus einem älteren Test übernommen hatte.
+- **Wessen Schlüssel:** Verglichen wurden nur Prüfsummen, kein Wert wurde angezeigt. Es war der Schlüssel der
+  **lokalen Entwicklungsumgebung** (Laptop-`.env`). VPS und Mini-PC haben einen anderen Schlüssel. Der
+  Prod-Schlüssel stand in keinem der 246 in Frage kommenden 43-Zeichen-Werte der gesamten Git-Geschichte
+  (alle Zweige). `.env` und `.env.deploy` wurden nie committet.
+- **Risiko:** gering. Mit dem Schlüssel ließen sich nur Pushs an Browser schicken, die sich beim lokalen
+  Testserver angemeldet hatten.
+- **Behoben:**
+  1. Die sieben Tests erzeugen ihr Paar beim Start (`webpush.generateVAPIDKeys()`).
+  2. In der lokalen `.env` steht ein neues Paar. Der Dev-Server auf :3000 ist neu gestartet und liefert
+     nachweislich den neuen Schlüssel aus. Die `.env` hat jetzt die Rechte 600.
+  3. Der neue Wächter `tests/keine-geheimnisse.js` durchsucht jede verfolgte **und jede neue, noch nicht
+     committete** Datei nach privaten VAPID- und PEM-Schlüsseln und nach den Werten der geheimen Einträge
+     der lokalen `.env`. Gegenproben 3 von 3 rot, jeweils aus dem richtigen Grund: alter Schlüssel, lokales
+     `JWT_SECRET`, PEM-Kopf.
+  - Das PEM-Beispiel im Test wird zur Laufzeit zusammengesetzt, sonst schlüge er bei sich selbst an.
+- **Nicht gemacht:** Die Git-Geschichte wurde nicht umgeschrieben. Das ginge nur per Force-Push und erreicht
+  Kopien und Zwischenspeicher trotzdem nicht; der alte Schlüssel ist nach dem Tausch wertlos.
+- **Für Alex:** Die Meldung bei GitGuardian als erledigt markieren („revoked“).
