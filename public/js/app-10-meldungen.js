@@ -411,11 +411,11 @@ function _mldErinnerungenHtml(m, darf) {
         return `
         <li class="mld-e mld-e-${e.stand}${e.stand === 'wartet' && !aktiv ? ' mld-e-ruht' : ''}" data-eid="${e.id}">
           <span class="mld-e-zeit">${esc(_mldUm(e.um))}</span>${stand ? ` <span class="mld-e-stand">${stand}</span>` : ''}
-          ${e.hinweis ? `<span class="mld-e-hinweis">${esc(e.hinweis)}</span>` : ''}
           <span class="mld-e-knoepfe">
             ${darf.bearbeiten ? `<button class="btn btn-xs btn-outline" data-e="aendern">${e.stand === 'wartet' ? 'Ändern' : 'Neues Datum'}</button>` : ''}
             <button class="btn btn-xs btn-outline" data-e="loeschen" aria-label="Erinnerung vom ${esc(_mldUm(e.um))} löschen">Löschen</button>
           </span>
+          ${e.hinweis ? `<span class="mld-e-hinweis">${esc(e.hinweis)}</span>` : ''}
         </li>`; }).join('')}</ul>` : ''}
       ${darf.bearbeiten && aktiv ? '<button class="btn btn-sm btn-outline" data-act="erinnern">🔔 Erinnern</button>'
         : darf.bearbeiten ? '<p class="mld-hinweis">Solange die Meldung in der History steht, ruhen Erinnerungen. Öffnest du sie wieder, kannst du eine neue stellen.</p>' : ''}
