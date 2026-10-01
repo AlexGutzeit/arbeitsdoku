@@ -4297,3 +4297,9 @@ keine mehr.
     solange das Formular offen ist“) war wirkungslos: Formular und Detail sind Geschwister im `body`, ein
     Escape im Formular erreicht das Detail nie. Die Bedingung ist entfernt; die Gegenprobe schaltet jetzt das
     Escape des Formulars ab und wird rot.
+
+**Deploy Meldungs-Erinnerungen (01.10.2026, 13:51, `66f2a13`, Cache 442).** Die Suite lief 270 von 270 auf der
+Kopie von 12:23. Vollsicherung `arbeitsdoku_backup_20261001-135117.adbk` (dreifach, gleiche Prüfsumme,
+Rückspielprobe). Rückkehrpunkt `vor-meldung-erinnerungen-deploy` (= `18b8852`). Datenbank: 57 → 58 Tabellen,
+neu ist `meldung_erinnerungen` (leer). Alte Tabellen und Spalten sind unverändert, die Datei ist heil. Im
+Serverprotokoll steht nach mehreren Zeitplaner-Läufen kein Fehler.
