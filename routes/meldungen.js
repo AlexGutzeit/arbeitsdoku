@@ -21,6 +21,7 @@ const { logAudit } = require('../audit');
 const reste = require('../reste');
 const push = require('../push');
 const regeln = require('../meldung-regeln');
+const erinnerungen = require('../meldung-erinnerungen');
 const { darfMeldungenBearbeiten, darfMeldungenVerwalten, SQL_MELDUNGSBERECHTIGT, SQL_MELDUNGSROLLEN } = require('../meldungrecht');
 
 const router = express.Router();
@@ -50,6 +51,12 @@ const istHistory = (m) => m.status === 'erledigt' || m.status === 'zurueckgezoge
 
 function holen(db, id) {
   return db.prepare(MELDUNG_SQL + ' WHERE m.id = ?').get(id);
+}
+
+// Jede Meldung bekommt die EIGENEN Erinnerungen des Fragenden mit — fremde sieht niemand (Alex, 01.10.2026).
+function mitErinnerungen(db, user, liste) {
+  const je = erinnerungen.eigeneZu(db, user.id, liste.map(m => m.id));
+  return liste.map(m => ({ ...m, erinnerungen: je.get(m.id) || [] }));
 }
 
 function verlauf(db, meldungId, user, art, vorher, nachher) {
@@ -108,13 +115,14 @@ router.get('/', authenticate, (req, res) => {
   const meldungen = db.prepare(MELDUNG_SQL + `
     WHERE m.status IN ('offen', 'in_arbeit') AND t.deleted_at IS NULL
     ORDER BY m.dringend DESC, m.created_at ASC`).all().map(m => ausgabe(m, req.user));
+  const mitEigenen = mitErinnerungen(db, req.user, meldungen);
   // Bis wann hat der Nutzer die Meldungen zuletzt gesehen? Daran markiert die Seite „neu"/„geändert" — BEVOR sie
   // selbst „gesehen" meldet (Zähler, routes/badges.js).
   const gesehen = db.prepare("SELECT seen_at FROM user_seen WHERE user_id = ? AND topic = 'meldungen'").get(req.user.id);
   // Regelmäßige Meldungen mit ihrer nächsten Fälligkeit — alle sehen, was demnächst kommt (Rückfrage 30)
   let regelListe = [];
   try { regelListe = regeln.regelnLesen(db, new Date()); } catch (_) { /* Altstand ohne Tabellen */ }
-  res.json({ themen, meldungen, regeln: regelListe, gesehen_bis: gesehen ? gesehen.seen_at : null,
+  res.json({ themen, meldungen: mitEigenen, regeln: regelListe, gesehen_bis: gesehen ? gesehen.seen_at : null,
     darf: { bearbeiten: darfMeldungenBearbeiten(req.user), verwalten: darfMeldungenVerwalten(req.user),
             loeschen: req.user.role === 'admin' } });
 });
@@ -141,7 +149,7 @@ router.get('/history', authenticate, (req, res) => {
     JOIN meldungen m ON m.thema_id = t.id
     WHERE m.status IN ('erledigt', 'zurueckgezogen') OR t.deleted_at IS NOT NULL
     ORDER BY geloescht, t.sort, t.name`).all().map(t => ({ ...t, geloescht: !!t.geloescht }));
-  res.json({ meldungen: zeilen.slice(0, limit).map(m => ausgabe(m, req.user)), mehr: zeilen.length > limit, themen });
+  res.json({ meldungen: mitErinnerungen(db, req.user, zeilen.slice(0, limit).map(m => ausgabe(m, req.user))), mehr: zeilen.length > limit, themen });
 });
 
 // Eine Meldung mit Verlauf (Detail-Ansicht).
@@ -150,7 +158,7 @@ router.get('/:id(\\d+)', authenticate, (req, res) => {
   const m = holen(db, req.params.id);
   if (!m) return res.status(404).json({ error: 'Diese Meldung gibt es nicht mehr.' });
   const verlaufListe = db.prepare('SELECT art, user_name, at, vorher, nachher FROM meldung_verlauf WHERE meldung_id = ? ORDER BY id').all(m.id);
-  res.json({ meldung: ausgabe(m, req.user), verlauf: verlaufListe });
+  res.json({ meldung: mitErinnerungen(db, req.user, [ausgabe(m, req.user)])[0], verlauf: verlaufListe });
 });
 
 // ── Melden und ändern ──────────────────────────────────────────────────────────────────────────────────
@@ -289,6 +297,61 @@ router.delete('/:id(\\d+)', authenticate, (req, res) => {
     details: `Nr. ${m.id} · ${m.thema_name} · von ${m.created_by_name} (${STATUS_TEXT[m.status] || m.status}): ${kurz(m.text, 120)}`, ip: req.ip });
   broadcast('meldungen', req.headers['x-tab-id']);
   res.json({ success: true });
+});
+
+// ── Erinnerungen (persönlich, nur Bearbeiter; meldung-erinnerungen.js) ─────────────────────────────────
+// Sie gehören dem, der sie stellt: Andere sehen sie nicht, und sie stehen deshalb nicht im Verlauf der Meldung,
+// den alle lesen — nur im Protokoll. Eine fremde Erinnerung gibt es für den Fragenden schlicht nicht (404).
+
+const erinnerungsListe = (db, user, meldungId) => erinnerungen.eigeneZu(db, user.id, [meldungId]).get(meldungId) || [];
+const erinnerungKurz = (e) => erinnerungen.umText(e.um) + (e.hinweis ? ` „${kurz(e.hinweis, 40)}"` : '');
+
+router.post('/:id(\\d+)/erinnerungen', authenticate, (req, res) => {
+  if (!darfMeldungenBearbeiten(req.user)) return res.status(403).json({ error: 'Erinnerungen stellt, wer Meldungen bearbeitet (Chef, Admin, Einzelrecht).' });
+  const db = getDb();
+  const m = holen(db, req.params.id);
+  if (!m) return res.status(404).json({ error: 'Diese Meldung gibt es nicht mehr.' });
+  if (!erinnerungen.meldungAktiv(m)) return res.status(409).json({ error: 'Die Meldung steht in der History — dort ruhen Erinnerungen. Öffne sie wieder, dann kannst du eine stellen.' });
+  const p = erinnerungen.pruefen(req.body, new Date());
+  if (p.fehler) return res.status(400).json({ error: p.fehler });
+  if (erinnerungen.anzahl(db, req.user.id, m.id) >= erinnerungen.MAX_JE_MELDUNG) {
+    return res.status(409).json({ error: `Mehr als ${erinnerungen.MAX_JE_MELDUNG} Erinnerungen an einer Meldung gehen nicht.` });
+  }
+  const id = erinnerungen.anlegen(db, req.user.id, m.id, p);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'meldung_erinnerung_create',
+    details: `Nr. ${m.id} · ${m.thema_name}: ${erinnerungKurz(p)} (${kurz(m.text, 40)})`, ip: req.ip });
+  broadcast('meldungen', req.headers['x-tab-id']);
+  res.status(201).json({ id, erinnerungen: erinnerungsListe(db, req.user, m.id) });
+});
+
+// Ändern: neues Datum, neue Uhrzeit, anderer Hinweis. Macht eine ausgelöste oder verfallene Erinnerung wieder
+// scharf. Ruht die Meldung gerade (History), ruht auch die geänderte Erinnerung — bis zum Wiederöffnen.
+router.put('/erinnerungen/:eid(\\d+)', authenticate, (req, res) => {
+  if (!darfMeldungenBearbeiten(req.user)) return res.status(403).json({ error: 'Erinnerungen stellt, wer Meldungen bearbeitet (Chef, Admin, Einzelrecht).' });
+  const db = getDb();
+  const e = erinnerungen.eigene(db, req.user.id, req.params.eid);
+  if (!e) return res.status(404).json({ error: 'Diese Erinnerung gibt es nicht (mehr).' });
+  const p = erinnerungen.pruefen(req.body, new Date());
+  if (p.fehler) return res.status(400).json({ error: p.fehler });
+  const m = holen(db, e.meldung_id);
+  erinnerungen.aendern(db, e.id, p);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'meldung_erinnerung_update',
+    details: `Nr. ${e.meldung_id} · ${m ? m.thema_name : '?'}: ${erinnerungKurz(e)} → ${erinnerungKurz(p)}`, ip: req.ip });
+  broadcast('meldungen', req.headers['x-tab-id']);
+  res.json({ erinnerungen: erinnerungsListe(db, req.user, e.meldung_id) });
+});
+
+// Löschen geht immer — auch ohne Recht (wer es verloren hat, räumt seine alten Erinnerungen selbst weg).
+router.delete('/erinnerungen/:eid(\\d+)', authenticate, (req, res) => {
+  const db = getDb();
+  const e = erinnerungen.eigene(db, req.user.id, req.params.eid);
+  if (!e) return res.status(404).json({ error: 'Diese Erinnerung gibt es nicht (mehr).' });
+  const m = holen(db, e.meldung_id);
+  erinnerungen.entfernen(db, e.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'meldung_erinnerung_delete',
+    details: `Nr. ${e.meldung_id} · ${m ? m.thema_name : '?'}: ${erinnerungKurz(e)}`, ip: req.ip });
+  broadcast('meldungen', req.headers['x-tab-id']);
+  res.json({ erinnerungen: erinnerungsListe(db, req.user, e.meldung_id) });
 });
 
 // ── Themen (nur Chef/Admin) ────────────────────────────────────────────────────────────────────────────

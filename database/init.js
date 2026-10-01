@@ -1266,6 +1266,25 @@ function ensureMeldungenSchema(targetDb) {
         PRIMARY KEY (regel_id, faellig_am),
         FOREIGN KEY (regel_id) REFERENCES meldung_regeln(id)
       );
+      -- Persönliche Erinnerungen an eine Meldung (01.10.2026, meldung-erinnerungen.js). um = deutsche Ortszeit
+      -- 'JJJJ-MM-TT HH:MM'; stand wartet/ausgeloest/verpasst; stand_am UTC (der Zähler vergleicht mit user_seen);
+      -- grund: warum verpasst ('Meldung ruhte' | 'ohne Recht').
+      CREATE TABLE IF NOT EXISTS meldung_erinnerungen (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        meldung_id INTEGER NOT NULL,
+        user_id    INTEGER NOT NULL,
+        um         TEXT NOT NULL,
+        hinweis    TEXT,
+        stand      TEXT NOT NULL DEFAULT 'wartet',
+        stand_am   TEXT,
+        grund      TEXT,
+        created_at TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+        updated_at TEXT,
+        FOREIGN KEY (meldung_id) REFERENCES meldungen(id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_meldung_erinnerungen_stand ON meldung_erinnerungen(stand, um);
+      CREATE INDEX IF NOT EXISTS idx_meldung_erinnerungen_wer ON meldung_erinnerungen(user_id, meldung_id);
     `);
     // Meldungen aus einer Regel tragen die Regel und ihr Fälligkeitsdatum (auch „erneut fällig am …")
     const spalten = targetDb.prepare('PRAGMA table_info(meldungen)').all().map(c => c.name);

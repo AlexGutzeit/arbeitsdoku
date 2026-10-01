@@ -161,9 +161,17 @@ function computeBadgeCounts(db, user) {
       meldungenOffenNeu = db.prepare(`SELECT COUNT(*) AS n ${offen} AND m.updated_at > ? AND COALESCE(m.updated_by, 0) != ?`).get(seit, uid).n;
     }
   } catch (_) { meldungen = 0; }   // Tabelle fehlt (sehr alte Sicherung)
+  // Eigene Erinnerungen, die seit dem letzten Besuch gekommen sind (01.10.2026, meldung-erinnerungen.js). Sie zählen
+  // am Menü mit — in der Zusammenfassung aber nicht (scheduler.js zieht sie dort wieder ab): Die Push kam ja schon.
+  let meldungenErinnerungen = 0;
+  try {
+    meldungenErinnerungen = db.prepare('SELECT COUNT(*) AS n FROM meldung_erinnerungen WHERE user_id = ? AND stand = ? AND stand_am > ?')
+      .get(uid, 'ausgeloest', getSeenAt(db, uid, 'meldungen')).n;
+  } catch (_) { /* Tabelle fehlt (sehr alte Sicherung) */ }
+  meldungen += meldungenErinnerungen;
 
   return { bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount, konto, mitarbeiter,
-           meldungen, meldungenOffen, meldungenOffenNeu, meldungenBearbeiter };
+           meldungen, meldungenOffen, meldungenOffenNeu, meldungenBearbeiter, meldungenErinnerungen };
 }
 
 router.get('/', authenticate, (req, res) => {

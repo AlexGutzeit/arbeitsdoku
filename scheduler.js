@@ -57,8 +57,10 @@ function buildSummaryText(cats, counts) {
       if (counts.meldungenBearbeiter) {
         const offen = counts.meldungenOffen || 0, neu = counts.meldungenOffenNeu || 0;
         if (offen > 0) parts.push(`${offen} ${offen === 1 ? 'offene Meldung' : 'offene Meldungen'}${neu > 0 ? ` (davon ${neu} neu)` : ''}`);
-      } else if ((counts.meldungen || 0) > 0) {
-        parts.push(`${counts.meldungen} ${counts.meldungen === 1 ? 'Neuigkeit' : 'Neuigkeiten'} zu deinen Meldungen`);
+      } else {
+        // Erinnerungen zählen am Menü mit, gehören aber nicht in die Zusammenfassung (ihre Push kam schon)
+        const n = (counts.meldungen || 0) - (counts.meldungenErinnerungen || 0);
+        if (n > 0) parts.push(`${n} ${n === 1 ? 'Neuigkeit' : 'Neuigkeiten'} zu deinen Meldungen`);
       }
       continue;
     }
@@ -334,6 +336,8 @@ function start(getDb) {
     try { tick(getDb()).catch(e => console.error('summary tick fehlgeschlagen:', e && e.message)); } catch (e) { console.error('summary tick fehlgeschlagen:', e && e.message); }
     // Regelmäßige Meldungen (meldung-regeln.js): minütlich prüfen, was fällig ist; danach live an alle Geräte
     try { if (require('./meldung-regeln').regelnPruefen(getDb()).length) require('./sse').broadcast('meldungen'); } catch (e) { console.error('regelmäßige Meldungen fehlgeschlagen:', e && e.message); }
+    // Persönliche Erinnerungen an Meldungen (meldung-erinnerungen.js): auslösen oder — ruhte die Meldung — verfallen
+    try { if (require('./meldung-erinnerungen').faelligePruefen(getDb()).length) require('./sse').broadcast('meldungen'); } catch (e) { console.error('Meldungs-Erinnerungen fehlgeschlagen:', e && e.message); }
     try { const d = berlinParts().date; if (d !== lastExtendDate) { lastExtendDate = d; extendSeries(getDb()); } } catch (e) { console.error('series extend fehlgeschlagen:', e && e.message); }
     // Eigener Tagesmerker: Faellt die Serien-Verlaengerung mit einem Fehler aus, darf der Austritt
     // trotzdem vollzogen werden — ein offen bleibendes Konto ist das groessere Problem.

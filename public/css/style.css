@@ -2819,6 +2819,22 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .mld-rf-vorschau { font-size: 0.85rem; background: var(--bg-soft, #f5f6f8); border-radius: 8px; padding: 0.5rem 0.6rem; min-height: 1.2em; }
 /* Themen verwalten: alle Knöpfe gleich hoch (das Mülleimer-Symbol ist höher als die Pfeile) */
 .mld-themen-liste .btn-xs { height: 30px; min-width: 34px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+/* Meldungen: persönliche Erinnerungen (01.10.2026) */
+.mld-erinnerung { font-size: 0.78rem; color: #1e40af; margin: 0; font-variant-numeric: tabular-nums; }
+.mld-erinnerung-ruht { color: var(--text-light); }
+.mld-erinnerung-mehr { font-weight: 600; }
+.mld-erinnerungen { margin-top: 0.9rem; border-top: 1px solid var(--border); padding-top: 0.6rem; font-size: 0.88rem; }
+.mld-erinnerungen-kopf { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; margin-bottom: 0.4rem; }
+.mld-erinnerungen ul { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.mld-e { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.5rem; border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.3rem 0.5rem; overflow-wrap: anywhere; }
+.mld-e-zeit { font-weight: 600; font-variant-numeric: tabular-nums; }
+.mld-e-stand { font-size: 0.8rem; color: var(--text-light); }
+.mld-e-hinweis { flex-basis: 100%; font-size: 0.85rem; }
+.mld-e-knoepfe { margin-left: auto; display: flex; gap: 0.3rem; }
+.mld-e-ausgeloest, .mld-e-verpasst, .mld-e-ruht { background: var(--bg-soft, #f5f6f8); }
+.mld-e-ausgeloest .mld-e-zeit, .mld-e-verpasst .mld-e-zeit { color: var(--text-light); }
+.mld-ef-schnell { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: -0.35rem; }
 /* Statistik: gearbeitete Tage (30.09.2026) */
 .stats-arbeitstage { margin-top: 1rem; }
 .stats-hinweis { font-size: 0.85rem; color: var(--text-light); margin: 0.25rem 0 0.6rem; }
