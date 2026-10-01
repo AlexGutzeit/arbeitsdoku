@@ -20,8 +20,8 @@ webpush.sendNotification = (sub, payload) => { SENT.push({ endpoint: sub.endpoin
 
 process.env.JWT_SECRET = 'test-secret-mindestens-32-zeichen-lang';
 process.env.DB_PATH = '/tmp/meldung-regeln-api.db';
-process.env.VAPID_PUBLIC = 'BPVS3ECi9gwO7lzmfRVhSOEYjVEgraSHuI3NY99sjRv099IUssBZTdHoHvkQnJet0QUv07n_LSWJhbdRZ60Pc0A';
-process.env.VAPID_PRIVATE = 'Gw_Gj7P4o-b5uAXuE8bT00TMWvby6V20t2fDguxf-8o';
+// Schlüsselpaar nur für diesen Lauf — im Repo steht kein privater Schlüssel (GitGuardian, 01.10.2026)
+{ const k = require('web-push').generateVAPIDKeys(); process.env.VAPID_PUBLIC = k.publicKey; process.env.VAPID_PRIVATE = k.privateKey; }
 process.env.VAPID_SUBJECT = 'mailto:a@b.de';
 try { fs.unlinkSync(process.env.DB_PATH); } catch (_) {}
 

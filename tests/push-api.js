@@ -8,8 +8,8 @@ const path = require('path');
 
 const PORT = 3097;
 const DB = '/tmp/push-api-test.db';
-const VAPID_PUBLIC = 'BPVS3ECi9gwO7lzmfRVhSOEYjVEgraSHuI3NY99sjRv099IUssBZTdHoHvkQnJet0QUv07n_LSWJhbdRZ60Pc0A';
-const VAPID_PRIVATE = 'Gw_Gj7P4o-b5uAXuE8bT00TMWvby6V20t2fDguxf-8o';
+// Schlüsselpaar nur für diesen Lauf — im Repo steht kein privater Schlüssel (GitGuardian, 01.10.2026)
+const { publicKey: VAPID_PUBLIC, privateKey: VAPID_PRIVATE } = require('web-push').generateVAPIDKeys();
 
 function req(method, p, token, body) {
   return new Promise((resolve, reject) => {
