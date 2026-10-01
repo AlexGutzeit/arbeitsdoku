@@ -4369,3 +4369,5 @@ kurz den alten Stand sah. Vollsicherung `arbeitsdoku_backup_20261001-220603.adbk
 Rückkehrpunkt `vor-r31-deploy` (= `66f2a13`). Mit dem Deploy gingen auch die Teständerungen von heute mit
 (VAPID-Schlüssel, Wächter). Auf Prod: `/api` mit `cache-control: no-store`, ohne ETag, auch mit If-None-Match
 200. Datenbank 58/58 Tabellen gleich, Datei heil.
+Die Suite danach (Kopie 22:04, gestartet vor dem Deploy, Dev-Server mit dem neuen Server-Code): **272 von 272
+grün** (23:33). Alex bestätigte am Handy: „Ich bin wieder drin.“
