@@ -64,8 +64,29 @@ const S = {
 // schlimmer als ein Tab, der noch offen ist.
 window.addEventListener('storage', (e) => {
   if (e.key !== 'token' || !e.newValue || e.newValue === S.token) return;
+  if (S.token && !istNeueresToken(e.newValue, S.token)) return;   // ein älteres nie (siehe unten)
   S.token = e.newValue;
 });
+
+// Inhalt eines Tokens lesen (ohne Prüfung — die macht der Server). null, wenn es keins ist.
+function tokenInhalt(t) {
+  try {
+    let teil = String(t).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    teil += '==='.slice((teil.length + 3) % 4);
+    return JSON.parse(atob(teil));
+  } catch (_) { return null; }
+}
+
+// Nur ein NEUERES, noch gültiges Token ersetzt das aktuelle (01.10.2026). Chrome lieferte bei „304 —
+// unverändert" die gespeicherte Antwort samt altem `X-Neues-Token` aus; die App übernahm es, und weil dessen
+// Anmeldung schon über der Höchstdauer lag, flog man direkt nach jeder Anmeldung wieder heraus (server.js
+// speichert API-Antworten seitdem gar nicht mehr — das hier ist die zweite Sicherung).
+function istNeueresToken(neu, aktuell) {
+  const n = tokenInhalt(neu);
+  if (!n || !(Number(n.exp) * 1000 > Date.now())) return false;
+  const a = tokenInhalt(aktuell);
+  return !a || Number(n.iat) > Number(a.iat);
+}
 
 // Frisches Token vom Server uebernehmen (gleitende Sitzung, R1). Zwei Riegel:
 //  * Nur, solange hier noch jemand angemeldet ist. Eine Antwort, die erst NACH dem Abmelden
@@ -75,11 +96,9 @@ window.addEventListener('storage', (e) => {
 // Das storage-Ereignis oben reicht das neue Token an die anderen Tabs weiter.
 function tokenUebernehmen(neu) {
   if (!S.token || !S.user || !neu || neu === S.token) return;
-  try {
-    let teil = String(neu).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    teil += '==='.slice((teil.length + 3) % 4);
-    if (Number(JSON.parse(atob(teil)).userId) !== Number(S.user.id)) return;
-  } catch (_) { return; }
+  const inhalt = tokenInhalt(neu);
+  if (!inhalt || Number(inhalt.userId) !== Number(S.user.id)) return;
+  if (!istNeueresToken(neu, S.token)) return;
   S.token = neu;
   try { localStorage.setItem('token', neu); } catch (_) {}
 }

@@ -58,21 +58,35 @@ const GRUND = {
 };
 const abweisen = (res, code, error) => res.status(401).json({ error, code });
 
-// Abgelaufenes Token → automatischer Logout. Einmal pro Nutzer als 'session_expired'
-// protokollieren, mit kurzer Sperre (5 Min), damit mehrere Folge-Requests/SSE-Reconnects mit
-// demselben abgelaufenen Token das Audit-Log nicht zuspammen.
+// Abgelaufenes Token → automatischer Logout. Einmal je Token als 'session_expired' protokollieren, mit kurzer
+// Sperre (5 Min), damit Folge-Requests/SSE-Reconnects mit demselben Token das Audit-Log nicht zuspammen.
+// Seit 01.10.2026 mit Anfrage und Alter des Tokens: Bei der Anmelde-Schleife (altes Token aus dem Browser-
+// Zwischenspeicher, siehe server.js) war nur „abgelaufen" zu sehen — nicht, WELCHES Token und woher.
 const _expiredLoggedAt = new Map();
-function logSessionExpired(token, ip) {
+function alterText(sekunden) {
+  const s = Math.max(0, Math.round(sekunden));
+  if (s < 3600) return `${Math.round(s / 60)} Min.`;
+  if (s < 2 * 86400) return `${Math.round(s / 3600)} Std.`;
+  return `${Math.round(s / 86400)} Tage`;
+}
+function logSessionExpired(token, req) {
   try {
     const decoded = jwt.decode(token);
     const userId = decoded && decoded.userId;
     if (!userId) return;
     const now = Date.now();
-    if (now - (_expiredLoggedAt.get(userId) || 0) < 5 * 60 * 1000) return;
-    _expiredLoggedAt.set(userId, now);
+    const schluessel = `${userId}:${decoded.iat || 0}`;
+    if (now - (_expiredLoggedAt.get(schluessel) || 0) < 5 * 60 * 1000) return;
+    _expiredLoggedAt.set(schluessel, now);
+    if (_expiredLoggedAt.size > 1000) _expiredLoggedAt.clear();
+    const jetzt = Math.floor(now / 1000);
     const db = getDb();
     const u = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
-    logAudit(db, { userId, username: u ? u.username : '', action: 'session_expired', details: 'Sitzung abgelaufen (3 Tage ohne Aktivität oder 30 Tage seit Anmeldung)', ip });
+    const weg = req ? `${req.method || 'GET'} ${String(req.originalUrl || req.url || '').split('?')[0]}` : '?';
+    logAudit(db, { userId, username: u ? u.username : '', action: 'session_expired',
+      details: 'Sitzung abgelaufen (3 Tage ohne Aktivität oder Höchstdauer seit Anmeldung)'
+        + ` · ${weg} · Token ${alterText(jetzt - (decoded.iat || jetzt))} alt, angemeldet vor ${alterText(jetzt - (decoded.anmeldung || decoded.iat || jetzt))}`,
+      ip: req ? req.ip : undefined });
   } catch (_) { /* Audit darf den Request nie stoeren */ }
 }
 
@@ -154,7 +168,7 @@ function authenticate(req, res, next) {
     const seit = Number(decoded.anmeldung) || Number(decoded.iat) || jetzt;
     const hoechstS = hoechstdauerFuer(db, user);
     if (jetzt - seit >= hoechstS) {
-      logSessionExpired(token, req.ip);
+      logSessionExpired(token, req);
       return abweisen(res, GRUND.ABGELAUFEN, 'Deine Sitzung ist abgelaufen. Bitte melde dich neu an.');
     }
 
@@ -190,7 +204,7 @@ function authenticate(req, res, next) {
     next();
   } catch (err) {
     if (err && err.name === 'TokenExpiredError') {
-      logSessionExpired(token, req.ip);
+      logSessionExpired(token, req);
       return abweisen(res, GRUND.ABGELAUFEN, 'Deine Sitzung ist abgelaufen. Bitte melde dich neu an.');
     }
     return abweisen(res, GRUND.UNGUELTIG, 'Ungültige Anmeldung');

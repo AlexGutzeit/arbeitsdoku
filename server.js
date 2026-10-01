@@ -91,6 +91,16 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// API-Antworten nie zwischenspeichern (01.10.2026). Chrome hob API-Antworten mit ETag auf und lieferte bei
+// „304 — unverändert" die GESPEICHERTE Antwort samt ihrer alten Kopfzeilen aus, auch ein altes `X-Neues-Token`
+// (gleitende Sitzung). Die App übernahm es; lag dessen Anmeldung schon über der Höchstdauer, flog man direkt
+// nach jeder Anmeldung wieder heraus — Website-Daten löschen half nicht, nur der Bild- und Datei-Cache (Alex,
+// PWA, Zwei-Faktor wöchentlich). Ohne ETag gibt es kein 304, und no-store hält die Antwort ganz aus dem Speicher.
+// Routen mit eigener Regel (Profilbilder) setzen ihren Kopf danach und gewinnen. Die App prüft zusätzlich selbst
+// (tokenUebernehmen nimmt nur ein NEUERES Token).
+app.set('etag', false);
+app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+
 // API-Routes
 app.use('/api/avatare', require('./routes/avatare'));
 app.use('/api/auth/2fa', require('./routes/twofa'));
