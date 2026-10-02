@@ -312,6 +312,15 @@ function req(server, method, p, token, body) {
     const gastMeldung = SENT[0] && SENT[0].payload;
     if (gastMeldung && /^Herr Maier \(Gast\) hat „Übergabe" bearbeitet$/.test(gastMeldung.body)) { pass++; console.log(`  ✓ … Text nennt den Gast als Gast  → „${gastMeldung.body}"`); }
     else { fail++; console.log('  ✗ Meldungstext Gast: ' + JSON.stringify(gastMeldung)); }
+    // Alex, 02.10.2026: „die Push natürlich auch nur an Mitbearbeiter, die gerade nicht eh in der Notiz sind" —
+    // auch wenn ein GAST schreibt. Lisa ist drin → nur der Eigentümer bekommt die Meldung.
+    const lisaDrinBeimGast = await oeffne('lisa');
+    g = await geraetOeffnen({ port: server.address().port, ticket: (await req(server, 'GET', '/api/gast/ticket', gastAnm.body.token)).body.ticket, token: gastAnm.body.token, basis: '/api/gast' });
+    SENT = [];
+    await g.schreibe(t => t.insert(0, 'Noch einmal vom Gast. '));
+    await verlassen(g);
+    expectTargets('Gast bearbeitet, lisa ist gerade drin → Meldung nur an den Eigentümer', ['max']);
+    await verlassen(lisaDrinBeimGast);
     SENT = [];
     for (let i = 0; i < 5; i++) await req(server, 'POST', '/api/gast/anmelden', null, { token: gastAnlegen.body.gast.token, passwort: 'falsch' + i });
     await sleep(80);

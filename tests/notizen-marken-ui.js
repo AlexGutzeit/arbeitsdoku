@@ -6,12 +6,15 @@
 //   B  Die Liste frischt sich still auf (jemand ändert noch eine): Hervorhebung und Marken BLEIBEN stehen, die eben
 //      geänderte kommt als „bearbeitet" dazu. Früher verschwand alles nach Sekunden.
 //   C  Nächster Besuch: alles gesehen, keine Marke mehr.
-//   D  Eigene Änderungen markieren nichts (Olga sieht an ihren Notizen keine Marke).
+//   D  Eigene Änderungen markieren nichts (Olga sieht an ihren Notizen keine Marke) — die des Gastes schon.
+//   E  Ein GAST ändert eine Notiz (echte Live-Verbindung über den Gast-Link) → für Mitarbeiter „bearbeitet"
+//      (Alex: „auch wenn ein Besuch geändert hat").
 //
 //   node tests/notizen-marken-ui.js
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
 const puppeteer = require('puppeteer');
+const { geraetOeffnen } = require('./hilfen/notiz-live-geraet');
 
 const PORT = 3367, DB = '/tmp/notizen-marken-ui.db', LOG = '/tmp/notizen-marken-ui.log';
 const BASIS = 'http://localhost:' + PORT;
@@ -35,7 +38,7 @@ function req(m, p, t, b) {
   const lg = fs.openSync(LOG, 'w');
   const srv = spawn('node', ['server.js'], { cwd: path.join(__dirname, '..'),
     env: { ...process.env, PORT: String(PORT), DB_PATH: DB, JWT_SECRET: 'test-secret-mindestens-32-zeichen-lang' }, stdio: ['ignore', lg, lg] });
-  let browser; const jsFehler = [];
+  let browser, gast; const jsFehler = [];
   try {
     for (let i = 0; i < 200; i++) { try { if ((await req('GET', '/health')).status === 200) break; } catch (_) {} await sleep(150); }
     let log = ''; for (let i = 0; i < 100; i++) { log = fs.readFileSync(LOG, 'utf8'); if (/admin\s+->\s+\S+/.test(log)) break; await sleep(150); }
@@ -48,8 +51,11 @@ function req(m, p, t, b) {
     const notiz = async (titel) => (await req('POST', '/api/notes', t.olga, { title: titel, body: 'Inhalt' })).body.note.id;
     const teilen = (id) => req('PUT', `/api/notes/${id}/shares`, t.olga, { shares: [{ user_id: ids.lena, permission: 'read' }] });
     const umbenennen = (id, titel) => req('PUT', `/api/notes/${id}`, t.olga, { title: titel });
-    const alt = await notiz('Altbekannt'), geaendert = await notiz('Material'), still = await notiz('Telefonliste');
-    for (const id of [alt, geaendert, still]) await teilen(id);
+    const alt = await notiz('Altbekannt'), geaendert = await notiz('Material'), still = await notiz('Telefonliste'), gastNotiz = await notiz('Baustellenplan');
+    for (const id of [alt, geaendert, still, gastNotiz]) await teilen(id);
+    // Ein Gast von außerhalb mit Schreibrecht an „Baustellenplan"
+    const g = (await req('POST', `/api/notes/${gastNotiz}/gaeste`, t.olga, { name: 'Herr Maier', passwort: 'Geheim123', permission: 'write' })).body.gast;
+    const gastToken = (await req('POST', '/api/gast/anmelden', null, { token: g.token, passwort: 'Geheim123' })).body.token;
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const neueSeite = async () => {
@@ -76,12 +82,23 @@ function req(m, p, t, b) {
     const L = await neueSeite();
     await anmelden(L, 'lena');
     await zu(L, '/notes'); await zu(L, '/welcome');
+    // Vorbedingung, sonst misst A etwas anderes: Lena ist wirklich weg von den Notizen, und ihr Besuch ist gespeichert
+    let gesehen = null;
+    for (let i = 0; i < 30 && !(gesehen > '2000-01-01 00:00:00'); i++) { gesehen = (await req('GET', '/api/notes', t.lena)).body.gesehen_bis; if (!(gesehen > '2000-01-01 00:00:00')) await sleep(200); }
+    ok('Vorbereitung: Lena war einmal in den Notizen und ist jetzt auf der Startseite', gesehen > '2000-01-01 00:00:00' && await L.evaluate(() => location.hash) === '#/welcome',
+      JSON.stringify([gesehen, await L.evaluate(() => location.hash)]));
     await sleep(300);
 
     // Seitdem: eine neu freigegeben, eine geändert, eine neu freigegeben UND geändert
     const neu = await notiz('Urlaubsplan'); await teilen(neu);
     const neuUndGeaendert = await notiz('Bestellung'); await teilen(neuUndGeaendert); await umbenennen(neuUndGeaendert, 'Bestellung Holz');
     await umbenennen(geaendert, 'Material Halle 2');
+    // Der Gast schreibt über die Live-Verbindung; gespeichert wird nach 1,5 s Ruhe
+    gast = await geraetOeffnen({ port: PORT, ticket: (await req('GET', '/api/gast/ticket', gastToken)).body.ticket, token: gastToken, basis: '/api/gast' });
+    const geschrieben = await gast.schreibe(txt => txt.insert(0, 'Vom Gast: '));
+    await sleep(2300);
+    gast.schliessen(); gast = null;
+    ok('Vorbereitung: der Gast hat geschrieben', geschrieben.status === 200, JSON.stringify(geschrieben.status));
 
     console.log('A · Marken seit dem letzten Besuch');
     await zu(L, '/notes'); await L.waitForSelector('.note-card');
@@ -89,6 +106,8 @@ function req(m, p, t, b) {
     ok('neu freigegeben → „neu", hervorgehoben', m['Urlaubsplan'] && m['Urlaubsplan'].marke === 'neu' && m['Urlaubsplan'].hell, JSON.stringify(m['Urlaubsplan']));
     ok('von Olga geändert → „bearbeitet", hervorgehoben', m['Material Halle 2'] && m['Material Halle 2'].marke === 'bearbeitet' && m['Material Halle 2'].hell, JSON.stringify(m['Material Halle 2']));
     ok('neu freigegeben UND geändert → „neu" (neu geht vor)', m['Bestellung Holz'] && m['Bestellung Holz'].marke === 'neu', JSON.stringify(m['Bestellung Holz']));
+    ok('vom GAST geändert → „bearbeitet", hervorgehoben', m['Baustellenplan'] && m['Baustellenplan'].marke === 'bearbeitet' && m['Baustellenplan'].hell, JSON.stringify(m['Baustellenplan']));
+    ok('… und an der Karte steht „von Herr Maier (Gast)"', await L.evaluate(() => /von Herr Maier \(Gast\)/.test([...document.querySelectorAll('.note-card')].find(k => /Baustellenplan/.test(k.textContent)).textContent)));
     ok('unverändert → keine Marke, nicht hervorgehoben', m['Altbekannt'] && !m['Altbekannt'].marke && !m['Altbekannt'].hell
       && m['Telefonliste'] && !m['Telefonliste'].marke, JSON.stringify([m['Altbekannt'], m['Telefonliste']]));
 
@@ -115,12 +134,14 @@ function req(m, p, t, b) {
     await anmelden(O, 'olga');
     await zu(O, '/notes'); await O.waitForSelector('.note-card');
     m = await marken(O);
-    ok('Olga sieht an ihren eigenen (selbst geänderten) Notizen keine Marke', Object.values(m).every(x => !x.marke), JSON.stringify(m));
+    ok('Olga sieht an ihren selbst geänderten Notizen keine Marke', Object.entries(m).filter(([titel]) => titel !== 'Baustellenplan').every(([, x]) => !x.marke), JSON.stringify(m));
+    ok('… aber „bearbeitet" an der, die der Gast geändert hat — auch für die Eigentümerin', m['Baustellenplan'] && m['Baustellenplan'].marke === 'bearbeitet', JSON.stringify(m['Baustellenplan']));
 
     ok('keine Skriptfehler', jsFehler.length === 0, jsFehler.slice(0, 3).join(' | '));
   } catch (e) {
     ok('Ablauf ohne Ausnahme', false, (e && e.stack) + (jsFehler.length ? '\n    Skriptfehler: ' + jsFehler.slice(0, 3).join(' | ') : ''));
   } finally {
+    if (gast) gast.schliessen();
     if (browser) await browser.close();
     srv.kill('SIGTERM'); await new Promise(r => { srv.once('exit', r); setTimeout(r, 3000); });
   }

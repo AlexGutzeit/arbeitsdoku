@@ -4414,3 +4414,22 @@ Stelle der Notiz, hervorgehoben und mit „Erinnerung“ gekennzeichnet, wie bei
   - `notiz-erinnerungen-ui.js` (20, Port 3366): Der echte Zeitplaner löst aus, Coin live, der Push-Klick
     führt zur hervorgehobenen Karte mit Marke, auch nach dem Auffrischen.
   - `notizen-export-ui` kennt den neuen Menüpunkt.
+
+**Nachträge (Alex, 02.10.2026):**
+- **Marken „neu“ und „bearbeitet“ in der Notizen-Übersicht**, wie bei den Meldungen.
+  - **Server:** `GET /api/notes` liefert `ungelesen` (`neu` = neu freigegeben, geht vor; `bearbeitet` = von
+    anderen geändert, auch von einem Gast). Mit `?seit=` rechnet er gegen den Stand beim Betreten.
+  - **Vorher:** Jede stille Auffrischung rechnete gegen das eben gesetzte „gesehen“, Hervorhebungen
+    verschwanden nach Sekunden.
+- **Wettlauf beim Betreten, gefunden durch den neuen Test** `notizen-marken-ui` (16):
+  - **Ablauf:** Ein Live-Ereignis (hier: ein Gast speichert) kam an, während die Seite noch lud. Die stille
+    Auffrischung lief mit dem Stand des **vorigen** Besuchs, kam nach dem Laden an und überschrieb die Marken.
+    Jede Notiz war „neu“.
+  - **Lösung:** `_notizenSeit = null`, bis die Seite geladen ist, und `notizenAuffrischen` wartet so lange.
+  - **Belege:** Gegenprobe ohne Riegel rot, mit Riegel 3 von 3 Läufen grün.
+  - **Fehlersuche:** Der Debug-Lauf mit zusätzlichen Ausgaben war grün; er traf das Zeitfenster nicht.
+- **Gegenproben der Marken 4 von 4 rot:** Reihenfolge, Auffrischen ohne Besuchsstand, Server ignoriert
+  `seit`, Karte ohne Marke.
+- **Push nur an wer nicht drin ist, auch bei Gast-Änderungen** (Alex). Das war schon so
+  (`notizen-live.js`, Filter `drin`). Neu ist der Fall „Gast schreibt, Mitleserin ist drin“ in
+  `push-targeting` (58). Gegenprobe ohne Filter: 4 Prüfungen rot.

@@ -1014,6 +1014,10 @@ function notizEditorLaden() {
 
 async function renderNotizen() {
   const neuerBesuch = _imRouter || _notizenSeit === null;   // vor dem ersten await lesen (R23)
+  // Bis die Seite geladen ist, kein stilles Auffrischen (notizenAuffrischen): Es liefe noch mit dem Stand des
+  // VORIGEN Besuchs, käme nach dem Laden an und überschriebe die Marken — gefunden 02.10.2026, als ein Gast
+  // genau beim Betreten speicherte und plötzlich jede Notiz „neu" war.
+  if (neuerBesuch) _notizenSeit = null;
   S.badges.notes = 0;
   refreshBadges();
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'notes');
@@ -1165,6 +1169,7 @@ async function renderNotizen() {
  * Abschnitt oben — dann doch der volle Weg.
  */
 async function notizenAuffrischen() {
+  if (_notizenSeit === null) return;   // die Seite lädt gerade erst — das Laden bringt den neuesten Stand
   // Keine neue Marke ziehen (das würde die Seite für veraltet erklären) — nur nachsehen, ob
   // inzwischen eine andere Seite gezeichnet wurde.
   const seq = _renderSeq;
