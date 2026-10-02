@@ -4433,3 +4433,8 @@ Stelle der Notiz, hervorgehoben und mit „Erinnerung“ gekennzeichnet, wie bei
 - **Push nur an wer nicht drin ist, auch bei Gast-Änderungen** (Alex). Das war schon so
   (`notizen-live.js`, Filter `drin`). Neu ist der Fall „Gast schreibt, Mitleserin ist drin“ in
   `push-targeting` (58). Gegenprobe ohne Filter: 4 Prüfungen rot.
+- **Fund des Wächters `tests/reste.js` (R27):** Das endgültige Löschen eines Projekts (`/purge`) löschte die
+  Projektnotiz mit einer eigenen Tabellenliste. Darin fehlten die neuen Erinnerungen. Jetzt räumt die Route
+  nach dem Löschen der Notiz über `reste.nachLoeschen(db, 'notes')` alles ab, was `reste.js` als Anhängsel einer
+  Notiz kennt; eine künftige Tabelle kann dort also nicht mehr fehlen. Prüfung im Server-Test (32), Gegenprobe
+  ohne den Aufruf rot.
