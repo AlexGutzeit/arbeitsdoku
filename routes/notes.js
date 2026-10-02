@@ -8,7 +8,6 @@ const push = require('../push');
 const live = require('../notizen-live');
 const { zeileAusKlartext, zeileAusDelta } = require('../notiz-dokument');
 const exporte = require('../notiz-export');
-const projektNotiz = require('../projekt-notiz');
 
 const router = express.Router();
 
@@ -33,19 +32,8 @@ function resolveProject(db, project_id, project_text) {
   return { project_id: null, project_text: (project_text || '').trim() };
 }
 
-function canAccessNote(db, noteId, userId) {
-  const note = db.prepare('SELECT * FROM notes WHERE id = ?').get(noteId);
-  if (!note) return { note: null, access: null };
-  // Projektnotiz: Rolle und Zuteilung (projekt-notiz.js); Projekt gelöscht → wie nicht vorhanden
-  if (note.projekt_notiz_fuer) {
-    const z = projektNotiz.zugriff(db, note, userId);
-    return z === undefined ? { note: null, access: null } : { note, access: z };
-  }
-  if (note.user_id === userId) return { note, access: 'owner' };
-  const share = db.prepare('SELECT permission FROM note_shares WHERE note_id = ? AND user_id = ?').get(noteId, userId);
-  if (!share) return { note, access: null };
-  return { note, access: share.permission };
-}
+// Wer darf die Notiz sehen? Steht in notiz-zugriff.js — die Notiz-Erinnerungen fragen dasselbe.
+const { canAccessNote } = require('../notiz-zugriff');
 
 function notizAusgeben(db, id) {
   // LEFT JOIN: Projektnotizen haben keinen Eigentümer
