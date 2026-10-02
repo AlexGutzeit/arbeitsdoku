@@ -446,6 +446,7 @@ async function initDatabase() {
   ensureProjektNotizSchema(db);
   // Meldungen: Themen, Meldungen, Verlauf (idempotent, hier UND im Restore-Pfad)
   ensureMeldungenSchema(db);
+  ensureErinnerungenSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -1047,6 +1048,7 @@ function ensureAuditSchema(targetDb) {
   ensureNotizGaesteSchema(targetDb);
   ensureProjektNotizSchema(targetDb);
   ensureMeldungenSchema(targetDb);
+  ensureErinnerungenSchema(targetDb);
   // Nur beim Zurückspielen: der Start räumt selbst auf, nach seinen übrigen Umstellungen (R27)
   if (targetDb !== db) {
     require('../konto-loeschen').altlastenAufraeumen(targetDb);
@@ -1180,6 +1182,24 @@ function ensureProjektNotizSchema(targetDb) {
 //                   (regelmäßige Meldung, Etappe 3); updated_at/updated_by = letzte Änderung (Zähler, Hervorheben)
 //   meldung_verlauf jede Änderung mit Name zum Zeitpunkt (bleibt lesbar, wenn das Konto später gelöscht wird)
 // Idempotent — läuft bei Init UND nach dem Zurückspielen einer alten Sicherung.
+// Persönliche Erinnerungen an Notizen (02.10.2026, notiz-erinnerungen.js). Spalten wie bei allen Erinnerungen
+// (erinnerungen.js, SPALTEN_SQL); die an Meldungen stehen bei ensureMeldungenSchema.
+function ensureErinnerungenSchema(targetDb) {
+  try {
+    const { SPALTEN_SQL } = require('../erinnerungen');
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS notiz_erinnerungen (${SPALTEN_SQL('note_id')},
+        FOREIGN KEY (note_id) REFERENCES notes(id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_notiz_erinnerungen_stand ON notiz_erinnerungen(stand, um);
+      CREATE INDEX IF NOT EXISTS idx_notiz_erinnerungen_wer ON notiz_erinnerungen(user_id, note_id);
+    `);
+  } catch (e) {
+    console.error('ensureErinnerungenSchema fehlgeschlagen:', e.message);
+  }
+}
+
 function ensureMeldungenSchema(targetDb) {
   try {
     targetDb.exec(`

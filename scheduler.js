@@ -64,7 +64,8 @@ function buildSummaryText(cats, counts) {
       }
       continue;
     }
-    const n = counts[c] || 0;
+    // Notiz-Erinnerungen zählen am Menü mit, gehören aber nicht in die Zusammenfassung (ihre Push kam schon)
+    const n = (counts[c] || 0) - (c === 'notes' ? (counts.notizErinnerungen || 0) : 0);
     if (n > 0) parts.push(`${n} ${CAT_LABELS[c] || c}`);
   }
   if (parts.length === 0) return 'Es gibt nichts zu tun.';
@@ -338,6 +339,7 @@ function start(getDb) {
     try { if (require('./meldung-regeln').regelnPruefen(getDb()).length) require('./sse').broadcast('meldungen'); } catch (e) { console.error('regelmäßige Meldungen fehlgeschlagen:', e && e.message); }
     // Persönliche Erinnerungen an Meldungen (meldung-erinnerungen.js): auslösen oder — ruhte die Meldung — verfallen
     try { if (require('./meldung-erinnerungen').faelligePruefen(getDb()).length) require('./sse').broadcast('meldungen'); } catch (e) { console.error('Meldungs-Erinnerungen fehlgeschlagen:', e && e.message); }
+    try { if (require('./notiz-erinnerungen').faelligePruefen(getDb()).length) require('./sse').broadcast('notes'); } catch (e) { console.error('Notiz-Erinnerungen fehlgeschlagen:', e && e.message); }
     try { const d = berlinParts().date; if (d !== lastExtendDate) { lastExtendDate = d; extendSeries(getDb()); } } catch (e) { console.error('series extend fehlgeschlagen:', e && e.message); }
     // Eigener Tagesmerker: Faellt die Serien-Verlaengerung mit einem Fehler aus, darf der Austritt
     // trotzdem vollzogen werden — ein offen bleibendes Konto ist das groessere Problem.

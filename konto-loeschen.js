@@ -112,7 +112,7 @@ function inhaltLoeschen(db, userId) {
   // Eigene Notizen (Projektnotizen haben keinen Eigentümer und bleiben) — mit Freigaben, Angeboten, Merkern, Gästen
   const notizen = db.prepare('SELECT id FROM notes WHERE user_id = ?').all(userId).map(r => r.id);
   for (const id of notizen) {
-    for (const t of ['note_shares', 'note_offers', 'note_gesehen', 'note_gaeste']) {
+    for (const t of ['note_shares', 'note_offers', 'note_gesehen', 'note_gaeste', 'notiz_erinnerungen']) {
       try { db.prepare(`DELETE FROM ${t} WHERE note_id = ?`).run(id); } catch (_) { /* Tabelle fehlt in alten Ständen */ }
     }
     db.prepare('DELETE FROM notes WHERE id = ?').run(id);

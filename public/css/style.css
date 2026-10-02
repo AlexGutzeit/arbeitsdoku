@@ -2825,16 +2825,22 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .mld-erinnerung-mehr { font-weight: 600; }
 .mld-erinnerungen { margin-top: 0.9rem; border-top: 1px solid var(--border); padding-top: 0.6rem; font-size: 0.88rem; }
 .mld-erinnerungen-kopf { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; margin-bottom: 0.4rem; }
-.mld-erinnerungen ul { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
-.mld-e { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.5rem; border: 1px solid var(--border); border-radius: 8px;
-  padding: 0.3rem 0.5rem; overflow-wrap: anywhere; }
-.mld-e-zeit { font-weight: 600; font-variant-numeric: tabular-nums; }
-.mld-e-stand { font-size: 0.8rem; color: var(--text-light); }
-.mld-e-hinweis { flex-basis: 100%; font-size: 0.85rem; }
-.mld-e-knoepfe { margin-left: auto; display: flex; gap: 0.3rem; }
-.mld-e-ausgeloest, .mld-e-verpasst, .mld-e-ruht { background: var(--bg-soft, #f5f6f8); }
-.mld-e-ausgeloest .mld-e-zeit, .mld-e-verpasst .mld-e-zeit { color: var(--text-light); }
-.mld-ef-schnell { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: -0.35rem; }
+/* Persönliche Erinnerungen — gemeinsam für Meldungen und Notizen (app-1-core.js, 02.10.2026) */
+.erinnerung-liste { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.erinnerung-eintrag { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.5rem; border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.3rem 0.5rem; overflow-wrap: anywhere; }
+.erinnerung-zeit { font-weight: 600; font-variant-numeric: tabular-nums; }
+.erinnerung-stand { font-size: 0.8rem; color: var(--text-light); }
+.erinnerung-hinweis { flex-basis: 100%; font-size: 0.85rem; }
+.erinnerung-knoepfe { margin-left: auto; display: flex; gap: 0.3rem; }
+.erinnerung-ausgeloest, .erinnerung-verpasst, .erinnerung-ruht { background: var(--bg-soft, #f5f6f8); }
+.erinnerung-ausgeloest .erinnerung-zeit, .erinnerung-verpasst .erinnerung-zeit { color: var(--text-light); }
+.erinnerung-formular { display: flex; flex-direction: column; gap: 0.7rem; }
+.erinnerung-formular label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; }
+.erinnerung-kontext { font-size: 0.78rem; color: var(--text-light); margin: 0; overflow-wrap: anywhere; }
+.erinnerung-erklaerung { font-size: 0.8rem; color: var(--text-light); margin: 0; }
+.erinnerung-fehler { color: #dc2626; font-size: 0.85rem; }
+.erinnerung-schnell { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: -0.35rem; }
 /* Statistik: gearbeitete Tage (30.09.2026) */
 .stats-arbeitstage { margin-top: 1rem; }
 .stats-hinweis { font-size: 0.85rem; color: var(--text-light); margin: 0.25rem 0 0.6rem; }

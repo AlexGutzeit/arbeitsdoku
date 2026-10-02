@@ -64,6 +64,15 @@ function computeBadgeCounts(db, user) {
     "SELECT COUNT(*) as n FROM note_offers WHERE to_user_id = ? AND status = 'pending'"
   ).get(uid).n;
 
+  // Eigene Notiz-Erinnerungen, die seit dem letzten Besuch gekommen sind (02.10.2026). Nur an Notizen der
+  // Übersicht — eine Projektnotiz steht dort nicht, ihr Klick führt zum Auftrag. In der Zusammenfassung zählen
+  // sie nicht mit (scheduler.js zieht sie ab).
+  let notizErinnerungen = 0;
+  try {
+    notizErinnerungen = db.prepare(`SELECT COUNT(*) AS n FROM notiz_erinnerungen e JOIN notes n ON n.id = e.note_id
+      WHERE e.user_id = ? AND e.stand = ? AND e.stand_am > ? AND n.projekt_notiz_fuer IS NULL`).get(uid, 'ausgeloest', notesSince).n;
+  } catch (_) { /* Tabelle fehlt (sehr alte Sicherung) */ }
+
   // Der Zaehler folgt dem Recht, nicht der Rolle: Wer bestellen darf, muss auch sehen, dass etwas
   // offen ist. Seit dem 27.08.2026 gilt das ausnahmslos, den Buchhalter eingeschlossen (Alex: „wer
   // bestellen kann, muss auch coin und push bekommen") — und die Frage wird mit demselben Helfer
@@ -170,7 +179,7 @@ function computeBadgeCounts(db, user) {
   } catch (_) { /* Tabelle fehlt (sehr alte Sicherung) */ }
   meldungen += meldungenErinnerungen;
 
-  return { bulletin, notes: sharedNotes + offers, orders, absences: absences + maAckCount + maStatusCount, konto, mitarbeiter,
+  return { bulletin, notes: sharedNotes + offers + notizErinnerungen, notizErinnerungen, orders, absences: absences + maAckCount + maStatusCount, konto, mitarbeiter,
            meldungen, meldungenOffen, meldungenOffenNeu, meldungenBearbeiter, meldungenErinnerungen };
 }
 

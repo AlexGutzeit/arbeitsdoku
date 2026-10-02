@@ -2088,3 +2088,82 @@ function seiteWaehlen() {
   else renderWelcome();
 }
 
+
+// ── Persönliche Erinnerungen — gemeinsame Bausteine (Meldungen 01.10., Notizen 02.10.2026) ─────────────────
+// Der Server (erinnerungen.js) schickt nur die EIGENEN Erinnerungen. Was eine Erinnerung im jeweiligen Fall
+// bedeutet (ruht, verfallen, warum), sagt die Seite selbst (standText) — Zeitangabe, Liste und Formular sind
+// für alle gleich.
+
+// „Di 27.10.2026, 07:00" aus der Ortszeit 'JJJJ-MM-TT HH:MM' (so speichert der Server)
+function erinnerungZeit(um) {
+  const t = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})$/.exec(String(um || ''));
+  if (!t) return String(um || '');
+  const wt = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date(`${t[1]}-${t[2]}-${t[3]}T12:00:00Z`).getUTCDay()];
+  return `${wt} ${t[3]}.${t[2]}.${t[1]}, ${t[4]}`;
+}
+
+// Die Liste „Meine Erinnerungen": je Eintrag Zeit, Stand, Knöpfe und Hinweis. opts.standText(e) liefert den
+// Stand als fertiges HTML ('' = nichts dazuschreiben), opts.ruht färbt wartende als ruhend, opts.darfAendern
+// zeigt „Ändern"/„Neues Datum" (löschen geht immer).
+function erinnerungEintraegeHtml(liste, opts) {
+  if (!liste || !liste.length) return '';
+  return `<ul class="erinnerung-liste">${liste.map(e => {
+    const stand = opts.standText(e);
+    return `
+      <li class="erinnerung-eintrag erinnerung-${e.stand}${e.stand === 'wartet' && opts.ruht ? ' erinnerung-ruht' : ''}" data-eid="${e.id}">
+        <span class="erinnerung-zeit">${esc(erinnerungZeit(e.um))}</span>${stand ? ` <span class="erinnerung-stand">${stand}</span>` : ''}
+        <span class="erinnerung-knoepfe">
+          ${opts.darfAendern ? `<button class="btn btn-xs btn-outline" data-e="aendern">${e.stand === 'wartet' ? 'Ändern' : 'Neues Datum'}</button>` : ''}
+          <button class="btn btn-xs btn-outline" data-e="loeschen" aria-label="Erinnerung vom ${esc(erinnerungZeit(e.um))} löschen">Löschen</button>
+        </span>
+        ${e.hinweis ? `<span class="erinnerung-hinweis">${esc(e.hinweis)}</span>` : ''}
+      </li>`; }).join('')}</ul>`;
+}
+
+// Formular: Datum (mit „morgen / in 1 Woche / in 4 Wochen"), Uhrzeit (Arbeitsbeginn der Firma), Hinweis.
+// opts: { e (zum Ändern), kontext, erklaerung, platzhalter, senden(body) → api-Ergebnis mit `erinnerungen` }.
+// Liefert die neue Liste der eigenen Erinnerungen — oder null (abgebrochen).
+function erinnerungFormular(opts) {
+  const e = opts.e || null;
+  return new Promise((fertig) => {
+    const tag = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return formatDateISO(d); };
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay dialog-modal erinnerung-form';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:440px">
+        <div class="modal-header"><h3>${e ? 'Erinnerung ändern' : '🔔 Erinnern'}</h3></div>
+        <div class="modal-body erinnerung-formular">
+          ${opts.kontext ? `<p class="erinnerung-kontext">${esc(opts.kontext)}</p>` : ''}
+          <label>Am <input id="ef-datum" type="date" class="form-control" min="${tag(0)}" value="${esc(e ? e.um.slice(0, 10) : tag(1))}"></label>
+          <div class="erinnerung-schnell" role="group" aria-label="Schnellauswahl">
+            ${[[1, 'morgen'], [7, 'in 1 Woche'], [28, 'in 4 Wochen']].map(([n, t]) => `<button type="button" class="btn btn-xs btn-outline" data-tage="${n}">${t}</button>`).join('')}
+          </div>
+          <label>Um <input id="ef-uhr" type="time" class="form-control" value="${esc(e ? e.um.slice(11, 16) : (arbeitszeitJetzt().work_start_default || '07:00'))}"></label>
+          <label>Hinweis (freiwillig)
+            <input id="ef-hinweis" class="form-control" maxlength="200" placeholder="${esc(opts.platzhalter || '')}" value="${esc(e && e.hinweis ? e.hinweis : '')}"></label>
+          ${opts.erklaerung ? `<p class="erinnerung-erklaerung">${esc(opts.erklaerung)}</p>` : ''}
+          <div id="ef-fehler" class="erinnerung-fehler" style="display:none"></div>
+        </div>
+        <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem">
+          <button class="btn btn-outline" data-act="cancel">Abbrechen</button>
+          <button class="btn btn-primary" data-act="ok">${e ? 'Speichern' : 'Erinnern'}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const $ = (sel) => overlay.querySelector(sel);
+    const schliessen = (liste) => { overlay.remove(); aufraeumen(); fertig(liste || null); };
+    const aufraeumen = dialogBarrierefrei(overlay, () => schliessen(null));
+    klickDanebenSchliesst(overlay, () => schliessen(null));
+    overlay.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); schliessen(null); } });
+    $('[data-act="cancel"]').addEventListener('click', () => schliessen(null));
+    overlay.querySelectorAll('[data-tage]').forEach(b => b.addEventListener('click', () => { $('#ef-datum').value = tag(Number(b.dataset.tage)); }));
+    $('[data-act="ok"]').addEventListener('click', async () => {
+      const body = { datum: $('#ef-datum').value, uhrzeit: $('#ef-uhr').value, hinweis: $('#ef-hinweis').value };
+      try {
+        const r = await opts.senden(body);
+        if (r) schliessen(r.erinnerungen);
+      } catch (err) { $('#ef-fehler').textContent = err.message; $('#ef-fehler').style.display = ''; }
+    });
+    $('#ef-datum').focus();
+  });
+}

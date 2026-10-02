@@ -330,6 +330,7 @@ router.get('/meine-daten', authenticate, (req, res) => {
     bestellungen: hole('SELECT * FROM orders WHERE user_id = ?'),
     meldungen_von_mir: hole('SELECT * FROM meldungen WHERE created_by = ?'),
     meine_erinnerungen_an_meldungen: hole('SELECT * FROM meldung_erinnerungen WHERE user_id = ?'),
+    meine_erinnerungen_an_notizen: hole('SELECT * FROM notiz_erinnerungen WHERE user_id = ?'),
     push_einstellungen: holeEins('SELECT * FROM push_prefs WHERE user_id = ?'),
     push_geraete: hole('SELECT id, user_agent, created_at FROM push_subscriptions WHERE user_id = ?'),
     geburtstags_freigabe: holeEins('SELECT * FROM geburtstag_freigabe WHERE user_id = ?'),

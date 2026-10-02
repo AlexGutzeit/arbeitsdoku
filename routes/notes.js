@@ -34,6 +34,8 @@ function resolveProject(db, project_id, project_text) {
 
 // Wer darf die Notiz sehen? Steht in notiz-zugriff.js — die Notiz-Erinnerungen fragen dasselbe.
 const { canAccessNote } = require('../notiz-zugriff');
+const erinnerungen = require('../notiz-erinnerungen');
+const { pruefen: erinnerungPruefen, umText, kurz, MAX_JE_ZIEL } = require('../erinnerungen');
 
 function notizAusgeben(db, id) {
   // LEFT JOIN: Projektnotizen haben keinen Eigentümer
@@ -102,6 +104,64 @@ router.delete('/offers/:id', authenticate, (req, res) => {
   db.prepare('DELETE FROM note_offers WHERE id = ?').run(offer.id);
   broadcast('notes', req.headers['x-tab-id']);
   res.json({ success: true });
+});
+
+// --- Erinnerungen (persönlich; notiz-erinnerungen.js, 02.10.2026) ---
+// Sie gehören dem, der sie stellt; stellen darf jeder, der die Notiz sehen kann. Eine fremde Erinnerung gibt
+// es für den Fragenden nicht (404). Im Protokoll nur der Titel der Notiz, nie ihr Inhalt.
+const erinnerungKurz = (e) => umText(e.um) + (e.hinweis ? ` „${kurz(e.hinweis, 40)}"` : '');
+const notizTitel = (note) => `Notiz ${note.id} „${kurz(note.title || '(ohne Titel)', 40)}"`;
+
+router.get('/:id(\\d+)/erinnerungen', authenticate, (req, res) => {
+  const db = getDb();
+  const { note, access } = canAccessNote(db, Number(req.params.id), req.user.id);
+  if (!note || !access) return res.status(404).json({ error: 'Notiz nicht gefunden' });
+  res.json({ erinnerungen: erinnerungen.liste(db, req.user.id, note.id) });
+});
+
+router.post('/:id(\\d+)/erinnerungen', authenticate, (req, res) => {
+  const db = getDb();
+  const { note, access } = canAccessNote(db, Number(req.params.id), req.user.id);
+  if (!note || !access) return res.status(404).json({ error: 'Notiz nicht gefunden' });
+  const p = erinnerungPruefen(req.body, new Date());
+  if (p.fehler) return res.status(400).json({ error: p.fehler });
+  if (erinnerungen.anzahl(db, req.user.id, note.id) >= MAX_JE_ZIEL) {
+    return res.status(409).json({ error: `Mehr als ${MAX_JE_ZIEL} Erinnerungen an einer Notiz gehen nicht.` });
+  }
+  const id = erinnerungen.anlegen(db, req.user.id, note.id, p);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'notiz_erinnerung_create',
+    details: `${notizTitel(note)}: ${erinnerungKurz(p)}`, ip: req.ip });
+  broadcast('notes', req.headers['x-tab-id']);
+  res.status(201).json({ id, erinnerungen: erinnerungen.liste(db, req.user.id, note.id) });
+});
+
+// Ändern: neues Datum, neue Uhrzeit, anderer Hinweis — macht eine gekommene oder verfallene wieder scharf.
+// Nur solange man die Notiz noch sieht; löschen geht immer.
+router.put('/erinnerungen/:eid(\\d+)', authenticate, (req, res) => {
+  const db = getDb();
+  const e = erinnerungen.eigene(db, req.user.id, req.params.eid);
+  if (!e) return res.status(404).json({ error: 'Diese Erinnerung gibt es nicht (mehr).' });
+  const { note, access } = canAccessNote(db, e.note_id, req.user.id);
+  if (!note || !access) return res.status(403).json({ error: 'Diese Notiz ist für dich nicht mehr erreichbar — die Erinnerung kannst du nur noch löschen.' });
+  const p = erinnerungPruefen(req.body, new Date());
+  if (p.fehler) return res.status(400).json({ error: p.fehler });
+  erinnerungen.aendern(db, e.id, p);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'notiz_erinnerung_update',
+    details: `${notizTitel(note)}: ${erinnerungKurz(e)} → ${erinnerungKurz(p)}`, ip: req.ip });
+  broadcast('notes', req.headers['x-tab-id']);
+  res.json({ erinnerungen: erinnerungen.liste(db, req.user.id, e.note_id) });
+});
+
+router.delete('/erinnerungen/:eid(\\d+)', authenticate, (req, res) => {
+  const db = getDb();
+  const e = erinnerungen.eigene(db, req.user.id, req.params.eid);
+  if (!e) return res.status(404).json({ error: 'Diese Erinnerung gibt es nicht (mehr).' });
+  const note = db.prepare('SELECT id, title FROM notes WHERE id = ?').get(e.note_id) || { id: e.note_id, title: '?' };
+  erinnerungen.entfernen(db, e.id);
+  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'notiz_erinnerung_delete',
+    details: `${notizTitel(note)}: ${erinnerungKurz(e)}`, ip: req.ip });
+  broadcast('notes', req.headers['x-tab-id']);
+  res.json({ erinnerungen: erinnerungen.liste(db, req.user.id, e.note_id) });
 });
 
 // --- Notes CRUD ---
@@ -173,7 +233,11 @@ router.get('/', authenticate, (req, res) => {
     }
   }
 
-  res.json({ notes });
+  // Eigene Erinnerungen je Notiz (02.10.2026). `gesehen_bis` braucht die Seite für die Marke „🔔 Erinnerung":
+  // Sie merkt sich den Stand beim Betreten — sonst verschwände die Marke beim nächsten stillen Auffrischen.
+  const eigene = erinnerungen.eigeneZu(db, uid, notes.map(n => n.id));
+  for (const n of notes) n.erinnerungen = eigene.get(n.id) || [];
+  res.json({ notes, gesehen_bis: notesSince });
 });
 
 // Neue Notiz erstellen. `body` (Klartext) ist optional: Die neue Oberfläche legt die Notiz leer an
@@ -270,7 +334,9 @@ router.delete('/:id', authenticate, (req, res) => {
   // Abhängiges ausdrücklich mitlöschen. Heute erledigt das auch ON DELETE CASCADE (die Gegenprobe
   // ohne diese Zeile bleibt grün) — aber am Prod-Klon standen 17 Freigaben zu gelöschten Notizen aus
   // früherer Zeit. Das Netz kostet nichts.
-  for (const t of ['note_shares', 'note_offers', 'note_gesehen', 'note_gaeste']) db.prepare(`DELETE FROM ${t} WHERE note_id = ?`).run(req.params.id);
+  for (const t of ['note_shares', 'note_offers', 'note_gesehen', 'note_gaeste', 'notiz_erinnerungen']) {
+    try { db.prepare(`DELETE FROM ${t} WHERE note_id = ?`).run(req.params.id); } catch (_) { /* Tabelle fehlt in alten Ständen */ }
+  }
   live.notizGeloescht(req.params.id);
   // Nur der Titel, nie der Inhalt — das Protokoll liest der Admin, die Notiz war persönlich
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'notiz_geloescht',

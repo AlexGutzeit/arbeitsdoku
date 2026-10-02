@@ -57,6 +57,8 @@ const ANHAENGSEL = [
   ['meldung_regel_lauf', 'regel_id', 'meldung_regeln', 'Auslöse-Merker gelöschter Regeln'],
   ['meldung_erinnerungen', 'meldung_id', 'meldungen', 'Erinnerungen an gelöschte Meldungen'],
   ['meldung_erinnerungen', 'user_id', 'users', 'Erinnerungen gelöschter Konten'],
+  ['notiz_erinnerungen', 'note_id', 'notes', 'Erinnerungen an gelöschte Notizen'],
+  ['notiz_erinnerungen', 'user_id', 'users', 'Notiz-Erinnerungen gelöschter Konten'],
   // zweite Stufe
   ['planning_reminder_sent', 'reminder_id', 'planning_reminders', 'Versand-Merker gelöschter Erinnerungen'],
 ].map(([tabelle, spalte, auf, text]) => ({ tabelle, spalte, auf, text }));

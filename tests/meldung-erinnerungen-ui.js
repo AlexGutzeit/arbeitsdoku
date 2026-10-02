@@ -85,7 +85,7 @@ function req(m, p, t, b) {
       await p.evaluate((tx) => [...document.querySelectorAll('.mld-karte')].find(k => k.textContent.includes(tx)).click(), text);
       await p.waitForSelector('.mld-detail'); await sleep(300);
     };
-    const eintraege = (p) => p.evaluate(() => [...document.querySelectorAll('.mld-detail .mld-e')].map(li => li.textContent.replace(/\s+/g, ' ').trim()));
+    const eintraege = (p) => p.evaluate(() => [...document.querySelectorAll('.mld-detail .erinnerung-eintrag')].map(li => li.textContent.replace(/\s+/g, ' ').trim()));
     const karteZeile = (p, text) => p.evaluate((tx) => { const k = [...document.querySelectorAll('.mld-karte')].find(x => x.textContent.includes(tx));
       const z = k && k.querySelector('.mld-erinnerung'); return z ? z.textContent.replace(/\s+/g, ' ').trim() : null; }, text);
     const coin = (p) => p.evaluate(() => { const b = document.getElementById('nav-badge-meldungen'); return b && b.style.display !== 'none' ? b.textContent.trim() : '0'; });
@@ -108,24 +108,24 @@ function req(m, p, t, b) {
     const kopf = await C.evaluate(() => { const b = document.querySelector('.mld-detail .mld-erinnerungen'); return b && b.textContent.replace(/\s+/g, ' ').trim(); });
     ok('Detail: „🔔 Meine Erinnerungen · nur für dich" mit Knopf „🔔 Erinnern"', !!kopf && kopf.startsWith('🔔 Meine Erinnerungen nur für dich')
       && !!(await C.$('.mld-detail [data-act="erinnern"]')), kopf);
-    await C.click('.mld-detail [data-act="erinnern"]'); await C.waitForSelector('.mld-erinnerung-form #mld-ef-datum'); await sleep(300);
-    const vorbelegt = await C.evaluate(() => [document.getElementById('mld-ef-datum').value, document.getElementById('mld-ef-uhr').value]);
+    await C.click('.mld-detail [data-act="erinnern"]'); await C.waitForSelector('.erinnerung-form #ef-datum'); await sleep(300);
+    const vorbelegt = await C.evaluate(() => [document.getElementById('ef-datum').value, document.getElementById('ef-uhr').value]);
     ok('vorbelegt: morgen, um den Arbeitsbeginn (07:00)', vorbelegt[0] === plus(HEUTE, 1) && vorbelegt[1] === '07:00', JSON.stringify(vorbelegt));
-    await C.click('.mld-erinnerung-form [data-tage="28"]'); await sleep(150);
-    ok('„in 4 Wochen" setzt das Datum', await C.evaluate(() => document.getElementById('mld-ef-datum').value) === plus(HEUTE, 28));
-    await C.type('#mld-ef-hinweis', 'Werkstatt Müller, 9 Uhr');
-    await C.click('.mld-erinnerung-form [data-act="ok"]'); await sleep(900);
+    await C.click('.erinnerung-form [data-tage="28"]'); await sleep(150);
+    ok('„in 4 Wochen" setzt das Datum', await C.evaluate(() => document.getElementById('ef-datum').value) === plus(HEUTE, 28));
+    await C.type('#ef-hinweis', 'Werkstatt Müller, 9 Uhr');
+    await C.click('.erinnerung-form [data-act="ok"]'); await sleep(900);
     let e = await eintraege(C);
-    ok('gespeichert: steht im Detail mit Zeit und Hinweis, der Dialog bleibt offen', !(await C.$('.mld-erinnerung-form')) && !!(await C.$('.mld-detail'))
+    ok('gespeichert: steht im Detail mit Zeit und Hinweis, der Dialog bleibt offen', !(await C.$('.erinnerung-form')) && !!(await C.$('.mld-detail'))
       && e.length === 1 && e[0].includes(umText(plus(HEUTE, 28), '07:00')) && e[0].includes('Werkstatt Müller, 9 Uhr'), JSON.stringify(e));
-    await C.click('.mld-detail [data-act="erinnern"]'); await C.waitForSelector('.mld-erinnerung-form'); await sleep(250);
+    await C.click('.mld-detail [data-act="erinnern"]'); await C.waitForSelector('.erinnerung-form'); await sleep(250);
     await C.keyboard.press('Escape'); await sleep(400);
-    ok('Escape schließt nur das Formular, das Detail bleibt', !(await C.$('.mld-erinnerung-form')) && !!(await C.$('.mld-detail')));
-    await C.click('.mld-detail [data-e="aendern"]'); await C.waitForSelector('.mld-erinnerung-form'); await sleep(250);
-    const geladen = await C.evaluate(() => [document.getElementById('mld-ef-datum').value, document.getElementById('mld-ef-uhr').value, document.getElementById('mld-ef-hinweis').value]);
+    ok('Escape schließt nur das Formular, das Detail bleibt', !(await C.$('.erinnerung-form')) && !!(await C.$('.mld-detail')));
+    await C.click('.mld-detail [data-e="aendern"]'); await C.waitForSelector('.erinnerung-form'); await sleep(250);
+    const geladen = await C.evaluate(() => [document.getElementById('ef-datum').value, document.getElementById('ef-uhr').value, document.getElementById('ef-hinweis').value]);
     ok('Ändern: Formular trägt die gespeicherten Werte', geladen.join('|') === `${plus(HEUTE, 28)}|07:00|Werkstatt Müller, 9 Uhr`, JSON.stringify(geladen));
-    await C.evaluate(() => { const f = document.getElementById('mld-ef-uhr'); f.value = '08:15'; });
-    await C.click('.mld-erinnerung-form [data-act="ok"]'); await sleep(900);
+    await C.evaluate(() => { const f = document.getElementById('ef-uhr'); f.value = '08:15'; });
+    await C.click('.erinnerung-form [data-act="ok"]'); await sleep(900);
     e = await eintraege(C);
     ok('… neue Uhrzeit steht im Detail', e.length === 1 && e[0].includes(umText(plus(HEUTE, 28), '08:15')), JSON.stringify(e));
     await C.click('.mld-detail [data-act="zu"]'); await sleep(1200);
@@ -157,8 +157,8 @@ function req(m, p, t, b) {
     await anmelden(H, 'carla');
     await zu(H, '/meldungen');
     await karteOeffnen(H, 'TÜV abgelaufen');
-    await H.evaluate(() => document.querySelector('.mld-detail [data-act="erinnern"]').click()); await H.waitForSelector('.mld-erinnerung-form'); await sleep(400);
-    const passt = await H.evaluate(() => { const m = document.querySelector('.mld-erinnerung-form .modal').getBoundingClientRect();
+    await H.evaluate(() => document.querySelector('.mld-detail [data-act="erinnern"]').click()); await H.waitForSelector('.erinnerung-form'); await sleep(400);
+    const passt = await H.evaluate(() => { const m = document.querySelector('.erinnerung-form .modal').getBoundingClientRect();
       return { links: Math.round(m.left), rechts: Math.round(m.right), seite: document.documentElement.scrollWidth }; });
     ok('Formular passt auf 390 px, keine seitliche Scrollleiste', passt.links >= 0 && passt.rechts <= 390 && passt.seite <= 390, JSON.stringify(passt));
 

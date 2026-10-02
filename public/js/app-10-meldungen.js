@@ -315,7 +315,7 @@ async function _mldDetail(id, themen) {
         if (liste) erneuern(liste, 'Erinnerung gespeichert.');
         return;
       }
-      if (!await confirmModal(`Erinnerung vom ${_mldUm(e.um)} löschen?`, { okLabel: 'Löschen' })) return;
+      if (!await confirmModal(`Erinnerung vom ${erinnerungZeit(e.um)} löschen?`, { okLabel: 'Löschen' })) return;
       try {
         const r = await api('DELETE', '/api/meldungen/erinnerungen/' + e.id);
         if (r) erneuern(r.erinnerungen, 'Erinnerung gelöscht.');
@@ -372,14 +372,7 @@ async function _mldDetail(id, themen) {
 // ── Erinnerungen (Alex, 01.10.2026) ────────────────────────────────────────────────────────────────────
 // Persönlich: Jeder sieht nur seine eigenen (der Server schickt auch nur die). Stellen darf, wer Meldungen
 // bearbeitet. Steht die Meldung in der History, ruhen sie; fällt ihre Zeit in diese Pause, verfallen sie.
-
-// „Di 27.10.2026, 07:00" aus der Ortszeit 'JJJJ-MM-TT HH:MM' (so speichert der Server, meldung-erinnerungen.js)
-function _mldUm(um) {
-  const t = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})$/.exec(String(um || ''));
-  if (!t) return String(um || '');
-  const wt = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date(`${t[1]}-${t[2]}-${t[3]}T12:00:00Z`).getUTCDay()];
-  return `${wt} ${t[3]}.${t[2]}.${t[1]}, ${t[4]}`;
-}
+// Zeitangabe, Liste und Formular sind gemeinsame Bausteine (app-1-core.js, auch für Notizen).
 const _mldAktiv = (m) => (m.status === 'offen' || m.status === 'in_arbeit') && !m.thema_geloescht;
 
 // An der Karte: die nächste wartende Erinnerung — oder dass sie ruhen
@@ -389,7 +382,7 @@ function _mldErinnerungZeile(m) {
   if (!_mldAktiv(m)) {
     return `<div class="mld-erinnerung mld-erinnerung-ruht">🔔 ${wartend.length === 1 ? 'Erinnerung ruht' : `${wartend.length} Erinnerungen ruhen`}</div>`;
   }
-  return `<div class="mld-erinnerung" title="Deine nächste Erinnerung">🔔 ${esc(_mldUm(wartend[0].um))}${
+  return `<div class="mld-erinnerung" title="Deine nächste Erinnerung">🔔 ${esc(erinnerungZeit(wartend[0].um))}${
     wartend.length > 1 ? ` <span class="mld-erinnerung-mehr">+${wartend.length - 1}</span>` : ''}</div>`;
 }
 
@@ -406,66 +399,20 @@ function _mldErinnerungenHtml(m, darf) {
   return `
     <div class="mld-erinnerungen">
       <div class="mld-erinnerungen-kopf"><strong>🔔 Meine Erinnerungen</strong> <span class="mld-v-zeit">nur für dich</span></div>
-      ${liste.length ? `<ul>${liste.map(e => {
-        const stand = _mldErinnerungStand(e, aktiv);
-        return `
-        <li class="mld-e mld-e-${e.stand}${e.stand === 'wartet' && !aktiv ? ' mld-e-ruht' : ''}" data-eid="${e.id}">
-          <span class="mld-e-zeit">${esc(_mldUm(e.um))}</span>${stand ? ` <span class="mld-e-stand">${stand}</span>` : ''}
-          <span class="mld-e-knoepfe">
-            ${darf.bearbeiten ? `<button class="btn btn-xs btn-outline" data-e="aendern">${e.stand === 'wartet' ? 'Ändern' : 'Neues Datum'}</button>` : ''}
-            <button class="btn btn-xs btn-outline" data-e="loeschen" aria-label="Erinnerung vom ${esc(_mldUm(e.um))} löschen">Löschen</button>
-          </span>
-          ${e.hinweis ? `<span class="mld-e-hinweis">${esc(e.hinweis)}</span>` : ''}
-        </li>`; }).join('')}</ul>` : ''}
+      ${erinnerungEintraegeHtml(liste, { darfAendern: darf.bearbeiten, ruht: !aktiv, standText: (e) => _mldErinnerungStand(e, aktiv) })}
       ${darf.bearbeiten && aktiv ? '<button class="btn btn-sm btn-outline" data-act="erinnern">🔔 Erinnern</button>'
         : darf.bearbeiten ? '<p class="mld-hinweis">Solange die Meldung in der History steht, ruhen Erinnerungen. Öffnest du sie wieder, kannst du eine neue stellen.</p>' : ''}
     </div>`;
 }
 
-// Formular: Datum (mit „morgen / in 1 Woche / in 4 Wochen"), Uhrzeit (Arbeitsbeginn), Hinweis.
 // Liefert die neue Liste der eigenen Erinnerungen an dieser Meldung — oder null (abgebrochen).
 function _mldErinnerungFormular(m, e) {
-  return new Promise((fertig) => {
-    const tag = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return formatDateISO(d); };
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay dialog-modal mld-erinnerung-form';
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:440px">
-        <div class="modal-header"><h3>${e ? 'Erinnerung ändern' : '🔔 Erinnern'}</h3></div>
-        <div class="modal-body mld-form">
-          <p class="mld-meta">${esc(m.thema_name)}: ${esc(m.text.length > 80 ? m.text.slice(0, 79) + '…' : m.text)}</p>
-          <label>Am <input id="mld-ef-datum" type="date" class="form-control" min="${tag(0)}" value="${esc(e ? e.um.slice(0, 10) : tag(1))}"></label>
-          <div class="mld-ef-schnell" role="group" aria-label="Schnellauswahl">
-            ${[[1, 'morgen'], [7, 'in 1 Woche'], [28, 'in 4 Wochen']].map(([n, t]) => `<button type="button" class="btn btn-xs btn-outline" data-tage="${n}">${t}</button>`).join('')}
-          </div>
-          <label>Um <input id="mld-ef-uhr" type="time" class="form-control" value="${esc(e ? e.um.slice(11, 16) : (arbeitszeitJetzt().work_start_default || '07:00'))}"></label>
-          <label>Hinweis (freiwillig)
-            <input id="mld-ef-hinweis" class="form-control" maxlength="200" placeholder="z. B. Werkstatt Müller, 9 Uhr" value="${esc(e && e.hinweis ? e.hinweis : '')}"></label>
-          <p class="mld-hinweis">Die Erinnerung bekommst nur du — als Push und am Zähler. Ist die Meldung bis dahin erledigt, ruht sie.</p>
-          <div id="mld-ef-fehler" class="mld-fehler" style="display:none"></div>
-        </div>
-        <div class="modal-footer" style="display:flex;gap:0.5rem;justify-content:flex-end;padding:1rem">
-          <button class="btn btn-outline" data-act="cancel">Abbrechen</button>
-          <button class="btn btn-primary" data-act="ok">${e ? 'Speichern' : 'Erinnern'}</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    const $ = (sel) => overlay.querySelector(sel);
-    const schliessen = (liste) => { overlay.remove(); aufraeumen(); fertig(liste || null); };
-    const aufraeumen = dialogBarrierefrei(overlay, () => schliessen(null));
-    klickDanebenSchliesst(overlay, () => schliessen(null));
-    overlay.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); schliessen(null); } });
-    $('[data-act="cancel"]').addEventListener('click', () => schliessen(null));
-    overlay.querySelectorAll('[data-tage]').forEach(b => b.addEventListener('click', () => { $('#mld-ef-datum').value = tag(Number(b.dataset.tage)); }));
-    $('[data-act="ok"]').addEventListener('click', async () => {
-      const body = { datum: $('#mld-ef-datum').value, uhrzeit: $('#mld-ef-uhr').value, hinweis: $('#mld-ef-hinweis').value };
-      try {
-        const r = e ? await api('PUT', '/api/meldungen/erinnerungen/' + e.id, body)
-                    : await api('POST', `/api/meldungen/${m.id}/erinnerungen`, body);
-        if (r) schliessen(r.erinnerungen);
-      } catch (err) { $('#mld-ef-fehler').textContent = err.message; $('#mld-ef-fehler').style.display = ''; }
-    });
-    $('#mld-ef-datum').focus();
+  return erinnerungFormular({
+    e,
+    kontext: `${m.thema_name}: ${m.text.length > 80 ? m.text.slice(0, 79) + '…' : m.text}`,
+    platzhalter: 'z. B. Werkstatt Müller, 9 Uhr',
+    erklaerung: 'Die Erinnerung bekommst nur du — als Push und am Zähler. Ist die Meldung bis dahin erledigt, ruht sie.',
+    senden: (body) => e ? api('PUT', '/api/meldungen/erinnerungen/' + e.id, body) : api('POST', `/api/meldungen/${m.id}/erinnerungen`, body),
   });
 }
 
