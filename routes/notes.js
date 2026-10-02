@@ -213,10 +213,15 @@ router.get('/', authenticate, (req, res) => {
     for (const n of notes) if (n.user_id === uid) n.gaeste = gaeste[n.id] || 0;
   }
 
-  const notesSince = (() => {
+  const gesehenBis = (() => {
     const row = db.prepare('SELECT seen_at FROM user_seen WHERE user_id = ? AND topic = ?').get(uid, 'notes');
     return row ? row.seen_at : '2000-01-01 00:00:00';
   })();
+  // Marken „neu"/„bearbeitet" gelten für den ganzen Besuch (Alex, 02.10.2026, wie bei den Meldungen): Die Seite
+  // schickt beim stillen Auffrischen den Stand mit, den sie beim Betreten hatte (`seit`). Ohne ihn rechnete jede
+  // Auffrischung gegen das eben gesetzte „gesehen", und Hervorhebung wie Marke verschwanden nach Sekunden.
+  const seitParam = String(req.query.seit || '');
+  const notesSince = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,3})?$/.test(seitParam) ? seitParam : gesehenBis;
 
   // Live gesehen (Notiz offen gehabt, während andere schrieben) zählt nicht als ungelesen — siehe badges.js.
   const gesehen = new Map(db.prepare('SELECT note_id, gesehen_am FROM note_gesehen WHERE user_id = ?').all(uid).map(g => [g.note_id, g.gesehen_am]));
@@ -224,20 +229,20 @@ router.get('/', authenticate, (req, res) => {
     // Ein Gast hat geändert → für jeden Mitarbeiter „jemand anderes"
     const effectiveUpdater = n.updated_by_gast ? 'gast' : (n.updated_by ?? n.user_id);
     const neuSeitLive = n.updated_at > (gesehen.get(n.id) || '');
-    if (n.user_id === uid) {
-      n.is_unread = n.updated_at > notesSince && effectiveUpdater !== uid && neuSeitLive;
-    } else {
-      const share = (n.shares || []).find(s => s.user_id === uid);
-      const shareNew = share ? share.created_at > notesSince : false;
-      n.is_unread = (n.updated_at > notesSince && effectiveUpdater !== uid && neuSeitLive) || shareNew;
-    }
+    // Marke an der Karte: „neu" = mir seit dem Besuch freigegeben, „bearbeitet" = seitdem von jemand anderem
+    // geändert (auch von einem Gast). Neu geht vor — eine neu freigegebene Notiz ist für mich ganz neu.
+    const bearbeitet = n.updated_at > notesSince && effectiveUpdater !== uid && neuSeitLive;
+    const share = n.user_id === uid ? null : (n.shares || []).find(s => s.user_id === uid);
+    const neuFreigegeben = !!share && share.created_at > notesSince;
+    n.ungelesen = neuFreigegeben ? 'neu' : bearbeitet ? 'bearbeitet' : null;
+    n.is_unread = !!n.ungelesen;
   }
 
   // Eigene Erinnerungen je Notiz (02.10.2026). `gesehen_bis` braucht die Seite für die Marke „🔔 Erinnerung":
   // Sie merkt sich den Stand beim Betreten — sonst verschwände die Marke beim nächsten stillen Auffrischen.
   const eigene = erinnerungen.eigeneZu(db, uid, notes.map(n => n.id));
   for (const n of notes) n.erinnerungen = eigene.get(n.id) || [];
-  res.json({ notes, gesehen_bis: notesSince });
+  res.json({ notes, gesehen_bis: gesehenBis });
 });
 
 // Neue Notiz erstellen. `body` (Klartext) ist optional: Die neue Oberfläche legt die Notiz leer an

@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**274 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**275 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -192,6 +192,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `notizen-live-ui.js` | Live-Notizen in der Oberfläche: Vorschau, Öffnen, gemeinsam schreiben, Cursor, Fertig (Etappe A, Schritt 4). |
 | `notizen-live-zurueckspielen.js` | Live-Notizen und das Zurückspielen einer Sicherung: Der offene Stand im Speicher darf die zurückgespielte Notiz nicht überschreiben. |
 | `notizen-live.js` | Live-Notizen auf dem Server: mehrere bearbeiten gleichzeitig, Rechte, Rauswurf, Speichern (Etappe A, Schritt 3). |
+| `notizen-marken-ui.js` | Marken „neu" und „bearbeitet" in der Notizen-Übersicht (Alex, 02.10.2026: „wie bei den Meldungen"). |
 | `password-policy-ui.js` | UI-Test (Puppeteer): Passwort-Policy im Anlege-Formular — Live-Checkliste (✓/✗), Feld-Einfärbung (rot/grün), |
 | `password-policy.js` | API-Test (B3): Passwort-Policy beim Anlegen + Zurücksetzen. |
 | `passwort-selbst-aendern.js` | Jeder darf sein eigenes Passwort ändern (PUT /api/auth/password). |

@@ -1019,8 +1019,11 @@ async function renderNotizen() {
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'notes');
   bindLayout();
 
+  // Innerhalb desselben Besuchs (Neuzeichnen nach einer Aktion) gegen den Stand beim Betreten rechnen lassen —
+  // sonst gingen „neu"/„bearbeitet" beim ersten Neuzeichnen verloren (wie bei den Meldungen)
+  const seit = (!neuerBesuch && _notizenSeit) ? '?seit=' + encodeURIComponent(_notizenSeit) : '';
   const geladen = await seiteLaden(() => Promise.all([
-    api('GET', '/api/notes'),
+    api('GET', '/api/notes' + seit),
     api('GET', '/api/projects'),
     api('GET', '/api/notes/offers')
   ]).then(([nData, pData, oData]) => nData ? { nData, pData, oData } : null), () => renderNotizen());
@@ -1166,7 +1169,8 @@ async function notizenAuffrischen() {
   // inzwischen eine andere Seite gezeichnet wurde.
   const seq = _renderSeq;
   let nData, oData;
-  try { [nData, oData] = await Promise.all([api('GET', '/api/notes'), api('GET', '/api/notes/offers')]); } catch (_) { return; }
+  const seit = _notizenSeit ? '?seit=' + encodeURIComponent(_notizenSeit) : '';   // Marken bleiben für den Besuch
+  try { [nData, oData] = await Promise.all([api('GET', '/api/notes' + seit), api('GET', '/api/notes/offers')]); } catch (_) { return; }
   if (!nData || getRoute() !== '/notes' || _renderSeq !== seq) return;
   const angebote = (oData && oData.offers) || [];
   if (angebote.length !== document.querySelectorAll('.note-offer-item').length) { renderNotizen(); return; }
@@ -1223,9 +1227,12 @@ function renderNoteList(notes) {
       ? `<span class="badge notiz-drin" title="Gerade in der Notiz">&#9998; ${drin.map(esc).join(', ')}</span>` : '';
     const oeffnenBtn = `<button class="btn btn-sm note-open-btn" data-id="${n.id}" title="${canWrite ? 'Öffnen und mitschreiben' : 'Öffnen und live mitlesen'}" aria-label="${canWrite ? 'Öffnen und mitschreiben' : 'Öffnen und live mitlesen'}">${canWrite ? '&#9998;' : '&#128065;'}</button>`;
 
+    // Marke wie bei den Meldungen (Alex, 02.10.2026): eine gekommene Erinnerung geht vor, sonst „neu" (mir neu
+    // freigegeben) oder „bearbeitet" (von jemand anderem geändert) — beides seit dem Betreten der Seite
     const erinnert = _notizErinnert(n);
+    const marke = erinnert ? '🔔 Erinnerung' : n.ungelesen === 'neu' ? 'neu' : n.ungelesen === 'bearbeitet' ? 'bearbeitet' : '';
     return `<div class="note-card${n.is_unread || erinnert ? ' note-card--unread' : ''}${isExpanded ? ' note-card-expanded' : ''}" data-id="${n.id}">
-      ${erinnert ? '<span class="note-marke">🔔 Erinnerung</span>' : ''}
+      ${marke ? `<span class="note-marke">${marke}</span>` : ''}
       <div class="note-card-row">
         <div class="note-content" style="flex:1;min-width:0">
           <div class="note-title">${esc(n.title)} ${accessBadge} ${gaesteBadge} ${drinBadge}</div>
