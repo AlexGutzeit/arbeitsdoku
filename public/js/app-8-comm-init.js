@@ -967,6 +967,22 @@ function bindOrderedEvents(orders) {
 let _notizen = [];
 let _notizenFilter = { projectId: '', search: '', owner: '' };
 let _expandedNoteId = null;
+// Bis wann waren die Notizen beim Betreten der Seite gesehen? Daran hängt die Marke „🔔 Erinnerung" (02.10.2026).
+// Bleibt für den ganzen Besuch stehen — die Liste frischt sich bei Live-Notizen alle paar Sekunden still auf,
+// und die Marke soll dabei nicht verschwinden. Erst ein neues Betreten der Seite setzt sie neu.
+let _notizenSeit = null;
+
+// Ist seit dem Besuch eine eigene Erinnerung an diese Notiz gekommen?
+function _notizErinnert(n) {
+  return !!_notizenSeit && (n.erinnerungen || []).some(e => e.stand === 'ausgeloest' && e.stand_am && e.stand_am > _notizenSeit);
+}
+// An der Karte: die nächste eigene Erinnerung („🔔 Mo 27.10.2026, 07:00 +1")
+function _notizErinnerungZeile(n) {
+  const wartend = (n.erinnerungen || []).filter(e => e.stand === 'wartet');
+  if (!wartend.length) return '';
+  return `<div class="note-erinnerung" title="Deine nächste Erinnerung">🔔 ${esc(erinnerungZeit(wartend[0].um))}${
+    wartend.length > 1 ? ` <span class="note-erinnerung-mehr">+${wartend.length - 1}</span>` : ''}</div>`;
+}
 
 let _kollabGeladen = null;
 
@@ -997,6 +1013,7 @@ function notizEditorLaden() {
 }
 
 async function renderNotizen() {
+  const neuerBesuch = _imRouter || _notizenSeit === null;   // vor dem ersten await lesen (R23)
   S.badges.notes = 0;
   refreshBadges();
   $app().innerHTML = layout('<div class="loading"><div class="spinner"></div></div>', 'notes');
@@ -1008,6 +1025,7 @@ async function renderNotizen() {
     api('GET', '/api/notes/offers')
   ]).then(([nData, pData, oData]) => nData ? { nData, pData, oData } : null), () => renderNotizen());
   if (!geladen) return;
+  if (neuerBesuch) _notizenSeit = geladen.nData.gesehen_bis || '2000-01-01 00:00:00';
   markSeen('notes');   // erst wenn man die Notizen wirklich zu sehen bekommt
   const notes = geladen.nData.notes || [];
   if (geladen.pData) S.projects = geladen.pData.projects;
@@ -1205,11 +1223,14 @@ function renderNoteList(notes) {
       ? `<span class="badge notiz-drin" title="Gerade in der Notiz">&#9998; ${drin.map(esc).join(', ')}</span>` : '';
     const oeffnenBtn = `<button class="btn btn-sm note-open-btn" data-id="${n.id}" title="${canWrite ? 'Öffnen und mitschreiben' : 'Öffnen und live mitlesen'}" aria-label="${canWrite ? 'Öffnen und mitschreiben' : 'Öffnen und live mitlesen'}">${canWrite ? '&#9998;' : '&#128065;'}</button>`;
 
-    return `<div class="note-card${n.is_unread ? ' note-card--unread' : ''}${isExpanded ? ' note-card-expanded' : ''}" data-id="${n.id}">
+    const erinnert = _notizErinnert(n);
+    return `<div class="note-card${n.is_unread || erinnert ? ' note-card--unread' : ''}${isExpanded ? ' note-card-expanded' : ''}" data-id="${n.id}">
+      ${erinnert ? '<span class="note-marke">🔔 Erinnerung</span>' : ''}
       <div class="note-card-row">
         <div class="note-content" style="flex:1;min-width:0">
           <div class="note-title">${esc(n.title)} ${accessBadge} ${gaesteBadge} ${drinBadge}</div>
           ${projDisplay}
+          ${_notizErinnerungZeile(n)}
           ${isExpanded
             ? `<div class="note-body-full">${notizHtml(n.body_delta, n.body)}</div>
                <button class="btn btn-primary btn-sm note-open-btn notiz-oeffnen-gross" data-id="${n.id}">${canWrite ? '&#9998; Öffnen und mitschreiben' : '&#128065; Öffnen und live mitlesen'}</button>`

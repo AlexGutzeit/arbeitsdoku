@@ -114,6 +114,7 @@ async function renderNotizEditor(id, opts = {}) {
       </div>
       <label class="sr-only" for="notiz-titel">Titel</label>
       <input type="text" id="notiz-titel" class="form-control notiz-titel" placeholder="Titel" autocomplete="off" disabled>
+      <button type="button" class="notiz-erinnerung-zeile" id="notiz-erinnerung-zeile" hidden></button>
       ${projektId ? `<p class="notiz-projekt-hinweis">&#128221; Projektnotiz — lesen alle, schreiben Chef, Admin und die Zugeteilten</p>` : `<details class="notiz-projekt" id="notiz-projekt">
         <summary id="notiz-projekt-zeile">Projekt: –</summary>
         <div class="notiz-projekt-felder">
@@ -127,6 +128,89 @@ async function renderNotizEditor(id, opts = {}) {
 
   if (_notizSitzung) _notizSitzung.beenden();
   _notizSitzung = notizSitzungStarten(id, notizWegeApp(id, projektId));
+  notizErinnerungZeileLaden(id);
+}
+
+// ─── Erinnerungen an die Notiz (Alex, 02.10.2026) ────────────────────────────────────────────────────
+// „Was bringt mir eine Notiz ‚bis zum … erledigt', wenn ich sie verlasse und gleich vergesse?" Persönlich (jeder
+// sieht nur seine eigenen), stellen darf jeder, der die Notiz sehen kann; der Server prüft das
+// (notiz-erinnerungen.js). Nur in der App: Die Gästeseite (gast.js) baut ihre eigenen Wege und kennt den
+// Menüpunkt nicht. Zeitangabe, Liste und Formular sind gemeinsame Bausteine (app-1-core.js).
+async function notizErinnerungZeileLaden(id) {
+  if (!document.getElementById('notiz-erinnerung-zeile')) return;
+  let d;
+  try { d = await api('GET', `/api/notes/${id}/erinnerungen`); } catch (_) { return; }
+  if (d) notizErinnerungZeileZeigen(id, d.erinnerungen || []);
+}
+
+// Unter dem Titel: „🔔 Deine Erinnerung: Mo 27.10.2026, 07:00 +1" — antippen öffnet „Meine Erinnerungen"
+function notizErinnerungZeileZeigen(id, liste) {
+  const el = document.getElementById('notiz-erinnerung-zeile');
+  if (!el) return;
+  const wartend = liste.filter(e => e.stand === 'wartet');
+  el.hidden = !wartend.length;
+  el.innerHTML = wartend.length ? `🔔 Deine Erinnerung: <strong>${esc(erinnerungZeit(wartend[0].um))}</strong>${
+    wartend.length > 1 ? ` <span class="notiz-erinnerung-mehr">+${wartend.length - 1}</span>` : ''}` : '';
+  el.onclick = () => notizErinnerungenDialog(id);
+}
+
+function _notizErinnerungStand(e) {
+  if (e.stand === 'ausgeloest') return `gekommen am ${esc(formatDateTimeDE(e.stand_am))}`;
+  if (e.stand === 'verpasst') return 'verfallen — die Notiz war zu der Zeit nicht für dich erreichbar';
+  return '';
+}
+
+function notizErinnerungenDialog(id) {
+  const titel = (document.getElementById('notiz-titel') || {}).value || '';
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay dialog-modal notiz-erinnerungen-dialog';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <div class="modal-header"><h3>🔔 Meine Erinnerungen</h3></div>
+      <div class="modal-body">
+        <p class="erinnerung-kontext">${esc(titel)} · nur für dich</p>
+        <div id="notiz-erinnerungen-liste"><div class="loading"><div class="spinner"></div></div></div>
+        <button type="button" class="btn btn-sm btn-outline" data-act="erinnern">🔔 Neue Erinnerung</button>
+      </div>
+      <div class="modal-footer" style="display:flex;justify-content:flex-end;padding:1rem">
+        <button class="btn btn-outline" data-act="zu">Fertig</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const schliessen = () => { overlay.remove(); aufraeumen(); };
+  const aufraeumen = dialogBarrierefrei(overlay, schliessen);
+  klickDanebenSchliesst(overlay, schliessen);
+  overlay.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') schliessen(); });   // das Formular darüber ist ein Geschwister
+  overlay.querySelector('[data-act="zu"]').addEventListener('click', schliessen);
+  const formular = (e) => erinnerungFormular({
+    e, kontext: titel, platzhalter: 'z. B. Angebot bis Freitag fertig',
+    erklaerung: 'Die Erinnerung bekommst nur du — als Push und am Zähler der Notizen.',
+    senden: (body) => e ? api('PUT', '/api/notes/erinnerungen/' + e.id, body) : api('POST', `/api/notes/${id}/erinnerungen`, body),
+  });
+  let liste = [];
+  const zeigen = (neu, text) => {
+    liste = neu || [];
+    const box = overlay.querySelector('#notiz-erinnerungen-liste');
+    box.innerHTML = liste.length ? erinnerungEintraegeHtml(liste, { darfAendern: true, standText: _notizErinnerungStand })
+      : '<p class="erinnerung-erklaerung">Noch keine Erinnerung an diese Notiz.</p>';
+    box.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', async () => {
+      const e = liste.find(x => x.id === Number(b.closest('[data-eid]').dataset.eid));
+      if (!e) return;
+      if (b.dataset.e === 'aendern') { const l = await formular(e); if (l) zeigen(l, 'Erinnerung gespeichert.'); return; }
+      if (!await confirmModal(`Erinnerung vom ${erinnerungZeit(e.um)} löschen?`, { okLabel: 'Löschen' })) return;
+      try { const r = await api('DELETE', '/api/notes/erinnerungen/' + e.id); if (r) zeigen(r.erinnerungen, 'Erinnerung gelöscht.'); }
+      catch (err) { toast(err.message, 'error'); }
+    }));
+    notizErinnerungZeileZeigen(id, liste);
+    if (text) toast(text, 'success');
+  };
+  overlay.querySelector('[data-act="erinnern"]').addEventListener('click', async () => {
+    await ladeArbeitszeit();
+    const l = await formular(null);
+    if (l) zeigen(l, 'Erinnerung gestellt.');
+  });
+  api('GET', `/api/notes/${id}/erinnerungen`).then(d => { if (d) zeigen(d.erinnerungen); })
+    .catch(err => { overlay.querySelector('#notiz-erinnerungen-liste').innerHTML = `<p class="erinnerung-fehler">${esc(err.message)}</p>`; });
 }
 
 // Der Teil des Editors, den App und Gästeseite (gast.js) gemeinsam haben: wer drin ist, Namensschilder,
@@ -280,10 +364,15 @@ function notizWegeApp(id, projektId = null) {
     menue: (zugriff) => [
       ...NOTIZ_MENUE_DATEI,
       { value: 'kopie', label: '📋  Stand als eigene Notiz' },
+      { value: 'erinnern', label: '🔔  Erinnern' },
       // Gäste: eigene Notiz → die Eigentümerin; Projektnotiz → Chef und Admin
       ...((projektId ? ['chef', 'admin'].includes(S.user && S.user.role) : zugriff === 'owner') ? [{ value: 'gaeste', label: '🔗  Gäste verwalten' }] : []),
     ],
-    menueExtra: (wahl) => { if (wahl === 'kopie') { notizKopieAnlegen(id); return true; } return false; },
+    menueExtra: (wahl) => {
+      if (wahl === 'kopie') { notizKopieAnlegen(id); return true; }
+      if (wahl === 'erinnern') { notizErinnerungenDialog(id); return true; }
+      return false;
+    },
     gaeste: () => notizGaesteDialog({ id, title: (document.getElementById('notiz-titel') || {}).value || '' }),
     // Nach einer Abweisung (Leserecht, zu groß, beschädigt) die Notiz neu öffnen
     neuOeffnen: () => { if (aufSeite()) renderNotizEditor(id, projektId ? { projektId } : {}); },
