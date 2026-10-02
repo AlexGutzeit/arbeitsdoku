@@ -2846,8 +2846,9 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .note-erinnerung-mehr { font-weight: 600; }
 .note-marke { display: block; width: fit-content; margin: 0 0 0.25rem auto; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.04em; background: var(--primary-light); color: #2f6b12; border-radius: 999px; padding: 0.02rem 0.45rem; }
-.notiz-erinnerung-zeile { display: block; width: 100%; text-align: left; border: 1px solid var(--border); background: var(--bg-soft, #f5f6f8);
-  color: #1e40af; border-radius: 8px; padding: 0.35rem 0.6rem; margin: 0.4rem 0; font-size: 0.85rem; cursor: pointer; }
+/* bündig mit dem Titelfeld (.notiz-editor .notiz-titel: margin 0 1rem) */
+.notiz-erinnerung-zeile { display: block; width: calc(100% - 2rem); text-align: left; border: 1px solid var(--border); background: var(--bg-soft, #f5f6f8);
+  color: #1e40af; border-radius: 8px; padding: 0.35rem 0.6rem; margin: 0.4rem 1rem 0; font-size: 0.85rem; cursor: pointer; }
 .notiz-erinnerung-zeile[hidden] { display: none; }
 .notiz-erinnerung-zeile:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 /* Statistik: gearbeitete Tage (30.09.2026) */
