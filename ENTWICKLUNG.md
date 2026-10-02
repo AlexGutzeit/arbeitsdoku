@@ -4371,3 +4371,46 @@ Rückkehrpunkt `vor-r31-deploy` (= `66f2a13`). Mit dem Deploy gingen auch die Te
 200. Datenbank 58/58 Tabellen gleich, Datei heil.
 Die Suite danach (Kopie 22:04, gestartet vor dem Deploy, Dev-Server mit dem neuen Server-Code): **272 von 272
 grün** (23:33). Alex bestätigte am Handy: „Ich bin wieder drin.“
+
+## Persönliche Erinnerungen an Notizen (02.10.2026)
+
+Alex: „Was bringt mir eine Notiz ‚Arbeit muss bis zum $Datum erledigt sein', wenn ich die Notiz verlasse und
+gleich vergesse?“ Gewünscht war eine Erinnerung am Datum um eine Uhrzeit. Jeder stellt sich seine eigenen,
+die Push hängt am Schalter „Notizen“.
+
+**Entschieden (Rückfragen):** Stellen darf jeder, der die Notiz sehen kann. Erinnerungen gibt es nur für die
+ganze Notiz, keine Checklisten-Punkte. Alex' Nachtrag: Der Klick auf die Push führt in die Notizen an die
+Stelle der Notiz, hervorgehoben und mit „Erinnerung“ gekennzeichnet, wie bei den Meldungen.
+
+**Aufbau:**
+- **Gemeinsamer Kern `erinnerungen.js`.** Er enthält Prüfen der Eingabe, `umText`, `erinnerungsArt(def)` mit
+  Lesen, Anlegen, Ändern, Löschen und `faelligePruefen` (erst vermerken, dann senden; verfällt statt
+  nachzukommen) sowie `SPALTEN_SQL`.
+- **Adapter.** Je Art liefert ein Adapter `zustand(db, zeile) → { kommt, grund }`, die Push, die
+  Protokoll-Aktionen und den Protokolltext.
+  - `meldung-erinnerungen.js` ist jetzt ein solcher Adapter mit unveränderter Schnittstelle. Belegt: 43/43 und
+    22/22 vor und nach dem Umbau.
+  - `notiz-erinnerungen.js` ist neu.
+- **`notiz-zugriff.js`:** Hierher ist `canAccessNote` aus `routes/notes.js` umgezogen. Route und Zeitplaner
+  stellen dieselbe Frage.
+- **Tabelle `notiz_erinnerungen`** in `ensureErinnerungenSchema`, beim Start und auf dem Rückspielweg. Sie ist
+  in `reste.js` eingetragen (Notiz und Konto). Notiz löschen und Konto löschen nehmen sie ausdrücklich mit.
+- **Routen:** `GET/POST /api/notes/:id/erinnerungen` (Zugriff nötig, sonst 404) und `PUT/DELETE
+  /api/notes/erinnerungen/:eid` (nur eigene; Ändern nur mit Zugriff, Löschen immer).
+  - `GET /api/notes` liefert je Notiz die eigenen Erinnerungen und `gesehen_bis`.
+- **Zähler und Zusammenfassung:** Der Zähler `notes` zählt `notizErinnerungen` mit, aber nur an Notizen der
+  Übersicht, keine Projektnotizen. Die Zusammenfassung zieht sie ab.
+- **Push:** über `notes`, mit Ziel `notiz` beziehungsweise `projekt` bei Projektnotizen.
+- **Oberfläche:**
+  - **Gemeinsame Bausteine** in app-1-core: `erinnerungZeit`, `erinnerungEintraegeHtml`, `erinnerungFormular`.
+    Die Meldungen nutzen sie auch; die Kennungen `#ef-*` und `.erinnerung-*` sind neu.
+  - **Editor:** Menüpunkt „🔔 Erinnern“ über `notizWegeApp.menue`. Die Gästeseite hat ihr eigenes Menü; der
+    Test `notiz-gaeste-ui` verlangt dort weiterhin genau Drucken, PDF, Word und ODT. Dazu kommen die Zeile
+    „🔔 Deine Erinnerung“ unter dem Titel und der Dialog „Meine Erinnerungen“.
+  - **Übersicht:** Die Karte zeigt die nächste Erinnerung und die Marke „🔔 Erinnerung“. Die Seite merkt sich
+    `_notizenSeit` beim Betreten, sonst verschwände die Marke beim stillen Auffrischen der Live-Notizen.
+- **Tests:**
+  - `notiz-erinnerungen.js` (31, gestellte Uhr).
+  - `notiz-erinnerungen-ui.js` (20, Port 3366): Der echte Zeitplaner löst aus, Coin live, der Push-Klick
+    führt zur hervorgehobenen Karte mit Marke, auch nach dem Auffrischen.
+  - `notizen-export-ui` kennt den neuen Menüpunkt.

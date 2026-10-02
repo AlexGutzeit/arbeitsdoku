@@ -151,9 +151,11 @@ function req(m, p, t, b) {
     const H = await neueSeite(true);
     await anmelden(H, 'olga');
     await notizOeffnen(H, n1);
-    await H.click('#notiz-erinnerung-zeile');
-    await H.waitForSelector('.notiz-erinnerungen-dialog .erinnerung-eintrag'); await sleep(400);
-    const passt = await H.evaluate(() => { const m = document.querySelector('.notiz-erinnerungen-dialog .modal').getBoundingClientRect();
+    await H.waitForFunction(() => { const z = document.getElementById('notiz-erinnerung-zeile'); return z && !z.hidden; }, { timeout: 5000 }).catch(() => {});
+    ok('beim Öffnen einer Notiz mit Erinnerung steht die Zeile gleich da', (await zeile(H)) === '🔔 Deine Erinnerung: ' + umText(plus(HEUTE, 28), '08:15'), await zeile(H));
+    await H.evaluate(() => { const z = document.getElementById('notiz-erinnerung-zeile'); if (z) z.click(); });
+    await H.waitForSelector('.notiz-erinnerungen-dialog .erinnerung-eintrag', { timeout: 5000 }).catch(() => {}); await sleep(400);
+    const passt = await H.evaluate(() => { const d = document.querySelector('.notiz-erinnerungen-dialog .modal'); if (!d) return { fehlt: true }; const m = d.getBoundingClientRect();
       return { links: Math.round(m.left), rechts: Math.round(m.right), seite: document.documentElement.scrollWidth }; });
     ok('Dialog passt auf 390 px, keine seitliche Scrollleiste', passt.links >= 0 && passt.rechts <= 390 && passt.seite <= 390, JSON.stringify(passt));
 
