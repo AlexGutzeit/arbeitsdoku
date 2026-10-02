@@ -4438,3 +4438,11 @@ Stelle der Notiz, hervorgehoben und mit „Erinnerung“ gekennzeichnet, wie bei
   nach dem Löschen der Notiz über `reste.nachLoeschen(db, 'notes')` alles ab, was `reste.js` als Anhängsel einer
   Notiz kennt; eine künftige Tabelle kann dort also nicht mehr fehlen. Prüfung im Server-Test (32), Gegenprobe
   ohne den Aufruf rot.
+
+**Deploy Notiz-Erinnerungen + Marken (02.10.2026, 13:41, `12e6652`, Cache 445).** Die Suite lief 275 von 275
+auf der Kopie von 12:10. Vollsicherung `arbeitsdoku_backup_20261002-134048.adbk` (dreifach, gleiche Prüfsumme,
+Rückspielprobe). Rückkehrpunkt `vor-notiz-erinnerungen-deploy` (= `4f81a93`); `main` wurde per `git branch -f`
+gesetzt. Datenbank: 58 → 59 Tabellen, neu ist `notiz_erinnerungen` (leer). In `entries` kam ein Eintrag aus dem
+laufenden Betrieb dazu (13:42); alle 1463 alten Zeilen sind unverändert, die Datei heil. Neue Stammdateien
+`erinnerungen.js`, `notiz-erinnerungen.js` und `notiz-zugriff.js` liegen auf dem Server. Im Protokoll nach
+mehreren Zeitplaner-Läufen kein Fehler.
