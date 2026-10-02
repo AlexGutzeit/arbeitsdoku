@@ -453,6 +453,9 @@ router.delete('/:id/purge', authenticate, authorize('chef'), (req, res) => {
     live().notizGeloescht(notiz.id);
     for (const t of ['note_shares', 'note_offers', 'note_gesehen', 'note_gaeste']) db.prepare(`DELETE FROM ${t} WHERE note_id = ?`).run(notiz.id);
     db.prepare('DELETE FROM notes WHERE id = ?').run(notiz.id);
+    // Alles, was reste.js als Anhängsel einer Notiz kennt — auch die Erinnerungen daran (02.10.2026). Die Liste
+    // oben hatte sie nicht; der Wächter in tests/reste.js fand es. So kann keine künftige Tabelle mehr fehlen.
+    reste.nachLoeschen(db, 'notes');
   }
   db.prepare('DELETE FROM projects WHERE id = ?').run(project.id);
   reste.nachLoeschen(db, 'projects'); // auch die Kategorie-Zuordnungen (fehlten hier bis R27)

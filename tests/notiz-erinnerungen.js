@@ -160,6 +160,9 @@ function berlin(datum, uhrzeit) {
     await req(server, 'DELETE', `/api/projects/${proj.id}`, tok.carla);
     p = await pruefen(tag(8), '07:00');
     ok('Projekt im Papierkorb → Erinnerung verfällt („kein Zugriff")', p.length === 1 && p[0].id === eC && zeile(eC).grund === 'kein Zugriff' && SENT.length === 0);
+    await req(server, 'DELETE', `/api/projects/${proj.id}/purge`, tok.carla);
+    ok('Projekt endgültig gelöscht → Erinnerungen an seine Notiz sind weg', !db.prepare('SELECT 1 FROM notes WHERE id = ?').get(pn)
+      && db.prepare('SELECT COUNT(*) AS n FROM notiz_erinnerungen WHERE note_id = ?').get(pn).n === 0);
 
     console.log('Grenzen, Löschen, Aufräumen');
     const n2 = (await req(server, 'POST', '/api/notes', tok.olga, { title: 'Viele' })).body.note.id;
@@ -169,6 +172,9 @@ function berlin(datum, uhrzeit) {
     await stellen('lena', n1, tag(30), '07:00');
     await req(server, 'DELETE', '/api/notes/' + n1, tok.olga);
     ok('Notiz gelöscht → alle Erinnerungen daran sind weg', db.prepare('SELECT COUNT(*) AS n FROM notiz_erinnerungen WHERE note_id = ?').get(n1).n === 0);
+    // Xavers Erinnerung an der Projektnotiz ist mit dem Projekt gegangen — eine eigene Notiz mit Erinnerung
+    const nx = (await req(server, 'POST', '/api/notes', tok.xaver, { title: 'Xavers Zettel' })).body.note.id;
+    await stellen('xaver', nx, tag(40), '07:00');
     const vorher = db.prepare('SELECT COUNT(*) AS n FROM notiz_erinnerungen WHERE user_id = ?').get(ids.xaver).n;
     db.prepare('DELETE FROM users WHERE id = ?').run(ids.xaver);
     reste.nachLoeschen(db, 'users');
