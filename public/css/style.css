@@ -2850,6 +2850,8 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .notiz-erinnerung-zeile { display: block; width: calc(100% - 2rem); text-align: left; border: 1px solid var(--border); background: var(--bg-soft, #f5f6f8);
   color: #1e40af; border-radius: 8px; padding: 0.35rem 0.6rem; margin: 0.4rem 1rem 0; font-size: 0.85rem; cursor: pointer; }
 .notiz-erinnerung-zeile[hidden] { display: none; }
+/* 🔔 an der Karte: wartet eine Erinnerung, ist die Glocke blau umrandet */
+.note-erinnern-btn.note-erinnern-aktiv { box-shadow: inset 0 0 0 2px #93c5fd; }
 .notiz-erinnerung-zeile:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 /* Statistik: gearbeitete Tage (30.09.2026) */
 .stats-arbeitstage { margin-top: 1rem; }

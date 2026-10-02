@@ -4446,3 +4446,12 @@ gesetzt. Datenbank: 58 → 59 Tabellen, neu ist `notiz_erinnerungen` (leer). In 
 laufenden Betrieb dazu (13:42); alle 1463 alten Zeilen sind unverändert, die Datei heil. Neue Stammdateien
 `erinnerungen.js`, `notiz-erinnerungen.js` und `notiz-zugriff.js` liegen auf dem Server. Im Protokoll nach
 mehreren Zeitplaner-Läufen kein Fehler.
+- **🔔 an der Karte (Alex, 02.10.2026, nach dem Deploy):** In der Übersicht steht links neben ✎ eine Glocke, an
+  jeder Karte (auch nur lesend freigegeben). Sie öffnet „Meine Erinnerungen“ direkt, ohne die Notiz zu öffnen
+  und ohne die Karte aufzuklappen. Dass die Karte nicht aufklappt, macht übrigens nicht das `stopPropagation`
+  des Knopfs, sondern die Karte selbst, die Klicks in `.note-actions` ignoriert; die erste Gegenprobe, die nur
+  `stopPropagation` entfernte, blieb deshalb grün. Danach frischt die Liste still auf, damit die Karte die
+  nächste Erinnerung zeigt. `notizErinnerungenDialog(id, { titel, nachAenderung })` kennt den Titel jetzt auch
+  ohne Editor. Ist eine Erinnerung offen, ist die Glocke blau umrandet. Test `notiz-erinnerungen-ui` (25);
+  Gegenproben 3/3 rot: kein Auffrischen; Glocke ganz entfernt (`hidden` allein überstimmt die `.btn`-Regel nicht —
+  diese erste Probe blieb grün); Karte ignoriert die Knopfreihe nicht mehr und kein `stopPropagation`.

@@ -1254,6 +1254,7 @@ function renderNoteList(notes) {
           </div>
         </div>
         <div class="note-actions">
+          <button class="btn btn-sm note-erinnern-btn${(n.erinnerungen || []).some(e => e.stand === 'wartet') ? ' note-erinnern-aktiv' : ''}" data-id="${n.id}" title="Meine Erinnerungen" aria-label="Meine Erinnerungen an „${esc(n.title)}“">&#128276;</button>
           ${oeffnenBtn}
           ${isOwner ? `<button class="btn btn-sm note-share-btn" data-id="${n.id}" title="Freigabe">&#128101;</button>` : ''}
           ${isOwner ? `<button class="btn btn-sm note-gaeste-btn" data-id="${n.id}" title="Gäste von außerhalb" aria-label="Gäste von außerhalb">&#128279;</button>` : ''}
@@ -1284,6 +1285,16 @@ function bindNoteEvents() {
         listEl.innerHTML = renderNoteList(filterNotizen());
         bindNoteEvents();
       }
+    });
+  });
+  // 🔔 an der Karte: „Meine Erinnerungen" direkt aus der Übersicht (Alex, 02.10.2026) — ohne die Notiz zu öffnen
+  // und ohne die Karte aufzuklappen. Danach still auffrischen, damit die Karte die nächste Erinnerung zeigt.
+  document.querySelectorAll('.note-erinnern-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const n = _notizen.find(x => x.id === Number(btn.dataset.id));
+      await ladeArbeitszeit();
+      notizErinnerungenDialog(Number(btn.dataset.id), { titel: n ? n.title : '', nachAenderung: () => notizenAuffrischen() });
     });
   });
   document.querySelectorAll('.note-open-btn').forEach(btn => {

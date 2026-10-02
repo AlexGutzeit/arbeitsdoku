@@ -160,8 +160,11 @@ function _notizErinnerungStand(e) {
   return '';
 }
 
-function notizErinnerungenDialog(id) {
-  const titel = (document.getElementById('notiz-titel') || {}).value || '';
+// Aus dem Editor (Titel steht im Feld) oder aus der Übersicht (🔔 an der Karte, Alex 02.10.2026): dort kommen der
+// Titel und `nachAenderung` mit — die Karte soll danach gleich die nächste Erinnerung zeigen.
+function notizErinnerungenDialog(id, opts = {}) {
+  const titel = opts.titel != null ? opts.titel : ((document.getElementById('notiz-titel') || {}).value || '');
+  let geaendert = false;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay dialog-modal notiz-erinnerungen-dialog';
   overlay.innerHTML = `
@@ -177,7 +180,7 @@ function notizErinnerungenDialog(id) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  const schliessen = () => { overlay.remove(); aufraeumen(); };
+  const schliessen = () => { overlay.remove(); aufraeumen(); if (geaendert && opts.nachAenderung) opts.nachAenderung(); };
   const aufraeumen = dialogBarrierefrei(overlay, schliessen);
   klickDanebenSchliesst(overlay, schliessen);
   overlay.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') schliessen(); });   // das Formular darüber ist ein Geschwister
@@ -202,7 +205,7 @@ function notizErinnerungenDialog(id) {
       catch (err) { toast(err.message, 'error'); }
     }));
     notizErinnerungZeileZeigen(id, liste);
-    if (text) toast(text, 'success');
+    if (text) { geaendert = true; toast(text, 'success'); }
   };
   overlay.querySelector('[data-act="erinnern"]').addEventListener('click', async () => {
     await ladeArbeitszeit();

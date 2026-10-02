@@ -4,9 +4,10 @@
 //   A  Eigentümerin: Notiz öffnen → ⋯ → „🔔 Erinnern" → „Meine Erinnerungen" → „Neue Erinnerung": vorbelegt
 //      morgen um den Arbeitsbeginn, „in 4 Wochen", Hinweis. Danach steht unter dem Titel „🔔 Deine Erinnerung: …";
 //      antippen öffnet den Dialog wieder, Ändern stellt die Uhrzeit um.
-//   B  Übersicht: an der Karte „🔔 Datum, Uhrzeit" — nur die eigene, an anderen Karten nichts.
+//   B  Übersicht: an der Karte „🔔 Datum, Uhrzeit" — nur die eigene, an anderen Karten nichts. Die 🔔 an der Karte
+//      öffnet „Meine Erinnerungen" direkt aus der Übersicht (ohne die Karte aufzuklappen); danach steht sie an der Karte.
 //   C  Leserin (nur lesen): sieht Olgas Erinnerung nicht, hat aber selbst „🔔 Erinnern" im Menü.
-//   D  Handy (390 px): der Dialog passt.
+//   D  Handy (390 px): der Dialog passt, die Knopfreihe der Karte (mit 🔔) auch.
 //   E  Der ECHTE Zeitplaner löst Lenas Erinnerung aus: Coin „1" live; Antippen der Push → Notizen, die Notiz
 //      hervorgehoben und mit „🔔 Erinnerung" gekennzeichnet — auch nach dem stillen Auffrischen der Liste.
 //
@@ -136,6 +137,22 @@ function req(m, p, t, b) {
     await O.waitForSelector('.note-card'); await sleep(500);
     ok('Karte: „🔔 Datum, Uhrzeit" — die nächste eigene', (await kartenZeile(O, n1)) === '🔔 ' + umText(plus(HEUTE, 28), '08:15'), await kartenZeile(O, n1));
     ok('… an der anderen Karte nichts', (await kartenZeile(O, n2)) === null);
+    ok('🔔 an jeder Karte; an der mit wartender Erinnerung blau umrandet', await O.evaluate((a, b) => {
+      const g = (id) => document.querySelector(`.note-card[data-id="${id}"] .note-erinnern-btn`);
+      return !!g(a) && !!g(b) && g(a).classList.contains('note-erinnern-aktiv') && !g(b).classList.contains('note-erinnern-aktiv'); }, n1, n2));
+    await O.click(`.note-card[data-id="${n2}"] .note-erinnern-btn`);
+    await O.waitForSelector('.notiz-erinnerungen-dialog'); await sleep(500);
+    ok('🔔 an der Karte → „Meine Erinnerungen" mit dem Titel dieser Notiz, Karte NICHT aufgeklappt', await O.evaluate((id) =>
+      /Einkaufsliste · nur für dich/.test(document.querySelector('.notiz-erinnerungen-dialog').textContent)
+      && /Noch keine Erinnerung/.test(document.querySelector('.notiz-erinnerungen-dialog').textContent)
+      && !document.querySelector(`.note-card[data-id="${id}"]`).classList.contains('note-card-expanded'), n2));
+    await O.click('.notiz-erinnerungen-dialog [data-act="erinnern"]');
+    await O.waitForSelector('.erinnerung-form #ef-datum'); await sleep(300);
+    await O.click('.erinnerung-form [data-tage="7"]');
+    await O.click('.erinnerung-form [data-act="ok"]'); await sleep(900);
+    await O.click('.notiz-erinnerungen-dialog [data-act="zu"]');
+    await O.waitForFunction((id) => !!document.querySelector(`.note-card[data-id="${id}"] .note-erinnerung`), { timeout: 8000 }, n2).catch(() => {});
+    ok('… gestellt und geschlossen: die Karte zeigt sie gleich, ohne Neuladen', (await kartenZeile(O, n2)) === '🔔 ' + umText(plus(HEUTE, 7), '07:00'), await kartenZeile(O, n2));
 
     console.log('C · Leserin');
     const L2 = await neueSeite();
@@ -158,6 +175,11 @@ function req(m, p, t, b) {
     const passt = await H.evaluate(() => { const d = document.querySelector('.notiz-erinnerungen-dialog .modal'); if (!d) return { fehlt: true }; const m = d.getBoundingClientRect();
       return { links: Math.round(m.left), rechts: Math.round(m.right), seite: document.documentElement.scrollWidth }; });
     ok('Dialog passt auf 390 px, keine seitliche Scrollleiste', passt.links >= 0 && passt.rechts <= 390 && passt.seite <= 390, JSON.stringify(passt));
+    await H.evaluate(() => { const z = document.querySelector('.notiz-erinnerungen-dialog [data-act="zu"]'); if (z) z.click(); }); await sleep(300);
+    await zu(H, '/notes'); await H.waitForSelector('.note-card'); await sleep(400);
+    const reihe = await H.evaluate((id) => { const k = document.querySelector(`.note-card[data-id="${id}"]`); const r = k.querySelector('.note-actions').getBoundingClientRect();
+      const kr = k.getBoundingClientRect(); return { knopf: !!k.querySelector('.note-erinnern-btn'), rechts: Math.round(r.right), karte: Math.round(kr.right), seite: document.documentElement.scrollWidth }; }, n1);
+    ok('Übersicht am Handy: die Knopfreihe mit 🔔 passt in die Karte', reihe.knopf && reihe.rechts <= reihe.karte && reihe.seite <= 390, JSON.stringify(reihe));
 
     console.log('E · Der Zeitplaner erinnert, Antippen führt zur Notiz');
     let gekommen = false;
