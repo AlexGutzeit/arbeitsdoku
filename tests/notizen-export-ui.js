@@ -107,9 +107,10 @@ const pdfText = (buf) => { const f = path.join(ORDNER, 'x.pdf'); fs.writeFileSyn
     ok('„⋯" steht sichtbar neben „← Fertig", Tippziel mindestens 36 × 44 px', knopf.sichtbar && knopf.nebenFertig && knopf.w >= 44 && knopf.h >= 36, JSON.stringify(knopf));
     await menue(A);
     const eintraege = await A.evaluate(() => [...document.querySelectorAll('.modal-overlay [data-val]')].map(b => b.dataset.val + ':' + b.textContent.trim()));
-    // Anna ist Eigentümerin: seit Etappe C (Gäste) zusätzlich „Gäste verwalten" — Rita sieht es nicht (unten)
-    ok('Einträge: Drucken, PDF, Word, OpenDocument, Stand als eigene Notiz (+ Gäste verwalten für die Eigentümerin)',
-      JSON.stringify(eintraege.map(e => e.split(':')[0])) === '["drucken","pdf","docx","odt","kopie","gaeste"]' && /Drucken/.test(eintraege[0]) && /eigene Notiz/.test(eintraege[4]), JSON.stringify(eintraege));
+    // Anna ist Eigentümerin: seit Etappe C (Gäste) zusätzlich „Gäste verwalten" — Rita sieht es nicht (unten).
+    // Seit 02.10.2026 für jeden in der App auch „🔔 Erinnern" (notiz-erinnerungen-ui.js prüft es genauer).
+    ok('Einträge: Drucken, PDF, Word, OpenDocument, Stand als eigene Notiz, Erinnern (+ Gäste verwalten für die Eigentümerin)',
+      JSON.stringify(eintraege.map(e => e.split(':')[0])) === '["drucken","pdf","docx","odt","kopie","erinnern","gaeste"]' && /Drucken/.test(eintraege[0]) && /eigene Notiz/.test(eintraege[4]), JSON.stringify(eintraege));
     await A.evaluate(() => document.querySelector('.modal-overlay [data-act="cancel"]').click()); await sleep(300);
     ok('Abbrechen: Menü zu, nichts gedruckt oder geladen, Sitzung offen', await A.evaluate(() =>
       !document.querySelector('.modal-overlay') && !document.getElementById('notiz-druck') && window.__dateien.length === 0 && _notizSitzung.offen));
