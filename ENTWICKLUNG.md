@@ -4455,3 +4455,8 @@ mehreren Zeitplaner-Läufen kein Fehler.
   ohne Editor. Ist eine Erinnerung offen, ist die Glocke blau umrandet. Test `notiz-erinnerungen-ui` (25);
   Gegenproben 3/3 rot: kein Auffrischen; Glocke ganz entfernt (`hidden` allein überstimmt die `.btn`-Regel nicht —
   diese erste Probe blieb grün); Karte ignoriert die Knopfreihe nicht mehr und kein `stopPropagation`.
+
+**Deploy Glocke an der Notizkarte (02.10.2026, 17:36, `889dc89`, Cache 446).** Die Suite lief 275 von 275 auf der
+Kopie von 16:04. Vollsicherung `arbeitsdoku_backup_20261002-173550.adbk` (dreifach, gleiche Prüfsumme,
+Rückspielprobe). Rückkehrpunkt `vor-glocke-deploy` (= `12e6652`). Die Datenbank ist vorher/nachher in allen
+59 Tabellen gleich, die Datei heil.
