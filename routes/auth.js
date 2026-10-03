@@ -74,7 +74,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     logAudit(db, { userId: user.id, username: user.username, action: 'login_2fa_noetig', ip: req.ip });
     // „Geraet merken" ergibt bei „bei jeder Anmeldung" keinen Sinn — egal ob die Rolle das
     // vorgibt oder der Nutzer es sich selbst so gewaehlt hat.
-    const wirksam = modus === 'aus' ? (zustand2fa.eigen_modus || 'geraet') : modus;
+    const wirksam = zf.wirksamerModus(modus, zustand2fa.eigen_modus);
     return res.json({
       zwei_faktor_erforderlich: true,
       zwischen_token: zwischenToken,
@@ -183,7 +183,7 @@ router.post('/login/2fa', zweiFaktorLimiter, (req, res) => {
     // Geraet merken — nur wenn gewuenscht UND die Rolle es zulaesst.
     const modus = zf.modusFuerRolle(db, user.role);
     const eigen = zf.zustandLesen(db, user.id).eigen_modus;
-    const wirksam = modus === 'aus' ? (eigen || 'geraet') : modus;
+    const wirksam = zf.wirksamerModus(modus, eigen);
     if (geraet_merken && wirksam !== 'immer') {
       const kennung = (req.cookies || {}).ad_geraet || zf.geraetKennungErzeugen();
       zf.geraetMerken(db, user.id, kennung, req.headers['user-agent'], req.ip);

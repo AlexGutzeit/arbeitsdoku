@@ -3281,9 +3281,10 @@ async function kontoZweiFaktorKarte() {
     </div>`;
 
   if (z.eingerichtet) {
-    // Wie oft ein Code verlangt wird, darf jeder selbst bestimmen — solange die Rolle nichts
-    // vorschreibt (Alex, 23.08.2026). Gibt die Verwaltung etwas vor, gewinnt sie; der eigene
-    // Wunsch bleibt gespeichert und greift wieder, sobald die Pflicht aufgehoben wird.
+    // Wie oft ein Code verlangt wird, darf jeder selbst bestimmen (Alex, 23.08.2026). Gibt die Verwaltung
+    // für die Rolle etwas vor, ist das das MINIMUM: strenger geht, milder nicht (Alex, 03.10.2026). Die
+    // Auswahl kommt vom Server (modi_auswahl) und enthält dann nur die erlaubten Stufen.
+    const auswahlWert = (z.modi_auswahl || []).some(m => m.wert === z.eigen_modus) ? z.eigen_modus : z.wirksam;
     const intervallHtml = z.eigen_modus_waehlbar ? `
       <hr style="margin:1rem 0; border:none; border-top:1px solid var(--border)">
       <div class="error-msg" id="zfa-intervall-fehler"></div>
@@ -3291,7 +3292,7 @@ async function kontoZweiFaktorKarte() {
         <div class="form-group" style="margin:0">
           <label for="zfa-modus">Wie oft soll ein Code verlangt werden?</label>
           <select class="form-control" id="zfa-modus" style="min-width:12rem">
-            ${(z.modi_auswahl || []).map(m => `<option value="${esc(m.wert)}"${m.wert === z.eigen_modus ? ' selected' : ''}>${esc(m.text)}</option>`).join('')}
+            ${(z.modi_auswahl || []).map(m => `<option value="${esc(m.wert)}"${m.wert === auswahlWert ? ' selected' : ''}>${esc(m.text)}</option>`).join('')}
           </select>
         </div>
         <div class="form-group" style="margin:0">
@@ -3301,14 +3302,17 @@ async function kontoZweiFaktorKarte() {
         <button type="submit" class="btn btn-primary">Übernehmen</button>
       </form>
       <div style="font-size:.78rem;color:var(--text-light);margin-top:.25rem">
-        Der Code ist nötig, damit an einem unbeaufsichtigten Gerät niemand deine Absicherung
+        ${z.pflicht ? `Für deine Rolle gibt die Verwaltung mindestens <strong>${esc(z.modus_text)}</strong> vor — strenger kannst du es jederzeit einstellen, milder nicht. ` : ''}Der Code ist nötig, damit an einem unbeaufsichtigten Gerät niemand deine Absicherung
         lockern kann. Beim Umstellen werden die gemerkten Geräte zurückgesetzt — sonst würde eine
         strengere Einstellung dort nicht greifen.
       </div>` : '';
 
     k.innerHTML = `${kopf}
       <p><strong style="color:var(--success)">Aktiv.</strong>
-         Abfrage: <strong>${esc(z.pflicht ? z.modus_text : z.eigen_modus_text)}</strong>${z.pflicht ? ' (von der Verwaltung vorgegeben)' : ' (von dir gewählt)'}.</p>
+         Abfrage: <strong>${esc(z.wirksam_text || (z.pflicht ? z.modus_text : z.eigen_modus_text))}</strong>${
+           !z.pflicht ? ' (von dir gewählt)'
+           : (z.wirksam && z.wirksam !== z.modus) ? ` (von dir gewählt — strenger als die Vorgabe „${esc(z.modus_text)}")`
+           : ' (von der Verwaltung vorgegeben)'}.</p>
       ${intervallHtml}
       ${z.abschaltbar
         ? `<div class="error-msg" id="zfa-aus-fehler"></div>
@@ -3490,7 +3494,7 @@ async function kontoGeraeteKarte() {
   // Geraet". Bei „woechentlich" wird sehr wohl gefragt, nur seltener (Alex, 24.08.2026). Also
   // neutral benennen und darunter sagen, was auf diesen Geraeten wirklich gilt.
   const zf = S.zweiFaktor || {};
-  const wirksam = zf.pflicht ? zf.modus : (zf.eigen_modus || 'geraet');
+  const wirksam = zf.wirksam || (zf.pflicht ? zf.modus : (zf.eigen_modus || 'geraet'));   // der Server rechnet (zweifaktor.js)
   const ERKLAERUNG = {
     geraet: 'Auf diesen Geräten wird kein Code mehr verlangt.',
     taeglich: 'Auf diesen Geräten wird höchstens einmal am Tag ein Code verlangt.',

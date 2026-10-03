@@ -81,15 +81,12 @@ function geraetGueltig(bestaetigtAm, modus, jetztMs = Date.now()) {
 // Wird beim Anmelden ein Code verlangt?
 //
 // `modus === 'aus'` und trotzdem eingerichtet: Wer sich freiwillig abgesichert hat, soll das auch
-// spüren — sonst wäre die freiwillige Einrichtung wirkungslos. Es gilt dann „einmal pro Gerät",
-// die mildeste Stufe.
+// spüren — sonst wäre die freiwillige Einrichtung wirkungslos. Es gilt dann der eigene Wunsch, ohne
+// den „einmal pro Gerät", die mildeste Stufe. Mit Vorgabe gilt die strengere von beiden (wirksamerModus).
 function codeNoetig({ modus, eingerichtet, eigenModus = null, geraetBestaetigtAm = null, jetztMs = Date.now() }) {
   if (notabschaltung()) return false;
   if (!eingerichtet) return false;                       // ohne Authenticator kann man nichts abfragen
-  // Schreibt die Rolle etwas vor, gewinnt sie. Sonst gilt der eigene Wunsch — und ohne den
-  // weiterhin „einmal pro Geraet", die mildeste Stufe.
-  const wirksam = (modus === 'aus') ? (EIGENE_MODI.includes(eigenModus) ? eigenModus : 'geraet') : modus;
-  return !geraetGueltig(geraetBestaetigtAm, wirksam, jetztMs);
+  return !geraetGueltig(geraetBestaetigtAm, wirksamerModus(modus, eigenModus), jetztMs);
 }
 
 // ── Datenbank-Seite ────────────────────────────────────────────────────────────────────────────
@@ -130,6 +127,28 @@ function zustandLesen(db, userId) {
 // Sperre, wenn die Rolle es verlangt.
 const EIGENE_MODI = MODI.filter(m => m !== 'aus');
 
+// ── Welche Stufe gilt? — die Regel steht NUR hier (Alex, 03.10.2026) ─────────────────────────────
+// Die Vorgabe der Rolle ist das MINIMUM; wer will, darf strenger sein. Früher gewann die Vorgabe in
+// beide Richtungen: Wer sich „wöchentlich" gewählt hatte, wurde nach einer Pflicht „monatlich" nur noch
+// monatlich gefragt — und konnte nicht zurück. Diese Regel stand an fünf Stellen (hier zweimal, in
+// routes/auth.js zweimal, in der Oberfläche); jetzt fragen alle diese Funktion.
+// Strenge: höher = öfter ein Code.
+const STRENGE = { geraet: 0, monatlich: 1, woechentlich: 2, taeglich: 3, immer: 4 };
+
+/** Die Stufe, die wirklich gilt. Ohne Vorgabe der eigene Wunsch (ohne den: „einmal pro Gerät", die
+ *  mildeste); mit Vorgabe die STRENGERE von Vorgabe und eigenem Wunsch. */
+function wirksamerModus(modus, eigenModus) {
+  const eigen = EIGENE_MODI.includes(eigenModus) ? eigenModus : null;
+  if (!(modus in STRENGE)) return eigen || 'geraet';   // 'aus' oder unbekannt: nichts vorgeschrieben
+  return eigen && STRENGE[eigen] > STRENGE[modus] ? eigen : modus;
+}
+
+/** Was jemand für sich wählen darf: ohne Vorgabe alles, mit Vorgabe die Vorgabe selbst und alles Strengere. */
+function erlaubteEigeneModi(modus) {
+  if (!(modus in STRENGE)) return EIGENE_MODI.slice();
+  return EIGENE_MODI.filter(m => STRENGE[m] >= STRENGE[modus]);
+}
+
 // Wie viele Tage darf eine Sitzung dieses Nutzers hoechstens laufen? null = keine Grenze von hier.
 //
 // Der Code wird nur beim ANMELDEN abgefragt. Seit die Sitzung gleitet (R1, 24.09.2026) haelt sie
@@ -137,7 +156,7 @@ const EIGENE_MODI = MODI.filter(m => m !== 'aus');
 // gewaehlte Stufe waere still ausgehebelt. Also begrenzt die Stufe die Sitzung.
 // „Bei jeder Anmeldung" bleibt bei einem Tag: So oft kam die Frage auch mit der alten
 // 24-Stunden-Sitzung. „Einmal pro Geraet" braucht keine Grenze.
-// Gleiche Wirksamkeits-Regel wie codeNoetig(): Schreibt die Rolle etwas vor, gewinnt sie.
+// Gleiche Wirksamkeits-Regel wie codeNoetig() — wirksamerModus(): die strengere von Vorgabe und Wunsch.
 const SITZUNG_TAGE = { immer: 1, taeglich: 1, woechentlich: 7, monatlich: 30 };
 function sitzungsGrenzeTage(db, user) {
   try {
@@ -145,8 +164,7 @@ function sitzungsGrenzeTage(db, user) {
     const z = zustandLesen(db, user.id);
     if (!z.aktiv) return null;                          // ohne Authenticator wird nie ein Code gefragt
     const modus = modusFuerRolle(db, user.role);
-    const wirksam = (modus === 'aus') ? (EIGENE_MODI.includes(z.eigen_modus) ? z.eigen_modus : 'geraet') : modus;
-    return SITZUNG_TAGE[wirksam] || null;
+    return SITZUNG_TAGE[wirksamerModus(modus, z.eigen_modus)] || null;
   } catch (_) { return null; }                          // im Zweifel keine zusaetzliche Grenze
 }
 
@@ -279,6 +297,7 @@ module.exports = {
   modusFuerRolle, alleModi, cacheVergessen,
   einrichtungNoetig, geraetGueltig, codeNoetig,
   zustandLesen, eingerichtet, stillgelegt, EIGENE_MODI, eigenenModusSetzen, sitzungsGrenzeTage,
+  STRENGE, wirksamerModus, erlaubteEigeneModi,
   geheimnisLesen, wartendesGeheimnisLesen, wartendesGeheimnisAnlegen, wartendesUebernehmen,
   stilllegen, wiederAktivieren, schrittVerbrauchen, zuruecksetzen,
   geraetKennungErzeugen, geraetHash, geraetFinden, geraetMerken, geraetBenutzt, geraeteAlleLoeschen,

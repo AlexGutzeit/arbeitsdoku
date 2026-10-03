@@ -77,10 +77,22 @@ const zustand = async (t) => (await req('GET', '/api/auth/2fa/status', t)).body.
     ok('„monatlich": nach 40 Tagen schon', noetig('monatlich', 40) === true);
     ok('„bei jeder Anmeldung": auch ein frisch bestätigtes Gerät hilft nicht',
       noetig('immer', 0.001) === true);
-    ok('die Rolle gewinnt: Pflicht „immer" schlägt den eigenen Wunsch „monatlich"',
+    // Seit 03.10.2026 (Alex): Die Vorgabe der Rolle ist das MINIMUM, strenger darf man immer.
+    ok('Vorgabe strenger als der Wunsch: Pflicht „immer" schlägt den milderen Wunsch „monatlich"',
       noetig('monatlich', 0.001, 'immer') === true);
-    ok('… und umgekehrt: Pflicht „monatlich" schlägt den eigenen Wunsch „immer"',
-      noetig('immer', 10, 'monatlich') === false);
+    ok('Wunsch strenger als die Vorgabe: Pflicht „monatlich", Wunsch „immer" → Code auch bei frischem Gerät',
+      noetig('immer', 0.001, 'monatlich') === true);
+    ok('Pflicht „monatlich", Wunsch „wöchentlich": nach 8 Tagen ein Code, nach 3 nicht',
+      noetig('woechentlich', 8, 'monatlich') === true && noetig('woechentlich', 3, 'monatlich') === false);
+    ok('Pflicht „wöchentlich", milderer Wunsch „monatlich": die Pflicht gilt (nach 8 Tagen ein Code)',
+      noetig('monatlich', 8, 'woechentlich') === true);
+    ok('wirksamerModus: immer die strengere von Vorgabe und Wunsch',
+      zf.wirksamerModus('monatlich', 'woechentlich') === 'woechentlich' && zf.wirksamerModus('woechentlich', 'monatlich') === 'woechentlich'
+      && zf.wirksamerModus('aus', 'monatlich') === 'monatlich' && zf.wirksamerModus('aus', null) === 'geraet' && zf.wirksamerModus('taeglich', 'geraet') === 'taeglich');
+    ok('erlaubteEigeneModi: mit Vorgabe nur sie selbst und Strengeres',
+      JSON.stringify(zf.erlaubteEigeneModi('woechentlich')) === '["immer","taeglich","woechentlich"]'
+      && zf.erlaubteEigeneModi('aus').length === 5 && JSON.stringify(zf.erlaubteEigeneModi('immer')) === '["immer"]',
+      JSON.stringify([zf.erlaubteEigeneModi('woechentlich'), zf.erlaubteEigeneModi('immer')]));
     ok('ein unsinniger gespeicherter Wert fällt auf „einmal pro Gerät" zurück',
       noetig('jaehrlich', 400) === false);
 
@@ -133,7 +145,7 @@ const zustand = async (t) => (await req('GET', '/api/auth/2fa/status', t)).body.
     ok('mit Code kommt er hinein', v.status === 200 && !!v.body.token, `${v.status}`);
     maT = v.body.token;
 
-    console.log('\n── Die Rolle gewinnt, sobald die Verwaltung etwas vorschreibt ──');
+    console.log('\n── Schreibt die Verwaltung etwas vor, ist es das Minimum (seit 03.10.2026) ──');
     // Scharfschalten braucht einen eigenen Authenticator des Admins.
     const aSetup = (await req('POST', '/api/auth/2fa/setup', admin, {})).body;
     await req('POST', '/api/auth/2fa/verify', admin, { code: await frisch(aSetup.geheim) });
@@ -141,17 +153,22 @@ const zustand = async (t) => (await req('GET', '/api/auth/2fa/status', t)).body.
     ok('Pflicht „wöchentlich" steht', r.status === 200, `${r.status} ${r.text.slice(0, 70)}`);
     z = await zustand(maT);
     ok('die Anzeige nennt jetzt die Vorgabe', z.modus === 'woechentlich' && z.pflicht === true, JSON.stringify({ m: z.modus, p: z.pflicht }));
-    ok('… die eigene Auswahl ist nicht mehr wählbar', z.eigen_modus_waehlbar === false);
-    ok('… der eigene Wunsch bleibt aber gespeichert', z.eigen_modus === 'immer', String(z.eigen_modus));
+    ok('… der eigene, STRENGERE Wunsch „bei jeder Anmeldung" gilt weiter', z.eigen_modus === 'immer' && z.wirksam === 'immer', JSON.stringify({ e: z.eigen_modus, w: z.wirksam }));
+    ok('… wählbar bleibt, was gleich streng oder strenger ist als die Vorgabe',
+      z.eigen_modus_waehlbar === true && JSON.stringify((z.modi_auswahl || []).map(m => m.wert)) === '["immer","taeglich","woechentlich"]',
+      JSON.stringify((z.modi_auswahl || []).map(m => m.wert)));
     r = await req('POST', '/api/auth/2fa/eigener-modus', maT, { modus: 'monatlich', code: await frisch(setup.geheim) });
-    ok('Umstellen wird abgelehnt, solange die Pflicht gilt', r.status === 403, `${r.status} ${r.text.slice(0, 80)}`);
+    ok('milder als die Vorgabe („monatlich") wird abgelehnt', r.status === 403 && /mindestens/.test(r.text), `${r.status} ${r.text.slice(0, 100)}`);
+    r = await req('POST', '/api/auth/2fa/eigener-modus', maT, { modus: 'taeglich', code: await frisch(setup.geheim) });
+    z = await zustand(maT);
+    ok('strenger („täglich") geht, und es gilt', r.status === 200 && z.eigen_modus === 'taeglich' && z.wirksam === 'taeglich', `${r.status} ${JSON.stringify({ e: z.eigen_modus, w: z.wirksam })}`);
 
     console.log('\n── Nimmt die Verwaltung die Pflicht zurück, gilt wieder der eigene Wunsch ──');
     await req('PUT', '/api/settings', admin, { twofa_mitarbeiter: 'aus' });
     z = await zustand(maT);
     ok('wieder wählbar', z.eigen_modus_waehlbar === true);
-    ok('… und es gilt wieder „bei jeder Anmeldung"', z.eigen_modus === 'immer' && z.modus_text === 'aus',
-      JSON.stringify({ eigen: z.eigen_modus, rolle: z.modus }));
+    ok('… und es gilt wieder der eigene Wunsch („täglich")', z.eigen_modus === 'taeglich' && z.wirksam === 'taeglich' && z.modus_text === 'aus',
+      JSON.stringify({ eigen: z.eigen_modus, wirksam: z.wirksam, rolle: z.modus }));
     a = await req('POST', '/api/auth/login', null, { username: 'max', password: maPw }, keks);
     ok('die Anmeldung verlangt entsprechend einen Code', a.body.zwei_faktor_erforderlich === true);
 
@@ -182,8 +199,9 @@ const zustand = async (t) => (await req('GET', '/api/auth/2fa/status', t)).body.
     ok('2) Pflicht „woechentlich" kommt → sie gilt', zb.modus === 'woechentlich' && zb.pflicht === true, JSON.stringify({ m: zb.modus }));
     ok('   → und abschalten geht jetzt NICHT',
       (await req('POST', '/api/auth/2fa/aus', bT, { code: await frisch(bSetup.geheim) })).status === 403);
-    ok('   → das Intervall umstellen ebenso wenig',
-      (await req('POST', '/api/auth/2fa/eigener-modus', bT, { modus: 'taeglich', code: await frisch(bSetup.geheim) })).status === 403);
+    ok('   → milder stellen als die Pflicht („einmal pro Gerät") ebenso wenig',
+      (await req('POST', '/api/auth/2fa/eigener-modus', bT, { modus: 'geraet', code: await frisch(bSetup.geheim) })).status === 403);
+    ok('   → sein „monatlich" bleibt gespeichert, es gilt die strengere Pflicht', (await zustand(bT)).eigen_modus === 'monatlich' && (await zustand(bT)).wirksam === 'woechentlich');
     ok('   → aber sein Authenticator ist unveraendert aktiv', (await zustand(bT)).eingerichtet === true);
 
     await req('PUT', '/api/settings', admin, { twofa_mitarbeiter: 'aus' });

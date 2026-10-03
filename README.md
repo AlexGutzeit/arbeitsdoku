@@ -195,13 +195,16 @@ nicht eingerichtet, führt die App die betroffene Person auf diese Seite und lä
 wenn ein Code bestätigt wurde. Abschalten kann man den zweiten Faktor nur, wenn die eigene Rolle
 ihn nicht verlangt — und nur mit gültigem Code.
 
-**Wie oft ein Code nötig ist, wählt jeder selbst** — solange die Rolle nichts vorschreibt. Auf
-„Mein Konto" stehen fünf Stufen zur Wahl: *bei jeder Anmeldung · einmal pro Gerät · täglich ·
-wöchentlich · monatlich*. Vorbelegt ist „einmal pro Gerät", die mildeste. Das Umstellen verlangt
-einen gültigen Code — sonst könnte an einem unbeaufsichtigten, noch angemeldeten Gerät jemand die
-Absicherung lockern —, und die gemerkten Geräte werden dabei zurückgesetzt, damit eine strengere
-Einstellung sofort greift. **Gibt die Verwaltung etwas vor, gewinnt sie**; der eigene Wunsch bleibt
-gespeichert und gilt wieder, sobald die Pflicht aufgehoben wird.
+**Wie oft ein Code nötig ist, wählt jeder selbst.** Auf „Mein Konto" stehen fünf Stufen zur Wahl:
+*bei jeder Anmeldung · einmal pro Gerät · täglich · wöchentlich · monatlich*. Vorbelegt ist „einmal pro
+Gerät", die mildeste. Das Umstellen verlangt einen gültigen Code — sonst könnte an einem
+unbeaufsichtigten, noch angemeldeten Gerät jemand die Absicherung lockern —, und die gemerkten Geräte
+werden dabei zurückgesetzt, damit eine strengere Einstellung sofort greift. **Gibt die Verwaltung für die
+Rolle etwas vor, ist das das Minimum:** strenger darf man es jederzeit einstellen, milder nicht — es gilt
+immer die **strengere** von Vorgabe und eigenem Wunsch (seit 03.10.2026; vorher gewann die Vorgabe in beide
+Richtungen). Beispiel: Vorgabe „monatlich", eigener Wunsch „wöchentlich" → es wird wöchentlich gefragt; zur
+Auswahl stehen dann nur *monatlich · wöchentlich · täglich · bei jeder Anmeldung*. Ein milderer Wunsch aus der
+Zeit vor der Vorgabe bleibt gespeichert und gilt wieder, sobald die Pflicht aufgehoben wird.
 
 **Pflicht und Freiwilligkeit sind ein ODER.** Gefragt wird, wer einen Authenticator eingerichtet
 hat — egal ob die Rolle es verlangt oder er sich freiwillig abgesichert hat. Ohne Vorgabe gilt

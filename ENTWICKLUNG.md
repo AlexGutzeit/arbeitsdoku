@@ -4460,3 +4460,34 @@ mehreren Zeitplaner-Läufen kein Fehler.
 Kopie von 16:04. Vollsicherung `arbeitsdoku_backup_20261002-173550.adbk` (dreifach, gleiche Prüfsumme,
 Rückspielprobe). Rückkehrpunkt `vor-glocke-deploy` (= `12e6652`). Die Datenbank ist vorher/nachher in allen
 59 Tabellen gleich, die Datei heil.
+
+## Zwei-Faktor: Die Vorgabe der Rolle ist das Minimum (03.10.2026)
+
+Alex fragte: Wer freiwillig „wöchentlich“ eingestellt hat und dann vom Admin „monatlich“ vorgeschrieben
+bekommt — bleibt es bei wöchentlich? Bisher nein. Die Vorgabe gewann in **beide** Richtungen, die eigene
+Auswahl war gesperrt, und man wurde seltener gefragt, als man wollte.
+
+**Jetzt gilt:** Die Vorgabe ist das Minimum. Strenger geht immer, milder nicht. Es gilt die strengere Stufe.
+- **Eine Regel, eine Stelle.** `zweifaktor.js` hat jetzt `STRENGE` (einmal pro Gerät < monatlich < wöchentlich
+  < täglich < bei jeder Anmeldung), `wirksamerModus(modus, eigen)` und `erlaubteEigeneModi(modus)`. Die Regel
+  „Rolle gewinnt“ stand an **fünf** Stellen: `codeNoetig`, `sitzungsGrenzeTage`, `routes/auth.js` zweimal
+  (Gerät merken) und `app-5` (Erklärung der gemerkten Geräte). Jetzt fragen alle `wirksamerModus`; die
+  Oberfläche nimmt `wirksam` vom Server.
+- **`routes/twofa.js`:**
+  - **Status** liefert `wirksam` und `wirksam_text`.
+  - **`modi_auswahl`** enthält nur die erlaubten Stufen; wählbar ist sie, sobald mehr als eine erlaubt ist.
+  - **Eigene Stufe setzen** weist nur noch eine *mildere* Stufe ab (403 „mindestens …“); bisher wurde jedes
+    Umstellen unter Pflicht abgewiesen.
+- **Mein Konto:**
+  - **Anzeige:** „Abfrage: wöchentlich (von dir gewählt — strenger als die Vorgabe ‚monatlich‘)“.
+  - **Auswahl:** zeigt bei einer Vorgabe nur gleich strenge oder strengere Stufen.
+  - **Hinweis:** „Für deine Rolle gibt die Verwaltung mindestens … vor — strenger kannst du es jederzeit
+    einstellen, milder nicht.“
+- **Einstellungen (Admin/Chef):** Ein Satz über den Auswahlfeldern sagt, dass die Stufe je Rolle das Minimum
+  ist — vorher stand nirgends, was die Vorgabe mit einem eigenen Wunsch macht.
+- **Test:** `twofa-eigenes-intervall` ist auf die neue Regel umgestellt. Der alte Test prüfte ausdrücklich
+  „Pflicht monatlich schlägt Wunsch immer“, also die alte Absicht, nicht einen Fehler. Neu sind die
+  Rechentabelle (`wirksamerModus`, `erlaubteEigeneModi`, `codeNoetig` mit Vorgabe und Wunsch) und über die
+  Schnittstelle: Unter Pflicht ist Milderes 403 und Strengeres 200, und es gilt dann auch.
+  - **Alex' Ablauf vom 23.08.** (monatlich → Pflicht wöchentlich → Pflicht weg → wieder monatlich →
+    abschalten) gilt unverändert.

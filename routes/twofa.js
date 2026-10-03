@@ -43,12 +43,14 @@ function zustand(db, user) {
     modus,
     modus_text: zf.MODUS_TEXT[modus] || modus,
     pflicht: modus !== 'aus',
-    // Der eigene Wunsch — nur waehlbar, solange die Rolle nichts vorschreibt. Er bleibt auch
-    // gespeichert, wenn zwischenzeitlich eine Pflicht gilt, und greift danach wieder.
+    // Der eigene Wunsch. Schreibt die Rolle etwas vor, ist das das Minimum — strenger darf man immer
+    // (Alex, 03.10.2026). Was gilt, sagt `wirksam` (zweifaktor.js, wirksamerModus — die Regel steht nur dort).
     eigen_modus: z.eigen_modus || 'geraet',
     eigen_modus_text: zf.MODUS_TEXT[z.eigen_modus || 'geraet'],
-    eigen_modus_waehlbar: fertig && modus === 'aus',
-    modi_auswahl: zf.EIGENE_MODI.map(m => ({ wert: m, text: zf.MODUS_TEXT[m] })),
+    wirksam: zf.wirksamerModus(modus, z.eigen_modus),
+    wirksam_text: zf.MODUS_TEXT[zf.wirksamerModus(modus, z.eigen_modus)],
+    eigen_modus_waehlbar: fertig && zf.erlaubteEigeneModi(modus).length > 1,
+    modi_auswahl: zf.erlaubteEigeneModi(modus).map(m => ({ wert: m, text: zf.MODUS_TEXT[m] })),
     einrichtung_noetig: zf.einrichtungNoetig(modus, fertig),
     notabschaltung: notabschaltung(),
     // Abschalten darf nur, wen die Rolle nicht dazu verpflichtet.
@@ -167,14 +169,15 @@ router.post('/eigener-modus', authenticate, codeLimiter, (req, res) => {
     const db = getDb();
     const z = zustand(db, req.user);
     if (!z.eingerichtet) return res.status(400).json({ error: 'Es ist nichts eingerichtet' });
-    if (z.pflicht) {
-      return res.status(403).json({
-        error: `Für deine Rolle gibt die Verwaltung vor, wie oft ein Code nötig ist (${z.modus_text}).`,
-      });
-    }
     const modus = String((req.body || {}).modus || '');
     if (!zf.EIGENE_MODI.includes(modus)) {
       return res.status(400).json({ error: `Erwartet eines von: ${zf.EIGENE_MODI.join(', ')}` });
+    }
+    // Strenger als die Vorgabe der Rolle geht immer, milder nicht (Alex, 03.10.2026)
+    if (!zf.erlaubteEigeneModi(z.modus).includes(modus)) {
+      return res.status(403).json({
+        error: `Für deine Rolle gibt die Verwaltung mindestens „${z.modus_text}" vor — strenger geht, milder nicht.`,
+      });
     }
 
     const geheim = zf.geheimnisLesen(db, req.user.id);

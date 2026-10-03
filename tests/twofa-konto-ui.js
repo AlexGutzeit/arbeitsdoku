@@ -263,6 +263,8 @@ async function scharfSchalten(adminToken, werte) {
       (await page.$eval('#s-twofa-mitarbeiter', el => el.value)) === 'immer');
     ok('ein Warnhinweis erklärt die Folgen',
       /kommt vorher nicht weiter/i.test(await page.$eval('#twofa-form', el => el.parentElement.innerText)));
+    ok('… und sagt, dass die Stufe nur das Minimum ist (strenger geht auf „Mein Konto")',
+      /Stufe je Rolle ist das Minimum.*strenger ein — milder geht nicht/s.test(await page.$eval('#twofa-form', el => el.parentElement.innerText)));
     ok('für den Admin ist das Admin-Feld bedienbar',
       !(await page.$eval('#s-twofa-admin', el => el.disabled)));
     await page.close();
@@ -412,6 +414,21 @@ async function scharfSchalten(adminToken, werte) {
     ok('… sondern heißt neutral „Gemerkte Geräte"', /Gemerkte Geräte/.test(gTxt), gTxt.slice(0, 100));
     ok('… und sagt, was dort wirklich gilt: höchstens einmal pro Woche',
       /höchstens einmal pro Woche/i.test(gTxt), gTxt.slice(0, 200));
+
+    // Alex, 03.10.2026: Die Vorgabe der Rolle ist das MINIMUM. Schreibt die Verwaltung „monatlich" vor, bleibt
+    // sein strengeres „wöchentlich" — und die Auswahl bietet nur noch Gleiches oder Strengeres an.
+    await scharfSchalten(adminToken, { twofa_mitarbeiter: 'monatlich' });
+    await kp.reload({ waitUntil: 'domcontentloaded' });
+    await kp.waitForSelector('#konto-2fa'); await sleep(2600);
+    const vTxt = (await kp.$eval('#konto-2fa', el => el.innerText)).replace(/\s+/g, ' ');
+    ok('Vorgabe „monatlich": es bleibt bei seinem strengeren „wöchentlich", und die Karte sagt warum',
+      /Abfrage: wöchentlich/i.test(vTxt) && /strenger als die Vorgabe „monatlich"/.test(vTxt), vTxt.slice(0, 200));
+    const stufenAuswahl = await kp.$$eval('#zfa-modus option', os => os.map(o => o.value + (o.selected ? '*' : '')));
+    ok('… die Auswahl bietet nur Gleiches oder Strengeres an (ohne „einmal pro Gerät"), „wöchentlich" gewählt',
+      JSON.stringify(stufenAuswahl) === '["immer","taeglich","woechentlich*","monatlich"]', JSON.stringify(stufenAuswahl));
+    ok('… mit dem Hinweis „mindestens monatlich — strenger geht, milder nicht"',
+      /mindestens monatlich vor — strenger kannst du es jederzeit einstellen, milder nicht/.test(vTxt), vTxt.slice(0, 400));
+    await req('PUT', '/api/settings', adminToken, { twofa_mitarbeiter: 'aus' });
     await kp.close();
 
     console.log('\n── Zwei Wege nach „Mein Konto" (Alex, 23.08.2026) ──');

@@ -133,6 +133,8 @@ async function renderSettings() {
           <strong>Mein Konto</strong> geführt und kommt vorher nicht weiter — auch mitten in der
           Arbeit. Sag den Betroffenen also vorher Bescheid.
         </div>
+        <p style="margin:0 0 0.75rem;color:var(--text-light)">Die Stufe je Rolle ist das <strong>Minimum</strong>: Wer will,
+          stellt sich auf <strong>Mein Konto</strong> strenger ein — milder geht nicht.</p>
         <form id="twofa-form">
           ${['admin', 'chef', 'buchhalter', 'mitarbeiter'].map(rolle => `
           <div class="form-group">
