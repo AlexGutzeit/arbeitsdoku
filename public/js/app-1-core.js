@@ -1715,7 +1715,7 @@ const SEITEN = ['renderWelcome', 'renderDashboard', 'renderKonto', 'renderEntryF
   'renderSettings', 'renderAudit', 'renderDeletedEntries', 'renderDeletedAbsences', 'renderDeletedProjects',
   'renderDeletedUsers', 'renderDocuments', 'renderPdfExport', 'renderStatistics', 'renderPlanning', 'renderPlanningForm',
   'renderProdukte', 'renderTools', 'renderOrders', 'renderMeldungen', 'renderNotizen', 'renderNotizEditor', 'renderAbsences',
-  'renderAbsenceType', 'renderBulletin', 'renderBulletinForm'];
+  'renderAbsenceType', 'renderBulletin', 'renderBulletinForm', 'renderKollegen', 'renderKollege'];
 const SEITEN_TEILE = { renderDashboardContent: 'renderDashboard', renderPlanningContent: 'renderPlanning',
   renderStatisticsContent: 'renderStatistics', renderProjectForm: 'renderProjects' };
 let _imRouter = false;
@@ -2076,6 +2076,8 @@ function seiteWaehlen() {
   else if (route === '/meldungen') renderMeldungen();
   else if (route === '/notes') renderNotizen();
   else if (route.startsWith('/notes/')) renderNotizEditor(route.split('/').pop());
+  else if (route === '/kollegen') renderKollegen();
+  else if (route.startsWith('/kollegen/')) renderKollege(route.split('/')[2]);
   // Projektnotiz: dieselbe Live-Notiz, erreichbar über das Projekt (legt sie beim ersten Öffnen an)
   else if (/^\/projects\/\d+\/notiz$/.test(route)) renderNotizEditor(null, { projektId: route.split('/')[2] });
   else if (route === '/absences') renderAbsences();

@@ -99,6 +99,7 @@ function anmeldungAbschliessen(data) {
   syncPushSubscription();
   refreshUser();   // holt auch den Zwei-Faktor-Zustand
   avatarStandLaden().then(() => avatareLaden(document));
+  kollegenLaden();
 }
 
 // Dezente Impressum/Datenschutz-Links — nur zeigen, was hinterlegt ist (white-label: frischer Deploy bleibt sauber).
@@ -474,6 +475,7 @@ function layout(content, activeNav) {
         <a href="#/statistics" class="${activeNav === 'statistics' ? 'active' : ''}">
           <span class="icon">&#128200;</span> Statistik
         </a>
+        ${kollegenMenueHtml(activeNav)}
         <div class="sidebar-divider"></div>
         <a href="#/konto" class="${activeNav === 'konto' ? 'active' : ''}">
           <span class="icon">&#128100;</span> Mein Konto
@@ -533,6 +535,23 @@ function layout(content, activeNav) {
   `;
 }
 
+// Menue-Gruppen (Papierkorb, Kollegen) per Tippen, Klick oder Enter/Leertaste auf- und zuklappen — an jedem
+// Geraet gleich. Kein Aufklappen per Hover mehr (siehe style.css, .nav-group). Eigene Funktion, weil die
+// Kollegen-Gruppe nach dem Laden der Liste ausgetauscht und neu gebunden wird (app-11-kollegen.js).
+function navGruppeBinden(label) {
+  if (!label) return;
+  const umschalten = () => {
+    const gruppe = label.closest('.nav-group');
+    if (!gruppe) return;
+    const offen = gruppe.classList.toggle('open');
+    label.setAttribute('aria-expanded', offen ? 'true' : 'false');
+  };
+  label.addEventListener('click', umschalten);
+  label.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); umschalten(); }
+  });
+}
+
 function bindLayout() {
   // Profilbilder nachladen — bindLayout laeuft nach JEDEM Seitenaufbau, damit erwischt es die
   // Kopfzeile und alle Platzhalter der jeweiligen Seite in einem Aufwasch.
@@ -569,20 +588,7 @@ function bindLayout() {
       if (menuBtn) menuBtn.focus();
     }
   });
-  // Menue-Gruppen (Papierkorb, Kollegen) per Tippen, Klick oder Enter/Leertaste auf- und zuklappen —
-  // an jedem Geraet gleich. Kein Aufklappen per Hover mehr (siehe style.css, .nav-group).
-  document.querySelectorAll('.nav-group-label').forEach(label => {
-    const umschalten = () => {
-      const gruppe = label.closest('.nav-group');
-      if (!gruppe) return;
-      const offen = gruppe.classList.toggle('open');
-      label.setAttribute('aria-expanded', offen ? 'true' : 'false');
-    };
-    label.addEventListener('click', umschalten);
-    label.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); umschalten(); }
-    });
-  });
+  document.querySelectorAll('.nav-group-label').forEach(navGruppeBinden);
 
   if (logoutBtn) logoutBtn.addEventListener('click', () => logout(true));
   if (fab) fab.addEventListener('click', () => {

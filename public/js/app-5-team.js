@@ -2472,6 +2472,7 @@ async function renderKonto() {
       <div class="welcome-section" id="konto-auszahlung" style="display:none"></div>
       <div class="welcome-section" id="konto-avatar"></div>
       <div class="welcome-section" id="konto-geburtstag"></div>
+      <div class="welcome-section" id="konto-kollegen"></div>
       <div class="welcome-section" id="konto-warnungen"></div>
       <div class="welcome-section" id="konto-2fa"><div class="loading"><div class="spinner"></div></div></div>
       <div class="welcome-section" id="konto-passwort"></div>
@@ -2487,6 +2488,7 @@ async function renderKonto() {
   await kontoAuszahlungKarte();
   await kontoAvatarKarte();
   await kontoGeburtstagKarte();
+  await kontoKollegenKarte();
   await kontoWarnungenKarte();
   kontoPasswortKarte();
   await kontoZweiFaktorKarte();
@@ -2778,7 +2780,8 @@ async function kontoAvatarKarte() {
 }
 
 // Eigenes Geburtsdatum anzeigen — damit ein Zahlendreher demjenigen auffaellt, der ihn am besten
-// erkennt. Dazu die Freigabe fuers Team, zweistufig.
+// erkennt. Die Freigabe fuers Team steht seit dem 05.10.2026 in der Karte „Für die Kollegen"
+// (app-11-kollegen.js), dort steht alles Freiwillige beieinander.
 async function kontoGeburtstagKarte() {
   const k = document.getElementById('konto-geburtstag');
   if (!k) return;
@@ -2799,37 +2802,9 @@ async function kontoGeburtstagKarte() {
       : `<p>Es ist <strong>kein Geburtsdatum</strong> hinterlegt.
            <span style="color:var(--text-light);font-size:.85rem">Solange das so ist, rechnet die App
            bei den Pausen vorsichtshalber mit den strengeren Regeln für Jugendliche.</span></p>`}
-    <hr style="margin:.85rem 0; border:none; border-top:1px solid var(--border)">
-    <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer">
-      <input type="checkbox" id="geb-zeigen" style="width:auto"${d.zeigen ? ' checked' : ''}${datum ? '' : ' disabled'}>
-      <span>Meinen Geburtstag im Team zeigen</span>
-    </label>
-    <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer; margin-top:.4rem; margin-left:1.5rem">
-      <input type="checkbox" id="geb-alter" style="width:auto"${d.alter_auch ? ' checked' : ''}${d.zeigen && datum ? '' : ' disabled'}>
-      <span>… und auch mein Alter</span>
-    </label>
     <div style="font-size:.78rem;color:var(--text-light);margin-top:.5rem">
-      Ohne Freigabe sehen nur Chef, Admin und Buchhaltung deinen Geburtstag — die haben das Datum
-      ohnehin in der Mitarbeiterverwaltung. Du kannst das jederzeit wieder zurücknehmen.
+      Ob deine Kollegen ihn sehen, stellst du direkt darunter unter <strong>Für die Kollegen</strong> ein.
     </div>`;
-
-  const zeigen = document.getElementById('geb-zeigen');
-  const alter = document.getElementById('geb-alter');
-  const speichern = async () => {
-    // „Alter" ergibt ohne „Geburtstag" keinen Sinn — die Oberflaeche sperrt es, der Server raeumt
-    // es zusaetzlich gerade (doppelt, damit kein widerspruechlicher Zustand entstehen kann).
-    alter.disabled = !zeigen.checked;
-    if (!zeigen.checked) alter.checked = false;
-    try {
-      await api('PUT', '/api/users/geburtstag-freigabe', { zeigen: zeigen.checked, alter_auch: alter.checked });
-      toast('Gespeichert', 'success');
-    } catch (err) {
-      toast(err.message || 'Konnte nicht gespeichert werden', 'error');
-      zeigen.checked = !zeigen.checked;   // zuruecknehmen, damit die Anzeige nicht luegt
-    }
-  };
-  if (zeigen && !zeigen.disabled) zeigen.addEventListener('change', speichern);
-  if (alter) alter.addEventListener('change', speichern);
 }
 
 // Gesetzliche Warnungen im Zeitnachweis ein- und ausblenden (Alex, 26.08.2026).

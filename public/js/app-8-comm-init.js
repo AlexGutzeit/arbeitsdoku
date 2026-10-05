@@ -2646,7 +2646,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadLegalFlags(); // öffentlich; blendet Impressum/Datenschutz-Links ein (auch ausgeloggt)
   // avatarStandLaden() zuerst und mit await: Ohne die Frischemarken wuesste avatarHtml() nicht,
   // wer ueberhaupt ein Bild hat, und es blieben ueberall Initialen stehen.
-  if (S.token) { avatarStandLaden().then(() => avatareLaden(document)); initSSE(); loadBadges(); syncPushSubscription(); refreshUser(); }
+  if (S.token) { avatarStandLaden().then(() => avatareLaden(document)); kollegenLaden(); initSSE(); loadBadges(); syncPushSubscription(); refreshUser(); }
 });
 // Beim Zurückkehren zum Tab Rechte/Rolle auffrischen (greift ohne F5, sobald der Tab wieder sichtbar ist)
 // — und die Zähler gleich mit. Am Handy trennt das Betriebssystem den SSE-Kanal, sobald der Bildschirm

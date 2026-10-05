@@ -69,6 +69,7 @@ function req(m, p, t, b) {
       '/projects/' + projekt.id + '/notiz',   // Projektnotiz (28.09.2026)
       '/absences', '/absences/urlaub', '/bulletin', '/bulletin/edit/' + aushang.id,
       '/meldungen',                            // Meldungen (30.09.2026)
+      '/kollegen', '/kollegen/' + maxId,       // Kollegen (05.10.2026)
       '/impressum', '/datenschutz',
     ];
 

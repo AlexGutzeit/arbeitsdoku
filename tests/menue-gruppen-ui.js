@@ -1,4 +1,6 @@
 // Aufklappbare Menü-Gruppen (Papierkorb, Kollegen): auf UND wieder zu — mit Maus, Finger und Tastatur.
+// Die Kollegen-Gruppe wird nach dem Laden der Liste AUSGETAUSCHT (app-11-kollegen.js) — sie muss danach
+// genauso bedienbar sein; deshalb läuft sie hier mit, nachdem die Liste da ist.
 //
 // Alex, 05.10.2026: „Das Papierkorb-Menü kann man aufklappen, aber nicht mehr zuklappen." Ursache: Die
 // Gruppe klappte zusätzlich bei :hover auf. Am Rechner steht der Mauszeiger nach dem Klick noch über der
@@ -63,7 +65,7 @@ function req(m, p, t, b) {
       const b = e.getBoundingClientRect(); return { x: b.x + 40, y: b.y + b.height / 2 };
     }, gruppe);
 
-    for (const gruppe of ['nav-papierkorb']) {
+    for (const gruppe of ['nav-papierkorb', 'nav-kollegen']) {
       console.log(`── ${gruppe}: Rechner (die Maus bleibt nach dem Klick darüber stehen) ──`);
       let p = await neueSeite({ width: 1280, height: 900 });
       let z = await zustand(p, gruppe);
