@@ -4491,3 +4491,11 @@ Auswahl war gesperrt, und man wurde seltener gefragt, als man wollte.
   Schnittstelle: Unter Pflicht ist Milderes 403 und Strengeres 200, und es gilt dann auch.
   - **Alex' Ablauf vom 23.08.** (monatlich → Pflicht wöchentlich → Pflicht weg → wieder monatlich →
     abschalten) gilt unverändert.
+
+**Deploy Zwei-Faktor-Minimum (05.10.2026, 15:23, `3cd5a76`, Cache 447).** Die volle Suite lief 275 von 275 auf der
+Kopie vom 03.10. 18:49; vor dem Deploy liefen die 18 Prod-Klon-Tests noch einmal auf einer frischen Kopie von
+05.10. 15:13, alle grün. Mit ausgerollt: die README-Ergänzung der Push-Tabelle (Projektnotiz, drei Erinnerungsarten).
+Vollsicherung `arbeitsdoku_backup_20261005-152240.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe).
+Rückkehrpunkt `vor-2fa-minimum-deploy` (= `889dc89`). Die Datenbank ist vorher/nachher in allen 59 Tabellen
+gleich, die Datei heil. Auf Produktion ist keine Rollen-Vorgabe gesetzt; für das eine eingerichtete Konto gilt
+vorher wie nachher dieselbe Stufe — der Umbau ändert im Bestand nichts.
