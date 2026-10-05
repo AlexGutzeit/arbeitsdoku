@@ -906,6 +906,7 @@ const AUDIT_LABELS = {
   alle_abgemeldet: 'Auf allen Geräten abgemeldet',
   datenauskunft: 'Datenauskunft heruntergeladen',
   geburtstag_freigabe: 'Geburtstags-Freigabe geändert',
+  kollegen_profil: 'Für die Kollegen geändert',
   avatar_gesetzt: 'Profilbild gesetzt',
   avatar_entfernt: 'Profilbild entfernt',
   twofa_aktiviert: 'Zwei-Faktor aktiviert',

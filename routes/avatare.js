@@ -228,6 +228,7 @@ router.post('/zuschnitt', authenticate, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.dateiFuer = dateiFuer;   // für das Foto in der vCard (routes/kollegen.js)
 module.exports.standFuer = standFuer;
 module.exports.dateiFuer = dateiFuer;
 module.exports.GROESSEN = GROESSEN;

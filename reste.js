@@ -46,6 +46,7 @@ const ANHAENGSEL = [
   ['user_sitzung', 'user_id', 'users', 'Sitzungen gelöschter Konten'],
   ['user_avatars', 'user_id', 'users', 'Profilbilder gelöschter Konten'],
   ['geburtstag_freigabe', 'user_id', 'users', 'Geburtstags-Freigaben gelöschter Konten'],
+  ['kollegen_profil', 'user_id', 'users', 'Kollegen-Profile gelöschter Konten'],
   ['push_prefs', 'user_id', 'users', 'Meldungs-Einstellungen gelöschter Konten'],
   ['push_subscriptions', 'user_id', 'users', 'Push-Anmeldungen gelöschter Konten'],
   ['summary_schedules', 'user_id', 'users', 'Zusammenfassungen gelöschter Konten'],

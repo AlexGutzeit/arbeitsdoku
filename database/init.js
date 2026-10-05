@@ -431,6 +431,8 @@ async function initDatabase() {
   ensureAvatarSchema(db);
   // Geburtstags-Freigabe (idempotent, hier UND im Restore-Pfad)
   ensureGeburtstagSchema(db);
+  // Kollegen-Profil: Infotext, Telefon, E-Mail (idempotent, hier UND im Restore-Pfad)
+  ensureKollegenSchema(db);
   // Sitzungs-Zaehler fuer „ueberall abmelden" (idempotent, hier UND im Restore-Pfad)
   ensureSitzungSchema(db);
   // Empfaenger fuer verschluesselte Sicherungen (idempotent, hier UND im Restore-Pfad)
@@ -1040,6 +1042,7 @@ function ensureAuditSchema(targetDb) {
   ensureTwoFactorSchema(targetDb);
   ensureAvatarSchema(targetDb);
   ensureGeburtstagSchema(targetDb);
+  ensureKollegenSchema(targetDb);
   ensureSitzungSchema(targetDb);
   ensureBackupEmpfaengerSchema(targetDb);
   ensureWarnungSchema(targetDb);
@@ -1424,6 +1427,28 @@ function ensureGeburtstagSchema(targetDb) {
     `);
   } catch (e) {
     console.error('ensureGeburtstagSchema fehlgeschlagen:', e.message);
+  }
+}
+
+// Was jeder SELBST für die Kollegen einträgt (Alex, 05.10.2026). Alles freiwillig: Der Infotext erscheint,
+// sobald er nicht leer ist; Telefon und E-Mail nur mit eigenem Haken. Ohne Zeile = nichts eingetragen.
+// Die Geburtstags-Freigabe bleibt in ihrer eigenen Tabelle (geburtstag_freigabe).
+function ensureKollegenSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS kollegen_profil (
+        user_id         INTEGER PRIMARY KEY,
+        info            TEXT,
+        telefon         TEXT,
+        telefon_zeigen  INTEGER DEFAULT 0,
+        email           TEXT,
+        email_zeigen    INTEGER DEFAULT 0,
+        geaendert       TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+    `);
+  } catch (e) {
+    console.error('ensureKollegenSchema fehlgeschlagen:', e.message);
   }
 }
 

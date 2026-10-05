@@ -334,6 +334,7 @@ router.get('/meine-daten', authenticate, (req, res) => {
     push_einstellungen: holeEins('SELECT * FROM push_prefs WHERE user_id = ?'),
     push_geraete: hole('SELECT id, user_agent, created_at FROM push_subscriptions WHERE user_id = ?'),
     geburtstags_freigabe: holeEins('SELECT * FROM geburtstag_freigabe WHERE user_id = ?'),
+    fuer_die_kollegen: holeEins('SELECT info, telefon, telefon_zeigen, email, email_zeigen, geaendert FROM kollegen_profil WHERE user_id = ?'),
     profilbild: holeEins('SELECT * FROM user_avatars WHERE user_id = ?'),
     // Beim zweiten Faktor NUR die Tatsache, nicht das Geheimnis — das waere ein Schluessel, kein Datum.
     zwei_faktor: (() => {
