@@ -4594,3 +4594,79 @@ dem nachgebauten Fehler wird er rot (3 Rücksprünge), mit dem echten Code bleib
 Meldungen (15 Meldungen). Er prüft, dass die Bilder wirklich da sind — Inhalt, der während des Scrollens
 nachkommt, ist genau die Art Auslöser vom Juli. Das Ergebnis: 23 Prüfungen, kein Rücksprung. Das Nachladen ändert
 nur Stil und Text eines vorhandenen Elements, keine Elemente — der Beobachter reagiert darauf gar nicht.
+
+## Menü: Papierkorb wieder zuklappbar (05.10.2026)
+
+Alex: „Das Papierkorb-Menü kann man aufklappen, aber nicht mehr zuklappen." Die Gruppe klappte zusätzlich bei
+`:hover` auf (`.nav-group:hover .nav-subitem`). Am Rechner steht der Mauszeiger nach dem Klick noch darüber, am
+Handy „klebt" `:hover` nach dem Antippen am Element. Das Tippen nahm `.open` weg, `:hover` hielt die Gruppe offen.
+Nachgestellt: am Rechner sofort (2. Klick → `open:false`, aber sichtbar). Die Touch-Simulation des Testbrowsers
+bildet das Kleben nicht nach — der Maus-Fall ist deshalb der scharfe.
+
+Jetzt nur noch `.open`. Der Gruppenkopf ist `role="button"` mit `aria-expanded` und lässt sich mit Enter/Leertaste
+bedienen; das Binden steht in `navGruppeBinden()` (app-2), weil die Kollegen-Gruppe nach dem Laden ausgetauscht
+und neu gebunden wird. Test `menue-gruppen-ui.js` (19; Papierkorb und Kollegen, Maus, Tastatur, Handy).
+Gegenproben: Hover wieder an → 4 rot (genau der gemeldete Fall); Kollegen-Gruppe nach dem Austausch nicht neu
+gebunden → 3 rot.
+
+## Kollegen (05.10.2026)
+
+Alex' Wunsch: Menüpunkt „Kollegen" mit den aktiven Kollegen als Unterpunkten; je Person Name, Bild, Geburtstag
+und Alter (wenn freigegeben) und ein Freitext „Infos für die Kollegen" aus Mein Konto. Dazu Telefon und E-Mail
+freiwillig mit Haken (sein Nachtrag). Aus meinen Vorschlägen gewählt: ausgeliehenes Werkzeug, vCard (mit E-Mail),
+„Neu im Team". Liste: alle aktiven Konten außer der Rolle admin, ohne einen selbst.
+
+**Server — `routes/kollegen.js`** (die Freigabe-Regel steht NUR dort):
+- **Endpunkte:** `GET /` (Liste), `GET /mein-profil` und `PUT /mein-profil` (immer gegen `req.user.id`, vor
+  `/:id`), `GET /:id`, `GET /:id/vcard`.
+- **Freigabe:** `sichtbar(db, u)` ist die EINE Stelle für Seite und vCard. Telefon und E-Mail nur mit Haken, der
+  Geburtstag nur mit `geburtstag_freigabe.zeigen`, das Alter nur mit `alter_auch`. Das Geburtsjahr geht nie
+  hinaus (Tag, Monat, berechnetes Alter).
+- **Admin:** Für Kollegen ist er 404; die eigene Vorschau ist für jeden abrufbar, auch für den Admin.
+- **Neue Tabelle `kollegen_profil`** (`ensureKollegenSchema`, beim Start UND beim Zurückspielen). In `reste.js`
+  als Anhängsel eingetragen, damit „Konto endgültig löschen" sie mitnimmt. In der Datenauskunft unter
+  `fuer_die_kollegen`.
+- **Protokoll** `kollegen_profil`: nur WAS sichtbar ist („Telefon: sichtbar / nur gespeichert / leer"), nie
+  Nummer, Adresse oder Text.
+- **„Neu im Team":** Gemessen wurde, dass im Bestand ALLE Anstellungszeiträume im März 2026 beginnen, also bei
+  der Einführung der App, nicht beim echten Eintritt. Nur „Beginn < 28 Tage" hätte bei jeder Firma, die die App
+  neu einführt, vier Wochen lang jeden als „neu" gezeigt. Regel deshalb: erster Eintritt vor weniger als 28 Tagen
+  (und nicht in der Zukunft) UND mindestens 28 Tage nach dem frühesten Beginn überhaupt. Wiedereinstellung zählt
+  nicht.
+- **vCard 3.0:** CRLF, Zeilen auf 75 Byte gefaltet, ohne UTF-8-Zeichen zu zerschneiden. Foto als JPEG 256 px aus
+  dem großen Profilbild (`dateiFuer` aus routes/avatare.js exportiert). `BDAY` nur mit Alter-Freigabe — 3.0 kennt
+  keinen Geburtstag ohne Jahr. Ohne freigegebenes Telefon oder E-Mail gibt es keine vCard (404, kein Knopf).
+
+**Oberfläche — `public/js/app-11-kollegen.js`:**
+- **Menügruppe:** „Alle Kollegen" plus je Kollege ein Eintrag. Sie wird nach `kollegenLaden()` (Start, Anmeldung,
+  Übersicht) ausgetauscht.
+- **Übersicht, Seite und „Für die Kollegen"** auf Mein Konto, mit Vorschau „So sehen dich deine Kollegen".
+- **Geburtstags-Haken** stehen jetzt dort (dieselben IDs `geb-zeigen`/`geb-alter`, gespeichert weiter über
+  `/api/users/geburtstag-freigabe`). Die Geburtstagskarte zeigt nur noch das hinterlegte Datum.
+- **Profilbild:** überall `'initialen'` — ein Personenverzeichnis.
+- **Neue Seiten** stehen in `SEITEN` und in `tests/seite-laden-ui.js`.
+- **Sprung zur Karte:** Von einer Kollegen-Seite springt „Mein Konto → Für die Kollegen" direkt zur Karte. Dabei
+  fiel auf, dass `scrollIntoView` die Kartenüberschrift HINTER die feste Kopfleiste schob →
+  `#konto-kollegen { scroll-margin-top: 72px }`.
+
+**Tests:**
+- **`kollegen.js` (57):** Was nicht freigegeben ist, steht in KEINER Antwort — geprüft am Antworttext, nicht nur
+  am Feld. „Neu im Team" prüft er über einen Neustart mit zurückdatierten Eintritten.
+- **`kollegen-ui.js` (39):** Rechner, Handy, Admin, Mein Konto, Vorschau, vCard über einen abgefangenen
+  `dateiHerunterladen`.
+
+**Gegenproben**, alle an der erwarteten Stelle rot:
+- **Server:**
+  - E-Mail ohne Haken → 2 rot.
+  - „Neu" ohne Einführungsregel → 1 rot.
+  - Admin in der Liste → 1 rot.
+  - Geburtstag ohne Haken → 1 rot. Der erste Versuch ließ den Server abstürzen (500) und war rot aus dem
+    falschen Grund. Dabei fiel auf, dass das Zurücknehmen der Freigabe nicht geprüft wurde — jetzt schon.
+- **Oberfläche:**
+  - Menü ohne Initialen → 1 rot.
+  - Telefon-Haken nicht entsperrt → 4 rot.
+  - Anruf-Link ungefiltert → 2 rot.
+  - Kein Sprung zur Karte → 1 rot.
+  - Ohne Abstand zur Kopfleiste → 1 rot.
+  - Die Sprung-Prüfung war zuerst ZAHNLOS: Am großen Bildschirm ist die Karte auch ohne Sprung im Bild. Jetzt
+    misst sie, dass der Kartenkopf direkt unter der Kopfleiste steht.

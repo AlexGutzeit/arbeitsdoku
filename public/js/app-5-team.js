@@ -2708,11 +2708,11 @@ async function kontoAvatarKarte() {
     <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap">
       <span id="avatar-vorschau">${avatarHtml(S.user, 96, 'initialen')}</span>
       <div style="flex:1; min-width:200px">
-        <p style="margin:0 0 .5rem">Erscheint neben deinem Namen (oben und im Menü), in der Planung, in den
-           Spalten von Zeitnachweis und Auftrags-Board, im Abwesenheitskalender und bei deinen Anträgen,
-           Meldungen und Aushängen. Du musst keines hochladen: <strong>Ohne Bild bleibt oben, im Menü,
-           in der Planung und in den Spalten alles wie bisher</strong>; bei Anträgen, Meldungen und
-           Aushängen steht dann ein Kreis mit deinen Initialen.</p>
+        <p style="margin:0 0 .5rem">Erscheint neben deinem Namen (oben und im Menükopf), unter Kollegen, in der
+           Planung, in den Spalten von Zeitnachweis und Auftrags-Board, im Abwesenheitskalender und bei deinen Anträgen,
+           Meldungen und Aushängen. Du musst keines hochladen: <strong>Ohne Bild bleibt oben, im Menükopf,
+           in der Planung und in den Spalten alles wie bisher</strong>; unter Kollegen und bei Anträgen, Meldungen
+           und Aushängen steht dann ein Kreis mit deinen Initialen.</p>
         <input type="file" id="avatar-datei" accept="image/*" style="display:none">
         <div style="display:flex;gap:.5rem;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" id="avatar-waehlen">${hatBild ? 'Anderes Bild wählen' : 'Bild hochladen'}</button>

@@ -74,6 +74,7 @@ const ERLAUBT_NEUE_TABELLEN = [
   'twofa_secrets', 'twofa_devices', 'user_avatars', 'user_sitzung', 'geburtstag_freigabe',  // 23.08.2026
   'backup_empfaenger',                                                                      // 25.08.2026
   'warnung_prefs',                                                                          // 26.08.2026
+  'kollegen_profil',                                                                        // 05.10.2026, Kollegen
 ];
 const ERLAUBT_NEUE_SPALTEN = {
   users: ['can_order'],   // 25.08.2026, Bestellrecht

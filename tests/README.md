@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**277 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**279 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -143,6 +143,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `keine-geheimnisse.js` | Keine Geheimnisse im Repo (Alex, 01.10.2026). |
 | `kleine-sackgassen-ui.js` | Kleine Sackgassen: Downloads, abgelaufener Zwei-Faktor-Schritt, Abmelden, neue Rechte |
 | `kollab-buendel.js` | Das Bündel für die gemeinsamen Notizen (Etappe A, Schritt 2 — 26.09.2026). |
+| `kollegen-ui.js` | Kollegen (Oberfläche): Menü mit den Kollegen als Unterpunkten, Übersicht, Seite einer Person, vCard, |
+| `kollegen.js` | Kollegen (Server): wer drinsteht, was ohne Freigabe den Server NICHT verlässt, „Neu im Team", Werkzeug, vCard. |
 | `konto-loeschen-ui.js` | Mitarbeiter endgültig löschen — Oberfläche (Alex, 28.09.2026). |
 | `konto-loeschen.js` | Mitarbeiter endgültig löschen — Server (Alex, 28.09.2026; Regel in konto-loeschen.js). |
 | `konto-pdf-ui.js` | Der PDF-Nachweis ist für Mitarbeiter nach „Mein Konto" gezogen (Alex, 23.08.2026). |

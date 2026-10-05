@@ -73,6 +73,7 @@ es geht; die Abschnitte darunter beschreiben es im Einzelnen.
 - [📌 Schwarzes Brett](#-schwarzes-brett) — Aushänge fürs Team, auf der Willkommensseite eingeblendet.
 - [📝 Notizen](#-notizen) — Eigene Notizen, einzeln freigebbar, gemeinsam live bearbeitbar; drucken, als PDF/Word/ODT speichern, Gäste von außerhalb einladen.
 - [🗂️ Dokumente](#-dokumente) — Dateiablage mit Ordnern und Speicherlimits.
+- [🤝 Kollegen](#-kollegen) — Wer im Team ist, mit dem, was jeder selbst freigibt: Geburtstag, Telefon, E-Mail, ein paar Zeilen über sich; dazu das ausgeliehene Werkzeug und „Ins Telefonbuch übernehmen".
 
 **Verwaltung**
 
@@ -99,14 +100,14 @@ eigene **Profilbild bzw. den Namen oben rechts** in der Kopfzeile, oder — mit 
 auf das Bild **oben im Seitenmenü** neben Name und Rolle. Alle führen an dieselbe Stelle.
 
 **Profilbild:** Jeder kann ein Bild hochladen. Es erscheint an zwei Arten von Stellen:
-- **Spalten, Menü und Auswahl** — Kopfzeile, Seitenmenü (rechts neben Name und Rolle), Planung (Spaltenköpfe in
+- **Spalten, Menü und Auswahl** — Kopfzeile, Menükopf (rechts neben Name und Rolle), Planung (Spaltenköpfe in
   Tag, Woche und Monat, Mitarbeiter-Auswahl im Planungsformular), Zeitnachweis (Spaltenköpfe in Tag, Woche und
   Monat, sobald mehrere Personen nebeneinanderstehen), Auftrags-Board-Spalten,
   Namensspalte im Abwesenheitskalender, Mitarbeiterliste. **Wer kein Bild hochlädt, ändert hier nichts** — die
   Ansicht bleibt genau wie vorher.
 - **Listen, in denen ein Name steht** — Abwesenheitsanträge (beim Antragsteller), Meldungen („Gemeldet von"),
   Aushänge am Schwarzen Brett und auf der Willkommensseite (Verfasser), „mit …" bei Terminen auf der
-  Willkommensseite. Hier steht ohne Bild ein **Kreis mit den Initialen** in der Personenfarbe, damit Namen mit
+  Willkommensseite, und die **Kollegen** (Menü, Übersicht, Seite — ein Personenverzeichnis). Hier steht ohne Bild ein **Kreis mit den Initialen** in der Personenfarbe, damit Namen mit
   und ohne Bild nicht durcheinander stehen. Gelöschte Konten und automatische Meldungen bekommen keinen Kreis.
 
 Jedes Bild lässt sich jederzeit wieder **entfernen**. Sehen können es nur angemeldete Kolleginnen und Kollegen.
@@ -138,10 +139,20 @@ freigegeben hat.
 
 **Geburtstag:** Die Seite zeigt das Geburtsdatum, das die Verwaltung hinterlegt hat — damit ein
 Zahlendreher demjenigen auffällt, den er betrifft (das Datum steuert auch die gesetzlichen
-Pausenzeiten). Dazu zwei Schalter: **„Meinen Geburtstag im Team zeigen"** und darunter
-**„… und auch mein Alter"**. Ohne Freigabe sehen weiterhin nur Chef, Admin und Buchhaltung den
-Geburtstag. Die zweite Stufe gibt es, weil „das Team darf gratulieren" nicht dasselbe ist wie
-„das Team darf mein Alter kennen"; sie lässt sich jederzeit zurücknehmen.
+Pausenzeiten).
+
+**Für die Kollegen:** Alles, was man freiwillig fürs Team freigibt, steht in einer Karte:
+- **Infos für die Kollegen** — ein paar Zeilen über sich (bis 1000 Zeichen), z. B. „Ansprechpartner für Heizung ·
+  spreche Polnisch". Sie erscheinen, sobald etwas drinsteht.
+- **Telefon** und **E-Mail** — jeweils mit eigenem Haken **„für die Kollegen sichtbar"**. Eingetragen, aber ohne
+  Haken, sieht sie niemand. Ohne Eintrag lässt sich der Haken gar nicht setzen.
+- **Geburtstag** — **„meinen Geburtstag zeigen"** und darunter **„… und auch mein Alter"**. Ohne Freigabe sehen ihn
+  nur Chef, Admin und Buchhaltung. Freigegeben steht er auf der Kollegen-Seite und am Tag selbst auf der
+  Willkommensseite. Die zweite Stufe gibt es, weil „das Team darf gratulieren" nicht dasselbe ist wie „das Team
+  darf mein Alter kennen".
+- **„So sehen dich deine Kollegen"** zeigt die eigene Seite genau so, wie die anderen sie sehen.
+
+Alles lässt sich jederzeit zurücknehmen; ins Protokoll kommt nur, *was* sichtbar ist, nie die Nummer oder der Text.
 
 **Benachrichtigungen:** Die Push-Kategorien und die geplanten Zusammenfassungen sind seit dem
 22.08.2026 hier zu finden statt auf einer eigenen Seite. An den Einstellungen selbst hat sich
@@ -773,6 +784,27 @@ Empfänger können eine geteilte Notiz per **„Freigabe verlassen"** selbst aus
 **Meldungen:** Eine Push-Meldung **je Bearbeitungsrunde**, nicht je Tastendruck („Notiz bearbeitet – Max Mustermann hat ‚Übergabe' bearbeitet"). Eine Runde endet, wenn der Bearbeiter die Notiz verlässt oder 2 Minuten nichts ändert. Gemeldet wird an Eigentümer und Mitleser, die **gerade nicht in der Notiz sind** – wer drin ist, hat es live gesehen –, nur bei einer echten Änderung (auch Umbenennen), nie an den Bearbeiter selbst, und nur mit eingeschaltetem Kategorie-Schalter „Notizen". **Zähler:** Nur hineinschauen löst nichts aus. Was man live in einer offenen Notiz gesehen hat, zählt danach nicht als neu. **Neue Freigabe:** Push-Meldung „Notiz geteilt", Zähler und Hervorhebung in der Liste – nur beim neu Hinzugekommenen; wer schon Zugriff hatte, bekommt nichts, auch nicht, wenn sich nur sein Recht (Lesen ↔ Schreiben) ändert.
 
 *Technik:* Yjs (gemeinsames Dokument, das ohne Sperre zusammenführt) und Quill (Schreibfeld), mitgeliefert als `public/vendor/kollab.min.js` (siehe `public/vendor/HERKUNFT.md`), erst beim Öffnen geladen. Ein Ereignisstrom je geöffneter Notiz (SSE, 60-Sekunden-Ticket), Änderungen und Cursor als kurze Anfragen; der Server prüft bei **jeder** Änderung das Schreibrecht und den Inhalt (nur erlaubte Formatierung), speichert nach 1,5 s Ruhe und vor jedem Neustart. Beim ersten Start nach dem Update werden bestehende Notizen einmal umgestellt – Text und Zeitstempel bleiben unverändert. Ein noch nicht aktualisierter Programmstand wird beim Speichern mit dem Hinweis „bitte neu laden" abgewiesen, statt die Formatierung der anderen zu überschreiben. PDF, Word und ODT baut der Server (`notiz-export.js`, PDF mit pdfkit und der Schrift aus dem Paket `dejavu-fonts-ttf`, Word/ODT ohne weitere Bibliothek als ZIP) aus dem Stand von eben – auch aus noch nicht gespeicherten Änderungen im geöffneten Raum; gedruckt wird im Browser (`@media print`). Gäste: Tabelle `note_gaeste` (Passwort nur als Hash, `pw_stand` entwertet alte Anmeldungen), eigenes Gast-Token, das keinen Mitarbeiter-Weg öffnet (auch nicht den Live-Draht der App), Wege unter `/api/gast`, Seite `public/gast.html` + `js/gast.js` mit derselben Live-Sitzung (`notiz-sitzung.js`); siehe `notiz-gaeste.js`.
+
+#### 🤝 Kollegen
+
+Ein Verzeichnis des Teams. Im Seitenmenü klappt **„🤝 Kollegen"** auf: zuerst **„Alle Kollegen"** (Übersicht mit
+Karten), darunter jeder Kollege mit Bild. Drin stehen alle **aktiven** Konten — Mitarbeiter, Chef, Buchhaltung —,
+**nicht** das Admin-Konto (meist ein technisches Konto) und nicht man selbst. Ausgestellte verschwinden sofort.
+
+Die Seite eines Kollegen zeigt **Name, Bild und Rolle** und darüber hinaus nur, was er **selbst freigegeben** hat
+(Mein Konto → *Für die Kollegen*): Geburtstag (auf Wunsch mit Alter), Telefon (antippen ruft an), E-Mail und seine
+„Infos für die Kollegen". Dazu das **Werkzeug, das er gerade ausgeliehen hat** (mit Baustelle) — das zeigt die
+Werkzeugliste ohnehin allen. Mit freigegebenem Telefon oder E-Mail gibt es **„📇 Ins Telefonbuch übernehmen"**: eine
+Kontaktkarte (vCard) mit Name, Firma, Foto und den freigegebenen Angaben. Den Geburtstag enthält sie nur mit
+freigegebenem Alter — eine vCard kennt keinen Geburtstag ohne Jahr, und das Jahr verriete das Alter.
+
+**„Neu im Team"** steht in den ersten 4 Wochen nach dem **ersten** Eintritt an Menü, Karte und Seite. Wer wieder
+eingestellt wird, ist nicht neu. Und beim Einführen der App, wenn alle Konten auf einmal angelegt werden, ist
+niemand „neu": Die Marke gibt es erst für Eintritte ab 4 Wochen nach dem ersten Konto.
+
+Bewusst **nicht** zu sehen: Abwesenheiten (Krankheit sind Gesundheitsdaten), Arbeitszeiten, Überstunden,
+Urlaubskonto, Personalnummer, Eintrittsdatum. Was nicht freigegeben ist, **verlässt den Server nicht** — es steht
+in keiner Antwort, auch nicht in der Kontaktkarte (`routes/kollegen.js`, Tests `kollegen.js` und `kollegen-ui.js`).
 
 #### 🗂️ Dokumente
 

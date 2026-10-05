@@ -2922,6 +2922,8 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .kollege-leise { color: var(--text-light); }
 /* Mein Konto → „Für die Kollegen" */
 .kollegen-konto-hinweis { margin: 0 0 0.85rem; color: var(--text-light); font-size: 0.88rem; }
+/* Sprung von einer Kollegen-Seite hierher: nicht hinter der festen Kopfleiste landen */
+#konto-kollegen { scroll-margin-top: 72px; }
 .kk-haken { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.4rem; font-weight: 400; cursor: pointer; }
 .kk-haken input { width: auto; }
 .kk-eingerueckt { margin-left: 1.5rem; }

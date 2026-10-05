@@ -200,10 +200,15 @@ function hochladen(token, buf) {
     ok('„So sehen dich deine Kollegen": Vorschau mit Telefon und Text, ohne E-Mail',
       /So sehen dich deine Kollegen/.test(vorschau) && /0151 9876543/.test(vorschau) && /Fahre den Sprinter/.test(vorschau) && !/bernd@beispiel/.test(vorschau), vorschau.slice(0, 300));
     await p.click('.kollege-vorschau a'); await sleep(2500);
-    ok('der Link zurück führt zur Karte in Mein Konto', await p.evaluate(() => {
-      const k = document.getElementById('konto-kollegen'); if (!k || location.hash !== '#/konto') return false;
-      const r = k.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0;
-    }));
+    // Die Karte steht von sich aus weiter unten (unter Profilbild und Geburtstag) — ohne Sprung wäre ihr Kopf
+    // NICHT direkt unter der Kopfleiste. Und mit Sprung darf er nicht HINTER der festen Kopfleiste verschwinden.
+    const sprung = await p.evaluate(() => {
+      const k = document.getElementById('konto-kollegen'), kopf = document.querySelector('.header');
+      if (!k || location.hash !== '#/konto') return null;
+      return { karte: Math.round(k.getBoundingClientRect().top), leiste: Math.round(kopf.getBoundingClientRect().bottom) };
+    });
+    ok('der Link zurück springt zur Karte in Mein Konto — direkt unter die Kopfleiste, nicht dahinter',
+      sprung && sprung.karte >= sprung.leiste && sprung.karte < sprung.leiste + 60, JSON.stringify(sprung));
     await p.close();
 
     console.log('\n── Am Handy (Anna) ──');
