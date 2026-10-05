@@ -4567,3 +4567,30 @@ nicht die Bilddateien. Mit einem Aufzeichnungsskript belegt, dass nur `/api/avat
 (der eine Ausreißer s. o., allein fünfmal grün). Vollsicherung `arbeitsdoku_backup_20261005-201424.adbk` (dreifach,
 gleiche Prüfsumme, Rückspielprobe samt 6 Profilbild-Dateien). Rückkehrpunkt `vor-avatar-orte-deploy`
 (= `3cd5a76`). Die Datenbank ist vorher/nachher in allen 59 Tabellen gleich, die Datei heil.
+
+## Scroll-Tests nachgeschärft (05.10.2026, nach dem Deploy)
+
+Alex fragte, was „das Ruckel-Problem" in der Suite war, und wollte sichergestellt haben, dass die App beim
+Scrollen nicht wieder ruckelt (Juli: die Uhr der Willkommensseite löste jede Sekunde eine Wiederherstellung der
+Scrollposition aus, `ce14e89`).
+
+**Der Ausreißer war kein Ruckeln.** Rot war nur die Vorbedingung „Seite ist scrollbar". Die eigentliche Messung
+auf der Willkommensseite lief auch in dem Lauf und war grün; der Test verkleinert das Fenster, wenn die Seite zu
+kurz ist. Gemessen: Mit den echten Daten ist die Willkommensseite des Admins **ohne Wetterkarte gar nicht
+scrollbar** (0 px Überstand), mit ihr 322 px. Das Wetter kommt über zwei fremde Dienste; antworten die unter
+Last zu spät, fehlt die Karte. → Der Prod-Klon-Test bekommt jetzt eine feste Wetterantwort (7 Tage wie der echte
+Dienst; mit 4 Tagen waren es nur 151 px).
+
+**Dabei kam ein echter Mangel heraus.** Beide Scroll-Tests wurden gegen den nachgebauten Juli-Fehler geprüft:
+Die Uhr löst bei jedem Tick wieder aus, und die Position wird wieder 120 ms verzögert gemerkt.
+- `scroll-ruckeln-ui` fand ihn sofort (840 → 240 px).
+- `scroll-ruckeln-prodklon` blieb **grün**. Mit 60-px-Schritten war die kurze echte Seite nach einer halben
+  Sekunde unten, bevor die Uhr tickte. Der Fehler konnte dort gar nicht auftreten.
+
+Jetzt richtet sich die Schrittweite nach der Seite (40 Schritte, ≈ 3,6 s, also mindestens drei Ticks). Mit
+dem nachgebauten Fehler wird er rot (3 Rücksprünge), mit dem echten Code bleibt er grün (31).
+
+**Profilbilder:** `scroll-ruckeln-ui` scrollt jetzt MIT geladenen Profilbildern (8 Personen) und mit der Seite
+Meldungen (15 Meldungen). Er prüft, dass die Bilder wirklich da sind — Inhalt, der während des Scrollens
+nachkommt, ist genau die Art Auslöser vom Juli. Das Ergebnis: 23 Prüfungen, kein Rücksprung. Das Nachladen ändert
+nur Stil und Text eines vorhandenen Elements, keine Elemente — der Beobachter reagiert darauf gar nicht.

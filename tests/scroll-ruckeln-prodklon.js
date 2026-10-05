@@ -65,8 +65,13 @@ async function scrollProbe(p, label) {
       window._letzte = y;
     }, { passive: true });
   }, traeger);
-  for (let i = 0; i < 30; i++) {
-    await p.evaluate(() => { window._ziel[window._achse] += 60; });
+  // Das Scrollen muss MEHRERE Uhr-Ticks dauern, sonst kann der Fehler gar nicht auftreten: Er entsteht, wenn
+  // ein Tick mitten in die Bewegung fällt. Mit festen 60-px-Schritten war eine kurze Seite (echte Daten: 322 px)
+  // nach einer halben Sekunde unten — der nachgebaute Juli-Fehler blieb am 05.10.2026 unentdeckt. Jetzt richtet
+  // sich die Schrittweite nach der Seite: 40 Schritte à 90 ms ≈ 3,6 s, also mindestens drei Ticks.
+  const schritt = Math.max(8, Math.ceil(traeger.weite / 40));
+  for (let i = 0; i < 45; i++) {
+    await p.evaluate(s => { window._ziel[window._achse] += s; }, schritt);
     await sleep(90);
   }
   await sleep(1800);   // mehrere Uhr-/Live-Ticks abwarten
