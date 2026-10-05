@@ -10,6 +10,7 @@
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
 const puppeteer = require('puppeteer');
+const sharp = require('sharp');
 
 const PORT = 3142, DB = '/tmp/scrollruckeln.db', BASE = 'http://localhost:' + PORT;
 const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
@@ -22,6 +23,20 @@ function req(m, p, t, b) {
     const r = http.request({ host: 'localhost', port: PORT, path: p, method: m, headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}), ...(d ? { 'Content-Length': Buffer.byteLength(d) } : {}) } }, x => { let s = ''; x.on('data', c => s += c); x.on('end', () => { let j = null; try { j = JSON.parse(s); } catch (_) {} res({ status: x.statusCode, body: j }); }); });
     r.on('error', rej); if (d) r.write(d); r.end(); });
 }
+// Profilbild hochladen (Multipart von Hand, wie in avatar-api.js)
+function bildHochladen(token, buf) {
+  const rand = '----sr' + Date.now();
+  const koerper = Buffer.concat([
+    Buffer.from(`--${rand}\r\nContent-Disposition: form-data; name="bild"; filename="bild.png"\r\nContent-Type: image/png\r\n\r\n`),
+    buf, Buffer.from(`\r\n--${rand}--\r\n`)]);
+  return new Promise((res, rej) => {
+    const r = http.request({ host: 'localhost', port: PORT, path: '/api/avatare', method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/form-data; boundary=' + rand, 'Content-Length': koerper.length } },
+      x => { x.resume(); x.on('end', () => res(x.statusCode)); });
+    r.on('error', rej); r.write(koerper); r.end();
+  });
+}
+const BILDER = path.join(__dirname, '..', 'storage', 'avatare');
 const today = new Date().toLocaleDateString('sv-SE');
 const morgenISO = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE');
 
@@ -92,6 +107,7 @@ async function warteAufHoehe(p, mindestens, maxMs = 20000) {
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}
+  try { fs.rmSync(BILDER, { recursive: true, force: true }); } catch (_) {}
   const lg = fs.openSync('/tmp/scrollruckeln-srv.log', 'w');
   const srv = spawn('node', ['server.js'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(PORT), DB_PATH: DB, JWT_SECRET: 'test-secret-mindestens-32-zeichen-lang' }, stdio: ['ignore', lg, lg] });
   let browser;
@@ -114,6 +130,22 @@ async function warteAufHoehe(p, mindestens, maxMs = 20000) {
       await req('POST', '/api/tools', admin, { name: 'Werkzeug ' + i });
       await req('POST', '/api/users', admin, { username: 'user' + i, password: 'Test1234!', name: 'Testperson ' + i, role: 'mitarbeiter' });
     }
+    // Profilbilder (05.10.2026): Sie laden NACH dem Aufbau der Seite nach, an vielen Stellen (Aushänge auf der
+    // Willkommensseite, Planung, Mitarbeiter, Anträge, Meldungen). Genau so etwas — Inhalt, der während des
+    // Scrollens nachkommt — hat im Juli das Zurückspringen ausgelöst. Deshalb wird hier MIT Bildern gescrollt.
+    const bild = await sharp({ create: { width: 200, height: 200, channels: 3, background: { r: 200, g: 90, b: 40 } } }).png().toBuffer();
+    const maT = (await req('POST', '/api/auth/login', null, { username: 'scrollma', password: 'Test1234!' })).body.token;
+    let hochgeladen = 0;
+    hochgeladen += (await bildHochladen(admin, bild)) < 300;
+    hochgeladen += (await bildHochladen(maT, bild)) < 300;
+    for (let i = 1; i <= 6; i++) {
+      const t = (await req('POST', '/api/auth/login', null, { username: 'user' + i, password: 'Test1234!' })).body.token;
+      hochgeladen += (await bildHochladen(t, bild)) < 300;
+    }
+    ok('Profilbilder für 8 Personen hochgeladen', hochgeladen === 8, String(hochgeladen));
+    // Meldungen haben jetzt das Bild des Melders — die Seite gehört mit in die Runde
+    const thema = (await req('POST', '/api/meldungen/themen', admin, { name: 'Fahrzeuge' })).body.thema.id;
+    for (let i = 1; i <= 15; i++) await req('POST', '/api/meldungen', i % 2 ? maT : admin, { thema_id: thema, text: 'Meldung Nummer ' + i });
     // Geplante Zusammenfassungen: sonst ist die Benachrichtigungen-Seite zu kurz zum Scrollen
     // (Push selbst gibt es im Testbrowser nicht) und die Pruefung dort waere wertlos.
     for (let i = 1; i <= 14; i++) {
@@ -145,6 +177,9 @@ async function warteAufHoehe(p, mindestens, maxMs = 20000) {
     const hoehe = await warteAufHoehe(p, 400);
     ok('Seite ist lang genug zum Scrollen', hoehe > 400, 'scrollbar um ' + hoehe + ' px');
     ok('die Uhr tickt (Auslöser des Problems)', await p.evaluate(() => !!document.getElementById('welcome-clock')));
+    // Ohne geladene Bilder wäre der neue Teil der Prüfung wertlos — also nachsehen, dass sie da sind
+    const bilderGeladen = await p.evaluate(() => [...document.querySelectorAll('.avatar')].filter(a => /blob:/.test(getComputedStyle(a).backgroundImage)).length);
+    ok('auf der Willkommensseite sind Profilbilder geladen (Aushänge, Kopf)', bilderGeladen >= 3, bilderGeladen + ' Bilder');
 
     await scrollProbe(p, 'Willkommen');
 
@@ -157,7 +192,7 @@ async function warteAufHoehe(p, mindestens, maxMs = 20000) {
       ['#/', 'Zeitnachweis'], ['#/planning', 'Planung'], ['#/projects', 'Aufträge'],
       ['#/users', 'Mitarbeiter'], ['#/tools', 'Werkzeuge'], ['#/orders', 'Bestellungen'],
       ['#/notes', 'Notizen'], ['#/bulletin', 'Schwarzes Brett'], ['#/absences', 'Abwesenheiten'],
-      ['#/statistics', 'Statistik'], ['#/notifications', 'Benachrichtigungen'],
+      ['#/meldungen', 'Meldungen'], ['#/statistics', 'Statistik'], ['#/notifications', 'Benachrichtigungen'],
       ['#/settings', 'Einstellungen'], ['#/audit', 'Audit-Log'],
       ['#/deleted-entries', 'Papierkorb: Einträge'], ['#/deleted-absences', 'Papierkorb: Abwesenheiten'],
       ['#/deleted-projects', 'Papierkorb: Aufträge'],
@@ -178,7 +213,10 @@ async function warteAufHoehe(p, mindestens, maxMs = 20000) {
     const nachher = await p.evaluate(() => Math.round(window.scrollY));
     ok('Scrollposition überlebt einen Neuaufbau', Math.abs(nachher - vorher) < 60, `${vorher} → ${nachher}`);
 
-  } finally { if (browser) await browser.close(); srv.kill('SIGTERM'); }
+  } finally {
+    if (browser) await browser.close(); srv.kill('SIGTERM');
+    try { fs.rmSync(BILDER, { recursive: true, force: true }); } catch (_) {}
+  }
   console.log(`\nScroll-Ruckeln: ${pass} bestanden, ${fail} fehlgeschlagen` + (fails.length ? `\nFehlgeschlagen: ${fails.join(', ')}` : ''));
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });

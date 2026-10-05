@@ -78,6 +78,28 @@ async function scrollProbe(p, label) {
   return { ende: r.ende, art: traeger.art };
 }
 
+// Feste Wetterantwort statt des echten Dienstes (Aufbau wie in wetter-heute-ui.js).
+//
+// Am 05.10.2026 fiel „Seite ist scrollbar" einmal in der Suite um und lief danach fünfmal grün. Gemessen: Mit den
+// echten Daten ist die Willkommensseite des Admins OHNE Wetterkarte gar nicht scrollbar (0 px Überstand), MIT ihr
+// 322 px. Das Wetter holt der Server von zwei fremden Diensten (OpenStreetMap, Open-Meteo) — antworten die unter
+// Last zu spät, fehlt die Karte, und der Test fällt um, ohne dass an der App etwas wäre. Die Karte kommt weiterhin
+// nachträglich über denselben Weg in die Seite (Abruf → Aufbau), nur nicht mehr abhängig vom Netz.
+function wetterAntwort() {
+  const plusTage = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const heute = new Date().toLocaleDateString('sv-SE');
+  const time = [], temp = [], code = [], rain = [];
+  for (let t = 0; t < 7; t++) {                  // 7 Tage wie der echte Dienst (forecast_days=7 in routes/settings.js)
+    for (let s = 0; s < 24; s++) {
+      time.push(`${plusTage(heute, t)}T${String(s).padStart(2, '0')}:00`);
+      temp.push(15 + s % 12 + t); code.push(t === 0 ? 0 : 3); rain.push(t * 5);
+    }
+  }
+  return { city: 'Teststadt', current: { temperature_2m: 21.5, weather_code: 0, wind_speed_10m: 9.1, relative_humidity_2m: 44 },
+    daily: { temperature_2m_max: [27, 26, 25, 24, 23, 22, 21], temperature_2m_min: [14, 13, 12, 11, 10, 9, 8] },
+    hourly: { time, temperature_2m: temp, weather_code: code, precipitation_probability: rain } };
+}
+
 // Warten, bis die Seite lang genug ist — statt einmal nach festem Schlaf zu messen.
 //
 // Die Willkommensseite laedt ihre Karten (Wetter, Aushaenge, Termine) nach. Unter Suite-Last
@@ -115,6 +137,10 @@ async function warteAufHoehe(p, mindestens, maxMs = 20000) {
     p.on('pageerror', e => console.log('      [Seitenfehler]', String(e.message).slice(0, 140)));
     p.on('console', m => { if (m.type() === 'error') console.log('      [console]', m.text().slice(0, 140)); });
     await p.setViewport({ width: 390, height: 700, isMobile: true, hasTouch: true });
+    const wetter = JSON.stringify(wetterAntwort());
+    await p.setRequestInterception(true);
+    p.on('request', r => /\/api\/settings\/weather/.test(r.url())
+      ? r.respond({ status: 200, contentType: 'application/json', body: wetter }) : r.continue());
     await p.goto(BASE, { waitUntil: 'networkidle2' });
     await p.evaluate((t, u) => { localStorage.setItem('token', t); localStorage.setItem('user', u); }, token, JSON.stringify({ id, username, name, role }));
     // ACHTUNG: goto() auf dieselbe Adresse mit nur anderem Anker ist KEIN echter Neuladevorgang —
@@ -122,6 +148,7 @@ async function warteAufHoehe(p, mindestens, maxMs = 20000) {
     await p.goto(BASE, { waitUntil: 'networkidle2' }); await sleep(2500);
     await p.evaluate(() => { location.hash = '#/welcome'; }); await sleep(4000);
     ok('Willkommensseite mit echten Daten geladen', await p.evaluate(() => !!document.getElementById('welcome-clock')));
+    ok('… mit Wetterkarte (feste Antwort, nicht vom Netz abhängig)', await p.evaluate(() => /Teststadt/.test((document.getElementById('welcome-weather') || {}).textContent || '')));
     const hoehe = await warteAufHoehe(p, 200);
     ok('Seite ist scrollbar', hoehe > 200, hoehe + ' px');
 
