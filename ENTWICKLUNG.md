@@ -4531,7 +4531,14 @@ Nachladen der Bilder läuft app-weit von selbst (MutationObserver auf `#app`), e
   jetzt alle Stellen und sagt ehrlich, dass in Listen ohne Bild Initialen stehen — der alte Satz „Ohne Bild bleibt
   dort alles wie bisher" stimmte für die Listen nicht mehr.
 
-**Test:** `tests/avatar-orte-ui.js` (41, Port 3368) prüft jede Stelle mit einer Person mit Bild und einer
+**Nachtrag Zeitnachweis Woche/Monat** (Alex: „gleich mit"): Dieselbe Lücke wie in der Planung, in
+`app-3-dashboard.js` beide `grid-col-header` über `rasterBild(col)`. Dieselbe Regel wie in der Tagesansicht:
+Sieht ein Mitarbeiter nur sich selbst („Meine Einträge"), steht kein Bild. Gegenproben GZ1 (kein Bild → 4 rot) und
+GZ2 (Bild auch beim Mitarbeiter selbst → 2 rot). Sie liefen in einem eigenen Worktree, weil die Suite gerade lief
+und die Avatar-Tests den Bilderordner `storage/avatare` löschen — gleichzeitig mit `twofa-anmeldung` oder
+`willkommen-avatare-ui` hätten sie die aus dem falschen Grund rot gemacht.
+
+**Test:** `tests/avatar-orte-ui.js` (49, Port 3368) prüft jede Stelle mit einer Person mit Bild und einer
 ohne: unsichtbar und ohne Platz bzw. Initialen. Dazu Menükopf (Lage, Klick, Schublade schließt, Handy) und das
 Nachziehen nach dem Hochladen. Mit `AVATAR_FOTOS=<ordner>` legt er Bildschirmfotos ab.
 

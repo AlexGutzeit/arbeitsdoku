@@ -100,7 +100,8 @@ auf das Bild **oben im Seitenmenü** neben Name und Rolle. Alle führen an diese
 
 **Profilbild:** Jeder kann ein Bild hochladen. Es erscheint an zwei Arten von Stellen:
 - **Spalten, Menü und Auswahl** — Kopfzeile, Seitenmenü (rechts neben Name und Rolle), Planung (Spaltenköpfe in
-  Tag, Woche und Monat, Mitarbeiter-Auswahl im Planungsformular), Zeitnachweis- und Auftrags-Board-Spalten,
+  Tag, Woche und Monat, Mitarbeiter-Auswahl im Planungsformular), Zeitnachweis (Spaltenköpfe in Tag, Woche und
+  Monat, sobald mehrere Personen nebeneinanderstehen), Auftrags-Board-Spalten,
   Namensspalte im Abwesenheitskalender, Mitarbeiterliste. **Wer kein Bild hochlädt, ändert hier nichts** — die
   Ansicht bleibt genau wie vorher.
 - **Listen, in denen ein Name steht** — Abwesenheitsanträge (beim Antragsteller), Meldungen („Gemeldet von"),
