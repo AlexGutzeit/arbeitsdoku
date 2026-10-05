@@ -4699,3 +4699,9 @@ Neuladen. Gegenproben:
 
 **Nebenbei:** Beim Anhalten der Suite traf `kill $(pgrep -f "timeout 900 node tests/")` auch die eigene Shell
 (Exit 144). Dieselbe Falle wie `pkill -f`: Der Suchtext stand in ihrer Befehlszeile.
+
+**Deploy Kollegen + Menü-Fix + Profilbild-Fix (06.10.2026, 00:07, `cfbf8b0`, Cache 449).** Suite 280 von 280 auf der
+Kopie vom 05.10. 21:57 (zweiter Lauf; den ersten habe ich nach dem Fund angehalten, weil sich mitten im Lauf Code
+änderte). Vollsicherung `arbeitsdoku_backup_20261006-000646.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe
+samt 6 Profilbild-Dateien). Rückkehrpunkt `vor-kollegen-deploy` (= `537c944`). Datenbank vorher/nachher: genau eine
+neue Tabelle `kollegen_profil` (leer), alle 59 alten unverändert, Datei heil.
