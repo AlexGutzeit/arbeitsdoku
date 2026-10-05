@@ -4555,3 +4555,10 @@ Der Erstlauf war an zwei Stellen rot, beide Male lag es am Test, nicht an der Ap
   trotzdem grün — erst der Klick fiel um. Jetzt wird aufgeklappt, und es wird geprüft, dass das Bild im
   sichtbaren Bereich liegt.
 - „admin" heißt als Rolle „Administrator".
+
+**Suite (Kopie 05.10. 18:14): 275 von 276.** Rot war einmal `scroll-ruckeln-prodklon` mit „Seite ist scrollbar".
+Der Test misst, ob die Willkommensseite des Admins mit den echten Daten über 200 px hoch wird, und wartet darauf.
+Danach lief er fünfmal allein, alle 30 Prüfungen grün. Das deutet auf die Wartezeit unter Last, nicht auf diese
+Änderung (die Willkommensseite hat nur am Aushang ein 18-px-Bild dazubekommen, das macht sie nicht kürzer).
+Die vielen 404 in seiner Konsole sind Profilbild-Abrufe: Die Prod-Kopie hat die Einträge in `user_avatars`, aber
+nicht die Bilddateien. Mit einem Aufzeichnungsskript belegt, dass nur `/api/avatare/<id>` betroffen ist.
