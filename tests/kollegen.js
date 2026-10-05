@@ -110,6 +110,10 @@ async function anhalten() { const fertig = new Promise(r => srv.on('exit', r)); 
     const erwartet = hj - 1990 - ((hm < 3 || (hm === 3 && ht < 12)) ? 1 : 0);
     ok('mit Alter-Freigabe: das Alter', s.body.geburtstag.alter === erwartet, JSON.stringify(s.body.geburtstag));
     ok('… das Geburtsjahr selbst trotzdem nicht', !s.text.includes('1990'));
+    await req('PUT', '/api/users/geburtstag-freigabe', T.anna, { zeigen: false, alter_auch: false });
+    s = await req('GET', '/api/kollegen/' + anna.id, T.bernd);
+    ok('Freigabe zurückgenommen → Geburtstag wieder weg', s.body.geburtstag === null && !s.text.includes('03-12'), JSON.stringify(s.body.geburtstag));
+    await req('PUT', '/api/users/geburtstag-freigabe', T.anna, { zeigen: true, alter_auch: true });
 
     console.log('\n── Prüfungen beim Speichern ──');
     const fehler = async (b) => (await req('PUT', '/api/kollegen/mein-profil', T.bernd, b)).status;
