@@ -32,10 +32,13 @@ const STATUS_TEXT = { offen: 'offen', in_arbeit: 'in Arbeit', erledigt: 'erledig
 const MAX_TEXT = 2000, MAX_THEMA = 60;
 
 // Eine Meldung mit allen Namen. „automatisch" = regelmäßige Meldung (created_by NULL, Etappe 3).
+// melder_id gibt es nur, solange das Konto besteht — dafür steht das Profilbild an der Meldung (Alex, 05.10.2026).
+// Bei „automatisch" und „Gelöschtes Konto" ist sie NULL, sonst stünde dort ein Initialen-Kreis „AU" bzw. „GK".
 const MELDUNG_SQL = `
   SELECT m.*, t.name AS thema_name, t.deleted_at AS thema_geloescht_am,
     CASE WHEN m.created_by IS NULL THEN 'automatisch' ELSE COALESCE(cu.name, 'Gelöschtes Konto') END AS created_by_name,
-    uu.name AS updated_by_name, su.name AS status_by_name
+    uu.name AS updated_by_name, su.name AS status_by_name,
+    cu.id AS melder_id
   FROM meldungen m
   LEFT JOIN meldung_themen t ON t.id = m.thema_id
   LEFT JOIN users cu ON cu.id = m.created_by

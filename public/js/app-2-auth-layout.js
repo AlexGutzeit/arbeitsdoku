@@ -227,12 +227,12 @@ async function logout(manual, grund) {
 // Holt den aktuellen Nutzer (inkl. Rechte wie can_plan) frisch vom Server und aktualisiert S.user.
 // Nötig, weil S.user aus der Login-Antwort gecacht ist — ändert ein Admin z.B. das Planungsrecht,
 // soll das ohne erneutes Login (nach F5 / Tab-Rückkehr) greifen. Re-Render nur bei echter Rechte-Änderung.
-// Das Profilbild in der Kopfzeile neu holen — nach dem Hochladen oder Entfernen.
+// Das Profilbild in der Kopfzeile und im Menükopf neu holen — nach dem Hochladen oder Entfernen.
 function kopfzeileAvatarAktualisieren() {
   const platz = document.getElementById('kopf-avatar');
-  if (!platz) return;
-  platz.innerHTML = avatarHtml(S.user, 28);
-  avatareLaden(platz);
+  if (platz) { platz.innerHTML = avatarHtml(S.user, 28); avatareLaden(platz); }
+  const menue = document.getElementById('menue-avatar');   // dasselbe Bild im Menükopf
+  if (menue) { menue.innerHTML = avatarHtml(S.user, 44); avatareLaden(menue); }
 }
 
 async function refreshUser() {
@@ -416,8 +416,14 @@ function layout(content, activeNav) {
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
     <div class="sidebar" id="sidebar" role="navigation" aria-label="Hauptmenü">
       <div class="sidebar-header">
-        <h2>${esc(S.user.name)}</h2>
-        <span class="role-badge">${roleName(S.user.role)}</span>
+        <div class="sidebar-kopf-text">
+          <h2>${esc(S.user.name)}</h2>
+          <span class="role-badge">${roleName(S.user.role)}</span>
+        </div>
+        <!-- Profilbild rechts neben Name und Rolle, führt wie oben in der Kopfzeile nach „Mein Konto"
+             (Alex, 05.10.2026). Ohne Bild verschwindet der ganze Link (CSS :has), damit kein
+             unsichtbarer Tab-Stopp übrig bleibt. -->
+        <a href="#/konto" class="sidebar-konto" id="menue-avatar" title="Mein Konto" aria-label="Mein Konto öffnen">${avatarHtml(S.user, 44)}</a>
       </div>
       <nav aria-label="Bereiche">
         <a href="#/welcome" class="${activeNav === 'welcome' ? 'active' : ''}">

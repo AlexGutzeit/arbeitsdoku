@@ -266,7 +266,9 @@
 
     const koerper = zeilen.map((z, i) => {
       const balken = z.eintraege.map(a => balkenHtml(a, von, bis, spalten)).join('');
-      return `<div class="abscal-name" style="grid-row:${i + 2}">${esc(z.name)}</div>
+      // Profilbild vor dem Namen wie in den Spalten der Planung (Alex, 05.10.2026); ohne Bild bleibt die
+      // Zeile wie bisher. Der Name steht in einem eigenen <span>, damit die Auslassungspunkte greifen.
+      return `<div class="abscal-name" style="grid-row:${i + 2}">${avatarHtml({ id: z.id, name: z.name }, zustand.modus === 'jahr' ? 18 : 20)}<span class="abscal-name-text">${esc(z.name)}</span></div>
               <div class="abscal-zeile" style="grid-row:${i + 2};grid-column:${TAG1} / ${spalten + TAG1}"></div>
               ${balken.replace(/style="grid-column:/g, `style="grid-row:${i + 2};grid-column:`)}`;
     }).join('');

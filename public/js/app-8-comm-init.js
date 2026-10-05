@@ -1837,7 +1837,7 @@ function renderAbsenceCard(a, opts = {}) {
     <div class="absence-card-header">
       <span class="absence-type-icon">${type.icon}</span>
       <strong>${esc(type.label)}</strong>
-      ${isManagerRole() && a.user_name ? `<span class="absence-user">${esc(a.user_name)}</span>` : ''}
+      ${isManagerRole() && a.user_name ? `<span class="absence-user">${a.user_id ? avatarHtml({ id: a.user_id, name: a.user_name }, 20, 'initialen') : ''}${esc(a.user_name)}</span>` : ''}
       ${absenceStatusLabel(a.status)}
     </div>
     ${datesHtml}

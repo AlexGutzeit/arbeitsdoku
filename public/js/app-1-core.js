@@ -1060,8 +1060,10 @@ function initialenVon(name) {
 //   'weg'       — der Platz bleibt leer, die Ansicht sieht aus wie vor den Profilbildern.
 //                 Das ist die Vorgabe an allen Stellen im Betrieb: Wer kein Bild hochlaedt, aendert
 //                 fuer die anderen nichts, und es entsteht kein halb bebildertes Mischbild.
-//   'initialen' — Kreis mit Initialen in der Personenfarbe. Nur dort, wo eine Flaeche gebraucht
-//                 wird, damit sie nicht leer wirkt: die Vorschau auf „Mein Konto".
+//   'initialen' — Kreis mit Initialen in der Personenfarbe. Dort, wo eine Flaeche gebraucht wird,
+//                 damit sie nicht leer wirkt (die Vorschau auf „Mein Konto"), und bei Namen in
+//                 LISTEN und im Fliesstext (Willkommen „mit …", Abwesenheitsantraege, Meldungen,
+//                 Aushaenge — Alex, 05.10.2026): Sonst stuenden Namen mit und ohne Bild durcheinander.
 //
 // Der Platzhalter steht auch bei 'weg' im Baum (nur unsichtbar) — sonst waere er beim Aufbau der
 // Seite noch nicht bekannt und koennte spaeter nicht mehr gefuellt werden, wenn die Uebersicht

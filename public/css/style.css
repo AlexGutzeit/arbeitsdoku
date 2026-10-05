@@ -198,7 +198,16 @@ body {
   padding: 1.25rem 1rem;
   background: var(--primary);
   color: white;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
 }
+.sidebar-kopf-text { min-width: 0; }
+.sidebar-kopf-text h2 { overflow-wrap: anywhere; }
+/* Profilbild im Menükopf (Alex, 05.10.2026). Ohne Bild fällt der ganze Link weg — sonst bliebe ein
+   unsichtbarer Tab-Stopp, und „Ohne Bild bleibt alles wie bisher" gilt auch hier. */
+.sidebar-konto { flex: 0 0 auto; display: inline-flex; border-radius: 50%; }
+.sidebar-konto .avatar { box-shadow: 0 0 0 2px rgba(255,255,255,0.75); }
+.sidebar-konto:has(> .avatar--leer) { display: none; }
+.sidebar-konto:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .sidebar-header h2 { font-size: 1.1rem; margin-bottom: 0.25rem; }
 .sidebar-header .role-badge {
   display: inline-block;
@@ -2161,7 +2170,8 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .absence-card--rejected { border-left-color: #ef4444; background: #fef2f2; }
 .absence-card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; flex-wrap: wrap; }
 .absence-type-icon { font-size: 1.1rem; }
-.absence-user { font-size: 0.8rem; color: var(--text-lighter); margin-left: auto; }
+.absence-user { font-size: 0.8rem; color: var(--text-lighter); margin-left: auto;
+  display: inline-flex; align-items: center; gap: 0.3rem; }
 .absence-card-dates { font-size: 0.9rem; font-weight: 500; color: var(--text); margin-bottom: 0.2rem; }
 .absence-card-comment { font-size: 0.82rem; color: var(--text-lighter); margin-bottom: 0.3rem; }
 .absence-card-meta { font-size: 0.75rem; color: var(--text-lighter); }
@@ -2317,6 +2327,8 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 /* Kein Bild hinterlegt: Der Platzhalter bleibt im Baum (damit er spaeter gefuellt werden
    kann), nimmt aber keinen Platz ein — die Ansicht sieht aus wie vor den Profilbildern. */
 .avatar--leer { display: none; }
+/* Bild vor einem Namen im Fließtext („Gemeldet von …", „von … am"). */
+.person-mit-bild { display: inline-flex; vertical-align: middle; margin-right: 0.3rem; }
 /* Bild und Name in einer Tabellenzelle.
    Das display:flex gehoert AUF DEN INHALT, nicht auf die Zelle: Ein <td> mit display:flex ist
    keine Tabellenzelle mehr und verhandelt seine Breite nicht mehr mit der Kopfzeile. */
@@ -2393,7 +2405,9 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .abscal-name { position: sticky; left: 0; z-index: 3; grid-column: 1;
   background: var(--card-bg, #fff); padding-right: 0.5rem; font-size: 0.8rem; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center;
-  border-right: 1px solid var(--border); }
+  gap: 0.35rem; border-right: 1px solid var(--border); }
+/* In einem Flex-Behälter greifen die Auslassungspunkte nur am Text selbst, nicht am Behälter. */
+.abscal-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .abscal-zeile { border-top: 1px solid var(--border-light, #eee); }
 
 /* z-index MUSS hier stehen. In einem Grid gilt z-index auch fuer Elemente ohne `position` — die

@@ -555,7 +555,7 @@ async function renderWelcome() {
       ${b.event_date ? `<span class="welcome-bulletin-event">&#128197; ${formatDateDE(b.event_date)}</span>` : ''}
     </div>
     ${b.text ? `<div class="welcome-bulletin-text">${esc(b.text)}</div>` : ''}
-    <div class="welcome-bulletin-meta">von ${esc(b.author_name)} am ${formatDateDE(b.created_at?.slice(0, 10) || '')}</div>
+    <div class="welcome-bulletin-meta">von ${b.author_id ? `<span class="person-mit-bild">${avatarHtml({ id: b.author_id, name: b.author_name }, 18, 'initialen')}</span>` : ''}${esc(b.author_name)} am ${formatDateDE(b.created_at?.slice(0, 10) || '')}</div>
   </div>`;
 
   let newBulletinHtml = '';
@@ -877,7 +877,7 @@ async function renderBulletin() {
         </div>
         ${b.text ? `<div class="bulletin-text">${esc(b.text).replace(/\n/g, '<br>')}</div>` : ''}
         <div class="bulletin-meta">
-          <span>&#128100; ${esc(b.author_name)}</span>
+          <span>${b.author_id ? `<span class="person-mit-bild">${avatarHtml({ id: b.author_id, name: b.author_name }, 18, 'initialen')}</span>` : '&#128100; '}${esc(b.author_name)}</span>
           <span>&#128197; Erstellt: ${createdDate}</span>
           ${b.event_date ? `<span>&#127937; Event: ${formatDateDE(b.event_date)}</span>` : ''}
           ${b.auto_delete_date ? `<span>&#128465; Läuft ab: ${formatDateDE(b.auto_delete_date)}</span>` : ''}
@@ -2706,9 +2706,11 @@ async function kontoAvatarKarte() {
     <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap">
       <span id="avatar-vorschau">${avatarHtml(S.user, 96, 'initialen')}</span>
       <div style="flex:1; min-width:200px">
-        <p style="margin:0 0 .5rem">Erscheint neben deinem Namen und in den Spalten von Planung,
-           Zeitnachweis und Auftrags-Board. <strong>Ohne Bild bleibt dort alles wie bisher</strong> —
-           du musst also keines hochladen.</p>
+        <p style="margin:0 0 .5rem">Erscheint neben deinem Namen (oben und im Menü), in der Planung, in den
+           Spalten von Zeitnachweis und Auftrags-Board, im Abwesenheitskalender und bei deinen Anträgen,
+           Meldungen und Aushängen. Du musst keines hochladen: <strong>Ohne Bild bleibt oben, im Menü,
+           in der Planung und in den Spalten alles wie bisher</strong>; bei Anträgen, Meldungen und
+           Aushängen steht dann ein Kreis mit deinen Initialen.</p>
         <input type="file" id="avatar-datei" accept="image/*" style="display:none">
         <div style="display:flex;gap:.5rem;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" id="avatar-waehlen">${hatBild ? 'Anderes Bild wählen' : 'Bild hochladen'}</button>

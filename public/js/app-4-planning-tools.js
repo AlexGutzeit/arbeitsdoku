@@ -655,7 +655,7 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
     let headerHtml = '<th class="grid-row-header">Tag</th>';
     columns.forEach((col, i) => {
       const c = PALETTE[i % PALETTE.length];
-      headerHtml += `<th class="grid-col-header" style="color:${c}">${esc(col.name)}</th>`;
+      headerHtml += `<th class="grid-col-header" style="color:${c}">${avatarHtml({ id: col.id, name: col.name }, 22)} ${esc(col.name)}</th>`;
     });
 
     let bodyHtml = '';
@@ -705,7 +705,7 @@ function renderPlanningGrid(entries, absences, range, view, canEdit) {
   let headerHtml = '<th class="grid-row-header">KW</th>';
   columns.forEach((col, i) => {
     const c = PALETTE[i % PALETTE.length];
-    headerHtml += `<th class="grid-col-header" style="color:${c}">${esc(col.name)}</th>`;
+    headerHtml += `<th class="grid-col-header" style="color:${c}">${avatarHtml({ id: col.id, name: col.name }, 22)} ${esc(col.name)}</th>`;
   });
 
   let bodyHtml = '';
@@ -1058,7 +1058,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
           <label>Mitarbeiter zuweisen</label>
           <div class="planning-user-checkboxes">
             ${workers.map(u => `
-              <label><input type="checkbox" name="assigned" value="${u.id}" ${assignedIds.includes(u.id) ? 'checked' : ''}> ${esc(u.name)} (${roleName(u.role)})</label>
+              <label><input type="checkbox" name="assigned" value="${u.id}" ${assignedIds.includes(u.id) ? 'checked' : ''}> ${avatarHtml(u, 22)} ${esc(u.name)} (${roleName(u.role)})</label>
             `).join('')}
           </div>
         </div>`}

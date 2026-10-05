@@ -17,6 +17,13 @@ let _mldSeit = null;
 
 const MLD_STATUS = { offen: 'offen', in_arbeit: 'in Arbeit', erledigt: 'erledigt', zurueckgezogen: 'zurückgezogen' };
 
+// Profilbild des Melders vor dem Namen (Alex, 05.10.2026). In einer Liste mit Initialen statt leer — sonst
+// stünden Namen mit und ohne Bild durcheinander (wie auf der Willkommensseite bei „mit …").
+// melder_id fehlt bei „automatisch" und „Gelöschtes Konto": dort kein Kreis.
+function _mldMelderBild(m) {
+  return m.melder_id ? `<span class="person-mit-bild">${avatarHtml({ id: m.melder_id, name: m.created_by_name }, 18, 'initialen')}</span>` : '';
+}
+
 function _mldStatusPill(m) {
   const wer = (m.status !== 'offen' && m.status_by_name) ? ' · ' + esc(m.status_by_name) : '';
   return `<span class="mld-status mld-status-${m.status}">${MLD_STATUS[m.status] || esc(m.status)}${wer}</span>`;
@@ -42,7 +49,7 @@ function _mldKarte(m, mitThema) {
       ${marke ? `<span class="mld-marke">${marke}</span>` : ''}
       ${mitThema ? `<div class="mld-thema">${esc(m.thema_name)}${m.thema_geloescht ? ' <span class="mld-geloescht">(Thema gelöscht)</span>' : ''}</div>` : ''}
       <div class="mld-text">${m.dringend ? '<span class="mld-dringend-zeichen" title="dringend">🔴</span> ' : ''}${esc(m.text)}</div>
-      <div class="mld-meta">${m.regel_id ? '🔁 ' : ''}${esc(m.created_by_name)} · ${esc(formatDateTimeDE(m.created_at))}</div>
+      <div class="mld-meta">${m.regel_id ? '🔁 ' : ''}${_mldMelderBild(m)}${esc(m.created_by_name)} · ${esc(formatDateTimeDE(m.created_at))}</div>
       ${m.faellig_am ? `<div class="mld-faellig">fällig am ${esc(formatDateDE(m.faellig_am))}${m.erneut_faellig ? ` · <strong>erneut fällig am ${esc(formatDateDE(m.erneut_faellig))}</strong>` : ''}</div>` : ''}
       ${_mldErinnerungZeile(m)}
       ${_mldStatusPill(m)}
@@ -270,7 +277,7 @@ async function _mldDetail(id, themen) {
         <div class="mld-detail-kopf">${_mldStatusPill(m)}${m.dringend ? ' <span class="mld-dringend-etikett">🔴 dringend</span>' : ''}</div>
         <p class="mld-detail-text">${esc(m.text)}</p>
         ${m.faellig_am ? `<p class="mld-faellig">🔁 Regelmäßige Meldung · fällig am ${esc(formatDateDE(m.faellig_am))}${m.erneut_faellig ? ` · <strong>erneut fällig am ${esc(formatDateDE(m.erneut_faellig))}</strong>` : ''}</p>` : ''}
-        <p class="mld-meta">Gemeldet von ${esc(m.created_by_name)} am ${esc(formatDateTimeDE(m.created_at))}${
+        <p class="mld-meta">Gemeldet von ${_mldMelderBild(m)}${esc(m.created_by_name)} am ${esc(formatDateTimeDE(m.created_at))}${
           m.updated_by_name && m.updated_at !== m.created_at ? ` · zuletzt geändert von ${esc(m.updated_by_name)} am ${esc(formatDateTimeDE(m.updated_at))}` : ''}</p>
         ${m.rueckmeldung ? `<div class="mld-rueck-block"><strong>Rückmeldung:</strong> ${esc(m.rueckmeldung)}</div>` : ''}
         ${knoepfe.length ? `<div class="mld-knoepfe">${knoepfe.map(([s, t, k]) => `<button class="btn btn-sm ${k}" data-status="${s}">${t}</button>`).join('')}</div>` : ''}
@@ -289,6 +296,7 @@ async function _mldDetail(id, themen) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  avatareLaden(overlay);              // der Dialog hängt am body — den beobachtet das automatische Nachladen nicht
   let erinnerungGeaendert = false;    // dann beim Schließen die Karten neu zeichnen (nächste Erinnerung)
   const schliessen = () => { overlay.remove(); aufraeumen(); if (erinnerungGeaendert) renderMeldungen(); };
   const aufraeumen = dialogBarrierefrei(overlay, schliessen);
