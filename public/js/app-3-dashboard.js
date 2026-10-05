@@ -627,7 +627,7 @@ function renderWeekGridHtml(entries, range, absences, verstoesse) {
     const summeText = summeFuer(entries.filter(e => e.user_id === col.id));
     // In der Wochenansicht IST die Spalte die Woche — hier gehoert der Wochenverstoss hin.
     const wv = verstossWoche(verstoesse, col.id, range.from);
-    headerHtml += `<th class="grid-col-header${wv.length ? ' grid-col-header--verstoss' : ''}" style="color:${c}">${esc(col.name)}`
+    headerHtml += `<th class="grid-col-header${wv.length ? ' grid-col-header--verstoss' : ''}" style="color:${c}">${rasterBild(col)}${esc(col.name)}`
       + (summeText ? `<div class="grid-col-header-sum">${summeText}${verstossMarkerHtml(wv, 'woche', col.id, range.from)}</div>` : '')
       + `</th>`;
   });
@@ -700,7 +700,7 @@ function renderMonthGridHtml(entries, range, absences = [], verstoesse) {
   columns.forEach((col, i) => {
     const c = PALETTE[i % PALETTE.length];
     const summeText = summeFuer(entries.filter(e => e.user_id === col.id));
-    headerHtml += `<th class="grid-col-header" style="color:${c}">${esc(col.name)}`
+    headerHtml += `<th class="grid-col-header" style="color:${c}">${rasterBild(col)}${esc(col.name)}`
       + (summeText ? `<div class="grid-col-header-sum">${summeText}</div>` : '')
       + `</th>`;
   });
@@ -788,6 +788,12 @@ function summeFuer(eintraege) {
   const pause = eintraege.reduce((s, e) => s + (Number(e.break_minutes) || 0), 0);
   const p = pauseText(pause);
   return fmtH(netto) + (p ? ' · ' + p : '');
+}
+
+// Profilbild im Spaltenkopf von Woche und Monat — wie in der Tagesansicht (Alex, 05.10.2026). Dieselbe Regel
+// wie dort: Ein Mitarbeiter sieht nur seine eigene Spalte, dann steht kein Bild (Tag: „Meine Einträge").
+function rasterBild(col) {
+  return S.user.role === 'mitarbeiter' ? '' : avatarHtml({ id: col.id, name: col.name }, 22) + ' ';
 }
 
 function getGridColumns(entries, range) {

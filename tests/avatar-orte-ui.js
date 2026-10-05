@@ -8,6 +8,7 @@
 //   5  Planungsformular — Mitarbeiter-Auswahl
 //   6  Meldungen — „Gemeldet von" an Karte und im Detail
 //   7  Schwarzes Brett — Verfasser am Aushang (Brett und Willkommensseite)
+//   +  Zeitnachweis Woche und Monat (Alex' Nachtrag) — wie dessen Tagesansicht, beim Mitarbeiter selbst ohne Bild
 //
 // Die Regel, um die es eigentlich geht: In Spalten, Menü und Formular (1, 2, 3, 5) bleibt ohne Bild ALLES
 // wie bisher — der Platzhalter ist unsichtbar und nimmt keinen Platz ein. In Listen (4, 6, 7) steht ohne
@@ -88,6 +89,8 @@ const von = (liste, name) => liste.filter(a => a.wer === name);
     const heute = new Date().toLocaleDateString('sv-SE');
     for (const u of [max.user.id, erika.id]) {
       await req('POST', '/api/planning', admin, { date: heute, time_from: '07:00', time_to: '15:30', description: 'Baustelle', assigned_user_ids: [u] });
+      // Ohne Eintrag zeichnet der Zeitnachweis am Tag gar keine Spalten (dieselbe Falle wie in avatar-ui.js)
+      await req('POST', '/api/entries', admin, { user_id: u, date: heute, time_from: '07:00', time_to: '15:30', break_minutes: 30, description: 'Arbeit' });
     }
     ok('Max beantragt Urlaub', (await req('POST', '/api/absences', max.token, { type: 'urlaub', date_from: heute, date_to: heute })).status < 300);
     ok('Erika beantragt Urlaub', (await req('POST', '/api/absences', erikaT, { type: 'urlaub', date_from: heute, date_to: heute })).status < 300);
@@ -148,6 +151,16 @@ const von = (liste, name) => liste.filter(a => a.wer === name);
     leerRegel('Monat', await avatareUnter(page, '.week-month-grid th.grid-col-header .avatar'));
     await foto('1-monat');
     await page.click('[data-pview="day"]'); await sleep(800);
+
+    console.log('\n── + Zeitnachweis: Woche und Monat wie die Tagesansicht ──');
+    await gehe('/');
+    leerRegel('Zeitnachweis Tag (wie bisher)', await avatareUnter(page, '.tl-col-header-name .avatar'));
+    await page.click('[data-view="week"]'); await sleep(1500);
+    leerRegel('Zeitnachweis Woche', await avatareUnter(page, '.week-month-grid th.grid-col-header .avatar'));
+    await foto('z-woche');
+    await page.click('[data-view="month"]'); await sleep(1500);
+    leerRegel('Zeitnachweis Monat', await avatareUnter(page, '.week-month-grid th.grid-col-header .avatar'));
+    await page.click('[data-view="day"]'); await sleep(800);
 
     console.log('\n── 5) Planungsformular: Mitarbeiter-Auswahl ──');
     await gehe('/planning/new');
@@ -234,6 +247,14 @@ const von = (liste, name) => liste.filter(a => a.wer === name);
     });
     ok('Handy: im aufgeklappten Menü steht Max\' Bild', handyKopf.bild && handyKopf.imBild, JSON.stringify(handyKopf));
     await foto('2-menue-handy', handy);
+    await handy.keyboard.press('Escape'); await sleep(300);
+    await handy.goto(BASIS + '/#/', { waitUntil: 'domcontentloaded' }); await sleep(2200);
+    for (const v of ['week', 'month']) {
+      await handy.click(`[data-view="${v}"]`); await sleep(1500);
+      const eigen = await avatareUnter(handy, '.week-month-grid th.grid-col-header .avatar');
+      ok(`Zeitnachweis ${v === 'week' ? 'Woche' : 'Monat'} als Max selbst: nur die eigene Spalte, kein Bild — wie „Meine Einträge" am Tag`,
+        eigen.length === 0, JSON.stringify(eigen));
+    }
     await handy.close();
 
     console.log('\n── Hochladen: der Menükopf zieht ohne Neuladen mit ──');
