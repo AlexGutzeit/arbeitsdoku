@@ -4562,3 +4562,8 @@ Danach lief er fünfmal allein, alle 30 Prüfungen grün. Das deutet auf die War
 Änderung (die Willkommensseite hat nur am Aushang ein 18-px-Bild dazubekommen, das macht sie nicht kürzer).
 Die vielen 404 in seiner Konsole sind Profilbild-Abrufe: Die Prod-Kopie hat die Einträge in `user_avatars`, aber
 nicht die Bilddateien. Mit einem Aufzeichnungsskript belegt, dass nur `/api/avatare/<id>` betroffen ist.
+
+**Deploy Profilbild-Stellen (05.10.2026, 20:14, `537c944`, Cache 448).** Suite 275 von 276 auf der Kopie von 18:14
+(der eine Ausreißer s. o., allein fünfmal grün). Vollsicherung `arbeitsdoku_backup_20261005-201424.adbk` (dreifach,
+gleiche Prüfsumme, Rückspielprobe samt 6 Profilbild-Dateien). Rückkehrpunkt `vor-avatar-orte-deploy`
+(= `3cd5a76`). Die Datenbank ist vorher/nachher in allen 59 Tabellen gleich, die Datei heil.
