@@ -1087,33 +1087,58 @@ function avatarHtml(user, groesse = 28, ohneBild = 'weg') {
 
 // Holt die Bilder fuer alle Platzhalter unterhalb von `wurzel` nach. Mehrfach aufrufbar; bereits
 // geholte Bilder kommen aus dem Speicher.
+// Ein Abruf je Person und Groesse — auch wenn sie auf einer Seite zehnmal steht (Kollegen-Menue,
+// Uebersicht, Planung …). Laufende Abrufe werden geteilt, fehlende Bilder fuer die Sitzung gemerkt.
+//
+// Fund vom 05.10.2026 (barrierefrei-prodklon lief in eine Zeitueberschreitung): Bei 404 blieb der
+// Inhalt der Antwort ungelesen. Fuer den Browser gilt die Verbindung dann als belegt — und weil
+// jeder Kreis derselben Person neu fragte, haeuften sich die offenen Verbindungen. Ueber HTTP/1.1
+// sind es hoechstens sechs je Server; danach haetten auch normale Anfragen der App gewartet.
+// Passiert, sobald eine Bilddatei fehlt (Rueckspielen ohne Bilder, Zweitanlage, Prod-Kopie).
+const _avatarLaufend = new Map();   // "id:stufe:stand" → Promise<blob:-Adresse | null>
+const _avatarFehlt = new Set();     // "id:stufe:stand" — gibt es nicht, nicht noch einmal fragen
+function avatarHolen(id, stufe, stand) {
+  const schluessel = id + ':' + stufe + ':' + stand;
+  if (_avatarBlobs.has(schluessel)) return Promise.resolve(_avatarBlobs.get(schluessel));
+  if (_avatarFehlt.has(schluessel)) return Promise.resolve(null);
+  if (_avatarLaufend.has(schluessel)) return _avatarLaufend.get(schluessel);
+  const abruf = (async () => {
+    try {
+      const antwort = await fetch('/api/avatare/' + id + (stufe === 'gross' ? '?g=gross' : ''), {
+        headers: { Authorization: 'Bearer ' + S.token },
+      });
+      if (!antwort.ok) {
+        try { if (antwort.body) await antwort.body.cancel(); } catch (_) {}   // Verbindung sofort freigeben
+        if (antwort.status === 404) _avatarFehlt.add(schluessel);            // nur „gibt es nicht" merken
+        return null;
+      }
+      const url = URL.createObjectURL(await antwort.blob());
+      _avatarBlobs.set(schluessel, url);
+      return url;
+    } catch (_) { return null; }        // offline o. ae. → beim naechsten Mal wieder versuchen
+    finally { _avatarLaufend.delete(schluessel); }
+  })();
+  _avatarLaufend.set(schluessel, abruf);
+  return abruf;
+}
+
 async function avatareLaden(wurzel) {
   // Solange die Uebersicht nicht da ist, wird NICHTS als erledigt markiert — sonst waeren die
   // Platzhalter verbraucht, bevor man weiss, wer ueberhaupt ein Bild hat.
   if (!S._avatarStandDa) return;
   const stellen = (wurzel || document).querySelectorAll('[data-avatar]:not([data-avatar-fertig])');
-  for (const el of stellen) {
+  await Promise.all([...stellen].map(async (el) => {
     el.setAttribute('data-avatar-fertig', '1');
     const stand = (S.avatarStand || {})[el.dataset.avatar];
-    if (!stand) continue;                      // diese Person hat sicher kein Bild → Initialen
+    if (!stand) return;                        // diese Person hat sicher kein Bild → Initialen
     const stufe = el.dataset.stufe === 'gross' ? 'gross' : 'klein';
-    const schluessel = el.dataset.avatar + ':' + stufe + ':' + stand;
-    try {
-      let url = _avatarBlobs.get(schluessel);
-      if (!url) {
-        const antwort = await fetch('/api/avatare/' + el.dataset.avatar + (stufe === 'gross' ? '?g=gross' : ''), {
-          headers: { Authorization: 'Bearer ' + S.token },
-        });
-        if (!antwort.ok) continue;                 // kein Bild → Initialen bleiben stehen
-        url = URL.createObjectURL(await antwort.blob());
-        _avatarBlobs.set(schluessel, url);
-      }
-      el.style.backgroundImage = `url("${url}")`;
-      el.classList.add('avatar--bild');
-      el.classList.remove('avatar--leer');   // jetzt gibt es etwas zu sehen
-      el.textContent = '';
-    } catch (_) { /* offline o. ae. → Initialen bleiben */ }
-  }
+    const url = await avatarHolen(el.dataset.avatar, stufe, stand);
+    if (!url) return;                          // kein Bild → Initialen bleiben stehen
+    el.style.backgroundImage = `url("${url}")`;
+    el.classList.add('avatar--bild');
+    el.classList.remove('avatar--leer');       // jetzt gibt es etwas zu sehen
+    el.textContent = '';
+  }));
 }
 
 // Wer hat ueberhaupt ein Bild? Einmal je Sitzung, damit nicht jede Liste einzeln nachfragt.

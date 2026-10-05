@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**279 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**280 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -84,6 +84,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `auszahlung-gesamtbild.js` | Das GESAMTBILD (Alex, 06.09.2026): mehrere Aufbau-Phasen, Freizeitausgleich dazwischen, |
 | `auth-active-guard.js` | API-Test (B1): Ein bereits ausgestelltes JWT wird sofort abgelehnt (401), sobald der Nutzer ausgestellt ist — |
 | `avatar-api.js` | Profilbilder: Hochladen, Ausliefern, Entfernen — und vor allem, wer sie NICHT sehen darf. |
+| `avatar-fehlt-ui.js` | Profilbild fehlt auf der Platte: keine hängenden Verbindungen, ein Abruf je Person, nicht dauernd neu fragen. |
 | `avatar-orte-ui.js` | Profilbild an den Stellen, die am 05.10.2026 dazugekommen sind (Alex: „konsistent auch in der Wochen- und |
 | `avatar-ui.js` | Profilbilder in der Oberfläche: hochladen, in der Kopfzeile sehen, wieder entfernen. |
 | `avatar-zuschnitt-ui.js` | Das Zuschnitt-Fenster im Browser: schieben, zoomen, mit dem Finger bedienen (Alex, 23.08.2026). |

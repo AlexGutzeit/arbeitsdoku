@@ -4670,3 +4670,32 @@ freiwillig mit Haken (sein Nachtrag). Aus meinen Vorschlägen gewählt: ausgelie
   - Ohne Abstand zur Kopfleiste → 1 rot.
   - Die Sprung-Prüfung war zuerst ZAHNLOS: Am großen Bildschirm ist die Karte auch ohne Sprung im Bild. Jetzt
     misst sie, dass der Kartenkopf direkt unter der Kopfleiste steht.
+
+## Profilbild fehlt: hängende Verbindungen (05.10.2026, Fund der Suite)
+
+`barrierefrei-prodklon` lief in eine Zeitüberschreitung beim ersten Seitenaufruf (`networkidle2`). Gemessen:
+- **Keine Endlosschleife** — in 15 s nur wenige Anfragen.
+- **Abrufe `/api/avatare/6` und `/12` blieben im Browser „offen"**, obwohl der Server sofort 404 lieferte. In
+  der Prod-Kopie stehen die zwei Bild-Einträge, die Dateien liegen nicht bei.
+- **Ursache:** `avatareLaden()` las den Inhalt einer Fehlerantwort nie (`if (!antwort.ok) continue;`). Der Browser
+  hielt die Verbindung für belegt. Weil jeder Kreis derselben Person neu fragte, häuften sich die offenen
+  Verbindungen. Über HTTP/1.1 sind es höchstens sechs je Server, danach warten auch normale Anfragen der App.
+- **Warum erst jetzt?** Das Muster steht seit August im Code. Sichtbar wurde es erst mit dem Kollegen-Menü: Die
+  zwei Personen stehen jetzt auf JEDER Seite.
+
+**Behoben** (`avatarHolen()` in app-1-core.js):
+- Fehlerantwort verwerfen (`antwort.body.cancel()`).
+- 404 für die Sitzung merken (`_avatarFehlt`).
+- Laufende Abrufe teilen (`_avatarLaufend`): ein Abruf je Person, Größe und Stand.
+- `avatareLaden` arbeitet die Kreise jetzt parallel ab.
+
+**Test `avatar-fehlt-ui.js` (13):** Bild-Eintrag ohne Datei; Kollegen-Übersicht, Durchklicken, Personenseite,
+Neuladen. Gegenproben:
+- **GA1** nicht verwerfen → 2 rot (Verbindung hängt).
+- **GA2** nicht merken → 2 rot (4 bzw. 8 Anfragen).
+- **GA3** nicht teilen → zuerst 0 rot. Im Test luden Menü und Karte in getrennten Durchgängen. Den gemeinsamen
+  Durchgang gibt es beim Neuladen (beide stehen schon da, bevor die App weiß, wer ein Bild hat) — mit diesem Fall
+  im Test: 1 rot, 3 Anfragen statt einer.
+
+**Nebenbei:** Beim Anhalten der Suite traf `kill $(pgrep -f "timeout 900 node tests/")` auch die eigene Shell
+(Exit 144). Dieselbe Falle wie `pkill -f`: Der Suchtext stand in ihrer Befehlszeile.
