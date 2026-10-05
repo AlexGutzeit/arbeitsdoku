@@ -489,7 +489,8 @@ function layout(content, activeNav) {
           <span class="icon">&#128220;</span> Audit-Log
         </a>` : ''}
         <div class="nav-group${(activeNav === 'deleted-entries' || activeNav === 'deleted-absences' || activeNav === 'deleted-projects' || activeNav === 'deleted-users') ? ' open' : ''}" id="nav-papierkorb">
-          <div class="nav-group-label" id="nav-papierkorb-label">
+          <div class="nav-group-label" id="nav-papierkorb-label" role="button" tabindex="0" aria-controls="nav-papierkorb"
+               aria-expanded="${(activeNav === 'deleted-entries' || activeNav === 'deleted-absences' || activeNav === 'deleted-projects' || activeNav === 'deleted-users') ? 'true' : 'false'}">
             <span class="icon">&#128465;</span> Papierkorb
             <span class="nav-caret">&#9656;</span>
           </div>
@@ -568,10 +569,19 @@ function bindLayout() {
       if (menuBtn) menuBtn.focus();
     }
   });
-  // Papierkorb-Gruppe per Tippen auf-/zuklappen (Touch-Geraete; Desktop nutzt zusaetzlich Hover via CSS)
-  const pkLabel = document.getElementById('nav-papierkorb-label');
-  if (pkLabel) pkLabel.addEventListener('click', () => {
-    document.getElementById('nav-papierkorb')?.classList.toggle('open');
+  // Menue-Gruppen (Papierkorb, Kollegen) per Tippen, Klick oder Enter/Leertaste auf- und zuklappen —
+  // an jedem Geraet gleich. Kein Aufklappen per Hover mehr (siehe style.css, .nav-group).
+  document.querySelectorAll('.nav-group-label').forEach(label => {
+    const umschalten = () => {
+      const gruppe = label.closest('.nav-group');
+      if (!gruppe) return;
+      const offen = gruppe.classList.toggle('open');
+      label.setAttribute('aria-expanded', offen ? 'true' : 'false');
+    };
+    label.addEventListener('click', umschalten);
+    label.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); umschalten(); }
+    });
   });
 
   if (logoutBtn) logoutBtn.addEventListener('click', () => logout(true));

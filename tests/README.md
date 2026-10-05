@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**276 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**277 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -177,6 +177,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `meldungen-zaehler.js` | Meldungen — Zähler, Zusammenfassung und Push-Schalter (Etappe 2, 30.09.2026). |
 | `meldungen.js` | Meldungen — Server: Themen, Melden, Rechte, Status, History (Alex, 30.09.2026). |
 | `menue-abrechnung-ui.js` | Der Menüpunkt hinter #/pdf gehört Chef, Admin und Buchhaltung — und heißt „Abrechnung". |
+| `menue-gruppen-ui.js` | Aufklappbare Menü-Gruppen (Papierkorb, Kollegen): auf UND wieder zu — mit Maus, Finger und Tastatur. |
 | `milestone-days-input.js` | Test: Zwischenziel-Dauer akzeptiert Komma UND Punkt (1,5 === 1.5), ungültige Werte werden abgefangen |
 | `nav-chooser.js` | Navigations-Auswahl-Test (Puppeteer, headless). Prüft Plattform-Optionen, URL-Builder, Auswahl-Dialog, |
 | `neuzeichnen-ui.js` | Neu zeichnen nur auf der eigenen Seite (R23, 29.09.2026). |

@@ -259,12 +259,14 @@ body {
 .nav-group-label:hover { background: var(--primary-light); }
 .nav-group-label .icon { font-size: 1.2rem; width: 1.5rem; text-align: center; }
 .nav-caret { margin-left: auto; font-size: 0.7rem; transition: transform 0.15s; }
-/* Unterpunkte versteckt; sichtbar bei Hover ueber die Gruppe oder wenn aufgeklappt (.open) */
+/* Unterpunkte versteckt; sichtbar NUR wenn aufgeklappt (.open).
+   Frueher klappte die Gruppe zusaetzlich bei :hover auf. Dann liess sie sich nicht mehr zuklappen
+   (Alex, 05.10.2026): Am Rechner steht der Mauszeiger nach dem Klick noch darueber, und am Handy
+   „klebt" :hover nach dem Antippen am Element. Das Tippen nahm .open weg, :hover hielt sie offen. */
 .nav-group .nav-subitem { display: none; }
-.nav-group:hover .nav-subitem,
 .nav-group.open .nav-subitem { display: flex; }
-.nav-group:hover .nav-caret,
 .nav-group.open .nav-caret { transform: rotate(90deg); }
+.nav-group-label:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 .sidebar nav a.nav-subitem { padding-left: 2.6rem; font-size: 0.9rem; }
 
 /* === Dokumente === */
