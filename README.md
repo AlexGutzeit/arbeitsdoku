@@ -919,10 +919,14 @@ an, wenn die App geschlossen ist. Gemeldet wird genau das, was auch den jeweilig
 | Neuer Aushang bzw. **inhaltlich geänderter** Aushang | alle außer dem Autor |
 | Notiz geteilt/angeboten | die **neu** hinzugekommenen Empfänger (wer schon Zugriff hatte, bekommt nichts) |
 | Geteilte Notiz **inhaltlich geändert** (einmal je Bearbeitungsrunde) — auch durch einen **Gast** („Herr Maier (Gast) hat … bearbeitet") | Eigentümer + Mitleser, die gerade nicht in der Notiz sind, außer dem Bearbeiter |
+| [Projektnotiz](#-projekte-und-aufträge) **inhaltlich geändert** (einmal je Bearbeitungsrunde) | die dem Auftrag Zugeteilten, die gerade nicht in der Notiz sind, außer dem Bearbeiter |
+| **🔔 Erinnerung** zu einer [Notiz](#-notizen) (zur eingestellten Zeit) | nur wer sie sich gestellt hat — sofern er die Notiz dann noch sehen kann |
 | Gastzugang **gesperrt** (5 falsche Passwörter) | die Eigentümerin der Notiz |
 | Neuer Abwesenheitsantrag bzw. Krank-/Schule-/Innung-Meldung | alle Manager (Chef/Admin/Buchhalter) |
 | Urlaub genehmigt/abgelehnt bzw. Abwesenheit vom Chef bearbeitet | der betroffene Mitarbeiter |
 | Neue oder geänderte [Meldung](#-meldungen) (auch Stand, Rückmeldung, zurückgezogen) | alle, die Meldungen bearbeiten dürfen, und der Melder — außer dem, der es getan hat |
+| **🔔 Erinnerung** zu einer [Meldung](#-meldungen) (zur eingestellten Zeit, nicht solange sie erledigt ist) | nur wer sie sich gestellt hat |
+| **🔔 Erinnerung** zu einem [Termin](#-planung) (siehe *Planungs-Erinnerungen* unten) | nur wer sie sich gestellt hat (Mitarbeiter an eigenen Terminen, Chef/Admin auch an fremden) |
 
 Pro Nutzer lassen sich die Kategorien (Abwesenheiten / Schwarzes Brett / Notizen / **Planung** / **Meldungen**,
 für Chef/Admin zusätzlich Bestellungen) einzeln ein- und ausschalten (wird sofort gespeichert).
@@ -930,7 +934,8 @@ für Chef/Admin zusätzlich Bestellungen) einzeln ein- und ausschalten (wird sof
 **Meldung antippen:** Man landet genau bei dem, worum es geht, und es ist kurz **hervorgehoben**: die Notiz
 (auch nach einer Änderung durch einen Gast), die Projektkachel (aufgeklappt, bei einer Projektnotiz), der
 Aushang, die Bestellung, der Abwesenheitsantrag, die Meldung (eine erledigte in der History), bei einer Planungs-Erinnerung die **Tagesansicht am Tag des
-Termins** mit dem Termin. Das gilt auch, wenn die App gerade zu war (sie öffnet sich direkt dort) oder man
+Termins** mit dem Termin. Bei einer Erinnerung zu einer Notiz oder Meldung trägt sie zusätzlich die Marke
+**„🔔 Erinnerung"**. Das gilt auch, wenn die App gerade zu war (sie öffnet sich direkt dort) oder man
 abgemeldet war (nach der Anmeldung geht es dorthin statt zur Willkommensseite). Ist neben der App eine
 **Gästeseite** offen, bleibt die unberührt. Zusammenfassung und Testmeldung holen nur die App nach vorn.
 
