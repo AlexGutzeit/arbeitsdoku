@@ -4499,3 +4499,52 @@ Vollsicherung `arbeitsdoku_backup_20261005-152240.adbk` (dreifach, gleiche Prüf
 Rückkehrpunkt `vor-2fa-minimum-deploy` (= `889dc89`). Die Datenbank ist vorher/nachher in allen 59 Tabellen
 gleich, die Datei heil. Auf Produktion ist keine Rollen-Vorgabe gesetzt; für das eine eingerichtete Konto gilt
 vorher wie nachher dieselbe Stufe — der Umbau ändert im Bestand nichts.
+
+## Profilbild an weiteren Stellen (05.10.2026)
+
+Alex: Der Avatar stand in der Planung nur in der **Tagesansicht** — „konsistent auch in der Wochen- und
+Monatsansicht". Dazu sollte ich Stellen vorschlagen; genommen hat er 1–7, dazu der Menükopf (sein Foto).
+
+**Ursache der Lücke:** Woche und Monat (`renderPlanningGrid`) schrieben im Spaltenkopf nur den Namen. Das
+Nachladen der Bilder läuft app-weit von selbst (MutationObserver auf `#app`), es fehlte nur der Platzhalter.
+
+**Zwei Regeln, je nach Art der Stelle** (beide stehen im Kommentar an `avatarHtml`):
+- **Spalten, Menü, Auswahl** (`'weg'`) — Planung Woche/Monat, Menükopf, Abwesenheitskalender, Planungsformular:
+  Ohne Bild bleibt alles wie bisher, der Platzhalter ist unsichtbar und nimmt keinen Platz ein. Das ist Alex'
+  Regel vom 22.08. und das Versprechen auf „Mein Konto". Deshalb wird auch in senkrechten Namenslisten
+  (Kalender, Formular) **kein** Platz freigehalten — so hält es schon die Mitarbeiterliste.
+- **Listen mit Namen im Text** (`'initialen'`) — Abwesenheitsanträge, Meldungen (Karte + Detail), Aushänge (Brett +
+  Willkommensseite): Ohne Bild steht ein Initialen-Kreis, sonst stünden Namen mit und ohne Bild durcheinander.
+  Vorbild war „mit …" auf der Willkommensseite.
+
+**Was dabei zu beachten war:**
+- **Gelöschte Konten** heißen in Meldungen und Aushängen „Gelöschtes Konto", die Kennung steht aber noch in
+  `created_by`. Ein Initialen-Kreis „GK" wäre falsch. Deshalb liefert der Server die Kennung fürs Bild nur,
+  solange das Konto besteht: `cu.id AS melder_id` (routes/meldungen.js), `u.id as author_id`
+  (routes/bulletin.js, alle vier Abfragen). Automatische Meldungen (`created_by` NULL) bekommen so auch keinen
+  „AU"-Kreis. Kein Namensvergleich im Browser.
+- **Das Meldungs-Detail hängt am `<body>`**, nicht in `#app` — den beobachtet das Nachladen nicht. Dort steht
+  jetzt ein ausdrückliches `avatareLaden(overlay)`. Wer weitere Dialoge mit Bildern baut: dasselbe.
+- **Menükopf:** Ohne Bild verschwindet der ganze Link per `.sidebar-konto:has(> .avatar--leer)`. Sonst bliebe
+  ein unsichtbarer Tab-Stopp. `kopfzeileAvatarAktualisieren()` zieht ihn nach Hochladen/Entfernen mit.
+- **„Mein Konto"** nannte, wo das Bild erscheint („Planung, Zeitnachweis und Auftrags-Board"). Der Text nennt
+  jetzt alle Stellen und sagt ehrlich, dass in Listen ohne Bild Initialen stehen — der alte Satz „Ohne Bild bleibt
+  dort alles wie bisher" stimmte für die Listen nicht mehr.
+
+**Test:** `tests/avatar-orte-ui.js` (41, Port 3368) prüft jede Stelle mit einer Person mit Bild und einer
+ohne: unsichtbar und ohne Platz bzw. Initialen. Dazu Menükopf (Lage, Klick, Schublade schließt, Handy) und das
+Nachziehen nach dem Hochladen. Mit `AVATAR_FOTOS=<ordner>` legt er Bildschirmfotos ab.
+
+Gegenproben, alle an der erwarteten Stelle rot:
+- **G1** Woche ohne Avatar → 2 rot.
+- **G2** ohne `:has`-Regel → 2 rot.
+- **G3** ohne `avatareLaden(overlay)` → 1 rot (Initialen statt Bild).
+- **G4** Server ohne `melder_id` → 4 rot.
+- **G5** Anträge ohne `'initialen'` → 1 rot.
+- **G6** Menükopf zieht nicht mit → 1 rot.
+
+Der Erstlauf war an zwei Stellen rot, beide Male lag es am Test, nicht an der App:
+- Das Menü ist auch bei 1280 px eine Schublade. Die Lageprüfung lief außerhalb des Bildschirms und war
+  trotzdem grün — erst der Klick fiel um. Jetzt wird aufgeklappt, und es wird geprüft, dass das Bild im
+  sichtbaren Bereich liegt.
+- „admin" heißt als Rolle „Administrator".

@@ -94,14 +94,21 @@ Persönliches Dashboard: anstehende Planung, eigene Abwesenheiten, Schnellüberb
 
 Die persönliche Seite — für **alle** Rollen sichtbar, auch für Mitarbeiter.
 
-**Zwei Wege dorthin:** der Menüpunkt **👤 Mein Konto** im Seitenmenü, oder ein Klick auf das
-eigene **Profilbild bzw. den Namen oben rechts** in der Kopfzeile. Beides führt an dieselbe
-Stelle.
+**Drei Wege dorthin:** der Menüpunkt **👤 Mein Konto** im Seitenmenü, ein Klick auf das
+eigene **Profilbild bzw. den Namen oben rechts** in der Kopfzeile, oder — mit Profilbild — ein Klick
+auf das Bild **oben im Seitenmenü** neben Name und Rolle. Alle führen an dieselbe Stelle.
 
-**Profilbild:** Jeder kann ein Bild hochladen; es erscheint neben dem eigenen Namen in der
-Kopfzeile und in den Spalten von Planung, Zeitnachweis und Auftrags-Board sowie in der
-Mitarbeiterliste. **Wer kein Bild hochlädt, ändert für die anderen nichts** — die Ansicht bleibt
-genau wie vorher. Jedes Bild lässt sich jederzeit wieder **entfernen**.
+**Profilbild:** Jeder kann ein Bild hochladen. Es erscheint an zwei Arten von Stellen:
+- **Spalten, Menü und Auswahl** — Kopfzeile, Seitenmenü (rechts neben Name und Rolle), Planung (Spaltenköpfe in
+  Tag, Woche und Monat, Mitarbeiter-Auswahl im Planungsformular), Zeitnachweis- und Auftrags-Board-Spalten,
+  Namensspalte im Abwesenheitskalender, Mitarbeiterliste. **Wer kein Bild hochlädt, ändert hier nichts** — die
+  Ansicht bleibt genau wie vorher.
+- **Listen, in denen ein Name steht** — Abwesenheitsanträge (beim Antragsteller), Meldungen („Gemeldet von"),
+  Aushänge am Schwarzen Brett und auf der Willkommensseite (Verfasser), „mit …" bei Terminen auf der
+  Willkommensseite. Hier steht ohne Bild ein **Kreis mit den Initialen** in der Personenfarbe, damit Namen mit
+  und ohne Bild nicht durcheinander stehen. Gelöschte Konten und automatische Meldungen bekommen keinen Kreis.
+
+Jedes Bild lässt sich jederzeit wieder **entfernen**. Sehen können es nur angemeldete Kolleginnen und Kollegen.
 
 **Du wählst den Ausschnitt selbst.** Nach der Dateiwahl geht ein Fenster auf: Der Kreis steht
 fest, das Foto wird darunter verschoben und gezoomt — am Rechner mit Maus, Mausrad oder Regler,
