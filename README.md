@@ -259,6 +259,16 @@ Verliert der einzige Admin sein Handy, hilft der Notfall-Schalter
 
 Kern-Zeiterfassung. Eintrag mit Datum, Von/Bis, Pause, Arbeitsort, Kunde, Projekt, Beschreibung und optionalem „Regie"-Vermerk. **Vorbelegung der Zeiten:** „Von" schließt an den letzten Eintrag des Tages an; gibt es keinen, gilt die geplante Startzeit, sonst der **Arbeitsbeginn** (je Mitarbeiter, sonst Firmenwert). „Bis" ist die aktuelle Uhrzeit — und **nie vor „Von"**: Wer um 06:30 bucht, obwohl der Arbeitsbeginn 07:00 ist, bekommt 06:30–06:30 statt einer unmöglichen Spanne. Läge die Endzeit eines bereits gebuchten Eintrags nach „jetzt" (Tag im Voraus gebucht), bleibt „Von" stehen und „Bis" zieht nach. **Die Pause wird mit dem REST zur Firmenpause vorbelegt:** `max(0, Firmenpause − heute schon erfasste Pausen)` für denselben Mitarbeiter am selben Tag. Firmenpause 30 → erster Auftrag 30, danach 0; wurden im ersten nur 15 genommen, schlägt der nächste 15 vor, davon 10 genommen → der dritte 5, bis 0. Es zählen **alle** Einträge des Tages, auch vom Chef nachgetragene: Es ist der Arbeitstag des Mitarbeiters, unabhängig davon, wer ihn erfasst hat. Steht schon etwas, erklärt eine kleine Zeile unter dem Feld warum („Firmenpause 30 min · heute schon 20 min erfasst"); beim ersten Eintrag bleibt sie leer. Bei **Übernahme aus der Planung** gilt der geplante Wert nur, solange der Tag leer ist; sonst gewinnt die Restpause. **Beim Bearbeiten** bleibt die gespeicherte Pause unangetastet. **Die Pause schluckt nie die ganze Arbeitszeit:** Passt die Tagespause nicht in einen kurzen Einsatz (z. B. 08:00–08:30 als erster Eintrag des Tages), schlägt die App 0 vor und sagt dazu, dass sie beim nächsten Eintrag des Tages vorgeschlagen wird — dieser rechnet die noch fehlende Pause ohnehin ein. Wer eine Pause einträgt, die so lang ist wie die Arbeitszeit oder länger, wird beim Speichern aufgehalten („von diesem Eintrag bliebe nichts übrig"); das prüft auch der Server, beim Anlegen wie beim Ändern. Früher wurde so ein Eintrag still mit 0 Stunden gespeichert.
 
+**Denselben Eintrag gibt es schon?** Speichert man einen Eintrag, der einem vorhandenen desselben Tages in **jedem**
+Inhaltsfeld gleicht (Von, Bis, Pause, Projekt, Kunde, Adresse, Beschreibung, Regie-Art), fragt die App nach: *„Diesen
+Eintrag gibt es schon: 01.09.2026, 07:00–15:30, Heizung Müller. Trotzdem speichern?"* — beim Anlegen wie beim
+Bearbeiten. Kein Verbot; wer bewusst zwei gleiche will, speichert trotzdem. Unterscheidet sich ein Feld, ist es kein
+Doppel: Zeitgleiche Arbeit an zwei Aufträgen bleibt ohne Rückfrage möglich.
+
+**Filter:** Projekt, Abwesenheit, Suchtext und **Regie** — *Alle · Nein · jede Art · Ja · pauschal · Büro · Lager ·
+Intern*. „jede Art" ist alles außer „Nein"; „Ja" ist nur echte Regie (bis 06.10.2026 umfasste „Ja" alle Arten, also
+auch Büro-, Lager- und Interne Zeiten).
+
 **Ansichten: Tag · Woche · Monat · Jahr · Gesamt.** Tag zeigt den Verlauf, Woche und Monat ein Raster mit den Personen
 als Spalten. **Jahr** und **Gesamt** fassen zusammen: Beim Jahr ist jede Zeile ein Monat, bei Gesamt jede Zeile ein
 Jahr seit dem ersten Eintrag. Eine Zelle zeigt *Nettostunden / Arbeitstage*, darunter die Abwesenheiten als Zeichen

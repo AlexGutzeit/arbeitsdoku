@@ -4,8 +4,9 @@
 // Doppel-Klick-Schutz, einmal von Hand dreimal eingetragen). Und „Regie: Ja" zählte alle Arten außer „Nein" —
 // also auch Büro-, Lager- und Interne Zeiten.
 //
-// Identisch = gleiche Person, gleicher Tag, gleiche Von/Bis-Zeit, dasselbe Projekt. Gleiche Zeit mit anderem
-// Projekt ist zeitgleiche Arbeit an zwei Aufträgen und KEIN Doppel. Kein Verbot: Wer bewusst trotzdem speichert,
+// Identisch = gleiche Person, gleicher Tag und in ALLEN Inhaltsfeldern gleich (Von, Bis, Pause, Projekt, Kunde,
+// Adresse, Beschreibung, Regie-Art) — so sahen alle drei echten Doppel aus. Unterscheidet sich ein Feld, ist es
+// zeitgleiche Arbeit an zwei Aufträgen und KEIN Doppel. Kein Verbot: Wer bewusst trotzdem speichert,
 // kann das (Rückfrage im Formular, `doppelt_ok` am Server).
 //
 //   node tests/eintrag-doppelt-regie.js
@@ -51,7 +52,7 @@ const TAG = '2026-09-01';   // fester Tag in der Vergangenheit — nie „heute"
     let r = await eintrag();
     ok('der erste Eintrag wird angelegt', r.status === 201, r.text.slice(0, 80));
     const erster = r.body.entry;
-    r = await eintrag({ description: 'nochmal' });
+    r = await eintrag();
     ok('derselbe noch einmal → 409 mit Kennung EINTRAG_DOPPELT', r.status === 409 && r.body.code === 'EINTRAG_DOPPELT', `${r.status} ${r.text.slice(0, 120)}`);
     ok('… die Meldung nennt Tag, Zeit und Projekt', /01\.09\.2026, 07:00–15:30, Heizung Müller/.test(r.body.error || ''), r.body.error);
     ok('… und es wurde nichts angelegt', await anzahl() === 1);
@@ -61,16 +62,19 @@ const TAG = '2026-09-01';   // fester Tag in der Vergangenheit — nie „heute"
     ok('gleiche Zeit, ANDERES Projekt ist kein Doppel (zeitgleiche Aufträge)', (await eintrag({ project_id: anderes.id })).status === 201);
     ok('gleiche Zeit ohne Projekt ist auch keins', (await eintrag({ project_id: null })).status === 201);
     ok('andere Zeit ist keins', (await eintrag({ time_from: '15:30', time_to: '17:00', break_minutes: 0 })).status === 201);
+    ok('gleiche Zeit und gleiches Projekt, aber andere Beschreibung → zwei Aufträge, kein Doppel', (await eintrag({ description: 'Zweiter Auftrag' })).status === 201);
+    ok('… ebenso mit anderer Pause', (await eintrag({ break_minutes: 45 })).status === 201);
 
     console.log('\n── Server: Bearbeiten ──');
-    r = await req('PUT', '/api/entries/' + erster.id, T, { description: 'nur der Text', reason: '' });
+    // Nur die persönliche Notiz ändern: Der Inhalt bleibt gleich — es GIBT noch die gleiche Kopie
+    r = await req('PUT', '/api/entries/' + erster.id, T, { personal_note: 'nur für mich', reason: '' });
     ok('Bearbeiten, solange eine gleiche Kopie existiert → Rückfrage (die Kopie IST ein Doppel)',
       r.status === 409 && r.body.code === 'EINTRAG_DOPPELT', `${r.status}`);
-    r = await req('PUT', '/api/entries/' + erster.id, T, { description: 'nur der Text', reason: '', doppelt_ok: true });
+    r = await req('PUT', '/api/entries/' + erster.id, T, { personal_note: 'nur für mich', reason: '', doppelt_ok: true });
     ok('… mit „trotzdem" gespeichert', r.status === 200, r.text.slice(0, 80));
     r = await req('DELETE', '/api/entries/' + zweiter.id, T, { reason: 'Doppel' });
     ok('die Kopie wird gelöscht', r.status === 200, r.text.slice(0, 80));
-    r = await req('PUT', '/api/entries/' + erster.id, T, { description: 'wieder allein', reason: '' });
+    r = await req('PUT', '/api/entries/' + erster.id, T, { personal_note: 'wieder allein', reason: '' });
     ok('danach: Bearbeiten ohne Rückfrage — ein Eintrag ist kein Doppel von sich selbst, gelöschte zählen nicht', r.status === 200, `${r.status} ${r.text.slice(0, 80)}`);
     const spaeter = (await eintrag({ time_from: '17:00', time_to: '18:00', break_minutes: 0 })).body.entry;
     r = await req('PUT', '/api/entries/' + spaeter.id, T, { time_from: '07:00', time_to: '15:30', break_minutes: 30, reason: '' });
@@ -108,9 +112,9 @@ const TAG = '2026-09-01';   // fester Tag in der Vergangenheit — nie „heute"
       await setze('ef-date', TAG); await sleep(700);
       await setze('ef-project', String(projekt.id)); await sleep(300);
       await setze('ef-from', '07:00'); await setze('ef-to', '15:30'); await sleep(300);
-      await setze('ef-break', '30'); await sleep(300);
-      const werte = await p.evaluate(() => ['ef-date', 'ef-from', 'ef-to', 'ef-break', 'ef-project'].map(i => document.getElementById(i).value).join(' '));
-      if (werte !== `${TAG} 07:00 15:30 30 ${projekt.id}`) console.log('      Formular steht auf: ' + werte);
+      await setze('ef-break', '30'); await setze('ef-desc', 'Arbeit'); await sleep(300);
+      const werte = await p.evaluate(() => ['ef-date', 'ef-from', 'ef-to', 'ef-break', 'ef-project', 'ef-desc'].map(i => document.getElementById(i).value).join(' '));
+      if (werte !== `${TAG} 07:00 15:30 30 ${projekt.id} Arbeit`) console.log('      Formular steht auf: ' + werte);
       await p.evaluate(() => document.getElementById('entry-form').requestSubmit());
       await sleep(1200);
     };

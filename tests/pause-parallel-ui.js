@@ -135,7 +135,9 @@ const tagNr = n => new Date(Date.now() - (n + 2) * 864e5).toLocaleDateString('sv
         g.pause === k.erwartet, `${g.pause} min · „${g.hinweis}"`);
       if (g.hinweis) console.log(`      „${g.hinweis}"`);
       const r = await req('POST', '/api/entries', admin.token,
-        { date: tag4, time_from: k.von, time_to: k.bis, break_minutes: k.genommen, user_id: uid });
+        // Jeder Auftrag mit eigener Beschreibung, wie im Betrieb: In JEDEM Feld gleiche Einträge hält die App seit dem
+        // 06.10.2026 für ein Doppel und fragt nach (Auftrag 1 und 2 haben hier dieselbe Zeit UND dieselbe Pause).
+        { date: tag4, time_from: k.von, time_to: k.bis, break_minutes: k.genommen, user_id: uid, description: 'Auftrag ' + k.nr });
       if (r.status >= 300) throw new Error(`Auftrag ${k.nr}: ` + r.text);
     }
     // Der Tag am Ende: Anwesenheit 07:00–17:00 = 10 Std, 45 min Pause, also 9:15 Arbeitszeit.

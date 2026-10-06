@@ -193,17 +193,22 @@ router.get('/:id', authenticate, (req, res) => {
 });
 
 // Eintrag erstellen
-// Gibt es denselben Eintrag schon? (Alex, 06.10.2026) — gleiche Person, gleicher Tag, gleiche Von/Bis-Zeit und dasselbe
-// Projekt (Auswahl oder Freitext). Gefunden wurden drei solche Doppel: zwei Doppel-Tipper aus der Zeit vor dem
-// Doppel-Klick-Schutz und einer, der von Hand mehrmals eingetragen wurde. Die Zeit zählt die App ohnehin nur einmal,
-// zieht aber die Pause jeder Kopie ab — die Tage standen zu knapp da.
-// Kein Verbot: Wer bewusst trotzdem speichert, schickt `doppelt_ok` mit (das Formular fragt nach). Gleiche Zeit mit
-// ANDEREM Projekt ist kein Doppel, sondern zeitgleiche Arbeit an zwei Aufträgen.
-function doppelterEintrag(db, { userId, date, von, bis, projectId, projectText, ohneId }) {
-  return db.prepare(`SELECT e.id, COALESCE(p.name, e.project_text) AS projekt FROM entries e LEFT JOIN projects p ON p.id = e.project_id
-    WHERE e.user_id = ? AND e.date = ? AND e.time_from = ? AND e.time_to = ? AND e.deleted_at IS NULL
-      AND COALESCE(e.project_id, 0) = ? AND COALESCE(e.project_text, '') = ? AND e.id != ? LIMIT 1`)
-    .get(userId, date, von, bis, Number(projectId) || 0, projectText || '', ohneId || 0);
+// Gibt es denselben Eintrag schon? (Alex, 06.10.2026) — gleiche Person, gleicher Tag und IN ALLEN INHALTSFELDERN gleich:
+// Von, Bis, Pause, Projekt (Auswahl oder Freitext), Kunde, Adresse, Beschreibung, Regie-Art. Gefunden wurden drei
+// solche Doppel, alle in jedem dieser Felder gleich: zwei Doppel-Tipper aus der Zeit vor dem Doppel-Klick-Schutz und
+// einer, der von Hand mehrmals eingetragen wurde. Die Zeit zählt die App ohnehin nur einmal, zieht aber die Pause jeder
+// Kopie ab — die Tage standen zu knapp da.
+// Bewusst NICHT nur Tag + Zeit: Zeitgleiche Arbeit an zwei Aufträgen ist erlaubt und kommt vor (Pausen- und
+// Höchstzeit-Regeln rechnen damit). Sobald sich ein Feld unterscheidet, ist es kein Doppel.
+// Kein Verbot: Wer bewusst trotzdem speichert, schickt `doppelt_ok` mit (das Formular fragt nach).
+function doppelterEintrag(db, e) {
+  return db.prepare(`SELECT x.id, COALESCE(p.name, x.project_text) AS projekt FROM entries x LEFT JOIN projects p ON p.id = x.project_id
+    WHERE x.user_id = ? AND x.date = ? AND x.time_from = ? AND x.time_to = ? AND x.deleted_at IS NULL AND x.id != ?
+      AND COALESCE(x.break_minutes, 0) = ? AND COALESCE(x.project_id, 0) = ? AND COALESCE(x.project_text, '') = ?
+      AND COALESCE(x.client, '') = ? AND COALESCE(x.address, '') = ? AND COALESCE(x.description, '') = ?
+      AND COALESCE(x.has_regie, 0) = ? LIMIT 1`)
+    .get(e.userId, e.date, e.von, e.bis, e.ohneId || 0, Number(e.pause) || 0, Number(e.projectId) || 0, e.projectText || '',
+      e.client || '', e.address || '', e.description || '', Number(e.regie) || 0);
 }
 function doppelAntwort(res, date, von, bis, d) {
   const [j, m, t] = date.split('-');
@@ -254,7 +259,8 @@ router.post('/', authenticate, (req, res) => {
   if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
 
   if (!req.body.doppelt_ok) {
-    const d = doppelterEintrag(db, { userId: targetUserId, date, von: time_from, bis: time_to, projectId: project_id, projectText: project_text });
+    const d = doppelterEintrag(db, { userId: targetUserId, date, von: time_from, bis: time_to, pause: break_minutes, projectId: project_id,
+      projectText: project_text, client, address, description, regie: has_regie });
     if (d) return doppelAntwort(res, date, time_from, time_to, d);
   }
 
@@ -320,9 +326,10 @@ router.put('/:id', authenticate, (req, res) => {
 
   if (!req.body.doppelt_ok) {
     const neuDatum = date || entry.date;
-    const d = doppelterEintrag(db, { userId: entry.user_id, date: neuDatum, von: newFrom, bis: newTo, ohneId: entry.id,
-      projectId: project_id !== undefined ? project_id : entry.project_id,
-      projectText: project_text !== undefined ? project_text : entry.project_text });
+    const neu = (feld, wert) => (wert !== undefined ? wert : entry[feld]);   // was nicht mitkommt, bleibt wie es ist
+    const d = doppelterEintrag(db, { userId: entry.user_id, date: neuDatum, von: newFrom, bis: newTo, ohneId: entry.id, pause: newBreak,
+      projectId: neu('project_id', project_id), projectText: neu('project_text', project_text), client: neu('client', client),
+      address: neu('address', address), description: neu('description', description), regie: neu('has_regie', has_regie) });
     if (d) return doppelAntwort(res, neuDatum, newFrom, newTo, d);
   }
 

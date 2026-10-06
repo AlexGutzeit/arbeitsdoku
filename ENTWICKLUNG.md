@@ -4765,3 +4765,43 @@ Neujahr und den 6.1. und nahm den 11.01.). Rot vorher, grün nachher, am selben 
   ist `cleanupToolHistory()` (server.js, seit 30.03.2026): Beim Start und täglich werden Ausleihen gelöscht, die
   seit mehr als drei Monaten zurückgegeben sind. Die beiden waren am 06.07. zurückgegeben — genau heute drei Monate
   alt. Gewollt; ein Vergleich über einen Neustart zeigt das immer dann, wenn gerade welche fällig werden.
+
+## Rückfrage bei doppelten Einträgen + Regie-Filter mit allen Arten (06.10.2026)
+
+Anlass war Alex' Filterprobe an den echten Daten (Gesamt = Jahr = Monate, alles gleich — jetzt fester Test
+`zeitnachweis-summen-prodklon.js`). Dabei fielen zwei Dinge auf, beide von ihm entschieden:
+
+**Doppelte Einträge — Rückfrage, kein Verbot.**
+- **Was gefunden wurde:** Drei Fälle, und jeder war in ALLEN Inhaltsfeldern gleich. Zwei entstanden innerhalb
+  einer Sekunde (Doppel-Tipper vor dem Klick-Schutz vom 24.07.), einer wurde über eine Stunde verteilt dreimal von
+  Hand eingetragen.
+- **Folge:** `calcActualHours` zählt die Zeit einmal, zieht aber die Pause jeder Kopie ab — die Tage standen zu
+  knapp da. Die Kopien löscht Alex selbst.
+- **Regel (`doppelterEintrag()` in routes/entries.js):** gleiche Person, gleicher Tag, Von, Bis, Pause, Projekt
+  (Auswahl/Freitext), Kunde, Adresse, Beschreibung, Regie-Art. Gelöschte zählen nicht, beim Bearbeiten nicht der
+  Eintrag selbst. Antwort 409 `EINTRAG_DOPPELT`; das Formular fragt „Trotzdem speichern?" und schickt dann
+  `doppelt_ok`.
+- **Erster Entwurf „Tag + Zeit + Projekt" war zu grob:** `pause-parallel-ui` (Alex' Kette vom 30.07.) und
+  `hoechstarbeitszeit-ui` legen zeitgleiche Aufträge OHNE Projekt an — echte Parallelarbeit. Deshalb jetzt „alle
+  Inhaltsfelder", geprüft an den drei echten Doppeln (dort war jedes Feld gleich).
+- **Zwei Tests angepasst:** Sie legten zwei in JEDEM Feld gleiche Einträge als „zwei Aufträge" an. Die haben jetzt
+  je eine eigene Beschreibung wie im Betrieb. Was sie prüfen (Pause bzw. Höchstzeit bei zeitgleichen Aufträgen),
+  bleibt gleich.
+
+**Regie-Filter.**
+- **Vorher:** „Regie: Ja" hieß `has_regie > 0` und schloss pauschal (108), Büro (260), Lager (13) und Intern (68)
+  mit ein.
+- **Jetzt:** `regie=jede` (das alte Verhalten), `regie=1…5` genau eine Art, `regie=0` keine. Die Auswahl entsteht
+  aus `REGIE_LABELS`.
+- **Gefahrlos:** Nur der Zeitnachweis nutzt den Parameter, kein Bestandstest setzte das alte „Ja" voraus.
+
+**Test `eintrag-doppelt-regie.js` (26):** Server (anlegen, bearbeiten, gelöscht, nur Notiz geändert,
+Unterschiede je Feld), Formular (Abbrechen speichert nichts, „Trotzdem speichern" speichert), Regie-Filter Server
+und Auswahl.
+
+**Gegenproben**, alle an der erwarteten Stelle rot:
+- **GD1** Server prüft nicht → 7 rot.
+- **GD2** Formular fragt nicht → 2 rot.
+- **GD3a** Projekt ignoriert (erster Entwurf) → 2 rot.
+- **GD3b** Beschreibung ignoriert → 1 rot.
+- **GD4** „Ja" wieder „jede Art" → 1 rot.

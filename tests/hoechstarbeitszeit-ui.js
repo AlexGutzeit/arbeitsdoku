@@ -141,7 +141,9 @@ const plusTage = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCD
     for (const nutzer of [erwachsen, jung]) {
       for (let i = 0; i < 2; i++) {
         const r = await req('POST', '/api/entries', admin.token,
-          { date: tagD, time_from: '07:00', time_to: '11:00', break_minutes: 0, user_id: nutzer.id });
+          // Zwei zeitgleiche AUFTRÄGE — mit eigener Beschreibung, wie im Betrieb. In jedem Feld gleiche Einträge hält die
+          // App seit dem 06.10.2026 für ein Doppel und fragt nach (routes/entries.js, doppelterEintrag).
+          { date: tagD, time_from: '07:00', time_to: '11:00', break_minutes: 0, user_id: nutzer.id, description: 'Auftrag ' + (i + 1) });
         if (r.status >= 300) throw new Error('Vorbereitung parallel: ' + r.text);
       }
     }

@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**282 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**283 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -125,6 +125,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `deploy-vollstaendigkeit.js` | Probe: Überträgt deploy.sh WIRKLICH alles, was der Server zum Starten braucht? |
 | `doc-limits.js` | Dokument-Limits-Test: kombinierter /limits-Endpunkt (Validierung + Pro-Datei≤Gesamt) und das |
 | `double-submit-ui.js` | Puppeteer-Test: globaler Doppel-Submit-Schutz. |
+| `eintrag-doppelt-regie.js` | Doppelte Einträge (Rückfrage statt stillem Doppel) und der Regie-Filter mit allen Arten — Alex, 06.10.2026. |
 | `entry-start-and-note-ui.js` | Puppeteer-Test: |
 | `entwurf-prodklon.js` | Prod-Klon-Pruefung fuer B4 (Entwurfs-Sicherung). |
 | `entwurf-sicherung-ui.js` | Puppeteer-Test (B4): Entwurfs-Sicherung fuer Formulare. |
