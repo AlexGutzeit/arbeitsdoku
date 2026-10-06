@@ -4805,3 +4805,19 @@ und Auswahl.
 - **GD3a** Projekt ignoriert (erster Entwurf) → 2 rot.
 - **GD3b** Beschreibung ignoriert → 1 rot.
 - **GD4** „Ja" wieder „jede Art" → 1 rot.
+
+## Suche findet Projekt und Person; Jahr/Gesamt mit Filter nur Stunden (06.10.2026)
+
+Alex, am Handy: „Wenn ich nach Projekt Benkert filtere, kommt mein einer Tag. Wenn ich im Freitext ‚Benk' eingebe,
+wird nichts gefunden. Hab ich einen Denkfehler?" — Nein. Die Suche (`routes/entries.js`) schaute nur in Beschreibung,
+Adresse, Kunde und `project_text`. Ein aus der LISTE gewähltes Projekt steht in `projects`, `project_text` bleibt leer.
+Von 193 Einträgen des Projekts hatten nur 5 den Namen zufällig auch in Beschreibung/Kunde/Adresse. Jetzt sucht sie
+zusätzlich in `p.name` und `u.name` (Person; Alex' Wahl).
+
+Auf seinen Bildern stand außerdem mit Projekt-/Suchfilter in jedem Monat „⚠️ 12", „🏥 10" usw. Die gehören zum ganzen
+Tag. Entscheidung: Mit Projekt-, Such- oder Regie-Filter zeigen Jahr und Gesamt nur die passenden Stunden, dazu ein
+Satz über dem Raster (`nurStunden` in `zeitraumRasterHtml`). Der Abwesenheits-Filter zählt nicht dazu.
+
+Tests: `eintrag-doppelt-regie` +5 (Suche), `zeitnachweis-jahr-ui` +5 (Filteranzeige). Gegenproben: ohne Projektname
+→ 1 rot, ohne Person → 1 rot, Filteranzeige immer „alles" → 4 rot. Gebaut im Worktree, solange die Suite für die
+Doppel-Rückfrage lief (die durfte nicht mitten im Lauf neuen Code sehen).

@@ -265,7 +265,8 @@ Eintrag gibt es schon: 01.09.2026, 07:00–15:30, Heizung Müller. Trotzdem spei
 Bearbeiten. Kein Verbot; wer bewusst zwei gleiche will, speichert trotzdem. Unterscheidet sich ein Feld, ist es kein
 Doppel: Zeitgleiche Arbeit an zwei Aufträgen bleibt ohne Rückfrage möglich.
 
-**Filter:** Projekt, Abwesenheit, Suchtext und **Regie** — *Alle · Nein · jede Art · Ja · pauschal · Büro · Lager ·
+**Filter:** Projekt, Abwesenheit, Suchtext (durchsucht Beschreibung, Adresse, Kunde, Projekt — auch den Namen eines
+aus der Liste gewählten Projekts — und den Namen der Person) und **Regie** — *Alle · Nein · jede Art · Ja · pauschal · Büro · Lager ·
 Intern*. „jede Art" ist alles außer „Nein"; „Ja" ist nur echte Regie (bis 06.10.2026 umfasste „Ja" alle Arten, also
 auch Büro-, Lager- und Interne Zeiten).
 
@@ -273,7 +274,9 @@ auch Büro-, Lager- und Interne Zeiten).
 als Spalten. **Jahr** und **Gesamt** fassen zusammen: Beim Jahr ist jede Zeile ein Monat, bei Gesamt jede Zeile ein
 Jahr seit dem ersten Eintrag. Eine Zelle zeigt *Nettostunden / Arbeitstage*, darunter die Abwesenheiten als Zeichen
 mit der Zahl der Tage (Mo–Fr, z. B. „🌴 2") und wie viele Verstöße bzw. Hinweise darin liegen („⚠️ 1"). Im Spaltenkopf
-steht die Summe des Zeitraums. **Antippen führt eine Stufe tiefer:** Gesamt → Jahr → Monat → Tag. Gesamt beginnt —
+steht die Summe des Zeitraums. **Mit Projekt-, Such- oder Regie-Filter zeigen Jahr und Gesamt nur die passenden
+Stunden** — Abwesenheiten und ⚠️ gehören zum ganzen Tag, nicht zum Projekt (ein Satz über dem Raster sagt das).
+**Antippen führt eine Stufe tiefer:** Gesamt → Jahr → Monat → Tag. Gesamt beginnt —
 wie in der Statistik — beim ersten Eintrag („Gesamt · seit Juni 2024") und hat nichts zu blättern. Filter, Mitarbeiter-
 Auswahl und die Kacheln oben (für Mitarbeiter Soll, Über/Unter und Überstunden gesamt) wirken in allen Ansichten
 gleich; das Soll eines Jahres rechnet wie in der Statistik über das ganze Jahr.
