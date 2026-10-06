@@ -111,6 +111,9 @@ auf das Bild **oben im Seitenmenü** neben Name und Rolle. Alle führen an diese
   und ohne Bild nicht durcheinander stehen. Gelöschte Konten und automatische Meldungen bekommen keinen Kreis.
 
 Jedes Bild lässt sich jederzeit wieder **entfernen**. Sehen können es nur angemeldete Kolleginnen und Kollegen.
+Fehlt eine Bilddatei auf dem Server (z. B. nach dem Zurückspielen einer Sicherung ohne Bilder), zeigt die App an
+dieser Stelle Initialen bzw. nichts und fragt in derselben Sitzung nicht erneut nach — je Person und Größe gibt es
+höchstens einen Abruf.
 
 **Du wählst den Ausschnitt selbst.** Nach der Dateiwahl geht ein Fenster auf: Der Kreis steht
 fest, das Foto wird darunter verschoben und gezoomt — am Rechner mit Maus, Mausrad oder Regler,
@@ -187,7 +190,8 @@ Sache, denn sonst käme das verlorene Handy weiterhin ohne Code hinein. Folge: B
 Anmeldung fragt die App auch auf **diesem** Gerät wieder nach einem Code.
 
 **„Meine Daten herunterladen"** gibt alles Gespeicherte als Datei aus (Auskunft nach Art. 15 DSGVO),
-ohne Passwort und ohne den Zwei-Faktor-Schlüssel.
+ohne Passwort und ohne den Zwei-Faktor-Schlüssel — auch, was man unter *Für die Kollegen* eingetragen hat
+(mit den Haken, also auch nicht freigegebene Telefonnummer oder E-Mail).
 
 **Passwort ändern:** Jeder ändert sein eigenes Passwort selbst; das aktuelle Passwort ist dabei
 Pflicht (sonst könnte an einem unbeaufsichtigten, noch angemeldeten Gerät jemand den Zugang
@@ -1042,6 +1046,11 @@ doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusamm
 | **Chef** | Wie Admin bei Team-/Projekt-/Einstellungs-Verwaltung und Sicht auf alle Daten – ohne Audit-Log. Papierkorb: **voller** Zugriff (alle gelöschten Einträge/Abwesenheiten + ausgestellte Mitarbeiter wiederherstellen). |
 | **Buchhalter** | **Lesende** Manager-Sicht auf alle Mitarbeiterdaten/Statistiken/Nachweise (kein Verwalten von Stammdaten). Bei Abwesenheiten **read-only**: sieht alle, kann aber fremde **nicht** genehmigen/ablehnen/löschen/bearbeiten und keine Fremd-/Feiertagseinträge anlegen (eigene Abwesenheiten normal). Papierkorb: nur eigene. |
 | **Mitarbeiter** | Nur die **eigenen** Daten (Zeiten, Abwesenheiten, Planung) + globale Feiertage. Papierkorb: sieht/stellt nur **selbst Gelöschtes** wieder her (kein Zugriff auf ausgestellte Mitarbeiter). Ausnahme: das **Auftrags-Board** ist bewusst für alle sichtbar (damit sich jeder freie Arbeit ziehen kann); anlegen/ändern/erledigen bleibt Chef/Admin. |
+
+**Für alle Rollen:** Unter [🤝 Kollegen](#-kollegen) sieht jeder Name, Bild und Rolle aller aktiven Kollegen (ohne das
+Admin-Konto) und dazu **nur**, was jeder **selbst** freigegeben hat (Geburtstag, Telefon, E-Mail, Infotext) sowie das
+ausgeliehene Werkzeug, das die Werkzeugliste ohnehin allen zeigt. Zeiten, Abwesenheiten und Planung anderer bleiben,
+wie in der Tabelle beschrieben, verborgen.
 
 > **Aussperr-Schutz:** Der **letzte** verbleibende (aktive) Admin kann weder herabgestuft noch ausgestellt werden – die App würde sonst ohne Administrator dastehen. Lege zuerst einen weiteren Admin an; bei mehreren Admins sind Herabstufen und Ausstellen ganz normal möglich.
 

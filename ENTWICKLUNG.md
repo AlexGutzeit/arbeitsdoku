@@ -2578,8 +2578,17 @@ Personalnummer), `node tests/lohn-export-prodklon.js` gegen eine Kopie der Produ
 (`routes/user-hours.js`) exakt dieselben Zahlen liefert wie die vorherigen Einzelkopien.
 
 Scroll-Verhalten: `node tests/scroll-ruckeln-ui.js` (jede Seite wird durchgescrollt; jeder Rücksprung
-wird gemeldet – Seiten, die innen scrollen wie Planung und Auftrags-Board, werden dort gemessen),
-`node tests/scroll-ruckeln-prodklon.js` gegen eine Kopie der Produktivdaten.
+wird gemeldet – Seiten, die innen scrollen wie Planung und Auftrags-Board, werden dort gemessen; seit
+05.10.2026 MIT geladenen Profilbildern und der Seite Meldungen), `node tests/scroll-ruckeln-prodklon.js`
+gegen eine Kopie der Produktivdaten. Dieser bekommt eine feste Wetterantwort (ohne Wetterkarte ist die echte
+Willkommensseite gar nicht scrollbar) und scrollt in Schritten nach Seitenlänge — mit festen 60 px war die
+kurze echte Seite unten, bevor die Uhr tickte, und der nachgebaute Juli-Fehler blieb unentdeckt.
+
+Seit Oktober 2026 steht zu jedem neuen Test ein eigener Abschnitt am Ende dieser Datei (mit Gegenproben); die
+vollständige Liste erzeugt `node scripts/generate-test-index.js` in `tests/README.md`. Die Tests vom 05.10.2026:
+`kollegen.js` / `kollegen-ui.js` (Kollegen), `menue-gruppen-ui.js` (Menü-Gruppen auf UND zu), `avatar-orte-ui.js`
+(Profilbild an allen Stellen), `avatar-fehlt-ui.js` (fehlende Bilddatei hält keine Verbindung offen),
+`twofa-eigenes-intervall.js` (Vorgabe der Rolle = Minimum, 03.10.).
 
 Tastatur/Screenreader: `node tests/barrierefrei-ui.js` (Fokusfalle in Dialogen, Escape, Fokus-Rückkehr,
 Landmarken, Namen der Symbol-Knöpfe), `node tests/barrierefrei-prodklon.js` gegen eine Kopie der
