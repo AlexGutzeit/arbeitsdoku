@@ -4821,3 +4821,10 @@ Satz über dem Raster (`nurStunden` in `zeitraumRasterHtml`). Der Abwesenheits-F
 Tests: `eintrag-doppelt-regie` +5 (Suche), `zeitnachweis-jahr-ui` +5 (Filteranzeige). Gegenproben: ohne Projektname
 → 1 rot, ohne Person → 1 rot, Filteranzeige immer „alles" → 4 rot. Gebaut im Worktree, solange die Suite für die
 Doppel-Rückfrage lief (die durfte nicht mitten im Lauf neuen Code sehen).
+
+**Nachtrag: Groß/klein bei Umlauten.** Alex fragte, ob die Suche die Arbeitsbeschreibung durchsucht („Wechselrichter")
+— ja (5 Treffer in den echten Daten), und Groß/klein ist egal. Beim Prüfen fiel auf: SQLites `LIKE` kennt Groß/Klein
+nur für A–Z, „übergabe" fand „Übergabe" nicht, „ölwechsel" nicht „Ölwechsel". Die Suche vergleicht deshalb jetzt in JS
+nach der Abfrage (`toLocaleLowerCase('de')`, NFC für zerlegt geschickte Umlaute). Die Abfrage hat kein LIMIT, also
+wird nichts vorher abgeschnitten. Gegenproben: ohne Kleinschreibung → 4 rot, ohne NFC → 1 rot, ohne Projektnamen →
+1 rot.

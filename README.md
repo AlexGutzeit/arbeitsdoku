@@ -266,7 +266,8 @@ Bearbeiten. Kein Verbot; wer bewusst zwei gleiche will, speichert trotzdem. Unte
 Doppel: Zeitgleiche Arbeit an zwei Aufträgen bleibt ohne Rückfrage möglich.
 
 **Filter:** Projekt, Abwesenheit, Suchtext (durchsucht Beschreibung, Adresse, Kunde, Projekt — auch den Namen eines
-aus der Liste gewählten Projekts — und den Namen der Person) und **Regie** — *Alle · Nein · jede Art · Ja · pauschal · Büro · Lager ·
+aus der Liste gewählten Projekts — und den Namen der Person; Groß- und Kleinschreibung egal, auch bei Umlauten:
+„übergabe" findet „Übergabe") und **Regie** — *Alle · Nein · jede Art · Ja · pauschal · Büro · Lager ·
 Intern*. „jede Art" ist alles außer „Nein"; „Ja" ist nur echte Regie (bis 06.10.2026 umfasste „Ja" alle Arten, also
 auch Büro-, Lager- und Interne Zeiten).
 

@@ -112,11 +112,7 @@ router.get('/', authenticate, (req, res) => {
     if (typeof search === 'string' && search.length > 100) {
       return res.status(400).json({ error: 'Suchbegriff zu lang (max. 100 Zeichen)' });
     }
-    // Auch der Name des aus der LISTE gewählten Projekts und der Name der Person (Alex, 06.10.2026: „Benk" fand
-    // seinen Benkert-Tag nicht — der Projektname steht dann in projects, nicht im Freitext project_text).
-    sql += ' AND (e.description LIKE ? OR e.address LIKE ? OR e.client LIKE ? OR e.project_text LIKE ? OR p.name LIKE ? OR u.name LIKE ?)';
-    const s = `%${search}%`;
-    params.push(s, s, s, s, s, s);
+    // Gesucht wird unten nach der Abfrage (siehe „Suche").
   }
   // Regie-Filter (Alex, 06.10.2026): jede Art einzeln (1 Ja, 2 pauschal, 3 Büro, 4 Lager, 5 Intern) oder „jede"
   // für alles außer „Nein". Früher hieß „Ja" schon „jede Art" — so kamen Büro-, Lager- und Interne Zeiten mit.
@@ -132,6 +128,18 @@ router.get('/', authenticate, (req, res) => {
   sql += ' ORDER BY e.date DESC, e.time_from ASC';
 
   let entries = db.prepare(sql).all(...params);
+
+  // Suche (Alex, 06.10.2026). Durchsucht Beschreibung, Adresse, Kunde, Freitext-Projekt, den Namen des aus der LISTE
+  // gewählten Projekts („Benk" fand den Benkert-Tag nicht — der Name steht dann in projects) und den Namen der Person.
+  // Groß/klein egal, AUCH bei Umlauten: SQLites LIKE kennt Groß/Klein nur für A–Z („übergabe" fand „Übergabe" nicht).
+  // Deshalb hier in JS; NFC, weil iPhones Umlaute manchmal zerlegt schicken (u + ¨). Die Abfrage hat kein LIMIT,
+  // vorher wird also nichts abgeschnitten. Die persönliche Notiz bleibt bewusst außen vor (privat).
+  if (search) {
+    const klein = (v) => String(v || '').normalize('NFC').toLocaleLowerCase('de');
+    const q = klein(search);
+    entries = entries.filter(e => [e.description, e.address, e.client, e.project_text, e.project_name, e.user_name]
+      .some(f => klein(f).includes(q)));
+  }
 
   // Persönliche Notizen nur für Mitarbeiter selbst und Admin sichtbar
   if (role !== 'admin') {

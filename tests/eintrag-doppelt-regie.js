@@ -103,6 +103,12 @@ const TAG = '2026-09-01';   // fester Tag in der Vergangenheit — nie „heute"
     ok('„Groß" findet die Einträge von Moritz Groß (Name der Person)', (await suche('Groß', admin)).length >= 1 && (await suche('Groß', admin)).every(e => e.user_name === 'Moritz Groß'));
     ok('die Beschreibung wird weiter durchsucht', (await suche('Zweiter Auftrag')).length === 1);
     ok('was nirgends steht, findet nichts', (await suche('Gibtsnicht')).length === 0);
+    // Groß/klein bei Umlauten: SQLites LIKE kannte das nur für A–Z
+    await req('POST', '/api/entries', T, { date: '2026-09-02', time_from: '07:00', time_to: '09:00', break_minutes: 0, description: 'Übergabe Ölwechsel Wechselrichter' });
+    ok('„übergabe" findet „Übergabe" (Umlaut am Anfang, klein getippt)', (await suche('übergabe')).length === 1);
+    ok('„ÖLWECHSEL" findet „Ölwechsel"', (await suche('ÖLWECHSEL')).length === 1);
+    ok('„wechselrichter" findet „Wechselrichter"', (await suche('wechselrichter')).length === 1);
+    ok('ein zerlegt geschicktes „u + ¨" findet „Übergabe" auch', (await suche('u\u0308bergabe')).length === 1);
 
     console.log('\n── Oberfläche: die Rückfrage im Formular ──');
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
