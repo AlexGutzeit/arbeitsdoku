@@ -56,12 +56,6 @@ function req(m, p, t, b) {
     const n2 = (await req('POST', '/api/notes', t.olga, { title: 'Einkaufsliste', body: 'Schrauben' })).body.note.id;
     for (const n of [n1, n2]) await req('PUT', `/api/notes/${n}/shares`, t.olga, { shares: [{ user_id: ids.lena, permission: 'read' }] });
 
-    // E vorbereiten: Lenas Erinnerung zur nächsten (sicher noch kommenden) Minute — der echte Zeitplaner läuft
-    // 15 s nach dem Start und dann minütlich; bis die anderen Teile durch sind, ist sie fällig.
-    const um = berlinJetzt(new Date(Date.now() + (new Date().getSeconds() > 45 ? 120000 : 60000))).slice(0, 16);
-    const el = await req('POST', `/api/notes/${n1}/erinnerungen`, t.lena, { datum: um.slice(0, 10), uhrzeit: um.slice(11, 16), hinweis: 'Angebot muss raus' });
-    ok('Vorbereitung: Lenas Erinnerung für ' + um + ' gestellt', el.status === 201, JSON.stringify(el.body));
-
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const neueSeite = async (handy) => {
       const ctx = await browser.createBrowserContext();
@@ -155,6 +149,13 @@ function req(m, p, t, b) {
     ok('… gestellt und geschlossen: die Karte zeigt sie gleich, ohne Neuladen', (await kartenZeile(O, n2)) === '🔔 ' + umText(plus(HEUTE, 7), '07:00'), await kartenZeile(O, n2));
 
     console.log('C · Leserin');
+    // Lenas Erinnerung zur nächsten (sicher noch kommenden) Minute — ERST JETZT, direkt vor der Prüfung, dass sie noch
+    // wartet. Früher wurde sie gleich zu Beginn gestellt: Brauchten A und B unter Suite-Last länger als 1–2 Minuten,
+    // war sie hier schon ausgelöst, und zwei Prüfungen fielen ohne Fehler in der App um (06.10.2026). E wartet danach
+    // bis zu 170 s auf den echten Zeitplaner (15 s nach dem Start, dann minütlich).
+    const um = berlinJetzt(new Date(Date.now() + (new Date().getSeconds() > 45 ? 120000 : 60000))).slice(0, 16);
+    const el = await req('POST', `/api/notes/${n1}/erinnerungen`, t.lena, { datum: um.slice(0, 10), uhrzeit: um.slice(11, 16), hinweis: 'Angebot muss raus' });
+    ok('Vorbereitung: Lenas Erinnerung für ' + um + ' gestellt', el.status === 201, JSON.stringify(el.body));
     const L2 = await neueSeite();
     await anmelden(L2, 'lena');
     await zu(L2, '/notes'); await L2.waitForSelector('.note-card'); await sleep(400);

@@ -4834,3 +4834,9 @@ von 12:37. Vollsicherung `arbeitsdoku_backup_20261006-141628.adbk` (dreifach, gl
 Rückkehrpunkt `vor-doppel-regie-deploy` (= `83ba49c`). Datenbank: 60/60 Tabellen, einzige Abweichung `tool_checkouts`
 47 → 46 — wieder die 3-Monats-Bereinigung beim Start (das Dienstprotokoll meldet „1 alte Einträge bereinigt").
 Suche + Filteranzeige (Zweig `suche-und-filteranzeige`) sind danach auf develop gekommen, noch nicht ausgerollt.
+
+**Zeitfalle in `notiz-erinnerungen-ui` (06.10.2026, Fund der Suite).** Lenas Erinnerung wurde gleich zu Beginn auf
+„in 1–2 Minuten" gestellt; die Teile A und B davor dauern unter Suite-Last länger. Dann war sie schon ausgelöst, bevor
+C prüfte, dass sie noch wartet → vier rote Prüfungen ohne Fehler in der App (allein lief der Test grün, in drei Suiten
+an diesem Tag auch). Jetzt wird sie erst direkt vor C gestellt. Beweis mit künstlichen 2 Minuten vor C: alte Fassung
+genau dieselben vier roten Prüfungen wie in der Suite, neue 25/25.
