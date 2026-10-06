@@ -116,8 +116,13 @@ router.get('/', authenticate, (req, res) => {
     const s = `%${search}%`;
     params.push(s, s, s, s);
   }
-  if (regie === '1') {
+  // Regie-Filter (Alex, 06.10.2026): jede Art einzeln (1 Ja, 2 pauschal, 3 Büro, 4 Lager, 5 Intern) oder „jede"
+  // für alles außer „Nein". Früher hieß „Ja" schon „jede Art" — so kamen Büro-, Lager- und Interne Zeiten mit.
+  if (regie === 'jede') {
     sql += ' AND e.has_regie > 0';
+  } else if (/^[1-9]$/.test(String(regie || ''))) {
+    sql += ' AND e.has_regie = ?';
+    params.push(Number(regie));
   } else if (regie === '0') {
     sql += ' AND (e.has_regie = 0 OR e.has_regie IS NULL)';
   }
@@ -188,6 +193,24 @@ router.get('/:id', authenticate, (req, res) => {
 });
 
 // Eintrag erstellen
+// Gibt es denselben Eintrag schon? (Alex, 06.10.2026) — gleiche Person, gleicher Tag, gleiche Von/Bis-Zeit und dasselbe
+// Projekt (Auswahl oder Freitext). Gefunden wurden drei solche Doppel: zwei Doppel-Tipper aus der Zeit vor dem
+// Doppel-Klick-Schutz und einer, der von Hand mehrmals eingetragen wurde. Die Zeit zählt die App ohnehin nur einmal,
+// zieht aber die Pause jeder Kopie ab — die Tage standen zu knapp da.
+// Kein Verbot: Wer bewusst trotzdem speichert, schickt `doppelt_ok` mit (das Formular fragt nach). Gleiche Zeit mit
+// ANDEREM Projekt ist kein Doppel, sondern zeitgleiche Arbeit an zwei Aufträgen.
+function doppelterEintrag(db, { userId, date, von, bis, projectId, projectText, ohneId }) {
+  return db.prepare(`SELECT e.id, COALESCE(p.name, e.project_text) AS projekt FROM entries e LEFT JOIN projects p ON p.id = e.project_id
+    WHERE e.user_id = ? AND e.date = ? AND e.time_from = ? AND e.time_to = ? AND e.deleted_at IS NULL
+      AND COALESCE(e.project_id, 0) = ? AND COALESCE(e.project_text, '') = ? AND e.id != ? LIMIT 1`)
+    .get(userId, date, von, bis, Number(projectId) || 0, projectText || '', ohneId || 0);
+}
+function doppelAntwort(res, date, von, bis, d) {
+  const [j, m, t] = date.split('-');
+  return res.status(409).json({ code: 'EINTRAG_DOPPELT', vorhanden_id: d.id,
+    error: `Diesen Eintrag gibt es schon: ${t}.${m}.${j}, ${von}–${bis}${d.projekt ? ', ' + d.projekt : ''}.` });
+}
+
 router.post('/', authenticate, (req, res) => {
   const db = getDb();
   const { date, time_from, time_to, break_minutes, address, client, project_id, project_text, description, personal_note, user_id, has_regie, regie_user_id } = req.body;
@@ -229,6 +252,11 @@ router.post('/', authenticate, (req, res) => {
   // Abrechnungs-Abschluss: kein Nachtragen in einen bezahlten Zeitraum (Admin nur mit Begruendung)
   const sperre = pruefeSperre(db, [date], req.user, req.body.reason);
   if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
+  if (!req.body.doppelt_ok) {
+    const d = doppelterEintrag(db, { userId: targetUserId, date, von: time_from, bis: time_to, projectId: project_id, projectText: project_text });
+    if (d) return doppelAntwort(res, date, time_from, time_to, d);
+  }
 
   const net_hours = calculateNetHours(time_from, time_to, break_minutes || 0);
 
@@ -289,6 +317,14 @@ router.put('/:id', authenticate, (req, res) => {
   // bezahlten Zeitraum herausschieben (oder nachtraeglich hinein).
   const sperre = pruefeSperre(db, [entry.date, date], req.user, reason);
   if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
+
+  if (!req.body.doppelt_ok) {
+    const neuDatum = date || entry.date;
+    const d = doppelterEintrag(db, { userId: entry.user_id, date: neuDatum, von: newFrom, bis: newTo, ohneId: entry.id,
+      projectId: project_id !== undefined ? project_id : entry.project_id,
+      projectText: project_text !== undefined ? project_text : entry.project_text });
+    if (d) return doppelAntwort(res, neuDatum, newFrom, newTo, d);
+  }
 
   const net_hours = calculateNetHours(newFrom, newTo, newBreak);
 

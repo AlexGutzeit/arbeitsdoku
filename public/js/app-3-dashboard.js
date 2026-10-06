@@ -147,8 +147,10 @@ async function renderDashboardContent() {
       </select>
       <select id="filter-regie">
         <option value="" ${S.filterRegie === '' ? 'selected' : ''}>Regie: Alle</option>
-        <option value="1" ${S.filterRegie === '1' ? 'selected' : ''}>Regie: Ja</option>
         <option value="0" ${S.filterRegie === '0' ? 'selected' : ''}>Regie: Nein</option>
+        <option value="jede" ${S.filterRegie === 'jede' ? 'selected' : ''}>Regie: jede Art</option>
+        ${Object.entries(REGIE_LABELS).filter(([k]) => k !== '0').map(([k, l]) =>
+          `<option value="${k}" ${S.filterRegie === k ? 'selected' : ''}>Regie: ${esc(l)}</option>`).join('')}
       </select>
       <select id="filter-absence-type">
         ${absenceTypeOptions.map(([v, l]) => `<option value="${v}" ${S.filterAbsenceType === v ? 'selected' : ''}>${l}</option>`).join('')}
@@ -1648,13 +1650,19 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
     }
 
     try {
-      if (isEdit) {
-        await api('PUT', '/api/entries/' + editId, body);
-        toast('Eintrag aktualisiert', 'success');
-      } else {
-        await api('POST', '/api/entries', body);
-        toast('Eintrag erstellt', 'success');
+      const speichern = () => isEdit ? api('PUT', '/api/entries/' + editId, body) : api('POST', '/api/entries', body);
+      try {
+        await speichern();
+      } catch (err) {
+        // Denselben Eintrag gibt es schon (Alex, 06.10.2026) — kein Verbot, sondern eine Rückfrage
+        if (err.code !== 'EINTRAG_DOPPELT') throw err;
+        const trotzdem = await confirmModal(err.message + ' Trotzdem speichern?',
+          { title: 'Eintrag gibt es schon', okLabel: 'Trotzdem speichern' });
+        if (!trotzdem) return;
+        body.doppelt_ok = true;
+        await speichern();
       }
+      toast(isEdit ? 'Eintrag aktualisiert' : 'Eintrag erstellt', 'success');
       entwurfLoeschen(entwurfName);   // gespeichert → Entwurf hat sich erledigt
       navigate('/');
     } catch (err) { toast(err.message, 'error'); }
