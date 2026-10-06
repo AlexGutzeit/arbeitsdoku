@@ -76,6 +76,13 @@ async function renderDashboardContent() {
   }
   if (renderStale(_tok)) return;                   // verspätete Antwort verwerfen
 
+  // Gesamt beginnt beim ersten Eintrag — wie in der Statistik, damit Soll und Überstunden dort und hier
+  // dieselben Zahlen ergeben. Ohne Einträge: heute.
+  if (S.view === 'total') {
+    S._gesamtVon = S.allEntries.reduce((min, e) => (!min || e.date < min ? e.date : min), null) || range.to;
+    range.from = S._gesamtVon;
+  }
+
   // Gesetzliche Verstösse einmal je Neuaufbau ermitteln. Die Wache auf `typeof` ist kein Zierrat:
   // Behält ein Browser eine alte index.html, die arbeitszeitrecht.js gar nicht anfordert, gäbe es
   // sonst mitten im Aufbau einen Fehler und die Hauptseite bliebe beim Spinner stehen. So
@@ -190,6 +197,10 @@ async function renderDashboardContent() {
     contentHtml = renderTimelineHtml(visibleEntries, filteredAbsences, verstoesse);
   } else if (S.view === 'week') {
     contentHtml = renderWeekGridHtml(visibleEntries, range, filteredAbsences, verstoesse);
+  } else if (S.view === 'year') {
+    contentHtml = renderYearGridHtml(visibleEntries, range, filteredAbsences, verstoesse);
+  } else if (S.view === 'total') {
+    contentHtml = renderTotalGridHtml(visibleEntries, range, filteredAbsences, verstoesse);
   } else {
     contentHtml = renderMonthGridHtml(visibleEntries, range, filteredAbsences, verstoesse);
   }
@@ -199,12 +210,14 @@ async function renderDashboardContent() {
       <button class="${S.view === 'day' ? 'active' : ''}" data-view="day">Tag</button>
       <button class="${S.view === 'week' ? 'active' : ''}" data-view="week">Woche</button>
       <button class="${S.view === 'month' ? 'active' : ''}" data-view="month">Monat</button>
+      <button class="${S.view === 'year' ? 'active' : ''}" data-view="year">Jahr</button>
+      <button class="${S.view === 'total' ? 'active' : ''}" data-view="total">Gesamt</button>
     </div>
     <div class="date-nav">
-      <button id="date-prev" aria-label="Vorheriger Zeitraum" title="Zurück">&#8249;</button>
+      ${S.view === 'total' ? '' : '<button id="date-prev" aria-label="Vorheriger Zeitraum" title="Zurück">&#8249;</button>'}
       <span class="current-period">${getPeriodLabel()}</span>
-      <button id="date-next" aria-label="Nächster Zeitraum" title="Weiter">&#8250;</button>
-      <button id="date-today" class="date-today-btn">Jetzt</button>
+      ${S.view === 'total' ? '' : `<button id="date-next" aria-label="Nächster Zeitraum" title="Weiter">&#8250;</button>
+      <button id="date-today" class="date-today-btn">Jetzt</button>`}
     </div>
     <div class="summary-grid">
       <div class="summary-card">
@@ -348,7 +361,7 @@ async function renderDashboardContent() {
       if (closest) {
         e.stopPropagation();
         S.currentDate = new Date(closest.dataset.jumpDate + 'T12:00:00');
-        S.view = 'day';
+        S.view = closest.dataset.jumpView || 'day';   // Jahr → Monat, Gesamt → Jahr, sonst Tag
         renderDashboardContent();
       }
     });
@@ -778,6 +791,91 @@ function renderMonthGridHtml(entries, range, absences = [], verstoesse) {
 //
 // Pausen unter einer Stunde stehen in Minuten („45 min Pause"), darueber als Zeit („2:30 Pause") —
 // eine Woche mit „150 min Pause" muesste man im Kopf umrechnen.
+// ── Jahr und Gesamt (Alex, 06.10.2026) ────────────────────────────────────────────────────────────
+// Zeilen sind Zeiträume — beim Jahr die zwölf Monate, bei Gesamt die Jahre seit dem ersten Eintrag —, Spalten die
+// Personen wie in Woche und Monat. Eine Zelle fasst zusammen: Nettostunden / Arbeitstage, Abwesenheiten als Zeichen
+// mit der Zahl der Tage (Mo–Fr, wie im Monatsraster) und wie viele Verstöße bzw. Hinweise darin liegen. Antippen
+// führt eine Stufe tiefer: Gesamt → Jahr → Monat (data-jump-view). Die Einzelheiten stehen dort, nicht hier.
+const ZN_MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+function renderYearGridHtml(entries, range, absences = [], verstoesse) {
+  const y = Number(range.from.slice(0, 4));
+  const zeilen = ZN_MONATE.map((name, m) => {
+    const von = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    return { von, bis: formatDateISO(new Date(y, m + 1, 0)), label: name, sprung: von, ansicht: 'month' };
+  });
+  return zeitraumRasterHtml(zeilen, entries, range, absences, verstoesse, 'Monat', 'Keine Einträge in diesem Jahr');
+}
+
+function renderTotalGridHtml(entries, range, absences = [], verstoesse) {
+  const zeilen = [];
+  for (let y = Number(range.from.slice(0, 4)); y <= Number(range.to.slice(0, 4)); y++) {
+    // Das erste und das laufende Jahr nur so weit, wie der Gesamtzeitraum reicht (erster Eintrag bis heute)
+    const von = `${y}-01-01` < range.from ? range.from : `${y}-01-01`;
+    const bis = `${y}-12-31` > range.to ? range.to : `${y}-12-31`;
+    zeilen.push({ von, bis, label: String(y), sprung: `${y}-01-01`, ansicht: 'year' });
+  }
+  return zeitraumRasterHtml(zeilen, entries, range, absences, verstoesse, 'Jahr', 'Noch keine Einträge');
+}
+
+function zeitraumRasterHtml(zeilen, entries, range, absences, verstoesse, kopf, leerText) {
+  const columns = getGridColumns(entries, range);
+  if (columns.length === 0) {
+    return `<div class="empty-state"><div class="icon">&#128203;</div><p>${leerText}</p></div>`;
+  }
+  let headerHtml = `<th class="grid-row-header">${kopf}</th>`;
+  columns.forEach((col, i) => {
+    const c = PALETTE[i % PALETTE.length];
+    const summeText = summeFuer(entries.filter(e => e.user_id === col.id));
+    headerHtml += `<th class="grid-col-header" style="color:${c}">${rasterBild(col)}${esc(col.name)}`
+      + (summeText ? `<div class="grid-col-header-sum">${summeText}</div>` : '')
+      + `</th>`;
+  });
+
+  const jePerson = {};
+  entries.forEach(e => { (jePerson[e.user_id] = jePerson[e.user_id] || []).push(e); });
+  const heute = formatDateISO(new Date());
+  const tageText = (n) => n === 1 ? '1 Tag' : `${n} Tage`;
+
+  let bodyHtml = '';
+  zeilen.forEach(z => {
+    const jetzt = heute >= z.von && heute <= z.bis;
+    bodyHtml += `<tr class="${jetzt ? 'grid-today' : ''}"><td class="grid-row-header"><strong>${esc(z.label)}</strong></td>`;
+    columns.forEach(col => {
+      const eigene = (jePerson[col.id] || []).filter(e => e.date >= z.von && e.date <= z.bis);
+      const arbeitstage = new Set(eigene.map(e => e.date)).size;
+      // Abwesenheiten: Tage je Art (Mo–Fr). Verstöße: Tage mit Tages-Verstoß + Wochen (am Montag gezählt,
+      // damit eine Woche über den Monatswechsel nicht doppelt zählt).
+      const abw = {};
+      let verstoss = 0;
+      for (const d = new Date(z.von + 'T12:00:00'); formatDateISO(d) <= z.bis; d.setDate(d.getDate() + 1)) {
+        const tag = formatDateISO(d);
+        const wd = d.getDay();
+        if (wd !== 0 && wd !== 6) {
+          for (const art of new Set(getAbsencesForDay(col.id, tag, absences).map(a => a.type))) abw[art] = (abw[art] || 0) + 1;
+        }
+        if (verstossTag(verstoesse, col.id, tag).length) verstoss++;
+        if (wd === 1 && verstossWoche(verstoesse, col.id, tag).length) verstoss++;
+      }
+      const abwHtml = Object.entries(abw).map(([art, n]) => {
+        const t = ABSENCE_TYPES[art] || { label: art, icon: '' };
+        return `<span class="grid-zeitraum-abw-art" title="${esc(t.label)}: ${tageText(n)}">${t.icon} ${n}</span>`;
+      }).join('');
+      bodyHtml += `<td class="grid-cell grid-zeitraum-zelle${verstoss ? ' grid-cell--verstoss' : ''}" data-jump-date="${z.sprung}" data-jump-view="${z.ansicht}">`
+        + (eigene.length ? `<div class="grid-cell-total">${fmtH(calcActualHours(eigene))} / ${tageText(arbeitstage)}</div>` : '')
+        + (abwHtml ? `<div class="grid-zeitraum-abw">${abwHtml}</div>` : '')
+        + (verstoss ? `<span class="verstoss-anzahl" title="${verstoss} × Hinweis oder Verstoß — antippen zeigt die Einzelheiten">&#9888;&#65039; ${verstoss}</span>` : '')
+        + '</td>';
+    });
+    bodyHtml += '</tr>';
+  });
+
+  return `<div class="grid-wrapper"><div class="grid-scroll"><table class="week-month-grid">
+    <thead><tr>${headerHtml}</tr></thead>
+    <tbody>${bodyHtml}</tbody>
+  </table></div></div>`;
+}
+
 function pauseText(minuten) {
   if (minuten <= 0) return '';
   return minuten < 60 ? `${minuten} min Pause` : `${fmtH(minuten / 60)} Pause`;
@@ -858,6 +956,13 @@ function getDateRange() {
     return { from: d, to: d };
   } else if (S.view === 'week') {
     return getWeekRange(S.currentDate);
+  } else if (S.view === 'year') {
+    const y = S.currentDate.getFullYear();
+    return { from: `${y}-01-01`, to: `${y}-12-31` };
+  } else if (S.view === 'total') {
+    // Gesamt: bis heute. Der Anfang steht erst nach dem Laden fest (erster Eintrag, wie in der Statistik) —
+    // renderDashboardContent setzt range.from dann auf S._gesamtVon.
+    return { from: '2000-01-01', to: formatDateISO(new Date()) };
   } else {
     return getMonthRange(S.currentDate);
   }
@@ -871,6 +976,11 @@ function getPeriodLabel() {
   } else if (S.view === 'week') {
     const r = getWeekRange(S.currentDate);
     return `KW ${getISOWeek(formatDateISO(S.currentDate))} | ${formatDateDE(r.from)} - ${formatDateDE(r.to)}`;
+  } else if (S.view === 'year') {
+    return String(S.currentDate.getFullYear());
+  } else if (S.view === 'total') {
+    const v = S._gesamtVon;
+    return v ? `Gesamt · seit ${months[Number(v.slice(5, 7)) - 1]} ${v.slice(0, 4)}` : 'Gesamt';
   } else {
     return `${months[S.currentDate.getMonth()]} ${S.currentDate.getFullYear()}`;
   }
@@ -879,6 +989,8 @@ function getPeriodLabel() {
 function navDate(dir) {
   if (S.view === 'day') S.currentDate.setDate(S.currentDate.getDate() + dir);
   else if (S.view === 'week') S.currentDate.setDate(S.currentDate.getDate() + dir * 7);
+  else if (S.view === 'year') S.currentDate.setFullYear(S.currentDate.getFullYear() + dir);
+  else if (S.view === 'total') { /* Gesamt hat nichts zu blättern */ }
   else S.currentDate.setMonth(S.currentDate.getMonth() + dir);
 }
 
