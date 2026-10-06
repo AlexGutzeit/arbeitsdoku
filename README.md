@@ -53,7 +53,7 @@ es geht; die Abschnitte darunter beschreiben es im Einzelnen.
 
 **Zeit erfassen und abrechnen**
 
-- [📊 Zeitnachweis](#-zeitnachweis) — Die Kern-Zeiterfassung samt Vorbelegung von Zeiten und Pausen.
+- [📊 Zeitnachweis](#-zeitnachweis) — Die Kern-Zeiterfassung samt Vorbelegung von Zeiten und Pausen; Übersicht nach Tag, Woche, Monat, Jahr und Gesamt.
 - [🏖️ Abwesenheit](#-abwesenheit) — Krank, Urlaub, Freizeitausgleich und Co. — mit Genehmigungs-Ablauf.
 - [📈 Statistik](#-statistik) — Ist/Soll/Überstunden je Zeitraum, als Diagramm und Zahl.
 - [🧾 Abrechnung](#-abrechnung) *(Chef/Admin/Buchhalter)* — PDF-Nachweis, Lohn-Export und Monatsabschluss. Mitarbeiter finden ihren eigenen PDF-Nachweis unter [👤 Mein Konto](#-mein-konto).
@@ -259,6 +259,15 @@ Verliert der einzige Admin sein Handy, hilft der Notfall-Schalter
 
 Kern-Zeiterfassung. Eintrag mit Datum, Von/Bis, Pause, Arbeitsort, Kunde, Projekt, Beschreibung und optionalem „Regie"-Vermerk. **Vorbelegung der Zeiten:** „Von" schließt an den letzten Eintrag des Tages an; gibt es keinen, gilt die geplante Startzeit, sonst der **Arbeitsbeginn** (je Mitarbeiter, sonst Firmenwert). „Bis" ist die aktuelle Uhrzeit — und **nie vor „Von"**: Wer um 06:30 bucht, obwohl der Arbeitsbeginn 07:00 ist, bekommt 06:30–06:30 statt einer unmöglichen Spanne. Läge die Endzeit eines bereits gebuchten Eintrags nach „jetzt" (Tag im Voraus gebucht), bleibt „Von" stehen und „Bis" zieht nach. **Die Pause wird mit dem REST zur Firmenpause vorbelegt:** `max(0, Firmenpause − heute schon erfasste Pausen)` für denselben Mitarbeiter am selben Tag. Firmenpause 30 → erster Auftrag 30, danach 0; wurden im ersten nur 15 genommen, schlägt der nächste 15 vor, davon 10 genommen → der dritte 5, bis 0. Es zählen **alle** Einträge des Tages, auch vom Chef nachgetragene: Es ist der Arbeitstag des Mitarbeiters, unabhängig davon, wer ihn erfasst hat. Steht schon etwas, erklärt eine kleine Zeile unter dem Feld warum („Firmenpause 30 min · heute schon 20 min erfasst"); beim ersten Eintrag bleibt sie leer. Bei **Übernahme aus der Planung** gilt der geplante Wert nur, solange der Tag leer ist; sonst gewinnt die Restpause. **Beim Bearbeiten** bleibt die gespeicherte Pause unangetastet. **Die Pause schluckt nie die ganze Arbeitszeit:** Passt die Tagespause nicht in einen kurzen Einsatz (z. B. 08:00–08:30 als erster Eintrag des Tages), schlägt die App 0 vor und sagt dazu, dass sie beim nächsten Eintrag des Tages vorgeschlagen wird — dieser rechnet die noch fehlende Pause ohnehin ein. Wer eine Pause einträgt, die so lang ist wie die Arbeitszeit oder länger, wird beim Speichern aufgehalten („von diesem Eintrag bliebe nichts übrig"); das prüft auch der Server, beim Anlegen wie beim Ändern. Früher wurde so ein Eintrag still mit 0 Stunden gespeichert.
 
+**Ansichten: Tag · Woche · Monat · Jahr · Gesamt.** Tag zeigt den Verlauf, Woche und Monat ein Raster mit den Personen
+als Spalten. **Jahr** und **Gesamt** fassen zusammen: Beim Jahr ist jede Zeile ein Monat, bei Gesamt jede Zeile ein
+Jahr seit dem ersten Eintrag. Eine Zelle zeigt *Nettostunden / Arbeitstage*, darunter die Abwesenheiten als Zeichen
+mit der Zahl der Tage (Mo–Fr, z. B. „🌴 2") und wie viele Verstöße bzw. Hinweise darin liegen („⚠️ 1"). Im Spaltenkopf
+steht die Summe des Zeitraums. **Antippen führt eine Stufe tiefer:** Gesamt → Jahr → Monat → Tag. Gesamt beginnt —
+wie in der Statistik — beim ersten Eintrag („Gesamt · seit Juni 2024") und hat nichts zu blättern. Filter, Mitarbeiter-
+Auswahl und die Kacheln oben (für Mitarbeiter Soll, Über/Unter und Überstunden gesamt) wirken in allen Ansichten
+gleich; das Soll eines Jahres rechnet wie in der Statistik über das ganze Jahr.
+
 **Am Handy scrollt die Seite, nicht der Kasten.** Bleibt für den Tagesverlauf weniger als rund 440 px
 übrig, bekommt er keine Höhenbegrenzung mehr und die **Seite scrollt als Ganzes** — wie im Wochen-
 und Monatsraster. Dazu zeichnet das Raster nur noch die Stunden, die der Tag wirklich braucht.
@@ -303,11 +312,12 @@ aber nur **8 gearbeitete** Stunden — dann erscheint keine Warnung. Beim Bearbe
 gespeicherte Eintrag herausgerechnet. **Es ist ein Hinweis, keine Sperre:** Wer elf Stunden
 gearbeitet hat, muss das eintragen können. Der Hinweis gilt für neue Einträge wie fürs Bearbeiten.
 
-**Verstöße in der Übersicht (Tag, Woche, Monat):** Derselbe Maßstab greift nicht nur beim Buchen,
+**Verstöße in der Übersicht (Tag, Woche, Monat, Jahr, Gesamt):** Derselbe Maßstab greift nicht nur beim Buchen,
 sondern auch beim Draufschauen. Wo eine Grenze gerissen ist, erscheint ein **gelbes Warnzeichen ⚠️
 und ein Rahmen** — in der **Tagesansicht** am Spaltenkopf des Mitarbeiters, in der **Wochenansicht**
 an der Tageszelle (und am Spaltenkopf, wenn die *Woche* zu lang ist), in der **Monatsansicht** an
-der Tageszeile und an der Kalenderwoche. **Mouseover oder langer Druck** (Handy) zeigt die
+der Tageszeile und an der Kalenderwoche, in **Jahr** und **Gesamt** als Anzahl je Zelle (antippen öffnet den
+Zeitraum mit den Einzelheiten). **Mouseover oder langer Druck** (Handy) zeigt die
 Erklärung samt Paragraf. Sichtbar für Chef, Buchhalter und Admin — und **für den Mitarbeiter in
 seiner eigenen Ansicht**.
 

@@ -4714,3 +4714,37 @@ Kopie vom 05.10. 21:57 (zweiter Lauf; den ersten habe ich nach dem Fund angehalt
 änderte). Vollsicherung `arbeitsdoku_backup_20261006-000646.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe
 samt 6 Profilbild-Dateien). Rückkehrpunkt `vor-kollegen-deploy` (= `537c944`). Datenbank vorher/nachher: genau eine
 neue Tabelle `kollegen_profil` (leer), alle 59 alten unverändert, Datei heil.
+
+## Zeitnachweis: Jahr und Gesamt (06.10.2026)
+
+Alex: „im Zeitnachweis gerne, ähnlich wie in Statistik, zusätzlich zu Tag, Woche, Monat auch Jahr und Gesamt."
+Vorschlag angenommen: Zeilen = Zeiträume, Spalten = Personen wie in Woche/Monat; Gesamt nach JAHREN (bleibt auch
+nach Jahren übersichtlich), ⚠️ als Anzahl je Zelle.
+
+**Umsetzung (app-3-dashboard.js):**
+- **Zeitraum:** `getDateRange`/`getPeriodLabel`/`navDate` kennen `year` und `total`.
+- **Gesamt:** lädt ab 2000-01-01 bis heute und setzt danach `range.from` auf den ersten Eintrag (`S._gesamtVon`) —
+  wie die Statistik (`routes/statistics.js`: MIN(date) bis heute). Soll und Überstunden sind dadurch in beiden
+  gleich. Keine Pfeile, kein „Jetzt".
+- **Ein gemeinsames Raster** `zeitraumRasterHtml(zeilen, …)`. Jahr gibt zwölf Monate hinein, Gesamt die Jahre (das
+  erste und das laufende nur, soweit der Zeitraum reicht).
+- **Zelle:** Nettostunden / Arbeitstage, Abwesenheiten je Art in Tagen (Mo–Fr, wie das Monatsraster) und die
+  Verstöße: Tage mit Tages-Verstoß + Wochen mit Wochen-Verstoß, die Woche am MONTAG gezählt, damit sie über den
+  Monatswechsel nicht doppelt zählt.
+- **Sprung:** `data-jump-view` (month/year) — der bestehende Klick-Handler liest es, sonst wie bisher „Tag".
+- **Soll eines Jahres** rechnet wie die Statistik über das ganze Jahr (im Oktober also mit dem Soll bis Dezember).
+  Bewusst gleich, damit Zeitnachweis und Statistik dieselben Zahlen zeigen.
+
+**Test `zeitnachweis-jahr-ui.js` (29):** Die Daten liegen in den VORJAHREN, sonst wäre der Test im Januar ein anderer
+als im Oktober. Chef, Mitarbeiter, Handy, Filter, Sprung Jahr → Monat und Gesamt → Jahr.
+
+**Gelernt beim ersten Lauf:** „⚠️ 2" statt 1 war richtig. Ohne Geburtsdatum gilt jemand als Jugendlicher, dann ist
+schon ein 8-Stunden-Tag mit 30 Min. Pause ein Verstoß. Die Testperson hat jetzt ein Geburtsdatum. Und ein vom Chef
+angelegter Urlaub ist noch nicht genehmigt; die Raster zeigen nur Genehmigtes. Jetzt beantragt der Mitarbeiter
+selbst, und der Chef genehmigt.
+
+**Gegenproben:**
+- Sprung immer zum Tag → 2 rot.
+- Gesamt ohne ersten Eintrag als Anfang → 4 rot (Zeilen ab 2000).
+- Abwesenheit auch am Wochenende → 1 rot (🌴 3).
+- Jahr ohne Filter → 1 rot.

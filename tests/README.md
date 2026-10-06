@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**280 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**281 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -318,6 +318,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `wetter-heute-ui.js` | Die Wetterkarte zeigte den heutigen Tag ZWEIMAL (Alex, 30.07.2026). |
 | `willkommen-avatare-ui.js` | Profilbilder in der Wochenliste der Willkommensseite (Alex, 31.08.2026). |
 | `willkommen-unveraendert-ui.js` | RÜCKSCHRITTS-PRÜFUNG der Willkommensseite (Alex, 07.08.2026). |
+| `zeitnachweis-jahr-ui.js` | Zeitnachweis: „Jahr" und „Gesamt" (Alex, 06.10.2026) — zusätzlich zu Tag, Woche, Monat. |
 | `zeitnachweis-netto-pause-ui.js` | Nettostunden und gebuchte Pause je Auftrag im Zeitnachweis (Alex, 26.08.2026) |
 | `zeitzonen.js` | Eine Zeitzone im ganzen Servercode (Alex, 06.09.2026: „Nicht dass noch irgendwo Zeiten um |
 | `zurueck-dialog-ui.js` | Zurück schließt den Dialog (R28, 29.09.2026). |
