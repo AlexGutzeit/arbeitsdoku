@@ -4754,3 +4754,14 @@ heute (+70, +140, +210 Tage). Am 06.10. traf die erste den 21.–25.12.: Heiliga
 Dev-Server Feiertage, das Soll war 24 statt 40 — zwölf rote Prüfungen ohne Bezug zum Code. Jetzt sucht
 `feiertagsfreierMontag()` ab dem Wunschtag die nächste Woche ohne Feiertag (übersprang am 06.10. Weihnachten,
 Neujahr und den 6.1. und nahm den 11.01.). Rot vorher, grün nachher, am selben Tag — das ist die Gegenprobe.
+
+**Deploy Zeitnachweis Jahr/Gesamt (06.10.2026, 12:18, `83ba49c`, Cache 450).**
+- **Suite:** 280 von 281 auf der Kopie vom 06.10. 10:41. Rot war nur `complex-saldo-versioning` (Zeitfalle
+  Weihnachten, im Lauf repariert, einzeln 29/29). Der App-Code ist exakt der geprüfte (`24bda19`); danach kamen
+  nur Tests und Doku dazu.
+- **Sicherung:** Vollsicherung `arbeitsdoku_backup_20261006-121753.adbk` (dreifach, gleiche Prüfsumme,
+  Rückspielprobe). Rückkehrpunkt `vor-jahr-gesamt-deploy` (= `cfbf8b0`).
+- **Datenbankvergleich:** 60/60 Tabellen, keine neuen Spalten. EINE Abweichung: `tool_checkouts` 49 → 47. Ursache
+  ist `cleanupToolHistory()` (server.js, seit 30.03.2026): Beim Start und täglich werden Ausleihen gelöscht, die
+  seit mehr als drei Monaten zurückgegeben sind. Die beiden waren am 06.07. zurückgegeben — genau heute drei Monate
+  alt. Gewollt; ein Vergleich über einen Neustart zeigt das immer dann, wenn gerade welche fällig werden.
