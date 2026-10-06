@@ -4828,3 +4828,9 @@ nur für A–Z, „übergabe" fand „Übergabe" nicht, „ölwechsel" nicht „
 nach der Abfrage (`toLocaleLowerCase('de')`, NFC für zerlegt geschickte Umlaute). Die Abfrage hat kein LIMIT, also
 wird nichts vorher abgeschnitten. Gegenproben: ohne Kleinschreibung → 4 rot, ohne NFC → 1 rot, ohne Projektnamen →
 1 rot.
+
+**Deploy Doppel-Rückfrage + Regie-Filter (06.10.2026, 14:17, `4d51a47`, Cache 451).** Suite 283 von 283 auf der Kopie
+von 12:37. Vollsicherung `arbeitsdoku_backup_20261006-141628.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe).
+Rückkehrpunkt `vor-doppel-regie-deploy` (= `83ba49c`). Datenbank: 60/60 Tabellen, einzige Abweichung `tool_checkouts`
+47 → 46 — wieder die 3-Monats-Bereinigung beim Start (das Dienstprotokoll meldet „1 alte Einträge bereinigt").
+Suche + Filteranzeige (Zweig `suche-und-filteranzeige`) sind danach auf develop gekommen, noch nicht ausgerollt.
