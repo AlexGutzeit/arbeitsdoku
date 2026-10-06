@@ -37,6 +37,19 @@ async function weekStat(uid, monday) {
 
 function fmt(d) { return d.toLocaleDateString('sv-SE'); }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+// Montag einer Woche OHNE Feiertag, frühestens `abTagen` nach heute. Die Wochen liegen relativ zu heute — am
+// 06.10.2026 traf die erste genau den 21.–25.12. (Heiligabend + 1. Weihnachtstag): Soll 24 statt 40, zwölf rote
+// Prüfungen aus einem Grund, den dieser Test gar nicht meint. Ostern und Pfingsten können die anderen treffen.
+async function feiertagsfreierMontag(abTagen) {
+  let base = addDays(new Date(), abTagen);
+  while (base.getDay() !== 1) base = addDays(base, 1);
+  for (let i = 0; i < 26; i++, base = addDays(base, 7)) {
+    const r = await api('GET', `/api/absences/by-date?from=${fmt(base)}&to=${fmt(addDays(base, 4))}`);
+    const liste = (r.data && r.data.absences) || [];
+    if (r.status === 200 && !liste.some(a => a.type === 'feiertag')) return base;
+  }
+  throw new Error('keine Woche ohne Feiertag gefunden');
+}
 
 (async () => {
   // Login
@@ -53,9 +66,8 @@ function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); retu
   const uid = cu.data.user.id;
   console.log('Test-Mitarbeiter id=' + uid + ' (' + uname + '), Soll 8h/Tag\n');
 
-  // Test-Woche: ~10 Wochen in der Zukunft, Montag bestimmen
-  let base = addDays(new Date(), 70);
-  while (base.getDay() !== 1) base = addDays(base, 1);
+  // Test-Woche: ~10 Wochen in der Zukunft, ohne Feiertag
+  const base = await feiertagsfreierMontag(70);
   const D = [0,1,2,3,4].map(i => fmt(addDays(base, i))); // Mo..Fr
   const MON = D[0];
   console.log('Test-Woche Mo–Fr: ' + D.join(', ') + '\n');
@@ -130,7 +142,7 @@ function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); retu
 
   // ===== Zusatz A: Ueberlappende Eintraege werden nicht doppelt gezaehlt =====
   console.log('\nZusatz A — Ueberlappende Eintraege (eigene, separate Woche):');
-  let base2 = addDays(new Date(), 140); while (base2.getDay() !== 1) base2 = addDays(base2, 1);
+  const base2 = await feiertagsfreierMontag(140);
   const MON2 = fmt(base2), TUE2 = fmt(addDays(base2, 1));
   // Zwei ueberlappende Eintraege am Di2: 07:00-12:00 (5h) und 11:00-15:00 (4h) → merged 8h
   await api('POST', '/api/entries', { date: TUE2, time_from: '07:00', time_to: '12:00', break_minutes: 0, user_id: uid });
@@ -140,7 +152,7 @@ function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); retu
 
   // ===== Zusatz B: Feiertag setzt Soll auf 0 =====
   console.log('\nZusatz B — Feiertag (global) setzt Soll auf 0:');
-  let base3 = addDays(new Date(), 210); while (base3.getDay() !== 1) base3 = addDays(base3, 1);
+  const base3 = await feiertagsfreierMontag(210);
   const MON3 = fmt(base3), WED3 = fmt(addDays(base3, 2));
   const sB0 = await weekStat(uid, MON3);
   const feier = await api('POST', '/api/absences', { type: 'feiertag', date_from: WED3, date_to: WED3 });

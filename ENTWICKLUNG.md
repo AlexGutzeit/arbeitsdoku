@@ -4748,3 +4748,9 @@ selbst, und der Chef genehmigt.
 - Gesamt ohne ersten Eintrag als Anfang → 4 rot (Zeilen ab 2000).
 - Abwesenheit auch am Wochenende → 1 rot (🌴 3).
 - Jahr ohne Filter → 1 rot.
+
+**Zeitfalle in `complex-saldo-versioning` (06.10.2026, Fund der Suite).** Der Test legt seine Testwochen relativ zu
+heute (+70, +140, +210 Tage). Am 06.10. traf die erste den 21.–25.12.: Heiligabend und 1. Weihnachtstag sind auf dem
+Dev-Server Feiertage, das Soll war 24 statt 40 — zwölf rote Prüfungen ohne Bezug zum Code. Jetzt sucht
+`feiertagsfreierMontag()` ab dem Wunschtag die nächste Woche ohne Feiertag (übersprang am 06.10. Weihnachten,
+Neujahr und den 6.1. und nahm den 11.01.). Rot vorher, grün nachher, am selben Tag — das ist die Gegenprobe.
