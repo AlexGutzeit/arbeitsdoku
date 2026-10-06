@@ -4840,3 +4840,11 @@ Suche + Filteranzeige (Zweig `suche-und-filteranzeige`) sind danach auf develop 
 C prüfte, dass sie noch wartet → vier rote Prüfungen ohne Fehler in der App (allein lief der Test grün, in drei Suiten
 an diesem Tag auch). Jetzt wird sie erst direkt vor C gestellt. Beweis mit künstlichen 2 Minuten vor C: alte Fassung
 genau dieselben vier roten Prüfungen wie in der Suite, neue 25/25.
+
+**Deploy Suche + Filteranzeige (06.10.2026, 16:06, `3b23e99`, Cache 452).**
+- **Suite:** 282 von 283 auf der Kopie von 14:23. Rot war nur `notiz-erinnerungen-ui` (Zeitfalle unter Last, im Lauf
+  behoben und mit künstlicher Verzögerung belegt, einzeln 25/25). Der App-Code ist exakt der geprüfte (`dbf5aa1`).
+- **Sicherung:** Vollsicherung `arbeitsdoku_backup_20261006-160530.adbk` (dreifach, gleiche Prüfsumme,
+  Rückspielprobe). Rückkehrpunkt `vor-suche-deploy` (= `4d51a47`).
+- **Datenbank:** 60/60 Tabellen, keine Abweichung. Auf dem Server ist `node_modules` ein normales Verzeichnis — vom
+  Link-Fehler unberührt.
