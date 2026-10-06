@@ -1345,6 +1345,15 @@ Wer den Server über einen **Namen** prüft, prüft die Namensauflösung gleich 
 aber bedacht sein will: Hängt der einzige Nameserver, meldet die Kontrolle einen Ausfall, obwohl
 Server und App laufen.
 
+**Den Wartungsstand gleich mitmelden.** Die automatischen Debian-Updates (`unattended-upgrades`)
+erfassen nur Debian-Pakete. Liegen bleiben ohne Hinweis: der **Neustart** nach einem Kernel-Update
+(`/var/run/reboot-required`), Pakete aus **Fremdquellen** wie Caddy und Node (`apt list --upgradable`)
+und **Lücken in den Bibliotheken der App** (`npm audit --omit=dev`). Dazu lohnen ein Blick auf das
+Ablaufdatum des Zertifikats, die Platte und das Alter der Paketlisten (älter als ein paar Tage heißt: Die
+nächtliche Aktualisierung läuft gar nicht). Am besten prüft jeder Rechner das selbst und hängt eine Zeile an
+die Morgenmeldung — dann steht dort „OK, Wartung fällig" statt eines stillen „OK". **Melden, nicht blind
+einspielen:** Fremdquellen und App-Bibliotheken gehören erst nach einem Testlauf auf den Server.
+
 **Wiederherstellung (getestet, auch der Abbruch):** Ein per *Backup herunterladen* (oder per Cron)
 erzeugtes ZIP wird über *Einstellungen → Backup einspielen* hochgeladen. Der Server geht in fünf
 Schritten vor und erledigt alles, was scheitern kann, **bevor** er etwas am Bestand ändert:

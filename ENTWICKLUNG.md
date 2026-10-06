@@ -4848,3 +4848,30 @@ genau dieselben vier roten Prüfungen wie in der Suite, neue 25/25.
   Rückspielprobe). Rückkehrpunkt `vor-suche-deploy` (= `4d51a47`).
 - **Datenbank:** 60/60 Tabellen, keine Abweichung. Auf dem Server ist `node_modules` ein normales Verzeichnis — vom
   Link-Fehler unberührt.
+
+## Wartung: Server aktuell, Bibliotheken ohne Lücken (06.10.2026)
+
+Alex: „Halte das System immer aktuell." Die Kontrolle am Abend fand, dass die automatischen Debian-Updates
+vieles NICHT erfassen: Der VPS lief vier Wochen auf dem alten Kernel (Neustart nötig), Caddy (2.11.4, die
+Sicherheitsfixe aus 2.11.6 fehlten) und Node kommen aus Fremdquellen, und `npm audit --omit=dev` zählte 8 Lücken,
+eine davon „kritisch" (`proxy-addr`, IPv4-gemappte IPv6-Subnetze — bei `trust proxy 1` kaum ausnutzbar).
+Der Mini-PC hatte gar keine automatischen Updates: Paketlisten vom 13.06., SSH mit Passwort über IPv6 aus dem
+Internet erreichbar, kein fail2ban.
+
+- **Bibliotheken** (`d553cf4`): sechs ohne Bruch, dazu `sharp` 0.34.5 → 0.35.5 (libvips/libheif/librsvg —
+  verarbeitet hochgeladene Profilbilder) und `adm-zip` 0.5.16 → 0.6.1 (liest Sicherungen beim Einspielen).
+  Benutzt werden nur `getEntries`/`getData` bzw. `resize`/`rotate`/`metadata`/`jpeg`/`png`/`extend`; von den
+  Brüchen (`extractEntryTo`, `failOnError`, `jp2k`, Node < 20.9) trifft uns keiner. Gezielt 7 Tests (218
+  Prüfungen), dann die Suite 283/283 auf der Kopie von 19:56. Nach dem Deploy: Eine echte verschlüsselte Sicherung
+  liest `adm-zip` 0.6.1 mit genau demselben Ergebnis wie 0.5.x (23 Dateien, 1484 Einträge, Integrität ok).
+- **Deploy** 21:50 (`d553cf4`, kein Cache-Wechsel — nur Server-Bibliotheken). Vollsicherung
+  `arbeitsdoku_backup_20261006-214943.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe), Rückkehrpunkt
+  `vor-bibliotheken-deploy` (= `3b23e99`). Datenbank 60/60 Tabellen, keine Abweichung.
+- **Server** (nicht im Repo): VPS Caddy 2.11.7, Node 22.23.3, Neustart; Mini-PC 120 Pakete, unattended-upgrades,
+  fail2ban, Node als Verweis `~/node-aktuell` (Deploy-Ziel `DEPLOY_STANDBY_NODE_BIN` umgestellt), Neustart.
+- **Die Morgenkontrolle meldet jetzt den Wartungsstand** beider Rechner (Titel „OK, Wartung fällig"): Neustart,
+  offene Updates samt Fremdquellen, veraltete Paketlisten, und vom VPS dazu App-Bibliotheken, Zertifikat, Platte.
+  Gemeldet, nicht automatisch eingespielt — Caddy 2.11.6 hätte das Streaming nach 60 s gekappt (erst 2.11.7 behob es).
+- **Nebenbefund IPv6:** Seit 06.10. früh (vor jeder Änderung) kommen IPv6-Antworten des VPS nicht im
+  Freifunk-Netz an; ein Mitschnitt zeigte: Anfrage kommt an, Antwort geht raus, ein Handy im Mobilfunk arbeitete
+  zeitgleich über IPv6. Die Morgenkontrolle sagte dazu „liegt am Server" — jetzt „Server oder Strecke".
