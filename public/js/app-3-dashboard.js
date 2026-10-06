@@ -822,6 +822,10 @@ function renderTotalGridHtml(entries, range, absences = [], verstoesse) {
 
 function zeitraumRasterHtml(zeilen, entries, range, absences, verstoesse, kopf, leerText) {
   const columns = getGridColumns(entries, range);
+  // Mit Projekt-, Such- oder Regie-Filter nur die passenden STUNDEN (Alex, 06.10.2026): Abwesenheiten und Verstöße
+  // gehören zum ganzen Tag, nicht zum Projekt — beim Filtern lenkten sie nur ab („⚠️ 12" in Monaten ohne Benkert).
+  // Der Abwesenheits-Filter ist kein solcher Filter: Mit ihm bleiben die Abwesenheiten (seiner Art) stehen.
+  const nurStunden = !!(S.filterProjectId || S.filterSearch || S.filterRegie !== '');
   if (columns.length === 0) {
     return `<div class="empty-state"><div class="icon">&#128203;</div><p>${leerText}</p></div>`;
   }
@@ -850,7 +854,7 @@ function zeitraumRasterHtml(zeilen, entries, range, absences, verstoesse, kopf, 
       // damit eine Woche über den Monatswechsel nicht doppelt zählt).
       const abw = {};
       let verstoss = 0;
-      for (const d = new Date(z.von + 'T12:00:00'); formatDateISO(d) <= z.bis; d.setDate(d.getDate() + 1)) {
+      for (const d = new Date(z.von + 'T12:00:00'); !nurStunden && formatDateISO(d) <= z.bis; d.setDate(d.getDate() + 1)) {
         const tag = formatDateISO(d);
         const wd = d.getDay();
         if (wd !== 0 && wd !== 6) {
@@ -872,7 +876,8 @@ function zeitraumRasterHtml(zeilen, entries, range, absences, verstoesse, kopf, 
     bodyHtml += '</tr>';
   });
 
-  return `<div class="grid-wrapper"><div class="grid-scroll"><table class="week-month-grid">
+  return `${nurStunden ? '<p class="grid-filter-hinweis">Gefiltert: nur die passenden Stunden — Abwesenheiten und &#9888;&#65039; zeigt die Ansicht ohne Projekt-, Such- und Regie-Filter.</p>' : ''}
+  <div class="grid-wrapper"><div class="grid-scroll"><table class="week-month-grid">
     <thead><tr>${headerHtml}</tr></thead>
     <tbody>${bodyHtml}</tbody>
   </table></div></div>`;

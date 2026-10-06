@@ -92,6 +92,18 @@ const TAG = '2026-09-01';   // fester Tag in der Vergangenheit — nie „heute"
     ok('„jede Art" → alle außer „Nein" (das frühere „Ja")', JSON.stringify(await regie('jede')) === '[1,2,3,4,5]', JSON.stringify(await regie('jede')));
     ok('ohne Filter → alle sechs', ((await req('GET', '/api/entries?date_from=2026-08-01&date_to=2026-08-31', T)).body.entries || []).length === 6);
 
+    console.log('\n── Suche findet auch den Projektnamen und die Person (06.10.2026) ──');
+    // Alex: „Benk" fand seinen Benkert-Tag nicht — das Projekt war aus der LISTE gewählt, der Name steht dann nicht
+    // im Freitext, und die Suche schaute nur in Beschreibung, Adresse, Kunde und Freitext-Projekt.
+    const suche = async (q, tok = T) => ((await req('GET', `/api/entries?date_from=2026-08-01&date_to=2026-09-30&search=${encodeURIComponent(q)}`, tok)).body.entries || []);
+    const mitProjekt = (await suche('Heizung')).filter(e => e.project_id === projekt.id);
+    ok('„Heizung" findet die Einträge mit dem Projekt „Heizung Müller" aus der Liste', mitProjekt.length >= 1 && mitProjekt.every(e => !/Heizung/.test(e.description + e.client + e.address + e.project_text)),
+      String(mitProjekt.length));
+    ok('… und nur diese (nicht „Dach Schmidt")', (await suche('Heizung')).every(e => e.project_id !== anderes.id));
+    ok('„Groß" findet die Einträge von Moritz Groß (Name der Person)', (await suche('Groß', admin)).length >= 1 && (await suche('Groß', admin)).every(e => e.user_name === 'Moritz Groß'));
+    ok('die Beschreibung wird weiter durchsucht', (await suche('Zweiter Auftrag')).length === 1);
+    ok('was nirgends steht, findet nichts', (await suche('Gibtsnicht')).length === 0);
+
     console.log('\n── Oberfläche: die Rückfrage im Formular ──');
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const p = await browser.newPage(); await p.setViewport({ width: 1100, height: 900 }); p.setDefaultTimeout(30000);

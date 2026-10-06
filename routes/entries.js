@@ -112,9 +112,11 @@ router.get('/', authenticate, (req, res) => {
     if (typeof search === 'string' && search.length > 100) {
       return res.status(400).json({ error: 'Suchbegriff zu lang (max. 100 Zeichen)' });
     }
-    sql += ' AND (e.description LIKE ? OR e.address LIKE ? OR e.client LIKE ? OR e.project_text LIKE ?)';
+    // Auch der Name des aus der LISTE gewählten Projekts und der Name der Person (Alex, 06.10.2026: „Benk" fand
+    // seinen Benkert-Tag nicht — der Projektname steht dann in projects, nicht im Freitext project_text).
+    sql += ' AND (e.description LIKE ? OR e.address LIKE ? OR e.client LIKE ? OR e.project_text LIKE ? OR p.name LIKE ? OR u.name LIKE ?)';
     const s = `%${search}%`;
-    params.push(s, s, s, s);
+    params.push(s, s, s, s, s, s);
   }
   // Regie-Filter (Alex, 06.10.2026): jede Art einzeln (1 Ja, 2 pauschal, 3 Büro, 4 Lager, 5 Intern) oder „jede"
   // für alles außer „Nein". Früher hieß „Ja" schon „jede Art" — so kamen Büro-, Lager- und Interne Zeiten mit.

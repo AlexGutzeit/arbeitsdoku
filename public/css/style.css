@@ -2939,3 +2939,5 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .verstoss-anzahl { display: inline-block; margin-top: 0.25rem; font-size: 0.8rem; font-weight: 600; color: var(--text); white-space: nowrap; }
 /* In Jahr/Gesamt steht die Summe zuoberst — ohne den Trennstrich, den sie im Monatsraster unter den Tagen hat */
 .grid-zeitraum-zelle .grid-cell-total { border-top: none; margin-top: 0; padding-top: 0; text-align: left; font-size: 0.85rem; }
+/* Jahr/Gesamt mit Projekt-/Such-/Regie-Filter: Hinweis, warum Abwesenheiten und ⚠️ fehlen */
+.grid-filter-hinweis { margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-light); }

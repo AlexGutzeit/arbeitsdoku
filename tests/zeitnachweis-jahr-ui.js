@@ -124,9 +124,21 @@ const JETZT = new Date().getFullYear(), VJ = JETZT - 1, VVJ = JETZT - 2;
     await foto(p, '1-jahr');
 
     console.log('\n── Filter wirken auch hier ──');
+    ok('ohne Filter kein Filter-Hinweis', !(await p.$('.grid-filter-hinweis')));
     await p.select('#filter-project', String(projekt.id)); await sleep(1800);
     r = await raster(p);
-    ok('Projekt „Heizung Müller": nur noch der eine Tag', r.zeilen[0].zellen[spalte(r, 'Moritz')].startsWith('8:00 / 1 Tag'), r.zeilen[0].zellen[spalte(r, 'Moritz')]);
+    ok('Projekt „Heizung Müller": nur noch der eine Tag', r.zeilen[0].zellen[spalte(r, 'Moritz')] === '8:00 / 1 Tag', r.zeilen[0].zellen[spalte(r, 'Moritz')]);
+    // Alex, 06.10.2026: Mit Projekt-/Such-/Regie-Filter nur die passenden STUNDEN — Abwesenheiten und ⚠️ gehören zum
+    // ganzen Tag und lenkten ab („⚠️ 12" in Monaten ohne das Projekt).
+    ok('… ohne Urlaub-Zeichen und ohne ⚠️ (gehören zum Tag, nicht zum Projekt)', !/🌴|⚠️/.test(r.zeilen[0].zellen[spalte(r, 'Moritz')]), r.zeilen[0].zellen[spalte(r, 'Moritz')]);
+    ok('… und ein Satz sagt, warum', /nur die passenden Stunden/.test(await p.$eval('.grid-filter-hinweis', e => e.textContent).catch(() => '')));
+    await p.select('#filter-project', ''); await sleep(1500);
+    await p.type('#filter-search', 'Heizung'); await sleep(2200);
+    r = await raster(p);
+    ok('Suche „Heizung" findet den Tag über den Projektnamen — auch hier nur Stunden', r.zeilen[0].zellen[spalte(r, 'Moritz')] === '8:00 / 1 Tag', r.zeilen[0].zellen[spalte(r, 'Moritz')]);
+    await p.$eval('#filter-search', e => { e.value = ''; e.dispatchEvent(new Event('input', { bubbles: true })); }); await sleep(2200);
+    r = await raster(p);
+    ok('Filter weg: Urlaub und ⚠️ sind wieder da', /🌴/.test(r.zeilen[0].zellen[spalte(r, 'Moritz')]) && /⚠️/.test(r.zeilen[0].zellen[spalte(r, 'Moritz')]), r.zeilen[0].zellen[spalte(r, 'Moritz')]);
     await p.select('#filter-project', ''); await sleep(1800);
 
     console.log('\n── Antippen: Jahr → Monat ──');
