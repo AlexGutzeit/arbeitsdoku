@@ -129,10 +129,17 @@ const zahlDe = n => String(Math.round(Number(n) * 100) / 100).replace('.', ',');
       !/nicht abgerechnet sind/.test(tWoche), `„${tWoche}"`);
 
     // Die Woche, die auf den letzten Stichtag folgt, ragt zur Hälfte in den offenen Bereich.
+    // Fällt der Stichtag auf einen SONNTAG, ragt keine Woche über ihn — die Woche danach ist ganz offen. Das
+    // ist eine Eigenschaft der echten Daten, kein Fehler (08.10.2026: Juni/Juli wieder geöffnet → Stichtag 31.05.,
+    // ein Sonntag; der Test war rot, obwohl die App richtig zeigte).
     const danach = new Date(letzteBis + 'T12:00:00Z'); danach.setUTCDate(danach.getUTCDate() + 1);
-    const tRand = await ansicht('week', danach.toISOString().slice(0, 10), '13-abschluss-woche-monatswechsel.png');
-    ok('Woche über den letzten Stichtag hinaus → Hinweis auf die offenen Tage',
-      /nicht abgerechnet sind/.test(tRand), `„${tRand}"`);
+    if (new Date(letzteBis + 'T12:00:00Z').getUTCDay() === 0) {
+      console.log(`   (Stichtag ${letzteBis} ist ein Sonntag — keine Woche ragt darüber, Prüfung entfällt)`);
+    } else {
+      const tRand = await ansicht('week', danach.toISOString().slice(0, 10), '13-abschluss-woche-monatswechsel.png');
+      ok('Woche über den letzten Stichtag hinaus → Hinweis auf die offenen Tage',
+        /nicht abgerechnet sind/.test(tRand), `„${tRand}"`);
+    }
 
     console.log('\n── Offener Monat und Jahresansicht ──');
     const letzterBis = letzteBis;
