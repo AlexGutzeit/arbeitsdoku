@@ -23,11 +23,11 @@ const ERLAUBT = new Set(['lager', 'regie', 'büro', 'buero', 'intern', 'sentec',
 // echte Konten über den Vornamen aussuchen (scenario-shared-planning, browser-smoke). Die gehören umgebaut
 // (Konto per Rolle wählen), dann hier austragen. Neue Einträge nur für erfundene Figuren.
 const ERLAUBT_IN = {
-  'tests/backup-empfaenger.js': ['daniel'], 'tests/backup-empfaenger-ui.js': ['daniel'],  // Testchef „Daniel"
-  'tests/planning-series.js': ['jakob'], 'tests/board-live-buffer-ui.js': ['jakob'],      // Figuren „Jakob", „Jakob Live"
+  'tests/backup-empfaenger.js': ['daniel'], 'tests/backup-empfaenger-ui.js': ['daniel'],  // Testchef
+  'tests/planning-series.js': ['jakob'], 'tests/board-live-buffer-ui.js': ['jakob'],      // erfundene Figuren
   'tests/hoechstarbeitszeit-ui.js': ['jonas'], 'tests/listen-suche-ui.js': ['jonas'],
-  'tests/pause-jugendschutz-ui.js': ['jonas'],                                            // „Jonas Klein/Schmidt/Jung"
-  'tests/produktpflege-ui.js': ['wagner'],                                                // „Herr Wagner"
+  'tests/pause-jugendschutz-ui.js': ['jonas'],                                            // erfundene Figuren
+  'tests/produktpflege-ui.js': ['wagner'],                                                // erfundener Ansprechpartner
   'tests/scenario-shared-planning.js': ['daniel', 'jakob'],                               // ALTLAST: echte Konten
   'tests/browser-smoke.js': ['daniel'],                                                   // ALTLAST: echtes Konto
 };
