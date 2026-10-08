@@ -4892,3 +4892,11 @@ tritt er nur an zwei Tagen auf, beide Male durch Kopien in abgeschlossenen Monat
 Auf echten Daten ändern sich 3 von 41 Projekten: das gemeldete Projekt 1457:30 → 1435:00, ein zweites 1165:45 → 1149:15
 (Dreifach-Eintrag vom 28.05.), ein drittes um 2 Minuten (Rundung: früher je Person auf 2 Nachkommastellen). Test
 `project-stats` +4 Prüfungen (Kopie + zeitgleicher Auftrag = 7 h statt 14 h); Gegenprobe mit alter Route: 2 rot.
+
+**Deploy Projektkarte + Namens-Bereinigung (08.10.2026, 10:38, `3f0e0c8`, Cache 453).**
+- **Suite:** 281 von 284 auf der Kopie von 08:55. Rot: `notiz-gaeste-ui` (gast.html-?v= beim Cache-Wechsel vergessen),
+  `keine-echten-namen-prodklon` (fand Namen in den eigenen Erklär-Kommentaren) und `abschluss-statistik-prodklon`
+  (Daten: Juni/Juli waren am Morgen wieder geöffnet worden, der letzte Stichtag 31.05. ist ein Sonntag). Alle drei
+  behoben und einzeln grün; die Projektkarte selbst war in der Suite grün.
+- **Sicherung:** `arbeitsdoku_backup_20261008-103817.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe).
+  Rückkehrpunkt `vor-projektkarte-deploy` (= `d553cf4`). Datenbank 60/60, keine Abweichung.
