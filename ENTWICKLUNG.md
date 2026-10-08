@@ -4875,3 +4875,20 @@ Internet erreichbar, kein fail2ban.
 - **Nebenbefund IPv6:** Seit 06.10. früh (vor jeder Änderung) kommen IPv6-Antworten des VPS nicht im
   Freifunk-Netz an; ein Mitschnitt zeigte: Anfrage kommt an, Antwort geht raus, ein Handy im Mobilfunk arbeitete
   zeitgleich über IPv6. Die Morgenkontrolle sagte dazu „liegt am Server" — jetzt „Server oder Strecke".
+
+## Projektkarte rechnet wie der Zeitnachweis (08.10.2026)
+
+Alex, am Handy: Projekt „Benkert" zeigte auf der Karte **1457:30 h**, der Zeitnachweis mit Projektfilter
+**1435:00 h** — bei denselben 198 Einträgen. Die Karte (`GET /api/projects/:id/stats`) summierte `net_hours` je
+Eintrag; Zeitnachweis, Statistik und Lohn legen Einträge derselben Person am selben Tag zusammen
+(`calcActualHoursRaw`) und zählen Überschneidungen einmal. Die 22:30 h waren: 22:00 h aus versehentlichen Kopien
+(Jakob 18.09. dreifach, Jonathan 01.07. doppelt) und 0:30 h aus einem Pausenfehler der Zusammenlegung: Bei echt
+überschneidenden Einträgen zieht sie die Pausen ALLER Einträge ab (Jonathan: 2 × 30 Min statt einmal).
+
+Entscheidungen (Alex): Die Karte rechnet jetzt mit derselben Funktion. Der **Pausenfehler bleibt** — über alle Daten
+tritt er nur an zwei Tagen auf, beide Male durch Kopien in abgeschlossenen Monaten (Bastian 28.05. −1:00 h,
+Jonathan 01.07. −0:30 h); echte zeitgleiche Aufträge trugen die Pause nie doppelt. Die Kopien bleiben ebenfalls.
+
+Auf echten Daten ändern sich 3 von 41 Projekten: Benkert 1457:30 → 1435:00, PV 1165:45 → 1149:15 (Bastians
+Dreifach-Eintrag), ein drittes um 2 Minuten (Rundung: früher je Person auf 2 Nachkommastellen). Test
+`project-stats` +4 Prüfungen (Kopie + zeitgleicher Auftrag = 7 h statt 14 h); Gegenprobe mit alter Route: 2 rot.

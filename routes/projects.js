@@ -327,20 +327,31 @@ router.post('/:id/reopen', authenticate, authorize('chef'), (req, res) => {
 
 // Auftrags-Statistik: gebuchte Netto-Stunden je Nutzer (alle Bucher außer Admin) — nur Manager.
 // Zählt Zeiteinträge, die per project_id ODER per Freitext-Projektname zugeordnet sind (deckt Bestands-
-// projekte + den Lösch→Freitext→Wiederherstellen-Fall ab). Nur net_hours (Pause bereits abgezogen).
+// projekte + den Lösch→Freitext→Wiederherstellen-Fall ab).
+// Stunden wie Zeitnachweis und Statistik (calcActualHoursRaw): Überschneidende Einträge derselben Person am
+// selben Tag zählen nur einmal. Vorher stand hier SUM(net_hours) — Alex fiel am 08.10.2026 auf, dass ein Projekt
+// 1457:30 h zeigte, der Zeitnachweis mit Projektfilter aber 1435:00 h (doppelt gespeicherte Einträge).
 router.get('/:id/stats', authenticate, (req, res) => {
   if (req.user.role === 'mitarbeiter') return res.status(403).json({ error: 'Keine Berechtigung' });
   const db = getDb();
   const project = db.prepare('SELECT id, name FROM projects WHERE id = ?').get(req.params.id);
   if (!project) return res.status(404).json({ error: 'Projekt nicht gefunden' });
-  const rows = db.prepare(`
-    SELECT e.user_id, u.name, ROUND(SUM(e.net_hours), 2) AS hours, COUNT(*) AS entries
+  const { calcActualHoursRaw } = require('./statistics');
+  const eintraege = db.prepare(`
+    SELECT e.user_id, u.name, e.date, e.time_from, e.time_to, e.break_minutes
     FROM entries e JOIN users u ON u.id = e.user_id
     WHERE (e.project_id = ? OR (e.project_text = ? AND e.project_text <> '')) AND u.role <> 'admin'
       AND e.deleted_at IS NULL
-    GROUP BY e.user_id
-    ORDER BY hours DESC, u.name ASC
   `).all(project.id, project.name);
+  const jeNutzer = new Map();
+  for (const e of eintraege) {
+    if (!jeNutzer.has(e.user_id)) jeNutzer.set(e.user_id, { user_id: e.user_id, name: e.name, liste: [] });
+    jeNutzer.get(e.user_id).liste.push(e);
+  }
+  const rows = [...jeNutzer.values()]
+    .map(n => ({ user_id: n.user_id, name: n.name,
+      hours: Math.round(calcActualHoursRaw(n.liste) * 100) / 100, entries: n.liste.length }))
+    .sort((a, b) => (b.hours - a.hours) || a.name.localeCompare(b.name));
   const total_hours = Math.round(rows.reduce((s, r) => s + (r.hours || 0), 0) * 100) / 100;
   const total_entries = rows.reduce((s, r) => s + r.entries, 0);
   res.json({ per_user: rows, total_hours, total_entries });

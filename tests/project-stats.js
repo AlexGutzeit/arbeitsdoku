@@ -66,6 +66,19 @@ const hoursOf = (s, name) => { const r = (s.per_user||[]).find(x=>x.name===name)
     ok('Buchhalter GET stats → 200', (await req('GET','/api/projects/'+proj.id+'/stats', tb)).status===200);
     ok('Chef GET stats → 200', (await req('GET','/api/projects/'+proj.id+'/stats', tc)).status===200);
 
+    // Überschneidungen zählen nur einmal — wie im Zeitnachweis (Alex, 08.10.2026: Projektkarte 1457:30 h,
+    // Zeitnachweis mit Projektfilter 1435:00 h; Ursache waren doppelt gespeicherte Einträge).
+    const projC = (await req('POST','/api/projects', admin, { name:'Bau C' })).body.project;
+    const e1 = await req('POST','/api/entries', tm1, { date:'2026-08-05', time_from:'07:00', time_to:'12:00', break_minutes:0, project_id:projC.id, description:'Kopie' });
+    const e2 = await req('POST','/api/entries', tm1, { date:'2026-08-05', time_from:'07:00', time_to:'12:00', break_minutes:0, project_id:projC.id, description:'Kopie', doppelt_ok:true });
+    const e3 = await req('POST','/api/entries', tm1, { date:'2026-08-05', time_from:'10:00', time_to:'14:00', break_minutes:0, project_id:projC.id, description:'parallel' });
+    await req('POST','/api/entries', tm1, { date:'2026-08-06', time_from:'07:00', time_to:'09:00', break_minutes:0, project_id:projC.id }); // anderer Tag, 2 h
+    ok('drei Einträge am 05.08. gespeichert (Kopie mit doppelt_ok)', [e1, e2, e3].every(r => r.status === 200 || r.status === 201), [e1, e2, e3].map(r => r.status).join(','));
+    const sC = await stats(admin, projC.id);
+    ok('überschneidend: 07–14 = 7 h + 2 h = 9 h (Summe der Einträge wäre 16 h)', hoursOf(sC,'M Eins')===9, JSON.stringify(sC.per_user));
+    ok('Einträge zählen weiter einzeln (4×)', sC.total_entries===4 && sC.per_user[0].entries===4, String(sC.total_entries));
+    ok('Gesamt = 9 h', sC.total_hours===9, String(sC.total_hours));
+
     // Löschen (soft) → endgültig löschen (Name → Freitext) → gleichnamig neu anlegen → Alt-Stunden bleiben
     const projB = (await req('POST','/api/projects', admin, { name:'Bau B' })).body.project;
     await req('POST','/api/entries', tm1, { date:'2026-09-01', time_from:'07:00', time_to:'12:00', break_minutes:0, project_id:projB.id }); // 5
