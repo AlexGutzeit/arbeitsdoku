@@ -823,7 +823,7 @@ function renderTotalGridHtml(entries, range, absences = [], verstoesse) {
 function zeitraumRasterHtml(zeilen, entries, range, absences, verstoesse, kopf, leerText) {
   const columns = getGridColumns(entries, range);
   // Mit Projekt-, Such- oder Regie-Filter nur die passenden STUNDEN (Alex, 06.10.2026): Abwesenheiten und Verstöße
-  // gehören zum ganzen Tag, nicht zum Projekt — beim Filtern lenkten sie nur ab („⚠️ 12" in Monaten ohne Benkert).
+  // gehören zum ganzen Tag, nicht zum Projekt — beim Filtern lenkten sie nur ab („⚠️ 12" in Monaten ohne einen Einsatz beim Kunden).
   // Der Abwesenheits-Filter ist kein solcher Filter: Mit ihm bleiben die Abwesenheiten (seiner Art) stehen.
   const nurStunden = !!(S.filterProjectId || S.filterSearch || S.filterRegie !== '');
   if (columns.length === 0) {

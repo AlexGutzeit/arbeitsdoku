@@ -1116,7 +1116,7 @@ Trefferzahl:
 ```
 
 Das **kehrt eine frühere Entscheidung um**. „2D schlägt 1D immer" war damit begründet, dass eine EAN
-*zufällig daneben* im Bild liegen könne (Valentins Lauf). Mit dem Zielrahmen liegt nichts mehr
+*zufällig daneben* im Bild liegen könne (Lauf eines Mitarbeiters). Mit dem Zielrahmen liegt nichts mehr
 zufällig daneben — die Begründung ist entfallen, also fällt auch die Regel. Ein QR als einzige
 Angabe gewinnt weiterhin.
 
@@ -1283,7 +1283,7 @@ Ziffern, falsche Prüfziffer) auch.
 *allen* Produkten eines Herstellers — gespeichert zeigten zwei verschiedene Artikel auf denselben
 Eintrag, und der zweite bekäme „gehört bereits zu …", ohne dass jemand versteht, warum.
 
-Mein erster Entwurf war **zu grob**: „jede http-Adresse ist Werbung". Das hätte Valentins Befund vom
+Mein erster Entwurf war **zu grob**: „jede http-Adresse ist Werbung". Das hätte den Befund eines Mitarbeiters vom
 Vortag zerstört — `https://id.abb/2CKA006800A3087` und `https://qr.fischer.id/p/568010` *bezeichnen*
 Artikel. Der Bestandstest „ein QR schlägt eine EAN daneben im Bild" fiel prompt. Der Unterschied
 steckt im letzten Pfadstück: Eine Artikelnummer enthält Ziffern, ein Seitenname nicht. Eine
@@ -2250,7 +2250,7 @@ beim Nachzählen mit `grep`.
 
 **Suite-Falle:** Drei Tests (`browser-smoke`, `browser-absences`, `complex-saldo-versioning`)
 brauchen einen **von Hand gestarteten** Server auf `:3000` und fallen sonst um — sie gehören zur
-Prod-Klon-Gruppe. Mit Server: 29/29, 24/24, 13/14 (die letzte Prüfung meldet sich als Konto „Daniel"
+Prod-Klon-Gruppe. Mit Server: 29/29, 24/24, 13/14 (die letzte Prüfung meldet sich als ein Mitarbeiter-Konto
 an, das es nur im anonymisierten Klon gibt). Wer die Suite bewertet, muss das wissen, sonst sieht es
 nach drei Regressionen aus.
 
@@ -4808,7 +4808,7 @@ und Auswahl.
 
 ## Suche findet Projekt und Person; Jahr/Gesamt mit Filter nur Stunden (06.10.2026)
 
-Alex, am Handy: „Wenn ich nach Projekt Benkert filtere, kommt mein einer Tag. Wenn ich im Freitext ‚Benk' eingebe,
+Alex, am Handy: „Wenn ich nach Projekt X filtere, kommt mein einer Tag. Wenn ich im Freitext die ersten Buchstaben eingebe,
 wird nichts gefunden. Hab ich einen Denkfehler?" — Nein. Die Suche (`routes/entries.js`) schaute nur in Beschreibung,
 Adresse, Kunde und `project_text`. Ein aus der LISTE gewähltes Projekt steht in `projects`, `project_text` bleibt leer.
 Von 193 Einträgen des Projekts hatten nur 5 den Namen zufällig auch in Beschreibung/Kunde/Adresse. Jetzt sucht sie
@@ -4878,17 +4878,17 @@ Internet erreichbar, kein fail2ban.
 
 ## Projektkarte rechnet wie der Zeitnachweis (08.10.2026)
 
-Alex, am Handy: Projekt „Benkert" zeigte auf der Karte **1457:30 h**, der Zeitnachweis mit Projektfilter
+Alex, am Handy: Ein Kundenprojekt zeigte auf der Karte **1457:30 h**, der Zeitnachweis mit Projektfilter
 **1435:00 h** — bei denselben 198 Einträgen. Die Karte (`GET /api/projects/:id/stats`) summierte `net_hours` je
 Eintrag; Zeitnachweis, Statistik und Lohn legen Einträge derselben Person am selben Tag zusammen
 (`calcActualHoursRaw`) und zählen Überschneidungen einmal. Die 22:30 h waren: 22:00 h aus versehentlichen Kopien
-(Jakob 18.09. dreifach, Jonathan 01.07. doppelt) und 0:30 h aus einem Pausenfehler der Zusammenlegung: Bei echt
-überschneidenden Einträgen zieht sie die Pausen ALLER Einträge ab (Jonathan: 2 × 30 Min statt einmal).
+(ein Mitarbeiter am 18.09. dreifach, ein anderer am 01.07. doppelt) und 0:30 h aus einem Pausenfehler der Zusammenlegung: Bei echt
+überschneidenden Einträgen zieht sie die Pausen ALLER Einträge ab (dort: 2 × 30 Min statt einmal).
 
 Entscheidungen (Alex): Die Karte rechnet jetzt mit derselben Funktion. Der **Pausenfehler bleibt** — über alle Daten
-tritt er nur an zwei Tagen auf, beide Male durch Kopien in abgeschlossenen Monaten (Bastian 28.05. −1:00 h,
-Jonathan 01.07. −0:30 h); echte zeitgleiche Aufträge trugen die Pause nie doppelt. Die Kopien bleiben ebenfalls.
+tritt er nur an zwei Tagen auf, beide Male durch Kopien in abgeschlossenen Monaten (28.05. −1:00 h,
+01.07. −0:30 h); echte zeitgleiche Aufträge trugen die Pause nie doppelt. Die Kopien bleiben ebenfalls.
 
-Auf echten Daten ändern sich 3 von 41 Projekten: Benkert 1457:30 → 1435:00, PV 1165:45 → 1149:15 (Bastians
-Dreifach-Eintrag), ein drittes um 2 Minuten (Rundung: früher je Person auf 2 Nachkommastellen). Test
+Auf echten Daten ändern sich 3 von 41 Projekten: das gemeldete Projekt 1457:30 → 1435:00, ein zweites 1165:45 → 1149:15
+(Dreifach-Eintrag vom 28.05.), ein drittes um 2 Minuten (Rundung: früher je Person auf 2 Nachkommastellen). Test
 `project-stats` +4 Prüfungen (Kopie + zeitgleicher Auftrag = 7 h statt 14 h); Gegenprobe mit alter Route: 2 rot.

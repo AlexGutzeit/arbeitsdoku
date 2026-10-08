@@ -85,7 +85,7 @@ function req(m, p, t, b) {
         knappDarunter: f([e('A', 2), e('B', 5)]),
         keinerReicht: f([e('A', 1), e('B', 2)]),
         einziger: f([e('A', 7)]),
-        // Valentins Fall: echte Hersteller-QRs, einmal bzw. zweimal gelesen.
+        // der Fall eines Mitarbeiters: echte Hersteller-QRs, einmal bzw. zweimal gelesen.
         qrEinmal: f([q('https://id.abb/2CKA006800A3087', 1)]),
         qrZweimal: f([q('https://qr.fischer.id/p/568010', 2)]),
         // Ein 2D-Code schlaegt einen 1D-Code, SOLANGE der 1D-Code keine gueltige GTIN ist.
@@ -234,7 +234,7 @@ function req(m, p, t, b) {
     });
     ok('die EAN schlägt den Händler-QR auf derselben Etikette',
       rang2.eltropa === '4003899947209', JSON.stringify(rang2.eltropa));
-    ok('… ein QR allein gewinnt weiterhin (Valentins Fall)',
+    ok('… ein QR allein gewinnt weiterhin (der Fall eines Mitarbeiters)',
       rang2.qrAllein === 'https://qr.fischer.id/p/551442', JSON.stringify(rang2.qrAllein));
     ok('… gegen einen einmal gelesenen Strichcode ebenso (der erreicht die Schwelle nicht)',
       rang2.qrGegenSchwache === 'wmqr.eu/1422030000', JSON.stringify(rang2.qrGegenSchwache));
@@ -303,7 +303,7 @@ function req(m, p, t, b) {
       // ROH, ohne vorherige Normalisierung: Die Antwort darf nicht davon abhaengen, in welcher
       // Reihenfolge die beiden Funktionen aufgerufen werden.
       digitalRoh: scannerIstWerbecode('https://herkunft.edeka.de/?01=04311501706954'),
-      // Valentins Hersteller-QRs bezeichnen ARTIKEL — die duerfen nicht als Werbung gelten.
+      // die Hersteller-QRs aus dem Lager-Lauf bezeichnen ARTIKEL — die duerfen nicht als Werbung gelten.
       abb: scannerIstWerbecode('https://id.abb/2CKA006800A3087'),
       fischer: scannerIstWerbecode('https://qr.fischer.id/p/568010'),
       merkblatt: scannerIstWerbecode('https://www.latrivenetacavi.com/download/environment_label.pdf'),
@@ -343,7 +343,7 @@ function req(m, p, t, b) {
       rund.mitBuchstabe === false && rund.adresse === false, JSON.stringify([rund.mitBuchstabe, rund.adresse]));
     ok('… ein GS1 Digital Link dagegen NICHT (daraus wird die Artikelnummer)', rund.digital === false);
     ok('… auch roh, vor der Normalisierung', rund.digitalRoh === false);
-    ok('… und Valentins Hersteller-QRs erst recht nicht (die BEZEICHNEN Artikel)',
+    ok('… und die Hersteller-QRs aus dem Lager-Lauf erst recht nicht (die BEZEICHNEN Artikel)',
       rund.abb === false && rund.fischer === false, JSON.stringify([rund.abb, rund.fischer]));
     ok('ein Merkblatt-PDF gilt dagegen als Werbecode', rund.merkblatt === true);
     ok('… und ein gewöhnlicher Code erst recht nicht', rund.echterCode === false);

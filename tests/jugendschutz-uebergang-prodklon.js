@@ -9,7 +9,7 @@
 // stellen; geschrieben wird nichts.
 //
 // Der Test sucht sich seinen Prüfling selbst (jüngster Nutzer mit Geburtsdatum) und reist zu
-// dessen 18. Geburtstag — er veraltet also nicht, wenn Jakob volljährig geworden ist.
+// dessen 18. Geburtstag — er veraltet also nicht, wenn der Jugendliche volljährig geworden ist.
 //   node tests/jugendschutz-uebergang-prodklon.js
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');

@@ -93,7 +93,7 @@ const TAG = '2026-09-01';   // fester Tag in der Vergangenheit — nie „heute"
     ok('ohne Filter → alle sechs', ((await req('GET', '/api/entries?date_from=2026-08-01&date_to=2026-08-31', T)).body.entries || []).length === 6);
 
     console.log('\n── Suche findet auch den Projektnamen und die Person (06.10.2026) ──');
-    // Alex: „Benk" fand seinen Benkert-Tag nicht — das Projekt war aus der LISTE gewählt, der Name steht dann nicht
+    // Alex: Die ersten Buchstaben fanden seinen Projekt-Tag nicht — das Projekt war aus der LISTE gewählt, der Name steht dann nicht
     // im Freitext, und die Suche schaute nur in Beschreibung, Adresse, Kunde und Freitext-Projekt.
     const suche = async (q, tok = T) => ((await req('GET', `/api/entries?date_from=2026-08-01&date_to=2026-09-30&search=${encodeURIComponent(q)}`, tok)).body.entries || []);
     const mitProjekt = (await suche('Heizung')).filter(e => e.project_id === projekt.id);

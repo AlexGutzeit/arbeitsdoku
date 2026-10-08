@@ -130,7 +130,7 @@ router.get('/', authenticate, (req, res) => {
   let entries = db.prepare(sql).all(...params);
 
   // Suche (Alex, 06.10.2026). Durchsucht Beschreibung, Adresse, Kunde, Freitext-Projekt, den Namen des aus der LISTE
-  // gewählten Projekts („Benk" fand den Benkert-Tag nicht — der Name steht dann in projects) und den Namen der Person.
+  // gewählten Projekts (die ersten Buchstaben fanden den Projekt-Tag nicht — der Name steht dann in projects) und den Namen der Person.
   // Groß/klein egal, AUCH bei Umlauten: SQLites LIKE kennt Groß/Klein nur für A–Z („übergabe" fand „Übergabe" nicht).
   // Deshalb hier in JS; NFC, weil iPhones Umlaute manchmal zerlegt schicken (u + ¨). Die Abfrage hat kein LIMIT,
   // vorher wird also nichts abgeschnitten. Die persönliche Notiz bleibt bewusst außen vor (privat).

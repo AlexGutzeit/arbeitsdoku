@@ -45,7 +45,7 @@ const SCANNER_FORMATE_2D = ['qr_code', 'data_matrix'];
  *    sich überhaupt entziffern lässt, ist praktisch sicher richtig; ein „falsch, aber gültig"
  *    gibt es dort nicht wie bei 1D.
  *
- * Warum das nicht theoretisch ist: Valentins Lauf im Lager (08.09.2026) verwarf zwei ECHTE
+ * Warum das nicht theoretisch ist: Der Lauf eines Mitarbeiters im Lager (08.09.2026) verwarf zwei ECHTE
  * Hersteller-QRs — `https://id.abb/2CKA006800A3087` (einmal gelesen) und
  * `https://qr.fischer.id/p/568010` (zweimal). ABB und fischer, also genau die Marken eines
  * Elektrobetriebs. Eine Regel, die richtige Daten wegwirft, ist genauso falsch wie eine, die
@@ -118,7 +118,7 @@ function scannerGtinGueltig(nummer) {
  *
  * Hier stehen sich zwei Feldbefunde gegenüber, und beide haben recht:
  *
- *   Valentin, 08.09.2026 — echte Hersteller-QRs, die ARTIKEL bezeichnen:
+ *   Ein Mitarbeiter, 08.09.2026 — echte Hersteller-QRs, die ARTIKEL bezeichnen:
  *     https://id.abb/2CKA006800A3087        (2CKA006800A3087 ist die ABB-Artikelnummer)
  *     https://qr.fischer.id/p/568010
  *
@@ -346,7 +346,7 @@ function scannerBesterTreffer(zaehlung) {
     // das naechste System. Die Adresse eines Haendlers ist es nicht.
     //
     // Frueher galt „2D schlaegt 1D immer", weil ein Hersteller-QR praeziser sei als eine EAN, die
-    // ZUFAELLIG DANEBEN im Bild liegt (Valentins Lauf). Diese Begruendung ist mit dem Zielrahmen
+    // ZUFAELLIG DANEBEN im Bild liegt (Lauf eines Mitarbeiters). Diese Begruendung ist mit dem Zielrahmen
     // entfallen: Es liegt nichts mehr zufaellig daneben, gelesen wird nur der Rahmen. Bleibt ein
     // QR die einzige Angabe, gewinnt er weiterhin — Klasse 2 schlaegt Klasse 1.
     //
