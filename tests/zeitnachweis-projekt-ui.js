@@ -12,6 +12,8 @@
 //   * Tom (nicht zugeteilt): nur lesen — Ziele als Punkte, keine Knopfleiste, Bens Text kommt live an;
 //     PATCH direkt → 403. Bei einer noch leeren Notiz „noch leer" ohne Anfangen-Feld; fängt Anna sie an,
 //     startet sie bei Tom von selbst. Carla (Chef): darf ändern.
+//   * Verlassen OHNE Speichern (Alex, 21.10.2026): Ziel-Status und Notiz bleiben erhalten — auch wenn
+//     direkt nach dem letzten Tastendruck „Zurück" getippt wird; ein Eintrag entsteht nicht.
 //   * Nebenfund: Eintrag eines ERLEDIGTEN Projekts bearbeiten → Projekt steht im Feld, Speichern behält es.
 //
 //   node tests/zeitnachweis-projekt-ui.js
@@ -223,6 +225,25 @@ const gestern = () => { const d = new Date(); d.setDate(d.getDate() - 1); return
     await notizBereit(C);
     const c = await bereich(C);
     ok('Carla: darf ändern und mitschreiben', c.opts === 9 && c.leiste && c.tippbar && /gelten sofort/.test(c.text), JSON.stringify(c));
+
+    console.log('\nVerlassen ohne Speichern');
+    const abnahme = pv.milestones[2];
+    const vorherAnzahl = ((await req('GET', `/api/entries?date_from=2000-01-01&date_to=2100-01-01`, tok.anna)).body.entries || []).length;
+    await A.bringToFront();
+    await neuerEintrag(A); await waehle(A, pv.id); await notizBereit(A);
+    await A.evaluate((b, m) => document.querySelector(`${b} .ms-opt[data-mid="${m}"][data-status="doing"]`).click(), B, abnahme.id);
+    await A.waitForFunction((b, m) => !!document.querySelector(`${b} .ms-opt.active[data-mid="${m}"][data-status="doing"]`), { timeout: 8000 }, B, abnahme.id).catch(() => {});
+    await A.evaluate(() => { const q = _notizSitzung.quill; q.setSelection(q.getLength() - 1, 0, 'user'); });
+    await A.keyboard.type(' Abnahme am Freitag');
+    await A.evaluate(() => document.getElementById('back-btn').click());   // sofort, ohne zu warten
+    await A.waitForFunction(() => !document.getElementById('entry-form'), { timeout: 8000 }).catch(() => {});
+    let nv = null;
+    for (let i = 0; i < 30; i++) { nv = (await req('GET', `/api/projects/${pv.id}/notiz`, tok.ben)).body.notiz; if (nv && /Abnahme am Freitag/.test(nv.body)) break; await sleep(200); }
+    const msNach = (await req('GET', `/api/projects/${pv.id}`, tok.ben)).body.project.milestones.find(m => m.id === abnahme.id).status;
+    const nachherAnzahl = ((await req('GET', `/api/entries?date_from=2000-01-01&date_to=2100-01-01`, tok.anna)).body.entries || []).length;
+    ok('ohne Speichern verlassen: Zwischenziel „Abnahme" bleibt „in Arbeit"', msNach === 'doing', msNach);
+    ok('… und der eben getippte Notiztext ist beim Server', nv && /Abnahme am Freitag/.test(nv.body), nv && nv.body);
+    ok('… ein Eintrag ist dabei nicht entstanden', nachherAnzahl === vorherAnzahl, vorherAnzahl + ' → ' + nachherAnzahl);
 
     console.log('\nErledigtes Projekt beim Bearbeiten');
     const alt = (await req('POST', '/api/entries', tok.anna, { date: gestern(), time_from: '13:00', time_to: '15:00', break_minutes: 0,
