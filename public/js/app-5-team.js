@@ -1887,6 +1887,18 @@ const msBar = (prog, cls, goalPct, fillPct) => {
     + '</div>';
 };
 
+// Zielliste eines Projekts: mit 3-Farb-Auswahl (darf ändern) oder nur als Punkt (lesen). Eine Fassung für
+// Board-Kachel und Zeitnachweis-Formular (Alex, 20.10.2026) — dort wie hier dieselben Klassen und data-Felder.
+function msZeilenHtml(projectId, ms, darf) {
+  return ms.map(m => {
+    const meta = MS_META[m.status] || MS_META.offen;
+    const ctrl = darf
+      ? `<span class="ms-picker">${MS_ORDER.map(s => `<button type="button" class="ms-opt${m.status === s ? ' active' : ''}" data-id="${projectId}" data-mid="${m.id}" data-status="${s}" style="background:${MS_META[s].color}" title="${MS_META[s].label}"></button>`).join('')}</span>`
+      : `<span class="ms-dot" style="background:${meta.color}" title="${meta.label}"></span>`;
+    return `<div class="ms-row">${ctrl}<span class="ms-title">${esc(m.title)}</span><span class="ms-days" title="Arbeitstage">${String(m.est_days).replace('.', ',')} AT</span></div>`;
+  }).join('');
+}
+
 // Fälligkeit + Zeitbudget. Restaufwand = Σ Tage der NICHT erledigten Ziele (offen + in Arbeit; erledigte raus).
 const SCHED = { rot: '#dc2626', orange: '#ea580c', gruen: '#16a34a', neutral: '#6b7280', luft: '#93c5fd' };
 const todayISO = () => formatDateISO(new Date());
@@ -2101,13 +2113,7 @@ async function renderProjects() {
          ${manage ? `<button class="btn btn-xs btn-outline proj-edit" data-id="${p.id}">Bearbeiten</button>` : ''}
          ${manage ? `<button class="btn btn-xs btn-success proj-done" data-id="${p.id}">Erledigt</button>` : ''}
          ${manage ? `<button class="btn btn-xs btn-danger proj-del" data-id="${p.id}">Löschen</button>` : ''}`;
-    const msList = ms.map(m => {
-      const meta = MS_META[m.status] || MS_META.offen;
-      const ctrl = canMs
-        ? `<span class="ms-picker">${MS_ORDER.map(s => `<button type="button" class="ms-opt${m.status === s ? ' active' : ''}" data-id="${p.id}" data-mid="${m.id}" data-status="${s}" style="background:${MS_META[s].color}" title="${MS_META[s].label}"></button>`).join('')}</span>`
-        : `<span class="ms-dot" style="background:${meta.color}" title="${meta.label}"></span>`;
-      return `<div class="ms-row">${ctrl}<span class="ms-title">${esc(m.title)}</span><span class="ms-days" title="Arbeitstage">${String(m.est_days).replace('.', ',')} AT</span></div>`;
-    }).join('');
+    const msList = msZeilenHtml(p.id, ms, canMs);
     // Projektnotiz (28.09.2026): 📝 an der Kachel, sobald sie Inhalt hat; ✎ wer gerade drin ist
     const pn = p.notiz;
     const pnDrin = pn ? (pn.live || []).filter(n => n !== S.user.name) : [];

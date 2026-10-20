@@ -304,6 +304,9 @@ function _sseOnMessage(e) {
   // Das Projekt-Formular liegt INNERHALB der Hauptfläche (kein Overlay) und hat keine eigene Route — ohne
   // den Selektor würde es beim Speichern eines Kollegen weggerissen, sobald man gerade nicht tippt.
   if (p.type === 'projects' && route === '/projects' && !_editorBusy('#pf2-save')) renderProjects();
+  // Zeitnachweis-Formular mit Projekt-Bereich: NUR die Zwischenziele nachziehen — das Formular selbst
+  // bleibt stehen, sonst wäre das gerade Getippte weg (20.10.2026)
+  if (p.type === 'projects' && document.getElementById('ef-projekt-bereich')) efProjektZieleAuffrischen();
 
   // ── Produktverzeichnis live (Alex, 09.09.2026) ────────────────────────────────────────────
   //

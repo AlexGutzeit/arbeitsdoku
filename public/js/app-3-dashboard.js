@@ -1001,6 +1001,128 @@ function navDate(dir) {
   else S.currentDate.setMonth(S.currentDate.getMonth() + dir);
 }
 
+// --- Projekt-Bereich im Zeitnachweis (Alex, 20.10.2026) ---
+//
+// Wer auf ein Projekt bucht, sieht im Formular gleich dessen Zwischenziele und die Projektnotiz — sonst
+// muss er hinterher im Board suchen, ob es dort noch etwas abzuhaken oder nachzutragen gibt. Es ist
+// DIESELBE Quelle wie im Board (Status per PATCH, Notiz als Live-Sitzung), also sofort überall gleich.
+// Rechte wie im Projekt: Zugeteilte, Chef und Admin ändern; alle anderen lesen mit (wer kurzfristig
+// einspringt, soll wissen, was Sache ist). Entschieden wird das auf dem Server; hier nur angezeigt.
+//
+// Der Bereich ist eine Zugabe: Er lädt hinter dem Formular her und hält es nie auf. Seine Felder
+// tragen data-kein-entwurf — sie gehören nicht in den Entwurf des Eintrags.
+let _efProjekt = null;      // { id, box } — welches Projekt steht im Bereich
+let _efProjektLauf = 0;     // Projektwechsel während des Ladens: der ältere Lauf verwirft sein Ergebnis
+
+function efDarfZiele(project) {
+  return isChefOrAdmin() || (project.assigned_users || []).some(x => Number(x.user_id) === Number(S.user.id));
+}
+
+async function efProjektBereich(projectId, seite) {
+  const box = document.getElementById('ef-projekt-bereich');
+  if (!box) return;
+  const pid = Number(projectId) || null;
+  if (pid && _efProjekt && _efProjekt.id === pid && _efProjekt.box === box) return;   // steht schon
+  const lauf = ++_efProjektLauf;
+  if (_notizSitzung) _notizSitzung.beenden();
+  _efProjekt = null;
+  box.hidden = true; box.innerHTML = '';
+  if (!pid) return;
+  let n, pr;
+  try { [n, pr] = await Promise.all([api('GET', `/api/projects/${pid}/notiz`), api('GET', `/api/projects/${pid}`)]); }
+  catch (_) { return; }   // Projekt weg, Konto ausgestellt, Funkloch: das Formular bleibt, wie es ist
+  if (lauf !== _efProjektLauf || !box.isConnected || !n || !pr || !pr.project) return;
+  _efProjekt = { id: pid, box };
+  box.innerHTML = `
+    <div class="ef-projekt-kopf">Projekt „${esc(pr.project.name)}" — Fortschritt &amp; Projektnotiz</div>
+    <p class="ef-projekt-hinweis" id="ef-projekt-hinweis"></p>
+    <div class="ef-projekt-ziele" id="ef-projekt-ziele"></div>
+    <div class="ef-projekt-notiz" id="ef-projekt-notiz"></div>`;
+  box.hidden = false;
+  // Einmal je Formular — der Bereich selbst bleibt beim Projektwechsel stehen, nur sein Inhalt wechselt
+  if (!box.dataset.gebunden) {
+    box.dataset.gebunden = '1';
+    box.addEventListener('click', async (e) => {
+      const b = e.target.closest('.ms-opt');
+      if (!b || !box.contains(b)) return;
+      e.preventDefault();
+      try {
+        const r = await api('PATCH', `/api/projects/${b.dataset.id}/milestones/${b.dataset.mid}/status`, { status: b.dataset.status });
+        if (r && r.project) efZieleZeichnen(r.project);
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  }
+  efZieleZeichnen(pr.project);
+  efNotizStarten(pid, seite, lauf);
+}
+
+// Zielliste + Balken + Hinweiszeile. Auch nach jedem `projects`-Signal (app-2): Wird man inzwischen
+// zugeteilt (oder entfernt), stimmen Auswahl und Hinweis danach wieder.
+function efZieleZeichnen(project) {
+  const el = document.getElementById('ef-projekt-ziele');
+  if (!el || !_efProjekt || _efProjekt.id !== Number(project.id)) return;
+  const darf = efDarfZiele(project);
+  const hinweis = document.getElementById('ef-projekt-hinweis');
+  if (hinweis) hinweis.textContent = darf
+    ? 'Änderungen hier gelten sofort im Projekt — unabhängig davon, ob du den Eintrag speicherst.'
+    : 'Du bist diesem Projekt nicht zugeteilt — Fortschritt und Projektnotiz zum Mitlesen.';
+  const ms = project.milestones || [];
+  if (!ms.length) { el.innerHTML = '<p class="ef-projekt-leer">Keine Zwischenziele angelegt.</p>'; return; }
+  const prog = projectProgress(ms);
+  el.innerHTML = `<div class="ms-list">${msZeilenHtml(project.id, ms, darf)}</div>${msBar(prog)}`
+    + `<div class="proj-meta">${Math.round(prog.done)}% fertig · ${Math.round(prog.doing)}% in Arbeit · ${Math.round(prog.offen)}% offen</div>`;
+}
+
+// Live-Signal `projects` (app-2): nur die Ziele neu holen — nie das Formular neu aufbauen.
+async function efProjektZieleAuffrischen() {
+  if (!_efProjekt || !_efProjekt.box.isConnected) return;
+  const pid = _efProjekt.id;
+  try {
+    const d = await api('GET', '/api/projects/' + pid);
+    if (d && d.project) efZieleZeichnen(d.project);
+  } catch (e) {
+    if (e.verbindung) return;   // Funkloch: der alte Stand bleibt stehen
+    const el = document.getElementById('ef-projekt-ziele');
+    if (el && _efProjekt && _efProjekt.id === pid) el.innerHTML = '<p class="ef-projekt-leer">Dieses Projekt gibt es nicht mehr.</p>';
+  }
+}
+
+async function efNotizStarten(pid, seite, lauf) {
+  const teil = document.getElementById('ef-projekt-notiz');
+  if (!teil) return;
+  teil.innerHTML = '<p class="ef-projekt-leer">Projektnotiz wird geladen …</p>';
+  let ok = false, pn = null;
+  try { [ok, pn] = await Promise.all([notizEditorLaden(), api('POST', `/api/projects/${pid}/notiz`)]); } catch (_) {}
+  if (lauf !== _efProjektLauf || !teil.isConnected) return;
+  if (!ok || !pn || !pn.notiz) {
+    teil.innerHTML = `<p class="ef-projekt-leer">Die Projektnotiz konnte nicht geladen werden.
+      <button type="button" class="btn btn-xs btn-outline" id="ef-notiz-nochmal">Nochmal versuchen</button></p>`;
+    teil.querySelector('#ef-notiz-nochmal').addEventListener('click', () => efNotizStarten(pid, seite, lauf));
+    return;
+  }
+  teil.innerHTML = `
+    <div class="notiz-editor ef-notiz">
+      <div class="notiz-editor-kopf">
+        <span class="ef-notiz-name">&#128221; Projektnotiz</span>
+        <span class="notiz-kopf-knoepfe">
+          <span class="notiz-status" id="notiz-status" role="status" aria-live="polite">Verbinde …</span>
+          <button type="button" class="btn btn-outline btn-sm notiz-mehr" id="notiz-mehr" title="Drucken und Speichern als" aria-label="Drucken und Speichern als">&#8943;</button>
+        </span>
+      </div>
+      <input type="hidden" id="notiz-titel">
+      ${notizFeldHtml()}
+    </div>`;
+  teil.querySelectorAll('input, select, textarea').forEach(f => { f.dataset.keinEntwurf = '1'; });
+  notizNamenSchalterBinden(teil.querySelector('.notiz-editor'));
+  if (_notizSitzung) _notizSitzung.beenden();
+  const id = pn.notiz.id;
+  _notizSitzung = notizSitzungStarten(id, notizWegeApp(id, pid, {
+    seite,
+    neuAufbauen: () => { if (_efProjekt && _efProjekt.id === pid && teil.isConnected) efNotizStarten(pid, seite, _efProjektLauf); },
+    entfernen: (text) => { if (teil.isConnected) teil.innerHTML = `<p class="ef-projekt-leer">${esc(text)}</p>`; },
+  }));
+}
+
 // --- Entry Form ---
 async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
   // Kreisel sofort: Vorher blieb waehrend des Ladens die alte Seite stehen, und ein Tipp auf
@@ -1281,6 +1403,21 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
 
   const netHours = isEdit ? entry.net_hours : 0;
 
+  // Das Projekt des Eintrags fehlt in der Auswahl, wenn es nicht mehr offen ist (erledigt oder im
+  // Papierkorb) — /api/projects liefert nur offene. Vorher sprang das Feld dann auf „Kein Projekt",
+  // der Freitext stand leer und gesperrt daneben, und Speichern loeschte still die Zuordnung (gefunden
+  // 20.10.2026 beim Verknuepfen von Zeitnachweis und Projekt). Jetzt steht es als eigene Option da.
+  let eigenesProjekt = null;
+  if (projectId && !S.projects.some(p => p.id == projectId)) {
+    let name = (isEdit && entry.project_name) || '';
+    let zusatz = 'im Papierkorb';
+    try {
+      const d = await api('GET', '/api/projects/' + projectId);
+      if (d && d.project) { name = d.project.name; zusatz = 'erledigt'; }
+    } catch (_) { /* 404 = im Papierkorb; Funkloch = Name aus dem Eintrag */ }
+    eigenesProjekt = { id: projectId, name: `${name || 'Projekt ' + projectId} (${zusatz})` };
+  }
+
   const allUsers = regieUsers.length > 0 ? regieUsers : [{ id: S.user.id, name: S.user.name }];
   const showNotes = S.user.role === 'admin' || S.user.role === 'mitarbeiter';
   const canDelete = isEdit && (S.user.role === 'admin' || entry.user_id === S.user.id);
@@ -1357,6 +1494,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
             <select class="form-control" id="ef-project">
               <option value="">-- Kein Projekt --</option>
               ${S.projects.map(p => `<option value="${p.id}" ${p.id == projectId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+              ${eigenesProjekt ? `<option value="${eigenesProjekt.id}" selected>${esc(eigenesProjekt.name)}</option>` : ''}
             </select>
           </div>
           <div class="form-group">
@@ -1389,6 +1527,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
           <label>Persönliche Notiz (nur für Sie sichtbar)</label>
           <textarea class="form-control" id="ef-note" rows="2" placeholder="Private Notiz...">${esc(personalNote)}</textarea>
         </div>` : ''}
+        <div class="ef-projekt-bereich" id="ef-projekt-bereich" hidden></div>
         ${gesperrt ? `
         <div class="push-hint" id="abgerechnet-hinweis" style="border-left:3px solid var(--warning,#e0a800);padding-left:0.6rem;margin-bottom:0.75rem;">
           🔒 ${esc(ABGERECHNET_HINWEIS(abgerechnetBisJetzt()))}
@@ -1549,8 +1688,13 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
 
   document.getElementById('ef-break').addEventListener('input', updateNet);
 
+  // Zwischenziele + Projektnotiz des gewählten Projekts (Alex, 20.10.2026) — lädt hinter dem Formular her
+  const formularRoute = getRoute();
+  efProjektBereich(document.getElementById('ef-project').value, formularRoute);
+
   // Projekt-Auswahl: Adresse/Kunde/Notiz übernehmen + Freitext steuern
   document.getElementById('ef-project').addEventListener('change', (e) => {
+    efProjektBereich(e.target.value, formularRoute);
     const proj = S.projects.find(p => p.id == e.target.value);
     if (proj) {
       if (proj.address) document.getElementById('ef-address').value = proj.address;
@@ -1669,6 +1813,9 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
       }
       toast(isEdit ? 'Eintrag aktualisiert' : 'Eintrag erstellt', 'success');
       entwurfLoeschen(entwurfName);   // gespeichert → Entwurf hat sich erledigt
+      // Die Projektnotiz im Formular: was gerade getippt wurde, noch abliefern (höchstens 3 s). Was dann
+      // noch fehlt, sichert das Beenden der Sitzung auf dem Gerät und reicht es beim nächsten Öffnen nach.
+      if (_notizSitzung && _notizSitzung.bisGesendet) await _notizSitzung.bisGesendet();
       navigate('/');
     } catch (err) { toast(err.message, 'error'); }
   });

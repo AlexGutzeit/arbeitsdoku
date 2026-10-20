@@ -347,11 +347,17 @@ const NOTIZ_MENUE_DATEI = [
 // Dieselbe Sitzung läuft in der App (Mitarbeiter) und auf der Gästeseite (gast.js, Etappe C). Alles,
 // was zwischen beiden verschieden ist — Adressen, Anmeldung, wohin es nach einem Rauswurf geht —,
 // steckt in diesem Objekt. Hier die Wege der App; gast.js baut seine eigenen.
-function notizWegeApp(id, projektId = null) {
-  const seite = projektId ? `/projects/${projektId}/notiz` : '/notes/' + id;
+//
+// `eingebettet` (Alex, 20.10.2026): die Projektnotiz steckt IN einer anderen Seite — dem Zeitnachweis-
+// Formular. Dann gibt es kein „← Fertig", und ein Rauswurf darf nicht die Seite verlassen (das Formular
+// mit der halb erfassten Zeit bliebe sonst auf der Strecke): `entfernen(text)` ersetzt nur den
+// Notizteil durch einen Hinweis, `neuAufbauen()` startet ihn neu. `seite` ist die Route des Formulars.
+function notizWegeApp(id, projektId = null, eingebettet = null) {
+  const seite = eingebettet ? eingebettet.seite : (projektId ? `/projects/${projektId}/notiz` : '/notes/' + id);
   const aufSeite = () => getRoute() === seite;
   // Zurück: aus der Übersicht bzw. vom Board gekommen → dorthin zurück (Scrollstelle bleibt)
-  const zurueck = () => (projektId
+  const zurueck = () => (eingebettet ? eingebettet.entfernen('Die Projektnotiz ist nicht mehr erreichbar.')
+    : projektId
     ? ((_notizListeZurueck && _notizListeZurueck.ausBoard && history.length > 1) ? history.back() : navigate('/projects'))
     : notizZurueckZurListe());
   return {
@@ -378,7 +384,7 @@ function notizWegeApp(id, projektId = null) {
     },
     gaeste: () => notizGaesteDialog({ id, title: (document.getElementById('notiz-titel') || {}).value || '' }),
     // Nach einer Abweisung (Leserecht, zu groß, beschädigt) die Notiz neu öffnen
-    neuOeffnen: () => { if (aufSeite()) renderNotizEditor(id, projektId ? { projektId } : {}); },
+    neuOeffnen: () => { if (aufSeite()) { if (eingebettet) eingebettet.neuAufbauen(); else renderNotizEditor(id, projektId ? { projektId } : {}); } },
     raus: (grund) => {
       toast(grund === 'geloescht' ? 'Diese Notiz wurde gelöscht.'
         : grund === 'projekt-geloescht' ? 'Das Projekt wurde gelöscht — seine Notiz liegt mit im Papierkorb.'
