@@ -4900,3 +4900,59 @@ Auf echten Daten ändern sich 3 von 41 Projekten: das gemeldete Projekt 1457:30 
   behoben und einzeln grün; die Projektkarte selbst war in der Suite grün.
 - **Sicherung:** `arbeitsdoku_backup_20261008-103817.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe).
   Rückkehrpunkt `vor-projektkarte-deploy` (= `d553cf4`). Datenbank 60/60, keine Abweichung.
+
+## Zeitnachweis ↔ Projekt: Zwischenziele und Projektnotiz im Formular (20.10.2026)
+
+Alex: Wer Zeit auf ein Projekt bucht, muss danach eigens ins Board, um nachzusehen, ob es dort Zwischenziele
+abzuhaken oder in der Projektnotiz etwas nachzutragen gibt — das passiert oft nicht. Jetzt zeigt das
+Zeitnachweis-Formular, sobald ein Projekt gewählt ist, den Bereich „Projekt „…" — Fortschritt & Projektnotiz":
+die Zwischenziele (dieselbe Zeile wie im Board, `msZeilenHtml`) und die **Live-Notiz eingebettet**.
+
+Entscheidungen (Alex): Notiz live im Formular, nicht Vorschau + Knopf. Sichtbar für **alle**, die das Projekt
+wählen — wer nicht zugeteilt ist, liest mit (Ziele als Punkte, Notiz ohne Knopfleiste), damit wer kurzfristig
+einspringt, Bescheid weiß. Änderungen bleiben erhalten, auch wenn der Eintrag nicht gespeichert wird.
+
+Wie es gebaut ist, und warum so:
+- **Kein Server-Umbau.** Rechte, Status-PATCH und Live-Raum gab es schon; die eine Rechte-Regel bleibt in
+  `projekt-notiz.js`. Das Formular fragt nur `GET /api/projects/:id/notiz` (`darf_schreiben`) und `GET /:id`.
+- **Eingebettete Sitzung:** `notizWegeApp(id, projektId, eingebettet)` — kein „← Fertig", und ein Rauswurf
+  (Projekt gelöscht, Rechte weg) ersetzt nur den Notizteil, statt die Seite zu verlassen: Die halb erfasste Zeit
+  bliebe sonst auf der Strecke. Die Sitzung endet wie immer mit jedem Seitenwechsel (`render()`).
+- **Live:** Das Signal `projects` zieht im Formular **nur die Ziele** nach (`efProjektZieleAuffrischen`), nie
+  das Formular — sonst wäre das gerade Getippte weg.
+- **Entwurf:** Die Felder des Bereichs tragen `data-kein-entwurf`; Notiz-Titel und Namensschalter gehören
+  nicht in den Entwurf des Eintrags.
+- **Die Notiz wird erst beim Antippen angelegt.** Die erste Fassung legte sie schon beim Öffnen des Formulars an
+  (`POST /notiz`) — dann entstünde bei jeder Buchung auf ein neues Projekt eine leere Notiz, auch bei Lesern.
+  Gefunden hat das `entwurf-prodklon` („kein einziger Datensatz dazugekommen", notes 10 → 11). Jetzt: Schreiber
+  sehen ein leeres Feld „Hier tippen …", Leser „noch leer"; fängt jemand an, startet die Notiz bei den anderen
+  von selbst (die Notiz meldet `projects`, sobald sie Inhalt bekommt).
+
+**Nebenfund, mitbehoben:** Beim Bearbeiten eines Eintrags, dessen Projekt **erledigt** ist, fehlte das Projekt im
+Dropdown (`GET /api/projects` liefert nur offene). Das Feld sprang auf „Kein Projekt", der Freitext stand leer und
+gesperrt daneben — **Speichern löschte still die Zuordnung**. Jetzt steht es als „Name (erledigt)" bzw.
+„(im Papierkorb)" da. An der Prod-Kopie lesend geprüft: nur ein Eintrag hat bei einer Bearbeitung je sein Projekt
+verloren, und das am 23.06. — vor dem „Erledigt"-Knopf (erstes `done_at` 15.07.). Kein Schaden durch diesen Fehler.
+
+Test `zeitnachweis-projekt-ui` (35): Bereich, Abhaken live im Board, fremde Änderung zieht nach ohne das
+Formular anzufassen, Notiz beim Server, Entwurf ohne Notizfelder, Projektwechsel verlässt die alte Notiz,
+Leser ohne Knopfleiste + PATCH 403, leere Notiz + Selbststart beim Leser, Chef darf, **ohne Speichern verlassen**
+(direkt nach dem letzten Tastendruck — Ziel und Text sind beim Server, kein Eintrag entsteht), erledigtes Projekt
+bleibt zugeordnet. Sieben Gegenproben, alle rot.
+
+Testfallen dabei:
+- Der Server schreibt `notes.body` erst 1,5 s nach der letzten Taste — im Test darauf warten, nicht einmal fragen.
+- Ohne Fenster-Fokus setzt Quill keine Schreibmarke: Bei mehreren Browserseiten vor dem Antippen
+  `page.bringToFront()`, sonst geht das Tippen ins Leere.
+- Der erste Suite-Lauf hat die Notiz in `/tmp/prodklon.db` geschrieben — die Gegenprobe zu `entwurf-prodklon` war
+  danach grün, weil die Notiz schon da war. Erst nach Neubau des Klons gültig.
+- Während eine Suite läuft, **nichts am Code ändern und keine Gegenproben fahren** — der Lauf wurde abgebrochen und
+  neu gestartet.
+- `geburtstag-eigener-ui` schrieb sein Foto in den Scratchpad einer alten Sitzung (Ordner weg → ENOENT) — jetzt `/tmp`.
+
+**Deploy (21.10.2026, 00:37, `f347498`, Cache 454).**
+- **Suite:** 284 von 285 auf der Kopie vom 20.10. 21:59; rot nur `testliste-vollstaendigkeit` (neuer Test fehlte in
+  `tests/README.md`, nachgetragen, grün). Alle 20 Prod-Klon-Tests vor dem Deploy auf frischer Kopie (00:23) grün.
+- **Sicherung:** `arbeitsdoku_backup_20261021-003641.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe auf dem
+  Mini-PC: Integrität ok, Zahlen wie in der Lesekopie). Rückkehrpunkt `vor-zeitnachweis-projekt-deploy` (= `3f0e0c8`).
+  Datenbank 60/60 Tabellen, keine Zeile verändert. Zweitanlage nachgezogen, Probestart ok.
