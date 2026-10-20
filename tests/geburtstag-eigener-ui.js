@@ -133,7 +133,7 @@ const morgenMD = iso(morgen).slice(5);
     z = await seite(page);
     ok('das Schalttagskind wird am 28. gefeiert', z.eigenDa && /Alles Gute zum Geburtstag/.test(z.eigenText), JSON.stringify(z.eigenText));
     ok('… mit Erklärung, warum heute', /29\. Februar/.test(z.eigenText), JSON.stringify(z.eigenText));
-    await page.screenshot({ path: '/tmp/claude-1000/-home-alex-zeug-arbeitsdoku/84cc3a6c-bbc9-43b1-ae98-766adee26b4e/scratchpad/gratulation.png' });
+    await page.screenshot({ path: '/tmp/geburtstag-gratulation.png' });
     await page.close();
 
     console.log('\n── Gegenprobe: dieselbe Person an einem anderen Tag ──');

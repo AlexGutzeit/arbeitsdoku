@@ -1053,7 +1053,7 @@ async function efProjektBereich(projectId, seite) {
     });
   }
   efZieleZeichnen(pr.project);
-  efNotizStarten(pid, seite, lauf);
+  efNotizZeigen(pid, seite, lauf, n.notiz ? n.notiz.id : null, n.darf_schreiben === true);
 }
 
 // Zielliste + Balken + Hinweiszeile. Auch nach jedem `projects`-Signal (app-2): Wird man inzwischen
@@ -1073,13 +1073,17 @@ function efZieleZeichnen(project) {
     + `<div class="proj-meta">${Math.round(prog.done)}% fertig · ${Math.round(prog.doing)}% in Arbeit · ${Math.round(prog.offen)}% offen</div>`;
 }
 
-// Live-Signal `projects` (app-2): nur die Ziele neu holen — nie das Formular neu aufbauen.
+// Live-Signal `projects` (app-2): nur die Ziele neu holen — nie das Formular neu aufbauen. Hat inzwischen
+// jemand die Notiz angefangen, während hier noch „leer" stand, startet die Live-Notiz jetzt.
 async function efProjektZieleAuffrischen() {
   if (!_efProjekt || !_efProjekt.box.isConnected) return;
   const pid = _efProjekt.id;
   try {
     const d = await api('GET', '/api/projects/' + pid);
     if (d && d.project) efZieleZeichnen(d.project);
+    if (d && d.project && d.project.notiz && _efProjekt && _efProjekt.id === pid && _efProjekt.notizLeer) {
+      efNotizStarten(pid, _efProjekt.seite, _efProjektLauf, d.project.notiz.id);
+    }
   } catch (e) {
     if (e.verbindung) return;   // Funkloch: der alte Stand bleibt stehen
     const el = document.getElementById('ef-projekt-ziele');
@@ -1087,17 +1091,41 @@ async function efProjektZieleAuffrischen() {
   }
 }
 
-async function efNotizStarten(pid, seite, lauf) {
+// Die Notiz gibt es erst, wenn jemand sie zum ersten Mal öffnet. Das bloße Öffnen des Formulars legt sie
+// NICHT an — sonst entstünde bei jeder Buchung auf ein neues Projekt eine leere Notiz, auch bei denen, die
+// nur lesen dürfen (gefunden von tests/entwurf-prodklon.js: „kein Datensatz dazugekommen"). Wer schreiben
+// darf, sieht ein leeres Feld; erst sein Antippen legt sie an. Wer nur liest, sieht „Noch leer." — fängt
+// jemand an, startet die Live-Notiz über das `projects`-Signal von selbst (efProjektZieleAuffrischen).
+function efNotizZeigen(pid, seite, lauf, notizId, darf) {
+  const teil = document.getElementById('ef-projekt-notiz');
+  if (!teil || !_efProjekt) return;
+  _efProjekt.seite = seite;
+  if (notizId) { efNotizStarten(pid, seite, lauf, notizId); return; }
+  _efProjekt.notizLeer = true;
+  teil.innerHTML = darf
+    ? `<button type="button" class="ef-notiz-anfangen" id="ef-notiz-anfangen">&#128221; Projektnotiz — noch leer. <span>Hier tippen, um sie anzufangen …</span></button>`
+    : '<p class="ef-projekt-leer">&#128221; Projektnotiz — noch leer.</p>';
+  const knopf = teil.querySelector('#ef-notiz-anfangen');
+  if (knopf) knopf.addEventListener('click', () => efNotizStarten(pid, seite, lauf, null, true));
+}
+
+// notizId fehlt nur, wenn jemand mit Schreibrecht die Notiz gerade anfängt: dann anlegen (POST) und gleich
+// ins Schreibfeld setzen.
+async function efNotizStarten(pid, seite, lauf, notizId, anfangen) {
   const teil = document.getElementById('ef-projekt-notiz');
   if (!teil) return;
+  if (_efProjekt && _efProjekt.id === pid) _efProjekt.notizLeer = false;
   teil.innerHTML = '<p class="ef-projekt-leer">Projektnotiz wird geladen …</p>';
   let ok = false, pn = null;
-  try { [ok, pn] = await Promise.all([notizEditorLaden(), api('POST', `/api/projects/${pid}/notiz`)]); } catch (_) {}
+  try {
+    [ok, pn] = await Promise.all([notizEditorLaden(),
+      notizId ? { notiz: { id: notizId } } : api('POST', `/api/projects/${pid}/notiz`)]);
+  } catch (_) {}
   if (lauf !== _efProjektLauf || !teil.isConnected) return;
   if (!ok || !pn || !pn.notiz) {
     teil.innerHTML = `<p class="ef-projekt-leer">Die Projektnotiz konnte nicht geladen werden.
       <button type="button" class="btn btn-xs btn-outline" id="ef-notiz-nochmal">Nochmal versuchen</button></p>`;
-    teil.querySelector('#ef-notiz-nochmal').addEventListener('click', () => efNotizStarten(pid, seite, lauf));
+    teil.querySelector('#ef-notiz-nochmal').addEventListener('click', () => efNotizStarten(pid, seite, lauf, notizId, anfangen));
     return;
   }
   teil.innerHTML = `
@@ -1116,11 +1144,17 @@ async function efNotizStarten(pid, seite, lauf) {
   notizNamenSchalterBinden(teil.querySelector('.notiz-editor'));
   if (_notizSitzung) _notizSitzung.beenden();
   const id = pn.notiz.id;
-  _notizSitzung = notizSitzungStarten(id, notizWegeApp(id, pid, {
+  const sitzung = notizSitzungStarten(id, notizWegeApp(id, pid, {
     seite,
-    neuAufbauen: () => { if (_efProjekt && _efProjekt.id === pid && teil.isConnected) efNotizStarten(pid, seite, _efProjektLauf); },
+    neuAufbauen: () => { if (_efProjekt && _efProjekt.id === pid && teil.isConnected) efNotizStarten(pid, seite, _efProjektLauf, id); },
     entfernen: (text) => { if (teil.isConnected) teil.innerHTML = `<p class="ef-projekt-leer">${esc(text)}</p>`; },
   }));
+  _notizSitzung = sitzung;
+  // Angetippt zum Anfangen: Sobald der Stand da ist (Schreibfeld frei), gleich hineinsetzen
+  if (anfangen) {
+    for (let i = 0; i < 50 && sitzung.offen && !sitzung.binding; i++) await new Promise(r => setTimeout(r, 100));
+    if (sitzung.offen && sitzung.zugriff !== 'read') sitzung.quill.focus();
+  }
 }
 
 // --- Entry Form ---

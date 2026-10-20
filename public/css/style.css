@@ -2150,6 +2150,8 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 /* Im Formular nicht kleben: Die Leiste stünde sonst beim Scrollen über den Eintragsfeldern */
 .notiz-editor.ef-notiz .notiz-leiste.ql-toolbar.ql-snow { position: static; }
 .notiz-editor.ef-notiz .ql-editor { min-height: 8rem; }
+.ef-notiz-anfangen { display: block; width: 100%; min-height: 6rem; text-align: left; vertical-align: top; padding: 0.6rem 0.75rem; border: 1px dashed var(--border); border-radius: var(--radius); background: var(--card); color: var(--text); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: text; }
+.ef-notiz-anfangen span { display: block; font-weight: 400; color: var(--text-lighter); margin-top: 0.35rem; }
 .note-offers-section { background: #fef9e7; border: 1px solid #f0c36d; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
 .note-offers-section h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
 .note-offer-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); gap: 0.5rem; }

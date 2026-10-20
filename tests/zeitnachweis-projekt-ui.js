@@ -2,14 +2,16 @@
 // Zwischenziele und die Live-Projektnotiz direkt im Formular — dieselbe Quelle wie im Board.
 //
 // Carla (Chef, nicht zugeteilt), Anna und Ben (zugeteilt), Tom (nicht zugeteilt). Geprüft:
-//   * Anna wählt „PV Beispiel": Bereich mit Dach / AC-Seite / Abnahme (3-Farb-Auswahl) + Live-Notiz.
+//   * Anna wählt „PV Beispiel": Bereich mit Dach / AC-Seite / Abnahme (3-Farb-Auswahl). Die Notiz gibt es
+//     noch nicht: leeres Feld „Hier tippen …", angelegt wird NICHTS — erst ihr Antippen legt sie an.
 //   * Anna hakt „Dach" ab → Server-Stand + Bens Board live.
 //   * Ben ändert „AC-Seite" → Annas Formular zieht nach, ihre Arbeitsbeschreibung bleibt stehen.
 //   * Anna schreibt in die Notiz → beim Server; Notizfelder landen NICHT im Eintragsentwurf.
 //   * Speichern: Eintrag mit Projekt, Notiz bleibt, Anna ist danach nicht mehr „in der Notiz".
 //   * Projektwechsel → anderer Bereich, alte Sitzung beendet; „Kein Projekt" → kein Bereich.
 //   * Tom (nicht zugeteilt): nur lesen — Ziele als Punkte, keine Knopfleiste, Bens Text kommt live an;
-//     PATCH direkt → 403. Carla (Chef): darf ändern.
+//     PATCH direkt → 403. Bei einer noch leeren Notiz „noch leer" ohne Anfangen-Feld; fängt Anna sie an,
+//     startet sie bei Tom von selbst. Carla (Chef): darf ändern.
 //   * Nebenfund: Eintrag eines ERLEDIGTEN Projekts bearbeiten → Projekt steht im Feld, Speichern behält es.
 //
 //   node tests/zeitnachweis-projekt-ui.js
@@ -95,11 +97,20 @@ const gestern = () => { const d = new Date(); d.setDate(d.getDate() - 1); return
     ok('ohne Projekt: kein Bereich', !a.sichtbar, JSON.stringify(a));
     await waehle(A, pv.id);
     await A.waitForFunction((b) => document.querySelectorAll(b + ' .ms-opt').length === 9, {}, B);
-    await notizBereit(A);
+    await A.waitForSelector(B + ' #ef-notiz-anfangen');
+    await sleep(300);
+    ok('Notiz noch nicht da: leeres Feld „Hier tippen …", angelegt ist nichts',
+      /Hier tippen/.test(await A.evaluate((b) => document.querySelector(b + ' #ef-notiz-anfangen').innerText, B))
+      && (await req('GET', `/api/projects/${pv.id}/notiz`, tok.carla)).body.notiz === null);
+    await A.bringToFront();   // ohne Fenster-Fokus setzt Quill keine Schreibmarke (Testfalle, s. notiz-gaeste-ui)
+    await A.click(B + ' #ef-notiz-anfangen');
+    await notizBereit(A); await sleep(300);
     a = await bereich(A);
     ok('Bereich: Kopf mit Projektname, Dach / AC-Seite / Abnahme mit 3-Farb-Auswahl, Hinweis „gelten sofort"',
       a.sichtbar && /PV Beispiel/.test(a.text) && /Dach/.test(a.text) && /AC-Seite/.test(a.text) && /Abnahme/.test(a.text) && a.opts === 9 && /gelten sofort/.test(a.text), JSON.stringify(a));
-    ok('Live-Notiz zum Mitschreiben: Knopfleiste da, tippbar', a.leiste && a.tippbar && !a.nurLesen, JSON.stringify(a));
+    ok('Antippen legt die Notiz an — Live-Notiz zum Mitschreiben: Knopfleiste da, tippbar, Schreibmarke drin',
+      a.leiste && a.tippbar && !a.nurLesen && (await A.evaluate(() => !!document.activeElement.closest('.ql-editor')))
+      && !!(await req('GET', `/api/projects/${pv.id}/notiz`, tok.carla)).body.notiz, JSON.stringify(a));
     ok('Anna steht jetzt „in der Notiz"', (await drin(pv.id)).includes('Anna Dach'), JSON.stringify(await drin(pv.id)));
 
     console.log('\nDach abhaken');
@@ -160,12 +171,14 @@ const gestern = () => { const d = new Date(); d.setDate(d.getDate() - 1); return
     await waehle(A, pv.id); await notizBereit(A);
     await waehle(A, halle.id);
     await A.waitForFunction((b) => /Halle Süd/.test(document.querySelector(b).innerText), {}, B);
-    await notizBereit(A); await sleep(400);
+    await A.waitForSelector(B + ' #ef-notiz-anfangen'); await sleep(400);
     a = await bereich(A);
-    ok('Bereich zeigt jetzt „Halle Süd", keine Ziele', /Halle Süd/.test(a.text) && !/PV Beispiel/.test(a.text) && /Keine Zwischenziele/.test(a.text) && a.opts === 0, JSON.stringify(a));
-    ok('alte Notiz verlassen, neue betreten', !(await drin(pv.id)).includes('Anna Dach') && (await drin(halle.id)).includes('Anna Dach'));
+    ok('Bereich zeigt jetzt „Halle Süd", keine Ziele, Notiz noch leer', /Halle Süd/.test(a.text) && !/PV Beispiel/.test(a.text) && /Keine Zwischenziele/.test(a.text) && a.opts === 0, JSON.stringify(a));
+    ok('alte Notiz verlassen', !(await drin(pv.id)).includes('Anna Dach'));
+    await waehle(A, pv.id); await notizBereit(A);
+    ok('zurück auf PV: Notiz läuft wieder', (await drin(pv.id)).includes('Anna Dach'));
     await waehle(A, null); await sleep(400);
-    ok('„Kein Projekt" → Bereich weg, Notiz verlassen', !(await bereich(A)).sichtbar && !(await drin(halle.id)).includes('Anna Dach'));
+    ok('„Kein Projekt" → Bereich weg, Notiz verlassen', !(await bereich(A)).sichtbar && !(await drin(pv.id)).includes('Anna Dach'));
 
     console.log('\nTom (nicht zugeteilt) liest mit');
     const T = await seite('tom', true);
@@ -189,6 +202,19 @@ const gestern = () => { const d = new Date(); d.setDate(d.getDate() - 1); return
     await T.waitForFunction((b) => document.querySelectorAll(b + ' .ms-dot[title="erledigt"]').length === 2, { timeout: 8000 }, B).catch(() => {});
     ok('Bens Statuswechsel kommt bei Tom an (2 von 3 erledigt)', (await T.evaluate((b) => document.querySelectorAll(b + ' .ms-dot[title="erledigt"]').length, B)) === 2);
 
+    console.log('\nTom bei einer noch leeren Notiz');
+    await neuerEintrag(T);
+    await waehle(T, halle.id);
+    await T.waitForFunction((b) => /noch leer/.test((document.querySelector(b + ' #ef-projekt-notiz') || {}).innerText || ''), {}, B);
+    ok('Tom: „noch leer", kein Feld zum Anfangen', !(await T.$(B + ' #ef-notiz-anfangen')));
+    await neuerEintrag(A); await waehle(A, halle.id);
+    await A.bringToFront();
+    await A.waitForSelector(B + ' #ef-notiz-anfangen'); await A.click(B + ' #ef-notiz-anfangen'); await notizBereit(A); await sleep(300);
+    await A.keyboard.type('Schlüssel beim Nachbarn');
+    await T.waitForFunction((b) => /Schlüssel beim Nachbarn/.test((document.querySelector(b + ' .ql-editor') || {}).innerText || ''), { timeout: 10000 }, B).catch(() => {});
+    const t2 = await bereich(T);
+    ok('Anna fängt an → bei Tom startet die Notiz von selbst, nur lesen', /Schlüssel beim Nachbarn/.test(t2.notiz) && !t2.tippbar, JSON.stringify(t2));
+
     console.log('\nCarla (Chef, nicht zugeteilt)');
     const C = await seite('carla');
     await neuerEintrag(C);
@@ -206,8 +232,8 @@ const gestern = () => { const d = new Date(); d.setDate(d.getDate() - 1); return
     await A.waitForSelector('#ef-project'); await sleep(500);
     const feld = await A.evaluate(() => { const s = document.getElementById('ef-project'); return { wert: s.value, text: s.selectedOptions[0] ? s.selectedOptions[0].textContent : '' }; });
     ok('Projekt steht im Feld als „Altbau Nord (erledigt)"', feld.wert === String(altbau.id) && /Altbau Nord \(erledigt\)/.test(feld.text), JSON.stringify(feld));
-    await notizBereit(A);
-    ok('Bereich auch beim erledigten Projekt (Notiz bleibt beschreibbar)', (await bereich(A)).tippbar);
+    await A.waitForSelector(B + ' #ef-notiz-anfangen');
+    ok('Bereich auch beim erledigten Projekt (Notiz bleibt beschreibbar)', (await bereich(A)).sichtbar);
     await A.evaluate(() => { document.getElementById('ef-desc').value = 'Leitungen gezogen, geprüft'; });
     await A.evaluate(() => document.querySelector('#entry-form button[type="submit"]').click());
     await A.waitForSelector('.modal-overlay [data-act="ok"]');
