@@ -5022,3 +5022,25 @@ Tests, bei Brüchen eine Gegenprobe mit dem alten Stand.
 `vor-bibliotheken2-deploy` (= `4a06054`). Danach eine echte Sicherung mit dem neuen Code (archiver 8) gezogen und am
 Mini-PC — dort ebenfalls schon mit den neuen Paketen — zurückgespielt: Integrität ok, 1634 Einträge. `npm audit --omit=dev`
 0, Protokoll ohne Fehler und ohne dotenv-Zeile, IPv4 + IPv6 200. Datenbank 60/60 Tabellen, keine Zeile verändert.
+
+## pdfkit 0.20: falsche „…" in den Arbeitsnachweisen (24.10.2026)
+
+Vorher/Nachher an der Prod-Kopie: 126 PDFs (jeder Monatsnachweis je Person Januar–Oktober, Gesamtnachweise, Projekte,
+Urlaubsübersicht, Notiz) mit fester Server-Uhr aus derselben eingefrorenen Kopie, verglichen nach Seitenzahl, Text mit
+Layout und Seitenbild. Zwei Läufe mit 0.16 waren untereinander identisch; ein absichtlich vertauschtes PDF meldete der
+Vergleich auf allen drei Ebenen. Bytes taugen nicht (Erstellzeit und Dokument-ID).
+
+- Seitenzahl überall gleich, Notiz-Export und Urlaubsübersicht pixelgleich.
+- Die Nachweis-Tabelle (`routes/pdf.js`) war in 84 PDFs anders. 0.16 setzte 1070 „…", 0.20 noch 18. Ursache in 0.16:
+  `ellipsis` bei Text von GENAU zwei Zeilen Höhe — „y + 2 Zeilenhöhen > Unterkante" kippte durch Rundung, das „…" hing an
+  der ersten Zeile („Straße 6…" über „PLZ Ort"), manchmal fehlte die zweite Zeile ganz. 0.20 rundet sauber.
+- Wortweise geprüft: in 34 PDFs steht mit 0.20 mehr Text, in keinem weniger.
+- Bereits ausgegebene Nachweise haben den Darstellungsfehler; die Stunden darin stimmen.
+
+Neuer Test `pdf-zellen-kuerzen` (Gegenprobe mit 0.16 rot). Werkzeuge für das nächste Mal: `pdf-erzeugen.js` und
+`pdf-vergleich.sh` bei den Deploy-Werkzeugen.
+
+**Deploy (24.10.2026, 17:12, `177f1f4`, kein Cache-Wechsel).** Suite 288/288 auf der Kopie von 15:31. Sicherung
+`arbeitsdoku_backup_20261024-171110.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe). Rückkehrpunkt `vor-pdfkit-deploy`
+(= `ffab65b`). Danach auf dem VPS mit Node 22 ein Probe-PDF erzeugt: zweizeilige Adresse vollständig ohne „…", überlange
+Zelle mit „…". IPv4 + IPv6 200, `npm audit --omit=dev` 0, Datenbank 60/60 Tabellen, keine Zeile verändert.
