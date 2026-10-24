@@ -99,7 +99,7 @@ function req(server, method, p, token, body) {
   }
 
   const app = express();
-  app.use(express.json());
+  app.use(express.json()); app.use(require('../middleware/body-standard'));
   app.use('/api/auth', require('../routes/auth'));
   app.use('/api/orders', require('../routes/orders'));
   app.use('/api/bulletin', require('../routes/bulletin'));

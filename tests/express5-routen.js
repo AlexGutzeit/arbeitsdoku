@@ -4,7 +4,8 @@
 //   A  „/:id(\\d+)" gibt es nicht mehr. Ersatz: middleware/nur-zahl.js. Ohne ihn finge GET /api/meldungen/:id
 //      auch /regeln ab und PUT /:id auch /themen-reihenfolge.
 //   B  „*" heißt jetzt „/{*rest}" — tiefe Pfade müssen weiter die App (index.html) bekommen.
-//   C  req.body ist ohne Body undefined statt {} — DELETE mit `!req.body.loesen` wäre ein 500.
+//   C  req.body ist ohne Body undefined statt {} — DELETE mit `!req.body.loesen` wäre ein 500. Ersatz:
+//      middleware/body-standard.js, im Server UND in jeder Test-Mini-App (C2 wacht darüber).
 //   D  app.listen gibt einen Startfehler (Port belegt) an den Rückruf, statt abzustürzen. Ohne Prüfung meldete der
 //      Server „läuft" und endete mit Code 0 — Gegenprobe am 24.10.2026.
 //   E  absturzschutz.asyncRoutenAbsichern() ist nur noch ein Wächter: unter Express < 5 bricht es laut ab.
@@ -90,6 +91,17 @@ function req(method, p, token, body, ohneBody) {
   ok('… mit Code 1', zweit.status === 1, String(zweit.status));
   ok('… und meldet NICHT „läuft"', !/Server läuft auf/.test(ausgabe));
   ok('… sondern den Grund (EADDRINUSE)', /EADDRINUSE/.test(ausgabe), ausgabe.split('\n').filter(z => /Port|EADDR/.test(z)).join(' | '));
+
+  console.log('── C2: Mini-Apps der Tests verhalten sich wie der Server ──');
+  // 19 Tests bauen sich eine eigene App mit express.json() — ohne body-standard bekäme dort jede Route ohne Body
+  // undefined statt {} (am 24.10.2026 dadurch auftrags-kategorien und produktpflege rot, der Server selbst war richtig).
+  const server = fs.readFileSync(path.join(WURZEL, 'server.js'), 'utf8');
+  ok('server.js hängt middleware/body-standard ein', /require\('\.\/middleware\/body-standard'\)/.test(server));
+  const ohne = fs.readdirSync(__dirname).filter(f => f.endsWith('.js')).filter(f => {
+    const t = fs.readFileSync(path.join(__dirname, f), 'utf8');
+    return /express\(\)/.test(t) && /express\.json\(/.test(t) && !/middleware\/body-standard/.test(t);
+  });
+  ok('jede Test-Mini-App mit express.json() hängt auch body-standard ein', ohne.length === 0, ohne.join(', '));
 
   console.log('── E: Absturz-Wächter ──');
   const waechter = (version) => spawnSync('node', ['-e', `

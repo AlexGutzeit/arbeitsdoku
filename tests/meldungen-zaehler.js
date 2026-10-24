@@ -55,7 +55,7 @@ function req(server, method, p, token, body) {
     db.prepare("INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, 'k', 'k')").run(ids[u], 'sub://' + u);
   }
   const app = express();
-  app.use(express.json());
+  app.use(express.json()); app.use(require('../middleware/body-standard'));
   app.use('/api/auth', require('../routes/auth'));
   app.use('/api/meldungen', require('../routes/meldungen'));
   app.use('/api/badges', require('../routes/badges'));

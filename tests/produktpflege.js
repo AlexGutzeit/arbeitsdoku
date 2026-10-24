@@ -43,7 +43,7 @@ function req(m, p, t, b) {
   const PW = 'Seed!12345';
   db.prepare('UPDATE users SET password_hash = ?').run(bcrypt.hashSync(PW, 10));
 
-  const app = express(); app.use(express.json());
+  const app = express(); app.use(express.json()); app.use(require('../middleware/body-standard'));
   for (const [pfad, mod] of [['/api/auth','auth'],['/api/users','users'],['/api/orders','orders'],
                              ['/api/products','products'],['/api/suppliers','suppliers'],['/api/projects','projects']])
     app.use(pfad, require('../routes/' + mod));

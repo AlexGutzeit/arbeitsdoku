@@ -46,7 +46,7 @@ function req(port, m, p, t, b) {
     db.prepare('UPDATE users SET password_hash = ?').run(bcrypt.hashSync('pw123456', 10));
     const max = db.prepare("SELECT id FROM users WHERE username = 'max'").get();
     const app = express();
-    app.use(express.json());
+    app.use(express.json()); app.use(require('../middleware/body-standard'));
     app.use('/api/auth', require('../routes/auth'));
     app.use('/api/notes', require('../routes/notes'));
     server = app.listen(0); await new Promise(r => server.once('listening', r));

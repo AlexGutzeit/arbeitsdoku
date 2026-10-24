@@ -50,7 +50,7 @@ const rund = (n) => Math.round((Number(n) || 0) * 100) / 100;
   db.prepare('UPDATE users SET password_hash = ?').run(bcrypt.hashSync(PWSEED, 10));
 
   const app = express();
-  app.use(express.json());
+  app.use(express.json()); app.use(require('../middleware/body-standard'));
   app.use('/api/auth', require('../routes/auth'));
   app.use('/api/users', require('../routes/users'));
   app.use('/api/entries', require('../routes/entries'));

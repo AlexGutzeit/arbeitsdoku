@@ -54,7 +54,7 @@ const token = (userId, { alterS = 0, anmeldungVorS = null, restS = 3 * TAG, sitz
   db.prepare('UPDATE users SET password_hash = ?').run(bcrypt.hashSync(PW, 10));
   const max = db.prepare("SELECT id FROM users WHERE username = 'max'").get().id;
 
-  const app = express(); app.use(express.json());
+  const app = express(); app.use(express.json()); app.use(require('../middleware/body-standard'));
   for (const [pfad, mod] of [['/api/auth', 'auth'], ['/api/users', 'users'], ['/api/entries', 'entries']])
     app.use(pfad, require('../routes/' + mod));
   const server = app.listen(0);

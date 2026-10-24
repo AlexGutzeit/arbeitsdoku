@@ -70,9 +70,8 @@ app.use((req, res, next) => {
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// Express 5 lässt req.body undefined, wenn kein Parser einen Body gelesen hat (Express 4: {}). Viele Routen lesen
-// req.body.x ungeprüft — ein DELETE ohne Body wäre sonst ein 500. Eine Stelle statt rund 190 (24.10.2026).
-app.use((req, res, next) => { if (req.body === undefined) req.body = {}; next(); });
+// Express 5 lässt req.body ohne Body undefined (Express 4: {}) — eine Stelle statt rund 190 ungeprüfter Zugriffe.
+app.use(require('./middleware/body-standard'));
 app.use(cookieParser());
 
 // Dynamische Branding-Routes (manifest.json + index.html mit Settings-Tokens)
