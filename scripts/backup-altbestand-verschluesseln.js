@@ -13,7 +13,7 @@
 // Ohne BACKUP_SCHLUESSEL kann Schritt 2 nicht laufen. Dann wird verschlüsselt, aber NICHTS
 // gelöscht — auf einem Server, der absichtlich keinen privaten Schlüssel hat, ist das der
 // richtige Ausgang.
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const fs = require('fs');
 const path = require('path');
 const { pipeline } = require('stream/promises');

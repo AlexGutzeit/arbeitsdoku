@@ -9,7 +9,7 @@
 //
 // Der Schlüssel kommt aus BACKUP_SCHLUESSEL (Umgebung oder .env) und wird bewusst NICHT als
 // Aufrufparameter genommen: Parameter stehen in der Prozessliste und in der Shell-Historie.
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const fs = require('fs');
 const path = require('path');
 const { entschluesseln, istContainer, empfaengerNamen } = require('../backup-krypto');

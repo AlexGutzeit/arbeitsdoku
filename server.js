@@ -10,7 +10,7 @@
 // die Kontrolle. Auf dem heutigen Produktivserver aendert das nichts (er steht bereits so).
 if (!process.env.TZ) process.env.TZ = 'Europe/Berlin';
 
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 const express = require('express');
