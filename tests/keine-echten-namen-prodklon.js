@@ -18,7 +18,7 @@ const WURZEL = path.join(__dirname, '..');
 // Gewöhnliche Wörter, Firmen-/Produktname der App und der Rechteinhaber (LICENSE) — keine Personen/Kunden.
 const ERLAUBT = new Set(['lager', 'regie', 'büro', 'buero', 'intern', 'sentec', 'gutzeit', 'alexander', 'documents',
   'installieren', 'abhängigkeiten', 'wallbox', 'carport', 'halle', 'dach', 'service', 'wartung', 'montage',
-  'allgemein', 'diverses', 'werkstatt', 'fahrzeug', 'schulung', 'administrator', 'alex', 'kita', 'gartenhütte']);
+  'allgemein', 'diverses', 'werkstatt', 'fahrzeug', 'schulung', 'administrator', 'alex', 'kita', 'gartenhütte', 'schule']);
 // Je Datei erlaubt: ausgedachte Testfiguren mit gängigen Vornamen — und zwei ALTLASTEN, die sich in der Prod-Kopie
 // echte Konten über den Vornamen aussuchen (scenario-shared-planning, browser-smoke). Die gehören umgebaut
 // (Konto per Rolle wählen), dann hier austragen. Neue Einträge nur für erfundene Figuren.
