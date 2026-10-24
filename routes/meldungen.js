@@ -16,6 +16,7 @@
 const express = require('express');
 const { getDb } = require('../database/init');
 const { authenticate } = require('../middleware/auth');
+const nurZahl = require('../middleware/nur-zahl');
 const { broadcast } = require('../sse');
 const { logAudit } = require('../audit');
 const reste = require('../reste');
@@ -156,7 +157,7 @@ router.get('/history', authenticate, (req, res) => {
 });
 
 // Eine Meldung mit Verlauf (Detail-Ansicht).
-router.get('/:id(\\d+)', authenticate, (req, res) => {
+router.get('/:id', nurZahl('id'), authenticate, (req, res) => {
   const db = getDb();
   const m = holen(db, req.params.id);
   if (!m) return res.status(404).json({ error: 'Diese Meldung gibt es nicht mehr.' });
@@ -188,7 +189,7 @@ router.post('/', authenticate, (req, res) => {
 });
 
 // Ändern: Text, Dringlichkeit, Thema — und (nur Bearbeiter) die Rückmeldung an den Melder.
-router.put('/:id(\\d+)', authenticate, (req, res) => {
+router.put('/:id', nurZahl('id'), authenticate, (req, res) => {
   const db = getDb();
   const m = holen(db, req.params.id);
   if (!m) return res.status(404).json({ error: 'Diese Meldung gibt es nicht mehr.' });
@@ -245,7 +246,7 @@ router.put('/:id(\\d+)', authenticate, (req, res) => {
 });
 
 // Status setzen: offen / in Arbeit / erledigt (auch zurück — „wieder öffnen").
-router.post('/:id(\\d+)/status', authenticate, (req, res) => {
+router.post('/:id/status', nurZahl('id'), authenticate, (req, res) => {
   const db = getDb();
   if (!darfMeldungenBearbeiten(req.user)) return res.status(403).json({ error: 'Den Stand setzen Chef und Admin.' });
   const m = holen(db, req.params.id);
@@ -267,7 +268,7 @@ router.post('/:id(\\d+)/status', authenticate, (req, res) => {
 });
 
 // Zurückziehen: nur der Melder selbst, nur solange offen. Nichts verschwindet — sie steht in der History.
-router.post('/:id(\\d+)/zurueckziehen', authenticate, (req, res) => {
+router.post('/:id/zurueckziehen', nurZahl('id'), authenticate, (req, res) => {
   const db = getDb();
   const m = holen(db, req.params.id);
   if (!m) return res.status(404).json({ error: 'Diese Meldung gibt es nicht mehr.' });
@@ -287,7 +288,7 @@ router.post('/:id(\\d+)/zurueckziehen', authenticate, (req, res) => {
 });
 
 // Endgültig löschen — nur Admin (zum Testen). Mit Verlauf; der Protokolleintrag behält den Text.
-router.delete('/:id(\\d+)', authenticate, (req, res) => {
+router.delete('/:id', nurZahl('id'), authenticate, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Endgültig löschen kann nur der Admin.' });
   const db = getDb();
   const m = holen(db, req.params.id);
@@ -309,7 +310,7 @@ router.delete('/:id(\\d+)', authenticate, (req, res) => {
 const erinnerungsListe = (db, user, meldungId) => erinnerungen.eigeneZu(db, user.id, [meldungId]).get(meldungId) || [];
 const erinnerungKurz = (e) => erinnerungen.umText(e.um) + (e.hinweis ? ` „${kurz(e.hinweis, 40)}"` : '');
 
-router.post('/:id(\\d+)/erinnerungen', authenticate, (req, res) => {
+router.post('/:id/erinnerungen', nurZahl('id'), authenticate, (req, res) => {
   if (!darfMeldungenBearbeiten(req.user)) return res.status(403).json({ error: 'Erinnerungen stellt, wer Meldungen bearbeitet (Chef, Admin, Einzelrecht).' });
   const db = getDb();
   const m = holen(db, req.params.id);
@@ -329,7 +330,7 @@ router.post('/:id(\\d+)/erinnerungen', authenticate, (req, res) => {
 
 // Ändern: neues Datum, neue Uhrzeit, anderer Hinweis. Macht eine ausgelöste oder verfallene Erinnerung wieder
 // scharf. Ruht die Meldung gerade (History), ruht auch die geänderte Erinnerung — bis zum Wiederöffnen.
-router.put('/erinnerungen/:eid(\\d+)', authenticate, (req, res) => {
+router.put('/erinnerungen/:eid', nurZahl('eid'), authenticate, (req, res) => {
   if (!darfMeldungenBearbeiten(req.user)) return res.status(403).json({ error: 'Erinnerungen stellt, wer Meldungen bearbeitet (Chef, Admin, Einzelrecht).' });
   const db = getDb();
   const e = erinnerungen.eigene(db, req.user.id, req.params.eid);
@@ -345,7 +346,7 @@ router.put('/erinnerungen/:eid(\\d+)', authenticate, (req, res) => {
 });
 
 // Löschen geht immer — auch ohne Recht (wer es verloren hat, räumt seine alten Erinnerungen selbst weg).
-router.delete('/erinnerungen/:eid(\\d+)', authenticate, (req, res) => {
+router.delete('/erinnerungen/:eid', nurZahl('eid'), authenticate, (req, res) => {
   const db = getDb();
   const e = erinnerungen.eigene(db, req.user.id, req.params.eid);
   if (!e) return res.status(404).json({ error: 'Diese Erinnerung gibt es nicht (mehr).' });
@@ -392,7 +393,7 @@ router.put('/themen-reihenfolge', authenticate, nurVerwalter, (req, res) => {
   res.json({ success: true });
 });
 
-router.put('/themen/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
+router.put('/themen/:id', nurZahl('id'), authenticate, nurVerwalter, (req, res) => {
   const db = getDb();
   const t = aktivesThema(db, req.params.id);
   if (!t) return res.status(404).json({ error: 'Dieses Thema gibt es nicht (mehr).' });
@@ -411,7 +412,7 @@ router.put('/themen/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
 // kämen sonst drei Meldungen auf einmal. Zähler und Hervorheben zeigen es trotzdem (updated_at).
 // Löschen: Ohne Meldungen ist das Thema ganz weg. Mit Meldungen bleibt es weich gelöscht, und ALLES darauf
 // wandert in die History — auch noch offene Meldungen, mit Vermerk im Verlauf (Alex, 30.09.2026).
-router.delete('/themen/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
+router.delete('/themen/:id', nurZahl('id'), authenticate, nurVerwalter, (req, res) => {
   const db = getDb();
   const t = aktivesThema(db, req.params.id);
   if (!t) return res.status(404).json({ error: 'Dieses Thema gibt es nicht (mehr).' });
@@ -473,7 +474,7 @@ router.post('/regeln', authenticate, nurVerwalter, (req, res) => {
   res.status(201).json({ regel: regelAusgabe(db, id) });
 });
 
-router.put('/regeln/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
+router.put('/regeln/:id', nurZahl('id'), authenticate, nurVerwalter, (req, res) => {
   const db = getDb();
   const alt = regelHolen(db, req.params.id);
   if (!alt) return res.status(404).json({ error: 'Diese Regel gibt es nicht (mehr).' });
@@ -489,7 +490,7 @@ router.put('/regeln/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
 });
 
 // Pausieren / fortsetzen. Beim Fortsetzen zählt es ab heute — die Pause wird nicht nachgeholt.
-router.post('/regeln/:id(\\d+)/pause', authenticate, nurVerwalter, (req, res) => {
+router.post('/regeln/:id/pause', nurZahl('id'), authenticate, nurVerwalter, (req, res) => {
   const db = getDb();
   const r = regelHolen(db, req.params.id);
   if (!r) return res.status(404).json({ error: 'Diese Regel gibt es nicht (mehr).' });
@@ -505,7 +506,7 @@ router.post('/regeln/:id(\\d+)/pause', authenticate, nurVerwalter, (req, res) =>
 });
 
 // Löschen: die Regel endet; schon erzeugte Meldungen bleiben stehen (Rückfrage 29).
-router.delete('/regeln/:id(\\d+)', authenticate, nurVerwalter, (req, res) => {
+router.delete('/regeln/:id', nurZahl('id'), authenticate, nurVerwalter, (req, res) => {
   const db = getDb();
   const r = regelHolen(db, req.params.id);
   if (!r) return res.status(404).json({ error: 'Diese Regel gibt es nicht (mehr).' });

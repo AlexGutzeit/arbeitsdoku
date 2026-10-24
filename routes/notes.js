@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../database/init');
 const { authenticate, JWT_SECRET } = require('../middleware/auth');
+const nurZahl = require('../middleware/nur-zahl');
 const { broadcast } = require('../sse');
 const { logAudit } = require('../audit');
 const push = require('../push');
@@ -112,14 +113,14 @@ router.delete('/offers/:id', authenticate, (req, res) => {
 const erinnerungKurz = (e) => umText(e.um) + (e.hinweis ? ` „${kurz(e.hinweis, 40)}"` : '');
 const notizTitel = (note) => `Notiz ${note.id} „${kurz(note.title || '(ohne Titel)', 40)}"`;
 
-router.get('/:id(\\d+)/erinnerungen', authenticate, (req, res) => {
+router.get('/:id/erinnerungen', nurZahl('id'), authenticate, (req, res) => {
   const db = getDb();
   const { note, access } = canAccessNote(db, Number(req.params.id), req.user.id);
   if (!note || !access) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   res.json({ erinnerungen: erinnerungen.liste(db, req.user.id, note.id) });
 });
 
-router.post('/:id(\\d+)/erinnerungen', authenticate, (req, res) => {
+router.post('/:id/erinnerungen', nurZahl('id'), authenticate, (req, res) => {
   const db = getDb();
   const { note, access } = canAccessNote(db, Number(req.params.id), req.user.id);
   if (!note || !access) return res.status(404).json({ error: 'Notiz nicht gefunden' });
@@ -137,7 +138,7 @@ router.post('/:id(\\d+)/erinnerungen', authenticate, (req, res) => {
 
 // Ändern: neues Datum, neue Uhrzeit, anderer Hinweis — macht eine gekommene oder verfallene wieder scharf.
 // Nur solange man die Notiz noch sieht; löschen geht immer.
-router.put('/erinnerungen/:eid(\\d+)', authenticate, (req, res) => {
+router.put('/erinnerungen/:eid', nurZahl('eid'), authenticate, (req, res) => {
   const db = getDb();
   const e = erinnerungen.eigene(db, req.user.id, req.params.eid);
   if (!e) return res.status(404).json({ error: 'Diese Erinnerung gibt es nicht (mehr).' });
@@ -152,7 +153,7 @@ router.put('/erinnerungen/:eid(\\d+)', authenticate, (req, res) => {
   res.json({ erinnerungen: erinnerungen.liste(db, req.user.id, e.note_id) });
 });
 
-router.delete('/erinnerungen/:eid(\\d+)', authenticate, (req, res) => {
+router.delete('/erinnerungen/:eid', nurZahl('eid'), authenticate, (req, res) => {
   const db = getDb();
   const e = erinnerungen.eigene(db, req.user.id, req.params.eid);
   if (!e) return res.status(404).json({ error: 'Diese Erinnerung gibt es nicht (mehr).' });

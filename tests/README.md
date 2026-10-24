@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**288 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**289 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -130,6 +130,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `entry-start-and-note-ui.js` | Puppeteer-Test: |
 | `entwurf-prodklon.js` | Prod-Klon-Pruefung fuer B4 (Entwurfs-Sicherung). |
 | `entwurf-sicherung-ui.js` | Puppeteer-Test (B4): Entwurfs-Sicherung fuer Formulare. |
+| `express5-routen.js` | Express 5: Zahlen-Routen, Rückfall auf index.html, DELETE ohne Body, Startfehler und Absturz-Wächter verhalten sich wie vorher. |
 | `form-hardening-ui.js` | Puppeteer-UI-Test (B3 + B4): |
 | `geburtsdatum-feld-ui.js` | Das Geburtsdatums-FELD in Mitarbeiter → bearbeiten — über die echte Oberfläche bedient. |
 | `geburtstag-eigener-ui.js` | Gratulation für das Geburtstagskind selbst (Alex, 08.08.2026). |

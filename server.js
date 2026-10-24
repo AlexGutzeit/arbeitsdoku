@@ -70,6 +70,9 @@ app.use((req, res, next) => {
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Express 5 lässt req.body undefined, wenn kein Parser einen Body gelesen hat (Express 4: {}). Viele Routen lesen
+// req.body.x ungeprüft — ein DELETE ohne Body wäre sonst ein 500. Eine Stelle statt rund 190 (24.10.2026).
+app.use((req, res, next) => { if (req.body === undefined) req.body = {}; next(); });
 app.use(cookieParser());
 
 // Dynamische Branding-Routes (manifest.json + index.html mit Settings-Tokens)
@@ -209,8 +212,8 @@ app.get('/gast', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'gast.html'));
 });
 
-// SPA-Fallback (gerenderte index.html mit Branding-Tokens)
-app.get('*', (req, res) => brandingRouter.renderIndex(req, res));
+// SPA-Fallback (gerenderte index.html mit Branding-Tokens). Express 5 braucht für „alles" einen benannten Platzhalter.
+app.get('/{*rest}', (req, res) => brandingRouter.renderIndex(req, res));
 
 // Fehlerbehandlung
 app.use((err, req, res, next) => {
@@ -246,7 +249,14 @@ async function start() {
   setInterval(cleanupToolHistory, 24 * 60 * 60 * 1000); // täglich
   // Geplante Zusammenfassungen (Digest-Push): minütlicher Scheduler.
   require('./scheduler').start(require('./database/init').getDb);
-  app.listen(PORT, () => {
+  // Express 5 reicht einen Startfehler (z. B. Port belegt) an diesen Rückruf, statt abzustürzen wie Express 4.
+  // Ohne die Prüfung meldete der Server „läuft" und endete mit Code 0 (nachgemessen in tests/express5-routen.js) —
+  // ein irreführendes Protokoll, und ein Test auf belegtem Port hätte die Antworten eines fremden Servers geprüft.
+  app.listen(PORT, (err) => {
+    if (err) {
+      console.error(`Server konnte nicht starten (Port ${PORT}): ${err.code || err.message}`);
+      process.exit(1);
+    }
     console.log(`Arbeitsdoku-Server läuft auf http://localhost:${PORT}`);
   });
 }

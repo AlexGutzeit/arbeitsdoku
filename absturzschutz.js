@@ -1,7 +1,7 @@
 // Absturz-Schutz (R2, 29.09.2026).
 //
-// Express 4 fängt keine Fehler aus async-Routen: Wirft `async (req, res) => { await …; … }` nach dem ersten
-// Warten, wird daraus eine unbehandelte Promise-Ablehnung — und Node beendet sich daran. systemd startet
+// Express 4 fing keine Fehler aus async-Routen: Warf `async (req, res) => { await …; … }` nach dem ersten
+// Warten, wurde daraus eine unbehandelte Promise-Ablehnung — und Node beendete sich daran. systemd startet
 // nach 5 s neu, aber alle Verbindungen brechen ab, und bis zu 5 s noch nicht gespeicherter Änderungen
 // (Autosave-Takt) sind weg. Nachgemessen war am 24.09. kein Auslöser erreichbar; das hier ist das Netz für
 // künftige Fehler:
@@ -15,24 +15,15 @@
 // Diese Datei gehoert in die feste Dateiliste von deploy.sh (STAMMDATEIEN, aus Git abgeleitet).
 'use strict';
 
-// Wie Express' eigenes Layer.handle_request — nur dass ein zurückgegebenes Promise, das scheitert, ebenfalls
-// an next(err) geht (dasselbe tut das verbreitete Paket express-async-errors).
+// Punkt 1 erledigt seit Express 5 (24.10.2026) der Router selbst: Layer.handleRequest im Paket `router` reicht
+// ein scheiterndes Promise an next(err) weiter — genau das, was hier vorher für Express 4 nachgerüstet war
+// (express/lib/router/layer gibt es in 5 nicht mehr). Übrig bleibt ein Wächter: Liefe je wieder ein Express ohne
+// diese Behandlung, bricht der Start laut ab, statt still ungeschützt weiterzulaufen.
 function asyncRoutenAbsichern() {
-  const Layer = require('express/lib/router/layer');
-  if (Layer.prototype._absturzschutz) return;
-  Layer.prototype.handle_request = function handle(req, res, next) {
-    const fn = this.handle;
-    if (fn.length > 3) return next();   // Fehler-Middleware (4 Argumente) — wie im Original
-    try {
-      const erg = fn(req, res, next);
-      if (erg && typeof erg.then === 'function') {
-        erg.then(null, (err) => next(err || new Error('Route ohne Grund abgebrochen')));
-      }
-    } catch (err) {
-      next(err);
-    }
-  };
-  Layer.prototype._absturzschutz = true;
+  const version = require('express/package.json').version;
+  if (Number(version.split('.')[0]) < 5) {
+    throw new Error(`Express ${version}: Fehler aus async-Routen würden den Server beenden — erwartet wird Express 5 oder neuer.`);
+  }
 }
 
 let _eingerichtet = false;

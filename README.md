@@ -1632,12 +1632,17 @@ Zurückspielen einer Sicherung und einmal am Tag auf, was trotzdem liegen blieb 
 aufgeräumt"). `tests/reste.js` wird rot, sobald eine neue Tabelle einen Verweis hat, der in keiner der beiden
 Listen steht, oder ein Lösch-Weg nicht aufräumt.
 
-Technik-Stack: Node.js/Express · `sql.js` (SQLite in WASM) · `pdfkit` (PDF) mit der Schrift aus
+Technik-Stack: Node.js/Express 5 · `sql.js` (SQLite in WASM) · `pdfkit` (PDF) mit der Schrift aus
 `dejavu-fonts-ttf` · `archiver`/`adm-zip` (Sicherungen, Word/ODT) · `sharp` (Bilder) · `bcryptjs` ·
 `jsonwebtoken` · `express-rate-limit` · `multer` · `web-push` (Push) · `yjs`/`y-protocols` (gemeinsame
 Notizen) · Vanilla-JS-Frontend (kein Framework). Einziger vorgebauter Teil: das Schreibfeld der Notizen
 (Quill + Yjs, `public/vendor/kollab.min.js`, fest versioniert und mitgeliefert — neu bauen nur mit
 `node scripts/kollab-buendeln.js`).
+
+Für neue Routen gilt Express 5: Regex-Parameter wie `/:id(\d+)` gibt es nicht mehr — Parameter, die eine Zahl sein
+müssen, prüft `middleware/nur-zahl.js` (`router.get('/:id', nurZahl('id'), authenticate, …)`; eine Nicht-Zahl gilt als
+nicht getroffen und geht an die nächste Route). „Alles übrige" heißt `'/{*rest}'`. Fehlt der Body, ist `req.body`
+trotzdem `{}` (eine Zeile in `server.js`). Fehler aus `async`-Routen fängt Express 5 selbst ab.
 
 ---
 
