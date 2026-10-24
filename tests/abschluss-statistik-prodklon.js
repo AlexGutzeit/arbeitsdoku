@@ -49,9 +49,11 @@ const zahlDe = n => String(Math.round(Number(n) * 100) / 100).replace('.', ',');
   const perioden = (d0.exec('SELECT id, period_from, period_to FROM payroll_closures ORDER BY period_from')[0] || { values: [] }).values;
   // Ein Mitarbeiter, der in MEHREREN Abschlüssen mit UNTERSCHIEDLICHEN Ist-Stunden steht — nur dann
   // faellt auf, wenn immer derselbe Abschluss gezeigt wird.
+  // Nur AKTIVE: Der Test meldet sich als Pruefling an, ein ausgestelltes Konto bekommt zu Recht 401
+  // (24.10.2026: der frische Klon waehlte jemanden, der Ende Juli ausgeschieden war).
   const kandidaten = (d0.exec(`SELECT r.user_id, u.name, COUNT(DISTINCT r.ist) verschieden, COUNT(*) n
                                  FROM payroll_closure_rows r JOIN users u ON u.id = r.user_id
-                                WHERE u.role = 'mitarbeiter'
+                                WHERE u.role = 'mitarbeiter' AND u.active = 1
                                 GROUP BY r.user_id HAVING verschieden >= 2 ORDER BY n DESC`)[0] || { values: [] }).values;
   if (!perioden.length || !kandidaten.length) { console.log('Zu wenig abgeschlossene Monate im Klon — Test übersprungen.'); d0.close(); process.exit(0); }
   const [uid, uname] = kandidaten[0];
