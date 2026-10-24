@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**287 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**288 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -211,6 +211,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `pause-zu-lang-ui.js` | Pause schluckt die Arbeitszeit — die Oberflaeche (R6, Alex 24.09.2026). |
 | `pause-zu-lang.js` | Pause schluckt die Arbeitszeit (R6, Alex 24.09.2026). |
 | `pdf-projektfilter.js` | Arbeitsnachweis-PDF mit Projektfilter: Soll, Differenz und die Ist-Spalte je Mitarbeiter müssen |
+| `pdf-zellen-kuerzen.js` | Arbeitsnachweis-PDF: zweizeilige Adressen stehen vollständig und ohne „…", nur wirklich zu lange Zellen werden gekürzt. |
 | `permission-refresh.js` | Rechte-Aktualisierung ohne Re-Login: Gibt/Entzieht ein Admin das Planungsrecht, muss sich das |
 | `planner-absences.js` | Planer-Sichtbarkeit-Test: Mitarbeiter mit „alle"-Planungsrecht (can_plan_all) sehen im Planungskontext |
 | `planning-audit.js` | Audit-Test: Planungsrecht wird semantisch als EINE Stufe protokolliert (keins / nur sich / alle), |
