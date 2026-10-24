@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**286 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**287 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -62,6 +62,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `abwesenheitskalender-ui.js` | Abwesenheitskalender: wer fehlt wann, alle Mitarbeiter auf einen Blick (Alex, 28.08.2026). |
 | `alle-abmelden-ui.js` | „Auf allen Geräten abmelden" — der Knopf darf einen NICHT selbst hinauswerfen (Alex, 23.08.2026). |
 | `altdb-spalten.js` | Ein sehr altes Backup einspielen — und trotzdem hineinkommen. |
+| `anmelde-bremse.js` | Anmelde-Bremsen: nach 10 Fehlversuchen kommt 429 mit deutscher Meldung — Login je Adresse, Code-Bestätigung je Konto. |
 | `ansicht-erhalten-ui.js` | Puppeteer-Test (B10): Ansicht bleibt über Neuaufbauten hinweg erhalten. |
 | `arbeitsbeginn-prodklon.js` | Abwaertskompatibilitaet des Arbeitsbeginns — der Aussperr-Fall. |
 | `arbeitsbeginn-ui.js` | Arbeitsbeginn je Mitarbeiter + Zeit-Vorbelegung, die nie unmöglich ist. |
