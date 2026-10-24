@@ -4956,3 +4956,34 @@ Testfallen dabei:
 - **Sicherung:** `arbeitsdoku_backup_20261021-003641.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe auf dem
   Mini-PC: Integrität ok, Zahlen wie in der Lesekopie). Rückkehrpunkt `vor-zeitnachweis-projekt-deploy` (= `3f0e0c8`).
   Datenbank 60/60 Tabellen, keine Zeile verändert. Zweitanlage nachgezogen, Probestart ok.
+
+## Wartung: body-parser, tzdata, automatische Updates (24.10.2026)
+
+Die Morgenkontrolle meldete „OK, Wartung fällig": auf beiden Rechnern `tzdata`, vom VPS dazu zwei Lücken in den
+App-Bibliotheken.
+
+- **Bibliotheken** (`03da48c`): `body-parser` 1.20.8 → 1.20.9 (hoch, GHSA-27r3-jxmh-p828 — Restbytes nach einem
+  komprimierten Request-Body legen den Prozess lahm) und `ip-address` 10.7.3 → 10.7.4 (mittel, GHSA-rxp7-6hxx-x8q5).
+  Nur Patch-Versionen, nur das Lockfile. Bewusst mit `npm audit fix --omit=dev`: ohne den Schalter hob `npm audit
+  fix` auch die Testwerkzeuge mit (Puppeteer 25.1 → 25.16, das einen anderen Test-Browser braucht) — das ist ein
+  eigener Schritt. **Falle:** `--omit=dev` räumt die Dev-Pakete aus `node_modules` (das Lockfile behält sie);
+  danach `npm ci`.
+- **Blinder Fleck der Kontrolle:** `quill`, `y-quill` und `quill-cursors` sind devDependencies, werden aber nach
+  `public/vendor/kollab.min.js` gebündelt und laufen im Browser. `npm audit --omit=dev` sieht sie nicht. Aktuell
+  `quill` 2.0.3: GHSA-v3m3-f69x-jf25 (niedrig, Quills HTML-Export, noch kein Fix) — unser Code ruft den Export
+  (`getSemanticHTML`) nicht auf.
+- **Server** (nicht im Repo): `tzdata` 2026c → 2026e auf VPS und Mini-PC. Es kam aus `stable-updates`, das die
+  Debian-Vorgabe der automatischen Updates auskommentiert lässt. Neu je Rechner
+  `/etc/apt/apt.conf.d/51unattended-upgrades-updates` (die Paketdatei bleibt unverändert, also keine Rückfrage bei
+  deren Updates); der Probelauf zeigt `trixie-updates` unter den erlaubten Quellen.
+- **Suite:** 283 von 285 auf der Kopie von 08:16. Beide roten lagen am frischen Datenstand, nicht an der App:
+  `abschluss-statistik-prodklon` wählte als Prüfling ein ausgestelltes Konto (401 bei der Anmeldung — richtig so),
+  jetzt nur aktive (`0fb6b0d`, 27/27). `keine-echten-namen-prodklon` schlug auf ein neues Projekt an, dessen Name
+  das allgemeine Wort „Schule" enthält; das steht im Repo nur als Abwesenheitsart und ist jetzt erlaubt (`4a06054`).
+  Gegenprobe: ein echtes Namenswort in einer Wegwerfdatei schlägt weiter an.
+
+**Deploy (24.10.2026, 09:58, `4a06054`, kein Cache-Wechsel — nur Server-Bibliotheken).** Sicherung
+`arbeitsdoku_backup_20261024-095748.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe auf dem Mini-PC: Integrität ok,
+1634 Einträge). Rückkehrpunkt `vor-npm-sicherheit-deploy` (= `d4097c8`). Danach `npm audit --omit=dev` 0, IPv4 + IPv6
+200, gzip-komprimierter Login wird normal gelesen. Datenbank 60/60 Tabellen; einzige neue Zeile `audit_logs` = dieser
+Probe-Login. Zweitanlage nachgezogen, Probestart ok.
