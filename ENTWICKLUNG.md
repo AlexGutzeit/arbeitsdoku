@@ -4987,3 +4987,38 @@ App-Bibliotheken.
 1634 Einträge). Rückkehrpunkt `vor-npm-sicherheit-deploy` (= `d4097c8`). Danach `npm audit --omit=dev` 0, IPv4 + IPv6
 200, gzip-komprimierter Login wird normal gelesen. Datenbank 60/60 Tabellen; einzige neue Zeile `audit_logs` = dieser
 Probe-Login. Zweitanlage nachgezogen, Probestart ok.
+
+## Bibliotheken Schritt für Schritt (24.10.2026, nachmittags)
+
+Alex nach dem Vormittags-Deploy: „Danach weiter den Rest Schritt für Schritt hochziehen." Je Paket ein Commit, eigene
+Tests, bei Brüchen eine Gegenprobe mit dem alten Stand.
+
+- **Testwerkzeuge** (`608ab5b`, `98e6b85`): Der Browser-Pfad stand mit fester Version in 162 Testdateien; jetzt liefert
+  ihn `tests/hilfen/chrome.js` aus `PUPPETEER_REVISIONS` — ein Puppeteer-Update braucht nur noch den passenden Browser.
+  Puppeteer 25.1 → 25.16 (Chrome 156), behebt zod (hoch) in der Testkette. Suite 285/285.
+- **multer 1.4.5-lts.2 → 2.5.0** (`1c7a818`): npm markiert 1.x als verwundbar (u. a. CVE-2025-47935 hoch), `npm audit`
+  meldete trotzdem 0 — „-lts.2" ist nach Semver eine Vorabversion und fällt nicht unter „< 2.0.0". Neuer Test
+  `upload-robust` (kaputte und abgebrochene Uploads an alle fünf Wege, dazu das App-Icon ohne bisherigen Test). Gegenprobe
+  mit 1.4.5-lts.2 rot: abgebrochene Uploads ließen Dateien in `uploads/tmp` liegen, eine Datei von genau Limit-Größe galt
+  als zu groß. Einen Absturz lösten diese Eingaben auch dort nicht aus.
+- **express-rate-limit 8.7.1** (`4ed357c`): Kein Test prüfte bisher, ob die Anmelde-Bremsen greifen — neu
+  `anmelde-bremse` (Login je Adresse, 2FA-Code je Konto, keine Selbstprüfungs-Warnung im Protokoll).
+- **sql.js 1.15.1** (`7723687`): SQLite 3.49.1 → 3.54.0. Die Prod-Kopie liest und schreibt 3.54 fehlerfrei; das alte 3.49
+  liest die von 3.54 geschriebene Datei — der Rückweg bleibt offen.
+- **bcryptjs 3** (`5a793c2`): neue Hashes `$2b$`, alte `$2a$` gelten weiter; das alte 2.4.3 prüft `$2b$` richtig.
+- **dotenv 18** (`ce3355b`): seit 17 eine Protokollzeile bei jedem `config()` → überall `quiet: true` (auch im
+  Status-Skript auf dem VPS, das das dotenv der App lädt).
+- **archiver 8** (`ffab65b`): exportiert Klassen statt der Funktion — `new ZipArchive(...)`. Betroffen auch
+  `scripts/make-backup.js`, das die nächtliche Sicherung zieht und archiver über den App-Pfad lädt. Gegenprobe mit altem
+  Code rot („archiver is not a function"). Das stillgelegte, unverschlüsselte Alt-Skript am Mini-PC umbenannt.
+- **quill-cursors bleibt 4.3**: ab 5 zeichnet der Browser die fremden Markierungen per CSS Highlight API (Chrome 122+,
+  Safari 17.2+) — auf älteren Handys fehlten sie still. Keine Lücke in 4.3.
+- **Panne, behoben:** Ein Hilfsskript „zur Probe" per `require()` geladen — es lief und setzte in der lokalen
+  Entwicklungsdatenbank 225 Passwörter auf „test". Der laufende Dev-Server hielt den alten Stand im Speicher; eine
+  Anmeldung ließ ihn ihn zurückschreiben. Skripte nur noch mit `node --check` prüfen.
+
+**Deploy (24.10.2026, 15:23, `ffab65b`, kein Cache-Wechsel — nur Server-Bibliotheken).** Suite 287/287 auf der Kopie von
+13:42. Sicherung `arbeitsdoku_backup_20261024-152213.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe). Rückkehrpunkt
+`vor-bibliotheken2-deploy` (= `4a06054`). Danach eine echte Sicherung mit dem neuen Code (archiver 8) gezogen und am
+Mini-PC — dort ebenfalls schon mit den neuen Paketen — zurückgespielt: Integrität ok, 1634 Einträge. `npm audit --omit=dev`
+0, Protokoll ohne Fehler und ohne dotenv-Zeile, IPv4 + IPv6 200. Datenbank 60/60 Tabellen, keine Zeile verändert.
