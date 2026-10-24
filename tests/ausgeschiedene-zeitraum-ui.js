@@ -14,13 +14,12 @@
 //
 //   node tests/ausgeschiedene-zeitraum-ui.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
 const PORT = 3356, DB = '/tmp/ausgeschiedene-zeitraum.db', LOG = '/tmp/ausgeschiedene-zeitraum.log';
 const BASIS = 'http://localhost:' + PORT;
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const Y1 = new Date().getFullYear() - 1, Y = Y1 + 1;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];

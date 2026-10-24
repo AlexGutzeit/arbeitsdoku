@@ -11,11 +11,10 @@
 //
 //   node tests/warn-schalter-ui.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const PORT = 3294, DB = '/tmp/warn-schalter.db', BASIS = `http://localhost:${PORT}`;
 const LOG = '/tmp/warn-schalter-srv.log';
 const TAG = '2026-07-08';

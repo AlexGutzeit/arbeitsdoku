@@ -8,13 +8,12 @@
 //
 //   node tests/konto-loeschen-ui.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
 const PORT = 3350, DB = '/tmp/konto-loeschen-ui.db', LOG = '/tmp/konto-loeschen-ui.log';
 const BASIS = 'http://localhost:' + PORT;
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const JAHR = new Date().getFullYear() - 1;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];

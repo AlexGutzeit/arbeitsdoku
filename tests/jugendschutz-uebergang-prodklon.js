@@ -12,13 +12,12 @@
 // dessen 18. Geburtstag — er veraltet also nicht, wenn der Jugendliche volljährig geworden ist.
 //   node tests/jugendschutz-uebergang-prodklon.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const jwt = require('jsonwebtoken');
 const initSqlJs = require('sql.js');
 const puppeteer = require('puppeteer');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const QUELLE = process.env.PRODKLON || '/tmp/prodklon.db';
 const PORT = 3211, DB = '/tmp/jugendschutz-uebergang.db', BASIS = `http://localhost:${PORT}`;
 const SECRET = 'test-secret-mindestens-32-zeichen-lang';

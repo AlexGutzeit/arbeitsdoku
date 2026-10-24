@@ -22,11 +22,10 @@
 //
 //   node tests/abwesenheitskalender-ui.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const PORT = 3298, DB = '/tmp/abwesenheitskalender.db', LOG = '/tmp/abwesenheitskalender-srv.log';
 const BASIS = `http://localhost:${PORT}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));

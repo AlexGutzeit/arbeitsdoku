@@ -7,11 +7,10 @@
 // Fall: Tag 2 nach der Umstellung muss die vollen 45 vorschlagen.
 //   node tests/restpause-firmenwert-ui.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const PORT = 3195, DB = '/tmp/restpause-fw.db', BASIS = `http://localhost:${PORT}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];

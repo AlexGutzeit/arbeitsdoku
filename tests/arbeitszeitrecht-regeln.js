@@ -11,11 +11,10 @@
 //
 //   node tests/arbeitszeitrecht-regeln.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const PORT = 3292, DB = '/tmp/arbeitszeitrecht.db', BASIS = `http://localhost:${PORT}`;
 const LOG = '/tmp/arbeitszeitrecht-srv.log';
 const sleep = ms => new Promise(r => setTimeout(r, ms));

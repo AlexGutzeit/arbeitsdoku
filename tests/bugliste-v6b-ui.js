@@ -5,12 +5,11 @@
 //  B5  Enter bestätigt destruktive Dialoge NICHT; Fokus liegt auf „Abbrechen".
 // Start: node tests/bugliste-v6b-ui.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
 const PORT = 3125, DB = '/tmp/v6b-ui.db', BASE = 'http://localhost:' + PORT;
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, fails.push(n), console.log('  ✗ ' + n + (e ? '  → ' + e : '')));

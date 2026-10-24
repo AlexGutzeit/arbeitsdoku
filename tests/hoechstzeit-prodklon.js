@@ -14,14 +14,13 @@
 // Der Test prüft zuerst, dass er überhaupt etwas gemessen hat. Nur lesend gegenüber der Quelle.
 //   node tests/hoechstzeit-prodklon.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const initSqlJs = require('sql.js');
 const puppeteer = require('puppeteer');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const QUELLE = process.env.PRODKLON || '/tmp/prodklon.db';
 const PORT = 3217, DB = '/tmp/hoechstzeit-klon.db', BASIS = `http://localhost:${PORT}`;
 const SECRET = 'test-secret-mindestens-32-zeichen-lang';

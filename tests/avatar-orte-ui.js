@@ -17,12 +17,11 @@
 //
 //   node tests/avatar-orte-ui.js            (Bildschirmfotos: AVATAR_FOTOS=<ordner>)
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 const sharp = require('sharp');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const PORT = 3368, DB = '/tmp/avatar-orte-ui.db', BASIS = `http://localhost:${PORT}`;
 const BILDER = path.join(__dirname, '..', 'storage', 'avatare');
 const FOTOS = process.env.AVATAR_FOTOS || null;

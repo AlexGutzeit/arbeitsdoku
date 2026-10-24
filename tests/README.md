@@ -430,14 +430,17 @@ Klickt durch: Login → Dokumente → Ordner anlegen → Datei hochladen → umb
 npx puppeteer browsers install chrome-headless-shell
 
 # Variante B: manuell (falls unzip fehlt) — Zip laden + mit 7z/bsdtar entpacken
-VER=149.0.7827.22
+VER=$(node -p "require('puppeteer').PUPPETEER_REVISIONS['chrome-headless-shell']")
 curl -sL -o /tmp/chs.zip "https://storage.googleapis.com/chrome-for-testing-public/$VER/linux64/chrome-headless-shell-linux64.zip"
 DEST=~/.cache/puppeteer/chrome-headless-shell/linux-$VER
 mkdir -p "$DEST" && 7z x /tmp/chs.zip -o"$DEST" -y
 chmod +x "$DEST/chrome-headless-shell-linux64/chrome-headless-shell"
 ```
 
-Der Test sucht die Binary unter dem Standard-Cache-Pfad oder via `CHROME_BIN`:
+Den Pfad liefert `tests/hilfen/chrome.js` für alle Browser-Tests: Standard-Cache-Pfad in genau der Version, die
+das installierte Puppeteer erwartet. Nach einem Puppeteer-Update also nur den neuen Browser laden (wie oben), an
+den Tests ändert sich nichts. Fehlt er, scheitert der Test laut („Browser was not found") statt sich zu überspringen.
+Ein anderer Browser geht über `CHROME_BIN`:
 
 ```bash
 CHROME_BIN=/pfad/zu/chrome-headless-shell node tests/browser-smoke.js

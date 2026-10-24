@@ -3,15 +3,12 @@
 //   BASE=http://localhost:3000 SHOT_PASS=test node tests/shot-notifications.js
 // Fehlt beides, ueberspringt sich das Skript — sonst faerbt es jeden Suite-Durchlauf rot.
 const puppeteer = require('puppeteer');
-const path = require('path');
-const os = require('os');
 
 const BASE = process.env.BASE || 'http://localhost:3096';
 const USER = process.env.SHOT_USER || 'admin';
 const PASS = process.env.SHOT_PASS;
 const OUT = process.env.OUT || '/tmp/notifications.png';
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 

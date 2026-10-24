@@ -16,15 +16,14 @@
 //
 //   node tests/kollab-buendel.js
 const { spawn, spawnSync } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 const Y = require('yjs');
 
 const PORT = 3335, DB = '/tmp/kollab-buendel.db', LOG = '/tmp/kollab-buendel.log';
 const BASIS = 'http://localhost:' + PORT;
 const APP = path.join(__dirname, '..');
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 // Lizenzen, unter denen eine Bibliothek in der (öffentlichen) App mitgeliefert werden darf
 const ERLAUBT = ['MIT', 'BSD-3-Clause', 'BSD-2-Clause', 'Apache-2.0', 'ISC'];
 const sleep = ms => new Promise(r => setTimeout(r, ms));

@@ -6,11 +6,10 @@
 // Gemessen wird, was ein Mitarbeiter im Feld „Pause" vorfindet und was darunter steht.
 //   node tests/pause-beispiele.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const PORT = 3197, DB = '/tmp/pause-beispiele.db', BASIS = `http://localhost:${PORT}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];

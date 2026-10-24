@@ -7,14 +7,12 @@ const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const puppeteer = require('puppeteer');
 
 const PORT = 3100;
 const DB = '/tmp/limits-ui.db';
 const BASE = 'http://localhost:' + PORT;
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MB = 1024 * 1024, GB = 1024 * MB;
 let pass = 0, fail = 0;

@@ -22,12 +22,11 @@
 // Nur lesend gegenüber der Quelle: Es wird eine Kopie angelegt und ausschließlich darauf gearbeitet.
 //   node tests/zweifaktor-klickweg-prodklon.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 const totp = require('../totp');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const QUELLE = process.env.PRODKLON || '/tmp/prodklon.db';
 const PORT = 3281, DB = '/tmp/zweifaktor-klickweg.db', BASIS = `http://localhost:${PORT}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));

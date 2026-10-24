@@ -21,7 +21,7 @@
 //
 //   node tests/willkommen-unveraendert-ui.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
 // Feste Tageszeit fuer den Browser. Feste Zeitstempel bleiben unberuehrt, nur „jetzt" wandert.
@@ -44,8 +44,7 @@ async function uhrStellen(page) {
   }, TEST_STUNDE, TEST_MINUTE);
 }
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const PORT = 3235, DB = '/tmp/willkommen-unveraendert.db', BASIS = `http://localhost:${PORT}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = []; const uebersprungen = [];

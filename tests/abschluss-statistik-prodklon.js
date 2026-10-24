@@ -12,14 +12,13 @@
 // Mit SHOTS=1 werden zusätzlich Bildschirmfotos abgelegt (Pfad über SHOT_DIR).
 //   node tests/abschluss-statistik-prodklon.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const initSqlJs = require('sql.js');
 const puppeteer = require('puppeteer');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const QUELLE = process.env.PRODKLON || '/tmp/prodklon.db';
 const PORT = 3225, DB = '/tmp/abschluss-stat-klon.db', BASIS = `http://localhost:${PORT}`;
 const SECRET = 'test-secret-mindestens-32-zeichen-lang';

@@ -17,11 +17,9 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const puppeteer = require('puppeteer');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const PORT = 3321;
 const BASIS = `http://localhost:${PORT}`;
 const WURZEL = path.join(__dirname, '..');

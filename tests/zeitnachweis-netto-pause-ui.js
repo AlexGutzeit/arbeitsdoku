@@ -13,11 +13,10 @@
 //
 //   node tests/zeitnachweis-netto-pause-ui.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const PORT = 3291, DB = '/tmp/zeitnachweis-netto.db', BASIS = `http://localhost:${PORT}`;
 const LOG = '/tmp/zeitnachweis-netto-srv.log';
 const TAG = '2026-07-06';

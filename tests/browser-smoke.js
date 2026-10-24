@@ -16,8 +16,7 @@ const os = require('os');
 const path = require('path');
 
 const BASE = 'http://localhost:3000';
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 
 let pass = 0, fail = 0;
 const fails = [];

@@ -11,11 +11,10 @@
 //
 //   node tests/zeitnachweis-summen-prodklon.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer'); const jwt = require('jsonwebtoken'); const initSqlJs = require('sql.js');
 
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const VORLAGE = '/tmp/prodklon.db', DB = '/tmp/zeitnachweis-summen-prodklon.db';
 const PORT = 3374, SECRET = 'test-secret-mindestens-32-zeichen-lang-summen', BASE = `http://localhost:${PORT}/`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));

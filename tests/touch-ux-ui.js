@@ -5,13 +5,12 @@
 //  B8a — graue Nebentexte erfuellen WCAG AA (>= 4,5:1), real aus dem Browser gerechnet
 // Start: node tests/touch-ux-ui.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs'); const path = require('path');
 const puppeteer = require('puppeteer');
 
 const PORT = 3131, DB = '/tmp/touchux.db', BASE = 'http://localhost:' + PORT;
 const SHOTS = '/tmp/claude-1000/-home-alex-zeug-arbeitsdoku/84cc3a6c-bbc9-43b1-ae98-766adee26b4e/scratchpad';
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, fails.push(n), console.log('  ✗ ' + n + (e ? '  → ' + e : '')));

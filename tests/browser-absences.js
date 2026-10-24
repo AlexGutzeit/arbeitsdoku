@@ -11,12 +11,9 @@
 //   Krank am selben Tag -> Soll 0, 0 Urlaub (verdrängt); Krank+Krank = Fehler;
 //   Berufsschule+Innung am selben Tag = Fehler.
 const puppeteer = require('puppeteer');
-const os = require('os');
-const path = require('path');
 
 const BASE = process.env.BASE || 'http://localhost:3000';
-const CHROME = process.env.CHROME_BIN || path.join(os.homedir(),
-  '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 
 // Datum-relativ + robust: Der Test legt sich seinen eigenen Nutzer an (Anstellung ab HEUTE), darum
 // muss die Test-Woche in der ZUKUNFT liegen (sonst Soll=0 vor Anstellungsbeginn). Wir nehmen den Montag

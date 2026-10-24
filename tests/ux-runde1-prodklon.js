@@ -3,7 +3,7 @@
 // Fehlt die Kopie, ueberspringt sich der Test.
 // Start: node tests/ux-runde1-prodklon.js
 const { spawn } = require('child_process');
-const http = require('http'); const fs = require('fs'); const path = require('path'); const os = require('os');
+const http = require('http'); const fs = require('fs');
 const puppeteer = require('puppeteer');
 const jwt = require('jsonwebtoken');
 const initSqlJs = require('sql.js');
@@ -11,7 +11,7 @@ const initSqlJs = require('sql.js');
 const PORT = 3133, DB = '/tmp/prodklon.db', BASE = 'http://localhost:' + PORT;
 const SECRET = 'test-secret-mindestens-32-zeichen-lang';
 const SHOTS = '/tmp/claude-1000/-home-alex-zeug-arbeitsdoku/84cc3a6c-bbc9-43b1-ae98-766adee26b4e/scratchpad';
-const CHROME = path.join(os.homedir(), '.cache/puppeteer/chrome-headless-shell/linux-149.0.7827.22/chrome-headless-shell-linux64/chrome-headless-shell');
+const CHROME = require('./hilfen/chrome');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = []; const hinweise = [];
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, fails.push(n), console.log('  ✗ ' + n + (e ? '  → ' + e : '')));
