@@ -33,7 +33,7 @@ const path = require('path');
 const APP = process.env.ARBEITSDOKU_APP || path.join(__dirname, '..');
 require(path.join(APP, 'node_modules', 'dotenv')).config({ path: path.join(APP, '.env') });
 
-const archiver = require(path.join(APP, 'node_modules', 'archiver'));
+const { ZipArchive } = require(path.join(APP, 'node_modules', 'archiver'));
 const krypto = require(path.join(APP, 'backup-krypto'));
 
 // Pfade aus der `.env` sind RELATIV zur App, nicht zum Arbeitsverzeichnis.
@@ -148,7 +148,7 @@ function altesEntfernen() {
   }
 
   const ausgabe = fs.createWriteStream(tmp);
-  const archive = archiver('zip', { zlib: { level: 9 } });
+  const archive = new ZipArchive({ zlib: { level: 9 } });
   let fehlgeschlagen = false;
 
   const abbruch = (was, err) => {

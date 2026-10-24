@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const archiver = require('archiver');
+const { ZipArchive } = require('archiver');
 const AdmZip = require('adm-zip');
 const dbModule = require('../database/init');
 const { getDb, setDb, saveToFile, datenbankVorbereiten, writeFileAtomic, DB_PATH } = dbModule;
@@ -303,7 +303,7 @@ router.get('/download', authenticate, authorize('chef'), (req, res) => {
   res.setHeader('Content-Type', empfaenger.length ? 'application/octet-stream' : 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-  const archive = archiver('zip', { zlib: { level: 9 } });
+  const archive = new ZipArchive({ zlib: { level: 9 } });
   archive.on('error', (err) => {
     console.error('Backup-Archiv Fehler:', err);
     if (!res.headersSent) res.status(500).json({ error: 'Backup fehlgeschlagen' });
@@ -414,7 +414,7 @@ function sicherheitskopieAnlegen(db) {
       ablehnen(e);
     };
     const ausgabe = fs.createWriteStream(tmp);
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
     archive.on('error', fehler);
     ausgabe.on('error', fehler);
     ausgabe.on('close', () => {

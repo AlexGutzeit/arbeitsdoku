@@ -13,7 +13,7 @@
 // Diese Datei gehoert in die feste Dateiliste von deploy.sh (STAMMDATEIEN, aus Git abgeleitet).
 'use strict';
 const path = require('path');
-const archiver = require('archiver');
+const { ZipArchive } = require('archiver');
 const PDFDocument = require('pdfkit');
 const { ZONE } = require('./zeit');
 
@@ -136,7 +136,7 @@ function pdf({ titel, deltaJson, klartext, stand }) {
 
 function zip(dateien) {
   return new Promise((fertig, fehler) => {
-    const a = archiver('zip', { zlib: { level: 9 } });
+    const a = new ZipArchive({ zlib: { level: 9 } });
     const stuecke = [];
     a.on('data', b => stuecke.push(b));
     a.on('end', () => fertig(Buffer.concat(stuecke)));
