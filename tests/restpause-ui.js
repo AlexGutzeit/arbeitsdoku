@@ -13,6 +13,7 @@ const http = require('http'); const fs = require('fs'); const path = require('pa
 const puppeteer = require('puppeteer');
 
 const CHROME = require('./hilfen/chrome');
+const kalendertag = require('./hilfen/kalendertag');
 const PORT = 3193, DB = '/tmp/restpause.db', BASIS = `http://localhost:${PORT}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];
@@ -62,7 +63,7 @@ async function neuesFormular(page) {
 }
 
 const HEUTE = new Date().toLocaleDateString('sv-SE');
-const GESTERN = new Date(Date.now() - 864e5).toLocaleDateString('sv-SE');
+const GESTERN = kalendertag(-1);
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}

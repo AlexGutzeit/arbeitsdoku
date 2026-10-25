@@ -13,6 +13,7 @@
 //   node tests/ausstellen-zweifaktor.js
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path');
+const kalendertag = require('./hilfen/kalendertag');
 
 const PORT = 3290, DB = '/tmp/ausstellen-2fa.db', LOG = '/tmp/ausstellen-2fa-srv.log';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -89,7 +90,7 @@ function req(m, p, t, b) {
     // zu frueh — genau daran ist dieser Test einen Tag nach seiner Entstehung umgefallen
     // (dieselbe Falle wie in tests/trash-access.js, 25.08.2026).
     const heute = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
-    const morgen = new Date(Date.now() + 24 * 3600 * 1000).toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+    const morgen = kalendertag(1);
     const r = await req('POST', `/api/users/${u.id}/deactivate`, admin, { employed_until: heute });
     ok('ausgestellt', r.status === 200, r.status + ' ' + r.text.slice(0, 90));
 

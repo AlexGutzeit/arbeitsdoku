@@ -10,6 +10,7 @@ const puppeteer = require('puppeteer');
 
 const PORT = 3156, DB = '/tmp/arbeitsbeginn.db', BASE = 'http://localhost:' + PORT;
 const CHROME = require('./hilfen/chrome');
+const kalendertag = require('./hilfen/kalendertag');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, fails.push(n), console.log('  ✗ ' + n + (e ? '  → ' + e : '')));
@@ -166,7 +167,7 @@ async function tabMitUhr(browser, ctx, hhmm, hash) {
       await p0.close();
     }
     // Eigener Tag ohne Eintraege für Frieda: morgen
-    const morgen = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE');
+    const morgen = kalendertag(1);
     p = await tabMitUhr(browser, ctx3, '09:00', '#/entry/new');
     await p.evaluate((d) => {
       const el = document.getElementById('ef-date'); el.value = d;
@@ -253,7 +254,7 @@ async function tabMitUhr(browser, ctx, hhmm, hash) {
       await p0.close();
     }
     // Tag ohne Eintraege waehlen (heute hat Norbert schon welche)
-    const uebermorgen = new Date(Date.now() + 2 * 864e5).toLocaleDateString('sv-SE');
+    const uebermorgen = kalendertag(2);
     p = await tabMitUhr(browser, ctx4, '09:00', '#/entry/new');
     await p.evaluate((d) => {
       const el = document.getElementById('ef-date'); el.value = d;

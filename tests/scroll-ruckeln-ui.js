@@ -14,6 +14,7 @@ const sharp = require('sharp');
 
 const PORT = 3142, DB = '/tmp/scrollruckeln.db', BASE = 'http://localhost:' + PORT;
 const CHROME = require('./hilfen/chrome');
+const kalendertag = require('./hilfen/kalendertag');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];
 const ok = (n, c, e) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, fails.push(n), console.log('  ✗ ' + n + (e ? '  → ' + e : '')));
@@ -37,7 +38,7 @@ function bildHochladen(token, buf) {
 }
 const BILDER = path.join(__dirname, '..', 'storage', 'avatare');
 const today = new Date().toLocaleDateString('sv-SE');
-const morgenISO = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE');
+const morgenISO = kalendertag(1);
 
 // Ermittelt, WAS auf dieser Seite scrollt: das Dokument oder ein innerer Bereich.
 const scrollTraeger = p => p.evaluate(() => {
@@ -85,7 +86,7 @@ async function scrollProbe(p, label) {
   ok(`${label}: kein Rücksprung (${t.art === 'seite' ? 'Seite' : 'Bereich ' + String(t.sel).split(' ')[0]})`,
     r.s.length === 0 && r.ende >= Math.min(100, t.weite - 10), `${r.s.length} Sprünge, Ende ${r.ende} von ${t.weite}`);
 }
-const morgen = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE');
+const morgen = kalendertag(1);
 
 // Warten, bis die Seite lang genug ist — statt einmal nach festem Schlaf zu messen.
 //

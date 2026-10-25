@@ -4,6 +4,7 @@ const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const kalendertag = require('./hilfen/kalendertag');
 
 const PORT = 3172;
 const DB = '/tmp/planning-series-test.db';
@@ -94,7 +95,7 @@ const uniq = arr => [...new Set(arr)];
     ok('scope=series: alles entfernt', (await occs()).length === 0);
 
     // 9) „Serie beenden": Anker in der Vergangenheit → Vergangenes bleibt, Zukunft weg
-    const past14 = new Date(Date.now() - 14 * 86400000).toLocaleDateString('sv-SE');
+    const past14 = kalendertag(-14);
     const today2 = new Date().toLocaleDateString('sv-SE');
     r = await req('POST','/api/planning', admin, { date:past14, time_from:'07:00', time_to:'15:30', assigned_user_ids:[anna.id], recurrence:{ freq:'weekly', end_type:'never' } });
     const sd2 = r.body.series_id;

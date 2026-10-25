@@ -11,6 +11,7 @@ const http = require('http'); const fs = require('fs'); const path = require('pa
 const puppeteer = require('puppeteer');
 
 const CHROME = require('./hilfen/chrome');
+const kalendertag = require('./hilfen/kalendertag');
 const PORT = 3195, DB = '/tmp/restpause-fw.db', BASIS = `http://localhost:${PORT}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];
@@ -52,9 +53,9 @@ async function formular(page, datum) {
     await sleep(1500);
   }
 }
-const TAG0 = new Date(Date.now() - 3 * 864e5).toLocaleDateString('sv-SE');
-const TAG1 = new Date(Date.now() - 2 * 864e5).toLocaleDateString('sv-SE');
-const TAG2 = new Date(Date.now() - 864e5).toLocaleDateString('sv-SE');
+const TAG0 = kalendertag(-3);
+const TAG1 = kalendertag(-2);
+const TAG2 = kalendertag(-1);
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}

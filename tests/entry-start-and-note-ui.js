@@ -9,6 +9,7 @@ const puppeteer = require('puppeteer');
 
 const PORT = 3126, DB = '/tmp/entry-start-note.db', BASE = 'http://localhost:' + PORT;
 const CHROME = require('./hilfen/chrome');
+const kalendertag = require('./hilfen/kalendertag');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Browser-Uhr auf eine feste Tageszeit stellen. OHNE das prueft dieser Test die Uhrzeit des
@@ -42,7 +43,7 @@ function req(m, p, t, b) {
 }
 const login = (u, pw) => req('POST', '/api/auth/login', null, { username: u, password: pw });
 const today = new Date().toLocaleDateString('sv-SE');
-const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
+const tomorrow = kalendertag(1);
 
 (async () => {
   try { fs.unlinkSync(DB); } catch (_) {}

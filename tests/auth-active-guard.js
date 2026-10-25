@@ -3,6 +3,7 @@
 //   node tests/auth-active-guard.js
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path');
+const kalendertag = require('./hilfen/kalendertag');
 const PORT = 3220, DB = '/tmp/auth-active-guard.db';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0; const fails = [];
@@ -43,7 +44,7 @@ const login = (u, pw) => req('POST', '/api/auth/login', null, { username: u, pas
 
     // 4) Wiedereinstellen → DASSELBE (noch gültige) Token greift wieder.
     //    Wiedereintritt muss NACH dem Austritt (heute) liegen → morgen wählen.
-    const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
+    const tomorrow = kalendertag(1);
     const reac = await req('POST', `/api/users/${ma.id}/reactivate`, admin, { start_date: tomorrow });
     ok('Wiedereinstellen: 200', reac.status === 200, 'status=' + reac.status);
     ok('nach Wiedereinstellen: gleiches Token → wieder 200', (await req('GET', '/api/entries', maTok)).status === 200);
