@@ -5044,3 +5044,37 @@ Neuer Test `pdf-zellen-kuerzen` (Gegenprobe mit 0.16 rot). Werkzeuge für das n�
 `arbeitsdoku_backup_20261024-171110.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe). Rückkehrpunkt `vor-pdfkit-deploy`
 (= `ffab65b`). Danach auf dem VPS mit Node 22 ein Probe-PDF erzeugt: zweizeilige Adresse vollständig ohne „…", überlange
 Zelle mit „…". IPv4 + IPv6 200, `npm audit --omit=dev` 0, Datenbank 60/60 Tabellen, keine Zeile verändert.
+
+## Express 4 → 5 (24./25.10.2026)
+
+Plan mit Alex abgestimmt („Ja, bitte baue das so"). Mit Express 5.3 kommen body-parser 2, router 2 und path-to-regexp 8.
+
+- **Zahlen-Routen:** `/:id(\d+)` gibt es nicht mehr. `middleware/nur-zahl.js` lässt eine Nicht-Zahl per `next('route')`
+  zur nächsten Route durch — 17 Routen in `meldungen.js`/`notes.js`, jeweils VOR `authenticate`. Nötig, weil z. B.
+  `GET /:id` vor `GET /regeln` und `PUT /:id` vor `PUT /themen-reihenfolge` steht.
+- **`req.body`** ist ohne Body `undefined` statt `{}`; rund 190 Stellen lesen `req.body.x` ungeprüft.
+  `middleware/body-standard.js` setzt `{}` — in `server.js` UND in den 19 Tests, die sich eine eigene Mini-App bauen.
+  Die erste Suite war genau daran rot (zwei Tests mit DELETE ohne Body, der Server selbst war richtig); ein Wächter in
+  `express5-routen` hält die Mini-Apps seitdem auf Linie.
+- **`'*'` → `'/{*rest}'`** für den Rückfall auf `index.html`.
+- **Startfehler:** `app.listen` gibt ihn jetzt an den Rückruf, statt abzustürzen. Ohne Prüfung meldete der Server bei
+  belegtem Port „läuft" und endete mit Code 0; jetzt Grund und Code 1.
+- **Absturzschutz:** Der Patch auf `express/lib/router/layer` hätte den Start verhindert — den Pfad gibt es in 5 nicht.
+  Express 5 reicht scheiternde Promises selbst an `next(err)`; `asyncRoutenAbsichern()` ist jetzt ein Wächter, der unter
+  Express < 5 laut abbricht.
+- Neuer Test `express5-routen` (22 Prüfungen) mit drei Sabotage-Gegenproben (je eine Korrektur entfernt → rot an der
+  passenden Stelle). Beim Schreiben selbst eine Messfalle: Die Branding-Platzhalter heißen `{{themeColor}}`, ein Muster
+  `[A-Z_]+` hätte nie etwas gefunden.
+
+**Zeitumstellung in den Tests.** Die zweite Suite hatte einen roten Test, `arbeitsbeginn-ui`. Er lief um 00:55 am
+25.10. — einem Tag mit 25 Stunden — und rechnete „morgen" als `Date.now() + 864e5`: Das ergab 23:55 desselben Tages,
+dort hatte der Prüfling schon einen Eintrag bis 16:00, und die App schlug richtig 16:00 vor. Mit `uhr-stellen.js`
+genau nachgestellt. Neu `tests/hilfen/kalendertag.js`; dieselbe Falle in acht Tests ersetzt. Die App rechnet sauber
+(Serientermine in UTC, Tagesdifferenzen gerundet oder auf 12:00/UTC).
+
+**Deploy (25.10.2026, 06:15, `f478204`, kein Cache-Wechsel).** App-Code = `77381f5`, Suite 288/289; der eine rote Test
+als Zeitumstellungs-Fehler im Test nachgewiesen und behoben (seit dem Suite-Stand nur Testcode geändert). Sicherung
+`arbeitsdoku_backup_20261025-061302.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe). Rückkehrpunkt `vor-express5-deploy`
+(= `177f1f4`). Am Produktivserver: `/api/meldungen/regeln` und `/api/meldungen/123` → 401 (beide erreichen ihre Route),
+`/api/meldungen/abc` → App; tiefe Links mit eingesetztem Branding; Sicherheitsköpfe da; Protokoll ohne Fehler und ohne
+Veraltet-Warnungen; `npm audit --omit=dev` 0. Datenbank 60/60 Tabellen, keine Zeile verändert.
