@@ -5078,3 +5078,22 @@ als Zeitumstellungs-Fehler im Test nachgewiesen und behoben (seit dem Suite-Stan
 (= `177f1f4`). Am Produktivserver: `/api/meldungen/regeln` und `/api/meldungen/123` → 401 (beide erreichen ihre Route),
 `/api/meldungen/abc` → App; tiefe Links mit eingesetztem Branding; Sicherheitsköpfe da; Protokoll ohne Fehler und ohne
 Veraltet-Warnungen; `npm audit --omit=dev` 0. Datenbank 60/60 Tabellen, keine Zeile verändert.
+
+## Wartung: minimatch unter archiver (31.10.2026)
+
+Die Morgenkontrolle meldete „npm: 3 Lücken (3 mittel)". Alle drei sind eine: `minimatch` 10.2.6 (GHSA-g3hv-75wg-m249,
+veröffentlicht am Vorabend — präparierte Glob-Muster lassen die Vorverarbeitung quadratisch wachsen). Es kommt über
+`archiver` 8 → `readdir-glob` 3, das noch `minimatch ^10` verlangt; behoben ist es erst in 11.0.1. `npm audit fix --force`
+hätte `archiver` auf 4.0.2 zurückgesetzt.
+
+Praktisch erreichbar war die Lücke nicht: Die App ruft `archiver.glob()`/`.directory()` nirgends auf, und Muster kämen
+ohnehin aus dem eigenen Code. Damit die tägliche Meldung wieder etwas bedeutet, hebt ein auf `readdir-glob` begrenzter
+`overrides`-Eintrag in `package.json` es auf `^11.0.3`. `readdir-glob` benutzt nur `new Minimatch()` und `.match()` —
+beides in 11 unverändert; ausprobiert mit Muster, Ausschluss, versteckten Dateien und `directory()`.
+**Der Eintrag kommt wieder raus, sobald `readdir-glob` selbst minimatch 11 verlangt.**
+
+**Deploy (31.10.2026, 09:25, `944b882`, kein Cache-Wechsel).** Suite 289/289 auf der Kopie von 07:45. Sicherung
+`arbeitsdoku_backup_20261031-092449.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe). Rückkehrpunkt `vor-minimatch-deploy`
+(= `f478204`). Danach: IPv4+IPv6 200, `npm audit --omit=dev` 0, Wartungsstand leer, Zweitanlage mit 11.0.3 und
+Probestart ok; eine Sicherung mit dem neuen Stand gezogen und zurückgespielt (gleiche Zählung). Datenbank 60/60 Tabellen,
+keine Zeile verändert. System-Pakete auf VPS und Mini-PC waren schon aktuell, kein Neustart nötig.
