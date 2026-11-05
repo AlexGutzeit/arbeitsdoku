@@ -1500,7 +1500,7 @@ einziger Schlüssel nur in ihr selbst liegt, ist keine.
 App-Name, Theme-Farbe, Hintergrundfarbe und App-Icon sind über *Einstellungen → App-Branding*
 konfigurierbar (Chef/Admin) – **ohne Code-Änderung**.
 
-- **Defaults:** „Arbeitsdoku", grünes Theme, neutrales „AD"-Icon.
+- **Defaults:** „Arbeitsdoku", grünes Theme, Icon „Uhr mit Haken" auf grünem Verlauf (wie im Werbefilm).
 - **Icon-Upload:** PNG/JPG, mind. 256×256 px, beliebiges Seitenverhältnis (wird auf 512×512 quadratisch
   zugeschnitten). Alle PWA-Größen inkl. „maskable" werden automatisch erzeugt.
 - **Reset-Button** stellt das Standard-Icon wieder her.
@@ -1571,7 +1571,7 @@ Datenbank wird beim Hochziehen sicher aktualisiert. Trotzdem vor einem Update ei
 | `npm start` | Produktionsbetrieb. |
 | `npm run dev` | Dev-Server auf Port `3001` mit separater `data/local.db` und Dev-JWT. |
 | `npm run clone-db` | Kopiert eine Datenbank per SSH und anonymisiert alle Passwörter zu `test` (interne Nutzung; Quelle in `.env.deploy`). |
-| `node scripts/generate-icons.js` | Erzeugt die Standard-Icons aus `public/icons/source.svg` neu. |
+| `node scripts/generate-icons.js` | Erzeugt die Standard-Icons aus `public/icons/source.svg` neu (die maskierbare Fassung aus `source-maskable.svg`, Apple-Symbol und Windows-Kachel randlos). |
 | `node scripts/generate-test-index.js` | Schreibt die vollständige Testliste in `tests/README.md` (Beschreibung = erste Kommentarzeile jedes Tests). |
 | `node scripts/kollab-buendeln.js` | Baut das Schreibfeld der gemeinsamen Notizen (`public/vendor/kollab.*`) aus den fest versionierten Paketen neu; mit `--pruefen` nur vergleichen. Herkunft und Lizenzen: `public/vendor/HERKUNFT.md`. |
 

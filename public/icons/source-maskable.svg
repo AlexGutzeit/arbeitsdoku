@@ -1,0 +1,17 @@
+<svg width="512" height="512" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Maskierbare Fassung: Verlauf bis zum Rand (das System schneidet selbst rund/eckig zu),
+       Motiv verkleinert in der sicheren Mitte (Kreis mit 80 % Durchmesser) -->
+  <defs>
+    <linearGradient id="verlauf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#72cf44"/>
+      <stop offset="1" stop-color="#1c4a28"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#verlauf)"/>
+  <g transform="translate(32 32) scale(0.8) translate(-33.85 -34.85)">
+    <circle cx="28" cy="31" r="15" fill="none" stroke="#fff" stroke-width="4.6"/>
+    <path d="M28 22v9.5l6.5 3.8" stroke="#fff" stroke-width="4.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="46" cy="45" r="11" fill="#fff"/>
+    <path d="M41 45.2l3.4 3.4 6.4-6.6" stroke="#4a9229" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
