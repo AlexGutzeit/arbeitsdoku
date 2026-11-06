@@ -12,6 +12,7 @@ const PORT = 3097;
 const DB = '/tmp/trash-matrix-ui.db';
 const BASE = 'http://localhost:' + PORT;
 const CHROME = require('./hilfen/chrome');
+const kalendertag = require('./hilfen/kalendertag');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (n, c, e) => c ? (pass++, console.log('    ✓ ' + n)) : (fail++, console.log('    ✗ ' + n + (e ? '  → ' + e : '')));
@@ -192,7 +193,8 @@ const navInfo = (p) => p.evaluate(() => ({
     ok('7c) Chef sieht ma2 im Papierkorb→Mitarbeiter mit „Wiedereinstellen"', seesU, ''+seesU);
     await p.evaluate((id) => document.querySelector('.reactivate-user[data-id="'+id+'"]').click(), ma2.id);
     await sleep(500);
-    await p.evaluate(() => { const i = document.getElementById('pm-input'); if (i) { i.value = '2026-11-02'; i.dispatchEvent(new Event('input', { bubbles:true })); } });
+    // Wiedereintritt muss NACH dem Austritt (= heute) liegen; ein festes Datum kippt, sobald es Vergangenheit ist
+    await p.evaluate((tag) => { const i = document.getElementById('pm-input'); if (i) { i.value = tag; i.dispatchEvent(new Event('input', { bubbles:true })); } }, kalendertag(1));
     await p.evaluate(() => { const b = document.querySelector('.dialog-modal [data-act="ok"]'); if (b) b.click(); });
     await sleep(1200);
     ok('7d) ma2 ist wieder aktiv (Login wieder möglich)', (await req('POST','/api/auth/login', null, { username:'xma2', password:'Test1234!' })).status === 200);
