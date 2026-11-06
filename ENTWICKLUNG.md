@@ -5097,3 +5097,32 @@ beides in 11 unverändert; ausprobiert mit Muster, Ausschluss, versteckten Datei
 (= `f478204`). Danach: IPv4+IPv6 200, `npm audit --omit=dev` 0, Wartungsstand leer, Zweitanlage mit 11.0.3 und
 Probestart ok; eine Sicherung mit dem neuen Stand gezogen und zurückgespielt (gleiche Zählung). Datenbank 60/60 Tabellen,
 keine Zeile verändert. System-Pakete auf VPS und Mini-PC waren schon aktuell, kein Neustart nötig.
+
+## Standard-App-Icon: Uhr mit Haken statt „AD" (05./06.11.2026)
+
+Wer kein eigenes App-Icon hochlädt, sah bisher ein grünes Quadrat mit weißem „AD". Für den Werbefilm entstand ein Logo:
+eine Uhr mit Haken auf grünem Verlauf. Der Inhaber wollte es als Standard. `public/icons/source.svg` ist jetzt dieses
+Logo, `scripts/generate-icons.js` erzeugt daraus alle Größen. Zwei Fassungen weichen bewusst ab:
+
+- **Maskierbar** (Android schneidet selbst rund/eckig zu): eigene Vorlage `source-maskable.svg` mit Verlauf bis zum Rand,
+  Motiv auf 80 % in der sicheren Mitte (nachgemessen: kein weißer Punkt außerhalb des 80-%-Kreises). Vorher bekam das
+  abgerundete Icon einfach einen Rand in Theme-Farbe.
+- **Apple-Symbol und Windows-Kachel randlos:** iOS rundet selbst ab und füllt durchsichtige Ecken schwarz — das betraf
+  auch das alte „AD".
+
+Das Benachrichtigungs-Symbol (Glocke) und die Kategorie-Icons bleiben. Wo ein eigenes Icon hochgeladen ist, ändert sich
+nichts; das Standard-Icon erscheint dort erst nach „Zurücksetzen" in Einstellungen → App-Branding.
+
+Die Suite davor fand zwei Rote ohne App-Fehler: `trash-matrix-ui` trug als Wiedereintritt fest den 02.11.2026 ein — der
+Server verlangt einen Wiedereintritt nach dem Austritt (= heute), seit dem 02.11. also zu Recht abgelehnt; jetzt „morgen"
+über `kalendertag(1)`. Und ein neues Kundenprojekt „… GmbH" machte die Rechtsform für `keine-echten-namen-prodklon` zu
+einem „Namen", der in jeder Musterfirma anschlug; „gmbh" steht jetzt bei den allgemeinen Wörtern (Gegenprobe: ein echtes
+Projektwort wird weiter gefunden). `abwesenheitskalender-ui` und `backup-einspielen-ui` waren nur im Suite-Lauf am Abend
+rot, einzeln dreimal grün — Ursache offen, beobachten.
+
+**Deploy (06.11.2026, 06:07, `62b0918`, Cache 455).** Suite 285/289 (Kopie von 16:26; die vier Roten oben erklärt und
+behoben bzw. einzeln grün), danach alle 20 Prod-Klon-Tests auf der Kopie von 05:53 grün. Sicherung
+`arbeitsdoku_backup_20261106-060619.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe: 13 Konten, 1737 Einträge,
+Integrität ok). Rückkehrpunkt `vor-icon-deploy` (= `4f79c3d`). Danach: IPv4+IPv6 200, Cache 455 in `sw.js`, `index.html`
+und `gast.html`, ausgeliefertes Icon byte-gleich, Protokoll ohne Fehler, Zweitanlage Probestart ok, Datenbank 60/60
+Tabellen, keine Zeile verändert.
