@@ -11,6 +11,9 @@ storage/
 *.db
 local.db
 
+# Offene Sicherheitsbefunde — erst nach dem Beheben (neutral) in BUGLISTE.md übernehmen
+BUGLISTE-SICHERHEIT.md
+
 # Claude-Code / lokale Editor-Einstellungen
 .claude/
 .deploy-backups/
