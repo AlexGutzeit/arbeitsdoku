@@ -40,15 +40,19 @@ function req(method, p, { token, body, vonAdresse } = {}) {
     console.log('── Login: 10 Fehlversuche je Adresse, dann 429 ──');
     const A = '203.0.113.7', B = '2001:db8::42';
     let r;
-    for (let i = 1; i <= 10; i++) r = await req('POST', '/api/auth/login', { body: { username: 'admin', password: 'falsch' + i }, vonAdresse: A });
+    // Jeder Fehlversuch auf einen ANDEREN Namen: Seit 11.11.2026 bremst der Server zusätzlich je Konto
+    // (kontobremse.js, eigener Test anmeldung-eingang) — zehn Versuche auf „admin" liefen dort schon
+    // beim sechsten auf. Hier soll allein die Bremse je ADRESSE antworten.
+    for (let i = 1; i <= 10; i++) r = await req('POST', '/api/auth/login', { body: { username: 'niemand' + i, password: 'falsch' + i }, vonAdresse: A });
     ok('10. Fehlversuch → noch 401', r.status === 401, String(r.status));
-    r = await req('POST', '/api/auth/login', { body: { username: 'admin', password: 'falsch' }, vonAdresse: A });
+    r = await req('POST', '/api/auth/login', { body: { username: 'niemand11', password: 'falsch' }, vonAdresse: A });
     ok('11. Versuch → 429', r.status === 429, String(r.status));
     ok('Meldung auf Deutsch', /Zu viele Login-Versuche/.test(r.body?.error || ''), JSON.stringify(r.body));
+    ok('es ist die Bremse je Adresse, nicht die je Konto', r.body?.code !== 'KONTO_GEBREMST', JSON.stringify(r.body));
     ok('Kopfzeile RateLimit vorhanden, keine X-RateLimit-Altlast', !!(r.kopf['ratelimit'] || r.kopf['ratelimit-policy']) && !r.kopf['x-ratelimit-limit'],
       JSON.stringify(Object.keys(r.kopf).filter(k => /ratelimit/i.test(k))));
     r = await req('POST', '/api/auth/login', { body: { username: 'admin', password: pw }, vonAdresse: A });
-    ok('auch das richtige Passwort ist von dort gebremst', r.status === 429, String(r.status));
+    ok('auch das richtige Passwort ist von dort gebremst', r.status === 429 && /Zu viele Login-Versuche/.test(r.body?.error || ''), r.status + ' ' + JSON.stringify(r.body));
     r = await req('POST', '/api/auth/login', { body: { username: 'admin', password: pw }, vonAdresse: B });
     ok('andere Adresse (IPv6) meldet sich normal an', r.status === 200 && !!r.body?.token, String(r.status));
     const token = r.body?.token;

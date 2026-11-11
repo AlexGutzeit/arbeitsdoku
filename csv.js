@@ -9,11 +9,31 @@
 //     Zeilenumbrueche und Anfuehrungszeichen im Text die Tabelle nicht zerreissen
 //   * CRLF als Zeilenende
 //   * UTF-8-BOM am Anfang, sonst zeigt Excel Umlaute falsch an
+//   * Zellen, die wie eine Formel beginnen, werden entschaerft — siehe csvZelle
 
 const BOM = '﻿';
 
+// Formeln entschaerfen (Sicherheitspruefung 10.11.2026, P2).
+//
+// Excel und LibreOffice werten eine Zelle als FORMEL aus, wenn sie mit = + - oder @ beginnt — auch
+// in einer CSV-Datei, auch in Anfuehrungszeichen. Freitext aus der App landet hier (Namen,
+// Projektnamen, Audit-Details), und der Benutzername einer FEHLANMELDUNG kommt sogar von jemandem,
+// der gar nicht angemeldet ist. Wer dort „=HYPERLINK(…)" eintippte, legte dem Admin eine Formel in
+// den Export.
+//
+// Solche Zellen bekommen ein Hochkomma vorangestellt (Empfehlung von OWASP) — die Tabelle zeigt sie
+// dann als Text. Tabulator und Wagenruecklauf am Anfang zaehlen mit, ebenso Leerraum vor dem
+// Formelzeichen: Manche Programme schneiden ihn beim Einlesen weg.
+//
+// AUSNAHME reine Zahlen: Ein negativer Saldo („-3,5") beginnt auch mit einem Minus, ist aber keine
+// Formel und muss eine Zahl bleiben — das Lohnbuero rechnet damit weiter.
+const FORMEL_ANFANG = /^(?:[=+\-@\t\r]|\s+[=+\-@])/;
+const REINE_ZAHL = /^[+-]?\d+(?:[.,]\d+)?$/;
+
 function csvZelle(v) {
-  return '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  let s = String(v ?? '');
+  if (typeof v !== 'number' && FORMEL_ANFANG.test(s) && !REINE_ZAHL.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
 }
 
 // Fertige Datei aus vorbereiteten Zeilen (Strings).

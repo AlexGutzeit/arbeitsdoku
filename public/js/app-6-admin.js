@@ -888,6 +888,7 @@ openssl ec -in privat.pem -pubout -outform der | base64 | tr -d '\n' &gt; oeffen
 const AUDIT_LABELS = {
   login_success: 'Login erfolgreich',
   login_failed: 'Login fehlgeschlagen',
+  login_gebremst: 'Login gebremst (viele Fehlversuche auf ein Konto)',
   logout: 'Abmeldung (manuell)',
   session_expired: 'Sitzung abgelaufen (Timeout)',
   settings_update: 'Einstellungen geändert',

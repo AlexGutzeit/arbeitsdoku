@@ -215,6 +215,26 @@ das Konto noch aktiv und die Anmeldung noch gültig ist. Nach „Überall abmeld
 Passwort oder dem Ausstellen schließt der Server sie von selbst; ein offen liegen gelassenes Gerät
 landet dadurch ohne Zutun in der Anmeldemaske.
 
+**Fehlversuche bei der Anmeldung werden gebremst — gesperrt wird kein Konto.** Es gibt zwei Bremsen:
+
+- **Je Adresse:** Nach 10 Fehlversuchen in 15 Minuten nimmt der Server von dieser Adresse eine
+  Viertelstunde lang keine Anmeldung mehr an.
+- **Je Konto** (seit 11.11.2026): Die ersten fünf Fehlversuche auf einen Benutzernamen kosten nichts.
+  Danach verlangt der Server zwischen zwei Versuchen eine Pause, die sich jedes Mal verdoppelt —
+  1, 2, 4 … Sekunden, **höchstens eine Minute**. Das gilt, egal von wie vielen Adressen die Versuche
+  kommen: Ein Konto lässt sich so höchstens rund 1 400-mal am Tag durchprobieren statt beliebig oft.
+  Wer in der Pause anklopft, liest *„Zu viele Fehlversuche für dieses Konto. Bitte in … Sekunden
+  erneut versuchen."* — auch mit dem richtigen Passwort, sonst verriete die Antwort einen Treffer.
+  Die richtige Anmeldung setzt den Zähler zurück, eine Viertelstunde Ruhe ebenfalls.
+
+Ein Konto wird dadurch **nie zugehalten**: Anklopfen während der Pause verlängert sie nicht, und
+spätestens eine Minute nach dem letzten Fehlversuch ist der Weg frei. Solange jemand ein Konto
+ununterbrochen durchprobiert, kann die betroffene Person allerdings mehrere Anläufe brauchen. Im
+**Audit-Log** steht dann „Login gebremst" (eine Zeile je Bremsphase, mit Adresse). Hört es nicht auf,
+hilft ein **neuer Benutzername** (Mitarbeiter bearbeiten) — die Bremse hängt am getippten Namen.
+Gezählt wird ein Name auch dann, wenn es das Konto gar nicht gibt: Die Bremse verrät nicht, welche
+Benutzernamen existieren. Der Zählerstand liegt im Arbeitsspeicher und ist nach einem Neustart leer.
+
 **Zwei-Faktor-Anmeldung (TOTP):** Zusätzlich zum Passwort ein 6-stelliger Code aus einer
 Authenticator-App (Google Authenticator, Aegis, 2FAS, Microsoft Authenticator …). Einrichtung per
 QR-Code; wer nicht scannen kann — etwa weil die App auf demselben Handy läuft — tippt den
@@ -897,6 +917,14 @@ Zur Häufigkeit: Der Code wird beim **Anmelden** abgefragt, und eine Anmeldung b
 #### 📜 Audit-Log
 
 Revisionssicheres Protokoll: An-/Abmeldungen (Login erfolgreich/fehlgeschlagen, manuelle Abmeldung, Sitzungs-Timeout), Benutzeränderungen, Einstellungs-/Branding-Änderungen, Backups, **Gäste in Notizen** (eingeladen, geändert, neues Passwort, entfernt, Anmeldung mit Passwort, falsche Passwörter, Sperre — jeweils mit Gastname und Notiz), **gelöschte Aushänge und Bestellungen** (per Knopf ebenso wie das automatische Aufräumen abgelaufener Aushänge und erledigter Bestellungen, dann als „System"), **aufgeräumte Datenreste** u. a. Benutzeranlage mit allen Parametern, Änderungen feldgenau als „alt → neu" (Passwörter nie). Mit Filter (Aktion/Zeitraum), seitenweisem Nachladen und CSV-Export fürs Archiv. *(Admin)*
+
+**CSV-Dateien und Formeln:** Tabellenprogramme werten eine Zelle als Formel aus, wenn sie mit `=`,
+`+`, `-` oder `@` beginnt — auch in einer CSV-Datei. Alle drei CSV-Exporte (Audit-Log,
+Projekt-Einträge, Lohn-Export) stellen solchen Zellen deshalb ein **Hochkomma** voran (`'=1+1`); die
+Tabelle zeigt sie dann als Text. Das trifft nur Freitext — einen Namen, der mit „+49 …" beginnt, oder
+den Benutzernamen einer Fehlanmeldung, den jemand ohne Konto eintippen kann. **Zahlen bleiben
+Zahlen**, auch negative (Saldo „-3,5"). Überlange Benutzernamen kürzt das Protokoll auf 100 Zeichen
+und vermerkt die ursprüngliche Länge.
 
 #### 🗑️ Papierkorb
 

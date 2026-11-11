@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**291 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**294 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -62,7 +62,9 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `abwesenheitskalender-ui.js` | Abwesenheitskalender: wer fehlt wann, alle Mitarbeiter auf einen Blick (Alex, 28.08.2026). |
 | `alle-abmelden-ui.js` | „Auf allen Geräten abmelden" — der Knopf darf einen NICHT selbst hinauswerfen (Alex, 23.08.2026). |
 | `altdb-spalten.js` | Ein sehr altes Backup einspielen — und trotzdem hineinkommen. |
+| `anmelde-bremse-ui.js` | Anmeldemaske: Ist ein Konto gebremst, sagt die Maske, wie lange — und danach kommt der Richtige hinein. |
 | `anmelde-bremse.js` | Anmelde-Bremsen: nach 10 Fehlversuchen kommt 429 mit deutscher Meldung — Login je Adresse, Code-Bestätigung je Konto. |
+| `anmeldung-eingang.js` | Anmelde-Eingang: Eingaben müssen Text sein, der Name kommt gekürzt ins Protokoll, und viele Fehlversuche auf EIN Konto werden gebremst, nicht gesperrt. |
 | `ansicht-erhalten-ui.js` | Puppeteer-Test (B10): Ansicht bleibt über Neuaufbauten hinweg erhalten. |
 | `arbeitsbeginn-prodklon.js` | Abwaertskompatibilitaet des Arbeitsbeginns — der Aussperr-Fall. |
 | `arbeitsbeginn-ui.js` | Arbeitsbeginn je Mitarbeiter + Zeit-Vorbelegung, die nie unmöglich ist. |
@@ -123,6 +125,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `bugliste-v6b-api.js` | Unit/API-Test Bugliste v6, Runde 2: |
 | `bugliste-v6b-ui.js` | Test Bugliste v6, Runde 2 (API + UI): |
 | `complex-saldo-versioning.js` | Komplexer Integrationstest: Berechnung (Soll/Ist/Ueber) + Versionierung (Papierkorb/History) |
+| `csv-formeln.js` | CSV-Exporte: Zellen, die wie eine Formel beginnen, kommen entschärft in die Datei — Zahlen bleiben Zahlen. |
 | `deploy-vollstaendigkeit.js` | Probe: Überträgt deploy.sh WIRKLICH alles, was der Server zum Starten braucht? |
 | `doc-limits.js` | Dokument-Limits-Test: kombinierter /limits-Endpunkt (Validierung + Pro-Datei≤Gesamt) und das |
 | `double-submit-ui.js` | Puppeteer-Test: globaler Doppel-Submit-Schutz. |

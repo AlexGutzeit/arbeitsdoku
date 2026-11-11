@@ -57,6 +57,15 @@ function recordAbsenceHistory(db, oldAbsence, action, changedBy, reason) {
 
 // Protokolliert ein Ereignis in audit_logs.
 // opts: { userId, username, action, details, ip }
+// Der Benutzername wird auf AUDIT_NAME_MAX Zeichen gekuerzt (P3): Bei einer Fehlanmeldung ist er
+// frei getippt und kam ungekuerzt ins Protokoll — ohne Anmeldung liess sich die Datenbank so mit
+// 90 000 Zeichen je Versuch fuellen. Die Laenge des Originals bleibt als Hinweis stehen.
+const AUDIT_NAME_MAX = 100;
+function auditName(name) {
+  const s = typeof name === 'string' ? name : (name === null || name === undefined ? '' : String(name));
+  return s.length > AUDIT_NAME_MAX ? s.slice(0, AUDIT_NAME_MAX) + `… (${s.length} Zeichen)` : s;
+}
+
 function logAudit(db, opts) {
   const o = opts || {};
   let details = o.details;
@@ -66,10 +75,10 @@ function logAudit(db, opts) {
   try {
     db.prepare(
       'INSERT INTO audit_logs (ts, user_id, username, action, details, ip) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(berlinNow(), o.userId || null, o.username || '', o.action, details || '', o.ip || '');
+    ).run(berlinNow(), o.userId || null, auditName(o.username), o.action, details || '', o.ip || '');
   } catch (e) {
     console.error('audit_logs konnte nicht geschrieben werden:', e.message);
   }
 }
 
-module.exports = { recordEntryHistory, recordAbsenceHistory, logAudit, berlinNow, ENTRY_SNAPSHOT_FIELDS, ABSENCE_SNAPSHOT_FIELDS };
+module.exports = { recordEntryHistory, recordAbsenceHistory, logAudit, auditName, AUDIT_NAME_MAX, berlinNow, ENTRY_SNAPSHOT_FIELDS, ABSENCE_SNAPSHOT_FIELDS };

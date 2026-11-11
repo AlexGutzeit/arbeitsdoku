@@ -6,6 +6,7 @@ const { getDb } = require('../database/init');
 const { authenticate, JWT_SECRET, tokenAusstellen, hoechstdauerFuer, sitzungenBeenden, tokenNachWiderruf } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { passwordPolicyError } = require('./users');
+const { kontobremse } = require('../kontobremse');
 const zf = require('../zweifaktor');
 const totp = require('../totp');
 const { zustand: zweiFaktorZustand } = require('./twofa');
@@ -26,16 +27,37 @@ const loginLimiter = rateLimit({
   skipSuccessfulRequests: true,
 });
 
+// Zweite Bremse je BENUTZERNAMEN (P5): bremst, sperrt nicht — Begruendung in kontobremse.js.
+const kontoBremse = kontobremse();
+// Der Name als Schluessel der Bremse. Abgeschnitten, damit ein Riesenname keinen Speicher bindet.
+const bremsName = (username) => username.slice(0, 200);
+
 // Login. async + bcrypt.compare (kooperativ): die rechenintensive Passwortpruefung blockiert den
 // Event-Loop nicht mehr — der Server bleibt unter vielen gleichzeitigen Logins ansprechbar.
 router.post('/login', loginLimiter, async (req, res) => {
  try {
-  const { username, password } = req.body;
-  if (!username || !password) {
+  const { username, password } = req.body || {};
+  // Beide Felder muessen TEXT sein (P3). Ein Objekt oder eine Liste liess bcrypt werfen — heraus kam
+  // „Interner Serverfehler" (500) fuer eine Anfrage, die schlicht falsch gestellt war.
+  if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
     return res.status(400).json({ error: 'Benutzername und Passwort erforderlich' });
   }
 
   const db = getDb();
+  // Bremse je Konto, VOR der Passwortpruefung und ohne sie: Wuerde ein richtiges Passwort auch
+  // waehrend der Pause durchgelassen, verriete die Antwort trotzdem jeden Treffer.
+  const klopfen = kontoBremse.anklopfen(bremsName(username));
+  if (klopfen.wartenS) {
+    // EINE Zeile je Bremsphase — nicht je abgewiesenem Versuch, sonst fuellte ein Angreifer das Protokoll.
+    if (klopfen.erstmals) {
+      logAudit(db, { username, action: 'login_gebremst',
+        details: `Nach ${klopfen.versuche} Versuchen in Folge: Wartezeit zwischen den Anmeldeversuchen`, ip: req.ip });
+    }
+    res.setHeader('Retry-After', String(klopfen.wartenS));
+    return res.status(429).json({ code: 'KONTO_GEBREMST', warten_s: klopfen.wartenS,
+      error: `Zu viele Fehlversuche für dieses Konto. Bitte in ${klopfen.wartenS === 1 ? 'einer Sekunde' : klopfen.wartenS + ' Sekunden'} erneut versuchen.` });
+  }
+
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   if (!user) {
     await bcrypt.compare(password, DUMMY_HASH); // Timing angleichen (Antwortzeit wie bei echtem User)
@@ -47,6 +69,9 @@ router.post('/login', loginLimiter, async (req, res) => {
     logAudit(db, { userId: user.id, username, action: 'login_failed', details: 'Falsches Passwort', ip: req.ip });
     return res.status(401).json({ error: 'Ungültige Anmeldedaten' });
   }
+  // Das Passwort stimmt — der Zaehler der Kontobremse beginnt von vorn. (Der Code-Schritt danach
+  // hat seine eigene Bremse je Konto, siehe zweiFaktorLimiter.)
+  kontoBremse.erfolg(bremsName(username));
 
   // Ausgestellte Mitarbeiter koennen sich nicht mehr anmelden (Daten bleiben erhalten).
   if (user.active === 0) {
@@ -224,7 +249,9 @@ router.get('/me', authenticate, (req, res) => {
 router.put('/password', authenticate, async (req, res) => {
   try {
     const { aktuell, neu } = req.body || {};
-    if (!aktuell || !neu) return res.status(400).json({ error: 'Aktuelles und neues Passwort erforderlich' });
+    if (typeof aktuell !== 'string' || typeof neu !== 'string' || !aktuell || !neu) {
+      return res.status(400).json({ error: 'Aktuelles und neues Passwort erforderlich' });
+    }
 
     const db = getDb();
     const reihe = db.prepare('SELECT password_hash, username FROM users WHERE id = ?').get(req.user.id);
