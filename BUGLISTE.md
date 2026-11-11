@@ -516,6 +516,52 @@ und wandern nach dem Beheben hierher.
   Inhalt). Und der Ereigniskanal ließ Konten durch, die den zweiten Faktor erst noch einrichten müssen.
 - **Tests:** `sitzung-widerruf` (64), `passwortwechsel-abmelden-ui` (28). **Gegenproben 16/16 rot**, jede an ihrer Stelle.
 
+### [x] P2 · CSV-Exporte gaben Formeln ungeschützt weiter — erledigt in `d2ad04b` *(noch nicht deployt)*
+- **Was war:** Eine Zelle, die mit `=`, `+`, `-` oder `@` beginnt, wertet eine Tabellenkalkulation als Formel aus —
+  auch in einer CSV-Datei. Freitext aus der App landet in drei Exporten (Audit-Log, Projekt-Einträge, Lohn), und der
+  Benutzername einer **Fehlanmeldung** kommt sogar von jemandem, der gar nicht angemeldet ist. Die Anzeige in der
+  App selbst war sauber; betroffen war nur, wer den Export öffnet.
+- **Gelöst:** `csvZelle` (`csv.js`, die eine Stelle für alle drei Exporte) stellt solchen Zellen ein Hochkomma voran.
+  Tabulator und Wagenrücklauf am Anfang zählen mit, ebenso Leerraum vor dem Formelzeichen.
+- **Bewusst ausgenommen:** reine Zahlen. Ein negativer Saldo (`-3,5`) bleibt eine Zahl, mit der das Lohnbüro
+  weiterrechnen kann.
+- **Nebenwirkung:** Harmloser Freitext, der mit einem dieser Zeichen beginnt („- siehe oben", `+49 …`), steht in der
+  Tabelle mit einem Hochkomma davor. In der App ändert sich nichts.
+- **Tests:** `csv-formeln` (62) — die Regel als Tabelle, dann alle drei Exporte über die API mit einem eigenen
+  CSV-Leser, der nicht die geprüfte Funktion benutzt.
+
+### [x] P3 · Anmeldung prüfte die Art der Eingaben nicht — erledigt in `d2ad04b` *(noch nicht deployt)*
+- **Was war:** Benutzername oder Passwort als Objekt, Liste oder Zahl führte zu „Interner Serverfehler" (500) statt zu
+  einer Ablehnung; dasselbe beim eigenen Passwortwechsel. Und ein beliebig langer Benutzername einer Fehlanmeldung
+  wurde ungekürzt ins Audit-Log geschrieben — ohne Anmeldung ließ sich die Datenbank so aufblähen.
+- **Gelöst:** Beide Felder müssen Text sein, sonst 400 (Anmeldung und Passwortwechsel). `logAudit` kürzt den
+  Benutzernamen zentral auf 100 Zeichen und vermerkt die ursprüngliche Länge — das gilt damit für jede Stelle, die
+  ins Audit-Log schreibt, nicht nur für die Anmeldung.
+- **Bewusst nicht geändert:** Keine Längengrenze für Benutzername oder Passwort *bei der Anmeldung*. Ein zu langer
+  Name ist schlicht unbekannt (401), und eine Passwortgrenze könnte ein Konto mit sehr langem Passwort aussperren.
+  Die Größe der Anfrage begrenzt ohnehin der Server.
+
+### [x] P5 · Die Anmeldebremse zählte nur je Adresse — erledigt in `d2ad04b` *(noch nicht deployt)*
+- **Was war:** Zehn Fehlversuche je Adresse in 15 Minuten, dann Pause. Wer von vielen Adressen kam, konnte ein
+  einzelnes Konto beliebig oft durchprobieren.
+- **Gelöst:** Zweite Bremse je **Benutzername** (`kontobremse.js`): fünf Versuche frei, danach wächst die Pause bis
+  zum nächsten Versuch (1, 2, 4 … höchstens 60 Sekunden). Rechnerisch bleiben einem Angreifer rund 1 400 Versuche am
+  Tag auf ein Konto, egal von wie vielen Adressen. Die richtige Anmeldung setzt den Zähler zurück, nach einer
+  Viertelstunde ohne Versuch ist er vergessen. Die Maske nennt die Wartezeit; im Audit-Log steht je Bremsphase
+  **eine** Zeile „Login gebremst".
+- **Bewusst so:** Es wird **gebremst, nicht gesperrt** (Entscheidung Alex, 10.11.) — eine Sperre wäre ein Werkzeug,
+  Kollegen auszusperren. Deshalb verlängert ein Versuch *während* der Pause sie nicht. Gezählt wird der Name, wie er
+  getippt wurde, auch wenn es das Konto nicht gibt (sonst verriete die Bremse, welche Namen es gibt). In der Pause
+  wird auch das richtige Passwort abgewiesen, ohne es zu prüfen (sonst verriete die Antwort jeden Treffer).
+- **Grenze:** Während jemand ein Konto gerade durchprobiert, braucht dessen Besitzer unter Umständen mehrere Anläufe.
+  Abhilfe steht im README (Benutzername ändern). Der Zählerstand liegt im Arbeitsspeicher und ist nach einem
+  Neustart leer.
+- **Tests:** `anmeldung-eingang` (63, P3 und P5; der Baustein mit gestellter Uhr, dann über die API),
+  `anmelde-bremse-ui` (8, die Maske nennt die Wartezeit und lässt danach hinein). Der Bestandstest `anmelde-bremse`
+  (13) war nach dem Umbau rot, weil er zehnmal dasselbe Konto benutzte — er misst jetzt mit wechselnden Namen wieder
+  allein die Bremse je Adresse. **Gegenproben für P2, P3 und P5 zusammen: 32/32 rot**
+  (eine blieb zuerst grün — Tabulator ohne Formelzeichen dahinter; Test in `03b25bd` ergänzt).
+
 ## Geprüft und in Ordnung
 
 Damit diese Punkte nicht ein zweites Mal untersucht werden:
@@ -541,4 +587,5 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 **R1–R30 sind erledigt und deployt** (30.09.2026, zuletzt R30 mit `8ca3263`, Cache 437). **R31** (Anmelde-Schleife durch
 den Browser-Zwischenspeicher) ist am 01.10.2026 um 22:06 deployt (`4f81a93`, Cache 443).
 
-**Sicherheitsprüfung 10.11.2026:** P1 und P6 sind behoben (`d1de64c`, Cache 456), **noch nicht deployt**.
+**Sicherheitsprüfung 10.11.2026:** P1 und P6 (`d1de64c`, Cache 456) sowie P2, P3 und P5 (`d2ad04b`, Cache 457) sind
+behoben, **noch nicht deployt**.

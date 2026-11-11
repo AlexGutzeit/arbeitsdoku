@@ -5170,3 +5170,55 @@ setzt sein eigenes Passwort im Mitarbeiter-Dialog). **Gegenproben 16/16 rot** �
 darunter die Token-Übernahme der Oberfläche an beiden Stellen. Die erste Fassung des Browser-Tests war dabei nur durch
 eine Ausnahme rot (das Formular war schon weg); er fragt jetzt zuerst nach der Anmeldemaske. Cache 456.
 **Noch nicht deployt.**
+
+## Sicherheitsprüfung: Anmeldung prüft Eingaben, Bremse je Konto, CSV ohne Formeln (11.11.2026)
+
+Drei Punkte derselben Prüfung, die an einer Stelle zusammenhängen: Der Benutzername einer **Fehlanmeldung** ist das
+einzige Freitextfeld, das jemand ohne Anmeldung in die Datenbank schreiben kann. Er kam ungeprüft (P3), beliebig oft
+(P5) und landete ungefiltert im Export (P2).
+
+**P3 — Art der Eingabe, nicht ihre Länge.** Benutzername und Passwort müssen Text sein, sonst 400; bisher ließ ein
+Objekt `bcrypt` werfen (500 und eine Fehlerzeile im Protokoll). Derselbe Fehler steckte im eigenen Passwortwechsel.
+Vorgeschlagen war zusätzlich eine Längengrenze für beide Felder. **Nicht gebaut:** Ein zu langer Name ist einfach
+unbekannt, und eine Grenze für das Passwort könnte jemanden aussperren, der heute ein sehr langes hat (die
+Passwortregeln kennen keine Obergrenze). Das eigentliche Problem war, dass der Riesenname im Audit-Log blieb — das
+löst `auditName()` in `logAudit`, also für **jede** Stelle, die dorthin schreibt: 100 Zeichen, dahinter die
+ursprüngliche Länge („… (90000 Zeichen)").
+
+**P5 — bremsen, nicht sperren** (`kontobremse.js`, eigener Baustein mit einstellbarer Uhr, damit der Test nicht
+minutenlang warten muss). Fünf Versuche frei, dann 1, 2, 4 … höchstens 60 Sekunden bis zum nächsten. Vier
+Entscheidungen, jede mit einem Grund, der sich nicht von selbst versteht:
+- **Ein Versuch während der Pause verlängert sie nicht.** Sonst hielte bloßes Anklopfen ein Konto dauerhaft zu —
+  die Sperre durch die Hintertür. Es gibt keinen Zustand, in dem ein Konto länger als 60 Sekunden zu ist.
+- **Gezählt wird beim Anklopfen,** nicht nach der Passwortprüfung. Die Prüfung dauert; zwanzig gleichzeitige
+  Versuche sähen sonst alle den alten Zählerstand.
+- **Auch unbekannte Namen zählen.** Bremste man nur vorhandene Konten, verriete die Bremse, welche es gibt.
+  Deshalb die Obergrenze von 10 000 gemerkten Namen (die ältesten gehen).
+- **In der Pause wird auch das richtige Passwort abgewiesen,** ohne es zu prüfen. Ließe man es durch, bliebe das
+  Durchprobieren ungebremst — nur die Fehlschläge würden langsamer gemeldet.
+
+Der Preis steht im README: Während jemand ein Konto durchprobiert, trifft dessen Besitzer mit dem richtigen Passwort
+unter Umständen auf die Pause. Er bekommt dann die Wartezeit genannt und nicht „Ungültige Anmeldedaten". Ein
+„bekanntes Gerät"-Merkmal, das den Besitzer an der Bremse vorbeiließe, wäre der nächste Schritt — nicht gebaut,
+weil es eine zweite Art Anmeldezustand einführt. Die beiden Bremsen stehen hintereinander: Die je Adresse
+(express-rate-limit) läuft zuerst und zählt jede Antwort ab 400, auch die 429 der Kontobremse.
+
+**P2 — ein Hochkomma, an der einen Stelle.** `csvZelle` bedient alle drei Exporte; dort wird entschärft, was mit
+`=`, `+`, `-`, `@`, Tabulator oder Wagenrücklauf beginnt (auch hinter Leerraum, den manche Programme wegschneiden).
+Die Ausnahme sind reine Zahlen: Der Lohn-Export enthält negative Salden, und die müssen Zahlen bleiben. Die Ausnahme
+ist eng gefasst (Vorzeichen, Ziffern, höchstens ein Komma oder Punkt) — `-7+1` ist keine Zahl. Sichtbare Folge:
+Freitext wie „- siehe oben" oder eine Telefonnummer mit `+49` steht im Export mit Hochkomma davor.
+
+**Der Bestandstest, der rot wurde.** `anmelde-bremse` prüfte die Bremse je Adresse mit zehn Fehlversuchen auf
+**dasselbe** Konto — nach dem Umbau griff vorher die neue Bremse. Der Test maß also den alten Weg, nicht das Ziel.
+Er benutzt jetzt je Versuch einen anderen Namen und prüft ausdrücklich, dass die Antwort **nicht** von der
+Kontobremse stammt. Stolperstein beim Schreiben der neuen Tests: Eine leere Datenbank bringt das Konto `max` schon
+mit; ein Testkonto dieses Namens anzulegen scheitert mit 409, und der Test läuft dann unbemerkt gegen das falsche
+Passwort.
+
+**Tests.** `anmeldung-eingang` (63), `csv-formeln` (62, mit eigenem CSV-Leser und eigener Fassung der Regel — sonst
+prüfte die Funktion sich selbst), `anmelde-bremse-ui` (8), `anmelde-bremse` (13).
+**Gegenproben 32/32 rot** — jede Schutzstelle einzeln ausgebaut, auch jedes der vier Formelzeichen und jeder der drei
+Exporte für sich. Eine blieb zuerst grün: Tabulator und Wagenrücklauf aus dem Muster genommen. Die Tabelle kannte
+beide nur *vor* einem Gleichheitszeichen, und das fängt schon der Zweig für Leerraum; zwei Fälle ohne Formelzeichen
+dahinter ergänzt (`03b25bd`). Cache 457. **Noch nicht deployt.**
