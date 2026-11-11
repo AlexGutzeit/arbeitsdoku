@@ -1273,6 +1273,10 @@ async function showUserModal(user) {
               <button type="button" class="btn btn-primary btn-sm" id="um-pw-save">Speichern</button>
               <button type="button" class="btn btn-outline btn-sm" id="um-pw-cancel">Abbrechen</button>
             </div>
+            <div style="font-size:.78rem;color:var(--text-light);margin-top:.4rem">
+              Beendet alle Anmeldungen dieses Kontos, auf jedem Gerät. Gemerkte Geräte der
+              Zwei-Faktor-Anmeldung werden dabei zurückgesetzt.
+            </div>
           </div>
         </div>
         <div class="form-group">
@@ -1503,8 +1507,12 @@ async function showUserModal(user) {
       if (pw1.toLowerCase() === user.username.toLowerCase()) { toast('Passwort darf nicht dem Benutzernamen entsprechen', 'error'); return; }
       if (pw1 !== pw2) { toast('Passwörter stimmen nicht überein', 'error'); return; }
       try {
-        await api('POST', `/api/users/${user.id}/reset-password`, { password: pw1 });
-        toast('Passwort gesetzt', 'success');
+        const d = await api('POST', `/api/users/${user.id}/reset-password`, { password: pw1 });
+        // Das Setzen beendet alle Anmeldungen des Betroffenen. War es das EIGENE Konto, liegt ein
+        // frisches Token bei — sonst floege man mit dem naechsten Klick selbst hinaus.
+        if (d && d.token) { S.token = d.token; localStorage.setItem('token', d.token); }
+        toast(d && d.token ? 'Passwort gesetzt — auf allen anderen Geräten wurdest du abgemeldet'
+          : 'Passwort gesetzt — alle Anmeldungen dieses Kontos wurden beendet', 'success');
         document.getElementById('um-reset-pw-form').style.display = 'none';
         document.getElementById('um-pw-new').value = '';
         document.getElementById('um-pw-repeat').value = '';
@@ -3202,6 +3210,10 @@ function kontoPasswortKarte() {
         <input type="password" class="form-control" id="pw-neu2" autocomplete="new-password" required>
       </div>
       <button type="submit" class="btn btn-primary">Passwort ändern</button>
+      <div style="font-size:.78rem;color:var(--text-light);margin-top:.4rem">
+        Meldet dich auf allen anderen Geräten ab — hier bleibst du angemeldet.
+        Gemerkte Geräte der Zwei-Faktor-Anmeldung werden dabei zurückgesetzt.
+      </div>
     </form>`;
   // Dieselbe Live-Prüfliste wie im Mitarbeiter-Dialog — eine Darstellung der Regeln, nicht zwei.
   // Erwartet ELEMENTE, nicht Kennungen (app-1-core.js:915) — hier hatte ich zuerst Kennungen
@@ -3220,10 +3232,14 @@ function kontoPasswortKarte() {
       return;
     }
     try {
-      await api('PUT', '/api/auth/password', { aktuell: alt, neu });
-      toast('Passwort geändert', 'success');
+      const d = await api('PUT', '/api/auth/password', { aktuell: alt, neu });
+      // Der Wechsel beendet ALLE Anmeldungen, auch die hiesige — der Server gibt dafuer ein frisches
+      // Token mit. Ohne es zu uebernehmen, floege man beim naechsten Klick selbst hinaus.
+      if (d && d.token) { S.token = d.token; localStorage.setItem('token', d.token); }
+      toast('Passwort geändert — auf allen anderen Geräten wurdest du abgemeldet', 'success');
       document.getElementById('konto-pw-form').reset();
       const reqs = document.getElementById('pw-neu-reqs'); if (reqs) reqs.innerHTML = '';
+      await kontoZweiFaktorKarte();   // die gemerkten Geraete sind weg
     } catch (err) {
       fehler.textContent = err.message;
       fehler.style.display = 'block';

@@ -112,6 +112,113 @@ function gateFrei(url) {
   return GATE_FREI.some(p => pfad === p || pfad.startsWith(p + '/'));
 }
 
+/**
+ * Gilt die Sitzung hinter diesem Token noch? Die Unterschrift ist bereits geprueft (jwt.verify) —
+ * hier geht es um alles, was sich NACH dem Ausstellen geaendert haben kann: Konto geloescht oder
+ * ausgestellt, Anmeldung widerrufen, Hoechstdauer ueberschritten.
+ *
+ * EINE Funktion fuer beide Tueren: die normale Anmeldung (authenticate) und den Ereigniskanal
+ * (/api/events in server.js). Der Kanal pruefte frueher nur die Unterschrift — ein widerrufenes
+ * Token oder das eines ausgestellten Kontos kam dort weiter hinein, waehrend die API es laengst
+ * abwies (P6). Zwei Abschriften derselben Regel laufen auseinander; deshalb steht sie hier einmal.
+ *
+ * Liefert `{ user, jetzt, seit, hoechstS }` oder `{ code, error }`.
+ */
+function sitzungPruefen(db, decoded) {
+  const user = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, work_start, birth_date, COALESCE(active,1) AS active FROM users WHERE id = ?").get(decoded.userId);
+  if (!user) return { code: GRUND.GELOESCHT, error: 'Dieses Konto gibt es nicht mehr.' };
+  // Ausgestellte (active=0) Nutzer werden sofort ausgesperrt — auch wenn ihr Token noch nicht abgelaufen ist.
+  // Prüfung läuft live gegen die DB: Wiedereinstellen (active=1) lässt dasselbe Token wieder greifen.
+  // COALESCE(active,1): alte DBs ohne gesetztes Flag gelten als aktiv ([[feedback_abwaertskompatibilitaet]]).
+  if (user.active === 0) return { code: GRUND.AUSGESTELLT, error: 'Dieses Konto ist ausgestellt. Bitte wende dich an die Verwaltung.' };
+
+  // Widerruf: Passt der Sitzungs-Stand im Token nicht mehr zum gespeicherten, ist das Token
+  // entwertet („Ueberall abmelden", Passwortwechsel, Zuruecksetzen — siehe sitzungenBeenden).
+  // Fehlender Anspruch gilt als 0 — Token aus der Zeit vor dieser Aenderung bleiben also gueltig,
+  // solange nichts davon passiert ist.
+  // Komplett in try/catch: Faellt die Pruefung aus, wird NICHT ausgesperrt.
+  try {
+    const stand = db.prepare('SELECT stand FROM user_sitzung WHERE user_id = ?').get(user.id);
+    if (stand && Number(stand.stand) > Number(decoded.sitzung || 0)) {
+      return { code: GRUND.BEENDET, error: 'Diese Anmeldung wurde beendet. Bitte neu anmelden.' };
+    }
+  } catch (_) { /* Tabelle fehlt (Altstand) → nichts widerrufen */ }
+
+  // Hoechstdauer — 30 Tage oder kuerzer, wenn die Stufe des zweiten Faktors oefter fragt. Ist die
+  // Sitzung aelter, gilt sie als ABGELAUFEN (Entwuerfe bleiben, bei der Neuanmeldung kommt der
+  // Code). Sofort und nicht erst beim naechsten Token-Ablauf: Stellt der Chef eine Rolle von
+  // „monatlich" auf „taeglich", soll das nicht bis zu drei Tage lang verschlafen werden.
+  // Tokens von vor dieser Aenderung tragen kein `anmeldung`; dann zaehlt ihr Ausstellungszeitpunkt
+  // — so fliegt nach dem Deploy niemand heraus.
+  const jetzt = Math.floor(Date.now() / 1000);
+  const seit = Number(decoded.anmeldung) || Number(decoded.iat) || jetzt;
+  const hoechstS = hoechstdauerFuer(db, user);
+  if (jetzt - seit >= hoechstS) {
+    return { code: GRUND.ABGELAUFEN, error: 'Deine Sitzung ist abgelaufen. Bitte melde dich neu an.' };
+  }
+  return { user, jetzt, seit, hoechstS };
+}
+
+/**
+ * Verlangt die Rolle einen zweiten Faktor, und ist noch keiner eingerichtet? Dann geht ausser den
+ * Konto-Endpunkten (GATE_FREI) nichts — auch kein Ereigniskanal.
+ * Ein Fehler hier darf niemals den Zugang kosten: im Zweifel `false`.
+ */
+function einrichtungFehlt(db, user) {
+  try {
+    return zweiFaktor.modusFuerRolle(db, user.role) !== 'aus' && !zweiFaktor.eingerichtet(db, user.id);
+  } catch (_) { return false; }   // 2FA ausgefallen → normal weiterarbeiten
+}
+
+/**
+ * ALLE Anmeldungen eines Nutzers beenden: Der Stand in user_sitzung steigt, jedes Token mit
+ * kleinerem Stand ist in derselben Sekunde wertlos. Liefert den neuen Stand.
+ *
+ * Drei Anlaesse, EINE Stelle (P1):
+ *   - „Auf allen Geraeten abmelden"
+ *   - eigener Passwortwechsel
+ *   - Zuruecksetzen des Passworts durch Chef/Admin
+ * Bis zum 10.11.2026 tat das nur der Knopf. Wer sein Passwort wechselte, WEIL jemand mitgelesen
+ * hatte, sperrte den Mitleser nicht aus: Dessen Token galt weiter, bis zu 30 Tage, und liess sich
+ * durch blosses Benutzen frisch halten.
+ *
+ * Das Geraete-Vertrauen der Zwei-Faktor-Anmeldung faellt mit weg — sonst kaeme ein verlorenes
+ * Handy weiterhin ohne Code hinein, und der Widerruf waere nur die halbe Wahrheit.
+ *
+ * Offene Ereigniskanaele muss hier niemand schliessen: /api/events prueft die Sitzung bei jedem
+ * Herzschlag neu (server.js) und beendet den Kanal von selbst.
+ */
+function sitzungenBeenden(db, userId) {
+  db.prepare(`INSERT INTO user_sitzung (user_id, stand, geaendert)
+              VALUES (?, 1, strftime('%Y-%m-%d %H:%M:%f','now'))
+              ON CONFLICT(user_id) DO UPDATE SET stand = stand + 1,
+                geaendert = strftime('%Y-%m-%d %H:%M:%f','now')`).run(userId);
+  try { zweiFaktor.geraeteAlleLoeschen(db, userId); } catch (_) {}
+  const r = db.prepare('SELECT stand FROM user_sitzung WHERE user_id = ?').get(userId);
+  return r ? Number(r.stand) : 0;
+}
+
+/**
+ * Frisches Token fuer den, der gerade SELBST alle seine Anmeldungen beendet hat — sonst wuerfe er
+ * sich mit dem eigenen Klick hinaus, was niemand erwartet.
+ *
+ * `anmeldung` wandert aus der laufenden Sitzung mit. Vorher begann die Uhr hier neu: Wer alle paar
+ * Wochen „ueberall abmelden" drueckte, kam nie an die Hoechstdauer — und damit auch nie wieder an
+ * der Abfrage des zweiten Faktors vorbei. Ein Widerruf beendet Sitzungen, er verlaengert keine.
+ *
+ * Die gleitende Erneuerung (authenticate) hat dieser Antwort moeglicherweise schon ein Token in die
+ * Kopfzeile gelegt — mit dem ALTEN, eben entwerteten Stand. Es muss weg: Andere Tabs desselben
+ * Geraets uebernehmen nur ein NEUERES Token (app-1-core.js) und blieben sonst auf dem toten sitzen,
+ * weil beide in derselben Sekunde ausgestellt sind.
+ */
+function tokenNachWiderruf(db, req, res, stand) {
+  res.removeHeader('X-Neues-Token');
+  return tokenAusstellen({
+    userId: req.user.id, role: req.user.role, sitzung: stand,
+    anmeldung: req.sitzung && req.sitzung.anmeldung, hoechstS: hoechstdauerFuer(db, req.user),
+  });
+}
+
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -138,39 +245,16 @@ function authenticate(req, res, next) {
     }
 
     const db = getDb();
-    const user = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, work_start, birth_date, COALESCE(active,1) AS active FROM users WHERE id = ?").get(decoded.userId);
-    if (!user) return abweisen(res, GRUND.GELOESCHT, 'Dieses Konto gibt es nicht mehr.');
-    // Ausgestellte (active=0) Nutzer werden sofort ausgesperrt — auch wenn ihr Token noch nicht abgelaufen ist.
-    // Prüfung läuft live gegen die DB: Wiedereinstellen (active=1) lässt dasselbe Token wieder greifen.
-    // COALESCE(active,1): alte DBs ohne gesetztes Flag gelten als aktiv ([[feedback_abwaertskompatibilitaet]]).
-    if (user.active === 0) return abweisen(res, GRUND.AUSGESTELLT, 'Dieses Konto ist ausgestellt. Bitte wende dich an die Verwaltung.');
-
-    // „Ueberall abmelden": Passt der Sitzungs-Stand im Token nicht mehr zum gespeicherten, ist das
-    // Token widerrufen. Fehlender Anspruch gilt als 0 — Token aus der Zeit vor dieser Aenderung
-    // bleiben also gueltig, solange niemand den Knopf gedrueckt hat.
-    // Komplett in try/catch: Faellt die Pruefung aus, wird NICHT ausgesperrt.
-    try {
-      const stand = db.prepare('SELECT stand FROM user_sitzung WHERE user_id = ?').get(user.id);
-      if (stand && Number(stand.stand) > Number(decoded.sitzung || 0)) {
-        return abweisen(res, GRUND.BEENDET, 'Diese Anmeldung wurde beendet. Bitte neu anmelden.');
-      }
-    } catch (_) { /* Tabelle fehlt (Altstand) → nichts widerrufen */ }
-
-    req.user = user;
-
-    // Hoechstdauer — 30 Tage oder kuerzer, wenn die Stufe des zweiten Faktors oefter fragt. Ist die
-    // Sitzung aelter, gilt sie als ABGELAUFEN (Entwuerfe bleiben, bei der Neuanmeldung kommt der
-    // Code). Sofort und nicht erst beim naechsten Token-Ablauf: Stellt der Chef eine Rolle von
-    // „monatlich" auf „taeglich", soll das nicht bis zu drei Tage lang verschlafen werden.
-    // Tokens von vor dieser Aenderung tragen kein `anmeldung`; dann zaehlt ihr Ausstellungszeitpunkt
-    // — so fliegt nach dem Deploy niemand heraus.
-    const jetzt = Math.floor(Date.now() / 1000);
-    const seit = Number(decoded.anmeldung) || Number(decoded.iat) || jetzt;
-    const hoechstS = hoechstdauerFuer(db, user);
-    if (jetzt - seit >= hoechstS) {
-      logSessionExpired(token, req);
-      return abweisen(res, GRUND.ABGELAUFEN, 'Deine Sitzung ist abgelaufen. Bitte melde dich neu an.');
+    const pruefung = sitzungPruefen(db, decoded);
+    if (!pruefung.user) {
+      if (pruefung.code === GRUND.ABGELAUFEN) logSessionExpired(token, req);
+      return abweisen(res, pruefung.code, pruefung.error);
     }
+    const { user, jetzt, seit, hoechstS } = pruefung;
+    req.user = user;
+    // Stand und Anmeldezeitpunkt DIESER Sitzung — fuer das SSE-Ticket (server.js) und fuer das frische
+    // Token nach einem Widerruf (tokenNachWiderruf): beide muessen sie weitertragen.
+    req.sitzung = { stand: Number(decoded.sitzung) || 0, anmeldung: seit };
 
     // Gleitende Sitzung: aelter als eine Stunde → frisches Token mitgeben.
     // Ein Fehler hier darf niemals den Zugang kosten.
@@ -189,17 +273,14 @@ function authenticate(req, res, next) {
     // 403 und NICHT 401: Ein 401 wuerde im Browser den automatischen Abmelde-Weg ausloesen
     // (app-1-core.js) — der Nutzer flaege raus, statt zur Einrichtung geleitet zu werden.
     //
-    // Komplett in try/catch, und die Abfrage laeuft nur, wenn die Rolle ueberhaupt betroffen ist.
-    // Ein Fehler hier darf niemals den Zugang kosten: im Zweifel durchlassen.
-    try {
-      const modus = zweiFaktor.modusFuerRolle(db, user.role);
-      if (modus !== 'aus' && !gateFrei(req.originalUrl || req.url) && !zweiFaktor.eingerichtet(db, user.id)) {
-        return res.status(403).json({
-          error: 'Bitte richte zuerst die Zwei-Faktor-Anmeldung ein.',
-          code: 'ZWEI_FAKTOR_EINRICHTUNG',
-        });
-      }
-    } catch (_) { /* 2FA ausgefallen → normal weiterarbeiten */ }
+    // Die Pruefung selbst (einrichtungFehlt) faengt ihre Fehler ab: Ein Fehler dort darf niemals
+    // den Zugang kosten — im Zweifel durchlassen.
+    if (!gateFrei(req.originalUrl || req.url) && einrichtungFehlt(db, user)) {
+      return res.status(403).json({
+        error: 'Bitte richte zuerst die Zwei-Faktor-Anmeldung ein.',
+        code: 'ZWEI_FAKTOR_EINRICHTUNG',
+      });
+    }
 
     next();
   } catch (err) {
@@ -222,4 +303,4 @@ function authorize(...roles) {
 }
 
 module.exports = { authenticate, authorize, JWT_SECRET, GATE_FREI, gateFrei,
-  tokenAusstellen, hoechstdauerFuer, GRUND, LEERLAUF_S, HOECHSTDAUER_S, ERNEUERN_NACH_S };
+  tokenAusstellen, hoechstdauerFuer, sitzungPruefen, einrichtungFehlt, sitzungenBeenden, tokenNachWiderruf, GRUND, LEERLAUF_S, HOECHSTDAUER_S, ERNEUERN_NACH_S };

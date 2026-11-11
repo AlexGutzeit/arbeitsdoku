@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**289 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**291 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -205,6 +205,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `password-policy-ui.js` | UI-Test (Puppeteer): Passwort-Policy im Anlege-Formular — Live-Checkliste (✓/✗), Feld-Einfärbung (rot/grün), |
 | `password-policy.js` | API-Test (B3): Passwort-Policy beim Anlegen + Zurücksetzen. |
 | `passwort-selbst-aendern.js` | Jeder darf sein eigenes Passwort ändern (PUT /api/auth/password). |
+| `passwortwechsel-abmelden-ui.js` | Passwort im Browser gewechselt — DIESES Gerät bleibt drin, das andere fliegt hinaus. |
 | `pause-beispiele.js` | Beispiel-Tabelle zur Pausenlogik — gemessen an der echten Oberfläche, nicht ausgerechnet. |
 | `pause-gesetz-ui.js` | Gesetzliche Mindestpause (§ 4 ArbZG) in der Vorbelegung. |
 | `pause-jugendschutz-ui.js` | Zwei Alterstabellen: § 4 ArbZG ab 18, § 11 JArbSchG darunter. |
@@ -279,6 +280,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `shot-notifications.js` | Einmal-Screenshot der Benachrichtigungen-Seite — ein Werkzeug, kein Test. |
 | `sitzung-entwurf-ui.js` | Abgelaufene Sitzung mitten im Formular (R1, Alex 24.09.2026). |
 | `sitzung-gleitend.js` | Gleitende Sitzung (R1, Alex 24.09.2026): 3 Tage ohne Aktivitaet, hoechstens 30 Tage. |
+| `sitzung-widerruf.js` | Passwort gewechselt — und der Mitleser ist wirklich draußen? Auch aus dem Live-Kanal? |
 | `sitzung-zwischenspeicher-ui.js` | Anmelde-Schleife durch den Browser-Zwischenspeicher (Alex, 01.10.2026). |
 | `sse-live-schutz-ui.js` | Zwei-BROWSER-Test (echtes SSE): Was passiert bei mir, wenn ein KOLLEGE in seinem eigenen Browser |
 | `stunden-vorher-nachher.js` | BEWEIS: Die ausgewiesenen Stunden und Überstunden ändern sich durch die Zusammenlegung der |

@@ -17,10 +17,10 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
-const { initDatabase, saveToFile } = require('./database/init');
+const { initDatabase, saveToFile, getDb } = require('./database/init');
 const { JWT_SECRET } = require('./middleware/auth');
 const { addClient, removeClient, getClientCount } = require('./sse');
-const { authenticate, authorize } = require('./middleware/auth');
+const { authenticate, authorize, sitzungPruefen, einrichtungFehlt } = require('./middleware/auth');
 const { berlinJetzt } = require('./zeit');
 
 const app = express();
@@ -138,17 +138,36 @@ app.use('/api/push', require('./routes/push'));
 // Kurzlebiges SSE-Ticket: normaler (authentifizierter) Aufruf per Authorization-Header liefert ein
 // nur 60 Sekunden gueltiges Token. Der Client haengt DIESES an die SSE-URL — nicht mehr den langen
 // Login-Token. Selbst falls die URL in einem Proxy-Log landet, ist das Ticket Sekunden spaeter wertlos.
+//
+// Das Ticket traegt Stand und Anmeldezeitpunkt der Sitzung, aus der es geholt wurde. Ohne sie
+// koennte der Kanal spaeter nicht erkennen, dass genau diese Sitzung beendet worden ist.
 app.get('/api/events/ticket', authenticate, (req, res) => {
-  const ticket = jwt.sign({ userId: req.user.id, sse: true }, JWT_SECRET, { expiresIn: '60s' });
+  const ticket = jwt.sign({ userId: req.user.id, sse: true, sitzung: req.sitzung.stand, anmeldung: req.sitzung.anmeldung },
+    JWT_SECRET, { expiresIn: '60s' });
   res.json({ ticket });
 });
+
+// Herzschlag des Ereigniskanals. Nur fuer Tests verstellbar (tests/sitzung-widerruf.js) — dreissig
+// Sekunden auf einen geschlossenen Kanal zu warten, waere dort verlorene Zeit.
+const SSE_PULS_MS = Math.max(200, Number(process.env.SSE_PULS_MS) || 30000);
 
 // SSE – Echtzeit-Updates für alle verbundenen Clients
 app.get('/api/events', (req, res) => {
   // Bevorzugt das kurzlebige Ticket; der lange Login-Token bleibt als Fallback gueltig (z.B. fuer
-  // einen alten, noch offenen Tab vor dem Reload) — die Verifikation ist fuer beide identisch.
+  // einen alten, noch offenen Tab vor dem Reload).
   const token = req.query.ticket || req.query.token;
   if (!token) return res.status(401).end();
+  // Dieselbe Pruefung wie an der API (middleware/auth.js, sitzungPruefen) — beim Oeffnen UND danach
+  // bei jedem Herzschlag (P6, 10.11.2026). Vorher zaehlte hier nur die Unterschrift: Das Token
+  // eines ausgestellten Kontos oder eine per „ueberall abmelden" beendete Anmeldung oeffnete den
+  // Kanal weiter, und ein einmal offener Kanal blieb bis zu einer Stunde stehen, egal was mit dem
+  // Konto geschah.
+  //
+  // Die Pruefung im Herzschlag statt eines gezielten Schliessens an jeder Stelle, die eine Sitzung
+  // beendet: So kann keine Stelle vergessen werden (Ausstellen, Loeschen, Passwortwechsel,
+  // Zurueckspielen einer Sicherung …), und wer selbst sein Passwort wechselt, hat sein neues Token
+  // laengst in der Hand, wenn sein eigener Kanal zum Neuverbinden geschlossen wird.
+  let sitzungGilt;
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     // Der Zwischen-Token der Zwei-Faktor-Anmeldung ist hier ausdruecklich NICHT gueltig — sonst
@@ -157,10 +176,17 @@ app.get('/api/events', (req, res) => {
     // Der lange Login-Token bleibt dagegen bewusst weiter erlaubt. Ihn hier zu sperren waere
     // sauberer, wuerde aber jeden alten, noch offenen Tab und jede PWA mit aeltererm Zwischenspeicher
     // von den Live-Aktualisierungen abschneiden, bis jemand neu laedt. Er ist kein Loch: Es IST
-    // ein gueltiger Zugangs-Token derselben Person.
+    // ein gueltiger Zugangs-Token derselben Person — und er wird genauso geprueft wie an der API.
     if (decoded.pending2fa) return res.status(401).end();
     // Gäste (Etappe C) bekommen den Live-Draht der App nie — ihr Token hat keine Nutzernummer.
     if (decoded.gast !== undefined || decoded.gastTicket !== undefined || !decoded.userId) return res.status(401).end();
+    sitzungGilt = () => {
+      const db = getDb();
+      const pruefung = sitzungPruefen(db, decoded);
+      // Ohne eingerichteten zweiten Faktor gibt es keine Datenrouten — und keinen Kanal (GATE_FREI).
+      return !!pruefung.user && !einrichtungFehlt(db, pruefung.user);
+    };
+    if (!sitzungGilt()) return res.status(401).end();
   } catch (_) { return res.status(401).end(); }
   res.set({
     'Content-Type': 'text/event-stream',
@@ -171,7 +197,14 @@ app.get('/api/events', (req, res) => {
   res.flushHeaders();
   res.write(': connected\n\n');
   addClient(res);
-  const hb = setInterval(() => { try { res.write(': ping\n\n'); } catch (_) { clearInterval(hb); } }, 30000);
+  const hb = setInterval(() => {
+    // Sitzung inzwischen beendet? Dann Schluss. Der Browser verbindet neu, holt dafuer ein Ticket —
+    // und erfaehrt dort den Grund (401 mit Code), den ein Ereigniskanal nicht uebermitteln kann.
+    let gilt = false;
+    try { gilt = sitzungGilt(); } catch (_) {}
+    if (!gilt) { try { res.end(); } catch (_) {} return; }
+    try { res.write(': ping\n\n'); } catch (_) { clearInterval(hb); }
+  }, SSE_PULS_MS);
   // Force-Reconnect nach 1h verhindert lange-laufende Phantom-Verbindungen
   const maxLife = setTimeout(() => { try { res.end(); } catch (_) {} }, 60 * 60 * 1000);
   let cleaned = false;

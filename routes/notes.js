@@ -1,7 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../database/init');
-const { authenticate, JWT_SECRET } = require('../middleware/auth');
+const { authenticate, JWT_SECRET, sitzungPruefen, einrichtungFehlt } = require('../middleware/auth');
 const nurZahl = require('../middleware/nur-zahl');
 const { broadcast } = require('../sse');
 const { logAudit } = require('../audit');
@@ -556,17 +556,25 @@ router.post('/:id/kopie', authenticate, (req, res) => {
 // deshalb — wie beim allgemeinen Live-Strom (/api/events) — das 60-Sekunden-Ticket aus
 // /api/events/ticket in der Adresse. Anders als dort NUR das Ticket: Der lange Anmelde-Token hat
 // in Adressen nichts verloren, und alte Programmstände kennen diesen Weg ohnehin nicht.
+//
+// Geprüft wird die SITZUNG, nicht nur das Konto (P6, 10.11.2026) — beim Öffnen und danach bei jedem
+// Herzschlag (notizen-live.js). Vorher blieb ein offener Strom stehen, wenn die Anmeldung dahinter
+// beendet wurde: Wer sein Passwort wechselte, weil jemand mitlas, ließ den Mitleser in einer
+// geöffneten Notiz weiterlesen. Hier steht der INHALT im Strom, nicht bloß ein Signal.
 router.get('/:id/live', (req, res) => {
-  let nutzerId;
+  let ticket;
   try {
-    const t = jwt.verify(String(req.query.ticket || ''), JWT_SECRET);
-    if (!t.sse || t.pending2fa) throw new Error('kein Ticket');
-    nutzerId = t.userId;
+    ticket = jwt.verify(String(req.query.ticket || ''), JWT_SECRET);
+    if (!ticket.sse || ticket.pending2fa) throw new Error('kein Ticket');
   } catch (_) { return res.status(401).json({ error: 'Nicht angemeldet' }); }
-  const db = getDb();
-  const nutzer = db.prepare('SELECT id, name, COALESCE(active,1) AS active FROM users WHERE id = ?').get(nutzerId);
-  if (!nutzer || nutzer.active === 0) return res.status(401).json({ error: 'Nicht angemeldet' });
-  const status = live.verbinden(Number(req.params.id), nutzer, req, res);
+  const sitzungGilt = () => {
+    const db = getDb();
+    const pruefung = sitzungPruefen(db, ticket);
+    return (pruefung.user && !einrichtungFehlt(db, pruefung.user)) ? pruefung.user : null;
+  };
+  const nutzer = sitzungGilt();
+  if (!nutzer) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const status = live.verbinden(Number(req.params.id), nutzer, req, res, () => !!sitzungGilt());
   if (status === 404) return res.status(404).json({ error: 'Notiz nicht gefunden' });
   if (status === 403) return res.status(403).json({ error: 'Keine Berechtigung' });
 });

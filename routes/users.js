@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../database/init');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, sitzungenBeenden, tokenNachWiderruf } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { ROLLEN_MIT_BESTELLRECHT, bestellmeldungenAufraeumen } = require('../bestellrecht');
 const { ROLLEN_MIT_EINLERNRECHT } = require('../barcoderecht');
@@ -668,7 +668,12 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   res.json({ user: updated });
 });
 
-// Passwort zurücksetzen
+// Passwort zurücksetzen.
+//
+// Beendet ALLE Anmeldungen des Betroffenen (P1, 10.11.2026): Zurueckgesetzt wird, wenn das Passwort
+// vergessen wurde — oder wenn jemand anderes es kennt. Im zweiten Fall blieb dessen Anmeldung
+// vorher bestehen, und der Chef glaubte, den Zugang geschlossen zu haben.
+// Setzt jemand sein EIGENES Passwort auf diesem Weg, bekommt er ein frisches Token zurueck.
 router.post('/:id/reset-password', authenticate, authorize('chef'), async (req, res) => {
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
@@ -683,9 +688,11 @@ router.post('/:id/reset-password', authenticate, authorize('chef'), async (req, 
   try { hash = await bcrypt.hash(password, 10); }
   catch (e) { console.error('Hash-Fehler:', e.message); return res.status(500).json({ error: 'Interner Serverfehler' }); }
   db.prepare("UPDATE users SET password_hash=? WHERE id=?").run(hash, req.params.id);
+  const stand = sitzungenBeenden(db, user.id);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_password_reset',
-    details: `Passwort zurückgesetzt für: ${user.username} (id=${req.params.id})`, ip: req.ip });
-  res.json({ success: true });
+    details: `Passwort zurückgesetzt für: ${user.username} (id=${req.params.id}) · alle Anmeldungen beendet`, ip: req.ip });
+  const selbst = user.id === req.user.id;
+  res.json({ success: true, ...(selbst ? { token: tokenNachWiderruf(db, req, res, stand) } : {}) });
 });
 
 // Zwei-Faktor-Anmeldung eines Mitarbeiters zuruecksetzen — der Weg zurueck bei verlorenem Handy.

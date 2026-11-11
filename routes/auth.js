@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const { getDb } = require('../database/init');
-const { authenticate, JWT_SECRET, tokenAusstellen, hoechstdauerFuer } = require('../middleware/auth');
+const { authenticate, JWT_SECRET, tokenAusstellen, hoechstdauerFuer, sitzungenBeenden, tokenNachWiderruf } = require('../middleware/auth');
 const { logAudit } = require('../audit');
 const { passwordPolicyError } = require('./users');
 const zf = require('../zweifaktor');
@@ -217,6 +217,10 @@ router.get('/me', authenticate, (req, res) => {
 //
 // Das aktuelle Passwort ist Pflicht: Sonst koennte jemand an einem unbeaufsichtigten, noch
 // angemeldeten Geraet das Passwort aendern und sich den Zugang dauerhaft sichern.
+//
+// Der Wechsel beendet ALLE anderen Anmeldungen (P1, 10.11.2026). Man wechselt das Passwort ja
+// gerade dann, wenn es jemand kennen koennte — vorher blieb dessen Anmeldung einfach bestehen.
+// Wer wechselt, bekommt ein frisches Token und bleibt auf DIESEM Geraet angemeldet.
 router.put('/password', authenticate, async (req, res) => {
   try {
     const { aktuell, neu } = req.body || {};
@@ -240,8 +244,10 @@ router.put('/password', authenticate, async (req, res) => {
     if (neu === aktuell) return res.status(400).json({ error: 'Das neue Passwort muss sich vom bisherigen unterscheiden' });
 
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await bcrypt.hash(neu, 10), req.user.id);
-    logAudit(db, { userId: req.user.id, username: reihe.username, action: 'password_self_change', ip: req.ip });
-    res.json({ success: true });
+    const stand = sitzungenBeenden(db, req.user.id);
+    logAudit(db, { userId: req.user.id, username: reihe.username, action: 'password_self_change',
+      details: 'Alle anderen Anmeldungen beendet', ip: req.ip });
+    res.json({ success: true, token: tokenNachWiderruf(db, req, res, stand) });
   } catch (e) {
     console.error('Passwort ändern fehlgeschlagen:', e.message);
     res.status(500).json({ error: 'Interner Serverfehler' });
@@ -256,16 +262,11 @@ router.put('/password', authenticate, async (req, res) => {
 router.post('/alle-abmelden', authenticate, (req, res) => {
   try {
     const db = getDb();
-    db.prepare(`INSERT INTO user_sitzung (user_id, stand, geaendert)
-                VALUES (?, 1, strftime('%Y-%m-%d %H:%M:%f','now'))
-                ON CONFLICT(user_id) DO UPDATE SET stand = stand + 1,
-                  geaendert = strftime('%Y-%m-%d %H:%M:%f','now')`).run(req.user.id);
-    // Geraete-Vertrauen der Zwei-Faktor-Anmeldung faellt mit weg — sonst kaeme ein verlorenes
-    // Handy weiterhin ohne Code hinein, und der Knopf waere nur die halbe Wahrheit.
-    try { require('../zweifaktor').geraeteAlleLoeschen(db, req.user.id); } catch (_) {}
+    // Stand hochzaehlen + Geraete-Vertrauen loeschen: dieselbe Funktion wie beim Passwortwechsel.
+    const stand = sitzungenBeenden(db, req.user.id);
     logAudit(db, { userId: req.user.id, username: req.user.username, action: 'alle_abgemeldet', ip: req.ip });
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-    res.json({ success: true, ...anmeldeAntwort(db, user) });
+    res.json({ success: true, ...anmeldeAntwort(db, user), token: tokenNachWiderruf(db, req, res, stand) });
   } catch (e) {
     console.error('Alle abmelden fehlgeschlagen:', e.message);
     res.status(500).json({ error: 'Interner Serverfehler' });

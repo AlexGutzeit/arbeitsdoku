@@ -34,7 +34,7 @@ const SPEICHERN_SPAETESTENS_MS = 10000; // … und spätestens so oft, auch wenn
 // So lange ohne Änderung, dann gilt eine Bearbeitungsrunde als beendet. Als Objekt, damit ein Test
 // die zwei Minuten verkürzen kann (tests/push-targeting.js).
 const zeiten = { rundeMs: 2 * 60 * 1000 };
-const PING_MS = 25000;
+const PING_MS = Math.max(200, Number(process.env.SSE_PULS_MS) || 25000);   // verstellbar nur für Tests (wie server.js)
 // Bytes je Sendung. Base64 macht daraus ein Drittel mehr, und die JSON-Grenze des Servers liegt bei
 // 100 KB — 70 KB passen mit Luft hinein (vorher 96 KB: die Anfrage scheiterte schon an der Grenze).
 const GROESSTE_AENDERUNG = 70 * 1024;
@@ -246,8 +246,13 @@ function rundeBeenden(raum, wer) {
  * Ereignisstrom einer Notiz öffnen. `nutzer` = { id, name } eines Mitarbeiters ODER
  * { gast: <Nummer>, name } eines Gasts (beides bereits geprüft), `res` = Antwort.
  * Liefert 404/403, wenn die Notiz fehlt oder kein Zugriff besteht, sonst 200.
+ *
+ * `nochGueltig` (nur Mitarbeiter): Gilt die Anmeldung hinter diesem Strom noch? Wird bei jedem
+ * Herzschlag gefragt. Wenn nicht, endet der Strom STILL — ohne „raus": Der Browser verbindet dann
+ * von selbst neu und holt dafür ein Ticket. Wer inzwischen ein frisches Token hat (eigener
+ * Passwortwechsel), ist ohne Unterbrechung wieder drin; wer keins hat, scheitert dort mit 401.
  */
-function verbinden(noteId, nutzer, req, res) {
+function verbinden(noteId, nutzer, req, res, nochGueltig) {
   const db = getDb();
   const gast = Number.isInteger(nutzer.gast);
   const wer = gast ? 'g' + nutzer.gast : nutzer.id;
@@ -269,7 +274,14 @@ function verbinden(noteId, nutzer, req, res) {
     name, vorname: String(nutzer.name || '').trim().split(/\s+/)[0] || name, farbe, zugriff, res,
     clientIds: new Set(), ping: null };
   raum.verbindungen.set(v.id, v);
-  v.ping = setInterval(() => { try { res.write(': ping\n\n'); } catch (_) {} }, PING_MS);
+  v.ping = setInterval(() => {
+    if (nochGueltig) {
+      let gilt = false;
+      try { gilt = nochGueltig(); } catch (_) {}
+      if (!gilt) { try { res.end(); } catch (_) {} if (v.abbauen) v.abbauen(); return; }
+    }
+    try { res.write(': ping\n\n'); } catch (_) {}
+  }, PING_MS);
 
   const fremde = [...raum.aw.getStates().keys()];
   const kopf = kopfVon(db, noteId);
