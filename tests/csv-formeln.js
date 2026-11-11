@@ -64,6 +64,9 @@ function bausteinPruefen() {
     ['@SUM(A1:A9)', `"'@SUM(A1:A9)"`, 'At-Zeichen'],
     ['\t=1+1', `"'\t=1+1"`, 'Tabulator davor'],
     ['\r=1+1', `"'\r=1+1"`, 'Wagenrücklauf davor'],
+    // Tabulator und Wagenrücklauf zählen auch OHNE Formelzeichen dahinter (OWASP führt sie eigens auf).
+    ['\tcmd', `"'\tcmd"`, 'Tabulator am Anfang, dahinter kein Formelzeichen'],
+    ['\rcmd', `"'\rcmd"`, 'Wagenrücklauf am Anfang, dahinter kein Formelzeichen'],
     ['   =1+1', `"'   =1+1"`, 'Leerzeichen davor'],
     ['\n=1+1', `"'\n=1+1"`, 'Zeilenumbruch davor'],
     ['-', `"'-"`, 'einzelnes Minus'],
