@@ -51,7 +51,11 @@ function req(method, p, token, body, ohneBody) {
     r = await req('PUT', '/api/meldungen/themen-reihenfolge', token, { ids: [] });
     ok('PUT /api/meldungen/themen-reihenfolge erreicht seine Route (nicht PUT /:id)', [200, 409].includes(r.status) && !/gibt es nicht mehr/.test(r.body?.error || ''), `${r.status} ${r.text.slice(0, 80)}`);
     r = await req('GET', '/api/meldungen/abc', token);
-    ok('GET /api/meldungen/abc → keine Meldungs-Route (fällt auf die App zurück wie unter Express 4)', r.status === 200 && /text\/html/.test(r.typ), `${r.status} ${r.typ}`);
+    // Bis 11.11.2026 stand hier „200 und HTML": Der Aufruf fiel auf die App zurück. Seither antwortet unter /api
+    // der Wächter für unbekannte Adressen (P9). Gemessen wird dasselbe Ziel: Die Meldungs-Route hat NICHT gegriffen —
+    // sie antwortete mit „gibt es nicht mehr" und ohne Kennzeichen.
+    ok('GET /api/meldungen/abc → keine Meldungs-Route (404 „unbekannte Adresse", nicht „Meldung gibt es nicht mehr")',
+      r.status === 404 && r.body?.code === 'UNBEKANNTE_ADRESSE' && !/gibt es nicht mehr/.test(r.body?.error || ''), `${r.status} ${r.typ} ${r.text.slice(0, 80)}`);
     r = await req('GET', '/api/notes/abc/erinnerungen', token);
     ok('GET /api/notes/abc/erinnerungen → keine Erinnerungs-Route', !(r.body && Array.isArray(r.body.erinnerungen)), `${r.status} ${r.text.slice(0, 60)}`);
     const neu = await req('POST', '/api/notes', token, { title: 'Probe', body: 'x' });
