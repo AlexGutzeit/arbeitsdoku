@@ -99,7 +99,13 @@ const kanalOffen = (page) => page.evaluate(() => !!S.sse && S.sse.readyState ===
       'ohne ihn pruefte der Rest nur, dass Nichtstun nichts kaputtmacht');
     const meldung = await rechner.evaluate(() => [...document.querySelectorAll('.toast')].map(t => t.textContent).join(' | '));
     ok('… und die Meldung nennt die abgemeldeten Geräte', /anderen Geräten/.test(meldung), meldung);
-    ok('keine Fehlermeldung im Formular', await rechner.$eval('#pw-fehler', el => getComputedStyle(el).display === 'none'));
+    // Die Seite lädt nach dem Wechsel sofort die Zwei-Faktor-Karte nach. Ohne übernommenes Token
+    // fliegt man schon HIER hinaus — deshalb erst nach der Maske fragen, dann nach dem Formular
+    // (das es dann gar nicht mehr gibt; `$eval` würde den ganzen Test abbrechen).
+    ok('direkt danach steht keine Anmeldemaske da', !(await rechner.$('#login-user')),
+      'das frische Token wurde nicht uebernommen');
+    ok('keine Fehlermeldung im Formular', await rechner.evaluate(() => {
+      const el = document.getElementById('pw-fehler'); return !!el && getComputedStyle(el).display === 'none'; }));
 
     console.log('\n── DIESES Gerät bleibt angemeldet ──');
     const nachher = await tokenIn(rechner);
