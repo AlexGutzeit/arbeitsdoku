@@ -562,6 +562,52 @@ und wandern nach dem Beheben hierher.
   allein die Bremse je Adresse. **Gegenproben für P2, P3 und P5 zusammen: 32/32 rot**
   (eine blieb zuerst grün — Tabulator ohne Formelzeichen dahinter; Test in `03b25bd` ergänzt).
 
+### [x] P4 · Der Server lauschte auf allen Adressen — erledigt in `85aafe3` *(noch nicht deployt)*
+- **Was war:** Die App glaubt dem vorgeschalteten Proxy, von welcher Adresse eine Anfrage kommt (Kopfzeile
+  `X-Forwarded-For`). Ihr eigener Port nahm aber Verbindungen von überall an. Wer ihn direkt erreichte, konnte sich
+  seine Adresse aussuchen — die Anmeldebremse je Adresse lief ins Leere, und im Audit-Log stand eine erfundene
+  Herkunft. Auf dem Produktivserver hält eine Firewall den Port zu; die Vorgabe der App selbst war trotzdem offen.
+- **Gelöst:** Vorgabe ist jetzt `127.0.0.1` — nur der eigene Rechner, also der Proxy. Wer die App ohne Proxy betreibt
+  oder den Proxy auf einem anderen Rechner hat, setzt `LISTEN_HOST=0.0.0.0` (oder `::`) in der `.env`. Der Server sagt
+  beim Start in einer zweiten Zeile, von wo er erreichbar ist und wie man das ändert; scheitert der Start, nennt die
+  Meldung Adresse und Port.
+- **Bewusst so:** Die Variable heißt `LISTEN_HOST`, nicht `HOST` — den Namen `HOST` belegen manche Shells von sich
+  aus, und der Server hätte dann ungefragt wieder alles geöffnet.
+- **Folge für Fremdinstallationen:** Wer die App bisher **direkt** über `http://<rechner>:3000` aufgerufen hat,
+  erreicht sie nach dem Update erst wieder, wenn `LISTEN_HOST` gesetzt ist. Steht im README beim Update, in der
+  Fehlerhilfe und in `.env.example`.
+
+### [x] P8 · Keine HSTS-Kopfzeile — erledigt in `85aafe3` *(noch nicht deployt)*
+- **Was war:** Der Proxy leitet zwar von http auf https um, aber der erste Aufruf einer getippten Adresse ging jedes
+  Mal unverschlüsselt hinaus — in einem fremden WLAN die Stelle, an der sich jemand dazwischensetzen kann.
+- **Gelöst:** Die App setzt `Strict-Transport-Security: max-age=31536000`, sobald die Anfrage über https kam. Der
+  Browser merkt sich das ein Jahr und fragt die Adresse gar nicht mehr unverschlüsselt an.
+- **Bewusst so:** In der App statt in der Proxy-Einstellung — dann haben es auch fremde Installationen, ohne dass
+  jemand daran denken muss. **Ohne** `includeSubDomains` und `preload`: Unter derselben Domain können Dienste hängen,
+  die kein https haben. Ohne https wird nichts gesetzt, also sperrt sich niemand aus.
+
+### [x] P9 · Unbekannte Adressen unter `/api` lieferten die Startseite — erledigt in `85aafe3` *(noch nicht deployt)*
+- **Was war:** `GET /api/gibtsnicht` antwortete mit 200 und der HTML-Seite der App. Ein Tippfehler in einer Adresse
+  oder eine entfernte Route sah für den Aufrufer aus wie eine gelungene Antwort.
+- **Gelöst:** Alles unter `/api`, das keine Route trifft, bekommt für **jede** Methode `404` als JSON mit dem
+  Kennzeichen `UNBEKANNTE_ADRESSE`. Alles andere fällt weiter auf die App zurück.
+- **Nebenbei (aus P10):** Die Kopfzeile `X-Powered-By` ist aus — die App nennt ihr Grundgerüst nicht mehr.
+- **Tests für P4, P8 und P9:** `server-haertung` (69) — „von außen zu" wird ohne Netz über eine zweite
+  Loopback-Adresse gemessen. Der Bestandstest `express5-routen` (22) war nach dem Umbau rot: Er erkannte die
+  Zahlen-Sperre der Routen am Rückfall auf die App und erkennt sie jetzt am neuen 404 (`e426a7f`).
+  **Gegenproben 31/31 rot** — zwei blieben zuerst grün: „hört auch auf `HOST`" (der Test setzte beide Variablen
+  zusammen; ergänzt in `0814ab5`) und eine Probe, die Express von sich aus abfing (Probe ersetzt).
+
+### [x] P7 und P11 · Klarstellungen im README — `85aafe3`
+- **P7:** Die Rolle *Chef* darf eine Sicherung zurückspielen und ist damit Herr über alle Daten und Rollen.
+  **Bewusstes Vertrauen** (Entscheidung Alex, 10.11.) — das README sagt es jetzt ausdrücklich.
+- **P11:** Die Dokumenten-Ablage kennt keine Rechte je Ordner; jeder Angemeldete kann jede Datei laden. Das README
+  sagt, wofür sie gedacht ist und was nicht hineingehört.
+
+### [ ] Offen aus der Prüfung
+- **Logo und App-Icon** werden beim Hochladen noch nicht neu kodiert (Rest aus P10). Hochladen darf nur der Chef.
+- **Hinweis in der Ablage selbst** (P11): bisher nur im README.
+
 ## Geprüft und in Ordnung
 
 Damit diese Punkte nicht ein zweites Mal untersucht werden:
@@ -587,5 +633,6 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 **R1–R30 sind erledigt und deployt** (30.09.2026, zuletzt R30 mit `8ca3263`, Cache 437). **R31** (Anmelde-Schleife durch
 den Browser-Zwischenspeicher) ist am 01.10.2026 um 22:06 deployt (`4f81a93`, Cache 443).
 
-**Sicherheitsprüfung 10.11.2026:** P1 und P6 (`d1de64c`, Cache 456) sowie P2, P3 und P5 (`d2ad04b`, Cache 457) sind
-behoben, **noch nicht deployt**.
+**Sicherheitsprüfung 10.11.2026:** P1 und P6 (`d1de64c`, Cache 456), P2, P3 und P5 (`d2ad04b`, Cache 457) sowie P4, P8
+und P9 (`85aafe3`, ohne Änderung an der Oberfläche) sind behoben, **noch nicht deployt**. Offen: Logo-Upload neu
+kodieren, Hinweis in der Ablage.

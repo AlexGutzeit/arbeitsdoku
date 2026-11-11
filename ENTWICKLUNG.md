@@ -5222,3 +5222,53 @@ prüfte die Funktion sich selbst), `anmelde-bremse-ui` (8), `anmelde-bremse` (13
 Exporte für sich. Eine blieb zuerst grün: Tabulator und Wagenrücklauf aus dem Muster genommen. Die Tabelle kannte
 beide nur *vor* einem Gleichheitszeichen, und das fängt schon der Zweig für Leerraum; zwei Fälle ohne Formelzeichen
 dahinter ergänzt (`03b25bd`). Cache 457. **Noch nicht deployt.**
+
+## Sicherheitsprüfung: Server lauscht nur lokal, HSTS, 404 unter /api (11.11.2026)
+
+Vier kleine Punkte, alle in `server.js`, keiner an der Oberfläche (Cache bleibt 457).
+
+**P4 — die Vorgabe war offen.** `app.listen(PORT)` nimmt Verbindungen auf allen Adressen an. Zusammen mit
+`trust proxy` heißt das: Wer den Port direkt erreicht, schreibt sich seine Adresse selbst in `X-Forwarded-For`. Auf
+dem Produktivserver hält die Firewall den Port zu — die App hat sich darauf verlassen, ohne es zu wissen. Jetzt
+lauscht sie auf `127.0.0.1`, solange niemand etwas anderes verlangt.
+- **`LISTEN_HOST`, nicht `HOST`.** Geplant war `HOST`. Den Namen setzen aber manche Umgebungen von sich aus
+  (tcsh, conda), und `dotenv` überschreibt eine schon gesetzte Variable nicht — der Server hätte dann auf den
+  Rechnernamen gehört statt auf die `.env`. Ein leerer Wert oder nur Leerzeichen zählt als „nicht gesetzt".
+- **`127.0.0.1`, nicht `localhost`.** Der Name löst je nach Rechner auf `::1` auf; dann erreichte ein Proxy, der
+  `127.0.0.1` anspricht, die App nicht. Umgekehrt ist es harmlos: Wer `localhost` anspricht (Caddy, curl, der
+  Browser, `deploy.sh`), versucht beide Adressen.
+- **Der Server sagt, was er tut.** Die zweite Startzeile nennt die Adresse und den Weg heraus
+  (`LISTEN_HOST=0.0.0.0`). Das ist die eigentliche Abwärtskompatibilität: Eine fremde Firma, die die App ohne Proxy
+  betreibt, findet nach dem Update im Protokoll, warum niemand mehr hinkommt. Ein stilles Weiterlauschen auf allen
+  Adressen „für Altbestände" gibt es nicht — woran sollte die App einen Altbestand ohne Proxy erkennen?
+- **Startfehler** nennen jetzt Adresse und Port (`EADDRNOTAVAIL` bei einer Adresse, die der Rechner nicht hat).
+
+**P8 — HSTS in der App, nicht im Proxy.** Geplant war eine Zeile im Caddyfile. Gebaut ist es in der App: Dann gilt
+es für jede Installation, und der Produktivserver braucht keinen Eingriff von Hand. Gesetzt wird nur bei
+`req.secure`, also wenn der Proxy https meldet. Wer die Kopfzeile am offenen Port fälscht, erreicht nichts: Browser
+beachten HSTS über http nicht. Ohne `includeSubDomains`, weil unter der Domain andere Dienste hängen — ein Jahr
+lang ließe sich das nicht zurücknehmen.
+
+**P9 — ein Wächter hinter allen Routen.** `app.use('/api', …)` direkt vor dem Rückfall auf die App. Er muss nach
+allen Routen stehen und davor; beides prüft der Test (bekannte Routen antworten wie bisher, `/apix` und
+`/apis/…` bekommen weiter die App). Im Repo hing nichts am alten Verhalten — der Service Worker lässt `/api/` aus.
+
+**Der Bestandstest, der rot wurde.** `express5-routen` prüfte „`/api/meldungen/abc` trifft die Meldungs-Route
+nicht" daran, dass 200 und HTML kam. Das war der alte Weg; das Ziel ist die Zahlen-Sperre. Er prüft jetzt 404 mit
+`UNBEKANNTE_ADRESSE` und ausdrücklich **nicht** „gibt es nicht mehr" (das wäre die Meldungs-Route). Gegenprobe:
+Sperre ausgebaut → rot.
+
+**„Von außen zu" ohne Netz messen.** Unter Linux gehört das ganze Netz `127.0.0.0/8` zum eigenen Rechner. Ein
+Server auf `127.0.0.1` lehnt `127.0.0.2` ab, einer auf `0.0.0.0` nimmt es an — dieselbe Unterscheidung wie bei
+einer Adresse aus dem Netz, nur ohne zweiten Rechner. Dazu `::1` für IPv6.
+
+**Tests.** `server-haertung` (69), `express5-routen` (22). **Gegenproben 31/31 rot.** Zwei blieben zuerst grün:
+- „Hört auch auf `HOST`": Der Fall setzte `LISTEN_HOST` (aus Leerzeichen) **und** `HOST`; ein Server, der
+  „`LISTEN_HOST` oder `HOST`" liest, kam nie bis `HOST`. Jetzt drei getrennte Läufe (`0814ab5`).
+- „Wächter greift zu weit" mit einem Muster statt eines Pfads: Express prüft bei `app.use` selbst, dass hinter dem
+  Treffer ein `/` folgt — die Probe konnte nichts kaputt machen. Ersetzt durch eine, die den Pfad von Hand prüft.
+
+**README** dazu: `LISTEN_HOST` an vier Stellen (Konfiguration, Produktivbetrieb, Update, Fehlerhilfe) und zwei
+Klarstellungen aus derselben Prüfung — der Chef ist über das Zurückspielen Herr über alle Daten (P7, bewusst so),
+und die Ablage ist für alle sichtbar (P11). **Offen:** Logo und App-Icon beim Hochladen neu kodieren; der Hinweis
+zur Ablage in der Oberfläche. **Noch nicht deployt.**
