@@ -488,6 +488,34 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 - **Sofortlösung für Betroffene bis zum Deploy:** Chrome → Einstellungen → Datenschutz → Browserdaten löschen →
   „Bilder und Dateien im Cache“.
 
+## Sicherheitsprüfung vom 10.11.2026
+
+Kennungen **P…**. Hier stehen nur **erledigte** Punkte; die offenen werden nicht öffentlich geführt
+und wandern nach dem Beheben hierher.
+
+### [x] P1 · Ein neues Passwort beendete bestehende Anmeldungen nicht — erledigt in `d1de64c` *(noch nicht deployt)*
+- **Was war:** Nach einem Passwortwechsel (selbst oder durch Chef/Admin) blieb jede schon bestehende Anmeldung gültig,
+  bis sie von selbst ablief (3 Tage Leerlauf, höchstens 30 Tage). Gerade der Fall „Passwort geändert, weil Verdacht"
+  schützte damit nicht. Der Widerruf war vorhanden („Auf allen Geräten abmelden"), wurde hier aber nicht benutzt.
+- **Gelöst:** Beide Wege rufen dieselbe Funktion wie „Überall abmelden" (`sitzungenBeenden`, `middleware/auth.js`):
+  Sitzungs-Stand hoch, gemerkte Zwei-Faktor-Geräte weg. Wer selbst wechselt, bekommt ein frisches Token und bleibt
+  auf diesem Gerät angemeldet; die Oberfläche sagt vorher, was passiert.
+- **Bewusst nicht geändert:** Das einfache „Abmelden" gilt weiter nur für das eine Gerät (Entscheidung Alex, 10.11.).
+- **Dabei gefunden:** „Überall abmelden" setzte den Anmeldezeitpunkt neu — die Höchstdauer (und damit die Abfrage des
+  zweiten Faktors) ließ sich so beliebig hinausschieben. Und die Antwort auf einen Widerruf konnte in `X-Neues-Token`
+  noch ein Token mit dem alten Stand mitschicken.
+
+### [x] P6 · Live-Kanäle prüften Konto und Sitzung nicht — erledigt in `d1de64c` *(noch nicht deployt)*
+- **Was war:** Der Ereigniskanal `/api/events` prüfte nur die Unterschrift des Tokens. Eine beendete Anmeldung oder
+  ein ausgestelltes Konto bekam ihn weiter, und ein offener Kanal blieb bis zu einer Stunde stehen. Übertragen wird
+  dort nur, *dass* sich etwas geändert hat (kein Inhalt) — Einfluss gering.
+- **Gelöst:** Die Prüfung der API steht jetzt als `sitzungPruefen()` an einer Stelle und gilt auch für die Kanäle —
+  beim Aufbau **und bei jedem Lebenszeichen** (30 s, Live-Notiz 25 s). Bewusst so und nicht als gezieltes Schließen
+  an jeder Stelle, die eine Sitzung beendet: So kann keine vergessen werden.
+- **Dabei gefunden:** Der Strom einer geöffneten Live-Notiz blieb nach einem Widerruf ebenfalls offen (dort fließt
+  Inhalt). Und der Ereigniskanal ließ Konten durch, die den zweiten Faktor erst noch einrichten müssen.
+- **Tests:** `sitzung-widerruf` (64), `passwortwechsel-abmelden-ui` (28). **Gegenproben 16/16 rot**, jede an ihrer Stelle.
+
 ## Geprüft und in Ordnung
 
 Damit diese Punkte nicht ein zweites Mal untersucht werden:
@@ -512,3 +540,5 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 
 **R1–R30 sind erledigt und deployt** (30.09.2026, zuletzt R30 mit `8ca3263`, Cache 437). **R31** (Anmelde-Schleife durch
 den Browser-Zwischenspeicher) ist am 01.10.2026 um 22:06 deployt (`4f81a93`, Cache 443).
+
+**Sicherheitsprüfung 10.11.2026:** P1 und P6 sind behoben (`d1de64c`, Cache 456), **noch nicht deployt**.

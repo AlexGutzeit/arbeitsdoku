@@ -5126,3 +5126,47 @@ behoben bzw. einzeln grün), danach alle 20 Prod-Klon-Tests auf der Kopie von 05
 Integrität ok). Rückkehrpunkt `vor-icon-deploy` (= `4f79c3d`). Danach: IPv4+IPv6 200, Cache 455 in `sw.js`, `index.html`
 und `gast.html`, ausgeliefertes Icon byte-gleich, Protokoll ohne Fehler, Zweitanlage Probestart ok, Datenbank 60/60
 Tabellen, keine Zeile verändert.
+
+## Sicherheitsprüfung: Passwortwechsel beendet Anmeldungen, Live-Kanäle prüfen die Sitzung (10./11.11.2026)
+
+Eine Sicherheitsprüfung von außen fand, dass ein neues Passwort bestehende Anmeldungen nicht beendet (P1) und der
+Ereigniskanal nur die Unterschrift des Tokens prüft (P6). Beides am Klon nachgestellt, dann zusammen behoben — es ist
+dieselbe Lücke von zwei Seiten: Die Sitzungsprüfung stand nur in `authenticate`.
+
+**Eine Prüfung, drei Benutzer.** `sitzungPruefen(db, decoded)` in `middleware/auth.js` beantwortet „gilt diese
+Anmeldung noch?" (Konto da, aktiv, Sitzungs-Stand, Höchstdauer) für die API, den Ereigniskanal und den Strom der
+Live-Notiz. `sitzungenBeenden(db, userId)` ist das Gegenstück: Stand hoch, gemerkte Zwei-Faktor-Geräte weg. Es wird von
+„Überall abmelden", vom eigenen Passwortwechsel und vom Zurücksetzen durch Chef/Admin benutzt.
+
+**Kanäle prüfen im Herzschlag, statt gezielt geschlossen zu werden.** Geplant war, beim Widerruf die offenen Kanäle
+des Nutzers zu schließen. Verworfen: Jede Stelle, die eine Sitzung beendet (Ausstellen, Löschen, Passwort,
+Zurückspielen einer Sicherung, künftige), müsste daran denken — genau die Art Liste, die hier schon einmal an fünf
+Stellen auseinanderlief. Jetzt fragt jeder Kanal bei jedem Lebenszeichen selbst nach. Preis: bis zu 30 s (Notiz 25 s)
+Verzug. Nebenwirkung, die gewollt ist: Wer sein eigenes Passwort wechselt, hat das neue Token längst in der Hand,
+wenn sein eigener Kanal (noch mit dem alten Ticket geöffnet) geschlossen wird und neu verbindet — kein Wettlauf.
+Ein offen liegen gelassenes Gerät landet dadurch ohne Klick in der Anmeldemaske: Der Kanal schließt, das neue Ticket
+wird mit 401 `SITZUNG_BEENDET` verweigert, die Oberfläche räumt auf.
+
+**Vier Funde unterwegs,** alle im Test:
+- „Überall abmelden" setzte `anmeldung` neu. Wer es alle paar Wochen drückte, erreichte die Höchstdauer nie und wurde
+  nie wieder nach dem zweiten Faktor gefragt. `tokenNachWiderruf` trägt den Zeitpunkt jetzt weiter.
+- Die gleitende Erneuerung legte der Widerrufs-Antwort ein `X-Neues-Token` mit dem **alten** Stand bei. Andere Tabs
+  übernehmen nur ein neueres Token; beide waren aus derselben Sekunde.
+- Der Notiz-Strom prüfte nur sein Ticket und blieb nach einem Widerruf offen — der einzige Kanal mit Inhalt.
+- `/api/events` ließ mit dem langen Token Konten durch, die den zweiten Faktor noch einrichten müssen.
+
+**Bewusst so gelassen:** Das einfache „Abmelden" gilt nur für das Gerät (sonst flöge das Handy mit, wenn man sich am
+Rechner abmeldet; ein einzelnes Token zu entwerten bräuchte eine Sperrliste). Der lange Token bleibt am Ereigniskanal
+als Ausweichweg erlaubt, wird aber genauso geprüft. Ein altes, nicht abgelaufenes Token gilt nach dem
+**Wiedereinstellen** eines Kontos wieder (`tests/auth-active-guard.js` sichert das zu) — Ausstellen erhöht den Stand
+nicht.
+
+**Folge für den Alltag:** Setzt der Chef ein Passwort zurück, sind auch die gemerkten Zwei-Faktor-Geräte der Person
+weg; sie braucht beim nächsten Anmelden den Code.
+
+**Tests.** `sitzung-widerruf` (64, API und drei Kanalarten, Herzschlag per `SSE_PULS_MS` auf 0,3 s),
+`passwortwechsel-abmelden-ui` (28: Rechner bleibt drin, Handy fliegt von selbst hinaus, zweiter Tab übernimmt, Admin
+setzt sein eigenes Passwort im Mitarbeiter-Dialog). **Gegenproben 16/16 rot** — jede Schutzstelle einzeln ausgebaut,
+darunter die Token-Übernahme der Oberfläche an beiden Stellen. Die erste Fassung des Browser-Tests war dabei nur durch
+eine Ausnahme rot (das Formular war schon weg); er fragt jetzt zuerst nach der Anmeldemaske. Cache 456.
+**Noch nicht deployt.**
