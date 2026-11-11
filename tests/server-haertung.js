@@ -15,7 +15,7 @@ const { spawn, spawnSync } = require('child_process');
 const http = require('http'); const fs = require('fs'); const os = require('os'); const path = require('path');
 
 const WURZEL = path.join(__dirname, '..');
-const PORT_VORGABE = 3401, PORT_ALLE4 = 3402, PORT_ALLE6 = 3403, PORT_LEER = 3404, PORT_FALSCH = 3405;
+const PORT_VORGABE = 3401, PORT_ALLE4 = 3402, PORT_ALLE6 = 3403, PORT_LEER = 3404, PORT_FALSCH = 3405, PORT_HOST = 3406;
 const SECRET = 'test-secret-mindestens-32-zeichen-lang';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
@@ -158,16 +158,31 @@ const hatIPv6 = Object.values(os.networkInterfaces()).flat().some(a => a && a.ad
     await srv.beenden();
   } else ok('IPv6 auf diesem Rechner vorhanden', false, 'kein ::1');
 
-  console.log('── P4: leerer Wert und ein fremdes HOST ändern nichts ──');
-  // „HOST" setzen manche Umgebungen von sich aus (tcsh, conda). Der Server darf darauf nicht hören.
-  srv = await starten(PORT_LEER, { LISTEN_HOST: '   ', HOST: '0.0.0.0' });
+  console.log('── P4: ein leerer Wert ist kein Wert ──');
+  srv = await starten(PORT_LEER, { LISTEN_HOST: '   ' });
   try {
     let r = await req('127.0.0.1', PORT_LEER, 'GET', '/health');
     ok('LISTEN_HOST nur aus Leerzeichen → startet mit der Vorgabe', r.status === 200, `${r.status} ${r.grund || ''}`);
     r = await req('127.0.0.2', PORT_LEER, 'GET', '/health');
-    ok('… und HOST=0.0.0.0 öffnet ihn NICHT', r.status === 0 && r.grund === 'ECONNREFUSED', `${r.status} ${r.grund || ''}`);
+    ok('… und bleibt von außen zu', r.status === 0 && r.grund === 'ECONNREFUSED', `${r.status} ${r.grund || ''}`);
   } catch (e) { ok('Ablauf ohne Ausnahme', false, e && e.stack); }
   await srv.beenden();
+
+  console.log('── P4: ein fremdes HOST öffnet nichts ──');
+  // „HOST" setzen manche Umgebungen von sich aus (tcsh, conda). Der Server darf darauf nicht hören.
+  // Zwei Läufe, weil sich die Fälle sonst gegenseitig verdecken: Steht LISTEN_HOST (und sei es leer)
+  // daneben, käme ein Server, der „LISTEN_HOST oder HOST" liest, gar nicht bis HOST.
+  for (const [was, mehr] of [['HOST=0.0.0.0 allein', { HOST: '0.0.0.0' }], ['HOST=0.0.0.0 neben leerem LISTEN_HOST', { HOST: '0.0.0.0', LISTEN_HOST: '' }]]) {
+    srv = await starten(PORT_HOST, mehr);
+    try {
+      let r = await req('127.0.0.1', PORT_HOST, 'GET', '/health');
+      ok(`${was} → Server läuft`, r.status === 200, `${r.status} ${r.grund || ''}`);
+      r = await req('127.0.0.2', PORT_HOST, 'GET', '/health');
+      ok(`${was} → öffnet ihn NICHT`, r.status === 0 && r.grund === 'ECONNREFUSED', `${r.status} ${r.grund || ''}`);
+      ok(`${was} → Startzeile sagt „nur von diesem Rechner"`, /Erreichbar nur von diesem Rechner \(127\.0\.0\.1\)/.test(srv.ausgabe()), srv.ausgabe().slice(0, 200));
+    } catch (e) { ok('Ablauf ohne Ausnahme', false, e && e.stack); }
+    await srv.beenden();
+  }
 
   console.log('── P4: eine Adresse, die dieser Rechner nicht hat ──');
   // 192.0.2.1 liegt in einem Netz, das für Beispiele reserviert ist — kein Rechner trägt sie.
