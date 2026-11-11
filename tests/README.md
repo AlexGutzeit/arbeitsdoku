@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**294 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**295 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -280,6 +280,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `seite-laden-ui.js` | Seiten laden: Fehleranzeige und Veraltet-Waechter auf JEDER Seite (R4 + R5, 25.09.2026). |
 | `self-planning-ui.js` | UI-Smoke (Puppeteer) für das zweistufige Planungsrecht: |
 | `self-planning.js` | Self-Planung-Test: Planungsrecht-Stufen „sich" (can_plan) vs. „alle" (can_plan_all). |
+| `server-haertung.js` | Härtung des Servers selbst: wo er lauscht, was er über sich verrät, was er auf unbekannte Adressen antwortet. |
 | `shot-notifications.js` | Einmal-Screenshot der Benachrichtigungen-Seite — ein Werkzeug, kein Test. |
 | `sitzung-entwurf-ui.js` | Abgelaufene Sitzung mitten im Formular (R1, Alex 24.09.2026). |
 | `sitzung-gleitend.js` | Gleitende Sitzung (R1, Alex 24.09.2026): 3 Tage ohne Aktivitaet, hoechstens 30 Tage. |

@@ -26,6 +26,28 @@ const { berlinJetzt } = require('./zeit');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Auf welcher Adresse der Server lauscht (P4, 11.11.2026). Vorgabe: nur dieser Rechner.
+//
+// Vorher stand hier nichts, und Node lauschte damit auf ALLEN Schnittstellen. Hinter einem Proxy
+// (der empfohlene Aufbau) war der Port dann zusaetzlich direkt erreichbar, sobald keine Firewall
+// davorstand — und wer direkt kommt, darf sich seine Adresse selbst aussuchen: Wegen
+// `trust proxy` glaubt die App der Kopfzeile X-Forwarded-For, die sonst nur der Proxy setzt.
+// Damit liess sich die Anmeldebremse je Adresse umgehen und das Protokoll mit erfundenen
+// Adressen fuellen. Der Schutz hing allein an der Firewall.
+//
+// Wer die App OHNE Proxy betreibt und aus dem Netz erreichen will, setzt LISTEN_HOST=0.0.0.0
+// (nur IPv4) oder LISTEN_HOST=:: (IPv4 und IPv6, das Verhalten von frueher).
+//
+// Bewusst nicht „HOST": Diesen Namen belegen manche Umgebungen von sich aus (tcsh, conda), und
+// weil die .env eine bereits gesetzte Variable nicht ueberschreibt, lauschte der Server dann
+// stillschweigend auf einer fremden Adresse.
+const LISTEN_HOST = (process.env.LISTEN_HOST || '').trim() || '127.0.0.1';
+const NUR_DIESER_RECHNER = /^(127\.|::1$|localhost$)/i.test(LISTEN_HOST);
+
+// Express nennt sich sonst in jeder Antwort selbst („X-Powered-By: Express") — eine Auskunft, die
+// nur dem nuetzt, der nach passenden Luecken sucht.
+app.disable('x-powered-by');
+
 // Vertraue dem ersten Proxy in der Kette (Caddy) — req.ip kommt dann aus X-Forwarded-For
 app.set('trust proxy', 1);
 
@@ -41,7 +63,14 @@ app.set('trust proxy', 1);
 //  - frame-ancestors 'none' (+ X-Frame-Options DENY) : die App darf nicht in eine fremde Seite
 //    eingebettet werden (Schutz gegen „Clickjacking").
 //  - object-src 'none', base-uri/form-action 'self' : weitere Haertung.
-// HSTS (HTTPS-Erzwingung) uebernimmt bewusst der vorgeschaltete Caddy-Proxy.
+// HSTS (Strict-Transport-Security): „diese Adresse kuenftig nur noch ueber https" — der Browser
+// merkt sich das ein Jahr und fragt gar nicht erst unverschluesselt an (P8, 11.11.2026). Bis dahin
+// stand hier, das uebernehme der Proxy; Caddy setzt die Kopfzeile von sich aus aber nicht, sie
+// fehlte also. Gesetzt wird sie nur, wenn die Anfrage tatsaechlich ueber https kam (req.secure —
+// das meldet der Proxy in X-Forwarded-Proto). Wer die App ohne https betreibt, bekommt sie nicht
+// und sperrt sich damit auch nicht aus. Ohne includeSubDomains: Unter derselben Domain koennen
+// andere Dienste haengen, ueber die diese App nicht zu bestimmen hat.
+const HSTS = 'max-age=31536000';
 const CSP_POLICY = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -64,6 +93,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (req.secure) res.setHeader('Strict-Transport-Security', HSTS);
   next();
 });
 
@@ -237,6 +267,14 @@ app.get('/health', (req, res) => {
   }
 });
 
+// Unbekannte Adressen unter /api: 404 als JSON, fuer jede Methode (P9, 11.11.2026). Vorher fiel ein
+// GET bis zum Rueckfall auf die App durch und bekam die Startseite mit 200 — ein Tippfehler in
+// einer Adresse oder eine entfernte Route sah fuer den Aufrufer aus wie eine gelungene Antwort,
+// nur eben mit HTML statt Daten. Muss NACH allen Wegen unter /api stehen und VOR dem Rueckfall.
+app.use('/api', (req, res) => {
+  res.status(404).json({ code: 'UNBEKANNTE_ADRESSE', error: 'Diese Adresse gibt es nicht.' });
+});
+
 // Seite für Gäste einer Notiz (Link: /gast#<Kennung>) — eigene, schlanke Seite ohne die App
 app.get('/gast', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -284,12 +322,15 @@ async function start() {
   // Express 5 reicht einen Startfehler (z. B. Port belegt) an diesen Rückruf, statt abzustürzen wie Express 4.
   // Ohne die Prüfung meldete der Server „läuft" und endete mit Code 0 (nachgemessen in tests/express5-routen.js) —
   // ein irreführendes Protokoll, und ein Test auf belegtem Port hätte die Antworten eines fremden Servers geprüft.
-  app.listen(PORT, (err) => {
+  app.listen(PORT, LISTEN_HOST, (err) => {
     if (err) {
-      console.error(`Server konnte nicht starten (Port ${PORT}): ${err.code || err.message}`);
+      console.error(`Server konnte nicht starten (Adresse ${LISTEN_HOST}, Port ${PORT}): ${err.code || err.message}`);
       process.exit(1);
     }
     console.log(`Arbeitsdoku-Server läuft auf http://localhost:${PORT}`);
+    console.log(NUR_DIESER_RECHNER
+      ? `Erreichbar nur von diesem Rechner (${LISTEN_HOST}) — gedacht für den Betrieb hinter einem Proxy. Direkt aus dem Netz: LISTEN_HOST=0.0.0.0 in der .env setzen.`
+      : `Lauscht auf ${LISTEN_HOST} — direkt aus dem Netz erreichbar.`);
   });
 }
 

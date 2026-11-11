@@ -877,6 +877,11 @@ in keiner Antwort, auch nicht in der Kontaktkarte (`routes/kollegen.js`, Tests `
 
 Dateiablage mit Ordnern/Unterordnern. Upload (PDF, MS-Office `docx/xlsx/pptx`, OpenDocument `odt/ods/odp`, Bilder PNG/JPG, `txt/csv/md`; max. Dateigröße standardmäßig 5 MB, vom Admin einstellbar, Magic-Byte-Prüfung gegen umbenannte `.exe`), Verschieben, Umbenennen, rekursives Löschen. Konfigurierbares Gesamt-Speicherlimit **und** Pro-Datei-Limit. Mitarbeiter laden nur herunter – außer sie bekommen das Upload-Recht.
 
+> **Die Ablage ist für alle da.** Jeder angemeldete Mitarbeiter sieht **jeden** Ordner und kann
+> **jede** Datei herunterladen — Rechte je Ordner gibt es nicht. Gedacht ist sie für das, was alle
+> lesen sollen: Betriebsanweisungen, Formulare, Preislisten, Pläne. **Nicht** hinein gehören
+> Lohnunterlagen, Verträge, Krankmeldungen oder andere Personalunterlagen.
+
 ### Verwaltung
 
 #### 👥 Mitarbeiter
@@ -1123,6 +1128,13 @@ Admin-Konto) und dazu **nur**, was jeder **selbst** freigegeben hat (Geburtstag,
 ausgeliehene Werkzeug, das die Werkzeugliste ohnehin allen zeigt. Zeiten, Abwesenheiten und Planung anderer bleiben,
 wie in der Tabelle beschrieben, verborgen.
 
+> **Der Chef ist Herr über die Daten.** Die Rolle *Chef* ist für die **Geschäftsführung** gedacht. Sie
+> darf eine Sicherung zurückspielen, und eine Sicherung ersetzt die **gesamte** Datenbank — samt
+> Konten, Rollen und Passwörtern. Wer Chef ist, kann sich auf diesem Weg also alles verschaffen, was
+> ein Administrator darf; die Sperren, die Admin-Konten sonst vor dem Chef schützen, gelten dort
+> nicht. Das ist so gewollt und kein Versehen: Die Rolle deshalb nur an Personen vergeben, denen die
+> Firma ohnehin alle Daten anvertraut — für Vorarbeiter und Vertretungen gibt es die Einzelrechte.
+
 > **Aussperr-Schutz:** Der **letzte** verbleibende (aktive) Admin kann weder herabgestuft noch ausgestellt werden – die App würde sonst ohne Administrator dastehen. Lege zuerst einen weiteren Admin an; bei mehreren Admins sind Herabstufen und Ausstellen ganz normal möglich.
 
 **Zusätzliche Einzelrechte** (pro Benutzer unter *Mitarbeiter → Bearbeiten* vergebbar):
@@ -1197,9 +1209,16 @@ Im Terminal erscheint:
 
 ```
 Arbeitsdoku-Server läuft auf http://localhost:3000
+Erreichbar nur von diesem Rechner (127.0.0.1) — gedacht für den Betrieb hinter einem Proxy. Direkt aus dem Netz: LISTEN_HOST=0.0.0.0 in der .env setzen.
 ```
 
 App im Browser öffnen: **<http://localhost:3000>**
+
+> **Von einem anderen Gerät aus?** Der Server nimmt von sich aus nur Verbindungen **vom selben
+> Rechner** an. Für den echten Betrieb gehört ein Proxy mit HTTPS davor (siehe
+> [Produktivbetrieb](#produktivbetrieb-server-https-autostart)) — der läuft auf demselben Rechner
+> und erreicht die App. Wer sie zum Ausprobieren **ohne** Proxy im eigenen Netz öffnen will, setzt
+> in der `.env` `LISTEN_HOST=0.0.0.0` und startet neu.
 
 ---
 
@@ -1255,6 +1274,7 @@ Konfiguration über die Datei `.env` (Vorlage: `.env.example`).
 |---|---|---|---|
 | `JWT_SECRET` | **ja** | – | Geheimer Schlüssel für die Login-Tokens. **Min. 32 Zeichen**, sonst startet der Server nicht. Lang und zufällig wählen, geheim halten. |
 | `PORT` | nein | `3000` | HTTP-Port des Servers. |
+| `LISTEN_HOST` | nein | `127.0.0.1` | Adresse, auf der der Server lauscht. Vorgabe: **nur dieser Rechner** — richtig, wenn ein Proxy (Caddy, nginx) auf demselben Rechner davorsteht. **Ohne Proxy** und für den Zugriff aus dem Netz: `0.0.0.0` (IPv4) oder `::` (IPv4 und IPv6 — so verhielt sich die App bis November 2026). Läuft der Proxy in einem **anderen Container oder auf einem anderen Rechner**, ebenfalls `0.0.0.0` setzen und den Port per Firewall auf den Proxy beschränken. |
 | `DB_PATH` | nein | `./data/arbeitsdoku.db` | Pfad der SQLite-Datenbankdatei. |
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` | nein | – | Schlüsselpaar für **Push-Benachrichtigungen** (Web Push). Einmalig erzeugen mit `node -e "console.log(require('web-push').generateVAPIDKeys())"`. Fehlen sie, ist Push inaktiv. |
 | `VAPID_SUBJECT` | nein | `mailto:admin@example.com` | Kontaktangabe (`mailto:` oder `https:`) für den Push-Dienst. |
@@ -1299,10 +1319,20 @@ Caddy holt automatisch ein Let's-Encrypt-Zertifikat. (Analog mit nginx + certbot
 Wenn ein Proxy vor der App läuft, ist `app.set('trust proxy', 1)` bereits aktiv – die echte
 Client-IP wird korrekt erkannt (für Login-Limit & Audit-Log).
 
+**Die App lauscht nur auf dem eigenen Rechner** (`127.0.0.1`, einstellbar über `LISTEN_HOST`, siehe
+[Konfiguration](#konfiguration-env-variablen)). Das gehört zu diesem Aufbau: Die App glaubt dem
+Proxy, von welcher Adresse eine Anfrage kommt. Wäre ihr Port zusätzlich direkt aus dem Netz
+erreichbar, könnte sich dort jeder eine Adresse aussuchen — und die Anmeldebremse je Adresse
+umgehen. Der Proxy auf demselben Rechner erreicht sie über `localhost:3000` wie bisher.
+
 **Sicherheits-Header:** Die App setzt selbst eine restriktive **Content-Security-Policy** sowie
 `X-Frame-Options`, `X-Content-Type-Options` und `Referrer-Policy` (schützt u. a. gegen
-eingeschleuste Skripte/XSS und Clickjacking). Die **HTTPS-Erzwingung (HSTS)** überlässt sie bewusst
-dem Reverse-Proxy – bei Caddy ist HTTPS automatisch aktiv; HSTS kann dort bei Bedarf ergänzt werden.
+eingeschleuste Skripte/XSS und Clickjacking). Kommt eine Anfrage über HTTPS an (der Proxy meldet das),
+setzt sie außerdem **`Strict-Transport-Security`** (HSTS, ein Jahr): Der Browser fragt diese Adresse
+danach gar nicht mehr unverschlüsselt an. Bewusst **ohne** `includeSubDomains` — unter derselben
+Domain können andere Dienste hängen. Ohne HTTPS wird die Kopfzeile nicht gesetzt; niemand sperrt sich
+aus. **Unbekannte Adressen unter `/api`** beantwortet die App mit `404` als JSON statt mit der
+Startseite, und sie nennt ihr Grundgerüst nicht in den Kopfzeilen (`X-Powered-By` ist aus).
 
 ### 2. Automatischer Start (systemd, Linux)
 
@@ -1608,6 +1638,13 @@ systemctl --user restart arbeitsdoku
 Schema-Migrationen laufen **automatisch und abwärtskompatibel** beim Start – eine bestehende
 Datenbank wird beim Hochziehen sicher aktualisiert. Trotzdem vor einem Update ein **Backup** ziehen.
 
+> **Nach dem Update nicht mehr erreichbar? (ab November 2026)** Die App lauscht seither nur noch auf
+> dem eigenen Rechner. Mit einem Proxy **auf demselben Rechner** ändert sich nichts. Wer sie bisher
+> **direkt** über `http://<rechner>:3000` aufgerufen hat oder den Proxy in einem **anderen Container
+> bzw. auf einem anderen Rechner** betreibt, trägt einmalig `LISTEN_HOST=0.0.0.0` in die `.env` ein
+> und startet den Dienst neu. Der Server sagt es beim Start selbst („Erreichbar nur von diesem
+> Rechner …"); die Daten sind davon nicht berührt.
+
 ---
 
 ## Entwicklung & Tests
@@ -1699,6 +1736,11 @@ In `.env` muss `JWT_SECRET=` mit mindestens 32 Zeichen gesetzt sein (siehe [Inst
 
 **Port 3000 ist belegt.**
 Mit anderem Port starten: `PORT=8080 npm start` (bzw. `PORT` in `.env`/systemd setzen).
+
+**Die App läuft, ist aber von anderen Geräten aus nicht erreichbar („Verbindung abgelehnt").**
+Sie lauscht von sich aus nur auf dem eigenen Rechner. Entweder einen Proxy davorsetzen (empfohlen,
+siehe [Produktivbetrieb](#produktivbetrieb-server-https-autostart)) oder `LISTEN_HOST=0.0.0.0` in die
+`.env` eintragen und neu starten.
 
 **Admin-Passwort vergessen.**
 Server stoppen und ein neues Passwort setzen (ersetzt das des Admin-Kontos):
