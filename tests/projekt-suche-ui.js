@@ -11,7 +11,8 @@
 //   * Zeitnachweis-Formular: tippen filtert, Enter/Klick wählt (Kunde + Adresse kommen mit, Freitext gesperrt),
 //     weggeklickt = alte Wahl bleibt, Esc, Pfeiltasten, ×, „als Freitext übernehmen", Wert ohne Ereignis gesetzt.
 //   * Planungsformular, Zeitnachweis-Filter, Abrechnung/PDF, Notizen (Filter, neue Notiz, offene Notiz), Werkzeug.
-//   * 360 px breit: Liste bleibt im Bild.
+//   * 360 px breit: Liste bleibt im Bild. Am Handy (Touch) rollt die Zeile beim Antippen unter die Kopfleiste und die
+//     Liste passt in den Platz bis zur Tastatur; am PC rollt nichts.
 //   node tests/projekt-suche-ui.js
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path');
@@ -191,6 +192,57 @@ function req(m, p, token, b) {
     ok('360 px: Liste bleibt im Bild, nichts läuft über', schmal.links >= 0 && schmal.rechts <= schmal.breite && !schmal.ueber, JSON.stringify(schmal));
     await page.keyboard.press('Escape');
     await page.setViewport({ width: 1200, height: 900 });
+
+    // Am PC rollt beim Öffnen nichts — das Nach-oben-Schieben ist nur für Touch-Geräte
+    await geh('#/entry/new', '#ef-project-suche');
+    await page.evaluate(() => { document.getElementById('ef-project-suche').scrollIntoView({ block: 'center' }); });
+    const yVor = await page.evaluate(() => window.scrollY);
+    await page.click('#ef-project-suche'); await sleep(200);
+    const pc = await page.evaluate(() => { const l = document.getElementById('ef-project-suche-liste').getBoundingClientRect(); return { y: window.scrollY, unten: l.bottom, h: innerHeight }; });
+    ok('PC: Öffnen rollt die Seite nicht, Liste endet im Fenster', pc.y === yVor && pc.unten <= pc.h, JSON.stringify({ yVor, pc }));
+    await page.keyboard.press('Escape');
+    // Zeile weit unten im Fenster: Die feste CSS-Grenze (45 % der Höhe) ragte hier unten hinaus — die Liste
+    // richtet sich nach dem wirklich freien Platz. (Dieselbe Rechnung hält sie am Handy über der Tastatur.)
+    await page.evaluate(() => { const f = document.getElementById('ef-project-suche'); window.scrollBy(0, f.getBoundingClientRect().top - (innerHeight - 260)); });
+    await page.click('#ef-project-suche'); await sleep(200);
+    const tief = await page.evaluate(() => { const l = document.getElementById('ef-project-suche-liste'); return { unten: Math.round(l.getBoundingClientRect().bottom), h: innerHeight, hoehe: l.clientHeight, inhalt: l.scrollHeight }; });
+    ok('PC, Zeile weit unten: Liste wird kürzer und endet trotzdem im Fenster', tief.unten <= tief.h && tief.hoehe < 0.45 * tief.h && tief.inhalt > tief.hoehe, JSON.stringify(tief));
+    await page.keyboard.press('Escape');
+
+    // Handy mit Touch: Zeile rollt unter die Kopfleiste, die Liste passt in den Platz bis zur Tastatur.
+    // Die Tastatur wird nachgestellt, indem der sichtbare Bereich bei offener Liste schrumpft.
+    console.log('── Handy: Zeile rollt nach oben ──');
+    await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });   // lädt die Seite neu
+    await geh('#/entry/new', '#ef-project-suche');
+    await page.evaluate(() => window.scrollTo(0, 0)); await sleep(100);
+    const handy = () => page.evaluate(() => {
+      const f = document.getElementById('ef-project-suche').getBoundingClientRect();
+      const l = document.getElementById('ef-project-suche-liste');
+      const kopf = document.querySelector('.header').getBoundingClientRect().bottom;
+      const vv = window.visualViewport;
+      return { touch: matchMedia('(pointer: coarse)').matches, feldOben: Math.round(f.top), kopf: Math.round(kopf),
+        listeUnten: Math.round(l.getBoundingClientRect().bottom), sichtUnten: Math.round(vv.offsetTop + vv.height),
+        listeHoehe: l.clientHeight, inhalt: l.scrollHeight, offen: !l.hidden };
+    });
+    const vorTipp = await handy();
+    ok('Vorbedingung: Touch-Gerät, Zeile steht weit unten', vorTipp.touch && vorTipp.feldOben > 400, JSON.stringify(vorTipp));
+    await page.tap('#ef-project-suche'); await sleep(300);
+    let h = await handy();
+    ok('Antippen: Zeile steht direkt unter der Kopfleiste', h.offen && h.feldOben >= h.kopf && h.feldOben <= h.kopf + 20, JSON.stringify(h));
+    ok('… Liste endet im sichtbaren Bereich und scrollt in sich', h.listeUnten <= h.sichtUnten && h.inhalt > h.listeHoehe, JSON.stringify(h));
+    await page.setViewport({ width: 390, height: 460, isMobile: true, hasTouch: true }); await sleep(400);   // Tastatur geht auf
+    h = await handy();
+    ok('Tastatur geht auf: Zeile bleibt oben, Liste schrumpft bis über die Tastatur', h.offen && h.feldOben >= h.kopf && h.feldOben <= h.kopf + 20 && h.listeUnten <= h.sichtUnten, JSON.stringify(h));
+    await page.keyboard.type('pv'); await sleep(150);
+    await page.keyboard.press('Enter'); await sleep(200);
+    ok('… und gewählt wird wie gewohnt', (await stand('ef-project')).feld === 'PV Anlage Dach');
+    ok('… der Platz zum Hochrollen ist danach wieder weg', await page.evaluate(() => !document.querySelector('.such-auswahl-platz')));
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.tap('#ef-project-suche'); await sleep(200);
+    const mitPlatz = await page.evaluate(() => !!document.querySelector('.such-auswahl-platz'));
+    await page.evaluate(() => { location.hash = '#/projects'; }); await page.waitForSelector('#ls-board'); await sleep(300);
+    ok('Seitenwechsel bei offener Liste: kein Platz bleibt an der nächsten Seite hängen', mitPlatz && await page.evaluate(() => !document.querySelector('.such-auswahl-platz')), String(mitPlatz));
+    await page.setViewport({ width: 1200, height: 900 });   // lädt die Seite neu
 
     // ── Planungsformular ────────────────────────────────────────────────────────────────────
     console.log('── Planungsformular ──');

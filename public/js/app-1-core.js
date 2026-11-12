@@ -1972,9 +1972,55 @@ function suchAuswahl(sel, opt = {}) {
       if (li) li.scrollIntoView({ block: 'nearest' });
     } else feld.removeAttribute('aria-activedescendant');
   };
+  // Handy (Alex, 12.11.2026): Die Bildschirmtastatur nimmt die untere Haelfte ein. Beim Antippen
+  // rollt die Zeile deshalb direkt unter die Kopfleiste, und die Liste wird nie hoeher als der Platz
+  // bis zur Tastatur (visualViewport = der wirklich sichtbare Teil). Beim Aufgehen der Tastatur
+  // aendert sich der sichtbare Teil — dann beides noch einmal, sonst schiebt der Browser selbst.
+  const istTouch = () => !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  // Steht die Zeile weit unten, ist unter dem Formular zu wenig Seite zum Hochrollen (gemessen:
+  // 327 px moeglich, ~650 noetig). Solange die Liste offen ist, haengt deshalb unsichtbarer Platz
+  // an der Seite; die Tastatur verkleinert die Seite auf den meisten Handys NICHT, sie liegt nur darueber.
+  let platzhalter = null;
+  const nachObenRollen = () => {
+    if (!platzhalter) {
+      platzhalter = document.createElement('div');
+      platzhalter.className = 'such-auswahl-platz';
+      platzhalter.setAttribute('aria-hidden', 'true');
+      platzhalter.style.height = window.innerHeight + 'px';
+      document.body.appendChild(platzhalter);
+      // Verschwindet das Formular, solange die Liste offen ist (Seitenwechsel, Neuaufbau), meldet
+      // Chrome nicht immer ein blur — der Platz darf dann trotzdem nicht stehen bleiben.
+      window.addEventListener('hashchange', schliessen, { once: true });
+    }
+    const kopf = document.querySelector('.header');
+    feld.style.scrollMarginTop = (Math.max(0, kopf ? kopf.getBoundingClientRect().bottom : 0) + 12) + 'px';
+    feld.scrollIntoView({ block: 'start', behavior: 'instant' });
+  };
+  const platzAnpassen = () => {
+    if (!offen) return;
+    const vv = window.visualViewport;
+    const unten = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const frei = unten - feld.getBoundingClientRect().bottom - 10;
+    liste.style.maxHeight = `min(18rem, ${Math.round(Math.max(140, frei))}px)`;
+    const li = liste.querySelector('.aktiv');
+    if (li) li.scrollIntoView({ block: 'nearest' });
+  };
+  const sichtGeaendert = (e) => {
+    if (!offen) return;
+    if (!feld.isConnected) { schliessen(); return; }
+    if (e && e.type === 'resize' && istTouch()) nachObenRollen();
+    platzAnpassen();
+  };
+  const sichtBeobachten = (an) => {
+    const f = an ? 'addEventListener' : 'removeEventListener';
+    if (window.visualViewport) { visualViewport[f]('resize', sichtGeaendert); visualViewport[f]('scroll', sichtGeaendert); }
+    window[f]('scroll', sichtGeaendert, { passive: true });
+  };
+
   const oeffnen = () => {
     if (offen || sel.disabled) return;
     offen = true; getippt = false;
+    if (istTouch()) nachObenRollen();
     // Zeile leeren, die bisherige Wahl steht grau als Platzhalter: So filtert der erste
     // Buchstabe sofort, statt hinten an den alten Namen angehaengt zu werden.
     feld.value = '';
@@ -1983,10 +2029,14 @@ function suchAuswahl(sel, opt = {}) {
     zeichnen();
     liste.hidden = false;
     feld.setAttribute('aria-expanded', 'true');
+    platzAnpassen();
+    sichtBeobachten(true);
   };
   function schliessen() {
     if (!offen) { anzeigen(); return; }
     offen = false; getippt = false; aktiv = -1;
+    sichtBeobachten(false);
+    if (platzhalter) { platzhalter.remove(); platzhalter = null; window.removeEventListener('hashchange', schliessen); }
     liste.hidden = true;
     feld.setAttribute('aria-expanded', 'false');
     feld.removeAttribute('aria-activedescendant');

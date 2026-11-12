@@ -997,7 +997,9 @@ Darauf ist sie ausgelegt:
   Liste, jeder Buchstabe filtert weiter (auch nach **Kunde** und **Adresse**; der Kunde steht klein
   daneben). Wählen per Tipp/Klick oder mit ↑ ↓ und Enter, Esc schließt, **×** setzt auf „Kein Projekt"
   zurück. Wer tippt und dann wegklickt, **behält die bisherige Wahl** – es geht nichts versehentlich
-  verloren. Wo es ein Freitext-Feld daneben gibt, steht unten **„„…" als Freitext übernehmen"**: das
+  verloren. Die Liste ist nie höher als der freie Platz darunter und scrollt in sich. **Am Handy**
+  rollt die Zeile beim Antippen direkt unter die Kopfleiste, damit die Liste über der
+  Bildschirmtastatur Platz hat (dafür hängt kurz unsichtbarer Platz unten an der Seite). Wo es ein Freitext-Feld daneben gibt, steht unten **„„…" als Freitext übernehmen"**: das
   trägt den getippten Text ins Freitext-Feld ein. Technisch bleibt das alte Dropdown unsichtbar als
   Wertquelle stehen; alles, was daran hängt (Kunde/Adresse übernehmen, Freitext sperren, Entwurf),
   läuft unverändert.
