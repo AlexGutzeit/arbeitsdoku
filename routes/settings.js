@@ -32,29 +32,27 @@ function getBrandingFileLimit(db) {
   const base = (!Number.isFinite(n) || n <= 0) ? BRANDING_DEFAULT : n;
   return Math.max(BRANDING_MIN, Math.min(base, BRANDING_MAX));
 }
+const NUR_PNG_JPG = 'Nur PNG und JPG Dateien erlaubt';
 const brandingFileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
   if (['.png', '.jpg', '.jpeg'].includes(ext)) cb(null, true);
-  else cb(new Error('Nur PNG und JPG Dateien erlaubt'));
+  else cb(new Error(NUR_PNG_JPG));
 };
+// Die Endung ist nur die erste Schranke. Was wirklich in der Datei steckt, sagt sharp — und nur PNG und JPEG
+// gelten. Ein SVG, GIF oder WebP mit der Endung .png käme sonst durch (Sicherheitsprüfung 10.11.2026, P10).
+const BILDFORMATE = ['png', 'jpeg'];
 
-// Logo-Upload konfigurieren
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '..', 'uploads');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, 'logo' + ext);
-  }
-});
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+// Das Logo wird neu geschrieben, nie durchgereicht: längste Seite höchstens LOGO_KANTE Pixel.
+const LOGO_KANTE = 1000;
+// Unter diesen Namen lag oder liegt ein Logo (frühere Fassungen nahmen die Endung der hochgeladenen Datei).
+const LOGO_NAMEN = ['logo.png', 'logo.jpg', 'logo.jpeg'];
 
 // Logo-Upload: Per-Request-Multer mit aktuellem (konfigurierbarem) Limit + klarer Fehlermeldung.
+// Die Datei landet in uploads/tmp — nach uploads/ kommt erst das von sharp neu geschriebene Bild.
 function logoUpload(req, res, next) {
   const limit = getBrandingFileLimit(getDb());
-  const m = multer({ storage, limits: { fileSize: limit }, fileFilter: brandingFileFilter }).single('logo');
+  const m = multer({ dest: path.join(uploadsDir, 'tmp'), limits: { fileSize: limit }, fileFilter: brandingFileFilter }).single('logo');
   m(req, res, (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: `Datei zu groß (max. ${Math.round(limit / (1024 * 1024))} MB)` });
@@ -298,18 +296,45 @@ router.put('/', authenticate, authorize('chef'), (req, res) => {
   res.json({ settings });
 });
 
-// Logo hochladen
-router.post('/logo', authenticate, authorize('chef'), logoUpload, (req, res) => {
+// Logo hochladen. uploads/ liefert der Server ohne Anmeldung aus — deshalb kommt dort nie die hochgeladene Datei
+// selbst an, sondern ein Bild, das sharp aus ihr neu geschrieben hat:
+//   · Der Inhalt entscheidet, nicht die Endung: nur echtes PNG oder JPEG.
+//   · PNG bleibt PNG (Transparenz), JPEG bleibt JPEG; größer als LOGO_KANTE wird verkleinert, nie vergrößert.
+//   · EXIF samt Standort, Kommentare und Angehängtes fallen weg; die Ausrichtung wird vorher angewendet.
+//   · Scheitert etwas, bleiben Einstellung und bisheriges Logo, wie sie waren.
+router.post('/logo', authenticate, authorize('chef'), logoUpload, async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Keine Datei hochgeladen' });
   }
 
-  const db = getDb();
-  const logoPath = '/uploads/' + req.file.filename;
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('company_logo', logoPath);
+  const zwischen = req.file.path + '.neu';
+  try {
+    const meta = await sharp(req.file.path).metadata();
+    if (!BILDFORMATE.includes(meta.format)) return res.status(400).json({ error: NUR_PNG_JPG });
+    const jpg = meta.format === 'jpeg';
+    const name = jpg ? 'logo.jpg' : 'logo.png';
+    const bild = sharp(req.file.path).rotate()
+      .resize({ width: LOGO_KANTE, height: LOGO_KANTE, fit: 'inside', withoutEnlargement: true });
+    await (jpg ? bild.jpeg({ quality: 90 }) : bild.png()).toFile(zwischen);
+    // Erst das fertige Bild ersetzt das alte — ein Abbruch mittendrin lässt kein halbes Logo zurück.
+    fs.renameSync(zwischen, path.join(uploadsDir, name));
 
-  logAudit(db, { userId: req.user.id, username: req.user.username, action: 'settings_update', details: 'Firmen-Logo gesetzt', ip: req.ip });
-  res.json({ logo: logoPath });
+    const db = getDb();
+    const logoPath = '/uploads/' + name;
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('company_logo', logoPath);
+    // Ein Logo der anderen Endung bliebe sonst liegen und weiter abrufbar.
+    for (const alt of LOGO_NAMEN) {
+      if (alt !== name) try { fs.unlinkSync(path.join(uploadsDir, alt)); } catch (_) {}
+    }
+
+    logAudit(db, { userId: req.user.id, username: req.user.username, action: 'settings_update', details: 'Firmen-Logo gesetzt', ip: req.ip });
+    res.json({ logo: logoPath });
+  } catch (e) {
+    console.error('Logo-Upload fehlgeschlagen:', e.message);
+    if (!res.headersSent) res.status(400).json({ error: 'Bild ungültig oder kann nicht verarbeitet werden' });
+  } finally {
+    for (const p of [req.file.path, zwischen]) try { fs.unlinkSync(p); } catch (_) {}
+  }
 });
 
 // Logo löschen
@@ -355,8 +380,12 @@ router.post('/app-icon', authenticate, authorize('chef'), (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
     try {
-      // Mindestgroesse pruefen
       const meta = await sharp(req.file.path).metadata();
+      if (!BILDFORMATE.includes(meta.format)) {
+        try { fs.unlinkSync(req.file.path); } catch (_) {}
+        return res.status(400).json({ error: NUR_PNG_JPG });
+      }
+      // Mindestgroesse pruefen
       if (!meta.width || !meta.height || meta.width < 256 || meta.height < 256) {
         try { fs.unlinkSync(req.file.path); } catch (_) {}
         return res.status(400).json({ error: 'Icon zu klein, mindestens 256x256 Pixel' });

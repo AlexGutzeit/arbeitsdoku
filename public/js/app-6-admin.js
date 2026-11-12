@@ -1549,11 +1549,14 @@ async function renderDocuments() {
       <span class="doc-storage-text${realPct > 100 ? ' doc-storage-text--over' : ''}">${docFormatSize(st.used) || '0 B'} / ${docFormatSize(st.limit)} belegt (${realPct}%)${realPct > 100 ? ' — Limit überschritten' : ''}</span>
     </div>` : '';
 
+  // Der Hinweis steht in jedem Ordner: Rechte je Ordner gibt es nicht, jeder Angemeldete sieht und lädt alles.
+  // Wer ablegen darf, liest zusätzlich, was nicht hineingehört (Sicherheitsprüfung 10.11.2026, P11).
   const mainEl = document.querySelector('.main');
   mainEl.innerHTML = `
     <div style="max-width:900px;margin:0 auto;">
       <div class="card">
         <div class="doc-breadcrumb">${breadcrumbHtml}</div>
+        <p class="hinweis-box" id="doc-hinweis" style="margin:.2rem 0 .7rem">Diese Ablage sehen alle Mitarbeiter.${manage ? ' Bitte keine Lohnunterlagen, Verträge oder Krankmeldungen ablegen.' : ''}</p>
         ${storageHtml}
         ${manage ? `<div class="doc-toolbar">
           <button class="btn btn-sm btn-outline" id="doc-new-folder">+ Neuer Ordner</button>

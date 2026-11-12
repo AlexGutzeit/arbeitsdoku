@@ -880,7 +880,9 @@ Dateiablage mit Ordnern/Unterordnern. Upload (PDF, MS-Office `docx/xlsx/pptx`, O
 > **Die Ablage ist für alle da.** Jeder angemeldete Mitarbeiter sieht **jeden** Ordner und kann
 > **jede** Datei herunterladen — Rechte je Ordner gibt es nicht. Gedacht ist sie für das, was alle
 > lesen sollen: Betriebsanweisungen, Formulare, Preislisten, Pläne. **Nicht** hinein gehören
-> Lohnunterlagen, Verträge, Krankmeldungen oder andere Personalunterlagen.
+> Lohnunterlagen, Verträge, Krankmeldungen oder andere Personalunterlagen. Die App sagt es auch
+> selbst: In jedem Ordner steht „Diese Ablage sehen alle Mitarbeiter." — und wer Dateien ablegen
+> darf, liest dazu „Bitte keine Lohnunterlagen, Verträge oder Krankmeldungen ablegen."
 
 ### Verwaltung
 
@@ -1580,6 +1582,14 @@ konfigurierbar (Chef/Admin) – **ohne Code-Änderung**.
 - **Icon-Upload:** PNG/JPG, mind. 256×256 px, beliebiges Seitenverhältnis (wird auf 512×512 quadratisch
   zugeschnitten). Alle PWA-Größen inkl. „maskable" werden automatisch erzeugt.
 - **Reset-Button** stellt das Standard-Icon wieder her.
+- **Firmenlogo** (*Einstellungen → Firmenlogo*, erscheint im PDF): PNG oder JPG. Die App legt nie die
+  hochgeladene Datei ab, sondern schreibt das Bild **neu** — PNG bleibt PNG (Transparenz bleibt), JPG bleibt
+  JPG, die längste Seite hat höchstens **1000 px** (kleinere Logos werden nicht vergrößert). Dabei fallen
+  alle Zusatzdaten weg, bei Fotos also auch Aufnahmeort und Kamera (EXIF); die Ausrichtung wird vorher
+  angewendet. **Der Inhalt zählt, nicht die Endung:** Ein SVG, GIF oder WebP, das sich `logo.png` nennt,
+  wird abgelehnt — beim App-Icon genauso. Der Grund: `uploads/` ist der einzige Ordner, den der Server
+  **ohne Anmeldung** ausliefert. Ein Logo, das schon hochgeladen ist, bleibt, wie es ist; neu geschrieben
+  wird erst beim nächsten Hochladen (Test `logo-upload.js`).
 - Nach Branding-Änderungen lädt die App automatisch neu. Bereits als PWA installierte Geräte müssen
   neu installiert werden, damit das neue Icon übernommen wird.
 

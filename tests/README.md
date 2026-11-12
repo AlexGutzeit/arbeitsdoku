@@ -38,10 +38,11 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**295 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**297 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
+| `ablage-hinweis-ui.js` | Ablage (Dokumente): In jedem Ordner steht, dass alle Mitarbeiter sie sehen — und wer ablegen darf, liest, was nicht hineingehört. |
 | `abnahme-undeployed-ui.js` | ABNAHME-TEST über ALLE noch nicht deployten Änderungen (Bugliste v6, Runden 1–4). |
 | `abschluss-audit-ui.js` | Das Protokoll des Abrechnungs-Abschlusses — im Browser gelesen und gefiltert. |
 | `abschluss-ausstellen.js` | Ausstellen von Mitarbeitern unter dem Abrechnungs-Abschluss. |
@@ -165,6 +166,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `listen-suche-prodklon.js` | Prod-Klon-Pruefung fuer B6 (Suche in den Listen). |
 | `listen-suche-ui.js` | Puppeteer-Test (B6): Suchfeld in den Listen. |
 | `live-dashboard-and-rights-ui.js` | Puppeteer-UI-Test: |
+| `logo-upload.js` | Firmenlogo: Der Server legt nie die hochgeladene Datei ab, sondern ein Bild, das er selbst daraus neu schreibt. |
 | `lohn-export-prodklon.js` | Lohn-Export gegen eine KOPIE der Produktivdaten — nur lesend. |
 | `lohn-export-ui.js` | Puppeteer-Test (C1): Bedienung des Lohn-Exports. |
 | `lohn-export.js` | Lohn-Export (C1): Zahlen und Dateiformat. |

@@ -4,6 +4,10 @@ const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
+
+const UPLOADS = path.join(__dirname, '..', 'uploads'), LOGO_NAMEN = ['logo.png', 'logo.jpg', 'logo.jpeg'];
+const logoVorher = {}; for (const n of LOGO_NAMEN) logoVorher[n] = fs.existsSync(path.join(UPLOADS, n)) ? fs.readFileSync(path.join(UPLOADS, n)) : null;
 
 const PORT = 3090;
 const DB = '/tmp/doc-limits-test.db';
@@ -137,11 +141,17 @@ const MB = 1024 * 1024;
     const bigLogo = Buffer.alloc(Math.round(1.3*MB), 0x42);
     let lu = await uploadField(token, '/api/settings/logo', 'logo', 'logo.png', bigLogo, 'image/png');
     ok('Logo > Branding-Limit → 413', lu.status===413, JSON.stringify(lu.body));
-    const smallLogo = Buffer.from([0x89,0x50,0x4e,0x47, ...new Array(2000).fill(0x42)]); // ~2 KB „PNG"
-    lu = await uploadField(token, '/api/settings/logo', 'logo', 'logo.png', Buffer.from(smallLogo), 'image/png');
+    // Bis 11.11.2026 genügten hier vier PNG-Kopfbytes und Füllbytes — der Server sah nur auf die Endung. Seither
+    // liest er die Datei wirklich (tests/logo-upload.js); gemessen wird weiter dasselbe: Unter dem Limit geht es durch.
+    const smallLogo = await sharp({ create: { width: 120, height: 40, channels: 3, background: '#2a7' } }).png().toBuffer();
+    lu = await uploadField(token, '/api/settings/logo', 'logo', 'logo.png', smallLogo, 'image/png');
     ok('Logo innerhalb Branding-Limit → 200', lu.status===200 && lu.body && lu.body.logo, JSON.stringify(lu.body));
 
-  } finally { srv.kill('SIGTERM'); }
+  } finally {
+    srv.kill('SIGTERM');
+    // Das Logo landet in uploads/ im Projektordner (einen anderen Ort kennt der Server nicht) — vorigen Stand zurück.
+    for (const n of LOGO_NAMEN) { try { fs.unlinkSync(path.join(UPLOADS, n)); } catch (_) {} if (logoVorher[n]) fs.writeFileSync(path.join(UPLOADS, n), logoVorher[n]); }
+  }
   console.log(`\nDoc-Limits: ${pass} ok, ${fail} fehlgeschlagen`);
   process.exit(fail===0?0:1);
 })().catch(e => { console.error(e); process.exit(1); });
