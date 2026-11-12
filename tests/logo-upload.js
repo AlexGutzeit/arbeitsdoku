@@ -119,6 +119,14 @@ const tmpReste = () => fs.existsSync(TMP) ? fs.readdirSync(TMP).filter(f => Date
     m = await sharp(await holen('/uploads/logo.png') || Buffer.alloc(1)).metadata().catch(() => ({}));
     ok('16-Bit-PNG → 200, abgelegt mit 8 Bit je Kanal', r.status === 200 && (await sharp(p16).metadata()).depth === 'ushort' && m.depth === 'uchar' && m.width === 80, `${r.status} ${m.depth}`);
 
+    // Auch ein PNG kann EXIF tragen (Block eXIf) — der Kommentar oben ist nicht der einzige Ort für Zusatzdaten.
+    const pngExif = await sharp({ create: { width: 90, height: 50, channels: 3, background: '#0a5' } }).png().withExif({ IFD0: { Copyright: MARKE, Artist: 'Vorlage' } }).toBuffer();
+    r = await logo(token, 'exif.png', pngExif);
+    bild = await holen('/uploads/logo.png');
+    m = bild ? await sharp(bild).metadata() : {};
+    ok('PNG mit EXIF → 200, abgelegt ohne EXIF', r.status === 200 && !!(await sharp(pngExif).metadata()).exif && pngExif.includes(MARKE)
+      && m.format === 'png' && m.width === 90 && !m.exif && !bild.includes(MARKE) && !bild.includes('eXIf'), `${r.status} ${m.format} exif=${!!m.exif}`);
+
     r = await logo(token, 'hoch.png', await rauschen(500, 2500, 3).png().toBuffer());
     m = await sharp(await holen('/uploads/logo.png') || Buffer.alloc(1)).metadata().catch(() => ({}));
     ok('hochkant 500×2500 → 200×1000', r.status === 200 && m.width === 200 && m.height === 1000, `${r.status} ${m.width}×${m.height}`);
@@ -203,6 +211,17 @@ const tmpReste = () => fs.existsSync(TMP) ? fs.readdirSync(TMP).filter(f => Date
     ok('ein gelungenes Hochladen schreibt genau eine Protokollzeile', r.status === 200 && await gesetzt() === standGesetzt + 1, String(await gesetzt()));
     r = await req('DELETE', '/api/settings/logo', token);
     ok('Löschen → Datei weg, Einstellung leer', r.status === 200 && !liegt('logo.png') && await einstellung() === '', `${r.status} ${await einstellung()}`);
+
+    // Scheitert ein Bild erst beim Schreiben, darf das bisherige Logo noch nicht angefasst sein: Einstellung und
+    // Aufräumen kommen nach dem fertigen Bild. Sichtbar wird das nur, wenn das bisherige Logo ein anderes Format hat.
+    r = await logo(token, 'stand.jpg', await rauschen(200, 100, 3).jpeg().toBuffer());
+    const jpgHash = hash('logo.jpg'), jpgGesetzt = await gesetzt();
+    ok('Ausgangslage gewechselt: ein JPEG ist das Logo', r.status === 200 && !!jpgHash && !liegt('logo.png') && await einstellung() === '/uploads/logo.jpg', await einstellung());
+    r = await logo(token, 'halb.png', gross.subarray(0, Math.floor(gross.length / 2)));
+    ok('abgeschnittenes PNG über einem JPEG-Logo → 400', r.status === 400 && /ungültig/.test(r.body?.error || ''), `${r.status} ${JSON.stringify(r.body)}`);
+    ok('   … das JPEG liegt unverändert da, die Einstellung zeigt weiter darauf, kein logo.png', hash('logo.jpg') === jpgHash && !liegt('logo.png')
+      && await einstellung() === '/uploads/logo.jpg' && await gesetzt() === jpgGesetzt && tmpReste().length === 0, `${await einstellung()} png=${liegt('logo.png')} ${tmpReste().join(', ')}`);
+    await req('DELETE', '/api/settings/logo', token);
 
     console.log('── F: Das neu geschriebene Logo landet im PDF ──');
     const pdf = async () => (await req('GET', `/api/pdf/export?user_id=${anm.user?.id}&date_from=2026-11-02&date_to=2026-11-08`, token));
