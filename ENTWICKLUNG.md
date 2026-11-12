@@ -5272,3 +5272,49 @@ einer Adresse aus dem Netz, nur ohne zweiten Rechner. Dazu `::1` für IPv6.
 Klarstellungen aus derselben Prüfung — der Chef ist über das Zurückspielen Herr über alle Daten (P7, bewusst so),
 und die Ablage ist für alle sichtbar (P11). **Offen:** Logo und App-Icon beim Hochladen neu kodieren; der Hinweis
 zur Ablage in der Oberfläche. **Noch nicht deployt.**
+
+---
+
+## Sicherheitsprüfung: Firmenlogo neu schreiben, Hinweis in der Ablage (11./12.11.2026)
+
+Die beiden Reste aus der Prüfung vom 10.11.2026 (P10, P11). Code `d4e5c57`, Test-Nachtrag `8103712`, Cache 458.
+
+**Logo — der Inhalt entscheidet, nicht die Endung.** Bisher zählte beim Logo nur der Dateiname; die Datei lag
+danach unverändert unter `/uploads/`, dem einzigen Ordner, den der Server ohne Anmeldung ausliefert. Jetzt liest
+`sharp` die Datei und schreibt sie neu. Gültig sind nur PNG und JPEG — gemessen an `metadata().format`. PNG bleibt
+PNG (Transparenz), JPEG bleibt JPEG, längste Seite höchstens 1000 px, nie vergrößert. Weil `sharp` ohne
+`keepMetadata` schreibt, fallen EXIF, Kommentare und Angehängtes weg; `.rotate()` wendet die Ausrichtung vorher an,
+sonst läge ein Hochkant-Foto nach dem Entfernen des Vermerks auf der Seite.
+
+**Erst das fertige Bild ersetzt das alte.** Die Datei landet in `uploads/tmp`, das neue Bild daneben, dann wird
+umbenannt. Einstellung, Aufräumen und Protokollzeile kommen danach. Ein Bild, das erst beim Schreiben scheitert
+(abgeschnittenes PNG: der Kopf ist lesbar, die Daten nicht), lässt so nichts zurück.
+
+**Alle drei Namen werden weggeräumt.** Frühere Fassungen legten unter der hochgeladenen Endung ab — `logo.png`,
+`logo.jpg` oder `logo.jpeg`. Wer von JPG auf PNG wechselte, ließ das alte Logo liegen und abrufbar. Jetzt heißt die
+Datei nach dem Inhalt `logo.png` oder `logo.jpg`, die anderen Namen werden gelöscht. Ein schon hochgeladenes Logo
+wird beim Update nicht angefasst.
+
+**App-Icon.** Lief schon durch `sharp` und wurde immer als PNG neu geschrieben; die Bugliste nannte es zu Unrecht
+„nicht neu kodiert". Über den Plan hinaus bekam es dieselbe Inhaltsprüfung: Ein SVG, GIF oder WebP mit der Endung
+`.png` wurde vorher stillschweigend umgewandelt, jetzt abgelehnt.
+
+**Tests schreiben ins echte `uploads/`.** Einen anderen Ort kennt der Server nicht. `logo-upload` und `doc-limits`
+merken sich deshalb die drei Logo-Dateien und schreiben sie am Ende zurück — sonst wäre das Logo des
+Entwicklungsservers nach jedem Lauf weg. Beim Icon legt der Test nichts ab (nur Ablehnungen).
+
+**Der Bestandstest.** `doc-limits` lud vier PNG-Kopfbytes mit Füllbytes als „kleines Logo" hoch. Das war der alte
+Weg; gemessen wird das Limit. Er nimmt jetzt ein echtes PNG.
+
+**Ablage.** Ein Satz in `renderDocuments()`, in jedem Ordner über der Liste: „Diese Ablage sehen alle
+Mitarbeiter." Wer ablegen darf, liest dazu, was nicht hineingehört. Der Test misst an der Schnittstelle mit, dass
+der Satz stimmt — bekäme die Ablage einmal Ordnerrechte, würde er rot und der Hinweis fiele auf.
+
+**Tests.** `logo-upload` (69), `ablage-hinweis-ui` (27), `doc-limits` (17). **Gegenproben 48/48 rot** (33 Logo und
+Icon, 2 Bestandstest, 13 Ablage). Zwei blieben zuerst grün:
+- „Zusatzdaten im PNG behalten": Die Vorlage trug einen Textblock, und den schreibt `sharp` auch mit
+  `keepMetadata` nicht zurück. EXIF im PNG (Block `eXIf`) schon — jetzt lädt der Test auch so eines hoch.
+- „Einstellung schon vor dem Schreiben setzen": Alle abgelehnten Dateien trafen auf ein PNG-Logo; die verfrühte
+  Einstellung zeigte auf denselben Namen wie vorher. Jetzt scheitert ein PNG zusätzlich über einem JPEG-Logo.
+
+Damit ist aus der Prüfung nichts mehr offen. **Noch nicht deployt.**

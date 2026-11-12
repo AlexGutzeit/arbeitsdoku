@@ -604,9 +604,34 @@ und wandern nach dem Beheben hierher.
 - **P11:** Die Dokumenten-Ablage kennt keine Rechte je Ordner; jeder Angemeldete kann jede Datei laden. Das README
   sagt, wofür sie gedacht ist und was nicht hineingehört.
 
-### [ ] Offen aus der Prüfung
-- **Logo und App-Icon** werden beim Hochladen noch nicht neu kodiert (Rest aus P10). Hochladen darf nur der Chef.
-- **Hinweis in der Ablage selbst** (P11): bisher nur im README.
+### [x] P10 (Rest) · Firmenlogo wird neu geschrieben statt durchgereicht — `d4e5c57`
+- **Vorher:** Beim Logo zählte nur die Endung. Was sich `logo.png` nannte, lag unverändert unter `/uploads/` — dem
+  einzigen Ordner, den der Server ohne Anmeldung ausliefert. Hochladen darf nur der Chef, ausgeliefert wird mit
+  `nosniff`; gering, aber unnötig.
+- **Jetzt** (`routes/settings.js`): Die Datei landet in `uploads/tmp`, `sharp` liest sie und schreibt sie neu.
+  - **Der Inhalt entscheidet**, nicht die Endung: nur echtes PNG oder JPEG. SVG, GIF, WebP, TIFF, HTML → 400.
+  - PNG bleibt PNG (Transparenz), JPEG bleibt JPEG; längste Seite höchstens **1000 px**, nie vergrößert.
+  - EXIF samt Standort, Kommentare und Angehängtes fallen weg; die Ausrichtung wird vorher angewendet.
+  - Abgelegt wird als `logo.png` oder `logo.jpg` nach dem Inhalt; ein Logo der anderen Endung wird weggeräumt
+    (vorher blieb es liegen und abrufbar). Erst das fertige Bild ersetzt das alte.
+  - Scheitert etwas, bleiben Einstellung, bisheriges Logo und Protokoll unverändert; `uploads/tmp` bleibt leer.
+  - **Ein schon hochgeladenes Logo wird nicht angefasst** — neu geschrieben wird beim nächsten Hochladen.
+- **App-Icon:** lief schon durch `sharp` und wurde immer als PNG neu geschrieben (die Zeile „noch nicht neu
+  kodiert" in dieser Liste war ungenau). Neu ist dort nur dieselbe Inhaltsprüfung: ein SVG/GIF/WebP mit der Endung
+  `.png` wird jetzt abgelehnt statt umgewandelt.
+- **Tests:** `logo-upload.js` (69). Bestandstest `doc-limits.js` lud vier PNG-Kopfbytes mit Füllbytes als „Logo"
+  hoch — das war der alte Weg; er nimmt jetzt ein echtes PNG und misst weiter „unter dem Limit geht es durch".
+  **Gegenproben 35/35 rot** (33 am neuen Test, 2 am Bestandstest). Zwei blieben zuerst grün und haben den Test
+  geschärft (`8103712`): „Zusatzdaten im PNG behalten" — die Vorlage trug nur einen Textblock, kein EXIF; und
+  „Einstellung schon vor dem Schreiben setzen" — die abgelehnten Dateien trafen immer auf ein PNG-Logo, die
+  verfrühte Einstellung zeigte also auf denselben Namen. Jetzt scheitert ein PNG zusätzlich über einem JPEG-Logo.
+
+### [x] P11 (Rest) · Hinweis in der Ablage selbst — `d4e5c57`, Cache 458
+- In jedem Ordner steht über der Liste: „Diese Ablage sehen alle Mitarbeiter." Wer ablegen darf (Chef, Admin,
+  Recht „Dateien hochladen"), liest dazu: „Bitte keine Lohnunterlagen, Verträge oder Krankmeldungen ablegen."
+- **Test:** `ablage-hinweis-ui.js` (27) — vier Rollen, Hauptordner und Unterordner, 360 px Breite; er misst an der
+  Schnittstelle mit, dass der Satz stimmt (ein Mitarbeiter ohne Recht sieht jeden Ordner).
+  **Gegenproben 13/13 rot.**
 
 ## Geprüft und in Ordnung
 
@@ -634,5 +659,5 @@ Damit diese Punkte nicht ein zweites Mal untersucht werden:
 den Browser-Zwischenspeicher) ist am 01.10.2026 um 22:06 deployt (`4f81a93`, Cache 443).
 
 **Sicherheitsprüfung 10.11.2026:** P1 und P6 (`d1de64c`, Cache 456), P2, P3 und P5 (`d2ad04b`, Cache 457) sowie P4, P8
-und P9 (`85aafe3`, ohne Änderung an der Oberfläche) sind behoben, **noch nicht deployt**. Offen: Logo-Upload neu
-kodieren, Hinweis in der Ablage.
+und P9 (`85aafe3`, ohne Änderung an der Oberfläche) sowie die Reste aus P10 und P11 (Firmenlogo neu schreiben, Hinweis
+in der Ablage; `d4e5c57`, Cache 458) sind behoben, **noch nicht deployt**. Aus der Prüfung ist nichts mehr offen.
