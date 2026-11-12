@@ -493,7 +493,7 @@ Eingaben, sonst Hinweis („Abbrechen" verwirft) — `klickDanebenSchliesst()`.
 Kennungen **P…**. Hier stehen nur **erledigte** Punkte; die offenen werden nicht öffentlich geführt
 und wandern nach dem Beheben hierher.
 
-### [x] P1 · Ein neues Passwort beendete bestehende Anmeldungen nicht — erledigt in `d1de64c` *(noch nicht deployt)*
+### [x] P1 · Ein neues Passwort beendete bestehende Anmeldungen nicht — erledigt in `d1de64c` *(deployt am 12.11.2026)*
 - **Was war:** Nach einem Passwortwechsel (selbst oder durch Chef/Admin) blieb jede schon bestehende Anmeldung gültig,
   bis sie von selbst ablief (3 Tage Leerlauf, höchstens 30 Tage). Gerade der Fall „Passwort geändert, weil Verdacht"
   schützte damit nicht. Der Widerruf war vorhanden („Auf allen Geräten abmelden"), wurde hier aber nicht benutzt.
@@ -505,7 +505,7 @@ und wandern nach dem Beheben hierher.
   zweiten Faktors) ließ sich so beliebig hinausschieben. Und die Antwort auf einen Widerruf konnte in `X-Neues-Token`
   noch ein Token mit dem alten Stand mitschicken.
 
-### [x] P6 · Live-Kanäle prüften Konto und Sitzung nicht — erledigt in `d1de64c` *(noch nicht deployt)*
+### [x] P6 · Live-Kanäle prüften Konto und Sitzung nicht — erledigt in `d1de64c` *(deployt am 12.11.2026)*
 - **Was war:** Der Ereigniskanal `/api/events` prüfte nur die Unterschrift des Tokens. Eine beendete Anmeldung oder
   ein ausgestelltes Konto bekam ihn weiter, und ein offener Kanal blieb bis zu einer Stunde stehen. Übertragen wird
   dort nur, *dass* sich etwas geändert hat (kein Inhalt) — Einfluss gering.
@@ -516,7 +516,7 @@ und wandern nach dem Beheben hierher.
   Inhalt). Und der Ereigniskanal ließ Konten durch, die den zweiten Faktor erst noch einrichten müssen.
 - **Tests:** `sitzung-widerruf` (64), `passwortwechsel-abmelden-ui` (28). **Gegenproben 16/16 rot**, jede an ihrer Stelle.
 
-### [x] P2 · CSV-Exporte gaben Formeln ungeschützt weiter — erledigt in `d2ad04b` *(noch nicht deployt)*
+### [x] P2 · CSV-Exporte gaben Formeln ungeschützt weiter — erledigt in `d2ad04b` *(deployt am 12.11.2026)*
 - **Was war:** Eine Zelle, die mit `=`, `+`, `-` oder `@` beginnt, wertet eine Tabellenkalkulation als Formel aus —
   auch in einer CSV-Datei. Freitext aus der App landet in drei Exporten (Audit-Log, Projekt-Einträge, Lohn), und der
   Benutzername einer **Fehlanmeldung** kommt sogar von jemandem, der gar nicht angemeldet ist. Die Anzeige in der
@@ -530,7 +530,7 @@ und wandern nach dem Beheben hierher.
 - **Tests:** `csv-formeln` (62) — die Regel als Tabelle, dann alle drei Exporte über die API mit einem eigenen
   CSV-Leser, der nicht die geprüfte Funktion benutzt.
 
-### [x] P3 · Anmeldung prüfte die Art der Eingaben nicht — erledigt in `d2ad04b` *(noch nicht deployt)*
+### [x] P3 · Anmeldung prüfte die Art der Eingaben nicht — erledigt in `d2ad04b` *(deployt am 12.11.2026)*
 - **Was war:** Benutzername oder Passwort als Objekt, Liste oder Zahl führte zu „Interner Serverfehler" (500) statt zu
   einer Ablehnung; dasselbe beim eigenen Passwortwechsel. Und ein beliebig langer Benutzername einer Fehlanmeldung
   wurde ungekürzt ins Audit-Log geschrieben — ohne Anmeldung ließ sich die Datenbank so aufblähen.
@@ -541,7 +541,7 @@ und wandern nach dem Beheben hierher.
   Name ist schlicht unbekannt (401), und eine Passwortgrenze könnte ein Konto mit sehr langem Passwort aussperren.
   Die Größe der Anfrage begrenzt ohnehin der Server.
 
-### [x] P5 · Die Anmeldebremse zählte nur je Adresse — erledigt in `d2ad04b` *(noch nicht deployt)*
+### [x] P5 · Die Anmeldebremse zählte nur je Adresse — erledigt in `d2ad04b` *(deployt am 12.11.2026)*
 - **Was war:** Zehn Fehlversuche je Adresse in 15 Minuten, dann Pause. Wer von vielen Adressen kam, konnte ein
   einzelnes Konto beliebig oft durchprobieren.
 - **Gelöst:** Zweite Bremse je **Benutzername** (`kontobremse.js`): fünf Versuche frei, danach wächst die Pause bis
@@ -562,7 +562,7 @@ und wandern nach dem Beheben hierher.
   allein die Bremse je Adresse. **Gegenproben für P2, P3 und P5 zusammen: 32/32 rot**
   (eine blieb zuerst grün — Tabulator ohne Formelzeichen dahinter; Test in `03b25bd` ergänzt).
 
-### [x] P4 · Der Server lauschte auf allen Adressen — erledigt in `85aafe3` *(noch nicht deployt)*
+### [x] P4 · Der Server lauschte auf allen Adressen — erledigt in `85aafe3` *(deployt am 12.11.2026)*
 - **Was war:** Die App glaubt dem vorgeschalteten Proxy, von welcher Adresse eine Anfrage kommt (Kopfzeile
   `X-Forwarded-For`). Ihr eigener Port nahm aber Verbindungen von überall an. Wer ihn direkt erreichte, konnte sich
   seine Adresse aussuchen — die Anmeldebremse je Adresse lief ins Leere, und im Audit-Log stand eine erfundene
@@ -577,7 +577,7 @@ und wandern nach dem Beheben hierher.
   erreicht sie nach dem Update erst wieder, wenn `LISTEN_HOST` gesetzt ist. Steht im README beim Update, in der
   Fehlerhilfe und in `.env.example`.
 
-### [x] P8 · Keine HSTS-Kopfzeile — erledigt in `85aafe3` *(noch nicht deployt)*
+### [x] P8 · Keine HSTS-Kopfzeile — erledigt in `85aafe3` *(deployt am 12.11.2026)*
 - **Was war:** Der Proxy leitet zwar von http auf https um, aber der erste Aufruf einer getippten Adresse ging jedes
   Mal unverschlüsselt hinaus — in einem fremden WLAN die Stelle, an der sich jemand dazwischensetzen kann.
 - **Gelöst:** Die App setzt `Strict-Transport-Security: max-age=31536000`, sobald die Anfrage über https kam. Der
@@ -586,7 +586,7 @@ und wandern nach dem Beheben hierher.
   jemand daran denken muss. **Ohne** `includeSubDomains` und `preload`: Unter derselben Domain können Dienste hängen,
   die kein https haben. Ohne https wird nichts gesetzt, also sperrt sich niemand aus.
 
-### [x] P9 · Unbekannte Adressen unter `/api` lieferten die Startseite — erledigt in `85aafe3` *(noch nicht deployt)*
+### [x] P9 · Unbekannte Adressen unter `/api` lieferten die Startseite — erledigt in `85aafe3` *(deployt am 12.11.2026)*
 - **Was war:** `GET /api/gibtsnicht` antwortete mit 200 und der HTML-Seite der App. Ein Tippfehler in einer Adresse
   oder eine entfernte Route sah für den Aufrufer aus wie eine gelungene Antwort.
 - **Gelöst:** Alles unter `/api`, das keine Route trifft, bekommt für **jede** Methode `404` als JSON mit dem
@@ -660,4 +660,5 @@ den Browser-Zwischenspeicher) ist am 01.10.2026 um 22:06 deployt (`4f81a93`, Cac
 
 **Sicherheitsprüfung 10.11.2026:** P1 und P6 (`d1de64c`, Cache 456), P2, P3 und P5 (`d2ad04b`, Cache 457) sowie P4, P8
 und P9 (`85aafe3`, ohne Änderung an der Oberfläche) sowie die Reste aus P10 und P11 (Firmenlogo neu schreiben, Hinweis
-in der Ablage; `d4e5c57`, Cache 458) sind behoben, **noch nicht deployt**. Aus der Prüfung ist nichts mehr offen.
+in der Ablage; `d4e5c57`, Cache 458) sind behoben und **deployt** (12.11.2026, 10:40, `fea3a90`, Cache 458). Aus der
+Prüfung ist nichts mehr offen.

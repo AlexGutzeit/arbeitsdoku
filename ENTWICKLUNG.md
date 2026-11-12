@@ -5169,7 +5169,7 @@ weg; sie braucht beim nächsten Anmelden den Code.
 setzt sein eigenes Passwort im Mitarbeiter-Dialog). **Gegenproben 16/16 rot** — jede Schutzstelle einzeln ausgebaut,
 darunter die Token-Übernahme der Oberfläche an beiden Stellen. Die erste Fassung des Browser-Tests war dabei nur durch
 eine Ausnahme rot (das Formular war schon weg); er fragt jetzt zuerst nach der Anmeldemaske. Cache 456.
-**Noch nicht deployt.**
+Deployt am 12.11.2026 mit den übrigen Paketen (Protokoll im letzten Abschnitt der Prüfung).
 
 ## Sicherheitsprüfung: Anmeldung prüft Eingaben, Bremse je Konto, CSV ohne Formeln (11.11.2026)
 
@@ -5221,7 +5221,7 @@ prüfte die Funktion sich selbst), `anmelde-bremse-ui` (8), `anmelde-bremse` (13
 **Gegenproben 32/32 rot** — jede Schutzstelle einzeln ausgebaut, auch jedes der vier Formelzeichen und jeder der drei
 Exporte für sich. Eine blieb zuerst grün: Tabulator und Wagenrücklauf aus dem Muster genommen. Die Tabelle kannte
 beide nur *vor* einem Gleichheitszeichen, und das fängt schon der Zweig für Leerraum; zwei Fälle ohne Formelzeichen
-dahinter ergänzt (`03b25bd`). Cache 457. **Noch nicht deployt.**
+dahinter ergänzt (`03b25bd`). Cache 457. Deployt am 12.11.2026 (Protokoll im letzten Abschnitt der Prüfung).
 
 ## Sicherheitsprüfung: Server lauscht nur lokal, HSTS, 404 unter /api (11.11.2026)
 
@@ -5271,7 +5271,7 @@ einer Adresse aus dem Netz, nur ohne zweiten Rechner. Dazu `::1` für IPv6.
 **README** dazu: `LISTEN_HOST` an vier Stellen (Konfiguration, Produktivbetrieb, Update, Fehlerhilfe) und zwei
 Klarstellungen aus derselben Prüfung — der Chef ist über das Zurückspielen Herr über alle Daten (P7, bewusst so),
 und die Ablage ist für alle sichtbar (P11). **Offen:** Logo und App-Icon beim Hochladen neu kodieren; der Hinweis
-zur Ablage in der Oberfläche. **Noch nicht deployt.**
+zur Ablage in der Oberfläche — beides im nächsten Abschnitt. Deployt am 12.11.2026 (Protokoll dort).
 
 ---
 
@@ -5317,4 +5317,17 @@ Icon, 2 Bestandstest, 13 Ablage). Zwei blieben zuerst grün:
 - „Einstellung schon vor dem Schreiben setzen": Alle abgelehnten Dateien trafen auf ein PNG-Logo; die verfrühte
   Einstellung zeigte auf denselben Namen wie vorher. Jetzt scheitert ein PNG zusätzlich über einem JPEG-Logo.
 
-Damit ist aus der Prüfung nichts mehr offen. **Noch nicht deployt.**
+Damit ist aus der Prüfung nichts mehr offen.
+
+**Deploy (12.11.2026, 10:40, `fea3a90`, Cache 458) — alle vier Pakete der Sicherheitsprüfung zusammen.** Suite 297/297
+auf der Kopie von 05:41, alle 20 Prod-Klon-Tests dabei; übersprungen nur die vier Vergleichstests, die einen alten
+Codestand unter `/tmp` brauchen. Sicherung `arbeitsdoku_backup_20261112-103839.adbk` (dreifach, gleiche Prüfsumme,
+Rückspielprobe: 13 Konten, 1774 Einträge, Integrität ok). Rückkehrpunkt `vor-sicherheit-deploy` (= `62b0918`).
+Vorher nur lesend nachgesehen, weil der Server jetzt allein auf 127.0.0.1 lauscht: Auf der Hauptanlage spricht nur der
+Proxy den Port an, und `localhost` löst dort auf 127.0.0.1 und ::1 auf; auf der Zweitanlage gehen Notfall-Umschalten,
+Wiederherstellungs-Übung und Probestart ebenfalls über `localhost`.
+Danach: IPv4+IPv6 200, Cache 458 in `sw.js`, `index.html` und `gast.html`, Hinweis der Ablage im ausgelieferten Skript,
+der Server lauscht auf `127.0.0.1:3000` (vorher `*:3000`), HSTS-Kopfzeile da, kein `x-powered-by`, `/api/gibtsnicht` →
+404 als JSON, Anmeldung mit einem Objekt als Passwort → 400, Ereigniskanal ohne Token → 401, Protokoll ohne Fehler,
+Zweitanlage Probestart ok, Datenbank 60/60 Tabellen, keine Zeile verändert. Das bestehende Firmenlogo blieb unberührt —
+neu geschrieben wird erst beim nächsten Hochladen.
