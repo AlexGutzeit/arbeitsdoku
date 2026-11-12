@@ -1245,6 +1245,7 @@ async function renderPlanningForm(editId, replanId, editGroupId, fromProjectId) 
       ft.disabled = false;
     }
   });
+  projektAuswahl('pf-project', 'pf-project-text');   // tippen filtert, Freitext-Angebot unten
 
   document.getElementById('pf-nav').addEventListener('click', () => {
     const addr = document.getElementById('pf-address').value.trim();
@@ -1626,6 +1627,7 @@ async function renderTools() {
             projText.disabled = false;
           }
         });
+        projektAuswahl(projSel, projText, projects);
       }
     });
   });

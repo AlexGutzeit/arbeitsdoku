@@ -1969,7 +1969,47 @@ async function projektNotizVorschau(tile) {
   feld.innerHTML = d.notiz && d.notiz.hat_inhalt ? notizHtml(d.notiz.body_delta, d.notiz.body) : '<span class="proj-notiz-leer">Noch leer.</span>';
 }
 
+// ── Suche im Board (Alex, 12.11.2026) ──
+// Wie die Listensuche (sucheTrifft: alle Woerter, beliebige Reihenfolge), aber mit Spalten:
+// Kacheln ohne Treffer fallen weg, die Zahl am Spaltenkopf zaehlt nur noch die Treffer, und
+// Spalten ganz ohne Treffer verschwinden — sonst wischt man auf dem Handy durch leere Spalten.
+// Eine Kachel kann in mehreren Spalten stehen; „x von y" zaehlt jeden Auftrag nur einmal.
+function boardSucheAnwenden(mainEl) {
+  const aktiv = !!sucheBegriff('board');
+  const treffer = new Set(), alle = new Set();
+  mainEl.querySelectorAll('.board-col').forEach(col => {
+    let sichtbar = 0;
+    col.querySelectorAll('.proj-tile').forEach(t => {
+      alle.add(t.dataset.id);
+      const ok = sucheTrifft('board', t.dataset.suchtext);
+      t.style.display = ok ? '' : 'none';
+      if (ok) { sichtbar++; treffer.add(t.dataset.id); }
+    });
+    col.style.display = aktiv && !sichtbar ? 'none' : '';
+    const z = col.querySelector('.board-count');
+    if (z) z.textContent = aktiv ? sichtbar : z.dataset.gesamt;
+  });
+  sucheAnzahl('board', treffer.size, alle.size);
+  const leer = mainEl.querySelector('.board-suche-leer');
+  if (leer) {
+    leer.hidden = !(aktiv && !treffer.size);
+    leer.textContent = 'Kein Auftrag passt zu „' + (_listenSuche.board || '').trim() + '".';
+  }
+}
+function boardSucheBinden(mainEl, fokus) {
+  const el = document.getElementById('ls-board');
+  if (!el) return;
+  const anwenden = () => { _listenSuche.board = el.value; boardSucheAnwenden(mainEl); };
+  el.addEventListener('input', anwenden);
+  el.addEventListener('search', anwenden);
+  boardSucheAnwenden(mainEl);
+  if (fokus) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+}
+
 async function renderProjects() {
+  // Ein Live-Update zeichnet das Board neu — wer gerade sucht, soll im Suchfeld bleiben.
+  // Hier ganz oben merken: gleich darunter ersetzt der Lade-Kreisel das Feld schon.
+  const sucheHatteFokus = !!document.activeElement && document.activeElement.id === 'ls-board';
   // Aus einer Meldung (Projektnotiz) gekommen: die Kachel aufgeklappt zeichnen (29.09.2026)
   if (S._projektZiel != null) _expandedProjects.add(String(S._projektZiel));
   const manage = isChefOrAdmin();
@@ -2126,7 +2166,12 @@ async function renderProjects() {
     const pn = p.notiz;
     const pnDrin = pn ? (pn.live || []).filter(n => n !== S.user.name) : [];
     const pnMarke = `${pn && pn.hat_inhalt ? '<span class="proj-notiz-marke" title="Projektnotiz vorhanden" aria-label="Projektnotiz vorhanden">&#128221;</span>' : ''}${pnDrin.length ? `<span class="badge notiz-drin" title="Gerade in der Projektnotiz">&#9998; ${pnDrin.map(esc).join(', ')}</span>` : ''}`;
-    return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}${expanded ? ' expanded' : ''}" data-id="${p.id}" style="border-left:5px solid ${u.color}">
+    // Suchtext: alles, was man auf der Kachel sieht oder aufklappt — Name, Kunde, Adresse, Kurzinfo,
+    // Kategorien, Zugeteilte und Zwischenziele
+    const suchtext = [p.name, p.client, p.address, p.note,
+      ...(p.categories || []).map(k => k.name), ...(p.assigned_users || []).map(x => x.name),
+      ...ms.map(m => m.title)].filter(Boolean).join(' ');
+    return `<div class="proj-tile${showDone ? ' proj-tile-done' : ''}${expanded ? ' expanded' : ''}" data-id="${p.id}" data-suchtext="${esc(suchtext)}" style="border-left:5px solid ${u.color}">
       <div class="proj-tile-top"><span class="proj-name">${esc(p.name)}</span>${pnMarke}${flag}</div>
       ${p.client ? `<div class="proj-client">${esc(p.client)}</div>` : ''}
       ${(plakMA.length || plakKats.length)
@@ -2161,7 +2206,7 @@ async function renderProjects() {
         c.kat ? '<span class="board-kat-zeichen" aria-hidden="true">▦</span> '
               : (c.id ? avatarHtml({ id: c.id, name: c.name }, 20) + ' ' : '')
       }${esc(c.name)}${c.aus ? ' <span class="board-aus">ausgeschieden</span>' : ''}${
-        c.list.length ? ` <span class="board-count">${c.list.length}</span>` : ''
+        c.list.length ? ` <span class="board-count" data-gesamt="${c.list.length}">${c.list.length}</span>` : ''
       }${c.kat && manage ? `
         <span class="board-kat-tools">
           <button class="btn-icon kat-um" data-id="${c.katId}" data-name="${esc(c.name)}" title="Umbenennen" aria-label="${esc(c.name)} umbenennen">&#9998;</button>
@@ -2195,9 +2240,12 @@ async function renderProjects() {
         ${zeigtKat && manage ? '<button class="btn btn-sm btn-outline" id="kat-neu">+ Kategorie</button>' : ''}
         ${manage ? `<button class="btn btn-sm btn-outline" id="board-archive-toggle">${showDone ? '← Offene Aufträge' : 'Erledigte anzeigen'}</button>` : ''}
       </div>
+      <div class="board-suche">${listenSucheHtml('board', 'Aufträge durchsuchen (Name, Kunde, Adresse, Mitarbeiter …)')}</div>
       ${legendHtml}
       <div class="board-scroll"><div class="board-columns">${colsHtml}</div></div>
+      <div class="empty-state board-suche-leer" hidden></div>
     </div>`;
+  boardSucheBinden(mainEl, sucheHatteFokus);
   // Im Archiv kein „Neues Projekt"-FAB anbieten
   if (showDone) { const fab = document.getElementById('fab-new'); if (fab) fab.style.display = 'none'; }
 

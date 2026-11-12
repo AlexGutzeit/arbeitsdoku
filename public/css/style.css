@@ -1441,6 +1441,36 @@ input.pw-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 1px
 .list-search-input { flex: 1; min-width: 0; }
 .list-search-count { font-size: 0.82rem; color: var(--text-light); white-space: nowrap; flex-shrink: 0; }
 
+/* Auswahl mit Suche (12.11.2026): das alte <select> bleibt als Wertquelle, nur unsichtbar */
+select.such-auswahl-quelle { display: none !important; }
+.such-auswahl { position: relative; min-width: 0; }
+.filters .such-auswahl { flex: 1; }
+.such-auswahl .such-auswahl-feld { width: 100%; padding-right: 2rem; text-overflow: ellipsis; }   /* schlägt .filters input */
+.such-auswahl-x {
+  position: absolute; right: 0.3rem; top: 50%; transform: translateY(-50%);
+  background: none; border: 0; font-size: 1.2rem; line-height: 1; padding: 0.2rem 0.35rem;
+  color: var(--text-light); cursor: pointer;
+}
+.such-auswahl-x[hidden] { display: none; }
+.such-auswahl-liste {
+  position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 60;
+  margin: 0; padding: 0.25rem 0; list-style: none;
+  background: var(--card); border: 1.5px solid var(--border); border-radius: 8px; box-shadow: var(--shadow);
+  max-height: min(18rem, 45vh); overflow-y: auto; overscroll-behavior: contain;
+}
+.such-auswahl-liste[hidden] { display: none; }
+.such-auswahl-liste li { padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.92rem; }
+.such-auswahl-liste li small { color: var(--text-light); margin-left: 0.3rem; }
+.such-auswahl-liste li.gewaehlt { font-weight: 600; }
+.such-auswahl-liste li.aktiv, .such-auswahl-liste li[data-i]:hover { background: var(--primary-light, rgba(37, 99, 235, 0.1)); }
+.such-auswahl-liste li.such-auswahl-leer { color: var(--text-light); }
+.such-auswahl-liste li.such-auswahl-frei { border-top: 1px solid var(--border); font-style: italic; color: var(--primary); }
+.such-auswahl-liste li.such-auswahl-nichts { color: var(--text-light); cursor: default; }
+/* Board-Suche: Spalten ohne Treffer fallen waehrend der Suche weg */
+.board-suche { padding: 0 0.25rem; max-width: 30rem; }
+.board-suche .list-search { margin-bottom: 0.6rem; }
+.board-suche-leer[hidden] { display: none; }
+
 /* Entwurfs-Leiste (B4): oben im Formular, wenn ein ungespeicherter Entwurf vorliegt */
 .draft-bar {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem;

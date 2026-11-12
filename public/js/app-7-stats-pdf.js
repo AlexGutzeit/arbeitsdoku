@@ -87,6 +87,7 @@ function pdfFormularBinden() {
     if (r) { feld('pdf-from').value = r.from; feld('pdf-to').value = r.to; }
     mitarbeiterZumZeitraum();
   });
+  projektAuswahl(feld('pdf-project'));
   feld('pdf-from').addEventListener('change', mitarbeiterZumZeitraum);
   feld('pdf-to').addEventListener('change', mitarbeiterZumZeitraum);
 

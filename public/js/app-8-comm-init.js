@@ -1120,6 +1120,7 @@ async function renderNotizen() {
     document.getElementById('note-list').innerHTML = renderNoteList(filterNotizen());
     bindNoteEvents();
   });
+  projektAuswahl('note-filter-project');
   document.getElementById('note-filter-search').addEventListener('input', (e) => {
     _notizenFilter.search = e.target.value;
     document.getElementById('note-list').innerHTML = renderNoteList(filterNotizen());
@@ -1400,6 +1401,7 @@ function showNoteForm() {
       projSelect.value = '';
     }
   });
+  projektAuswahl(projSelect, projTextInput);
 
   document.getElementById('nf-cancel').addEventListener('click', () => { entwurfLoeschen(nfEntwurf); renderNotizen(); });   // Abbrechen verwirft (R28)
   const nfEntwurf = 'notiz:neu';

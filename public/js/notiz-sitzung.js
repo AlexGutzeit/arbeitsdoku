@@ -657,6 +657,8 @@ function notizSitzungStarten(id, weg = notizWegeApp(id)) {
   const wEl = $('notiz-projekt-wahl'), fEl = $('notiz-projekt-text');
   if (wEl) wEl.addEventListener('change', () => { if (fEl) { if (wEl.value) fEl.value = ''; fEl.disabled = !!wEl.value; } kopfSpeichern(); });
   if (fEl) fEl.addEventListener('input', kopfSpeichernBald);
+  // Auswahl mit Suche — nur in der App; die Gaesteseite kennt den Baustein nicht (und hat kein Projektfeld)
+  if (wEl && typeof projektAuswahl === 'function') projektAuswahl(wEl, fEl);
 
   // ─── Verbindung ───────────────────────────────────────────────────────────────────────────
   async function verbinden() {

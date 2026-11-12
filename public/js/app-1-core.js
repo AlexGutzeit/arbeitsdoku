@@ -1837,6 +1837,215 @@ function sucheAnzahl(key, sichtbar, gesamt) {
 }
 
 // ================================================================
+// Auswahl mit Suche (Alex, 12.11.2026)
+// ================================================================
+// Ein langes Projekt-Dropdown heisst: wischen, wischen, wischen. Jetzt tippt man in die Zeile,
+// und jeder Buchstabe filtert die Liste weiter — dieselbe Wortregel wie die Listensuche.
+//
+// Das ALTE <select> bleibt im Formular, nur unsichtbar, und ist weiterhin die einzige Quelle des
+// Werts. Alles, was daran haengt — Freitext sperren, Adresse/Kunde uebernehmen, Projektbereich,
+// Speichern, Entwurfs-Sicherung, Tests mit page.select — laeuft dadurch unveraendert weiter.
+// Damit die Anzeige auch Werte mitbekommt, die Code OHNE Ereignis setzt (Entwurf, Live-Notiz,
+// „Freitext leert die Auswahl"), haengt sich der Baustein an value/selectedIndex/disabled
+// genau DIESES einen Elements.
+//
+// opt.freitext:  Freitext-Feld daneben. Dann bietet die Liste „„xyz" als Freitext übernehmen" an.
+// opt.suchtext:  value → weiterer durchsuchbarer Text (z. B. Kunde, Adresse)
+// opt.nebentext: value → kleiner grauer Zusatz in der Liste (z. B. Kunde)
+let _suchAuswahlNr = 0;
+function suchAuswahl(sel, opt = {}) {
+  if (typeof sel === 'string') sel = document.getElementById(sel);
+  if (!sel || sel._suchAuswahl) return;
+  const nr = ++_suchAuswahlNr;
+  const ft = typeof opt.freitext === 'string' ? document.getElementById(opt.freitext) : opt.freitext;
+
+  const huelle = document.createElement('div');
+  huelle.className = 'such-auswahl';
+  const feld = document.createElement('input');
+  feld.type = 'text';
+  feld.className = (sel.className + ' such-auswahl-feld').trim();
+  feld.id = (sel.id || 'such-auswahl-' + nr) + '-suche';
+  feld.autocomplete = 'off';
+  feld.spellcheck = false;
+  feld.dataset.keinEntwurf = '1';
+  feld.setAttribute('role', 'combobox');
+  feld.setAttribute('aria-autocomplete', 'list');
+  feld.setAttribute('aria-expanded', 'false');
+  const liste = document.createElement('ul');
+  liste.className = 'such-auswahl-liste';
+  liste.id = feld.id + '-liste';
+  liste.setAttribute('role', 'listbox');
+  liste.hidden = true;
+  feld.setAttribute('aria-controls', liste.id);
+  const leeren = document.createElement('button');
+  leeren.type = 'button';
+  leeren.className = 'such-auswahl-x';
+  leeren.innerHTML = '&times;';
+  leeren.tabIndex = -1;
+  leeren.setAttribute('aria-label', 'Auswahl leeren');
+  huelle.append(feld, leeren, liste);
+  sel.classList.add('such-auswahl-quelle');
+  sel.tabIndex = -1;
+  sel.setAttribute('aria-hidden', 'true');
+  sel.after(huelle);
+
+  // Beschriftung: <label for> zeigt jetzt auf die Suchzeile, sonst traegt die Zeile den Text selbst
+  const lbl = sel.id ? document.querySelector(`label[for="${CSS.escape(sel.id)}"]`) : null;
+  if (lbl) lbl.htmlFor = feld.id;
+  else {
+    const gruppe = sel.closest('.form-group');
+    const l = gruppe && gruppe.querySelector('label');
+    feld.setAttribute('aria-label', (l ? l.textContent.trim() : (sel.options[0] ? sel.options[0].textContent.replace(/-/g, '').trim() : 'Auswahl')));
+  }
+
+  const leerText = () => { const o = [...sel.options].find(x => x.value === ''); return o ? o.textContent.replace(/^-+\s*|\s*-+$/g, '') : ''; };
+  let offen = false, getippt = false, aktiv = -1, eintraege = [];
+
+  const anzeigen = () => {
+    feld.disabled = sel.disabled;
+    const o = sel.options[sel.selectedIndex];
+    leeren.hidden = sel.disabled || !sel.value;
+    const name = o && o.value !== '' ? o.textContent : '';
+    if (offen) {   // offen: nicht unter den Fingern wegschreiben, nur der Platzhalter folgt
+      feld.placeholder = name || leerText() || 'Suchen …';
+      return;
+    }
+    feld.value = name;
+    feld.placeholder = (leerText() || 'Auswahl') + ' – tippen zum Suchen';
+  };
+
+  // Werte, die Code ohne Ereignis setzt, landen trotzdem in der Anzeige
+  for (const prop of ['value', 'selectedIndex', 'disabled']) {
+    const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, prop);
+    Object.defineProperty(sel, prop, {
+      configurable: true,
+      get() { return d.get.call(this); },
+      set(v) { d.set.call(this, v); anzeigen(); },
+    });
+  }
+
+  const melden = () => {
+    sel.dispatchEvent(new Event('input', { bubbles: true }));
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const waehlen = (wert) => {
+    const vorher = sel.value;
+    sel.value = wert;
+    schliessen();
+    if (sel.value !== vorher) melden();
+  };
+  const freitextUebernehmen = (text) => {
+    if (sel.value !== '') { sel.value = ''; melden(); }
+    schliessen();
+    ft.disabled = false;
+    ft.value = text;
+    ft.dispatchEvent(new Event('input', { bubbles: true }));
+    ft.focus();
+  };
+
+  const zeichnen = () => {
+    const q = getippt ? feld.value.trim().toLowerCase() : '';
+    const woerter = q ? q.split(/\s+/) : [];
+    eintraege = [];
+    for (const o of sel.options) {
+      if (o.disabled) continue;
+      if (woerter.length) {
+        if (o.value === '') continue;   // „Kein Projekt"/„Alle" nur ohne Suchbegriff
+        const heu = (o.textContent + ' ' + (opt.suchtext ? opt.suchtext(o.value) || '' : '')).toLowerCase();
+        if (!woerter.every(w => heu.includes(w))) continue;
+      }
+      eintraege.push({ wert: o.value, text: o.textContent, neben: opt.nebentext ? opt.nebentext(o.value) : '' });
+    }
+    const roh = feld.value.trim();
+    if (ft && getippt && roh && !eintraege.some(e => e.text.trim().toLowerCase() === q)) {
+      eintraege.push({ frei: roh });
+    }
+    if (aktiv >= eintraege.length) aktiv = eintraege.length - 1;
+    if (aktiv < 0 && woerter.length && eintraege.length) aktiv = 0;
+    liste.innerHTML = eintraege.length ? eintraege.map((e, i) => e.frei
+      ? `<li role="option" id="${liste.id}-${i}" class="such-auswahl-frei${i === aktiv ? ' aktiv' : ''}" data-i="${i}" aria-selected="${i === aktiv}">„${esc(e.frei)}" als Freitext übernehmen</li>`
+      : `<li role="option" id="${liste.id}-${i}" class="${e.wert === '' ? 'such-auswahl-leer' : ''}${i === aktiv ? ' aktiv' : ''}${e.wert === sel.value ? ' gewaehlt' : ''}" data-i="${i}" aria-selected="${i === aktiv}">${esc(e.text)}${e.neben ? ` <small>${esc(e.neben)}</small>` : ''}</li>`).join('')
+      : '<li class="such-auswahl-nichts" aria-disabled="true">Kein Treffer</li>';
+    if (aktiv >= 0) {
+      feld.setAttribute('aria-activedescendant', `${liste.id}-${aktiv}`);
+      const li = liste.querySelector('.aktiv');
+      if (li) li.scrollIntoView({ block: 'nearest' });
+    } else feld.removeAttribute('aria-activedescendant');
+  };
+  const oeffnen = () => {
+    if (offen || sel.disabled) return;
+    offen = true; getippt = false;
+    // Zeile leeren, die bisherige Wahl steht grau als Platzhalter: So filtert der erste
+    // Buchstabe sofort, statt hinten an den alten Namen angehaengt zu werden.
+    feld.value = '';
+    anzeigen();
+    aktiv = [...sel.options].filter(o => !o.disabled).findIndex(o => o.value === sel.value);
+    zeichnen();
+    liste.hidden = false;
+    feld.setAttribute('aria-expanded', 'true');
+  };
+  function schliessen() {
+    if (!offen) { anzeigen(); return; }
+    offen = false; getippt = false; aktiv = -1;
+    liste.hidden = true;
+    feld.setAttribute('aria-expanded', 'false');
+    feld.removeAttribute('aria-activedescendant');
+    anzeigen();
+  }
+  const nehmen = (i) => {
+    const e = eintraege[i];
+    if (!e) return;
+    if (e.frei) freitextUebernehmen(e.frei); else waehlen(e.wert);
+  };
+
+  feld.addEventListener('focus', oeffnen);
+  feld.addEventListener('click', oeffnen);
+  feld.addEventListener('input', () => {
+    if (!offen) { const t = feld.value; oeffnen(); feld.value = t; }
+    getippt = true; aktiv = -1;
+    zeichnen();
+  });
+  // Weggeklickt ohne Wahl: die bisherige Auswahl bleibt — nichts geht versehentlich verloren
+  feld.addEventListener('blur', schliessen);
+  feld.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!offen) { oeffnen(); return; }
+      if (!eintraege.length) return;
+      aktiv = e.key === 'ArrowDown' ? Math.min(aktiv + 1, eintraege.length - 1) : Math.max(aktiv - 1, 0);
+      zeichnen();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();   // nie das Formular abschicken
+      if (!offen) oeffnen(); else if (aktiv >= 0) nehmen(aktiv);
+    } else if (e.key === 'Escape' && offen) {
+      e.stopPropagation();  // nur die Liste schliessen, nicht den Dialog drumherum
+      schliessen();
+    }
+  });
+  // mousedown abfangen: sonst verliert die Zeile den Fokus, bevor der Klick ankommt
+  liste.addEventListener('mousedown', (e) => e.preventDefault());
+  liste.addEventListener('click', (e) => {
+    const li = e.target.closest('li[data-i]');
+    if (li) nehmen(Number(li.dataset.i));
+  });
+  leeren.addEventListener('mousedown', (e) => e.preventDefault());
+  leeren.addEventListener('click', () => { waehlen(''); });
+  sel.addEventListener('change', anzeigen);
+
+  sel._suchAuswahl = { schliessen, feld };
+  anzeigen();
+}
+// Projekt-Auswahl: sucht auch im Kunden und in der Adresse, zeigt den Kunden klein daneben
+function projektAuswahl(sel, freitext, projekte) {
+  const finde = (v) => (projekte || S.projects || []).find(p => String(p.id) === String(v));
+  suchAuswahl(sel, {
+    freitext,
+    suchtext: (v) => { const p = finde(v); return p ? [p.client, p.address].filter(Boolean).join(' ') : ''; },
+    nebentext: (v) => { const p = finde(v); return p && p.client ? p.client : ''; },
+  });
+}
+
+// ================================================================
 // Entwurfs-Sicherung fuer Formulare (B4)
 // ================================================================
 // Warum ueberhaupt: Kommt waehrend des Ausfuellens ein Anruf, geht die App in den Hintergrund.

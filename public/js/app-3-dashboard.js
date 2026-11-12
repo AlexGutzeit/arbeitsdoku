@@ -276,6 +276,7 @@ async function renderDashboardContent() {
   document.getElementById('date-today')?.addEventListener('click', () => { S.currentDate = new Date(); renderDashboardContent(); });
   // Filters
   document.getElementById('filter-project')?.addEventListener('change', (e) => { S.filterProjectId = e.target.value; renderDashboardContent(); });
+  projektAuswahl('filter-project');
   document.getElementById('filter-regie')?.addEventListener('change', (e) => { S.filterRegie = e.target.value; renderDashboardContent(); });
   document.getElementById('filter-absence-type')?.addEventListener('change', (e) => { S.filterAbsenceType = e.target.value; renderDashboardContent(); });
   let searchTimeout;
@@ -1743,6 +1744,7 @@ async function renderEntryForm(editId, continueId, planningId, fromProjectId) {
       ft.disabled = false;
     }
   });
+  projektAuswahl('ef-project', 'ef-project-text');   // tippen filtert, Freitext-Angebot unten
 
   document.getElementById('ef-nav').addEventListener('click', () => {
     const addr = document.getElementById('ef-address').value.trim();
