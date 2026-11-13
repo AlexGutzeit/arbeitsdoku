@@ -1964,7 +1964,7 @@ function suchAuswahl(sel, opt = {}) {
     if (aktiv < 0 && woerter.length && eintraege.length) aktiv = 0;
     liste.innerHTML = eintraege.length ? eintraege.map((e, i) => e.frei
       ? `<li role="option" id="${liste.id}-${i}" class="such-auswahl-frei${i === aktiv ? ' aktiv' : ''}" data-i="${i}" aria-selected="${i === aktiv}">„${esc(e.frei)}" als Freitext übernehmen</li>`
-      : `<li role="option" id="${liste.id}-${i}" class="${e.wert === '' ? 'such-auswahl-leer' : ''}${i === aktiv ? ' aktiv' : ''}${e.wert === sel.value ? ' gewaehlt' : ''}" data-i="${i}" aria-selected="${i === aktiv}">${esc(e.text)}${e.neben ? ` <small>${esc(e.neben)}</small>` : ''}</li>`).join('')
+      : `<li role="option" id="${liste.id}-${i}" class="${e.wert === '' ? 'such-auswahl-leer' : ''}${i === aktiv ? ' aktiv' : ''}${e.wert === sel.value ? ' aktuelle-wahl' : ''}" data-i="${i}" aria-selected="${i === aktiv}">${esc(e.text)}${e.neben ? ` <small>${esc(e.neben)}</small>` : ''}</li>`).join('')
       : '<li class="such-auswahl-nichts" aria-disabled="true">Kein Treffer</li>';
     if (aktiv >= 0) {
       feld.setAttribute('aria-activedescendant', `${liste.id}-${aktiv}`);

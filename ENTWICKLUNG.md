@@ -5331,3 +5331,48 @@ der Server lauscht auf `127.0.0.1:3000` (vorher `*:3000`), HSTS-Kopfzeile da, ke
 404 als JSON, Anmeldung mit einem Objekt als Passwort → 400, Ereigniskanal ohne Token → 401, Protokoll ohne Fehler,
 Zweitanlage Probestart ok, Datenbank 60/60 Tabellen, keine Zeile verändert. Das bestehende Firmenlogo blieb unberührt —
 neu geschrieben wird erst beim nächsten Hochladen.
+
+---
+
+## Projekte suchen: Board-Suchleiste und Projekt-Auswahl mit Suche (12.11.2026)
+
+Wunsch: eine Suchleiste im Board und eine Suche in der Projekt-Auswahl — „nach jedem Buchstaben wird die Liste weiter
+gefiltert". Code `c42fc21`, Handy-Nachtrag `a41db38`, Cache 460.
+
+**Das alte `<select>` bleibt stehen.** `suchAuswahl()` in `app-1-core.js` legt eine Tippzeile mit Liste daneben und
+blendet das Dropdown nur aus. Es bleibt die einzige Quelle des Werts. An ihm hängt an neun Stellen Unterschiedliches:
+Freitext sperren, Kunde/Adresse/Notiz übernehmen, Projektbereich im Zeitnachweis, Speichern, Entwurfs-Sicherung,
+Live-Notiz, Tests mit `page.select`. Ein Neubau hätte jede dieser Stellen anfassen müssen; so läuft alles unverändert.
+
+**Werte ohne Ereignis.** Einige Stellen setzen den Wert, ohne `change` zu melden: die Entwurfs-Sicherung, die
+Live-Notiz (`kopfZeigen`), „Tippen im Freitext leert die Auswahl" bei der neuen Notiz, `disabled` bei Nur-Lesen.
+Die Anzeige hätte dann den alten Namen gezeigt. Der Baustein überschreibt deshalb `value`, `selectedIndex` und
+`disabled` — nur an genau diesem einen Element, nicht am Prototyp — und zeichnet nach jedem Setzen neu.
+
+**Beim Öffnen leert sich die Zeile.** Geplant war: Name markieren, Tippen ersetzt ihn. Verworfen, bevor es getestet
+war — eine im `focus` gesetzte Markierung kann der Browser beim Loslassen der Maus wieder aufheben, dann hinge der
+erste Buchstabe hinten am alten Namen (nicht gemessen, nur vermieden). Jetzt steht der alte Name grau als Platzhalter;
+wegklicken ohne Wahl stellt ihn wieder her.
+
+**Freitext-Angebot.** Wo ein Freitext-Feld daneben steht (Zeitnachweis, Planung, neue und offene Notiz, Werkzeug),
+steht unten „„…" als Freitext übernehmen" — auch neben Treffern, außer der Text trifft einen Namen genau. Filter
+(Zeitnachweis-Liste, PDF, Notizen) haben keins.
+
+**Board.** Suchtext je Kachel aus Name, Kunde, Adresse, Kurzinfo, Kategorien, Zugeteilten, Zwischenzielen. Spalten
+ohne Treffer fallen weg, „x von y" zählt jeden Auftrag einmal (eine Kachel steht oft in mehreren Spalten). Der Test
+fand einen echten Fehler: Nach einem Live-Neuaufbau war der Fokus weg. Gemerkt wurde er kurz vor dem Neuzeichnen —
+da hatte der Lade-Kreisel das Feld schon ersetzt. Jetzt ganz oben in `renderProjects()`.
+
+**Handy.** Beim Antippen (nur `pointer: coarse`) rollt die Zeile unter die Kopfleiste. Erster Versuch blieb stehen:
+gemessen 327 px Rollweg möglich, rund 650 nötig — unter dem Formular ist zu wenig Seite. Solange die Liste offen ist,
+hängt deshalb ein unsichtbarer Platzhalter (eine Fensterhöhe) an `body`; er geht beim Schließen und bei `hashchange`.
+Die Listenhöhe richtet sich überall nach dem Platz bis zur Unterkante von `visualViewport`, also auch bis zur
+Tastatur. **Messgrenze:** Puppeteer kann eine Tastatur, die *über* der Seite liegt, nicht nachstellen; getestet ist
+nur das Schrumpfen der ganzen Seite. Die Höhenregel ist deshalb ersatzweise am PC belegt (Zeile weit unten im
+Fenster) — dort war die alte CSS-Grenze (45 % der Höhe) wirklich zu groß.
+
+**Tests.** `projekt-suche-ui` (58) über alle neun Stellen, Board, Tastatur, Klick, Handy. Gegenproben: ohne App-Code
+rot; ohne Hochrollen 3 rot; ohne Höhenregel 1 rot. **Grün geblieben** ist das Abschalten des Aufräumens bei
+`hashchange`: Chrome meldet beim Entfernen des Felds selbst ein `blur`. Die drei Zeilen bleiben als Schutz für andere
+Browser, belegt sind sie nicht. Eine Falle beim Bestandslauf: unter zsh trennt `for t in $T` nicht in Wörter — alle
+31 Pfade gingen als ein Argument an node und meldeten einen falschen roten Test.
