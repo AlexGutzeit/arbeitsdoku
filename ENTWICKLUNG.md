@@ -5376,3 +5376,14 @@ rot; ohne Hochrollen 3 rot; ohne Höhenregel 1 rot. **Grün geblieben** ist das 
 `hashchange`: Chrome meldet beim Entfernen des Felds selbst ein `blur`. Die drei Zeilen bleiben als Schutz für andere
 Browser, belegt sind sie nicht. Eine Falle beim Bestandslauf: unter zsh trennt `for t in $T` nicht in Wörter — alle
 31 Pfade gingen als ein Argument an node und meldeten einen falschen roten Test.
+
+**Deploy (13.11.2026, 05:20, `130c44a`, Cache 460).** Suite 296/298 auf der Kopie von 12.11. 20:23, alle 20 Prod-Klon-Tests
+dabei; übersprungen nur die vier Vergleichstests mit altem Codestand unter `/tmp`. Rot: `umlaute-in-texten` — der
+Klassenname `gewaehlt` galt als Ersatzschreibung, umbenannt in `aktuelle-wahl` (`130c44a`, Wächter grün, auf dem
+vorigen Stand rot); `zeitnachweis-projekt-ui` an der Stelle „Notiz tippen, sofort verlassen" — nur am Ende langer
+Läufe, unter künstlicher Last je 4× grün mit neuem Stand und mit `main`, hängt also nicht an dieser Änderung
+(beobachten). Sicherung `arbeitsdoku_backup_20261113-052003.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe: 13
+Konten, 1779 Einträge, 14 Notizen, Integrität ok). Rückkehrpunkt `vor-projektsuche-deploy` (= `fea3a90`). Danach:
+IPv4+IPv6 200, Cache 460 in `sw.js`, `index.html` und `gast.html`, `suchAuswahl`/`boardSucheAnwenden` im
+ausgelieferten Skript, Protokoll ohne Fehler, Zweitanlage Probestart ok, Datenbank 60/60 Tabellen, keine Zeile
+verändert. Vorher am selben Abend (22:00) lief auf der Hauptanlage das Node-Update 22.23.5 — sauber, nachgeprüft.
