@@ -102,6 +102,8 @@ router.post('/:id/checkout', authenticate, (req, res) => {
   }
 
   const { project_id, project_text, address } = req.body;
+  // Vorschau (14.11.2026, Zugangsschlüssel/MCP): geprüft wie echt, geschrieben wird nichts.
+  if (req.body.vorschau === true) { res.locals.nurVorschau = true; return res.json({ vorschau: true, werkzeug: tool.name }); }
   const now = berlinJetzt();
   db.prepare(
     'INSERT INTO tool_checkouts (tool_id, user_id, checked_out_at, project_id, project_text, address) VALUES (?, ?, ?, ?, ?, ?)'
@@ -122,6 +124,7 @@ router.post('/:id/return', authenticate, (req, res) => {
   if (checkout.user_id !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'chef') {
     return res.status(403).json({ error: 'Nur der aktuelle Besitzer kann zurückgeben' });
   }
+  if (req.body.vorschau === true) { res.locals.nurVorschau = true; return res.json({ vorschau: true }); }   // siehe checkout
 
   const now = berlinJetzt();
   db.prepare('UPDATE tool_checkouts SET returned_at = ? WHERE id = ?').run(now, checkout.id);
@@ -143,6 +146,7 @@ router.post('/:id/takeover', authenticate, (req, res) => {
   }
 
   const { project_id, project_text, address } = req.body;
+  if (req.body.vorschau === true) { res.locals.nurVorschau = true; return res.json({ vorschau: true }); }   // siehe checkout
   const now = berlinJetzt();
   db.prepare('UPDATE tool_checkouts SET returned_at = ? WHERE id = ?').run(now, checkout.id);
   db.prepare(

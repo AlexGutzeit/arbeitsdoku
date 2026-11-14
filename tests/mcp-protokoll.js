@@ -160,6 +160,74 @@ const werkzeug = async (schl, name, args) => {
     ok('… ohne Inhalte (das Suchwort steht nirgends)', !JSON.stringify(zug).includes('GeheimesSuchwort4711'));
     ok('Mitarbeiter darf das Zugriffsprotokoll nicht sehen', (await req('GET', '/api/schluessel/protokoll', tok.mia)).status === 403);
 
+    console.log('── Material, Abwesenheit, Werkzeug ──');
+    await req('POST', '/api/projects', admin, { name: 'Neubau Probe', client: 'Probe' });
+    for (const n of ['Bohrhammer', 'Presszange']) await req('POST', '/api/tools', admin, { name: n });
+    S.tomSchreiben = await schl(tok.tom, 'Tom schreibt', 'schreiben');
+    const schreibNamen = ((await rpc(S.miaSchreiben, 'tools/list')).body.result.tools || []).map(t => t.name);
+    ok('Schreib-Schlüssel: 27 Werkzeuge (21 lesen + 6 schreiben), Lese-Schlüssel weiter 21',
+      schreibNamen.length === 27 && ['material_bestellen', 'abwesenheit_eintragen', 'werkzeug_entnehmen', 'werkzeug_zurueckgeben'].every(n => schreibNamen.includes(n))
+      && ((await rpc(S.chef, 'tools/list')).body.result.tools || []).length === 21, schreibNamen.join(','));
+    const bestellungen = async () => ((await req('GET', '/api/orders', admin)).body?.orders || []);
+    w = await werkzeug(S.miaSchreiben, 'material_bestellen', { material: 'Kabelbinder 280 mm', menge: 50, einheit: 'Stk', auftrag: 'neubau', vorschau: true });
+    ok('Bestellung Vorschau: für „Neubau Probe", nichts bestellt', w.daten && w.daten.vorschau && w.daten.wuerde_ergeben.fuer === 'Neubau Probe' && (await bestellungen()).length === 0, JSON.stringify(w));
+    w = await werkzeug(S.miaSchreiben, 'material_bestellen', { material: 'Kabelbinder 280 mm', menge: 50, einheit: 'Stk', auftrag: 'neubau' });
+    const best = await bestellungen();
+    ok('Bestellung aufgegeben: 50 Stk für Neubau Probe, von Mia', w.daten && w.daten.gespeichert && best.length === 1 && best[0].quantity === 50 && best[0].location_text === 'Neubau Probe' && best[0].user_name === 'Mia Mcp', JSON.stringify(best));
+    w = await werkzeug(S.miaSchreiben, 'material_bestellen', { material: 'Dübel', auftrag: 'gibtsnicht' });
+    ok('unbekannter Auftrag → Hinweis, nichts bestellt', /Kein Auftrag „gibtsnicht"/.test(w.fehler || '') && (await bestellungen()).length === 1, w.fehler);
+    w = await werkzeug(S.miaSchreiben, 'material_bestellen', { material: 'Dübel' });
+    ok('ohne Auftrag → fürs Lager', w.daten && w.daten.bestellung && w.daten.bestellung.fuer === 'Lager', JSON.stringify(w.daten));
+
+    const abw = async () => ((await req('GET', '/api/absences?from=2026-01-01&to=2026-12-31', admin)).body?.absences || []).filter(x => x.type !== 'feiertag');
+    w = await werkzeug(S.miaSchreiben, 'abwesenheit_eintragen', { art: 'urlaub', von: '2026-12-21', bis: '2026-12-23', vorschau: true });
+    ok('Urlaub Vorschau: „beantragt — wartet auf Genehmigung", nichts eingetragen', w.daten && w.daten.vorschau && /beantragt/.test(w.daten.wuerde_ergeben.status) && (await abw()).length === 0, JSON.stringify(w));
+    w = await werkzeug(S.miaSchreiben, 'abwesenheit_eintragen', { art: 'urlaub', von: '2026-12-21', bis: '2026-12-23', kommentar: 'über Hermes' });
+    let abwListe = await abw();
+    ok('Urlaub beantragt: Status pending, für Mia', w.daten && w.daten.gespeichert && abwListe.length === 1 && abwListe[0].status === 'pending' && abwListe[0].user_id === ids.mia, JSON.stringify(abwListe));
+    w = await werkzeug(S.miaSchreiben, 'abwesenheit_eintragen', { art: 'fza', von: '2026-12-22' });
+    ok('FZA am selben Tag → Hinweis der App (Überschneidung), nichts eingetragen', !!w.fehler && (await abw()).length === 1, w.fehler);
+    w = await werkzeug(S.miaSchreiben, 'abwesenheit_eintragen', { art: 'krank', von: '2026-11-02' });
+    abwListe = await abw();
+    ok('Krank: sofort eingetragen (Status active)', w.daten && w.daten.gespeichert && abwListe.some(x => x.type === 'krank' && x.status === 'active'), JSON.stringify(w));
+    w = await werkzeug(S.miaSchreiben, 'abwesenheit_eintragen', { art: 'feiertag', von: '2026-12-24' });
+    ok('Feiertag ist keine erlaubte Art → Eingabefehler', /einer dieser Werte/.test(w.fehler || ''), w.fehler);
+
+    const wz = async (name) => ((await req('GET', '/api/tools', admin)).body?.tools || []).find(t => t.name === name);
+    w = await werkzeug(S.miaSchreiben, 'werkzeug_entnehmen', { werkzeug: 'bohr', auftrag: 'neubau', vorschau: true });
+    ok('Werkzeug Vorschau: nichts entnommen', w.daten && w.daten.vorschau && !(await wz('Bohrhammer')).checkout_id, JSON.stringify(w));
+    w = await werkzeug(S.miaSchreiben, 'werkzeug_entnehmen', { werkzeug: 'bohr', auftrag: 'neubau', adresse: 'Baustelle Nord' });
+    let bh = await wz('Bohrhammer');
+    ok('Mia entnimmt den Bohrhammer für Neubau Probe', w.daten && w.daten.gespeichert && bh.checked_out_by === ids.mia && bh.checkout_project_name === 'Neubau Probe', JSON.stringify(bh));
+    w = await werkzeug(S.tomSchreiben, 'werkzeug_entnehmen', { werkzeug: 'Bohrhammer' });
+    ok('Tom ohne „übernehmen" → Hinweis „ist gerade bei Mia", bleibt bei Mia', /ist gerade bei Mia Mcp/.test(w.fehler || '') && (await wz('Bohrhammer')).checked_out_by === ids.mia, w.fehler);
+    w = await werkzeug(S.tomSchreiben, 'werkzeug_entnehmen', { werkzeug: 'Bohrhammer', uebernehmen: true });
+    ok('Tom mit uebernehmen=true → jetzt bei Tom', w.daten && w.daten.gespeichert && (await wz('Bohrhammer')).checked_out_by === ids.tom, JSON.stringify(w));
+    w = await werkzeug(S.miaSchreiben, 'werkzeug_zurueckgeben', { werkzeug: 'Bohrhammer' });
+    ok('Mia kann Toms Werkzeug nicht zurückgeben (die Route entscheidet)', /aktuelle Besitzer/.test(w.fehler || '') && (await wz('Bohrhammer')).checked_out_by === ids.tom, w.fehler);
+    w = await werkzeug(S.tomSchreiben, 'werkzeug_zurueckgeben', { werkzeug: 'Bohrhammer' });
+    ok('Tom gibt zurück → frei', w.daten && w.daten.gespeichert && !(await wz('Bohrhammer')).checkout_id, JSON.stringify(w));
+    w = await werkzeug(S.miaSchreiben, 'werkzeug_entnehmen', { werkzeug: 'zange zz' });
+    ok('unbekanntes Werkzeug → Hinweis', /Kein Werkzeug/.test(w.fehler || ''), w.fehler);
+
+    const prot2 = ((await req('GET', '/api/audit?action=schluessel_schreibzugriff&limit=100', admin)).body?.logs || []).map(p => p.details);
+    ok('Änderungsprotokoll: Bestellungen, Abwesenheiten und Werkzeug-Vorgänge mit Schlüssel und Werkzeugname, keine Vorschau',
+      prot2.filter(d => /POST \/api\/orders → 201 .*Werkzeug material_bestellen/.test(d)).length === 2
+      && prot2.filter(d => /POST \/api\/absences → 201 .*Werkzeug abwesenheit_eintragen/.test(d)).length === 2
+      && prot2.some(d => /\/checkout → 200 .*Werkzeug werkzeug_entnehmen/.test(d)) && prot2.some(d => /\/takeover → 200 .*„Tom schreibt"/.test(d))
+      && prot2.some(d => /\/return → 200 .*Werkzeug werkzeug_zurueckgeben/.test(d)), JSON.stringify(prot2).slice(0, 600));
+
+    console.log('── über REST weiterhin gesperrt ──');
+    const bestNr = (await bestellungen())[0].id;
+    const abwNr = (await abw())[0].id;
+    const chefSchreib = await schl(tok.chef, 'Chef schreibt', 'schreiben');
+    for (const [m, p, k] of [['DELETE', `/api/orders/${bestNr}`, S.miaSchreiben], ['PUT', `/api/orders/${bestNr}`, S.miaSchreiben],
+      ['POST', `/api/orders/${bestNr}/order`, chefSchreib], ['PUT', `/api/absences/${abwNr}`, S.miaSchreiben], ['DELETE', `/api/absences/${abwNr}`, S.miaSchreiben],
+      ['POST', `/api/absences/${abwNr}/approve`, chefSchreib], ['POST', '/api/tools', chefSchreib], ['POST', '/api/orders', S.chef]]) {
+      const x = await req(m, p, k, m === 'DELETE' ? undefined : {});
+      ok(`${m} ${p.replace(/\d+/g, ':id')}${k === S.chef ? ' (Lese-Schlüssel)' : ''} → 403`, x.status === 403 && x.body?.code === 'SCHLUESSEL_NICHT_ERLAUBT', `${x.status} ${JSON.stringify(x.body)}`);
+    }
+
     console.log('── Kopfzeilen fälschen ──');
     // Frischer Schlüssel: „zuletzt benutzt" wird höchstens einmal je Minute geschrieben — die gefälschte Anfrage
     // muss die ERSTE sein, sonst könnte eine angenommene Fälschung gar nicht sichtbar werden.

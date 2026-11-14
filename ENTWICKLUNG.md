@@ -5456,3 +5456,13 @@ Rechte-Vergleich der Oberfläche (`app-2-auth-layout.js`) verglich nur an/aus �
 zeichnet das Laden die Seite ein zweites Mal. Die Profilbild-Karte des ersten Durchlaufs wartete noch und suchte danach
 ihre Knöpfe per `document.getElementById` auf der neuen Seite — dort gab es sie noch nicht → Skriptfehler. Alle neun
 Karten der Seite hatten das Muster; jede prüft jetzt nach dem ersten Warten `k.isConnected`. Gegenprobe rot.
+
+**Nachtrag 14.11.2026 abends — mehr Schreib-Werkzeuge (Alex: Material bestellen, Abwesenheit beantragen, Werkzeug
+entnehmen/zurückgeben).** Gleiches Muster wie bei den Zeiteinträgen: Die Erlaubt-Liste bekam genau die nötigen
+POST-Wege (`/api/orders`, `/api/absences`, `/api/tools/:id/checkout|return|takeover`) — kein PUT, kein DELETE, kein
+Genehmigen; die Vorschau sitzt in der jeweiligen Route nach allen Prüfungen (Bestellung: Ort/Produkt aufgelöst;
+Abwesenheit: Doppelbuchung, Sperre, mit Status und Urlaubswarnung; Werkzeug: Besitz). Das MCP-Werkzeug grenzt
+weiter ein, wo die Route mehr kann: Abwesenheit nur für sich und ohne Feiertag (die Route ließe den Chef für
+andere eintragen — über REST darf er das mit Schreibschlüssel weiterhin, wie in der App); Übernehmen eines Werkzeugs
+von einem Kollegen nur mit `uebernehmen: true`. Test `mcp-protokoll` jetzt 69 Prüfungen, Gegenproben 5/5 rot (u. a.
+„Löschen von Bestellungen versehentlich erlaubt" — fällt am REST-Teil des Tests auf).

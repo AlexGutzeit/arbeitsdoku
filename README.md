@@ -1172,9 +1172,15 @@ beantworten wie „Wie viele Stunden war Max im Oktober bei Kunde Müller?". Daf
   seitenweise (höchstens 50 je Seite). `stunden_summe` rechnet **genau wie der Zeitnachweis** (zeitgleiche Einsätze
   derselben Person zählen einmal). „Kunden" sind die Kundennamen an Aufträgen und Zeiteinträgen — eine eigene
   Kundenliste hat die App nicht.
-* **Schreiben** (nur mit Recht „lesen + schreiben"): `zeiteintrag_anlegen`, `zeiteintrag_aendern` — mit allen
-  Prüfungen der App (Zeiten, Pause, abgerechnete Monate, Doppel-Rückfrage) und **`vorschau: true`**, die genau diese
-  Prüfungen durchläuft und nichts speichert. Jede Schreibaktion steht im Änderungsprotokoll („Schreibzugriff über
+* **Schreiben** (nur mit Recht „lesen + schreiben"), jeweils mit **`vorschau: true`**, die alle Prüfungen der App
+  durchläuft und nichts speichert:
+  * `zeiteintrag_anlegen`, `zeiteintrag_aendern` — Zeiten, Pause, abgerechnete Monate, Doppel-Rückfrage wie im Formular.
+  * `material_bestellen` — wie das Bestellformular (mit Auftrag für die Baustelle, ohne fürs Lager); Ändern,
+    Abschließen und Löschen von Bestellungen gehen nicht.
+  * `abwesenheit_eintragen` — nur für sich selbst: Urlaub, FZA, Sonderurlaub werden **beantragt** (Chef/Admin
+    genehmigt in der App), Krank, Berufsschule, Innung sind sofort eingetragen; keine Feiertage, kein Genehmigen,
+    kein Ändern. Die Vorschau zeigt, ob der Resturlaub reicht.
+  * `werkzeug_entnehmen` (von einem Kollegen nur mit `uebernehmen: true`), `werkzeug_zurueckgeben`. Jede Schreibaktion steht im Änderungsprotokoll („Schreibzugriff über
   Zugangsschlüssel", mit Name des Schlüssels und des Werkzeugs) und im Änderungsverlauf des Eintrags.
 * **Schutz:** Anfragebremse 60/Min. je Schlüssel und 120/Min. je Adresse, 10 Fehlversuche/Min. je Adresse; fremde
   Browser-Herkunft (`Origin`) wird abgewiesen; jeder Parameter wird geprüft; Fehlermeldungen ohne Innenleben.

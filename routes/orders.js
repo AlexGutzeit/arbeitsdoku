@@ -93,6 +93,12 @@ router.post('/', authenticate, (req, res) => {
   const db = getDb();
   const loc = resolveLocation(db, project_id);
   const pid = pruefeProduktId(db, product_id);
+  // Vorschau (14.11.2026, Zugangsschlüssel/MCP): geprüft wie echt, geschrieben wird nichts.
+  if (req.body.vorschau === true) {
+    res.locals.nurVorschau = true;
+    return res.json({ vorschau: true, order: { quantity: qty, unit: (unit || '').trim() || null, product: product.trim(),
+      comment: (comment || '').trim() || null, project_id: loc.project_id, location_text: loc.location_text, product_id: pid } });
+  }
   const result = db.prepare(
     'INSERT INTO orders (quantity, unit, product, comment, user_id, project_id, location_text, product_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(qty, (unit || '').trim() || null, product.trim(), (comment || '').trim() || null, req.user.id, loc.project_id, loc.location_text, pid);

@@ -149,16 +149,41 @@ async function eintragKoerper(ktx, a) {
   if (a.vorschau) b.vorschau = true;
   if (a.auftrag !== undefined) {
     if (a.auftrag === '') { b.project_id = null; b.project_text = ''; }
-    else if (/^\d+$/.test(a.auftrag)) { b.project_id = Number(a.auftrag); b.project_text = ''; }
     else {
-      const treffer = ((await hole(ktx, '/api/projects')).projects || []).filter(p => trifft(a.auftrag, p.name));
-      const exakt = treffer.filter(p => norm(p.name) === norm(a.auftrag));
-      const p = exakt.length === 1 ? exakt[0] : (treffer.length === 1 ? treffer[0] : null);
-      if (!p && treffer.length > 1) throw new Hinweis(`Auftrag „${a.auftrag}" ist mehrdeutig: ${treffer.slice(0, 10).map(x => `${x.name} (${x.id})`).join(', ')}. Bitte die Nummer angeben.`);
+      const p = await auftragFinden(ktx, a.auftrag);
       if (p) { b.project_id = p.id; b.project_text = ''; } else { b.project_id = null; b.project_text = a.auftrag; }
     }
   }
   return b;
+}
+/** Auftrag vom Board per Nummer oder Name (Teil genügt, eindeutig) — oder null, wenn keiner passt. */
+async function auftragFinden(ktx, wert) {
+  if (/^\d+$/.test(String(wert))) return { id: Number(wert) };
+  const treffer = ((await hole(ktx, '/api/projects')).projects || []).filter(p => trifft(wert, p.name));
+  const exakt = treffer.filter(p => norm(p.name) === norm(wert));
+  const p = exakt.length === 1 ? exakt[0] : (treffer.length === 1 ? treffer[0] : null);
+  if (!p && treffer.length > 1) throw new Hinweis(`Auftrag „${wert}" ist mehrdeutig: ${treffer.slice(0, 10).map(x => `${x.name} (${x.id})`).join(', ')}. Bitte die Nummer angeben.`);
+  return p ? { id: p.id, name: p.name } : null;
+}
+// Antwort einer Schreib-Route: Inhalt bei Erfolg, sonst ein Hinweis mit der (für Nutzer geschriebenen) Meldung der App
+function geschrieben(a) {
+  if (a.status === 200 || a.status === 201) return a.body || {};
+  if (a.status >= 500) throw new Error('Schreiben: Route antwortet ' + a.status);
+  throw new Hinweis((a.body && a.body.error) || `Nicht gespeichert (${a.status}).`);
+}
+const SCHREIBT = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+const VORSCHAU = { type: 'boolean', description: 'Nur prüfen und zeigen, was passieren würde — nichts speichern' };
+const ABW_ART = { urlaub: 'urlaub', fza: 'freizeitausgleich', sonderurlaub: 'sonderurlaub', krank: 'krank', berufsschule: 'berufsschule', innung: 'innung' };
+const ABW_STATUS = { pending: 'beantragt — wartet auf Genehmigung durch Chef/Admin', active: 'eingetragen' };
+/** Werkzeug per Nummer oder Name (Teil genügt, eindeutig). */
+async function werkzeugFinden(ktx, wert) {
+  const alle = (await hole(ktx, '/api/tools')).tools || [];
+  const t = /^\d+$/.test(String(wert)) ? alle.filter(x => x.id === Number(wert)) : alle.filter(x => trifft(wert, x.name));
+  const exakt = t.filter(x => norm(x.name) === norm(wert));
+  if (exakt.length === 1) return exakt[0];
+  if (t.length === 1) return t[0];
+  if (!t.length) throw new Hinweis(`Kein Werkzeug „${wert}" gefunden.`);
+  throw new Hinweis(`„${wert}" ist mehrdeutig: ${t.slice(0, 10).map(x => `${x.name} (${x.id})`).join(', ')}. Bitte die Nummer angeben.`);
 }
 function schreibenAuswerten(a, vorschau, wort) {
   const e = a.body && a.body.entry;
@@ -509,6 +534,87 @@ const WERKZEUGE = [
       const body = await eintragKoerper(ktx, a);
       if (Object.keys(body).filter(k => !['vorschau', 'doppelt_ok', 'reason'].includes(k)).length === 0) throw new Hinweis('Nichts zu ändern — bitte mindestens ein Feld angeben.');
       return schreibenAuswerten(await intern(ktx, 'PUT', `/api/entries/${a.nr}`, body), a.vorschau, 'geändert');
+    },
+  },
+
+  // ── Seit 14.11.2026 abends (Alex): Material, Abwesenheit, Werkzeug ──
+  {
+    name: 'material_bestellen', title: 'Material bestellen', schreibt: true, annotations: SCHREIBT,
+    description: 'Gibt eine Material-Bestellung auf — wie das Bestellformular der App (landet in „offene Bestellungen", wer bestellen darf, bekommt eine Meldung). Mit Auftrag wird für die Baustelle bestellt, ohne fürs Lager. Ändern oder Löschen von Bestellungen geht hier nicht. Tipp: erst mit vorschau=true.',
+    eingabe: { material: { type: 'string', maxLength: 200, description: 'Was bestellt werden soll' },
+      menge: { type: 'integer', minimum: 1, maximum: 100000, description: 'Anzahl' },
+      einheit: { type: 'string', maxLength: 20, description: 'Einheit, z. B. Stk, m, Rolle' },
+      kommentar: { type: 'string', maxLength: 500, description: 'Hinweis, z. B. Händler oder Artikelnummer' },
+      auftrag: { type: 'string', maxLength: 200, description: 'Auftrag (Nummer oder Name) — leer = fürs Lager' },
+      produkt_nr: { type: 'integer', minimum: 1, description: 'Nummer aus lager_suchen, falls bekannt' },
+      vorschau: VORSCHAU },
+    pflicht: ['material'],
+    async ausfuehren(a, ktx) {
+      let projekt = null;
+      if (a.auftrag) { projekt = await auftragFinden(ktx, a.auftrag); if (!projekt) throw new Hinweis(`Kein Auftrag „${a.auftrag}" gefunden. Ohne Auftrag geht die Bestellung ans Lager.`); }
+      const b = geschrieben(await intern(ktx, 'POST', '/api/orders', { product: a.material, quantity: a.menge, unit: a.einheit, comment: a.kommentar,
+        project_id: projekt ? projekt.id : null, product_id: a.produkt_nr, vorschau: a.vorschau === true }));
+      const o = b.order || {};
+      const kurz = ohneLeeres({ nr: o.id, menge: o.quantity, einheit: o.unit, material: o.product, kommentar: o.comment, fuer: o.location_text });
+      return b.vorschau ? { vorschau: true, gespeichert: false, wuerde_ergeben: kurz, hinweis: 'Alle Prüfungen bestanden. Ohne vorschau erneut aufrufen, um zu bestellen.' }
+        : { gespeichert: true, bestellung: kurz };
+    },
+  },
+  {
+    name: 'abwesenheit_eintragen', title: 'Abwesenheit eintragen/beantragen', schreibt: true, annotations: SCHREIBT,
+    description: 'Trägt eine Abwesenheit für den Benutzer dieses Schlüssels ein — wie in der App: Urlaub, Freizeitausgleich und Sonderurlaub werden BEANTRAGT (Chef/Admin genehmigt), Krank, Berufsschule und Innung sind sofort eingetragen. Es gelten die Prüfungen der App (Überschneidungen, abgerechnete Monate). Nur für sich selbst, keine Feiertage. Tipp: erst mit vorschau=true — sie zeigt auch, ob der Resturlaub reicht.',
+    eingabe: { art: { type: 'string', enum: Object.keys(ABW_ART), description: 'urlaub, fza (Freizeitausgleich), sonderurlaub, krank, berufsschule, innung' },
+      von: { type: 'string', format: 'date', description: 'Erster Tag, JJJJ-MM-TT' },
+      bis: { type: 'string', format: 'date', description: 'Letzter Tag, JJJJ-MM-TT (Standard: wie von)' },
+      kommentar: { type: 'string', maxLength: 500, description: 'Kommentar (optional)' },
+      vorschau: VORSCHAU },
+    pflicht: ['art', 'von'],
+    async ausfuehren(a, ktx) {
+      const b = geschrieben(await intern(ktx, 'POST', '/api/absences', { type: ABW_ART[a.art], date_from: a.von, date_to: a.bis || a.von,
+        comment: a.kommentar, vorschau: a.vorschau === true }));
+      const x = b.absence || {};
+      const kurz = ohneLeeres({ nr: x.id, art: ABWESENHEIT[x.type] || x.type, von: x.date_from, bis: x.date_to, status: ABW_STATUS[x.status] || x.status, kommentar: x.comment });
+      const warnung = b.warning ? (typeof b.warning === 'string' ? b.warning : (b.warning.text || b.warning.message || JSON.stringify(b.warning))) : undefined;
+      return ohneLeeres(b.vorschau ? { vorschau: true, gespeichert: false, wuerde_ergeben: kurz, warnung, hinweis: 'Alle Prüfungen bestanden. Ohne vorschau erneut aufrufen, um einzutragen.' }
+        : { gespeichert: true, abwesenheit: kurz, warnung });
+    },
+  },
+  {
+    name: 'werkzeug_entnehmen', title: 'Werkzeug entnehmen', schreibt: true, annotations: SCHREIBT,
+    description: 'Vermerkt, dass der Benutzer dieses Schlüssels ein Werkzeug hat — wie „Entnehmen" auf der Werkzeugseite. Hat es gerade ein Kollege, nur mit uebernehmen=true (wie „Übernehmen"). Tipp: erst mit vorschau=true.',
+    eingabe: { werkzeug: { type: 'string', maxLength: 100, description: 'Werkzeug: Name (Teil genügt) oder Nummer aus werkzeuge_liste' },
+      auftrag: { type: 'string', maxLength: 200, description: 'Für welchen Auftrag (Nummer oder Name; sonst als Freitext)' },
+      adresse: { type: 'string', maxLength: 300, description: 'Wo das Werkzeug ist' },
+      uebernehmen: { type: 'boolean', description: 'Von dem Kollegen übernehmen, der es gerade hat' },
+      vorschau: VORSCHAU },
+    pflicht: ['werkzeug'],
+    async ausfuehren(a, ktx) {
+      const t = await werkzeugFinden(ktx, a.werkzeug);
+      let wo = 'checkout';
+      if (t.checkout_id) {
+        if (t.checked_out_by === ktx.user.id) throw new Hinweis(`Du hast „${t.name}" schon (seit ${t.checked_out_at}).`);
+        if (!a.uebernehmen) throw new Hinweis(`„${t.name}" ist gerade bei ${t.checked_out_by_name} (seit ${t.checked_out_at}). Zum Übernehmen mit uebernehmen=true erneut aufrufen.`);
+        wo = 'takeover';
+      }
+      const body = { vorschau: a.vorschau === true, address: a.adresse || null };
+      if (a.auftrag) { const p = await auftragFinden(ktx, a.auftrag); if (p) body.project_id = p.id; else body.project_text = a.auftrag; }
+      const b = geschrieben(await intern(ktx, 'POST', `/api/tools/${t.id}/${wo}`, body));
+      const was = wo === 'takeover' ? `von ${t.checked_out_by_name} übernommen` : 'entnommen';
+      return b.vorschau ? { vorschau: true, gespeichert: false, wuerde: `„${t.name}" ${was}`, hinweis: 'Alle Prüfungen bestanden. Ohne vorschau erneut aufrufen.' }
+        : { gespeichert: true, werkzeug: t.name, vorgang: was };
+    },
+  },
+  {
+    name: 'werkzeug_zurueckgeben', title: 'Werkzeug zurückgeben', schreibt: true, annotations: SCHREIBT,
+    description: 'Gibt ein Werkzeug zurück (wieder frei) — wie „Zurückgeben" auf der Werkzeugseite. Fremde Werkzeuge nur als Chef/Admin. Tipp: erst mit vorschau=true.',
+    eingabe: { werkzeug: { type: 'string', maxLength: 100, description: 'Werkzeug: Name (Teil genügt) oder Nummer' }, vorschau: VORSCHAU },
+    pflicht: ['werkzeug'],
+    async ausfuehren(a, ktx) {
+      const t = await werkzeugFinden(ktx, a.werkzeug);
+      if (!t.checkout_id) throw new Hinweis(`„${t.name}" ist gar nicht entnommen.`);
+      const b = geschrieben(await intern(ktx, 'POST', `/api/tools/${t.id}/return`, { vorschau: a.vorschau === true }));
+      return b.vorschau ? { vorschau: true, gespeichert: false, wuerde: `„${t.name}" zurückgeben (bisher bei ${t.checked_out_by_name})`, hinweis: 'Ohne vorschau erneut aufrufen.' }
+        : { gespeichert: true, werkzeug: t.name, vorgang: 'zurückgegeben' };
     },
   },
 ];

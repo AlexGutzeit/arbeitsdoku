@@ -477,6 +477,14 @@ router.post('/', authenticate, (req, res) => {
   const sperre = pruefeSperre(db, [date_from, date_to], req.user, req.body.reason);
   if (sperre && sperre.fehler) return res.status(403).json({ error: sperre.fehler });
 
+  // Vorschau (14.11.2026, Zugangsschlüssel/MCP): alle Prüfungen oben sind gelaufen — Typ, Rechte, Doppelbuchung,
+  // Abrechnungssperre —, geschrieben wird nichts. Mit dem Status, den der Eintrag bekäme, und der Urlaubswarnung.
+  if (req.body.vorschau === true) {
+    res.locals.nurVorschau = true;
+    return res.json({ vorschau: true, absence: { user_id: uid, type, date_from, date_to, status, comment: (comment || '').trim() },
+      warning: urlaubWarning(db, uid, type, date_from, date_to) });
+  }
+
   const result = db.prepare(`
     INSERT INTO absences (user_id, type, date_from, date_to, status, comment, created_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))

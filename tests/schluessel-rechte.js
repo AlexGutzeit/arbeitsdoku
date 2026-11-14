@@ -131,7 +131,7 @@ async function anhalten() {
     const gesperrt = [['GET', '/api/users'], ['GET', '/api/settings'], ['GET', '/api/backup/download'], ['POST', '/api/backup/restore'], ['GET', '/api/settings/arbeitszeit'], ['GET', '/api/audit'],
       ['GET', '/api/schluessel'], ['POST', '/api/schluessel'], ['GET', '/api/auth/me'], ['PUT', '/api/auth/password'],
       ['GET', '/api/entries/deleted'], [`GET`, `/api/entries/${neuId}/history`], ['GET', '/api/events/ticket'],
-      ['GET', '/api/users/meine-daten'], ['POST', '/api/projects'], ['POST', '/api/absences'], ['GET', '/api/projects/1/entries.csv']];
+      ['GET', '/api/users/meine-daten'], ['POST', '/api/projects'], ['PUT', '/api/absences/1'], ['POST', '/api/absences/1/approve'], ['DELETE', '/api/orders/1'], ['GET', '/api/projects/1/entries.csv']];
     for (const [m, p] of gesperrt) {
       const a = await req(m, p, chefLesen, m === 'GET' ? null : {});
       const b = await req(m, p, annaSchreiben, m === 'GET' ? null : {});

@@ -82,10 +82,17 @@ const LESEN = [
   '/api/notes',
   '/api/documents', '/api/documents/folders/all',
 ];
-// Schreiben (nur Recht 'schreiben'): Zeiteinträge anlegen und ändern. Nie DELETE.
+// Schreiben (nur Recht 'schreiben'): Zeiteinträge anlegen und ändern; seit 14.11.2026 abends (Alex) auch
+// Material bestellen, Abwesenheit eintragen/beantragen, Werkzeug entnehmen/zurückgeben/übernehmen. Nie DELETE,
+// kein Ändern von Bestellungen oder Abwesenheiten, kein Genehmigen.
 const SCHREIBEN = [
   ['POST', '/api/entries'],
   ['PUT', `/api/entries/${Z}`],
+  ['POST', '/api/orders'],
+  ['POST', '/api/absences'],
+  ['POST', `/api/tools/${Z}/checkout`],
+  ['POST', `/api/tools/${Z}/return`],
+  ['POST', `/api/tools/${Z}/takeover`],
 ];
 const muster = (p) => new RegExp('^' + p + '/?$');
 const LESEN_RE = LESEN.map(muster);
