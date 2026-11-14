@@ -246,6 +246,16 @@ function schluesselPruefen(db, roh) {
   return { eintrag, user };
 }
 
+// „Zuletzt benutzt" höchstens einmal je Minute schreiben — nicht bei jeder Anfrage. Auch /mcp (routes/mcp.js).
+function zuletztMerken(db, eintrag, ip) {
+  try {
+    const jetzt = berlinNow();
+    if (!eintrag.zuletzt_am || jetzt.slice(0, 16) !== String(eintrag.zuletzt_am).slice(0, 16)) {
+      db.prepare('UPDATE api_schluessel SET zuletzt_am = ?, zuletzt_ip = ? WHERE id = ?').run(jetzt, String(ip || '').slice(0, 64), eintrag.id);
+    }
+  } catch (_) { /* darf den Zugriff nie kosten */ }
+}
+
 function mitSchluessel(req, res, next, roh) {
   const db = getDb();
   const intern = schluessel.internerAufruf(req);   // Folgeaufruf eines MCP-Werkzeugs aus diesem Prozess
@@ -270,13 +280,7 @@ function mitSchluessel(req, res, next, roh) {
   req.user = user;
   req.zugang = { art: 'schluessel', id: eintrag.id, name: eintrag.name, recht: eintrag.recht };
 
-  // „Zuletzt benutzt" höchstens einmal je Minute schreiben — nicht bei jeder Anfrage.
-  try {
-    const jetzt = berlinNow();
-    if (!eintrag.zuletzt_am || jetzt.slice(0, 16) !== String(eintrag.zuletzt_am).slice(0, 16)) {
-      db.prepare('UPDATE api_schluessel SET zuletzt_am = ?, zuletzt_ip = ? WHERE id = ?').run(jetzt, String(ip || '').slice(0, 64), eintrag.id);
-    }
-  } catch (_) { /* darf den Zugriff nie kosten */ }
+  zuletztMerken(db, eintrag, ip);
 
   // Jede gelungene Schreibaktion über einen Schlüssel ins Änderungsprotokoll — mit dem Namen des
   // Schlüssels. Am Ende der Antwort, damit nur festgehalten wird, was wirklich geschrieben wurde
@@ -380,5 +384,5 @@ function authorize(...roles) {
   };
 }
 
-module.exports = { authenticate, authorize, JWT_SECRET, GATE_FREI, gateFrei, nutzerLaden, schluesselPruefen,
+module.exports = { authenticate, authorize, JWT_SECRET, GATE_FREI, gateFrei, nutzerLaden, schluesselPruefen, zuletztMerken,
   tokenAusstellen, hoechstdauerFuer, sitzungPruefen, einrichtungFehlt, sitzungenBeenden, tokenNachWiderruf, GRUND, LEERLAUF_S, HOECHSTDAUER_S, ERNEUERN_NACH_S };

@@ -165,6 +165,8 @@ app.use('/api/audit', require('./routes/audit'));
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/push', require('./routes/push'));
 app.use('/api/schluessel', require('./routes/schluessel'));
+// MCP-Schnittstelle für KI-Assistenten (14.11.2026) — nur mit Zugangsschlüssel, siehe routes/mcp.js
+app.use('/mcp', require('./routes/mcp'));
 
 // Kurzlebiges SSE-Ticket: normaler (authentifizierter) Aufruf per Authorization-Header liefert ein
 // nur 60 Sekunden gueltiges Token. Der Client haengt DIESES an die SSE-URL — nicht mehr den langen
