@@ -161,10 +161,16 @@ const werkzeug = async (schl, name, args) => {
     ok('Mitarbeiter darf das Zugriffsprotokoll nicht sehen', (await req('GET', '/api/schluessel/protokoll', tok.mia)).status === 403);
 
     console.log('── Kopfzeilen fälschen ──');
-    await rpc(S.tom, 'ping', {}, { 'X-Intern': 'a'.repeat(48), 'X-Intern-Ip': '203.0.113.99', 'X-Intern-Werkzeug': 'gefaelscht' });
-    await req('GET', '/api/bulletin', S.tom, undefined, { 'X-Intern': 'b'.repeat(48), 'X-Intern-Ip': '203.0.113.99' });
-    const toms = ((await req('GET', '/api/schluessel', tok.tom)).body.schluessel || [])[0];
-    ok('gefälschtes X-Intern ändert die gespeicherte Adresse nicht', toms && toms.zuletzt_ip && toms.zuletzt_ip !== '203.0.113.99', JSON.stringify(toms));
+    // Frischer Schlüssel: „zuletzt benutzt" wird höchstens einmal je Minute geschrieben — die gefälschte Anfrage
+    // muss die ERSTE sein, sonst könnte eine angenommene Fälschung gar nicht sichtbar werden.
+    const faelschung = { 'X-Intern': 'b'.repeat(48), 'X-Intern-Ip': '203.0.113.99', 'X-Intern-Werkzeug': 'gefaelscht' };
+    const fSchl = await schl(tok.tom, 'Fälscher', 'lesen');
+    await req('GET', '/api/bulletin', fSchl, undefined, faelschung);
+    const fz = ((await req('GET', '/api/schluessel', tok.tom)).body.schluessel || []).find(s => s.name === 'Fälscher');
+    ok('gefälschtes X-Intern: gespeichert wird die echte Adresse, nicht die behauptete', fz && fz.zuletzt_ip && fz.zuletzt_ip !== '203.0.113.99', JSON.stringify(fz));
+    const fst = [];
+    for (let i = 0; i < 62; i++) fst.push((await req('GET', '/api/bulletin', fSchl, undefined, faelschung)).status);
+    ok('… und es umgeht die Bremse nicht (nach 60: 429)', fst.includes(429), fst.slice(55).join(','));
 
     console.log('── Bremse ──');
     const vielSchl = await schl(tok.chef, 'Viel', 'lesen');

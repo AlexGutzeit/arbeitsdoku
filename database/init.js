@@ -1422,7 +1422,8 @@ function ensureSchluesselSchema(targetDb) {
         widerrufen_am TEXT,
         widerrufen_von INTEGER,
         zuletzt_am    TEXT,
-        zuletzt_ip    TEXT
+        zuletzt_ip    TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
       CREATE TABLE IF NOT EXISTS mcp_zugriffe (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1432,7 +1433,8 @@ function ensureSchluesselSchema(targetDb) {
         werkzeug      TEXT,
         ergebnis      TEXT,
         dauer_ms      INTEGER,
-        ip            TEXT
+        ip            TEXT,
+        FOREIGN KEY (schluessel_id) REFERENCES api_schluessel(id) ON DELETE SET NULL
       );
       CREATE INDEX IF NOT EXISTS idx_mcp_zugriffe_ts ON mcp_zugriffe(ts);
     `);

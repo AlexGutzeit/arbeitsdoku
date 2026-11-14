@@ -130,7 +130,7 @@ const EINTRAG_FELDER = {
   auftrag: { type: 'string', maxLength: 200, description: 'Auftrag: Nummer oder Name eines Auftrags vom Board; sonst wird der Text als Freitext übernommen' },
   beschreibung: { type: 'string', maxLength: 2000, description: 'Arbeitsbeschreibung' },
   regie: { type: 'integer', minimum: 0, maximum: 5, description: 'Regiezettel: 0 nein, 1 ja, 2 pauschal, 3 Büro, 4 Lager, 5 Intern' },
-  begruendung: { type: 'string', maxLength: 500, description: 'Begründung — nötig bei fremden Einträgen (Admin) und in abgerechneten Monaten (Admin)' },
+  grund: { type: 'string', maxLength: 500, description: 'Begründung — nötig bei fremden Einträgen (Admin) und in abgerechneten Monaten (Admin)' },
   doppelt_ok: { type: 'boolean', description: 'Trotzdem speichern, obwohl es einen gleichen Eintrag gibt (nur nach Rückfrage beim Menschen)' },
   vorschau: { type: 'boolean', description: 'Nur prüfen und zeigen, was entstünde — nichts speichern' },
 };
@@ -144,7 +144,7 @@ async function eintragKoerper(ktx, a) {
   if (a.adresse !== undefined) b.address = a.adresse;
   if (a.beschreibung !== undefined) b.description = a.beschreibung;
   if (a.regie !== undefined) b.has_regie = a.regie;
-  if (a.begruendung !== undefined) b.reason = a.begruendung;
+  if (a.grund !== undefined) b.reason = a.grund;
   if (a.doppelt_ok) b.doppelt_ok = true;
   if (a.vorschau) b.vorschau = true;
   if (a.auftrag !== undefined) {
@@ -502,7 +502,7 @@ const WERKZEUGE = [
   {
     name: 'zeiteintrag_aendern', title: 'Zeiteintrag ändern', schreibt: true,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-    description: 'Ändert einen bestehenden Zeiteintrag (Nummer aus zeiteintraege_suchen). Nur angegebene Felder werden geändert. Eigene Einträge; fremde nur mit Admin-Schlüssel und begruendung. Der alte Stand bleibt im Änderungsverlauf. Tipp: erst mit vorschau=true.',
+    description: 'Ändert einen bestehenden Zeiteintrag (Nummer aus zeiteintraege_suchen). Nur angegebene Felder werden geändert. Eigene Einträge; fremde nur mit Admin-Schlüssel und grund. Der alte Stand bleibt im Änderungsverlauf. Tipp: erst mit vorschau=true.',
     eingabe: { nr: { type: 'integer', minimum: 1, description: 'Nummer des Zeiteintrags' }, ...EINTRAG_FELDER },
     pflicht: ['nr'],
     async ausfuehren(a, ktx) {
