@@ -511,6 +511,16 @@ async function initDatabase() {
     }
   } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile für Kontext):', e.message); }
 
+  // Migration: can_mcp Spalte (Zugangsschlüssel für Programme: 0 keine, 1 nur lesen, 2 lesen + schreiben — schluessel.js).
+  // ZWINGEND vor dem ersten Login: middleware/auth.js liest die Spalte bei JEDER Anfrage mit.
+  try {
+    const colsMcp = db.prepare("PRAGMA table_info(users)").all();
+    if (!colsMcp.some(c => c.name === 'can_mcp')) {
+      db.exec("ALTER TABLE users ADD COLUMN can_mcp INTEGER DEFAULT 0");
+      console.log('Migration: can_mcp Spalte hinzugefügt.');
+    }
+  } catch (e) { console.error('Migration fehlgeschlagen (siehe vorherige Logzeile für Kontext):', e.message); }
+
   // Migration: can_meldungen Spalte (Recht, alle Meldungen zu bearbeiten — meldungrecht.js).
   try {
     const colsMld = db.prepare("PRAGMA table_info(users)").all();
@@ -999,6 +1009,7 @@ function ensureAuditSchema(targetDb) {
     addCol('users', 'can_products_edit', 'INTEGER DEFAULT 0');
     addCol('users', 'can_products_add', 'INTEGER DEFAULT 0');
     addCol('users', 'can_meldungen', 'INTEGER DEFAULT 0');
+    addCol('users', 'can_mcp', 'INTEGER DEFAULT 0');   // wird in middleware/auth.js bei jeder Anfrage gelesen
     // ALLE Spalten, die routes/products.js namentlich liest — nicht nur die zuletzt dazugekommene.
     // Der Barcode-Haertetest (tests/barcode-haerte.js) hat gezeigt, dass hier nur `hersteller`
     // stand: Die Regel „was die Routen lesen, muss der Restore-Pfad nachziehen" war halb

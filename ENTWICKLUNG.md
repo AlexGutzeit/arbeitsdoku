@@ -5442,3 +5442,17 @@ Dienst der Zweitanlage blieb aus.
 **Eigener Fehler beim Bauen:** Ein Kurztest per `node -e "require('./routes/…')"` lud die Datenbank-Schicht und blieb
 hängen (Speicher-Takt, siehe Gedächtnis „kein zweiter Prozess auf der DB"). Beendet per PID, die Datenbankdatei war
 unberührt (Routen öffnen sie erst beim Start). Für Syntaxprüfungen `node --check`.
+
+**Nachtrag 14.11.2026 abends — Recht „Zugangsschlüssel für Programme" (Alex: „auch eine MCP-Berechtigung in den
+MA-Einstellungen").** `users.can_mcp` mit drei Stufen (0 keine, 1 nur lesen, 2 lesen + schreiben), Standard 0 — auch
+der Chef; der Admin per Rolle (gespeichert 0, wie die anderen Rollenrechte). Die Regel steht einmal in
+`schluessel.js` (`mcpStufe`, `wirksamesRecht`) und wirkt an drei Stellen: Anlegen (nur im Rahmen der Stufe), jede
+Anfrage (`schluesselPruefen` rechnet das wirksame Recht live aus — gesenkte Stufe gilt sofort, „keine" → 403
+`SCHLUESSEL_RUHT`), Liste (Zustand „ruht", „wirkt: nur lesen"). Mitgezogen: Migration (ZWINGEND, `nutzerLaden` liest
+die Spalte bei jeder Anfrage), alle Benutzer-Abfragen, Änderungsprotokoll, Stammdaten-Karte, Dialog. Der
+Rechte-Vergleich der Oberfläche (`app-2-auth-layout.js`) verglich nur an/aus — für Stufen jetzt den Wert.
+
+**Ein alter Fehler, den der neue Test fand:** Ändert der Admin ein Recht, während jemand auf „Mein Konto" steht,
+zeichnet das Laden die Seite ein zweites Mal. Die Profilbild-Karte des ersten Durchlaufs wartete noch und suchte danach
+ihre Knöpfe per `document.getElementById` auf der neuen Seite — dort gab es sie noch nicht → Skriptfehler. Alle neun
+Karten der Seite hatten das Muster; jede prüft jetzt nach dem ersten Warten `k.isConnected`. Gegenprobe rot.

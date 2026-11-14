@@ -29,6 +29,33 @@ function erzeugen() {
   return { roh, hash: hashVon(roh), anzeige: roh.slice(0, PRAEFIX.length + 6) + '…' };
 }
 
+// ── Recht „Zugangsschlüssel für Programme" (Alex, 14.11.2026) ─────────────────────────────────
+// Stufe je Konto im Mitarbeiter-Dialog: 0 keine (Standard), 1 nur lesen, 2 lesen + schreiben. Der Admin hat
+// per Rolle immer 2 (gespeichert bleibt bei ihm 0, wie bei den anderen Rollenrechten). Ein Schlüssel kann nie
+// mehr als die Stufe seines Kontos — geprüft bei JEDER Anfrage: Wird die Stufe gesenkt, gilt das sofort für
+// alle vorhandenen Schlüssel (auf 0 ruhen sie, auf 1 lesen sie nur noch).
+const STUFEN = ['keine', 'nur lesen', 'lesen + schreiben'];
+function mcpStufe(user) {
+  if (!user) return 0;
+  if (user.role === 'admin') return 2;
+  const n = Number(user.can_mcp) || 0;
+  return n >= 2 ? 2 : (n === 1 ? 1 : 0);
+}
+/** Was ein Schlüssel mit diesem Recht bei dieser Stufe wirklich darf: 'schreiben', 'lesen' oder null (ruht). */
+function wirksamesRecht(recht, user) {
+  const s = mcpStufe(user);
+  if (s === 0) return null;
+  return s === 1 ? 'lesen' : (recht === 'schreiben' ? 'schreiben' : 'lesen');
+}
+/** Eingabe aus dem Mitarbeiter-Dialog → 0/1/2; undefined = nicht mitgeschickt; null = ungültig. */
+function stufeLesen(v) {
+  if (v === undefined) return undefined;
+  if (v === true) return 2;
+  if (v === false || v === null || v === '') return 0;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n <= 2 ? n : null;
+}
+
 // ── Erlaubt-Liste ─────────────────────────────────────────────────────────────────────────────
 // Lesen: nur GET, nur Datenrouten. Bewusst NICHT dabei: Papierkorb (/deleted), Änderungsverläufe
 // (/history), CSV-/PDF-Exporte, Datei-Downloads, /api/users (Personaldaten — es gibt /api/users/list
@@ -117,6 +144,6 @@ function internerAufruf(req) {
 }
 
 module.exports = {
-  PRAEFIX, RECHTE, istSchluessel, hashVon, erzeugen, erlaubt, LESEN, SCHREIBEN,
+  PRAEFIX, RECHTE, STUFEN, mcpStufe, wirksamesRecht, stufeLesen, istSchluessel, hashVon, erzeugen, erlaubt, LESEN, SCHREIBEN,
   GRENZEN, bremsen, INTERN, internerAufruf,
 };

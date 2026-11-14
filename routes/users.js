@@ -15,6 +15,7 @@ const kontoLoeschen = require('../konto-loeschen');
 const { broadcast } = require('../sse');
 const { austrittsdatumSetzen, austrittsdatumAufheben, ausstellenVollziehen, berlinHeute } = require('../ausstellen');
 
+const schluessel = require('../schluessel');
 const router = express.Router();
 
 // Personalnummer des Lohnbueros (Lohn-Export C1). Bewusst KEINE Eindeutigkeitspruefung — die
@@ -91,6 +92,7 @@ const USER_AUDIT_FIELDS = [
   ['can_products_edit', 'Recht Produktverzeichnis pflegen', v => (v ? 'Ja' : 'Nein')],
   ['can_products_add', 'Recht Artikel einlernen', v => (v ? 'Ja' : 'Nein')],
   ['can_meldungen', 'Recht Meldungen bearbeiten', v => (v ? 'Ja' : 'Nein')],
+  ['can_mcp', 'Recht Zugangsschlüssel für Programme', v => schluessel.STUFEN[Number(v) || 0] || String(v)],
 ];
 // Planungsrecht semantisch als EINE Stufe (statt zwei Boolescher Felder), damit im Audit auf einen Blick
 // erkennbar ist, WELCHER Stand gilt — insbesondere „alle → nur sich" (nur die alle-Stufe entzogen).
@@ -291,6 +293,8 @@ router.get('/meine-stammdaten', authenticate, (req, res) => {
         schwarzes_brett: !!u.can_bulletin, dateien_hochladen: !!u.can_upload,
         bestellungen_abschliessen: !!u.can_order, produktverzeichnis_pflegen: !!u.can_products_edit,
         artikel_einlernen: !!u.can_products_add, meldungen_bearbeiten: !!u.can_meldungen,
+        // Stufe als Text („nur lesen"), ohne Recht false: Die Karte nennt nur, was gilt
+        zugangsschluessel: schluessel.mcpStufe(u) ? schluessel.STUFEN[schluessel.mcpStufe(u)] : false,
       },
     },
   });
@@ -432,9 +436,9 @@ router.get('/', authenticate, authorize('chef', 'buchhalter'), (req, res) => {
   let users;
 
   if (req.user.role === 'admin') {
-    users = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, personnel_no, work_start, birth_date, active, created_at FROM users ORDER BY name').all();
+    users = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, can_mcp, personnel_no, work_start, birth_date, active, created_at FROM users ORDER BY name').all();
   } else {
-    users = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, personnel_no, work_start, birth_date, active, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
+    users = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, can_mcp, personnel_no, work_start, birth_date, active, created_at FROM users WHERE role != 'admin' ORDER BY name").all();
   }
 
   res.json({ users: attachEmployment(db, users) });
@@ -445,7 +449,7 @@ router.get('/:id', authenticate, authorize('chef'), (req, res) => {
   const db = getDb();
   let user;
 
-  user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(req.params.id);
+  user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, can_mcp, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(req.params.id);
 
   if (!user) return res.status(404).json({ error: 'Benutzer nicht gefunden' });
   res.json({ user });
@@ -453,7 +457,7 @@ router.get('/:id', authenticate, authorize('chef'), (req, res) => {
 
 // Benutzer erstellen
 router.post('/', authenticate, authorize('chef'), async (req, res) => {
-  const { username, password, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, personnel_no, work_start, birth_date } = req.body;
+  const { username, password, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, can_mcp, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, personnel_no, work_start, birth_date } = req.body;
   // „alle" impliziert immer „sich" (can_plan_all=1 ⇒ can_plan=1).
   let planAll = can_plan_all ? 1 : 0;
   let planSelf = (can_plan || can_plan_all) ? 1 : 0;
@@ -463,6 +467,8 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   let produkte = can_products_edit ? 1 : 0;
   let einlernen = can_products_add ? 1 : 0;
   let meldungen = can_meldungen ? 1 : 0;
+  const mcp = schluessel.stufeLesen(req.body.can_mcp);
+  if (mcp === null) return res.status(400).json({ error: 'Ungültige Stufe für Zugangsschlüssel (0, 1 oder 2).' });
 
   if (!username || !password || !name || !role) {
     return res.status(400).json({ error: 'Benutzername, Passwort, Name und Rolle sind Pflichtfelder' });
@@ -521,8 +527,8 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
     userId = db.transaction(() => {
       if (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) return null;
       const result = db.prepare(
-        "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, personnel_no, work_start, birth_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      ).run(username, hash, name, role, hpw, Number(start_overtime) || 0, planSelf, planAll, bulletin, upload, order, produkte, einlernen, meldungen, normPersonalNr(personnel_no) ?? null, beginnNeu || null, geburtNeu || null);
+        "INSERT INTO users (username, password_hash, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, can_mcp, personnel_no, work_start, birth_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(username, hash, name, role, hpw, Number(start_overtime) || 0, planSelf, planAll, bulletin, upload, order, produkte, einlernen, meldungen, role === 'admin' ? 0 : (mcp || 0), normPersonalNr(personnel_no) ?? null, beginnNeu || null, geburtNeu || null);
       const id = result.lastInsertRowid;
       db.prepare(
         'INSERT INTO user_target_hours (user_id, hours_per_week, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, valid_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
@@ -537,7 +543,7 @@ router.post('/', authenticate, authorize('chef'), async (req, res) => {
   }
   if (userId === null) return res.status(409).json({ error: 'Benutzername bereits vergeben' });
 
-  const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(userId);
+  const user = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, can_mcp, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(userId);
   logAudit(db, { userId: req.user.id, username: req.user.username, action: 'user_create',
     details: `id=${userId} · ${userAuditCreate(user)}`, ip: req.ip });
   res.status(201).json({ user });
@@ -554,7 +560,7 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     return res.status(403).json({ error: 'Admin-Accounts können nur von Admins bearbeitet werden' });
   }
 
-  const { username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, personnel_no, work_start } = req.body;
+  const { username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, can_mcp, personnel_no, work_start } = req.body;
 
   // Rollen-Absicherung (serverseitig, nicht nur im Frontend): nur bekannte Rollen zulassen und die
   // Admin-Rolle ausschließlich durch Admins vergeben — sonst könnte ein Chef per direktem API-Call einen
@@ -609,6 +615,11 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   // zwei Quellen fuer dieselbe Aussage laufen frueher oder spaeter auseinander.
   if (ROLLEN_MIT_EINLERNRECHT.includes(effRole) || newProdukte === 1) newEinlernen = 0;
   if (ROLLEN_MIT_MELDUNGSRECHT.includes(effRole)) newMeldungen = 0;   // Chef/Admin per Rolle
+  // Zugangsschlüssel: Stufe 0/1/2 (schluessel.js); Admin per Rolle — gespeichert bleibt 0
+  const mcpEingabe = schluessel.stufeLesen(req.body.can_mcp);
+  if (mcpEingabe === null) return res.status(400).json({ error: 'Ungültige Stufe für Zugangsschlüssel (0, 1 oder 2).' });
+  let newMcp = mcpEingabe !== undefined ? mcpEingabe : (Number(user.can_mcp) || 0);
+  if (effRole === 'admin') newMcp = 0;
 
   // Start-Überstunden und Wochenstunden verschieben das Saldo über den GESAMTEN Verlauf, also auch
   // in bereits abgerechneten Zeiträumen — und tragen kein Datum, an dem sich das eingrenzen liesse.
@@ -628,7 +639,7 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
   const geburtPut = req.body.birth_date === undefined ? (user.birth_date || null) : (geburtGeprueft || null);
 
   db.prepare(
-    'UPDATE users SET username=?, name=?, role=?, target_hours_per_week=?, start_overtime=?, can_plan=?, can_plan_all=?, can_bulletin=?, can_upload=?, can_order=?, can_products_edit=?, can_products_add=?, can_meldungen=?, personnel_no=?, work_start=?, birth_date=? WHERE id=?'
+    'UPDATE users SET username=?, name=?, role=?, target_hours_per_week=?, start_overtime=?, can_plan=?, can_plan_all=?, can_bulletin=?, can_upload=?, can_order=?, can_products_edit=?, can_products_add=?, can_meldungen=?, can_mcp=?, personnel_no=?, work_start=?, birth_date=? WHERE id=?'
   ).run(
     username || user.username,
     name || user.name,
@@ -643,13 +654,14 @@ router.put('/:id', authenticate, authorize('chef'), (req, res) => {
     newProdukte,
     newEinlernen,
     newMeldungen,
+    newMcp,
     normPersonalNr(personnel_no) !== undefined ? normPersonalNr(personnel_no) : (user.personnel_no ?? null),
     beginnPut,
     geburtPut,
     req.params.id
   );
 
-  const updated = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(req.params.id);
+  const updated = db.prepare('SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, can_mcp, personnel_no, work_start, birth_date, created_at FROM users WHERE id = ?').get(req.params.id);
   const _changes = userAuditDiff(user, updated);
   // Die Rolle entscheidet über das Schreiben in Projektnotizen (Chef/Admin) — wer gerade drin ist,
   // bekommt die Änderung sofort (sonst erst beim nächsten Öffnen)

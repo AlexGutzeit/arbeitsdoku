@@ -51,6 +51,8 @@ async function werkzeug(schl, name, args) {
     const K = {};
     for (const r of ['admin', 'chef', 'mitarbeiter']) {
       const u = r === 'admin' ? { username: 'admin' } : rolle(r);
+      // Seit 14.11.2026 hat niemand außer dem Admin das Recht von selbst — in der Kopie hier vergeben
+      if (u && u.id) await req('PUT', `/api/users/${u.id}`, admin, { can_mcp: 1 });
       const t = u && await anmelden(u.username);
       K[r] = t && await schl(t, 'Prodklon ' + r);
     }

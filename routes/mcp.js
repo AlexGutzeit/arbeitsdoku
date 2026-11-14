@@ -85,8 +85,8 @@ router.all('/', async (req, res) => {
   const p = schluesselPruefen(db, roh);
   if (!p.eintrag) {
     if (p.code === 'SCHLUESSEL_UNGUELTIG') schluessel.bremsen.fehlversuch.zaehlen(ip);
-    res.setHeader('WWW-Authenticate', 'Bearer realm="arbeitsdoku", error="invalid_token"');
-    return ende(401, fehlerAntwort(null, -32001, p.error), 'abgewiesen');
+    if (p.status === 401) res.setHeader('WWW-Authenticate', 'Bearer realm="arbeitsdoku", error="invalid_token"');
+    return ende(p.status || 401, fehlerAntwort(null, -32001, p.error), 'abgewiesen');
   }
   const { eintrag, user } = p;
   z.schluesselId = eintrag.id;

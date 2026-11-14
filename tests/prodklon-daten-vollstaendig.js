@@ -75,9 +75,10 @@ const ERLAUBT_NEUE_TABELLEN = [
   'backup_empfaenger',                                                                      // 25.08.2026
   'warnung_prefs',                                                                          // 26.08.2026
   'kollegen_profil',                                                                        // 05.10.2026, Kollegen
+  'api_schluessel', 'mcp_zugriffe',                                                         // 14.11.2026, MCP
 ];
 const ERLAUBT_NEUE_SPALTEN = {
-  users: ['can_order'],   // 25.08.2026, Bestellrecht
+  users: ['can_order', 'can_mcp'],   // 25.08.2026 Bestellrecht · 14.11.2026 Zugangsschlüssel (Stufe)
 };
 
 (async () => {

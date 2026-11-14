@@ -1139,8 +1139,14 @@ beantworten wie „Wie viele Stunden war Max im Oktober bei Kunde Müller?". Daf
 
 **Zugangsschlüssel** — auf **„Mein Konto" → „Zugangsschlüssel für Programme"**:
 
-* Jeder legt Schlüssel **nur für sich selbst** an: Name (wofür?), Recht **„nur lesen"** oder **„lesen + Zeiteinträge
-  anlegen/ändern"**, optional ein Ablaufdatum. Zur Bestätigung wird das **eigene Passwort** verlangt.
+* **Wer darf?** Im **Mitarbeiter-Dialog** steht je Konto **„Zugangsschlüssel für Programme"** mit drei Stufen:
+  **keine** (Standard, auch für den Chef), **nur lesen**, **lesen + Zeiteinträge anlegen/ändern**. Der **Admin** darf
+  per Rolle. Die Stufe begrenzt jeden Schlüssel **sofort**: Herabsetzen auf „nur lesen" nimmt vorhandenen
+  Schreibschlüsseln das Schreiben, „keine" legt alle Schlüssel des Kontos still („ruht") — wieder hochsetzen weckt
+  sie auf. Die Änderung steht im Änderungsprotokoll.
+* Jeder legt Schlüssel **nur für sich selbst** an, im Rahmen seiner Stufe: Name (wofür?), Recht **„nur lesen"** oder
+  **„lesen + Zeiteinträge anlegen/ändern"**, optional ein Ablaufdatum. Zur Bestätigung wird das **eigene Passwort**
+  verlangt.
 * Der Schlüssel (`adk_…`) wird **genau einmal** angezeigt (mit Kopierknopf). Auf dem Server liegt nur ein Hash —
   verloren ist verloren, dann einen neuen anlegen.
 * Ein Schlüssel kann **nie mehr als sein Konto**: Ein Mitarbeiter-Schlüssel sieht nur die eigenen Zeiten, ein
@@ -1152,8 +1158,10 @@ beantworten wie „Wie viele Stunden war Max im Oktober bei Kunde Müller?". Daf
   ausgestellt/gelöscht wird. **Passwortwechsel und „Auf allen Geräten abmelden" lassen Schlüssel gültig** — sonst
   fiele der Assistent bei jedem Passwortwechsel still aus. Nach einem Passwortwechsel weist die Seite deshalb auf
   aktive Schlüssel hin, und beim Anlegen kommt eine **Push-Meldung** an den Besitzer.
-* Die Liste zeigt je Schlüssel Anfang, Recht, Ablauf, **zuletzt benutzt** und Zustand. Der **Admin** sieht alle
-  Schlüssel aller Konten (und kann jeden widerrufen) sowie das **Zugriffsprotokoll** von `/mcp`.
+* Die Liste zeigt je Schlüssel Anfang, Recht, Ablauf, **zuletzt benutzt** und Zustand (aktiv · ruht · abgelaufen ·
+  widerrufen); widerrufene stehen eingeklappt darunter — sie bleiben für das Zugriffsprotokoll erhalten, nützen aber
+  niemandem mehr. Der **Admin** sieht alle Schlüssel aller Konten (und kann jeden widerrufen) sowie das
+  **Zugriffsprotokoll** von `/mcp`. Alle Schlüssel eines Kontos auf einmal stilllegen: Stufe auf „keine".
 
 **MCP-Schnittstelle** (`/mcp`, „Streamable HTTP", zustandslos; Anmeldung per `Authorization: Bearer adk_…`):
 

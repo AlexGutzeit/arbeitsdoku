@@ -244,7 +244,7 @@ async function refreshUser() {
     // Rolle und ALLE Rechte vergleichen, nicht eine Teilliste (R8): Vorher fehlten can_order und die
     // Lagerrechte — eine Rechtevergabe zeigte sich erst nach einem Seitenwechsel. Die Liste kommt aus
     // dem Objekt selbst, damit ein neues Recht nicht wieder vergessen wird.
-    const norm = u => u ? [u.role, ...Object.keys(u).filter(k => k.startsWith('can_')).sort().map(k => k + '=' + !!u[k])].join('|') : '';
+    const norm = u => u ? [u.role, ...Object.keys(u).filter(k => k.startsWith('can_')).sort().map(k => k + '=' + (Number(u[k]) || 0))].join('|') : '';
     // Der Zwei-Faktor-Zustand gehoert mit in den Vergleich: Schaltet der Chef die Pflicht scharf,
     // soll die Oberflaeche ohne F5 auf „Mein Konto" umlenken.
     const zfNorm = z => z ? [!!z.einrichtung_noetig, !!z.eingerichtet, z.modus].join('|') : '';

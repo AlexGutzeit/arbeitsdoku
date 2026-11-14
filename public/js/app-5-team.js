@@ -1369,6 +1369,24 @@ async function showUserModal(user) {
         <div class="form-group" id="um-order-role-hint" style="display:none;">
           <p class="push-hint" style="margin:0;">Chef, Admin und Buchhalter dürfen Bestellungen ohnehin abschließen (per Rolle).</p>
         </div>
+        <!-- Zugangsschlüssel (14.11.2026): drei Stufen statt Haken. Für JEDE Rolle außer Admin (der hat es per
+             Rolle) — auch der Chef bekommt Schlüssel nur, wenn es hier steht. Standard: keine. -->
+        <div class="form-group" id="um-mcp-group">
+          <label for="um-can-mcp" style="display:block;margin-bottom:0.3rem;">Zugangsschlüssel für Programme (KI-Assistent, MCP)</label>
+          <select class="form-control" id="um-can-mcp">
+            <option value="0" ${!Number(user?.can_mcp) ? 'selected' : ''}>keine</option>
+            <option value="1" ${Number(user?.can_mcp) === 1 ? 'selected' : ''}>nur lesen</option>
+            <option value="2" ${Number(user?.can_mcp) === 2 ? 'selected' : ''}>lesen + Zeiteinträge anlegen/ändern</option>
+          </select>
+          <p class="push-hint" style="margin:0.25rem 0 0;">
+            Darf auf „Mein Konto" eigene Schlüssel anlegen, mit denen ein Programm in seinem Namen zugreift — nie mehr,
+            als die Person selbst sieht. Herabsetzen wirkt <strong>sofort</strong> auf alle vorhandenen Schlüssel
+            (bei „keine" ruhen sie).
+          </p>
+        </div>
+        <div class="form-group" id="um-mcp-role-hint" style="display:none;">
+          <p class="push-hint" style="margin:0;">Der Admin darf Zugangsschlüssel per Rolle anlegen.</p>
+        </div>
         ${isEdit ? `
         <div class="form-section">
           <label class="form-section-title">Soll-Stunden pro Tag</label>
@@ -1469,9 +1487,16 @@ async function showUserModal(user) {
     if (orderGroup) orderGroup.style.display = perRolle ? 'none' : '';
     if (orderHint) orderHint.style.display = perRolle ? '' : 'none';
   };
-  roleSel.addEventListener('change', () => { syncRightsVisibility(); syncOrderVisibility(); });
+  // Zugangsschlüssel: nur der Admin hat sie per Rolle
+  const syncMcpVisibility = () => {
+    const admin = roleSel.value === 'admin';
+    document.getElementById('um-mcp-group').style.display = admin ? 'none' : '';
+    document.getElementById('um-mcp-role-hint').style.display = admin ? '' : 'none';
+  };
+  roleSel.addEventListener('change', () => { syncRightsVisibility(); syncOrderVisibility(); syncMcpVisibility(); });
   syncRightsVisibility();
   syncOrderVisibility();
+  syncMcpVisibility();
 
   // Zwei-Faktor zuruecksetzen (nur bei Bearbeitung) — der Weg zurueck bei verlorenem Handy.
   if (isEdit) {
@@ -1605,6 +1630,7 @@ async function showUserModal(user) {
       can_products_edit: document.getElementById('um-can-products-edit').checked,
       can_products_add: document.getElementById('um-can-products-add').checked,
       can_meldungen: document.getElementById('um-can-meldungen').checked,
+      can_mcp: Number(document.getElementById('um-can-mcp').value),
     };
     // Bei neuem User Tages-Stunden setzen
     if (!isEdit) {
@@ -2576,6 +2602,7 @@ async function kontoPdfKarte() {
   if (!k) return;                      // Rolle mit Abrechnungs-Zugriff: Karte gibt es hier nicht
   // Das Formular filtert nach Projekt — ohne diese Liste stuende dort nur „Alle Projekte".
   try { const d = await api('GET', '/api/projects'); if (d) S.projects = d.projects; } catch (_) {}
+  if (!k.isConnected) return;   // Seite inzwischen neu gezeichnet (z. B. Recht geändert) — der neue Durchlauf baut die Karte
   k.innerHTML = `
     <h3>&#128196; Zeitnachweis als PDF</h3>
     <p style="margin:0 0 .8rem">Deine erfassten Zeiten als PDF — für die Ablage oder zum Ausdrucken.</p>
@@ -2766,6 +2793,10 @@ async function kontoAvatarKarte() {
   const k = document.getElementById('konto-avatar');
   if (!k) return;
   await avatarStandLaden();
+  // Gefunden vom Test der Zugangsschlüssel (14.11.2026): Ändert der Admin ein Recht, während jemand auf
+  // „Mein Konto" steht, zeichnet das Laden die Seite ein zweites Mal. Diese Karte wartete noch, suchte dann ihre
+  // Knöpfe per document.getElementById auf der NEUEN Seite — dort gab es sie noch nicht → Skriptfehler.
+  if (!k.isConnected) return;   // Seite inzwischen neu gezeichnet (z. B. Recht geändert) — der neue Durchlauf baut die Karte
   const hatBild = !!(S.avatarStand || {})[S.user.id];
   k.innerHTML = `
     <h3>&#128100; Profilbild</h3>
@@ -2852,6 +2883,7 @@ async function kontoGeburtstagKarte() {
   let d;
   try { d = await api('GET', '/api/users/geburtstag-freigabe'); }
   catch (_) { k.style.display = 'none'; return; }
+  if (!k.isConnected) return;   // Seite inzwischen neu gezeichnet (z. B. Recht geändert) — der neue Durchlauf baut die Karte
 
   const datum = d.geburtsdatum
     ? new Date(d.geburtsdatum + 'T12:00:00').toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -2885,6 +2917,7 @@ async function kontoWarnungenKarte() {
   let d;
   try { d = await api('GET', '/api/users/warnungen'); }
   catch (_) { k.style.display = 'none'; return; }
+  if (!k.isConnected) return;   // Seite inzwischen neu gezeichnet (z. B. Recht geändert) — der neue Durchlauf baut die Karte
 
   const schalter = [
     ['pausen', 'Zu kurze Pausen', '§ 4 ArbZG bzw. § 11 JArbSchG'],
@@ -3051,6 +3084,7 @@ async function kontoAuszahlungKarte() {
   let liste = [];
   try { liste = (await api('GET', '/api/payouts')).auszahlungen || []; }
   catch (_) { k.style.display = 'none'; return; }
+  if (!k.isConnected) return;   // Seite inzwischen neu gezeichnet (z. B. Recht geändert) — der neue Durchlauf baut die Karte
 
   const offen = liste.filter(z => z.status === 'offen');
   const erledigt = liste.filter(z => z.status !== 'offen');
@@ -3133,6 +3167,7 @@ async function kontoStammdatenKarte() {
   let d;
   try { d = (await api('GET', '/api/users/meine-stammdaten')).stammdaten; }
   catch (_) { k.style.display = 'none'; return; }
+  if (!k.isConnected) return;   // Seite inzwischen neu gezeichnet (z. B. Recht geändert) — der neue Durchlauf baut die Karte
 
   const datum = (t) => t ? new Date(t + 'T12:00:00').toLocaleDateString('de-DE') : null;
   const zeile = (bez, wert, hinweis) => wert === null || wert === undefined || wert === ''
@@ -3157,6 +3192,7 @@ async function kontoStammdatenKarte() {
     produktverzeichnis_pflegen: 'Lagerdaten pflegen',
     artikel_einlernen: 'Artikel einlernen',
     meldungen_bearbeiten: 'Meldungen bearbeiten',
+    zugangsschluessel: 'Zugangsschlüssel für Programme',
   };
   // Zwei Rechte schliessen jeweils ein kleineres ein (barcoderecht.js: „das groessere Recht
   // schliesst das kleinere ein"). Beide nebeneinander zu nennen liest sich wie zwei Dinge, obwohl
@@ -3172,7 +3208,8 @@ async function kontoStammdatenKarte() {
   const rechte = Object.keys(rechteRoh)
     .filter(k => rechteRoh[k] && !verdeckt.has(k))
     .map(k => (RECHTE_NAMEN[k] || k)
-      + (UMFASST[k] && rechteRoh[UMFASST[k].klein] === false ? UMFASST[k].zusatz : ''))
+      + (UMFASST[k] && rechteRoh[UMFASST[k].klein] === false ? UMFASST[k].zusatz : '')
+      + (typeof rechteRoh[k] === 'string' ? ` (${rechteRoh[k]})` : ''))   // Stufe, z. B. „nur lesen“
     .join(', ');
 
   k.innerHTML = `
@@ -3246,15 +3283,22 @@ function kontoSicherheitKarte() {
 // genau einmal; gespeichert ist auf dem Server nur ein Hash (schluessel.js).
 // Der Admin sieht zusätzlich alle Schlüssel aller Konten und das Zugriffsprotokoll von /mcp.
 const SCHLUESSEL_RECHT = { lesen: 'lesen', schreiben: 'lesen + schreiben' };
-const SCHLUESSEL_ZUSTAND = { aktiv: 'aktiv', abgelaufen: 'abgelaufen', widerrufen: 'widerrufen' };
+const SCHLUESSEL_ZUSTAND = { aktiv: 'aktiv', abgelaufen: 'abgelaufen', widerrufen: 'widerrufen', ruht: 'ruht (kein Recht)' };
 
+// Widerrufene stehen eingeklappt darunter: Sie zählen nichts mehr, bleiben aber für das Zugriffsprotokoll da.
 function schluesselZeilen(liste, mitBesitzer) {
   if (!liste.length) return '<p class="push-hint">Noch keine Schlüssel.</p>';
+  const lebend = liste.filter(s => s.zustand !== 'widerrufen');
+  const tot = liste.filter(s => s.zustand === 'widerrufen');
+  return (lebend.length ? schluesselTabelle(lebend, mitBesitzer) : '<p class="push-hint">Keine gültigen Schlüssel.</p>')
+    + (tot.length ? `<details class="schluessel-widerrufen" style="margin-top:.4rem"><summary>Widerrufene (${tot.length})</summary>${schluesselTabelle(tot, mitBesitzer)}</details>` : '');
+}
+function schluesselTabelle(liste, mitBesitzer) {
   return `<div class="table-scroll"><table class="table schluessel-tabelle">
     <thead><tr><th>Name</th>${mitBesitzer ? '<th>Konto</th>' : ''}<th>Recht</th><th>Anfang</th><th>Gültig bis</th><th>Zuletzt benutzt</th><th>Zustand</th><th></th></tr></thead>
     <tbody>${liste.map(s => `<tr class="schluessel-zeile${s.zustand !== 'aktiv' ? ' schluessel-aus' : ''}" data-id="${s.id}">
       <td>${esc(s.name)}</td>${mitBesitzer ? `<td>${esc(s.user_name || '–')}</td>` : ''}
-      <td>${esc(SCHLUESSEL_RECHT[s.recht] || s.recht)}</td>
+      <td>${esc(SCHLUESSEL_RECHT[s.recht] || s.recht)}${s.wirksam && s.wirksam !== s.recht ? ' <small>(wirkt: nur lesen)</small>' : ''}</td>
       <td><code>${esc(s.anzeige)}</code></td>
       <td>${s.ablauf ? esc(formatDateDE(s.ablauf)) : 'unbegrenzt'}</td>
       <td>${s.zuletzt_am ? esc(formatDateTimeDE(s.zuletzt_am)) : 'nie'}</td>
@@ -3266,9 +3310,11 @@ function schluesselZeilen(liste, mitBesitzer) {
 async function kontoSchluesselKarte() {
   const k = document.getElementById('konto-schluessel');
   if (!k) return;
-  let eigene = [], alle = null, protokoll = null;
+  let eigene = [], alle = null, protokoll = null, stufe = 0;
   try {
-    eigene = (await api('GET', '/api/schluessel')).schluessel || [];
+    const d = await api('GET', '/api/schluessel');
+    eigene = d.schluessel || [];
+    stufe = Number(d.stufe) || 0;
     if (S.user.role === 'admin') {
       alle = (await api('GET', '/api/schluessel?alle=1')).schluessel || [];
       protokoll = (await api('GET', '/api/schluessel/protokoll')).zugriffe || [];
@@ -3277,6 +3323,7 @@ async function kontoSchluesselKarte() {
     k.innerHTML = '<h3>&#128477; Zugangsschlüssel für Programme</h3><p>Nicht abrufbar.</p>';
     return;
   }
+  if (!k.isConnected) return;   // Seite inzwischen neu gezeichnet (z. B. Recht geändert) — der neue Durchlauf baut die Karte
   const adresse = location.origin + '/mcp';
   k.innerHTML = `
     <h3>&#128477; Zugangsschlüssel für Programme</h3>
@@ -3286,7 +3333,8 @@ async function kontoSchluesselKarte() {
     </p>
     <div id="schluessel-neu-anzeige"></div>
     ${schluesselZeilen(eigene, false)}
-    <details class="schluessel-anlegen" style="margin-top:.75rem">
+    ${stufe === 0 ? `<p class="push-hint schluessel-kein-recht" style="margin-top:.75rem">Du darfst keine Zugangsschlüssel anlegen.
+      Das Recht vergibt der Chef oder Admin im Mitarbeiter-Dialog.</p>` : `<details class="schluessel-anlegen" style="margin-top:.75rem">
       <summary>Neuen Schlüssel anlegen</summary>
       <div class="error-msg" id="schluessel-fehler"></div>
       <form id="schluessel-form" style="margin-top:.5rem">
@@ -3299,7 +3347,7 @@ async function kontoSchluesselKarte() {
             <label for="schluessel-recht">Recht</label>
             <select class="form-control" id="schluessel-recht" data-kein-entwurf="1">
               <option value="lesen" selected>nur lesen</option>
-              <option value="schreiben">lesen + Zeiteinträge anlegen/ändern</option>
+              ${stufe >= 2 ? '<option value="schreiben">lesen + Zeiteinträge anlegen/ändern</option>' : ''}
             </select>
           </div>
           <div class="form-group">
@@ -3313,7 +3361,7 @@ async function kontoSchluesselKarte() {
         </div>
         <button type="submit" class="btn btn-primary">Schlüssel anlegen</button>
       </form>
-    </details>
+    </details>`}
     ${alle ? `<h4 style="margin-top:1.25rem">Alle Schlüssel (Admin)</h4>${schluesselZeilen(alle, true)}` : ''}
     ${protokoll ? `<details style="margin-top:.75rem"><summary>Zugriffsprotokoll /mcp (letzte ${protokoll.length})</summary>
       ${protokoll.length ? `<div class="table-scroll"><table class="table schluessel-protokoll">
@@ -3332,7 +3380,8 @@ async function kontoSchluesselKarte() {
     } catch (err) { toast(err.message, 'error'); }
   }));
 
-  document.getElementById('schluessel-form').addEventListener('submit', async (e) => {
+  const form = document.getElementById('schluessel-form');
+  if (form) form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fehler = document.getElementById('schluessel-fehler');
     fehler.style.display = 'none';
@@ -3447,6 +3496,7 @@ async function kontoZweiFaktorKarte() {
   let z;
   try { z = (await api('GET', '/api/auth/2fa/status')).zwei_faktor; }
   catch (_) { k.innerHTML = '<h3>&#128274; Zwei-Faktor-Anmeldung</h3><p>Zustand nicht abrufbar.</p>'; return; }
+  if (!k.isConnected) return;   // Seite inzwischen neu gezeichnet (z. B. Recht geändert) — der neue Durchlauf baut die Karte
   S.zweiFaktor = z;
 
   if (z.notabschaltung) {

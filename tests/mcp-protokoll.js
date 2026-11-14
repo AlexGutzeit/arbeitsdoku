@@ -50,7 +50,7 @@ const werkzeug = async (schl, name, args) => {
     const admin = await anmelden('admin', adminPw);
     const PW = 'Test1234!';
     const konto = async (username, name, role) => { const r = await req('POST', '/api/users', admin, { username, password: PW, name, role,
-      hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 }); return r.body?.id || r.body?.user?.id; };
+      hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8, can_mcp: 2 }); return r.body?.id || r.body?.user?.id; };
     const ids = { mia: await konto('mcpmia', 'Mia Mcp', 'mitarbeiter'), tom: await konto('mcptom', 'Tom Mcp', 'mitarbeiter'), chef: await konto('mcpchef', 'Carla Chef', 'chef') };
     const tok = { mia: await anmelden('mcpmia', PW), tom: await anmelden('mcptom', PW), chef: await anmelden('mcpchef', PW) };
     const eintrag = (t, d, von, bis, kunde) => req('POST', '/api/entries', t, { date: d, time_from: von, time_to: bis, break_minutes: 0, client: kunde });

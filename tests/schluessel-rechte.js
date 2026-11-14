@@ -54,7 +54,7 @@ async function anhalten() {
 
     const PW = 'Test1234!';
     const konto = async (username, role) => { const r = await req('POST', '/api/users', admin, { username, password: PW, name: 'Probe ' + username, role,
-      hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 }); return r.body?.id || r.body?.user?.id; };
+      hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8, can_mcp: 2 }); return r.body?.id || r.body?.user?.id; };
     const ids = { anna: await konto('schlanna', 'mitarbeiter'), ben: await konto('schlben', 'mitarbeiter'), chef: await konto('schlchef', 'chef') };
     const tok = { anna: await anmelden('schlanna', PW), ben: await anmelden('schlben', PW), chef: await anmelden('schlchef', PW) };
     ok('drei Konten (2 Mitarbeiter, Chef), angemeldet', Object.values(ids).every(Boolean) && Object.values(tok).every(Boolean));
@@ -195,6 +195,50 @@ async function anhalten() {
     await starten();
     const ab = await req('GET', '/api/entries', annaSchreiben);
     ok('abgelaufener Schlüssel → 401 SCHLUESSEL_ABGELAUFEN', ab.status === 401 && ab.body?.code === 'SCHLUESSEL_ABGELAUFEN', JSON.stringify(ab));
+
+    console.log('── Stufe des Kontos (Mitarbeiter-Dialog) ──');
+    const tokA = await anmelden('schlanna', 'Neu5678!x');
+    const stufe = (id, v) => req('PUT', `/api/users/${id}`, admin, { can_mcp: v });
+    const neuerMa = async (u, v) => { const body = { username: u, password: PW, name: 'Probe ' + u, role: 'mitarbeiter',
+      hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 }; if (v !== undefined) body.can_mcp = v;
+      const r = await req('POST', '/api/users', admin, body); return r.body?.id || r.body?.user?.id; };
+    const ohneId = await neuerMa('schlohne');
+    const tokOhne = await anmelden('schlohne', PW);
+    r = await neu(tokOhne, { name: 'x', recht: 'lesen', passwort: PW });
+    ok('neues Konto ohne Angabe: Stufe „keine" → Anlegen 403', r.status === 403 && /keine Zugangsschlüssel/.test(r.body?.error || ''), JSON.stringify(r));
+    ok('… die Liste meldet Stufe 0', (await req('GET', '/api/schluessel', tokOhne)).body?.stufe === 0);
+    await stufe(ohneId, 1);
+    r = await neu(tokOhne, { name: 'x', recht: 'schreiben', passwort: PW });
+    ok('Stufe 1: Schreibschlüssel anlegen → 403', r.status === 403, r.status);
+    r = await neu(tokOhne, { name: 'Leser', recht: 'lesen', passwort: PW });
+    ok('Stufe 1: Leseschlüssel → 201', r.status === 201, r.status);
+    r = await req('PUT', `/api/users/${ohneId}`, admin, { can_mcp: 5 });
+    ok('ungültige Stufe 5 → 400', r.status === 400, r.status);
+    // Herabsetzen wirkt sofort auf vorhandene Schlüssel
+    const stufeSchl = (await neu(tokA, { name: 'Stufenprobe', recht: 'schreiben', passwort: 'Neu5678!x' })).body?.schluessel;
+    ok('Anna (Stufe 2) legt einen Schreibschlüssel an', !!stufeSchl);
+    await stufe(ids.anna, 1);
+    r = await eintrag(stufeSchl, tag(20));
+    const lesenGeht = (await req('GET', '/api/entries', stufeSchl)).status;
+    ok('Anna auf Stufe 1 → derselbe Schlüssel darf nicht mehr schreiben (403), lesen schon', r.status === 403 && r.body?.code === 'SCHLUESSEL_NICHT_ERLAUBT' && lesenGeht === 200, JSON.stringify([r.status, lesenGeht]));
+    const zl = ((await req('GET', '/api/schluessel', tokA)).body.schluessel || []).find(s => s.name === 'Stufenprobe');
+    ok('… Liste: Recht „schreiben", wirkt „lesen"', zl && zl.recht === 'schreiben' && zl.wirksam === 'lesen' && zl.zustand === 'aktiv', JSON.stringify(zl));
+    await stufe(ids.anna, 0);
+    r = await req('GET', '/api/entries', stufeSchl);
+    const zr = ((await req('GET', '/api/schluessel', tokA)).body.schluessel || []).find(s => s.name === 'Stufenprobe');
+    ok('Anna auf Stufe 0 → Schlüssel ruht (403 SCHLUESSEL_RUHT), Liste „ruht"', r.status === 403 && r.body?.code === 'SCHLUESSEL_RUHT' && zr.zustand === 'ruht', JSON.stringify([r, zr && zr.zustand]));
+    ok('… Anlegen ebenfalls 403', (await neu(tokA, { name: 'y', recht: 'lesen', passwort: 'Neu5678!x' })).status === 403);
+    await stufe(ids.anna, 2);
+    ok('Stufe wieder 2 → derselbe Schlüssel schreibt wieder (nicht widerrufen, nur geruht)', (await eintrag(stufeSchl, tag(21))).status === 201);
+    const adminSchl = (await neu(admin, { name: 'Admin per Rolle', recht: 'schreiben', passwort: adminPw })).body?.schluessel;
+    ok('Admin (Stufe per Rolle, gespeichert 0) legt einen Schreibschlüssel an', !!adminSchl && (await req('GET', '/api/entries', adminSchl)).status === 200);
+    const aenderung = ((await req('GET', '/api/audit?limit=200', admin)).body?.logs || []).filter(l => /Recht Zugangsschlüssel für Programme/.test(l.details || ''));
+    ok('Änderung der Stufe steht im Änderungsprotokoll („keine → nur lesen" usw.)', aenderung.length >= 3 && aenderung.some(l => /keine/.test(l.details) && /nur lesen/.test(l.details)), JSON.stringify(aenderung.map(l => l.details)).slice(0, 300));
+    const auskunft = (await req('GET', '/api/users/meine-daten', tokOhne)).body;
+    const stamm = (await req('GET', '/api/users/meine-stammdaten', tokOhne)).body;
+    ok('Datenauskunft enthält die Schlüssel (ohne Hash), Stammdaten-Karte die Stufe „nur lesen"',
+      (auskunft.zugangsschluessel || []).length === 1 && !JSON.stringify(auskunft).includes('"hash"') && JSON.stringify(stamm || {}).includes('"zugangsschluessel":"nur lesen"'),
+      JSON.stringify([auskunft && auskunft.zugangsschluessel, stamm && stamm.rechte]).slice(0, 300));
 
     console.log('── Bremsen ──');
     const tokAnna2 = await anmelden('schlanna', 'Neu5678!x');

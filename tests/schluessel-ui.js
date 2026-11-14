@@ -37,8 +37,11 @@ function req(m, p, token, b) {
     const admin = (await req('POST', '/api/auth/login', null, { username: 'admin', password: adminPw })).body?.token;
     const PW = 'Test1234!';
     await req('POST', '/api/users', admin, { username: 'uima', password: PW, name: 'Uwe Ui', role: 'mitarbeiter',
+      hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8, can_mcp: 1 });
+    const ohne = await req('POST', '/api/users', admin, { username: 'uiohne', password: PW, name: 'Olga Ohne', role: 'mitarbeiter',
       hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 });
-    ok('Server, Admin und Mitarbeiter', !!admin);
+    const ohneId = ohne.body?.id || ohne.body?.user?.id;
+    ok('Server, Admin und zwei Mitarbeiter (einer mit Recht „nur lesen", einer ohne)', !!admin && !!ohneId);
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const fehler = [];
@@ -101,6 +104,31 @@ function req(m, p, token, b) {
     const ad = await A.evaluate(() => { const k = document.getElementById('konto-schluessel').textContent;
       return { alle: /Alle Schlüssel \(Admin\)/.test(k), uwe: /Uwe Ui/.test(k), protokoll: /Zugriffsprotokoll \/mcp/.test(k) }; });
     ok('Admin sieht „Alle Schlüssel" mit Uwes Schlüssel und das Zugriffsprotokoll', ad.alle && ad.uwe && ad.protokoll, JSON.stringify(ad));
+
+    console.log('── Recht im Mitarbeiter-Dialog ──');
+    const { page: O } = await seite('uiohne', PW);
+    const o1 = await O.evaluate(() => ({ hinweis: !!document.querySelector('.schluessel-kein-recht'), form: !!document.getElementById('schluessel-form') }));
+    ok('ohne Recht: Hinweis statt Formular', o1.hinweis && !o1.form, JSON.stringify(o1));
+    await A.evaluate(() => { location.hash = '/users'; });
+    await A.waitForSelector('.edit-user'); await sleep(600);
+    await A.evaluate((id) => document.querySelector(`.edit-user[data-id="${id}"]`).click(), ohneId);
+    await A.waitForSelector('#um-can-mcp'); await sleep(400);
+    const d1 = await A.evaluate(() => ({ wert: document.getElementById('um-can-mcp').value, sichtbar: document.getElementById('um-mcp-group').checkVisibility(),
+      optionen: [...document.getElementById('um-can-mcp').options].map(o => o.textContent.trim()) }));
+    ok('Dialog: Auswahl „Zugangsschlüssel" sichtbar, steht auf „keine", drei Stufen', d1.sichtbar && d1.wert === '0' && d1.optionen.length === 3, JSON.stringify(d1));
+    await A.select('#um-role', 'admin'); await sleep(100);
+    const d2 = await A.evaluate(() => ({ gruppe: document.getElementById('um-mcp-group').checkVisibility(), hinweis: document.getElementById('um-mcp-role-hint').checkVisibility() }));
+    ok('… Rolle Admin: Auswahl weg, Hinweis „per Rolle"', !d2.gruppe && d2.hinweis, JSON.stringify(d2));
+    await A.select('#um-role', 'mitarbeiter'); await sleep(100);
+    await A.select('#um-can-mcp', '1');
+    await A.evaluate(() => document.querySelector('#um-can-mcp').closest('form').querySelector('button[type="submit"]').click());
+    await sleep(1500);
+    const gesp = ((await req('GET', '/api/users', admin)).body?.users || []).find(u => u.id === ohneId);
+    ok('gespeichert: can_mcp = 1, Rolle unverändert', gesp && gesp.can_mcp === 1 && gesp.role === 'mitarbeiter', JSON.stringify(gesp && { can_mcp: gesp.can_mcp, role: gesp.role }));
+    await O.reload({ waitUntil: 'domcontentloaded' }); await O.waitForSelector('#konto-schluessel h3'); await sleep(400);
+    const o2 = await O.evaluate(() => ({ form: !!document.getElementById('schluessel-form'),
+      rechte: [...document.querySelectorAll('#schluessel-recht option')].map(x => x.value) }));
+    ok('danach: Formular da, nur „nur lesen" wählbar', o2.form && JSON.stringify(o2.rechte) === '["lesen"]', JSON.stringify(o2));
     ok('keine Skriptfehler im Browser', fehler.length === 0, fehler.join(' | '));
   } catch (e) { ok('Ablauf ohne Ausnahme', false, e && e.stack); }
   finally {

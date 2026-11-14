@@ -129,7 +129,7 @@ function gateFrei(url) {
 // Der angemeldete Benutzer, wie ihn jede Route als req.user sieht — für Sitzungen UND Zugangsschlüssel
 // dieselbe Abfrage, damit beide Wege garantiert dieselben Rechte-Spalten tragen.
 function nutzerLaden(db, userId) {
-  return db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, work_start, birth_date, COALESCE(active,1) AS active FROM users WHERE id = ?").get(userId);
+  return db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, can_mcp, work_start, birth_date, COALESCE(active,1) AS active FROM users WHERE id = ?").get(userId);
 }
 
 function sitzungPruefen(db, decoded) {
@@ -243,7 +243,10 @@ function schluesselPruefen(db, roh) {
   const user = nutzerLaden(db, eintrag.user_id);
   if (!user) return { status: 401, code: GRUND.GELOESCHT, error: 'Dieses Konto gibt es nicht mehr.' };
   if (user.active === 0) return { status: 401, code: GRUND.AUSGESTELLT, error: 'Dieses Konto ist ausgestellt.' };
-  return { eintrag, user };
+  // Stufe des Kontos (Mitarbeiter-Dialog) begrenzt jeden Schlüssel — live, bei jeder Anfrage (schluessel.js)
+  const recht = schluessel.wirksamesRecht(eintrag.recht, user);
+  if (!recht) return { status: 403, code: 'SCHLUESSEL_RUHT', error: 'Für dieses Konto sind Zugangsschlüssel abgeschaltet.' };
+  return { eintrag: { ...eintrag, recht }, user };
 }
 
 // „Zuletzt benutzt" höchstens einmal je Minute schreiben — nicht bei jeder Anfrage. Auch /mcp (routes/mcp.js).

@@ -18,9 +18,18 @@ const NAME_MAX = 60;
 const JE_KONTO_MAX = 20;   // aktive Schlüssel je Konto
 
 const SPALTEN = `s.id, s.user_id, u.name AS user_name, s.name, s.recht, s.anzeige, s.ablauf,
-  s.angelegt_am, s.widerrufen_am, s.zuletzt_am, s.zuletzt_ip`;
-const zustand = (s) => (s.widerrufen_am ? 'widerrufen' : (s.ablauf && berlinHeute() > s.ablauf ? 'abgelaufen' : 'aktiv'));
-const mitZustand = (liste) => liste.map(s => ({ ...s, zustand: zustand(s) }));
+  s.angelegt_am, s.widerrufen_am, s.zuletzt_am, s.zuletzt_ip, u.role AS user_role, u.can_mcp AS user_can_mcp`;
+// „ruht": Das Konto hat (derzeit) kein Recht auf Zugangsschlüssel. „nur lesen": als Schreibschlüssel angelegt,
+// die Stufe des Kontos lässt aber nur Lesen zu. Beides live aus der Stufe — wie die Anmeldeprüfung.
+function zustand(s) {
+  if (s.widerrufen_am) return 'widerrufen';
+  if (s.ablauf && berlinHeute() > s.ablauf) return 'abgelaufen';
+  const wirksam = schluessel.wirksamesRecht(s.recht, { role: s.user_role, can_mcp: s.user_can_mcp });
+  if (!wirksam) return 'ruht';
+  return 'aktiv';
+}
+const mitZustand = (liste) => liste.map(({ user_role, user_can_mcp, ...s }) => ({ ...s, zustand: zustand({ ...s, user_role, user_can_mcp }),
+  wirksam: s.widerrufen_am ? null : schluessel.wirksamesRecht(s.recht, { role: user_role, can_mcp: user_can_mcp }) }));
 
 // Eigene Schlüssel; der Admin mit ?alle=1 die aller Konten
 router.get('/', authenticate, (req, res) => {
@@ -28,7 +37,7 @@ router.get('/', authenticate, (req, res) => {
   const alle = req.user.role === 'admin' && req.query.alle === '1';
   const liste = db.prepare(`SELECT ${SPALTEN} FROM api_schluessel s LEFT JOIN users u ON u.id = s.user_id
     ${alle ? '' : 'WHERE s.user_id = ?'} ORDER BY (s.widerrufen_am IS NOT NULL), s.angelegt_am DESC`).all(...(alle ? [] : [req.user.id]));
-  res.json({ schluessel: mitZustand(liste), rechte: schluessel.RECHTE });
+  res.json({ schluessel: mitZustand(liste), rechte: schluessel.RECHTE, stufe: schluessel.mcpStufe(req.user) });
 });
 
 // Anlegen: nur mit dem eigenen Passwort. Der Schlüssel steht genau EINMAL in der Antwort.
@@ -39,6 +48,9 @@ router.post('/', authenticate, async (req, res) => {
   if (!n) return res.status(400).json({ error: 'Bitte einen Namen angeben, z. B. „Hermes".' });
   if (n.length > NAME_MAX) return res.status(400).json({ error: `Der Name ist zu lang (höchstens ${NAME_MAX} Zeichen).` });
   if (!schluessel.RECHTE.includes(recht)) return res.status(400).json({ error: 'Unbekanntes Recht.' });
+  const stufe = schluessel.mcpStufe(req.user);
+  if (stufe === 0) return res.status(403).json({ error: 'Du darfst keine Zugangsschlüssel anlegen. Das Recht vergibt der Chef oder Admin im Mitarbeiter-Dialog.' });
+  if (recht === 'schreiben' && stufe < 2) return res.status(403).json({ error: 'Du darfst nur Schlüssel zum Lesen anlegen.' });
   let bis = null;
   if (ablauf !== undefined && ablauf !== null && ablauf !== '') {
     if (!istDatum(ablauf)) return res.status(400).json({ error: 'Ungültiges Ablaufdatum.' });

@@ -156,6 +156,7 @@ async function kontoKollegenKarte() {
   let p;
   try { p = await api('GET', '/api/kollegen/mein-profil'); } catch (_) { k.style.display = 'none'; return; }
   if (!p) return;
+  if (!k.isConnected) return;   // Seite inzwischen neu gezeichnet (z. B. Recht geändert) — der neue Durchlauf baut die Karte
   k.innerHTML = `
     <h3>&#129309; Für die Kollegen</h3>
     <p class="kollegen-konto-hinweis">Was du hier freigibst, sehen alle angemeldeten Kolleginnen und Kollegen unter
