@@ -142,10 +142,14 @@ async function anhalten() {
     const { LESEN } = require('../schluessel');
     const projekt = (await req('POST', '/api/projects', admin, { name: 'Schlüssel-Probe' })).body;
     const pid = projekt?.id || projekt?.project?.id || 1;
+    // Eigener Schlüssel: Der Chef-Schlüssel ist oben schon oft benutzt, und eine 429 der Bremse würde hier eine
+    // falsche Route verdecken — deshalb zählt auch sie als Fehler.
+    const routenSchl = (await neu(tok.chef, { name: 'Routenprobe', recht: 'lesen', passwort: PW })).body?.schluessel;
     const falsch = [];
     for (const muster of LESEN) {
       const p = muster.replace(/\\d\+/g, muster.includes('/api/statistics') || muster.includes('/api/payouts') ? String(ids.anna) : String(pid));
-      const a = await req('GET', p, chefLesen);
+      const a = await req('GET', p, routenSchl);
+      if (a.status === 429 || a.status === 401) falsch.push(p + ' (' + a.status + ')');
       if (a.status === 404 && a.body?.code === 'UNBEKANNTE_ADRESSE') falsch.push(p);
       if (a.status === 403 && a.body?.code === 'SCHLUESSEL_NICHT_ERLAUBT') falsch.push(p + ' (abgewiesen)');
     }
@@ -163,7 +167,7 @@ async function anhalten() {
     r = await req('POST', `/api/schluessel/${benId}/widerrufen`, admin);
     ok('Admin widerruft Bens Schlüssel → 401', r.status === 200 && (await req('GET', '/api/entries', benLesen)).status === 401);
     const alleListe = (await req('GET', '/api/schluessel?alle=1', admin)).body.schluessel;
-    ok('Admin-Liste zeigt alle Konten mit Zustand', alleListe.length === 4 && alleListe.filter(s => s.zustand === 'widerrufen').length === 2, JSON.stringify(alleListe.map(s => [s.user_name, s.zustand])));
+    ok('Admin-Liste zeigt alle Konten mit Zustand', alleListe.length === 5 && alleListe.filter(s => s.zustand === 'widerrufen').length === 2, JSON.stringify(alleListe.map(s => [s.user_name, s.zustand])));
     ok('Anna sieht mit ?alle=1 trotzdem nur ihre', ((await req('GET', '/api/schluessel?alle=1', tok.anna)).body.schluessel || []).every(s => s.user_id === ids.anna));
 
     console.log('── Passwortwechsel / überall abmelden ──');

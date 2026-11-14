@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**298 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**300 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -278,6 +278,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `scanner-formular-ui.js` | Der Scanner im Bestellformular — mit GESTELLTEM Decoder. |
 | `scenario-shared-planning.js` | Komplexer Szenario-Test gegen den PROD-KLON (data/local.db, anonymisiert → Passwort 'test'). |
 | `scheduler-tick.js` | In-Process-Test des Zusammenfassungs-Schedulers: reine Funktionen isDue()/buildSummaryText() + |
+| `schluessel-rechte.js` | Zugangsschlüssel für Programme: Anlegen, Rechte, Grenzen, Widerruf — über die echte Schnittstelle. |
+| `schluessel-ui.js` | Zugangsschlüssel auf „Mein Konto": anlegen, einmal sehen, kopieren, widerrufen — im Browser. |
 | `scroll-ruckeln-prodklon.js` | Prod-Klon-Pruefung: Kein Zurueckspringen beim Scrollen — mit den ECHTEN Daten, |
 | `scroll-ruckeln-ui.js` | Puppeteer-Test: Beim Scrollen darf die Seite NICHT zurückspringen. |
 | `seite-laden-ui.js` | Seiten laden: Fehleranzeige und Veraltet-Waechter auf JEDER Seite (R4 + R5, 25.09.2026). |
