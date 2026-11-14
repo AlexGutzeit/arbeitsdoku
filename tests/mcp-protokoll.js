@@ -164,9 +164,10 @@ const werkzeug = async (schl, name, args) => {
     await req('POST', '/api/projects', admin, { name: 'Neubau Probe', client: 'Probe' });
     for (const n of ['Bohrhammer', 'Presszange']) await req('POST', '/api/tools', admin, { name: n });
     S.tomSchreiben = await schl(tok.tom, 'Tom schreibt', 'schreiben');
+    const chefSchreibVorab = await schl(tok.chef, 'Chef schreibt (Brett)', 'schreiben');
     const schreibNamen = ((await rpc(S.miaSchreiben, 'tools/list')).body.result.tools || []).map(t => t.name);
-    ok('Schreib-Schlüssel: 27 Werkzeuge (21 lesen + 6 schreiben), Lese-Schlüssel weiter 21',
-      schreibNamen.length === 27 && ['material_bestellen', 'abwesenheit_eintragen', 'werkzeug_entnehmen', 'werkzeug_zurueckgeben'].every(n => schreibNamen.includes(n))
+    ok('Schreib-Schlüssel: 29 Werkzeuge (21 lesen + 8 schreiben), Lese-Schlüssel weiter 21',
+      schreibNamen.length === 29 && ['material_bestellen', 'abwesenheit_eintragen', 'werkzeug_entnehmen', 'werkzeug_zurueckgeben'].every(n => schreibNamen.includes(n))
       && ((await rpc(S.chef, 'tools/list')).body.result.tools || []).length === 21, schreibNamen.join(','));
     const bestellungen = async () => ((await req('GET', '/api/orders', admin)).body?.orders || []);
     w = await werkzeug(S.miaSchreiben, 'material_bestellen', { material: 'Kabelbinder 280 mm', menge: 50, einheit: 'Stk', auftrag: 'neubau', vorschau: true });
@@ -217,6 +218,33 @@ const werkzeug = async (schl, name, args) => {
       && prot2.some(d => /\/checkout → 200 .*Werkzeug werkzeug_entnehmen/.test(d)) && prot2.some(d => /\/takeover → 200 .*„Tom schreibt"/.test(d))
       && prot2.some(d => /\/return → 200 .*Werkzeug werkzeug_zurueckgeben/.test(d)), JSON.stringify(prot2).slice(0, 600));
 
+    console.log('── Schwarzes Brett ──');
+    const brettZahl = async () => ((await req('GET', '/api/bulletin', admin)).body?.entries || []).length;
+    w = await werkzeug(S.miaSchreiben, 'aushang_anlegen', { titel: 'Grillfest', text: 'Freitag ab 16 Uhr' });
+    ok('Mia ohne Recht „Schwarzes Brett" → klarer Hinweis, nichts ausgehängt', /fehlt dir das Recht/.test(w.fehler || '') && (await brettZahl()) === 0, w.fehler);
+    await req('PUT', `/api/users/${ids.mia}`, admin, { can_bulletin: true });
+    w = await werkzeug(S.miaSchreiben, 'aushang_anlegen', { titel: 'Grillfest', text: 'Freitag ab 16 Uhr', termin: '2026-11-20', vorschau: true });
+    ok('mit Recht: Vorschau, nichts ausgehängt', w.daten && w.daten.vorschau && (await brettZahl()) === 0, JSON.stringify(w));
+    w = await werkzeug(S.miaSchreiben, 'aushang_anlegen', { titel: 'Grillfest', text: 'Freitag ab 16 Uhr', termin: '2026-11-20', entfernen_am: '2026-11-21' });
+    const aushNr = w.daten && w.daten.aushang && w.daten.aushang.nr;
+    let brettLesen = await werkzeug(S.chef, 'aushaenge', {});
+    const aush = brettLesen.daten && brettLesen.daten.aushaenge.find(x => x.nr === aushNr);
+    ok('ausgehängt: der Chef liest ihn mit Nummer, Termin, Entfernen-Datum und Autorin', aush && aush.termin === '2026-11-20' && aush.entfernt_am === '2026-11-21' && aush.von === 'Mia Mcp', JSON.stringify(brettLesen.daten));
+    w = await werkzeug(S.miaSchreiben, 'aushang_anlegen', { titel: 'x', termin: '20.11.2026' });
+    ok('falsches Datumsformat → Eingabefehler (die Route prüft Daten nicht selbst)', /gültiges Datum/.test(w.fehler || ''), w.fehler);
+    w = await werkzeug(S.miaSchreiben, 'aushang_aendern', { nr: aushNr, text: 'Freitag ab 17 Uhr, bitte Salat mitbringen' });
+    brettLesen = await werkzeug(S.chef, 'aushaenge', {});
+    ok('ändern: neuer Text kommt an', w.daten && w.daten.gespeichert && brettLesen.daten.aushaenge.find(x => x.nr === aushNr).text === 'Freitag ab 17 Uhr, bitte Salat mitbringen', JSON.stringify(w));
+    w = await werkzeug(S.miaSchreiben, 'aushang_aendern', { nr: aushNr, text: 'Freitag ab 17 Uhr, bitte Salat mitbringen' });
+    ok('gleicher Text noch einmal → „keine Änderung" (keine Meldung, kein Zähler)', w.daten && w.daten.gespeichert === false && /Keine Änderung/.test(w.daten.hinweis), JSON.stringify(w));
+    w = await werkzeug(S.miaSchreiben, 'aushang_aendern', { nr: aushNr, titel: '  ' });
+    ok('leere Überschrift → Hinweis', /nicht leer/.test(w.fehler || ''), w.fehler);
+    await req('PUT', `/api/users/${ids.mia}`, admin, { can_bulletin: false });
+    w = await werkzeug(S.miaSchreiben, 'aushang_aendern', { nr: aushNr, titel: 'Grillfest abgesagt' });
+    ok('Recht entzogen → Ändern abgelehnt, Aushang unverändert', /fehlt dir das Recht/.test(w.fehler || '') && (await werkzeug(S.chef, 'aushaenge', {})).daten.aushaenge.find(x => x.nr === aushNr).titel === 'Grillfest', w.fehler);
+    const delBrett = await req('DELETE', `/api/bulletin/${aushNr}`, chefSchreibVorab);
+    ok('DELETE /api/bulletin/:id mit Schreibschlüssel des Chefs → 403', delBrett.status === 403 && delBrett.body?.code === 'SCHLUESSEL_NICHT_ERLAUBT', JSON.stringify(delBrett));
+
     console.log('── über REST weiterhin gesperrt ──');
     const bestNr = (await bestellungen())[0].id;
     const abwNr = (await abw())[0].id;
@@ -241,6 +269,9 @@ const werkzeug = async (schl, name, args) => {
     ok('… und es umgeht die Bremse nicht (nach 60: 429)', fst.includes(429), fst.slice(55).join(','));
 
     console.log('── Bremse ──');
+    // Neues Minutenfenster: Der Test hat bis hier über 120 /mcp-Aufrufe von 127.0.0.1 gemacht — sonst griffe die
+    // Grenze je ADRESSE vor der je Schlüssel, die hier gemessen werden soll.
+    await sleep(61000);
     const vielSchl = await schl(tok.chef, 'Viel', 'lesen');
     const st = [];
     for (let i = 0; i < 25; i++) st.push((await werkzeug(vielSchl, 'kunden_suchen', {})).status);

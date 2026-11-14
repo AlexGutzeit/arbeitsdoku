@@ -69,6 +69,11 @@ router.post('/', authenticate, canBulletin, (req, res) => {
   if (!title || !title.trim()) {
     return res.status(400).json({ error: 'Überschrift ist ein Pflichtfeld' });
   }
+  // Vorschau (14.11.2026, Zugangsschlüssel/MCP): Recht und Pflichtfeld sind geprüft, geschrieben wird nichts.
+  if (req.body.vorschau === true) {
+    res.locals.nurVorschau = true;
+    return res.json({ vorschau: true, entry: { title: title.trim(), text: text || '', event_date: event_date || null, auto_delete_date: auto_delete_date || null } });
+  }
 
   const result = db.prepare(`
     INSERT INTO bulletin_entries (created_by, updated_by, title, text, event_date, auto_delete_date, created_at, updated_at)
@@ -123,6 +128,10 @@ router.put('/:id', authenticate, canBulletin, (req, res) => {
       WHERE b.id = ?
     `).get(req.params.id);
     return res.json({ entry: unbewegt, unchanged: true });
+  }
+  if (req.body.vorschau === true) {   // siehe POST
+    res.locals.nurVorschau = true;
+    return res.json({ vorschau: true, entry: { ...entry, title: neuTitel, text: neuText, event_date: neuEvent, auto_delete_date: neuAuto } });
   }
 
   db.prepare(`

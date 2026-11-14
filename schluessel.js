@@ -93,6 +93,8 @@ const SCHREIBEN = [
   ['POST', `/api/tools/${Z}/checkout`],
   ['POST', `/api/tools/${Z}/return`],
   ['POST', `/api/tools/${Z}/takeover`],
+  ['POST', '/api/bulletin'],          // Schwarzes Brett (Alex, 14.11.2026) — die Route prüft das Recht „Schwarzes Brett"
+  ['PUT', `/api/bulletin/${Z}`],
 ];
 const muster = (p) => new RegExp('^' + p + '/?$');
 const LESEN_RE = LESEN.map(muster);

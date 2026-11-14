@@ -1180,7 +1180,9 @@ beantworten wie „Wie viele Stunden war Max im Oktober bei Kunde Müller?". Daf
   * `abwesenheit_eintragen` — nur für sich selbst: Urlaub, FZA, Sonderurlaub werden **beantragt** (Chef/Admin
     genehmigt in der App), Krank, Berufsschule, Innung sind sofort eingetragen; keine Feiertage, kein Genehmigen,
     kein Ändern. Die Vorschau zeigt, ob der Resturlaub reicht.
-  * `werkzeug_entnehmen` (von einem Kollegen nur mit `uebernehmen: true`), `werkzeug_zurueckgeben`. Jede Schreibaktion steht im Änderungsprotokoll („Schreibzugriff über
+  * `werkzeug_entnehmen` (von einem Kollegen nur mit `uebernehmen: true`), `werkzeug_zurueckgeben`.
+  * `aushang_anlegen`, `aushang_aendern` — Schwarzes Brett, **nur mit dem Recht „Schwarzes Brett"** (Chef/Admin per
+    Rolle; die Route entscheidet). Löschen nicht. Wer ohne Recht fragt, bekommt das so gesagt. Jede Schreibaktion steht im Änderungsprotokoll („Schreibzugriff über
   Zugangsschlüssel", mit Name des Schlüssels und des Werkzeugs) und im Änderungsverlauf des Eintrags.
 * **Schutz:** Anfragebremse 60/Min. je Schlüssel und 120/Min. je Adresse, 10 Fehlversuche/Min. je Adresse; fremde
   Browser-Herkunft (`Origin`) wird abgewiesen; jeder Parameter wird geprüft; Fehlermeldungen ohne Innenleben.

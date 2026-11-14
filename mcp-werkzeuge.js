@@ -171,6 +171,12 @@ function geschrieben(a) {
   if (a.status >= 500) throw new Error('Schreiben: Route antwortet ' + a.status);
   throw new Hinweis((a.body && a.body.error) || `Nicht gespeichert (${a.status}).`);
 }
+// Das Brett lehnt ohne Recht nur mit „Keine Berechtigung" ab — für einen Assistenten zu knapp
+// (nur genau diese Ablehnung übersetzen — sperrt der Schlüssel selbst, bleibt dessen Meldung stehen)
+function brett(a) {
+  if (a.status === 403 && a.body && a.body.error === 'Keine Berechtigung') throw new Hinweis('Für das Schwarze Brett fehlt dir das Recht. Es vergibt der Chef oder Admin im Mitarbeiter-Dialog.');
+  return geschrieben(a);
+}
 const SCHREIBT = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 const VORSCHAU = { type: 'boolean', description: 'Nur prüfen und zeigen, was passieren würde — nichts speichern' };
 const ABW_ART = { urlaub: 'urlaub', fza: 'freizeitausgleich', sonderurlaub: 'sonderurlaub', krank: 'krank', berufsschule: 'berufsschule', innung: 'innung' };
@@ -424,7 +430,8 @@ const WERKZEUGE = [
     eingabe: {},
     async ausfuehren(a, ktx) {
       const liste = (await hole(ktx, '/api/bulletin')).entries || [];
-      return { aushaenge: liste.map(x => ohneLeeres({ titel: x.title, text: kuerzen(x.text, 2000), termin: x.event_date, von: x.created_by_name, geaendert: x.updated_at || x.created_at })) };
+      return { aushaenge: liste.map(x => ohneLeeres({ nr: x.id, titel: x.title, text: kuerzen(x.text, 2000), termin: x.event_date,
+        entfernt_am: x.auto_delete_date, von: x.author_name, geaendert: x.updated_at || x.created_at })) };
     },
   },
   {
@@ -615,6 +622,46 @@ const WERKZEUGE = [
       const b = geschrieben(await intern(ktx, 'POST', `/api/tools/${t.id}/return`, { vorschau: a.vorschau === true }));
       return b.vorschau ? { vorschau: true, gespeichert: false, wuerde: `„${t.name}" zurückgeben (bisher bei ${t.checked_out_by_name})`, hinweis: 'Ohne vorschau erneut aufrufen.' }
         : { gespeichert: true, werkzeug: t.name, vorgang: 'zurückgegeben' };
+    },
+  },
+
+  // ── Schwarzes Brett (Alex, 14.11.2026): nur wer in der App das Recht dazu hat — die Route entscheidet ──
+  {
+    name: 'aushang_anlegen', title: 'Aushang anlegen', schreibt: true, annotations: SCHREIBT,
+    description: 'Hängt einen Aushang ans Schwarze Brett — wie in der App, nur mit dem Recht „Schwarzes Brett" (Chef/Admin immer). Alle bekommen eine Meldung. Löschen geht hier nicht. Tipp: erst mit vorschau=true.',
+    eingabe: { titel: { type: 'string', maxLength: 200, description: 'Überschrift' }, text: { type: 'string', maxLength: 5000, description: 'Text des Aushangs' },
+      termin: { type: 'string', format: 'date', description: 'Termin, um den es geht (JJJJ-MM-TT, optional)' },
+      entfernen_am: { type: 'string', format: 'date', description: 'Aushang an diesem Tag automatisch entfernen (JJJJ-MM-TT, optional)' },
+      vorschau: VORSCHAU },
+    pflicht: ['titel'],
+    async ausfuehren(a, ktx) {
+      const b = brett(await intern(ktx, 'POST', '/api/bulletin', { title: a.titel, text: a.text || '', event_date: a.termin || null,
+        auto_delete_date: a.entfernen_am || null, vorschau: a.vorschau === true }));
+      const e = b.entry || {};
+      const kurz = ohneLeeres({ nr: e.id, titel: e.title, text: kuerzen(e.text, 500), termin: e.event_date, entfernt_am: e.auto_delete_date });
+      return b.vorschau ? { vorschau: true, gespeichert: false, wuerde_ergeben: kurz, hinweis: 'Recht und Angaben geprüft. Ohne vorschau erneut aufrufen, um auszuhängen.' }
+        : { gespeichert: true, aushang: kurz };
+    },
+  },
+  {
+    name: 'aushang_aendern', title: 'Aushang ändern', schreibt: true, annotations: { ...SCHREIBT, destructiveHint: true, idempotentHint: true },
+    description: 'Ändert einen Aushang (Nummer aus der Liste der Aushänge). Nur angegebene Felder werden geändert. Nur mit dem Recht „Schwarzes Brett". Tipp: erst mit vorschau=true.',
+    eingabe: { nr: { type: 'integer', minimum: 1, description: 'Nummer des Aushangs' }, titel: { type: 'string', maxLength: 200, description: 'Neue Überschrift' },
+      text: { type: 'string', maxLength: 5000, description: 'Neuer Text' }, termin: { type: 'string', format: 'date', description: 'Neuer Termin (JJJJ-MM-TT)' },
+      entfernen_am: { type: 'string', format: 'date', description: 'Neues Entfernen-Datum (JJJJ-MM-TT)' }, vorschau: VORSCHAU },
+    pflicht: ['nr'],
+    async ausfuehren(a, ktx) {
+      const body = { vorschau: a.vorschau === true };
+      if (a.titel !== undefined) { if (!a.titel.trim()) throw new Hinweis('Die Überschrift darf nicht leer sein.'); body.title = a.titel; }
+      if (a.text !== undefined) body.text = a.text;
+      if (a.termin !== undefined) body.event_date = a.termin;
+      if (a.entfernen_am !== undefined) body.auto_delete_date = a.entfernen_am;
+      if (Object.keys(body).length === 1) throw new Hinweis('Nichts zu ändern — bitte mindestens ein Feld angeben.');
+      const b = brett(await intern(ktx, 'PUT', `/api/bulletin/${a.nr}`, body));
+      const e = b.entry || {};
+      const kurz = ohneLeeres({ nr: e.id || a.nr, titel: e.title, text: kuerzen(e.text, 500), termin: e.event_date, entfernt_am: e.auto_delete_date });
+      if (b.vorschau) return { vorschau: true, gespeichert: false, wuerde_ergeben: kurz, hinweis: 'Ohne vorschau erneut aufrufen, um zu speichern.' };
+      return b.unchanged ? { gespeichert: false, hinweis: 'Keine Änderung — der Aushang ist schon so.', aushang: kurz } : { gespeichert: true, aushang: kurz };
     },
   },
 ];

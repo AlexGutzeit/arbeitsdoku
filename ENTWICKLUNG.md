@@ -5466,3 +5466,13 @@ weiter ein, wo die Route mehr kann: Abwesenheit nur für sich und ohne Feiertag 
 andere eintragen — über REST darf er das mit Schreibschlüssel weiterhin, wie in der App); Übernehmen eines Werkzeugs
 von einem Kollegen nur mit `uebernehmen: true`. Test `mcp-protokoll` jetzt 69 Prüfungen, Gegenproben 5/5 rot (u. a.
 „Löschen von Bestellungen versehentlich erlaubt" — fällt am REST-Teil des Tests auf).
+
+**Nachtrag — Schwarzes Brett (Alex: „wenn ich das Recht habe").** `aushang_anlegen`, `aushang_aendern`; Erlaubt-Liste
+um `POST /api/bulletin` und `PUT /api/bulletin/:id` erweitert, Vorschau in beiden Routen. Das Recht prüft die Route
+selbst (`canBulletin`), MCP baut nichts nach; ihr knappes „Keine Berechtigung" übersetzt das Werkzeug in einen klaren
+Hinweis — aber NUR diese Ablehnung: Die Gegenprobe „Ändern fehlt in der Erlaubt-Liste" zeigte, dass die erste
+Fassung jede 403 als „dir fehlt das Brett-Recht" meldete, auch wenn der Schlüssel selbst sperrte. Die Route prüft
+Datumsfelder nicht — das Werkzeug tut es. Nebenbei: Das Lese-Werkzeug `aushaenge` las den Autor aus einem Feld, das
+es nicht gibt (`created_by_name` statt `author_name`), und lieferte keine Nummer. Der Test wartet vor dem
+Bremsen-Abschnitt jetzt eine Minute: Er macht inzwischen über 120 Aufrufe je Minute von 127.0.0.1, und dann griff die
+Grenze je Adresse vor der gemessenen je Schlüssel. `mcp-protokoll` 78, Gegenproben 4/4 rot.
