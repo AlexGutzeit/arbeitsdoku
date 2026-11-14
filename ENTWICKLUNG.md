@@ -5387,3 +5387,58 @@ Konten, 1779 Einträge, 14 Notizen, Integrität ok). Rückkehrpunkt `vor-projekt
 IPv4+IPv6 200, Cache 460 in `sw.js`, `index.html` und `gast.html`, `suchAuswahl`/`boardSucheAnwenden` im
 ausgelieferten Skript, Protokoll ohne Fehler, Zweitanlage Probestart ok, Datenbank 60/60 Tabellen, keine Zeile
 verändert. Vorher am selben Abend (22:00) lief auf der Hauptanlage das Node-Update 22.23.5 — sauber, nachgeprüft.
+
+---
+
+## MCP-Schnittstelle und Zugangsschlüssel (14.11.2026)
+
+Auftrag von Alex über die Haustechnik-Sitzung: KI-Assistenten (zuerst Hermes auf dem Mini-PC) sollen über MCP Fragen
+beantworten und Einträge anlegen können — mehrbenutzerfähig, aus dem Internet. Plan mit vier Entscheidungen, Alex:
+„A–D wie empfohlen" (A schlanker Eigenbau statt SDK, B jeder legt Schlüssel nur für sich an, C Passwortwechsel und
+„überall abmelden" lassen Schlüssel gültig, D schreiben zunächst nur Zeiteinträge). Commits `b1df12d` … `bbc3ef3`.
+
+**Ein Schlüssel ist eine zweite Art der Anmeldung, kein Nebenweg.** `authenticate` erkennt `adk_…` und lädt den
+Benutzer mit DERSELBEN Abfrage wie bei Sitzungen (`nutzerLaden`). Danach läuft die Anfrage durch die normale Route.
+Dass ein Mitarbeiter-Schlüssel keine fremden Zeiten sieht, entscheidet `/api/entries` — die Gegenprobe „Route ohne
+Mitarbeiter-Einschränkung" macht den MCP-Test rot, nicht eine eigene Prüfung in der MCP-Schicht.
+
+**Was ein Schlüssel zusätzlich nicht darf, steht in EINER Erlaubt-Liste** (`schluessel.js`). Bewusst keine
+Verbotsliste: Eine neue Route ist für Schlüssel zu, bis sie jemand einträgt. Der Test prüft jede Zeile gegen den
+echten Server — ein Tippfehler in der Liste fiele als 404 auf.
+
+**Werkzeuge ohne Datenbank.** `mcp-werkzeuge.js` ruft die eigenen Routen über 127.0.0.1 mit demselben Schlüssel
+auf. Zwei Folgen, beide mit einem Geheimnis gelöst, das nur der laufende Prozess kennt (`X-Intern`): Die Folgeaufrufe
+eines Werkzeugs zählen nicht noch einmal gegen die Bremse, und Protokoll und „zuletzt benutzt" tragen die echte
+Adresse des Aufrufers statt 127.0.0.1. Ohne das richtige Geheimnis werden die Kopfzeilen ignoriert.
+
+**`stunden_summe` = Zeitnachweis.** Sie benutzt `calcActualHours` (zeitgleiche Einsätze einmal). Am Prod-Klon in
+45 Vergleichen Monat × Mitarbeiter gleich dem Ist der Statistik; Gegenprobe mit naiver Summe rot.
+
+**Vorschau ist dieselbe Prüfung.** `POST`/`PUT /api/entries` bekommen `vorschau: true` NACH allen Prüfungen und VOR
+dem Schreiben. `res.locals.nurVorschau` hält sie aus dem Änderungsprotokoll.
+
+**Schutz:** Bremse je Schlüssel (60/Min.), je Adresse an /mcp (120/Min.), Fehlversuche (10/Min.); `Origin`-Prüfung;
+eigene Eingabeprüfung je Werkzeug (unbekannte Parameter abgelehnt); Zugriffsprotokoll `mcp_zugriffe` ohne Inhalte,
+90 Tage. Schreibzugriffe über Schlüssel stehen im Änderungsprotokoll (`schluessel_schreibzugriff`) und im Verlauf
+des Eintrags („über Schlüssel „…"").
+
+**Tests.** `schluessel-rechte` (58), `schluessel-ui` (13), `mcp-protokoll` (43, mit dem offiziellen MCP-Client
+`@modelcontextprotocol/sdk` 1.32.2 — nur devDependency), `mcp-prodklon` (10). Gegenproben 22/22 rot. Zwei waren
+zuerst grün, beide lagen am Test:
+- „Geheimnis interner Aufrufe nicht geprüft": Die gefälschte Anfrage kam in derselben Minute wie die vorige, und
+  „zuletzt benutzt" wird nur einmal je Minute geschrieben — eine angenommene Fälschung konnte gar nicht sichtbar
+  werden. Jetzt mit frischem Schlüssel, dazu: Fälschung umgeht die Bremse nicht.
+- Eine Probe war wertlos gebaut (griff nur mit einer Umgebungsvariable, die nie gesetzt war) — ersetzt durch
+  „Route ohne Mitarbeiter-Einschränkung".
+Außerdem fiel eine Probe aus dem falschen Grund rot aus: Der Chef-Schlüssel lief im Test nahe an die Bremse, eine 429
+hätte in der Prüfung der Erlaubt-Liste eine falsche Route verdeckt. Die Prüfung hat jetzt einen eigenen Schlüssel und
+wertet 429 als Fehler.
+
+**Probebetrieb Zweitanlage:** Stand per `git archive` in einen eigenen Ordner auf dem Mini-PC, `npm ci --omit=dev`
+(das SDK ist dort nicht installiert — `/mcp` braucht es zur Laufzeit nicht), Node 22.23.5, Port 3998 mit der Prod-Kopie:
+Handshake, 21/23 Werkzeuge je Recht, Oktober-Summe = Statistik (1225,5), Vorschau, Abweisungen. Danach entfernt; der
+Dienst der Zweitanlage blieb aus.
+
+**Eigener Fehler beim Bauen:** Ein Kurztest per `node -e "require('./routes/…')"` lud die Datenbank-Schicht und blieb
+hängen (Speicher-Takt, siehe Gedächtnis „kein zweiter Prozess auf der DB"). Beendet per PID, die Datenbankdatei war
+unberührt (Routen öffnen sie erst beim Start). Für Syntaxprüfungen `node --check`.

@@ -24,6 +24,7 @@ revisionssichere Nachweise als PDF.
 - [Was überall gilt](#was-überall-gilt)
 - [📱 Für die Baustelle gedacht](#-für-die-baustelle-gedacht)
 - [🔔 Push-Benachrichtigungen](#-push-benachrichtigungen-web-push)
+- [🤖 KI-Assistenten und Programme (MCP, Zugangsschlüssel)](#-ki-assistenten-und-programme-mcp-zugangsschlüssel)
 - [Rollen & Rechte](#rollen--rechte)
 - [Schnellstart (lokal testen)](#schnellstart-lokal-testen)
 - [Erster Start & Login](#erster-start--login)
@@ -1127,6 +1128,59 @@ der Browser laufen (auch im Hintergrund). Auf **Android** kann die Akku-Optimier
 Standby schicken und Meldungen verzögern → für den Empfangs-Browser ggf. „uneingeschränkt" einstellen. Pro
 Gerät am besten **einen** Browser bzw. die installierte PWA nutzen (zwei Browser = zwei getrennte Abos, ggf.
 doppelte Meldungen). Mehrere Meldungen stapeln sich einzeln (werden nicht zusammengefasst).
+
+---
+
+## 🤖 KI-Assistenten und Programme (MCP, Zugangsschlüssel)
+
+Ein KI-Assistent (z. B. Hermes, Claude) oder ein anderes Programm kann auf die Arbeitsdoku zugreifen und Fragen
+beantworten wie „Wie viele Stunden war Max im Oktober bei Kunde Müller?". Dafür gibt es die **MCP-Schnittstelle**
+(Model Context Protocol) unter **`https://<eure-adresse>/mcp`** und **persönliche Zugangsschlüssel**.
+
+**Zugangsschlüssel** — auf **„Mein Konto" → „Zugangsschlüssel für Programme"**:
+
+* Jeder legt Schlüssel **nur für sich selbst** an: Name (wofür?), Recht **„nur lesen"** oder **„lesen + Zeiteinträge
+  anlegen/ändern"**, optional ein Ablaufdatum. Zur Bestätigung wird das **eigene Passwort** verlangt.
+* Der Schlüssel (`adk_…`) wird **genau einmal** angezeigt (mit Kopierknopf). Auf dem Server liegt nur ein Hash —
+  verloren ist verloren, dann einen neuen anlegen.
+* Ein Schlüssel kann **nie mehr als sein Konto**: Ein Mitarbeiter-Schlüssel sieht nur die eigenen Zeiten, ein
+  Chef-Schlüssel, was der Chef sieht. Er läuft durch dieselben Prüfungen wie die Oberfläche.
+* **Nie** über einen Schlüssel: Löschen, Verwaltung (Benutzer, Rechte, Einstellungen, Sicherungen, Schlüssel,
+  Zwei-Faktor, Passwort), Papierkorb, Änderungsverläufe, Exporte und Datei-Downloads. Die Liste des Erlaubten
+  steht an EINER Stelle (`schluessel.js`) — was dort nicht steht, ist zu.
+* **Widerrufen** jederzeit (wirkt sofort). Ein Schlüssel ist außerdem tot, wenn er abläuft oder das Konto
+  ausgestellt/gelöscht wird. **Passwortwechsel und „Auf allen Geräten abmelden" lassen Schlüssel gültig** — sonst
+  fiele der Assistent bei jedem Passwortwechsel still aus. Nach einem Passwortwechsel weist die Seite deshalb auf
+  aktive Schlüssel hin, und beim Anlegen kommt eine **Push-Meldung** an den Besitzer.
+* Die Liste zeigt je Schlüssel Anfang, Recht, Ablauf, **zuletzt benutzt** und Zustand. Der **Admin** sieht alle
+  Schlüssel aller Konten (und kann jeden widerrufen) sowie das **Zugriffsprotokoll** von `/mcp`.
+
+**MCP-Schnittstelle** (`/mcp`, „Streamable HTTP", zustandslos; Anmeldung per `Authorization: Bearer adk_…`):
+
+* **Lesen** (21 Werkzeuge): `angemeldet_als`, `mitarbeiter_liste`, `zeiteintraege_suchen`, `stunden_summe`,
+  `kunden_suchen`, `auftraege_suchen`, `auftrag_anzeigen`, `planung_anzeigen`, `abwesenheiten`, `stundenkonto`,
+  `urlaubskonto`, `notizen_suchen`, `notiz_lesen`, `aushaenge`, `werkzeuge_liste`, `bestellungen`, `lager_suchen`,
+  `meldungen`, `ablage_liste`, `abrechnung_stand`, `kollegen`. Deutsche Beschreibungen, kompakte Antworten,
+  seitenweise (höchstens 50 je Seite). `stunden_summe` rechnet **genau wie der Zeitnachweis** (zeitgleiche Einsätze
+  derselben Person zählen einmal). „Kunden" sind die Kundennamen an Aufträgen und Zeiteinträgen — eine eigene
+  Kundenliste hat die App nicht.
+* **Schreiben** (nur mit Recht „lesen + schreiben"): `zeiteintrag_anlegen`, `zeiteintrag_aendern` — mit allen
+  Prüfungen der App (Zeiten, Pause, abgerechnete Monate, Doppel-Rückfrage) und **`vorschau: true`**, die genau diese
+  Prüfungen durchläuft und nichts speichert. Jede Schreibaktion steht im Änderungsprotokoll („Schreibzugriff über
+  Zugangsschlüssel", mit Name des Schlüssels und des Werkzeugs) und im Änderungsverlauf des Eintrags.
+* **Schutz:** Anfragebremse 60/Min. je Schlüssel und 120/Min. je Adresse, 10 Fehlversuche/Min. je Adresse; fremde
+  Browser-Herkunft (`Origin`) wird abgewiesen; jeder Parameter wird geprüft; Fehlermeldungen ohne Innenleben.
+  **Zugriffsprotokoll** (`mcp_zugriffe`): Zeit, Schlüssel, Werkzeug, Ergebnis, Dauer, Adresse — **ohne Inhalte**,
+  90 Tage aufbewahrt.
+* Technik: Die Werkzeuge haben **keinen eigenen Datenbankzugriff** — sie rufen die Routen der App über
+  `127.0.0.1` mit demselben Schlüssel auf (`mcp-werkzeuge.js`). Der Server ist ein schlanker Eigenbau
+  (`routes/mcp.js`); das offizielle MCP-Paket ist nur Testwerkzeug (`tests/mcp-protokoll.js`).
+* Dieselben Lese-Routen sind mit einem Schlüssel auch als **REST** erreichbar (z. B. `GET /api/entries` mit
+  `Authorization: Bearer adk_…`) — Grundlage für Home Assistant / ioBroker. OAuth 2.1 ist vorbereitet, aber nicht
+  gebaut.
+
+**Anbinden** (Beispiel für einen MCP-Client): URL `https://<eure-adresse>/mcp`, Kopfzeile
+`Authorization: Bearer <Schlüssel>`. Mehr ist nicht nötig; ein Proxy wie Caddy reicht `/mcp` ohne Zusatz durch.
 
 ---
 
