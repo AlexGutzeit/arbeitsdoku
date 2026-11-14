@@ -1,7 +1,9 @@
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../database/init');
 const zweiFaktor = require('../zweifaktor');
-const { logAudit } = require('../audit');
+const { logAudit, berlinNow } = require('../audit');
+const schluessel = require('../schluessel');
+const { berlinHeute } = require('../zeit');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET || JWT_SECRET.length < 32) {
@@ -124,8 +126,14 @@ function gateFrei(url) {
  *
  * Liefert `{ user, jetzt, seit, hoechstS }` oder `{ code, error }`.
  */
+// Der angemeldete Benutzer, wie ihn jede Route als req.user sieht — für Sitzungen UND Zugangsschlüssel
+// dieselbe Abfrage, damit beide Wege garantiert dieselben Rechte-Spalten tragen.
+function nutzerLaden(db, userId) {
+  return db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, work_start, birth_date, COALESCE(active,1) AS active FROM users WHERE id = ?").get(userId);
+}
+
 function sitzungPruefen(db, decoded) {
-  const user = db.prepare("SELECT id, username, name, role, target_hours_per_week, start_overtime, can_plan, can_plan_all, can_bulletin, can_upload, can_order, can_products_edit, can_products_add, can_meldungen, work_start, birth_date, COALESCE(active,1) AS active FROM users WHERE id = ?").get(decoded.userId);
+  const user = nutzerLaden(db, decoded.userId);
   if (!user) return { code: GRUND.GELOESCHT, error: 'Dieses Konto gibt es nicht mehr.' };
   // Ausgestellte (active=0) Nutzer werden sofort ausgesperrt — auch wenn ihr Token noch nicht abgelaufen ist.
   // Prüfung läuft live gegen die DB: Wiedereinstellen (active=1) lässt dasselbe Token wieder greifen.
@@ -219,6 +227,72 @@ function tokenNachWiderruf(db, req, res, stand) {
   });
 }
 
+// ── Anmeldung mit Zugangsschlüssel (14.11.2026, siehe schluessel.js) ─────────────────────────────
+// Gilt nur, solange der Schlüssel weder widerrufen noch abgelaufen ist und das Konto weder gelöscht
+// noch ausgestellt — geprüft bei JEDER Anfrage, wie bei Sitzungen.
+// Bewusst anders als bei Sitzungen:
+//   * kein zweiter Faktor — der Schlüssel IST der Faktor; angelegt wird er nur nach Passworteingabe;
+//   * „Überall abmelden" und ein Passwortwechsel lassen ihn gültig (Alex' Entscheidung C) — er wird
+//     einzeln widerrufen;
+//   * kein gleitendes Token, kein Ereigniskanal.
+// Prüft nur, wird nirgends geschrieben außer „zuletzt benutzt". Liefert { eintrag, user } oder { status, code, error }.
+function schluesselPruefen(db, roh) {
+  const eintrag = db.prepare('SELECT * FROM api_schluessel WHERE hash = ?').get(schluessel.hashVon(roh));
+  if (!eintrag || eintrag.widerrufen_am) return { status: 401, code: 'SCHLUESSEL_UNGUELTIG', error: 'Ungültiger Zugangsschlüssel' };
+  if (eintrag.ablauf && berlinHeute() > eintrag.ablauf) return { status: 401, code: 'SCHLUESSEL_ABGELAUFEN', error: 'Dieser Zugangsschlüssel ist abgelaufen.' };
+  const user = nutzerLaden(db, eintrag.user_id);
+  if (!user) return { status: 401, code: GRUND.GELOESCHT, error: 'Dieses Konto gibt es nicht mehr.' };
+  if (user.active === 0) return { status: 401, code: GRUND.AUSGESTELLT, error: 'Dieses Konto ist ausgestellt.' };
+  return { eintrag, user };
+}
+
+function mitSchluessel(req, res, next, roh) {
+  const db = getDb();
+  const intern = schluessel.internerAufruf(req);   // Folgeaufruf eines MCP-Werkzeugs aus diesem Prozess
+  const ip = (intern && intern.ip) || req.ip;
+  if (!intern && schluessel.bremsen.fehlversuch.gesperrt(ip)) {
+    return res.status(429).json({ code: 'ZU_VIELE_VERSUCHE', error: 'Zu viele ungültige Versuche. Bitte in einer Minute erneut.' });
+  }
+  const p = schluesselPruefen(db, roh);
+  if (!p.eintrag) {
+    if (!intern && p.code === 'SCHLUESSEL_UNGUELTIG') schluessel.bremsen.fehlversuch.zaehlen(ip);
+    return res.status(p.status).json({ code: p.code, error: p.error });
+  }
+  const { eintrag, user } = p;
+  // Die Bremse je Schlüssel zählt die Anfrage von außen; die Folgeaufrufe eines Werkzeugs nicht noch einmal.
+  if (!intern && schluessel.bremsen.schluessel.zaehlen(eintrag.id)) {
+    return res.status(429).json({ code: 'ZU_VIELE_ANFRAGEN', error: 'Zu viele Anfragen mit diesem Schlüssel. Bitte kurz warten.' });
+  }
+  const pfad = String(req.originalUrl || req.url || '').split('?')[0];
+  if (!schluessel.erlaubt(eintrag.recht, req.method, pfad)) {
+    return res.status(403).json({ code: 'SCHLUESSEL_NICHT_ERLAUBT', error: 'Mit diesem Zugangsschlüssel ist das nicht erlaubt.' });
+  }
+  req.user = user;
+  req.zugang = { art: 'schluessel', id: eintrag.id, name: eintrag.name, recht: eintrag.recht };
+
+  // „Zuletzt benutzt" höchstens einmal je Minute schreiben — nicht bei jeder Anfrage.
+  try {
+    const jetzt = berlinNow();
+    if (!eintrag.zuletzt_am || jetzt.slice(0, 16) !== String(eintrag.zuletzt_am).slice(0, 16)) {
+      db.prepare('UPDATE api_schluessel SET zuletzt_am = ?, zuletzt_ip = ? WHERE id = ?').run(jetzt, String(ip || '').slice(0, 64), eintrag.id);
+    }
+  } catch (_) { /* darf den Zugriff nie kosten */ }
+
+  // Jede gelungene Schreibaktion über einen Schlüssel ins Änderungsprotokoll — mit dem Namen des
+  // Schlüssels. Am Ende der Antwort, damit nur festgehalten wird, was wirklich geschrieben wurde
+  // (eine Vorschau setzt res.locals.nurVorschau und schreibt nichts).
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.on('finish', () => {
+      if (res.statusCode >= 400 || res.locals.nurVorschau) return;
+      logAudit(db, { userId: user.id, username: user.username, action: 'schluessel_schreibzugriff',
+        details: `${req.method} ${pfad} → ${res.statusCode} · über Schlüssel „${eintrag.name}"`
+          + (intern && intern.werkzeug ? ` · Werkzeug ${intern.werkzeug}` : ''),
+        ip });
+    });
+  }
+  next();
+}
+
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -226,6 +300,10 @@ function authenticate(req, res, next) {
   }
 
   const token = authHeader.split(' ')[1];
+  if (schluessel.istSchluessel(token)) {
+    try { return mitSchluessel(req, res, next, token); }
+    catch (_) { return abweisen(res, GRUND.UNGUELTIG, 'Ungültige Anmeldung'); }
+  }
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
 
@@ -302,5 +380,5 @@ function authorize(...roles) {
   };
 }
 
-module.exports = { authenticate, authorize, JWT_SECRET, GATE_FREI, gateFrei,
+module.exports = { authenticate, authorize, JWT_SECRET, GATE_FREI, gateFrei, nutzerLaden, schluesselPruefen,
   tokenAusstellen, hoechstdauerFuer, sitzungPruefen, einrichtungFehlt, sitzungenBeenden, tokenNachWiderruf, GRUND, LEERLAUF_S, HOECHSTDAUER_S, ERNEUERN_NACH_S };

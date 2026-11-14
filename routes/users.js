@@ -333,6 +333,8 @@ router.get('/meine-daten', authenticate, (req, res) => {
     meine_erinnerungen_an_notizen: hole('SELECT * FROM notiz_erinnerungen WHERE user_id = ?'),
     push_einstellungen: holeEins('SELECT * FROM push_prefs WHERE user_id = ?'),
     push_geraete: hole('SELECT id, user_agent, created_at FROM push_subscriptions WHERE user_id = ?'),
+    // Zugangsschlüssel für Programme — ohne den Hash (der Schlüssel selbst ist nirgends gespeichert)
+    zugangsschluessel: hole('SELECT id, name, recht, anzeige, ablauf, angelegt_am, widerrufen_am, zuletzt_am, zuletzt_ip FROM api_schluessel WHERE user_id = ?'),
     geburtstags_freigabe: holeEins('SELECT * FROM geburtstag_freigabe WHERE user_id = ?'),
     fuer_die_kollegen: holeEins('SELECT info, telefon, telefon_zeigen, email, email_zeigen, geaendert FROM kollegen_profil WHERE user_id = ?'),
     profilbild: holeEins('SELECT * FROM user_avatars WHERE user_id = ?'),

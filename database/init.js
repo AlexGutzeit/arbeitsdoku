@@ -449,6 +449,8 @@ async function initDatabase() {
   // Meldungen: Themen, Meldungen, Verlauf (idempotent, hier UND im Restore-Pfad)
   ensureMeldungenSchema(db);
   ensureErinnerungenSchema(db);
+  // Zugangsschlüssel für Programme + MCP-Zugriffsprotokoll (idempotent, hier UND im Restore-Pfad)
+  ensureSchluesselSchema(db);
 
   // Migration: target_hours_per_day → target_hours_per_week
   try {
@@ -1052,6 +1054,7 @@ function ensureAuditSchema(targetDb) {
   ensureProjektNotizSchema(targetDb);
   ensureMeldungenSchema(targetDb);
   ensureErinnerungenSchema(targetDb);
+  ensureSchluesselSchema(targetDb);
   // Nur beim Zurückspielen: der Start räumt selbst auf, nach seinen übrigen Umstellungen (R27)
   if (targetDb !== db) {
     require('../konto-loeschen').altlastenAufraeumen(targetDb);
@@ -1399,6 +1402,45 @@ function normalizeManagerRights(targetDb) {
 //
 // Fehlender Eintrag heisst 0. Token OHNE den Anspruch (aus der Zeit vor dieser Aenderung) gelten
 // weiter, solange der Zaehler bei 0 steht — niemand wird durch das Update abgemeldet.
+// Zugangsschlüssel (Alex, 14.11.2026): Programme wie Hermes melden sich mit einem persönlichen
+// Schlüssel statt mit Passwort an (schluessel.js). Gespeichert wird nur der SHA-256 des Schlüssels
+// und sein Anfang zum Wiedererkennen. `mcp_zugriffe` hält jeden Zugriff über /mcp fest — Zeit,
+// Schlüssel, Werkzeug, Ergebnis, ohne Inhalte.
+function ensureSchluesselSchema(targetDb) {
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS api_schluessel (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id       INTEGER NOT NULL,
+        name          TEXT NOT NULL,
+        recht         TEXT NOT NULL DEFAULT 'lesen',
+        hash          TEXT NOT NULL UNIQUE,
+        anzeige       TEXT NOT NULL DEFAULT '',
+        ablauf        TEXT,
+        angelegt_am   TEXT,
+        angelegt_von  INTEGER,
+        widerrufen_am TEXT,
+        widerrufen_von INTEGER,
+        zuletzt_am    TEXT,
+        zuletzt_ip    TEXT
+      );
+      CREATE TABLE IF NOT EXISTS mcp_zugriffe (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts            TEXT NOT NULL,
+        schluessel_id INTEGER,
+        methode       TEXT,
+        werkzeug      TEXT,
+        ergebnis      TEXT,
+        dauer_ms      INTEGER,
+        ip            TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_mcp_zugriffe_ts ON mcp_zugriffe(ts);
+    `);
+  } catch (e) {
+    console.error('ensureSchluesselSchema fehlgeschlagen:', e.message);
+  }
+}
+
 function ensureSitzungSchema(targetDb) {
   try {
     targetDb.exec(`

@@ -2543,6 +2543,7 @@ async function renderKonto() {
       <div class="welcome-section" id="konto-stammdaten"></div>
       ${canViewAll() ? '' : '<div class="welcome-section" id="konto-pdf"></div>'}
       <div class="welcome-section" id="konto-sicherheit"></div>
+      <div class="welcome-section" id="konto-schluessel"></div>
     </div>`, 'konto');
   bindLayout();
   const fab = document.getElementById('fab-new');
@@ -2563,6 +2564,7 @@ async function renderKonto() {
   await kontoStammdatenKarte();
   await kontoPdfKarte();
   kontoSicherheitKarte();
+  await kontoSchluesselKarte();
 }
 
 // Der Zeitnachweis als PDF — NUR fuer Mitarbeiter. Fuer sie ist das eine rein persoenliche Sache
@@ -3204,6 +3206,7 @@ function kontoSicherheitKarte() {
     <div style="font-size:.78rem;color:var(--text-light);margin-top:.25rem;margin-bottom:.9rem">
       Beendet jede Anmeldung — auch auf einem verlorenen Handy. Hier bleibst du angemeldet.
       Gemerkte Geräte der Zwei-Faktor-Anmeldung werden dabei ebenfalls zurückgesetzt.
+      Zugangsschlüssel für Programme bleiben gültig — die widerrufst du unten einzeln.
     </div>
     <button class="btn btn-outline btn-sm" id="daten-auskunft">Meine Daten herunterladen</button>
     <div style="font-size:.78rem;color:var(--text-light);margin-top:.25rem">
@@ -3234,6 +3237,131 @@ function kontoSicherheitKarte() {
       dateiHerunterladen(await antwort.blob(), `arbeitsdoku-meine-daten-${(S.user.username || 'daten')}.json`);
       toast('Datei wird heruntergeladen', 'success');
     } catch (err) { toast(err.message || 'Auskunft nicht möglich', 'error'); }
+  });
+}
+
+// ── Zugangsschlüssel für Programme (Alex, 14.11.2026) ─────────────────────────────────────────
+// Ein Schlüssel lässt ein Programm (zuerst Hermes über /mcp) in deinem Namen auf die Arbeitsdoku
+// zugreifen — nie mehr, als du selbst darfst. Angelegt wird nur nach Passworteingabe, angezeigt
+// genau einmal; gespeichert ist auf dem Server nur ein Hash (schluessel.js).
+// Der Admin sieht zusätzlich alle Schlüssel aller Konten und das Zugriffsprotokoll von /mcp.
+const SCHLUESSEL_RECHT = { lesen: 'lesen', schreiben: 'lesen + schreiben' };
+const SCHLUESSEL_ZUSTAND = { aktiv: 'aktiv', abgelaufen: 'abgelaufen', widerrufen: 'widerrufen' };
+
+function schluesselZeilen(liste, mitBesitzer) {
+  if (!liste.length) return '<p class="push-hint">Noch keine Schlüssel.</p>';
+  return `<div class="table-scroll"><table class="table schluessel-tabelle">
+    <thead><tr><th>Name</th>${mitBesitzer ? '<th>Konto</th>' : ''}<th>Recht</th><th>Anfang</th><th>Gültig bis</th><th>Zuletzt benutzt</th><th>Zustand</th><th></th></tr></thead>
+    <tbody>${liste.map(s => `<tr class="schluessel-zeile${s.zustand !== 'aktiv' ? ' schluessel-aus' : ''}" data-id="${s.id}">
+      <td>${esc(s.name)}</td>${mitBesitzer ? `<td>${esc(s.user_name || '–')}</td>` : ''}
+      <td>${esc(SCHLUESSEL_RECHT[s.recht] || s.recht)}</td>
+      <td><code>${esc(s.anzeige)}</code></td>
+      <td>${s.ablauf ? esc(formatDateDE(s.ablauf)) : 'unbegrenzt'}</td>
+      <td>${s.zuletzt_am ? esc(formatDateTimeDE(s.zuletzt_am)) : 'nie'}</td>
+      <td>${esc(SCHLUESSEL_ZUSTAND[s.zustand] || s.zustand)}</td>
+      <td>${s.zustand !== 'widerrufen' ? `<button type="button" class="btn btn-outline btn-xs schluessel-weg" data-id="${s.id}" data-name="${esc(s.name)}">Widerrufen</button>` : ''}</td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+async function kontoSchluesselKarte() {
+  const k = document.getElementById('konto-schluessel');
+  if (!k) return;
+  let eigene = [], alle = null, protokoll = null;
+  try {
+    eigene = (await api('GET', '/api/schluessel')).schluessel || [];
+    if (S.user.role === 'admin') {
+      alle = (await api('GET', '/api/schluessel?alle=1')).schluessel || [];
+      protokoll = (await api('GET', '/api/schluessel/protokoll')).zugriffe || [];
+    }
+  } catch (err) {
+    k.innerHTML = '<h3>&#128477; Zugangsschlüssel für Programme</h3><p>Nicht abrufbar.</p>';
+    return;
+  }
+  const adresse = location.origin + '/mcp';
+  k.innerHTML = `
+    <h3>&#128477; Zugangsschlüssel für Programme</h3>
+    <p class="push-hint" style="margin-top:0">
+      Damit kann ein Programm — etwa ein KI-Assistent — in deinem Namen auf die Arbeitsdoku zugreifen.
+      Es sieht und darf <strong>nie mehr als du selbst</strong>. Adresse für MCP: <code>${esc(adresse)}</code>
+    </p>
+    <div id="schluessel-neu-anzeige"></div>
+    ${schluesselZeilen(eigene, false)}
+    <details class="schluessel-anlegen" style="margin-top:.75rem">
+      <summary>Neuen Schlüssel anlegen</summary>
+      <div class="error-msg" id="schluessel-fehler"></div>
+      <form id="schluessel-form" style="margin-top:.5rem">
+        <div class="form-group">
+          <label for="schluessel-name">Name (wofür?)</label>
+          <input type="text" class="form-control" id="schluessel-name" maxlength="60" placeholder="z. B. Hermes" required autocomplete="off" data-kein-entwurf="1">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="schluessel-recht">Recht</label>
+            <select class="form-control" id="schluessel-recht" data-kein-entwurf="1">
+              <option value="lesen" selected>nur lesen</option>
+              <option value="schreiben">lesen + Zeiteinträge anlegen/ändern</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="schluessel-ablauf">Gültig bis (leer = unbegrenzt)</label>
+            <input type="date" class="form-control" id="schluessel-ablauf" data-kein-entwurf="1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="schluessel-pw">Dein Passwort zur Bestätigung</label>
+          <input type="password" class="form-control" id="schluessel-pw" autocomplete="current-password" required data-kein-entwurf="1">
+        </div>
+        <button type="submit" class="btn btn-primary">Schlüssel anlegen</button>
+      </form>
+    </details>
+    ${alle ? `<h4 style="margin-top:1.25rem">Alle Schlüssel (Admin)</h4>${schluesselZeilen(alle, true)}` : ''}
+    ${protokoll ? `<details style="margin-top:.75rem"><summary>Zugriffsprotokoll /mcp (letzte ${protokoll.length})</summary>
+      ${protokoll.length ? `<div class="table-scroll"><table class="table schluessel-protokoll">
+        <thead><tr><th>Zeit</th><th>Schlüssel</th><th>Konto</th><th>Aufruf</th><th>Ergebnis</th><th>Dauer</th><th>Adresse</th></tr></thead>
+        <tbody>${protokoll.map(z => `<tr><td>${esc(formatDateTimeDE(z.ts))}</td><td>${esc(z.schluessel || '–')}</td><td>${esc(z.user_name || '–')}</td>
+          <td>${esc(z.werkzeug || z.methode || '')}</td><td>${esc(z.ergebnis || '')}</td><td>${z.dauer_ms != null ? esc(String(z.dauer_ms)) + ' ms' : ''}</td><td>${esc(z.ip || '')}</td></tr>`).join('')}</tbody>
+      </table></div>` : '<p class="push-hint">Noch keine Zugriffe.</p>'}</details>` : ''}`;
+
+  k.querySelectorAll('.schluessel-weg').forEach(b => b.addEventListener('click', async () => {
+    const weiter = await confirmModal(`Schlüssel „${b.dataset.name}" widerrufen?\n\nDas Programm, das ihn benutzt, kommt ab sofort nicht mehr hinein. Das lässt sich nicht rückgängig machen.`);
+    if (!weiter) return;
+    try {
+      await api('POST', `/api/schluessel/${b.dataset.id}/widerrufen`);
+      toast('Schlüssel widerrufen', 'success');
+      await kontoSchluesselKarte();
+    } catch (err) { toast(err.message, 'error'); }
+  }));
+
+  document.getElementById('schluessel-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fehler = document.getElementById('schluessel-fehler');
+    fehler.style.display = 'none';
+    try {
+      const d = await api('POST', '/api/schluessel', {
+        name: document.getElementById('schluessel-name').value,
+        recht: document.getElementById('schluessel-recht').value,
+        ablauf: document.getElementById('schluessel-ablauf').value || null,
+        passwort: document.getElementById('schluessel-pw').value,
+      });
+      await kontoSchluesselKarte();
+      const box = document.getElementById('schluessel-neu-anzeige');
+      // Nur dieses eine Mal sichtbar — der Server hat ihn nicht im Klartext.
+      box.innerHTML = `<div class="warning-box schluessel-neu" role="status" style="margin-bottom:.75rem">
+        <strong>Schlüssel „${esc(d.eintrag.name)}" angelegt.</strong> Er wird <strong>nur jetzt</strong> angezeigt — bitte gleich kopieren und sicher ablegen.
+        <div class="input-with-btn" style="margin-top:.5rem">
+          <input type="text" class="form-control" id="schluessel-wert" readonly value="${esc(d.schluessel)}" data-kein-entwurf="1">
+          <button type="button" class="btn btn-outline btn-sm" id="schluessel-kopieren">Kopieren</button>
+        </div>
+      </div>`;
+      document.getElementById('schluessel-kopieren').addEventListener('click', async () => {
+        const feld = document.getElementById('schluessel-wert');
+        try { await navigator.clipboard.writeText(feld.value); toast('Kopiert', 'success'); }
+        catch (_) { feld.select(); toast('Bitte markierten Text kopieren', 'info'); }
+      });
+    } catch (err) {
+      fehler.textContent = err.message;
+      fehler.style.display = 'block';
+    }
   });
 }
 
@@ -3285,6 +3413,15 @@ function kontoPasswortKarte() {
       // Token mit. Ohne es zu uebernehmen, floege man beim naechsten Klick selbst hinaus.
       if (d && d.token) { S.token = d.token; localStorage.setItem('token', d.token); }
       toast('Passwort geändert — auf allen anderen Geräten wurdest du abgemeldet', 'success');
+      // Zugangsschlüssel überleben den Wechsel (Alex, 14.11.2026, Entscheidung C) — wer wechselt, weil
+      // jemand mitgelesen hat, soll seine aktiven Schlüssel aber sehen und prüfen.
+      try {
+        const aktiv = ((await api('GET', '/api/schluessel')).schluessel || []).filter(s => s.zustand === 'aktiv');
+        if (aktiv.length) {
+          toast(`Du hast ${aktiv.length} aktive${aktiv.length === 1 ? 'n' : ''} Zugangsschlüssel — sie bleiben gültig. Bitte unten unter „Zugangsschlüssel" prüfen.`, 'info');
+          await kontoSchluesselKarte();
+        }
+      } catch (_) {}
       document.getElementById('konto-pw-form').reset();
       const reqs = document.getElementById('pw-neu-reqs'); if (reqs) reqs.innerHTML = '';
       await kontoZweiFaktorKarte();   // die gemerkten Geraete sind weg

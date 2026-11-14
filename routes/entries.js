@@ -276,6 +276,16 @@ router.post('/', authenticate, (req, res) => {
 
   const net_hours = calculateNetHours(time_from, time_to, break_minutes || 0);
 
+  // Vorschau (14.11.2026, für Zugangsschlüssel/MCP): ALLE Prüfungen oben sind gelaufen — Zeiten, Pause,
+  // Abrechnungssperre, Doppel-Rückfrage —, geschrieben wird nichts. So ist die Vorschau dieselbe Prüfung
+  // wie das echte Anlegen, kein Nachbau.
+  if (req.body.vorschau === true) {
+    res.locals.nurVorschau = true;
+    return res.json({ vorschau: true, entry: { user_id: targetUserId, date, time_from, time_to, break_minutes: break_minutes || 0, net_hours,
+      address: address || '', client: client || '', project_id: project_id || null, project_text: project_text || '',
+      description: description || '', has_regie: has_regie || 0 } });
+  }
+
   const result = db.prepare(`
     INSERT INTO entries (user_id, date, time_from, time_to, break_minutes, net_hours, address, client, project_id, project_text, description, personal_note, has_regie, regie_user_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -348,8 +358,18 @@ router.put('/:id', authenticate, (req, res) => {
   const newRegie = has_regie !== undefined ? (has_regie || 0) : entry.has_regie;
   const newRegieUser = has_regie !== undefined ? (has_regie === 1 ? (regie_user_id || entry.regie_user_id) : null) : entry.regie_user_id;
 
-  // GoBD: Vorher-Abbild unveraenderlich festhalten, bevor ueberschrieben wird
-  recordEntryHistory(db, entry, 'update', req.user.id, reason);
+  if (req.body.vorschau === true) {   // siehe POST: geprüft wie echt, geschrieben wird nichts
+    res.locals.nurVorschau = true;
+    const neu = (feld, wert) => (wert !== undefined ? wert : entry[feld]);
+    return res.json({ vorschau: true, entry: { ...entry, date: date || entry.date, time_from: newFrom, time_to: newTo, break_minutes: newBreak, net_hours,
+      address: neu('address', address), client: neu('client', client), project_id: project_id !== undefined ? (project_id || null) : entry.project_id,
+      project_text: neu('project_text', project_text), description: neu('description', description), has_regie: newRegie } });
+  }
+
+  // GoBD: Vorher-Abbild unveraenderlich festhalten, bevor ueberschrieben wird. Über einen Zugangsschlüssel
+  // steht dessen Name beim Grund — der Verlauf zeigt sonst nur den Benutzer, nicht das Programm.
+  const grund = req.zugang ? [reason, `über Schlüssel „${req.zugang.name}"`].filter(Boolean).join(' · ') : reason;
+  recordEntryHistory(db, entry, 'update', req.user.id, grund);
 
   db.prepare(`
     UPDATE entries SET date=?, time_from=?, time_to=?, break_minutes=?, net_hours=?, address=?, client=?, project_id=?, project_text=?, description=?, personal_note=?, has_regie=?, regie_user_id=?, updated_at=strftime('%Y-%m-%d %H:%M:%f', 'now')

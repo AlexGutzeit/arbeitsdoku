@@ -44,6 +44,7 @@ const ANHAENGSEL = [
   ['vacation_entitlements', 'user_id', 'users', 'Urlaubsansprüche gelöschter Konten'],
   ['user_seen', 'user_id', 'users', 'Gesehen-Merker gelöschter Konten'],
   ['user_sitzung', 'user_id', 'users', 'Sitzungen gelöschter Konten'],
+  ['api_schluessel', 'user_id', 'users', 'Zugangsschlüssel gelöschter Konten'],
   ['user_avatars', 'user_id', 'users', 'Profilbilder gelöschter Konten'],
   ['geburtstag_freigabe', 'user_id', 'users', 'Geburtstags-Freigaben gelöschter Konten'],
   ['kollegen_profil', 'user_id', 'users', 'Kollegen-Profile gelöschter Konten'],
@@ -89,6 +90,7 @@ const BLEIBT = [
   ['meldungen', 'thema_id', 'meldung_themen', 'Meldung — ihr Thema bleibt weich gelöscht erhalten (History)'],
   ['meldungen', 'created_by', 'users', 'Meldung (bleibt wie Bestellungen; Name „Gelöschtes Konto")'],
   ['meldung_regeln', 'thema_id', 'meldung_themen', 'Regel — weich gelöscht mit ihrem Thema'],
+  ['mcp_zugriffe', 'schluessel_id', 'api_schluessel', 'Zugriffsprotokoll — läuft nach 90 Tagen von selbst aus'],
 ].map(([tabelle, spalte, auf, grund]) => ({ tabelle, spalte, auf, grund }));
 
 const loeschSql = (a) =>

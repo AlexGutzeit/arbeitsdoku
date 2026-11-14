@@ -2986,3 +2986,8 @@ details[open] > .absence-history-month-summary::before { content: '▾ '; }
 .grid-zeitraum-zelle .grid-cell-total { border-top: none; margin-top: 0; padding-top: 0; text-align: left; font-size: 0.85rem; }
 /* Jahr/Gesamt mit Projekt-/Such-/Regie-Filter: Hinweis, warum Abwesenheiten und ⚠️ fehlen */
 .grid-filter-hinweis { margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--text-light); }
+
+/* Zugangsschlüssel (14.11.2026) */
+.schluessel-tabelle td, .schluessel-protokoll td { font-size: .85rem; vertical-align: middle; }
+.schluessel-zeile.schluessel-aus { opacity: .55; }
+.schluessel-neu code, .schluessel-tabelle code { font-size: .8rem; }
