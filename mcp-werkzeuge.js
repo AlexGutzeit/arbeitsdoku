@@ -22,7 +22,7 @@ function eigeneAdresse() {
   const host = (!h || h === '0.0.0.0' || h === 'localhost') ? '127.0.0.1' : (h === '::' ? '::1' : h);
   return { host, port: Number(process.env.PORT || 3000) };
 }
-function intern(ktx, methode, pfad, body) {
+function intern(ktx, methode, pfad, body, binaer) {
   return new Promise((resolve, reject) => {
     const daten = body ? JSON.stringify(body) : null;
     const { host, port } = eigeneAdresse();
@@ -31,9 +31,14 @@ function intern(ktx, methode, pfad, body) {
       'X-Intern-Ip': ktx.ip || '', 'X-Intern-Werkzeug': ktx.werkzeug || '',
       ...(daten ? { 'Content-Length': Buffer.byteLength(daten) } : {}),
     } }, (x) => {
-      let s = ''; x.setEncoding('utf8');
-      x.on('data', c => { s += c; });
-      x.on('end', () => { let j = null; try { j = JSON.parse(s); } catch (_) {} resolve({ status: x.statusCode, body: j }); });
+      // Binär (PDF): die Bytes sammeln; JSON-Fehlermeldungen der Route trotzdem lesbar machen
+      const teile = [];
+      x.on('data', c => { teile.push(c); });
+      x.on('end', () => {
+        const roh = Buffer.concat(teile);
+        let j = null; try { j = JSON.parse(roh.toString('utf8')); } catch (_) {}
+        resolve({ status: x.statusCode, body: j, roh: binaer ? roh : undefined, typ: x.headers['content-type'] || '' });
+      });
     });
     r.setTimeout(20000, () => r.destroy(new Error('Zeitüberschreitung')));
     r.on('error', reject);
@@ -203,6 +208,15 @@ function schreibenAuswerten(a, vorschau, wort) {
   if (a.status >= 500) throw new Error('Speichern: Route antwortet ' + a.status);
   throw new Hinweis((a.body && a.body.error) || `Nicht gespeichert (${a.status}).`);
 }
+
+// ── „Mein Konto" ──────────────────────────────────────────────────────────────────────────────
+const PUSH_KAT = { bestellungen: 'orders', schwarzes_brett: 'bulletin', notizen: 'notes', abwesenheiten: 'absences', planung: 'planning', meldungen: 'meldungen' };
+const PUSH_TEXT = { bestellungen: 'neue Bestellungen', schwarzes_brett: 'neue Aushänge', notizen: 'geteilte Notizen', abwesenheiten: 'Abwesenheiten/Anträge',
+  planung: 'Planung', meldungen: 'Meldungen' };
+const ZUS_KAT = { bestellungen: 'orders', schwarzes_brett: 'bulletin', notizen: 'notes', abwesenheiten: 'absences', meldungen: 'meldungen' };
+const KAT_DE = Object.fromEntries(Object.entries(PUSH_KAT).map(([de, en]) => [en, de]));
+const TAGE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const PDF_MAX = 8 * 1048576;   // größer → Download-Adresse nutzen
 
 // ── Werkzeuge ────────────────────────────────────────────────────────────────────────────────
 const S = {   // wiederkehrende Parameter
@@ -664,6 +678,157 @@ const WERKZEUGE = [
       return b.unchanged ? { gespeichert: false, hinweis: 'Keine Änderung — der Aushang ist schon so.', aushang: kurz } : { gespeichert: true, aushang: kurz };
     },
   },
+
+  // ── „Mein Konto" und Zeitnachweis-PDF (Alex, 15.11.2026) ──
+  {
+    name: 'mein_konto', title: 'Mein Konto', annotations: LESEN,
+    description: 'Alles von der Seite „Mein Konto" des Benutzers dieses Schlüssels: Stammdaten und Rechte, Benachrichtigungen (welche Push-Kategorien an sind, geplante Zusammenfassungen), Gesetzeswarnungen, was die Kollegen sehen (Infotext, Telefon, E-Mail, Geburtstag) und eigene Überstunden-Auszahlungen. Zugangsschlüssel, Passwort und Zwei-Faktor stehen nur in der App.',
+    eingabe: {},
+    async ausfuehren(a, ktx) {
+      const [st, push, zus, warn, kol, aus] = await Promise.all([
+        hole(ktx, '/api/users/meine-stammdaten'), hole(ktx, '/api/push/prefs'), hole(ktx, '/api/push/summaries'),
+        hole(ktx, '/api/users/warnungen'), hole(ktx, '/api/kollegen/mein-profil'),
+        hole(ktx, '/api/payouts').catch(e => { if (e instanceof Hinweis) return {}; throw e; }),
+      ]);
+      const s = st.stammdaten || {};
+      return ohneLeeres({
+        stammdaten: ohneLeeres({ name: s.name, benutzername: s.benutzername, rolle: s.rolle, personalnummer: s.personalnummer, geburtsdatum: s.geburtsdatum,
+          soll_stunden_woche: s.soll_stunden_woche, arbeitsbeginn: s.arbeitsbeginn, urlaubstage_jahr: s.urlaubstage_jahr, start_ueberstunden: s.start_ueberstunden || undefined,
+          anstellung: (s.anstellung || []).map(z => ({ von: z.start_date, bis: z.end_date || 'heute' })),
+          rechte: Object.entries(s.rechte || {}).filter(([, v]) => v).map(([k, v]) => typeof v === 'string' ? `${k}: ${v}` : k) }),
+        benachrichtigungen: {
+          push: Object.fromEntries(Object.entries(PUSH_KAT).map(([de, en]) => [de, push[en] !== false])),
+          hinweis: 'Push kommt nur auf Geräten an, auf denen die App Benachrichtigungen erlaubt hat (Mein Konto → Benachrichtigungen).',
+          zusammenfassungen_alle_pausiert: !!zus.pausedAll,
+          zusammenfassungen: (zus.schedules || []).map(z => ohneLeeres({ nr: z.id, name: z.name, wochentage: z.weekdays.map(d => TAGE[d - 1]), uhrzeit: z.time,
+            kategorien: z.cats.map(c => KAT_DE[c] || c), pausiert: z.paused || undefined })),
+        },
+        gesetzeswarnungen: { pausen: !!warn.pausen, hoechstarbeitszeit: !!warn.arbeitszeit, ruhezeit: !!warn.ruhezeit },
+        fuer_kollegen: ohneLeeres({ infotext: kol.info, telefon: kol.telefon, telefon_sichtbar: kol.telefon ? !!kol.telefon_zeigen : undefined,
+          email: kol.email, email_sichtbar: kol.email ? !!kol.email_zeigen : undefined, geburtstag_sichtbar: !!kol.geburtstag_zeigen,
+          alter_sichtbar: kol.geburtstag_zeigen ? !!kol.alter_zeigen : undefined }),
+        ueberstunden_auszahlungen: ((aus && aus.auszahlungen) || []).filter(z => z.user_id === ktx.user.id).map(z => ohneLeeres({ stunden: z.stunden, wirksam_ab: z.wirksam_ab, status: z.status, grund: z.grund })),
+      });
+    },
+  },
+  {
+    name: 'zeitnachweis_pdf', title: 'Zeitnachweis als PDF', annotations: LESEN,
+    description: 'Erzeugt den Zeitnachweis als PDF — dasselbe Dokument wie „Zeitnachweis als PDF" in der App — und liefert es als Datei (eingebettete Ressource, application/pdf). Mitarbeiter bekommen immer ihren eigenen; Chef/Admin/Buchhaltung wahlweise für einen Mitarbeiter oder alle. Zusätzlich steht eine Download-Adresse dabei, die mit demselben Schlüssel funktioniert.',
+    eingabe: { von: { type: 'string', format: 'date', description: 'Erster Tag, JJJJ-MM-TT' }, bis: { type: 'string', format: 'date', description: 'Letzter Tag, JJJJ-MM-TT' },
+      mitarbeiter: { ...S.mitarbeiter, description: 'Nur für Chef/Admin/Buchhaltung: Name oder Nummer (leer = alle)' },
+      auftrag: { type: 'string', maxLength: 200, description: 'Nur Einträge dieses Auftrags (Nummer oder Name)' } },
+    pflicht: ['von', 'bis'],
+    async ausfuehren(a, ktx) {
+      if (a.von > a.bis) throw new Hinweis('„von" liegt nach „bis".');
+      const uid = ktx.user.role === 'mitarbeiter' ? null : await mitarbeiterNr(ktx, a.mitarbeiter);
+      let projekt = null;
+      if (a.auftrag) { projekt = await auftragFinden(ktx, a.auftrag); if (!projekt) throw new Hinweis(`Kein Auftrag „${a.auftrag}" gefunden.`); }
+      const pfad = '/api/pdf/export' + q({ date_from: a.von, date_to: a.bis, user_id: uid, project_id: projekt && projekt.id });
+      const r = await intern(ktx, 'GET', pfad, null, true);
+      if (r.status !== 200 || !/application\/pdf/.test(r.typ)) {
+        if (r.status >= 500) throw new Error('PDF: Route antwortet ' + r.status);
+        throw new Hinweis((r.body && r.body.error) || `PDF nicht erzeugt (${r.status}).`);
+      }
+      if (r.roh.length > PDF_MAX) throw new Hinweis(`Das PDF ist zu groß für die Übertragung (${Math.round(r.roh.length / 1048576)} MB). Bitte einen kürzeren Zeitraum wählen oder die Download-Adresse nutzen.`);
+      const seiten = (r.roh.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+      const datei = `zeitnachweis_${a.von}_${a.bis}.pdf`;
+      return {
+        datei, seiten, groesse_kb: Math.round(r.roh.length / 1024), zeitraum: { von: a.von, bis: a.bis },
+        download: { adresse: ktx.basis + pfad, kopfzeile: 'Authorization: Bearer <derselbe Schlüssel>' },
+        __inhalt: [{ type: 'resource', resource: { uri: `arbeitsdoku://zeitnachweis/${datei}`, mimeType: 'application/pdf', blob: r.roh.toString('base64') } }],
+      };
+    },
+  },
+  {
+    name: 'benachrichtigungen_einstellen', title: 'Benachrichtigungen einstellen', schreibt: true, annotations: { ...SCHREIBT, idempotentHint: true },
+    description: 'Schaltet Push-Benachrichtigungen je Kategorie an oder aus (wie „Mein Konto → Benachrichtigungen"). Nur angegebene Kategorien ändern sich. Ob überhaupt Push ankommt, entscheidet das Gerät in der App.',
+    eingabe: Object.fromEntries(Object.keys(PUSH_KAT).map(de => [de, { type: 'boolean', description: `Push für ${PUSH_TEXT[de]}` }])),
+    async ausfuehren(a, ktx) {
+      const body = {};
+      for (const [de, en] of Object.entries(PUSH_KAT)) if (a[de] !== undefined) body[en] = a[de];
+      if (!Object.keys(body).length) throw new Hinweis(`Bitte mindestens eine Kategorie angeben: ${Object.keys(PUSH_KAT).join(', ')}.`);
+      const b = geschrieben(await intern(ktx, 'PUT', '/api/push/prefs', body));
+      return { gespeichert: true, push: Object.fromEntries(Object.entries(PUSH_KAT).map(([de, en]) => [de, b[en] !== false])) };
+    },
+  },
+  {
+    name: 'gesetzeswarnungen_einstellen', title: 'Gesetzeswarnungen einstellen', schreibt: true, annotations: { ...SCHREIBT, idempotentHint: true },
+    description: 'Schaltet die persönlichen Hinweise zu Pausen, Höchstarbeitszeit und Ruhezeit (ArbZG/JArbSchG) im Zeitnachweis an oder aus. Nur angegebene ändern sich.',
+    eingabe: { pausen: { type: 'boolean', description: 'Hinweis bei zu kurzer Pause' }, hoechstarbeitszeit: { type: 'boolean', description: 'Hinweis bei Überschreiten der Höchstarbeitszeit' },
+      ruhezeit: { type: 'boolean', description: 'Hinweis bei zu kurzer Ruhezeit' } },
+    async ausfuehren(a, ktx) {
+      if (a.pausen === undefined && a.hoechstarbeitszeit === undefined && a.ruhezeit === undefined) throw new Hinweis('Bitte mindestens einen Schalter angeben.');
+      // Die Route setzt fehlende Felder auf „an" — deshalb den aktuellen Stand mitschicken
+      const jetzt = await hole(ktx, '/api/users/warnungen');
+      const neu = { pausen: a.pausen ?? !!jetzt.pausen, arbeitszeit: a.hoechstarbeitszeit ?? !!jetzt.arbeitszeit, ruhezeit: a.ruhezeit ?? !!jetzt.ruhezeit };
+      geschrieben(await intern(ktx, 'PUT', '/api/users/warnungen', neu));
+      return { gespeichert: true, gesetzeswarnungen: { pausen: neu.pausen, hoechstarbeitszeit: neu.arbeitszeit, ruhezeit: neu.ruhezeit } };
+    },
+  },
+  {
+    name: 'kollegen_profil_aendern', title: 'Was die Kollegen sehen', schreibt: true, annotations: { ...SCHREIBT, idempotentHint: true },
+    description: 'Ändert, was die Kollegen im Kollegen-Verzeichnis über dich sehen: Infotext, Telefon, E-Mail (jeweils mit sichtbar ja/nein) und ob Geburtstag/Alter angezeigt werden. Nur angegebene Felder ändern sich; leerer Text löscht den Eintrag.',
+    eingabe: { infotext: { type: 'string', maxLength: 1000, description: 'Infotext für die Kollegen' },
+      telefon: { type: 'string', maxLength: 40, description: 'Telefonnummer' }, telefon_sichtbar: { type: 'boolean', description: 'Telefon für Kollegen sichtbar' },
+      email: { type: 'string', maxLength: 120, description: 'E-Mail-Adresse' }, email_sichtbar: { type: 'boolean', description: 'E-Mail für Kollegen sichtbar' },
+      geburtstag_sichtbar: { type: 'boolean', description: 'Geburtstag (Tag und Monat) für Kollegen sichtbar' }, alter_sichtbar: { type: 'boolean', description: 'Auch das Alter zeigen (nur zusammen mit dem Geburtstag)' } },
+    async ausfuehren(a, ktx) {
+      if (!Object.keys(a).length) throw new Hinweis('Bitte mindestens ein Feld angeben.');
+      const jetzt = await hole(ktx, '/api/kollegen/mein-profil');
+      const profil = Object.keys(a).some(k => ['infotext', 'telefon', 'telefon_sichtbar', 'email', 'email_sichtbar'].includes(k));
+      let p = null;
+      if (profil) {
+        p = geschrieben(await intern(ktx, 'PUT', '/api/kollegen/mein-profil', {
+          info: a.infotext ?? jetzt.info, telefon: a.telefon ?? jetzt.telefon, telefon_zeigen: a.telefon_sichtbar ?? jetzt.telefon_zeigen,
+          email: a.email ?? jetzt.email, email_zeigen: a.email_sichtbar ?? jetzt.email_zeigen }));
+      }
+      let g = null;
+      if (a.geburtstag_sichtbar !== undefined || a.alter_sichtbar !== undefined) {
+        g = geschrieben(await intern(ktx, 'PUT', '/api/users/geburtstag-freigabe', {
+          zeigen: a.geburtstag_sichtbar ?? jetzt.geburtstag_zeigen, alter_auch: a.alter_sichtbar ?? jetzt.alter_zeigen }));
+      }
+      const n = p || { info: jetzt.info, telefon: jetzt.telefon, telefon_zeigen: jetzt.telefon_zeigen, email: jetzt.email, email_zeigen: jetzt.email_zeigen };
+      const gz = g ? !!g.zeigen : !!jetzt.geburtstag_zeigen;
+      return { gespeichert: true, fuer_kollegen: ohneLeeres({ infotext: n.info, telefon: n.telefon, telefon_sichtbar: n.telefon ? !!n.telefon_zeigen : undefined,
+        email: n.email, email_sichtbar: n.email ? !!n.email_zeigen : undefined, geburtstag_sichtbar: gz,
+        alter_sichtbar: gz ? (g ? !!g.alter_auch : !!jetzt.alter_zeigen) : undefined }),
+        hinweis: (a.geburtstag_sichtbar && !jetzt.geburtsdatum_hinterlegt) ? 'Es ist kein Geburtsdatum hinterlegt — sichtbar wird erst etwas, wenn die Verwaltung es einträgt.' : undefined };
+    },
+  },
+  {
+    name: 'zusammenfassung_planen', title: 'Geplante Zusammenfassung', schreibt: true, annotations: SCHREIBT,
+    description: 'Legt eine geplante Zusammenfassung (Sammel-Push zu festen Zeiten) an oder ändert eine bestehende (mit nr) — wie „Mein Konto → Zusammenfassungen". Einzeln pausieren mit pausiert=true. Löschen geht hier nicht.',
+    eingabe: { nr: { type: 'integer', minimum: 1, description: 'Nummer einer bestehenden Zusammenfassung (leer = neu anlegen)' },
+      name: { type: 'string', maxLength: 40, description: 'Name, z. B. „Morgens"' },
+      wochentage: { type: 'array', maxItems: 7, items: { type: 'integer', minimum: 1, maximum: 7 }, description: 'Wochentage 1 = Montag … 7 = Sonntag' },
+      uhrzeit: { ...UHR, description: 'Uhrzeit HH:MM' },
+      kategorien: { type: 'array', maxItems: 5, items: { type: 'string', enum: Object.keys(ZUS_KAT) }, description: `Inhalt: ${Object.keys(ZUS_KAT).join(', ')}` },
+      pausiert: { type: 'boolean', description: 'Diese Zusammenfassung pausieren (true) oder fortsetzen (false)' } },
+    async ausfuehren(a, ktx) {
+      const body = {};
+      if (a.name !== undefined) body.name = a.name;
+      if (a.wochentage !== undefined) body.weekdays = a.wochentage;
+      if (a.uhrzeit !== undefined) body.time = a.uhrzeit;
+      if (a.kategorien !== undefined) body.cats = a.kategorien.map(k => ZUS_KAT[k]);
+      if (a.pausiert !== undefined) body.paused = a.pausiert;
+      if (!a.nr && (!a.wochentage || !a.uhrzeit || !a.kategorien)) throw new Hinweis('Für eine neue Zusammenfassung bitte wochentage, uhrzeit und kategorien angeben.');
+      if (a.nr && !Object.keys(body).length) throw new Hinweis('Nichts zu ändern — bitte mindestens ein Feld angeben.');
+      const b = geschrieben(await intern(ktx, a.nr ? 'PUT' : 'POST', a.nr ? `/api/push/summaries/${a.nr}` : '/api/push/summaries', body));
+      const z = b.schedule || {};
+      return { gespeichert: true, zusammenfassung: ohneLeeres({ nr: z.id, name: z.name, wochentage: (z.weekdays || []).map(d => TAGE[d - 1]), uhrzeit: z.time,
+        kategorien: (z.cats || []).map(c => KAT_DE[c] || c), pausiert: z.paused || undefined }) };
+    },
+  },
+  {
+    name: 'zusammenfassungen_pausieren', title: 'Alle Zusammenfassungen pausieren', schreibt: true, annotations: { ...SCHREIBT, idempotentHint: true },
+    description: 'Pausiert alle geplanten Zusammenfassungen auf einmal (z. B. im Urlaub) oder setzt sie fort.',
+    eingabe: { pausiert: { type: 'boolean', description: 'true = alle pausieren, false = fortsetzen' } },
+    pflicht: ['pausiert'],
+    async ausfuehren(a, ktx) {
+      const b = geschrieben(await intern(ktx, 'PUT', '/api/push/summaries/pause-all', { paused: a.pausiert }));
+      return { gespeichert: true, alle_pausiert: !!b.pausedAll };
+    },
+  },
 ];
 const MS = { offen: 'offen', doing: 'in Arbeit', done: 'erledigt' };
 const DRINGLICHKEIT = { rot: 'dringend', orange: 'hoch', gelb: 'mittel', gruen: 'niedrig' };
@@ -704,6 +869,17 @@ function eingabePruefen(w, args) {
       if (s.maximum !== undefined && v > s.maximum) return `„${k}" darf höchstens ${s.maximum} sein.`;
     } else if (s.type === 'boolean') {
       if (typeof v !== 'boolean') return `„${k}" muss true oder false sein.`;
+    } else if (s.type === 'array') {
+      if (!Array.isArray(v)) return `„${k}" muss eine Liste sein.`;
+      if (s.maxItems !== undefined && v.length > s.maxItems) return `„${k}" hat zu viele Einträge (höchstens ${s.maxItems}).`;
+      if (s.minItems !== undefined && v.length < s.minItems) return `„${k}" braucht mindestens ${s.minItems} Eintrag.`;
+      const i = s.items || {};
+      for (const x of v) {
+        if (i.type === 'integer' && (typeof x !== 'number' || !Number.isInteger(x) || (i.minimum !== undefined && x < i.minimum) || (i.maximum !== undefined && x > i.maximum)))
+          return `„${k}": jeder Eintrag muss eine ganze Zahl${i.minimum !== undefined ? ` von ${i.minimum} bis ${i.maximum}` : ''} sein.`;
+        if (i.type === 'string' && (typeof x !== 'string' || (i.enum && !i.enum.includes(x))))
+          return `„${k}": erlaubt sind ${i.enum ? i.enum.join(', ') : 'nur Texte'}.`;
+      }
     }
   }
   return null;

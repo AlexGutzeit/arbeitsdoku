@@ -1165,7 +1165,10 @@ beantworten wie „Wie viele Stunden war Max im Oktober bei Kunde Müller?". Daf
 
 **MCP-Schnittstelle** (`/mcp`, „Streamable HTTP", zustandslos; Anmeldung per `Authorization: Bearer adk_…`):
 
-* **Lesen** (21 Werkzeuge): `angemeldet_als`, `mitarbeiter_liste`, `zeiteintraege_suchen`, `stunden_summe`,
+* **Lesen** (23 Werkzeuge): `mein_konto` (alles von „Mein Konto": Stammdaten, Rechte, Benachrichtigungen,
+  Zusammenfassungen, Gesetzeswarnungen, was die Kollegen sehen, eigene Auszahlungen — ohne Zugangsschlüssel, Passwort,
+  Zwei-Faktor), `zeitnachweis_pdf` (dasselbe PDF wie in der App, als eingebettete Datei plus Download-Adresse, die mit
+  demselben Schlüssel funktioniert; Mitarbeiter immer nur den eigenen), `angemeldet_als`, `mitarbeiter_liste`, `zeiteintraege_suchen`, `stunden_summe`,
   `kunden_suchen`, `auftraege_suchen`, `auftrag_anzeigen`, `planung_anzeigen`, `abwesenheiten`, `stundenkonto`,
   `urlaubskonto`, `notizen_suchen`, `notiz_lesen`, `aushaenge`, `werkzeuge_liste`, `bestellungen`, `lager_suchen`,
   `meldungen`, `ablage_liste`, `abrechnung_stand`, `kollegen`. Deutsche Beschreibungen, kompakte Antworten,
@@ -1181,6 +1184,11 @@ beantworten wie „Wie viele Stunden war Max im Oktober bei Kunde Müller?". Daf
     genehmigt in der App), Krank, Berufsschule, Innung sind sofort eingetragen; keine Feiertage, kein Genehmigen,
     kein Ändern. Die Vorschau zeigt, ob der Resturlaub reicht.
   * `werkzeug_entnehmen` (von einem Kollegen nur mit `uebernehmen: true`), `werkzeug_zurueckgeben`.
+  * Eigene Einstellungen von „Mein Konto": `benachrichtigungen_einstellen` (Push je Kategorie),
+    `gesetzeswarnungen_einstellen`, `kollegen_profil_aendern` (Infotext, Telefon, E-Mail, Geburtstag — jeweils mit
+    sichtbar ja/nein), `zusammenfassung_planen` (anlegen/ändern/einzeln pausieren), `zusammenfassungen_pausieren`.
+    Nicht über Schlüssel: Passwort, Zwei-Faktor, Zugangsschlüssel, „überall abmelden", Profilbild, Push-Gerät an/ab,
+    Auszahlung bestätigen, Zusammenfassung löschen.
   * `aushang_anlegen`, `aushang_aendern` — Schwarzes Brett, **nur mit dem Recht „Schwarzes Brett"** (Chef/Admin per
     Rolle; die Route entscheidet). Löschen nicht. Wer ohne Recht fragt, bekommt das so gesagt. Jede Schreibaktion steht im Änderungsprotokoll („Schreibzugriff über
   Zugangsschlüssel", mit Name des Schlüssels und des Werkzeugs) und im Änderungsverlauf des Eintrags.

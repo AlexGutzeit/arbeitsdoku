@@ -72,7 +72,7 @@ const werkzeug = async (schl, name, args) => {
     const info = client.getServerVersion();
     ok('Handshake: Server „arbeitsdoku", mit Anleitung', info && info.name === 'arbeitsdoku' && /stunden_summe/.test(client.getInstructions() || ''), JSON.stringify(info));
     const liste = (await client.listTools()).tools;
-    ok('Werkzeugliste: 21 Lese-Werkzeuge mit deutscher Beschreibung und Schema', liste.length === 21 && liste.every(t => t.description && t.inputSchema && t.inputSchema.type === 'object'), liste.length);
+    ok('Werkzeugliste: 23 Lese-Werkzeuge mit deutscher Beschreibung und Schema', liste.length === 23 && liste.every(t => t.description && t.inputSchema && t.inputSchema.type === 'object'), liste.length);
     ok('… alle als „nur lesen" gekennzeichnet', liste.every(t => t.annotations && t.annotations.readOnlyHint === true));
     const summe = await client.callTool({ name: 'stunden_summe', arguments: { von: '2026-10-01', bis: '2026-10-31', kunde: 'korn' } });
     const sd = summe.structuredContent;
@@ -166,9 +166,9 @@ const werkzeug = async (schl, name, args) => {
     S.tomSchreiben = await schl(tok.tom, 'Tom schreibt', 'schreiben');
     const chefSchreibVorab = await schl(tok.chef, 'Chef schreibt (Brett)', 'schreiben');
     const schreibNamen = ((await rpc(S.miaSchreiben, 'tools/list')).body.result.tools || []).map(t => t.name);
-    ok('Schreib-Schlüssel: 29 Werkzeuge (21 lesen + 8 schreiben), Lese-Schlüssel weiter 21',
-      schreibNamen.length === 29 && ['material_bestellen', 'abwesenheit_eintragen', 'werkzeug_entnehmen', 'werkzeug_zurueckgeben'].every(n => schreibNamen.includes(n))
-      && ((await rpc(S.chef, 'tools/list')).body.result.tools || []).length === 21, schreibNamen.join(','));
+    ok('Schreib-Schlüssel: 36 Werkzeuge (23 lesen + 13 schreiben), Lese-Schlüssel weiter 23',
+      schreibNamen.length === 36 && ['material_bestellen', 'abwesenheit_eintragen', 'werkzeug_entnehmen', 'werkzeug_zurueckgeben'].every(n => schreibNamen.includes(n))
+      && ((await rpc(S.chef, 'tools/list')).body.result.tools || []).length === 23, schreibNamen.join(','));
     const bestellungen = async () => ((await req('GET', '/api/orders', admin)).body?.orders || []);
     w = await werkzeug(S.miaSchreiben, 'material_bestellen', { material: 'Kabelbinder 280 mm', menge: 50, einheit: 'Stk', auftrag: 'neubau', vorschau: true });
     ok('Bestellung Vorschau: für „Neubau Probe", nichts bestellt', w.daten && w.daten.vorschau && w.daten.wuerde_ergeben.fuer === 'Neubau Probe' && (await bestellungen()).length === 0, JSON.stringify(w));
@@ -244,6 +244,72 @@ const werkzeug = async (schl, name, args) => {
     ok('Recht entzogen → Ändern abgelehnt, Aushang unverändert', /fehlt dir das Recht/.test(w.fehler || '') && (await werkzeug(S.chef, 'aushaenge', {})).daten.aushaenge.find(x => x.nr === aushNr).titel === 'Grillfest', w.fehler);
     const delBrett = await req('DELETE', `/api/bulletin/${aushNr}`, chefSchreibVorab);
     ok('DELETE /api/bulletin/:id mit Schreibschlüssel des Chefs → 403', delBrett.status === 403 && delBrett.body?.code === 'SCHLUESSEL_NICHT_ERLAUBT', JSON.stringify(delBrett));
+
+    console.log('── Mein Konto und Zeitnachweis-PDF ──');
+    let mk = await werkzeug(S.tom, 'mein_konto', {});
+    ok('mein_konto mit Lese-Schlüssel: Stammdaten, Push (Standard alles an), Warnungen, Kollegen-Teil',
+      mk.daten && mk.daten.stammdaten.name === 'Tom Mcp' && Object.values(mk.daten.benachrichtigungen.push).every(v => v === true)
+      && mk.daten.gesetzeswarnungen.pausen === true && 'fuer_kollegen' in mk.daten, JSON.stringify(mk.daten).slice(0, 300));
+    ok('… ohne Zugangsschlüssel, Passwort, Zwei-Faktor', !/schluessel_|passwort|zwei_faktor|adk_/i.test(JSON.stringify(Object.keys(mk.daten))) && !JSON.stringify(mk.daten).includes('adk_'));
+    const pdfAntwort = (await rpc(S.tom, 'tools/call', { name: 'zeitnachweis_pdf', arguments: { von: '2026-10-01', bis: '2026-10-31' } })).body.result;
+    const res = pdfAntwort && pdfAntwort.content && pdfAntwort.content.find(c => c.type === 'resource');
+    const bytes = res ? Buffer.from(res.resource.blob, 'base64') : Buffer.alloc(0);
+    ok('zeitnachweis_pdf (Lese-Schlüssel): eingebettete Datei application/pdf, beginnt mit %PDF', res && res.resource.mimeType === 'application/pdf' && bytes.slice(0, 4).toString() === '%PDF', JSON.stringify(pdfAntwort).slice(0, 200));
+    ok('… das strukturierte Ergebnis bleibt klein (keine Datei darin), nennt Seiten und Download-Adresse',
+      pdfAntwort.structuredContent && pdfAntwort.structuredContent.seiten >= 1 && !JSON.stringify(pdfAntwort.structuredContent).includes(res.resource.blob.slice(0, 50))
+      && /\/api\/pdf\/export\?date_from=2026-10-01&date_to=2026-10-31/.test(pdfAntwort.structuredContent.download.adresse), JSON.stringify(pdfAntwort.structuredContent));
+    const direkt = await new Promise((r) => { http.get({ host: 'localhost', port: PORT, path: '/api/pdf/export?date_from=2026-10-01&date_to=2026-10-31', headers: { Authorization: 'Bearer ' + S.tom } },
+      x => { const t = []; x.on('data', c => t.push(c)); x.on('end', () => r({ status: x.statusCode, typ: x.headers['content-type'], b: Buffer.concat(t) })); }); });
+    ok('… und die Download-Adresse liefert mit demselben Schlüssel das PDF', direkt.status === 200 && /application\/pdf/.test(direkt.typ) && direkt.b.slice(0, 4).toString() === '%PDF', `${direkt.status} ${direkt.typ}`);
+    w = await werkzeug(S.tom, 'zeitnachweis_pdf', { von: '2026-10-31', bis: '2026-10-01' });
+    ok('von nach bis → Hinweis', /liegt nach/.test(w.fehler || ''), w.fehler);
+    w = await werkzeug(S.tom, 'benachrichtigungen_einstellen', { planung: false });
+    ok('Lese-Schlüssel kann Einstellungen nicht ändern (Werkzeug unbekannt)', /Unbekanntes Werkzeug/.test(w.fehler || ''), w.fehler);
+    const restPush = await req('PUT', '/api/push/prefs', S.tom, { planning: false });
+    ok('… und über REST auch nicht (403)', restPush.status === 403 && restPush.body?.code === 'SCHLUESSEL_NICHT_ERLAUBT', JSON.stringify(restPush.body));
+
+    w = await werkzeug(S.miaSchreiben, 'benachrichtigungen_einstellen', { planung: false, bestellungen: false });
+    let pr = (await req('GET', '/api/push/prefs', tok.mia)).body;
+    ok('Push: Planung und Bestellungen aus, der Rest bleibt an', w.daten && pr.planning === false && pr.orders === false && pr.bulletin === true && pr.meldungen === true, JSON.stringify(pr));
+    w = await werkzeug(S.miaSchreiben, 'benachrichtigungen_einstellen', {});
+    ok('… ohne Angabe → Hinweis', /mindestens eine Kategorie/.test(w.fehler || ''), w.fehler);
+    w = await werkzeug(S.miaSchreiben, 'gesetzeswarnungen_einstellen', { ruhezeit: false });
+    let wa = (await req('GET', '/api/users/warnungen', tok.mia)).body;
+    ok('Warnungen: nur Ruhezeit aus, Pausen und Höchstarbeitszeit bleiben an (die Route würde Fehlendes auf „an" setzen)', wa.ruhezeit === false && wa.pausen === true && wa.arbeitszeit === true, JSON.stringify(wa));
+    await werkzeug(S.miaSchreiben, 'gesetzeswarnungen_einstellen', { pausen: false });
+    wa = (await req('GET', '/api/users/warnungen', tok.mia)).body;
+    ok('… zweite Änderung (Pausen aus) lässt Ruhezeit aus', wa.ruhezeit === false && wa.pausen === false && wa.arbeitszeit === true, JSON.stringify(wa));
+    w = await werkzeug(S.miaSchreiben, 'kollegen_profil_aendern', { infotext: 'Elektrikerin, Schwerpunkt PV', telefon: '0171 2345678', telefon_sichtbar: true });
+    let alsKollege = (await req('GET', `/api/kollegen/${ids.mia}`, tok.tom)).body || {};
+    ok('Kollegen-Profil: Tom sieht Infotext und Telefon', w.daten && alsKollege.info === 'Elektrikerin, Schwerpunkt PV' && alsKollege.telefon === '0171 2345678', JSON.stringify(alsKollege).slice(0, 200));
+    await werkzeug(S.miaSchreiben, 'kollegen_profil_aendern', { telefon_sichtbar: false });
+    alsKollege = (await req('GET', `/api/kollegen/${ids.mia}`, tok.tom)).body || {};
+    ok('… Telefon unsichtbar geschaltet: Tom sieht es nicht mehr, der Infotext bleibt', !alsKollege.telefon && alsKollege.info === 'Elektrikerin, Schwerpunkt PV', JSON.stringify(alsKollege).slice(0, 200));
+    w = await werkzeug(S.miaSchreiben, 'kollegen_profil_aendern', { telefon: 'ruf mich an' });
+    ok('… ungültige Telefonnummer → Meldung der App', /Telefonnummer/.test(w.fehler || ''), w.fehler);
+    w = await werkzeug(S.miaSchreiben, 'kollegen_profil_aendern', { geburtstag_sichtbar: true });
+    ok('Geburtstag sichtbar ohne hinterlegtes Datum → gespeichert, mit Hinweis', w.daten && w.daten.fuer_kollegen.geburtstag_sichtbar === true && /kein Geburtsdatum/.test(w.daten.hinweis || ''), JSON.stringify(w.daten));
+    w = await werkzeug(S.miaSchreiben, 'zusammenfassung_planen', { name: 'Morgens', wochentage: [1, 2, 3, 4, 5], uhrzeit: '06:30', kategorien: ['schwarzes_brett', 'meldungen'] });
+    const zNr = w.daten && w.daten.zusammenfassung && w.daten.zusammenfassung.nr;
+    let zs = (await req('GET', '/api/push/summaries', tok.mia)).body;
+    ok('Zusammenfassung angelegt: Mo–Fr 06:30, Brett + Meldungen', zs.schedules.length === 1 && zs.schedules[0].time === '06:30' && zs.schedules[0].weekdays.length === 5
+      && JSON.stringify(zs.schedules[0].cats.sort()) === '["bulletin","meldungen"]', JSON.stringify(zs));
+    await werkzeug(S.miaSchreiben, 'zusammenfassung_planen', { nr: zNr, pausiert: true, uhrzeit: '07:00' });
+    zs = (await req('GET', '/api/push/summaries', tok.mia)).body;
+    ok('… geändert: 07:00 und pausiert', zs.schedules[0].time === '07:00' && zs.schedules[0].paused === true, JSON.stringify(zs.schedules));
+    w = await werkzeug(S.miaSchreiben, 'zusammenfassung_planen', { wochentage: [1], uhrzeit: '06:00', kategorien: ['urlaub'] });
+    ok('… unbekannte Kategorie → Eingabefehler', /erlaubt sind/.test(w.fehler || ''), w.fehler);
+    w = await werkzeug(S.miaSchreiben, 'zusammenfassung_planen', { name: 'unvollständig' });
+    ok('… neu ohne Wochentage/Uhrzeit/Kategorien → Hinweis', /bitte wochentage, uhrzeit und kategorien/.test(w.fehler || ''), w.fehler);
+    const tomZ = (await req('POST', '/api/push/summaries', tok.tom, { weekdays: [1], time: '06:00', cats: ['bulletin'] })).body.schedule.id;
+    w = await werkzeug(S.miaSchreiben, 'zusammenfassung_planen', { nr: tomZ, pausiert: true });
+    ok('… fremde Zusammenfassung (von Tom) → nicht gefunden', /nicht gefunden/.test(w.fehler || ''), w.fehler);
+    w = await werkzeug(S.miaSchreiben, 'zusammenfassungen_pausieren', { pausiert: true });
+    ok('alle Zusammenfassungen pausiert', w.daten && w.daten.alle_pausiert === true && (await req('GET', '/api/push/summaries', tok.mia)).body.pausedAll === true, JSON.stringify(w));
+    for (const [m, p] of [['DELETE', `/api/push/summaries/${zNr}`], ['POST', '/api/push/subscribe'], ['POST', '/api/push/test'], ['GET', '/api/schluessel']]) {
+      const x = await req(m, p, S.miaSchreiben, m === 'GET' || m === 'DELETE' ? undefined : {});
+      ok(`${m} ${p.replace(/\d+/g, ':id')} mit Schreibschlüssel → 403`, x.status === 403 && x.body?.code === 'SCHLUESSEL_NICHT_ERLAUBT', `${x.status}`);
+    }
 
     console.log('── über REST weiterhin gesperrt ──');
     const bestNr = (await bestellungen())[0].id;

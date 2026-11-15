@@ -5487,3 +5487,15 @@ Notizen, Integrität ok). Rückkehrpunkt `vor-mcp-deploy` (= `130c44a`). Danach:
 Zweitanlage Probestart ok. Datenbank: 60 → 62 Tabellen (`api_schluessel` leer, `mcp_zugriffe` mit genau den drei
 abgewiesenen Prüfaufrufen der Nachkontrolle), `users.can_mcp` überall 0, `tool_checkouts` 40 → 36 (am 14.08.
 zurückgegeben, Drei-Monats-Bereinigung beim Start), sonst keine Zeile verändert.
+
+**Nachtrag 15.11.2026 — „Mein Konto" über MCP und Zeitnachweis als PDF (Alex).** Lesen: `mein_konto` sammelt die
+Karten der Seite aus ihren eigenen Routen (Stammdaten, Push-Kategorien, Zusammenfassungen, Warnungen, Kollegen-Profil,
+Auszahlungen); die Zugangsschlüssel bewusst NICHT — `/api/schluessel` bleibt für Programme ganz zu (Gegenprobe: lesbar
+→ rot). `zeitnachweis_pdf` holt `/api/pdf/export` binär (`intern(…, binaer)`) und gibt die Datei als eingebettete
+Ressource (`type: resource`, base64) im content zurück, nicht im strukturierten Ergebnis; dazu die Download-Adresse —
+`/api/pdf/export` ist für Schlüssel lesbar. Grenze 8 MB. Schreiben (nur „lesen + schreiben", Alex' Entscheidung):
+Push je Kategorie, Gesetzeswarnungen, Kollegen-Profil + Geburtstags-Freigabe, Zusammenfassungen anlegen/ändern/
+pausieren, alle pausieren. **Zwei Routen ersetzen beim Speichern alles:** `PUT /api/users/warnungen` setzt fehlende
+Schalter auf „an", `PUT /api/kollegen/mein-profil` leert fehlende Felder. Die Werkzeuge lesen deshalb erst den Stand
+und schicken ihn zusammengeführt — beide Gegenproben (ohne Zusammenführen) rot. Die Eingabeprüfung kann jetzt Listen
+(Wochentage, Kategorien). `mcp-protokoll` 104, Gegenproben 5/5 rot.

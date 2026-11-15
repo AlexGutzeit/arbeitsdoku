@@ -81,6 +81,11 @@ const LESEN = [
   '/api/suppliers', `/api/suppliers/${Z}/produkte`,
   '/api/notes',
   '/api/documents', '/api/documents/folders/all',
+  // „Mein Konto" lesen und der Zeitnachweis als PDF (Alex, 15.11.2026). Die eigenen Zugangsschlüssel bleiben
+  // bewusst draußen: /api/schluessel ist für Programme ganz zu, lesend wie schreibend.
+  '/api/users/meine-stammdaten', '/api/users/warnungen', '/api/users/geburtstag-freigabe', '/api/kollegen/mein-profil',
+  '/api/push/prefs', '/api/push/summaries',
+  '/api/pdf/export',
 ];
 // Schreiben (nur Recht 'schreiben'): Zeiteinträge anlegen und ändern; seit 14.11.2026 abends (Alex) auch
 // Material bestellen, Abwesenheit eintragen/beantragen, Werkzeug entnehmen/zurückgeben/übernehmen. Nie DELETE,
@@ -95,6 +100,15 @@ const SCHREIBEN = [
   ['POST', `/api/tools/${Z}/takeover`],
   ['POST', '/api/bulletin'],          // Schwarzes Brett (Alex, 14.11.2026) — die Route prüft das Recht „Schwarzes Brett"
   ['PUT', `/api/bulletin/${Z}`],
+  // Eigene Konto-Einstellungen (Alex, 15.11.2026: nur mit „lesen + schreiben"). Kein Passwort, kein zweiter Faktor,
+  // keine Schlüssel, kein Push-Gerät an/ab, keine Auszahlung bestätigen, keine Zusammenfassung löschen.
+  ['PUT', '/api/push/prefs'],
+  ['PUT', '/api/users/warnungen'],
+  ['PUT', '/api/users/geburtstag-freigabe'],
+  ['PUT', '/api/kollegen/mein-profil'],
+  ['POST', '/api/push/summaries'],
+  ['PUT', '/api/push/summaries/pause-all'],
+  ['PUT', `/api/push/summaries/${Z}`],
 ];
 const muster = (p) => new RegExp('^' + p + '/?$');
 const LESEN_RE = LESEN.map(muster);

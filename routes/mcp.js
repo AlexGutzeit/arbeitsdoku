@@ -128,13 +128,16 @@ router.all('/', async (req, res) => {
       z.werkzeug = name;
       const w = werkzeuge.fuer(eintrag.recht).find(x => x.name === name);
       if (!w) return ende(200, fehlerAntwort(id, -32602, `Unbekanntes Werkzeug „${name.slice(0, 64)}".`), 'fehler');
-      const ergebnis = (text, isError, daten) => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }], ...(daten ? { structuredContent: daten } : {}), isError } });
+      // `__inhalt`: weitere Inhaltsblöcke eines Werkzeugs (z. B. das PDF als eingebettete Ressource) — sie stehen
+      // NUR im content, nicht im strukturierten Ergebnis (das bleibt klein und lesbar).
+      const ergebnis = (text, isError, daten, mehr) => ({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }, ...(mehr || [])], ...(daten ? { structuredContent: daten } : {}), isError } });
       const falsch = werkzeuge.eingabePruefen(w, params.arguments);
       if (falsch) return ende(200, ergebnis(falsch, true), 'fehler');
-      const ktx = { roh, ip, werkzeug: name, user, schluessel: { id: eintrag.id, name: eintrag.name, recht: eintrag.recht } };
+      const ktx = { roh, ip, werkzeug: name, user, schluessel: { id: eintrag.id, name: eintrag.name, recht: eintrag.recht },
+        basis: `${req.protocol}://${req.get('host')}` };
       try {
-        const daten = await w.ausfuehren(params.arguments || {}, ktx);
-        return ende(200, ergebnis(JSON.stringify(daten), false, daten), 'ok');
+        const { __inhalt, ...daten } = await w.ausfuehren(params.arguments || {}, ktx);
+        return ende(200, ergebnis(JSON.stringify(daten), false, daten, __inhalt), 'ok');
       } catch (e) {
         if (e instanceof werkzeuge.Hinweis) return ende(200, ergebnis(e.message, true), 'fehler');
         console.error(`MCP-Werkzeug ${name}:`, e && e.message);

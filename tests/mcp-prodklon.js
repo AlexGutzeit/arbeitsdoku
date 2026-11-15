@@ -63,7 +63,8 @@ async function werkzeug(schl, name, args) {
       ['stunden_summe', { von: '2026-01-01', bis: '2026-12-31', einzelposten: true }], ['kunden_suchen', {}], ['auftraege_suchen', {}],
       ['planung_anzeigen', {}], ['abwesenheiten', {}], ['stundenkonto', {}], ['stundenkonto', { zeitraum: 'gesamt' }], ['urlaubskonto', {}],
       ['notizen_suchen', {}], ['aushaenge'], ['werkzeuge_liste', {}], ['bestellungen', {}], ['bestellungen', { bestellte: true }],
-      ['lager_suchen', {}], ['meldungen', {}], ['meldungen', { erledigte: true }], ['ablage_liste', {}], ['abrechnung_stand'], ['kollegen', {}]];
+      ['lager_suchen', {}], ['meldungen', {}], ['meldungen', { erledigte: true }], ['ablage_liste', {}], ['abrechnung_stand'], ['kollegen', {}],
+      ['mein_konto'], ['zeitnachweis_pdf', { von: '2026-10-01', bis: '2026-10-31' }]];
     const projekte = (await req('GET', '/api/projects', admin)).body?.projects || [];
     for (const p of projekte.slice(0, 5)) AUFRUFE.push(['auftrag_anzeigen', { nr: p.id }]);
     for (const r of ['admin', 'chef', 'mitarbeiter']) {
@@ -72,7 +73,8 @@ async function werkzeug(schl, name, args) {
         const w = await werkzeug(K[r], name, args);
         // Erwartbare Ablehnungen der Route (z. B. Mitarbeiter darf Projektstatistik nicht) sind ok — Absturz oder 500 nicht
         if (w.status !== 200 || (w.fehler && /interner Fehler/i.test(w.fehler))) probleme.push(`${name}: ${w.status} ${w.fehler || ''}`);
-        if (w.laenge > 120000) gross.push(`${name} ${Math.round(w.laenge / 1024)} KB`);
+        // Das PDF ist eine Datei, keine Antwort zum Lesen — dafür gilt die eigene Grenze (8 MB, mcp-werkzeuge.js)
+        if (w.laenge > (name === 'zeitnachweis_pdf' ? 12 * 1048576 : 120000)) gross.push(`${name} ${Math.round(w.laenge / 1024)} KB`);
       }
       ok(`${r}: alle ${AUFRUFE.length} Aufrufe ohne internen Fehler`, probleme.length === 0, probleme.join(' | '));
       ok(`${r}: keine Antwort über 120 KB`, gross.length === 0, gross.join(', '));
