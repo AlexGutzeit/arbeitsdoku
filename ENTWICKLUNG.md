@@ -5476,3 +5476,14 @@ Datumsfelder nicht — das Werkzeug tut es. Nebenbei: Das Lese-Werkzeug `aushaen
 es nicht gibt (`created_by_name` statt `author_name`), und lieferte keine Nummer. Der Test wartet vor dem
 Bremsen-Abschnitt jetzt eine Minute: Er macht inzwischen über 120 Aufrufe je Minute von 127.0.0.1, und dann griff die
 Grenze je Adresse vor der gemessenen je Schlüssel. `mcp-protokoll` 78, Gegenproben 4/4 rot.
+
+**Deploy (15.11.2026, 03:01, `017a283`, Cache 461) — MCP-Schnittstelle, Zugangsschlüssel, Stufen-Recht, Schreib-Werkzeuge
+(Zeiteinträge, Material, Abwesenheit, Werkzeug, Schwarzes Brett).** Suite 302/302 auf der Kopie von 14.11. 22:05, alle 21
+Prod-Klon-Tests dabei; übersprungen nur die vier Vergleichstests mit altem Codestand. Sicherung
+`arbeitsdoku_backup_20261115-030114.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe: 13 Konten, 1799 Einträge, 14
+Notizen, Integrität ok). Rückkehrpunkt `vor-mcp-deploy` (= `130c44a`). Danach: IPv4+IPv6 200, Cache 461 in `sw.js`,
+`index.html` und `gast.html`, Schlüssel-Karte im ausgelieferten Skript, `/mcp` ohne Schlüssel 401 mit
+`WWW-Authenticate`, GET 405, falscher Schlüssel 401, Migration „can_mcp Spalte hinzugefügt", Protokoll ohne Fehler,
+Zweitanlage Probestart ok. Datenbank: 60 → 62 Tabellen (`api_schluessel` leer, `mcp_zugriffe` mit genau den drei
+abgewiesenen Prüfaufrufen der Nachkontrolle), `users.can_mcp` überall 0, `tool_checkouts` 40 → 36 (am 14.08.
+zurückgegeben, Drei-Monats-Bereinigung beim Start), sonst keine Zeile verändert.
