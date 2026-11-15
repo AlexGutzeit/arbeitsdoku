@@ -5499,3 +5499,12 @@ pausieren, alle pausieren. **Zwei Routen ersetzen beim Speichern alles:** `PUT /
 Schalter auf „an", `PUT /api/kollegen/mein-profil` leert fehlende Felder. Die Werkzeuge lesen deshalb erst den Stand
 und schicken ihn zusammengeführt — beide Gegenproben (ohne Zusammenführen) rot. Die Eingabeprüfung kann jetzt Listen
 (Wochentage, Kategorien). `mcp-protokoll` 104, Gegenproben 5/5 rot.
+
+**Deploy (15.11.2026, 09:25, `4dacbff`, Cache unverändert 461) — „Mein Konto" über MCP, Zeitnachweis als PDF.** Suite
+302/302 auf der Kopie von 07:41, alle 21 Prod-Klon-Tests dabei; übersprungen nur die vier Vergleichstests. Sicherung
+`arbeitsdoku_backup_20261115-092457.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe ok). Rückkehrpunkt
+`vor-mcp-konto-deploy` (= `017a283`). Danach: IPv4+IPv6 200, die sieben neuen Werkzeuge im Server-Code, `/mcp` und
+`/api/pdf/export` ohne Anmeldung 401, Protokoll ohne Fehler, Zweitanlage Probestart ok, Datenbank 62/62 ohne
+Schemaänderung (nur `mcp_zugriffe` +1 durch die Nachkontrolle). Zwischen beiden Deploys hat Hermes sich angebunden:
+Schlüssel „Hermes" (nur lesen) seit 08:21, Handshake, Werkzeugliste, 12 erfolgreiche Werkzeugaufrufe, regelmäßiger
+`ping`; die 31 abgewiesenen Zugriffe kamen alle aus dem eigenen Freifunk-Netz (Prüfaufrufe, Versuche vor dem Schlüssel).
