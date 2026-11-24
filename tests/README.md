@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**304 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**306 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -204,6 +204,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `notiz-freigabe-datum.js` | Neue Freigabe leuchtet nur beim NEUEN Empfänger auf — nicht bei allen bisherigen (27.09.2026). |
 | `notiz-gaeste-ui.js` | Gäste in Notizen — Oberfläche (Etappe C, 27.09.2026). |
 | `notiz-gaeste.js` | Gäste in Notizen — Server (Etappe C, 27.09.2026). |
+| `notiz-zeichnen-ui.js` | Zeichenflächen in Notizen — Oberfläche (24.11.2026). |
+| `notiz-zeichnen.js` | Zeichenflächen in Notizen — Server, Prüfung und Dateien (24.11.2026). |
 | `notizen-export-ui.js` | Drucken und „Speichern als" in der geöffneten Notiz — Oberfläche (Etappe B, 27.09.2026). |
 | `notizen-export.js` | Notiz als PDF, Word, OpenDocument und „Stand als eigene Notiz" — Server (Etappe B, 27.09.2026). |
 | `notizen-live-prodklon.js` | Live-Notizen am Prod-Klon: Umstellung der echten Notizen auf das gemeinsame Dokument (Etappe A, Schritt 3). |

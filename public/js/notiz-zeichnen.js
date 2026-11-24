@@ -38,6 +38,31 @@ function nzKennung(n) {
   return Array.from(zufall, x => z[x % z.length]).join('');
 }
 
+// Antippen sicher erkennen. Chrome verschluckt nach einem schnellen Zug über eine Fläche mit
+// touch-action: none ein Tippen, das kurz danach kommt (gilt als „Schwung anhalten") — der click fehlt
+// dann, man tippt „Radierer" und nichts passiert (gemessen 24.11.2026: jeder zweite Tipp nach einem Strich).
+// Bei Finger und Stift zählt deshalb schon das Loslassen auf demselben Knopf; der click, der meist doch
+// noch kommt, wird übergangen. Maus und Tastatur (Enter/Leertaste) laufen wie immer über click.
+function nzTippen(wurzel, handeln) {
+  let unten = null, zuletzt = { knopf: null, zeit: 0 };
+  const knopfVon = (e) => { const b = e.target.closest && e.target.closest('button'); return b && wurzel.contains(b) && !b.disabled ? b : null; };
+  const runter = (e) => { unten = e.pointerType === 'mouse' ? null : knopfVon(e); };
+  const hoch = (e) => {
+    const b = knopfVon(e);
+    if (e.pointerType !== 'mouse' && b && b === unten) { zuletzt = { knopf: b, zeit: Date.now() }; handeln(b, e); }
+    unten = null;
+  };
+  const klick = (e) => {
+    const b = knopfVon(e);
+    if (!b || (b === zuletzt.knopf && Date.now() - zuletzt.zeit < 700)) return;
+    handeln(b, e);
+  };
+  wurzel.addEventListener('pointerdown', runter);
+  wurzel.addEventListener('pointerup', hoch);
+  wurzel.addEventListener('click', klick);
+  return () => { wurzel.removeEventListener('pointerdown', runter); wurzel.removeEventListener('pointerup', hoch); wurzel.removeEventListener('click', klick); };
+}
+
 // Einmal je Seite: der Block „zeichnung" für Quill
 function notizZeichnungAnmelden(Quill) {
   if (notizZeichnungAnmelden.erledigt) return;
@@ -166,7 +191,7 @@ function nzSteuerung(s) {
     v.svg.addEventListener('pointercancel', (e) => zeichnenAbbrechen(v, e));
     griffBinden(v, node.querySelector('.nz-griff-groesse'), 'groesse');
     griffBinden(v, node.querySelector('.nz-griff-schieben'), 'einzug');
-    node.querySelector('.nz-griff-loeschen').addEventListener('click', () => loeschen(v));
+    nzTippen(v.rahmen, (b) => { if (b.classList.contains('nz-griff-loeschen')) loeschen(v); });
     zeigen(v, true);
   }
   function ab(node) { ansichten.delete(node); }
@@ -236,7 +261,7 @@ function nzSteuerung(s) {
     v.zeiger = e.pointerId;
     rueck.stopCapturing();   // alles bis zum Loslassen ist EIN Schritt für „Rückgängig"
     const [x, y] = punkt(v, e);
-    if (st.werkzeug === 'radierer') { v.strich = { radieren: true }; radieren(v, x, y); return; }
+    if (st.werkzeug === 'radierer') { v.strich = { radieren: true, x, y }; radieren(v, [x, y]); return; }
     v.strich = { k: nzKennung(8), t: st.werkzeug, f: st.farbe, d: st.dicke, p: st.werkzeug === 'frei' ? [x, y] : [x, y, x, y] };
     vorschau(v);
   }
@@ -246,7 +271,13 @@ function nzSteuerung(s) {
     const folge = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
     for (const ev of folge) {
       const [x, y] = punkt(v, ev);
-      if (v.strich.radieren) { radieren(v, x, y); continue; }
+      if (v.strich.radieren) {
+        // Die ganze Strecke seit dem letzten Punkt abtasten — ein schneller Wischer meldet nur wenige Punkte
+        const { x: x0, y: y0 } = v.strich, schritte = Math.max(1, Math.ceil(Math.hypot(x - x0, y - y0) / (4 / v.massstab)));
+        radieren(v, Array.from({ length: schritte }, (_, i) => [x0 + (x - x0) * (i + 1) / schritte, y0 + (y - y0) * (i + 1) / schritte]).flat());
+        v.strich.x = x; v.strich.y = y;
+        continue;
+      }
       const p = v.strich.p;
       if (v.strich.t === 'frei') {
         if (Math.hypot(x - p[p.length - 2], y - p[p.length - 1]) >= 1 && p.length < Z.MAX_ZAHLEN) p.push(x, y);
@@ -272,14 +303,17 @@ function nzSteuerung(s) {
   }
   const vorschau = (v) => { v.jetzt.innerHTML = Z.strichSvg(v.strich); };
 
-  // Radierer: ganze Striche, die man berührt (10 Bildschirmpunkte Spielraum)
-  function radieren(v, x, y) {
+  // Radierer: ganze Striche, die man berührt (10 Bildschirmpunkte Spielraum). punkte = [x0, y0, x1, y1, …]
+  function radieren(v, punkte) {
     const m = karte.get(v.id);
     const striche = m instanceof Y.Map ? m.get('s') : null;
     if (!striche) return;
     const alle = striche.toArray();
     const weg = [];
-    alle.forEach((strich, i) => { if (Z.abstand(strich, x, y) <= strich.d / 2 + 10 / v.massstab) weg.push(i); });
+    alle.forEach((strich, i) => {
+      const grenze = strich.d / 2 + 10 / v.massstab;
+      for (let j = 0; j < punkte.length; j += 2) if (Z.abstand(strich, punkte[j], punkte[j + 1]) <= grenze) { weg.push(i); break; }
+    });
     if (!weg.length) return;
     s.doc.transact(() => { for (const i of weg.reverse()) striche.delete(i, 1); }, herkunft);
   }
@@ -426,9 +460,7 @@ function nzSteuerung(s) {
   }
   const stiftMerken = () => { try { localStorage.setItem('notiz-stift', JSON.stringify({ farbe: st.farbe, dicke: st.dicke })); } catch (_) {} };
 
-  const klick = (e) => {
-    const b = e.target.closest('button');
-    if (!b || !leiste.contains(b)) return;
+  const knopf = (b) => {
     if (b.dataset.modus) { modusSetzen(b.dataset.modus); return; }
     if (b.dataset.werkzeug) { st.werkzeug = b.dataset.werkzeug; leisteZeigen(); return; }
     if (b.classList.contains('nz-stift-knopf')) {
@@ -451,7 +483,7 @@ function nzSteuerung(s) {
     if (b.dataset.akt === 'wiederholen') { rueck.redo(); return; }
     if (b.dataset.akt === 'neu') { einfuegen(); }
   };
-  if (leiste) leiste.addEventListener('click', klick);
+  const tippenAus = leiste ? nzTippen(leiste, knopf) : () => {};
   // Farbwahl schließt beim Tippen daneben
   const daneben = (e) => {
     const g = leiste && leiste.querySelector('.nz-stift-gruppe');
@@ -483,7 +515,7 @@ function nzSteuerung(s) {
       groesse.disconnect();
       document.removeEventListener('pointerdown', daneben, true);
       document.removeEventListener('keydown', tasten);
-      if (leiste) leiste.removeEventListener('click', klick);
+      tippenAus();
       try { rueck.destroy(); } catch (_) {}
       ansichten.clear();
       if (_nzSitzung === steuerung) _nzSitzung = null;
