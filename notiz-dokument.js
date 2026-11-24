@@ -3,15 +3,22 @@
 // Seit den Live-Notizen (Etappe A, 26.09.2026) ist der Inhalt einer Notiz ein Yjs-Dokument
 // (`notes.ydoc`). Daneben stehen zwei ABGELEITETE Spalten, die nur der Server schreibt:
 //   body        Klartext — für Suche, Vorschau, Push-Text, Datenauskunft, alte Programmstände
-//   body_delta  Quill-Delta als JSON — für die formatierte Anzeige in der Liste
+//   body_delta  Quill-Delta als JSON — für die formatierte Anzeige in der Liste, Druck und Dateien
 // Wer den Inhalt ändern will, ändert das Dokument; die beiden Spalten folgen beim Speichern.
+//
+// Zeichenflächen (24.11.2026, Aufbau in public/js/zeichnung.js): im Text ein Block { zeichnung: '<id>' },
+// der Inhalt in der Karte ZEICHNUNGEN. In body_delta steht der Block MIT Inhalt
+// ({ zeichnung: { id, b, h, e, s } }) — so braucht die Vorschau kein Dokument; im Klartext steht „[Zeichnung]".
 //
 // Diese Datei gehoert in die feste Dateiliste von deploy.sh (STAMMDATEIEN, aus Git abgeleitet).
 'use strict';
 const Y = require('yjs');
+const Z = require('./public/js/zeichnung');
 
 // Name des Textes im Dokument — Browser (Quill-Anbindung) und Server müssen ihn gleich nennen.
 const TEXT = 'notiz';
+const ZEICHNUNGEN = 'zeichnungen';
+const KLARTEXT_ZEICHNUNG = '[Zeichnung]';
 
 /**
  * Das Dokument endet IMMER mit einem Zeilenende und ist nie ganz leer.
@@ -21,7 +28,18 @@ const TEXT = 'notiz';
  * gemessen beim Bau des Bündels (tests/kollab-buendel.js).
  */
 function zeilenendeSichern(text) {
-  if (text.length === 0 || text.toString().slice(-1) !== '\n') text.insert(text.length, '\n');
+  if (!endetMitZeilenende(text)) text.insert(text.length, '\n');
+}
+
+/**
+ * Endet der Text mit einem Zeilenende? Über die Formatierung, nicht über toString(): Das lässt
+ * eingebettete Blöcke (Zeichnungen) aus — steht eine Zeichnung am Schluss, sähe es das Zeilenende davor.
+ */
+function endetMitZeilenende(text) {
+  if (text.length === 0) return false;
+  const d = text.toDelta();
+  const letzte = d[d.length - 1];
+  return !!letzte && typeof letzte.insert === 'string' && letzte.insert.endsWith('\n');
 }
 
 /**
@@ -49,12 +67,29 @@ function laden(stand, klartext) {
   return doc;
 }
 
+/** Inhalt einer Zeichenfläche als schlichtes Objekt ({ b, h, e, s }); fehlt sie, eine leere */
+function zeichnungDaten(doc, id) {
+  const m = doc.getMap(ZEICHNUNGEN).get(id);
+  if (!(m instanceof Y.Map)) return Z.bereinigt({});
+  const s = m.get('s');
+  return Z.bereinigt({ b: m.get('b'), h: m.get('h'), e: m.get('e'), s: s instanceof Y.Array ? s.toArray() : [] });
+}
+
 /** Die abgeleiteten Spalten eines Dokuments. */
 function felder(doc) {
   const text = doc.getText(TEXT);
+  const delta = text.toDelta();
+  let body = '';
+  const mitZeichnungen = delta.map(op => {
+    if (typeof op.insert === 'string') { body += op.insert; return op; }
+    const id = op.insert && op.insert.zeichnung;
+    if (typeof id !== 'string') return op;
+    body += KLARTEXT_ZEICHNUNG + '\n';
+    return { ...op, insert: { zeichnung: { id, ...zeichnungDaten(doc, id) } } };
+  });
   return {
-    body: text.toString().replace(/\n$/, ''),
-    body_delta: JSON.stringify(text.toDelta()),
+    body: body.replace(/\n$/, ''),
+    body_delta: JSON.stringify(mitZeichnungen),
   };
 }
 
@@ -69,7 +104,18 @@ function zeileAusDelta(deltaJson, klartext) {
   if (!Array.isArray(delta)) return zeileAusKlartext(klartext);
   const doc = new Y.Doc();
   const text = doc.getText(TEXT);
-  text.applyDelta(delta);
+  // Zeichnungen: Inhalt zurück in die Karte, im Text nur die Kennung. Andere Blöcke gibt es nicht.
+  const flaechen = doc.getMap(ZEICHNUNGEN);
+  const ops = [];
+  for (const op of delta) {
+    if (!op || op.insert === undefined) continue;
+    if (typeof op.insert === 'string') { ops.push(op); continue; }
+    const z = op.insert && op.insert.zeichnung;
+    if (!z || typeof z !== 'object' || typeof z.id !== 'string' || !Z.ID.test(z.id) || flaechen.has(z.id)) continue;
+    flaechen.set(z.id, neueZeichnung(Z.bereinigt(z)));
+    ops.push({ ...op, insert: { zeichnung: z.id } });
+  }
+  text.applyDelta(ops);
   zeilenendeSichern(text);
   const aus = { ydoc: Y.encodeStateAsUpdate(doc), ...felder(doc) };
   doc.destroy();
@@ -97,14 +143,47 @@ const GROESSEN = { small: 0.75, large: 1.5, huge: 2.5 };
 const ERLAUBTE_FORMATE = { bold: [true, false], italic: [true, false], underline: [true, false], strike: [true, false],
   color: [...Object.keys(FARBEN), false], size: [...Object.keys(GROESSEN), false], list: ['bullet', 'ordered', 'checked', 'unchecked', false] };
 function zulaessig(doc) {
-  if ([...doc.share.keys()].some(k => k !== TEXT)) return false;
+  if ([...doc.share.keys()].some(k => k !== TEXT && k !== ZEICHNUNGEN)) return false;
+  let bloecke = 0;
   for (const op of doc.getText(TEXT).toDelta()) {
-    if (typeof op.insert !== 'string') return false;
+    if (typeof op.insert !== 'string') {
+      // Einziger erlaubter Block: eine Zeichenfläche, als Objekt mit genau der Kennung
+      const ins = op.insert;
+      if (!ins || typeof ins !== 'object' || Object.keys(ins).length !== 1 || typeof ins.zeichnung !== 'string' || !Z.ID.test(ins.zeichnung)) return false;
+      if (++bloecke > Z.MAX_FLAECHEN) return false;
+    }
+    // Formate gelten auch für Blöcke: Wer Text samt Zeichnung markiert und „fett" drückt, formatiert beide.
     for (const [k, v] of Object.entries(op.attributes || {})) {
       if (!Object.hasOwn(ERLAUBTE_FORMATE, k) || !ERLAUBTE_FORMATE[k].includes(v)) return false;
     }
   }
+  return !doc.share.has(ZEICHNUNGEN) || zeichnungenZulaessig(doc.getMap(ZEICHNUNGEN));
+}
+
+// Die Karte der Zeichenflächen: nur Kennung → Y.Map { b, h, e, s: Y.Array von Strichen }. `_start` bzw.
+// `_map` sind die Listen- bzw. Schlüsselteile eines Yjs-Typs — gehören dort nicht hin (ein manipulierter
+// Browser könnte die Karte sonst als Liste befüllen; sichtbar wäre es nirgends, aber es läge in der Notiz).
+function zeichnungenZulaessig(karte) {
+  if (karte._start !== null || karte.size > Z.MAX_FLAECHEN) return false;
+  for (const [id, m] of karte) {
+    if (!Z.ID.test(id) || !(m instanceof Y.Map) || m._start !== null) return false;
+    if ([...m.keys()].some(k => !['b', 'h', 'e', 's'].includes(k))) return false;
+    const s = m.get('s');
+    if (!Z.massOk(m.get('b'), m.get('h'), m.get('e')) || !(s instanceof Y.Array) || s._map.size) return false;
+    if (s.length > Z.MAX_STRICHE || !s.toArray().every(Z.strichOk)) return false;
+  }
   return true;
 }
 
-module.exports = { Y, TEXT, FARBEN, GROESSEN, ausKlartext, laden, felder, zeileAusKlartext, zeileAusDelta, zeilenendeSichern, zulaessig };
+/** Eine Zeichenfläche als Yjs-Typ (zum Einfügen in die Karte) */
+function neueZeichnung({ b, h, e, s = [] }) {
+  const m = new Y.Map();
+  m.set('b', b); m.set('h', h); m.set('e', e);
+  const striche = new Y.Array();
+  striche.push(s.map(st => ({ ...st, p: [...st.p] })));
+  m.set('s', striche);
+  return m;
+}
+
+module.exports = { Y, TEXT, ZEICHNUNGEN, FARBEN, GROESSEN, ausKlartext, laden, felder, zeileAusKlartext, zeileAusDelta,
+  zeilenendeSichern, endetMitZeilenende, zulaessig, neueZeichnung };

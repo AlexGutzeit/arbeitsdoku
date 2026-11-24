@@ -23,7 +23,7 @@ const crypto = require('crypto');
 const decoding = require('lib0/decoding');
 const awarenessProtocol = require('y-protocols/awareness');
 const { getDb } = require('./database/init');
-const { Y, TEXT, laden, felder, zulaessig } = require('./notiz-dokument');
+const { Y, TEXT, laden, felder, zulaessig, endetMitZeilenende } = require('./notiz-dokument');
 const { broadcast } = require('./sse');
 const push = require('./push');
 const notizGaeste = require('./notiz-gaeste');
@@ -38,6 +38,9 @@ const PING_MS = Math.max(200, Number(process.env.SSE_PULS_MS) || 25000);   // ve
 // Bytes je Sendung. Base64 macht daraus ein Drittel mehr, und die JSON-Grenze des Servers liegt bei
 // 100 KB — 70 KB passen mit Luft hinein (vorher 96 KB: die Anfrage scheiterte schon an der Grenze).
 const GROESSTE_AENDERUNG = 70 * 1024;
+// Die ganze Notiz (Yjs-Stand) höchstens so groß. Text allein kommt da nie hin; Zeichenflächen schon
+// (24.11.2026) — eine voll bekritzelte Fläche hat einige hundert KB. Radierte Striche geben ihren Platz frei.
+const GROESSTE_NOTIZ = 2 * 1024 * 1024;
 
 // Farben je Person. Jeder hat eine Stammfarbe (nach Nutzernummer); ist sie im Raum schon vergeben,
 // nimmt er die nächste freie — in EINER Notiz sind zwei Leute nie gleich gefärbt.
@@ -341,15 +344,18 @@ function aenderung(noteId, wer, verbindungId, updateB64) {
   // Ins echte Dokument (und zu den anderen) kommt sie nur dann — zurücknehmen lässt sich in Yjs nichts.
   const probe = new Y.Doc();
   let inOrdnung = false;
+  let zuGross = false;
   try {
     Y.applyUpdate(probe, Y.encodeStateAsUpdate(raum.doc));
     Y.applyUpdate(probe, update);
     inOrdnung = zulaessig(probe);
+    zuGross = inOrdnung && Y.encodeStateAsUpdate(probe).length > GROESSTE_NOTIZ;
   } catch (_) {
     probe.destroy();
     return { status: 400, code: 'BESCHAEDIGT', fehler: 'Die Änderung war beschädigt und wurde nicht übernommen.' };
   }
   probe.destroy();
+  if (zuGross) return { status: 413, code: 'ZU_GROSS', fehler: 'Die Notiz ist zu groß geworden (viele Zeichnungen?). Die letzte Änderung wurde nicht übernommen — radiere etwas weg oder lege eine neue Notiz an.' };
   if (!inOrdnung) return { status: 400, code: 'BESCHAEDIGT', fehler: 'Die Änderung enthielt etwas, das in einer Notiz nicht vorkommen kann, und wurde nicht übernommen.' };
   const vorher = inhalt(raum);
   Y.applyUpdate(raum.doc, update, v);
@@ -357,7 +363,7 @@ function aenderung(noteId, wer, verbindungId, updateB64) {
   // alles bis auf den letzten Rest, wird es hier wieder angefügt — und an ALLE verteilt.
   anAlle(raum, 'aenderung', { update: updateB64 }, v);
   const text = raum.doc.getText(TEXT);
-  if (text.length === 0 || text.toString().slice(-1) !== '\n') {
+  if (!endetMitZeilenende(text)) {
     const sv = Y.encodeStateVector(raum.doc);
     text.insert(text.length, '\n');
     anAlle(raum, 'aenderung', { update: b64(Y.encodeStateAsUpdate(raum.doc, sv)) }, null);

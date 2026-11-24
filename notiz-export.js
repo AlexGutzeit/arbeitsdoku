@@ -16,7 +16,21 @@ const path = require('path');
 const { ZipArchive } = require('archiver');
 const PDFDocument = require('pdfkit');
 const { ZONE } = require('./zeit');
+const sharp = require('sharp');
 const { FARBEN, GROESSEN } = require('./notiz-dokument');
+const Z = require('./public/js/zeichnung');
+
+// Zeichenflächen (24.11.2026): Im Schreibfeld ist 1 Einheit = 1 Bildschirmpunkt bei 16-px-Schrift; die
+// Dateien haben 11 pt. Im selben Verhältnis umgerechnet steht eine Zeichnung zum Text wie am Bildschirm —
+// ist sie dafür zu breit (oder zu hoch), wird sie auf die Seite verkleinert.
+const PT_JE_EINHEIT = 11 / 16;
+const SATZBREITE_PT = 481.9;   // A4 mit 2 cm Rand (Word/ODT); das PDF rechnet mit seiner eigenen Breite
+const massstab = (z, breite, hoehe = Infinity) => Math.min(PT_JE_EINHEIT, breite / (z.b + z.e), hoehe / z.h);
+/** Zeichnung als PNG (Word/ODT können kein eingebettetes SVG verlässlich) — doppelt aufgelöst, höchstens 4000 px */
+function zeichnungPng(z) {
+  const f = Math.min(2, 4000 / Math.max(z.b, z.h));
+  return sharp(Buffer.from(Z.svg(z, { pixelBreite: Math.round(z.b * f) }))).png().toBuffer();
+}
 
 // Erst beim ersten PDF aufgelöst: Fehlt das Schriftpaket, scheitert nur das PDF (mit Meldung) — nicht
 // der Start des Servers, der diese Datei über routes/notes.js schon beim Hochfahren lädt.
@@ -25,14 +39,23 @@ const schriften = () => path.join(path.dirname(require.resolve('dejavu-fonts-ttf
 // ─── Gemeinsamer Zwischenschritt ─────────────────────────────────────────────────────────────
 
 /** Delta (JSON-Text) → [{ teile: [{ t, bold, italic, underline, strike, farbe, faktor }], liste: null|'bullet'|'ordered'|'checked'|'unchecked', nr }]
- *  farbe: '#rrggbb' oder null (Standard), faktor: Schriftgröße relativ zur Grundschrift (1 = normal) */
+ *  farbe: '#rrggbb' oder null (Standard), faktor: Schriftgröße relativ zur Grundschrift (1 = normal).
+ *  Eine Zeichenfläche ist eine eigene Zeile { zeichnung: { b, h, e, s } } — leere Flächen fallen weg. */
 function zeilen(deltaJson, klartext) {
   let ops = null;
   try { ops = JSON.parse(deltaJson || ''); } catch (_) { /* Rückfall auf Klartext */ }
   if (!Array.isArray(ops)) ops = [{ insert: String(klartext || '') + '\n' }];
   const aus = []; let teile = [];
   for (const op of ops) {
-    if (typeof op.insert !== 'string') continue;
+    if (typeof op.insert !== 'string') {
+      const z = op.insert && op.insert.zeichnung;
+      if (z && typeof z === 'object') {
+        if (teile.length) { aus.push({ teile, liste: null }); teile = []; }
+        const d = Z.bereinigt(z);
+        if (d.s.length) aus.push({ zeichnung: d, teile: [], liste: null });
+      }
+      continue;
+    }
     const a = op.attributes || {};
     op.insert.split('\n').forEach((t, i, alle) => {
       if (t) teile.push({ t, bold: !!a.bold, italic: !!a.italic, underline: !!a.underline, strike: !!a.strike,
@@ -93,6 +116,7 @@ function pdf({ titel, deltaJson, klartext, stand }) {
     doc.moveDown(1);
 
     for (const z of zeilen(deltaJson, klartext)) {
+      if (z.zeichnung) { pdfZeichnung(doc, z.zeichnung, links, breite, unten); continue; }
       const einzug = z.liste ? 22 : 0;
       doc.font('R').fontSize(GROESSE);
       const groesste = Math.max(1, ...z.teile.map(t => t.faktor));
@@ -149,6 +173,31 @@ function pdf({ titel, deltaJson, klartext, stand }) {
   });
 }
 
+/** Zeichenfläche als Vektorgrafik ins PDF — dieselben Formen wie im SVG (zeichnung.js) */
+function pdfZeichnung(doc, z, links, breite, unten) {
+  const m = massstab(z, breite, doc.page.height - doc.page.margins.top - doc.page.margins.bottom);
+  if (doc.y + z.h * m > unten()) doc.addPage();
+  const x0 = links + z.e * m, y0 = doc.y + 2;
+  doc.save();
+  doc.rect(x0, y0, z.b * m, z.h * m).clip();
+  doc.translate(x0, y0).scale(m);
+  for (const st of z.s) {
+    const farbe = Z.FARBEN[st.f], p = st.p;
+    doc.lineWidth(st.d).strokeColor(farbe).fillColor(farbe).lineCap('round').lineJoin('round');
+    const [x0s, y0s, x1, y1] = p;
+    if (st.t === 'frei') doc.path(Z.freiPfad(p)).stroke();
+    else if (st.t === 'linie') doc.moveTo(x0s, y0s).lineTo(x1, y1).stroke();
+    else if (st.t === 'pfeil') {
+      doc.moveTo(x0s, y0s).lineTo(x1, y1).stroke();
+      doc.polygon(...Z.pfeilSpitze(x0s, y0s, x1, y1, st.d)).fillAndStroke(farbe, farbe);
+    } else if (st.t === 'kasten') doc.rect(Math.min(x0s, x1), Math.min(y0s, y1), Math.abs(x1 - x0s), Math.abs(y1 - y0s)).stroke();
+    else if (st.t === 'kreis') doc.ellipse((x0s + x1) / 2, (y0s + y1) / 2, Math.abs(x1 - x0s) / 2, Math.abs(y1 - y0s) / 2).stroke();
+  }
+  doc.restore();
+  doc.x = links;
+  doc.y = y0 + z.h * m + 6;
+}
+
 // ─── Zip-Hilfe (DOCX, ODT) ───────────────────────────────────────────────────────────────────
 
 function zip(dateien) {
@@ -170,9 +219,25 @@ const HAKEN = { checked: '☑', unchecked: '☐' };   // ☑ ☐
 
 // ─── DOCX ────────────────────────────────────────────────────────────────────────────────────
 
-function docx({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
+async function docx({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const NS_BILD = 'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
+    + 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" '
+    + 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
   const alle = zeilen(deltaJson, klartext);
+  // Zeichnungen als Bilder: word/media/zeichnungN.png, je eine Beziehung rIdZN
+  const bilder = [];
+  for (const z of alle) if (z.zeichnung) { z.bildNr = bilder.length + 1; bilder.push(await zeichnungPng(z.zeichnung)); }
+  const bildAbsatz = (z) => {
+    const d = z.zeichnung, m = massstab(d, SATZBREITE_PT, 700), n = z.bildNr;
+    const cx = Math.round(d.b * m * 12700), cy = Math.round(d.h * m * 12700);
+    return `<w:p><w:pPr>${d.e ? `<w:ind w:left="${Math.round(d.e * m * 20)}"/>` : ''}</w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">`
+      + `<wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${n}" name="Zeichnung ${n}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>`
+      + `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${n}" name="zeichnung${n}.png"/><pic:cNvPicPr/></pic:nvPicPr>`
+      + `<pic:blipFill><a:blip r:embed="rIdZ${n}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>`
+      + `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>`
+      + `</wp:inline></w:drawing></w:r></w:p>`;
+  };
   // Jede nummerierte Liste bekommt eine eigene Nummerierung, damit sie wieder bei 1 beginnt
   let listen = 0; const nums = [];
   for (let i = 0; i < alle.length; i++) {
@@ -189,6 +254,7 @@ function docx({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
       + `</w:rPr><w:t xml:space="preserve">${xml(text)}</w:t></w:r>`;
   };
   const absaetze = alle.map(z => {
+    if (z.zeichnung) return bildAbsatz(z);
     const erledigt = z.liste === 'checked';
     let pPr = '';
     if (z.liste === 'bullet') pPr = '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>';
@@ -198,7 +264,7 @@ function docx({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
     return `<w:p>${pPr}${haken}${z.teile.map(t => lauf(t.t, { ...t, erledigt })).join('')}</w:p>`;
   }).join('');
   const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document ${W}><w:body>
+<w:document ${W} ${NS_BILD}><w:body>
 <w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr>${lauf(titel)}</w:p>
 <w:p><w:pPr><w:pStyle w:val="Stand"/></w:pPr>${lauf('Stand: ' + stand)}</w:p>
 ${absaetze}
@@ -225,6 +291,7 @@ ${nummer(1, 0)}${nums.map(id => nummer(id, 1)).join('')}
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 <Default Extension="xml" ContentType="application/xml"/>
+<Default Extension="png" ContentType="image/png"/>
 <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
@@ -239,10 +306,12 @@ ${nummer(1, 0)}${nums.map(id => nummer(id, 1)).join('')}
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+${bilder.map((_, i) => `<Relationship Id="rIdZ${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/zeichnung${i + 1}.png"/>`).join('\n')}
 </Relationships>` },
     { name: 'word/document.xml', inhalt: document },
     { name: 'word/styles.xml', inhalt: styles },
     { name: 'word/numbering.xml', inhalt: numbering },
+    ...bilder.map((png, i) => ({ name: `word/media/zeichnung${i + 1}.png`, inhalt: png })),
     { name: 'docProps/core.xml', inhalt: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <dc:title>${xml(titel)}</dc:title><dc:creator>Arbeitsdoku</dc:creator>
@@ -253,10 +322,12 @@ ${nummer(1, 0)}${nums.map(id => nummer(id, 1)).join('')}
 
 // ─── ODT ─────────────────────────────────────────────────────────────────────────────────────
 
-function odt({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
+async function odt({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
   const NS = 'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" '
     + 'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" '
-    + 'xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:dc="http://purl.org/dc/elements/1.1/"';
+    + 'xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:dc="http://purl.org/dc/elements/1.1/" '
+    + 'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" '
+    + 'xmlns:xlink="http://www.w3.org/1999/xlink"';
   // Zeichenformate nach Bedarf: T_b, T_i, T_u, T_s, T_bi … und x für „erledigt" (durchgestrichen, grau),
   // dazu _<Farbwert> und _g<Faktor> (T_bs_dc2626_g15)
   const zeichen = new Map();
@@ -279,9 +350,19 @@ function odt({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
       return s ? `<text:span text:style-name="${s}">${x}</text:span>` : x; }).join('');
   };
   const alle = zeilen(deltaJson, klartext);
+  // Zeichnungen als Bilder (Pictures/zeichnungN.png), je ein Absatz mit eigenem Einzug
+  const bilder = [], bildStile = [];
+  for (const z of alle) if (z.zeichnung) { z.bildNr = bilder.length + 1; bilder.push(await zeichnungPng(z.zeichnung)); }
+  const bildAbsatz = (z) => {
+    const d = z.zeichnung, m = massstab(d, SATZBREITE_PT, 700), n = z.bildNr;
+    bildStile.push(`<style:style style:name="P_bild${n}" style:family="paragraph"><style:paragraph-properties fo:margin-left="${(d.e * m).toFixed(2)}pt" fo:margin-bottom="0.14cm"/></style:style>`);
+    return `<text:p text:style-name="P_bild${n}"><draw:frame draw:name="Zeichnung ${n}" text:anchor-type="as-char" svg:width="${(d.b * m).toFixed(2)}pt" svg:height="${(d.h * m).toFixed(2)}pt" draw:z-index="0">`
+      + `<draw:image xlink:href="Pictures/zeichnung${n}.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/></draw:frame></text:p>`;
+  };
   let koerper = '', offen = null;
   const zu = () => { if (offen) { koerper += '</text:list>'; offen = null; } };
   for (const z of alle) {
+    if (z.zeichnung) { zu(); koerper += bildAbsatz(z); continue; }
     const art = z.liste === 'bullet' ? 'L_punkt' : z.liste === 'ordered' ? 'L_zahl' : null;
     if (art !== offen) { zu(); if (art) { koerper += `<text:list text:style-name="${art}">`; offen = art; } }
     if (art) koerper += `<text:list-item><text:p text:style-name="P_text">${inhalt(z)}</text:p></text:list-item>`;
@@ -296,6 +377,7 @@ function odt({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
 <style:style style:name="P_text" style:family="paragraph"><style:paragraph-properties fo:margin-bottom="0.14cm"/></style:style>
 <style:style style:name="P_haken" style:family="paragraph"><style:paragraph-properties fo:margin-left="0.63cm" fo:text-indent="-0.63cm" fo:margin-bottom="0.14cm"/></style:style>
 ${[...zeichen.values()].join('\n')}
+${bildStile.join('\n')}
 <text:list-style style:name="L_punkt"><text:list-level-style-bullet text:level="1" text:bullet-char="•"><style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="0.63cm" fo:text-indent="-0.63cm" fo:margin-left="0.63cm"/></style:list-level-properties></text:list-level-style-bullet></text:list-style>
 <text:list-style style:name="L_zahl"><text:list-level-style-number text:level="1" style:num-format="1" style:num-suffix="."><style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="0.63cm" fo:text-indent="-0.63cm" fo:margin-left="0.63cm"/></style:list-level-properties></text:list-level-style-number></text:list-style>
 </office:automatic-styles>
@@ -319,10 +401,12 @@ ${koerper}
 <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
 <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
 <manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/>
+${bilder.map((_, i) => `<manifest:file-entry manifest:full-path="Pictures/zeichnung${i + 1}.png" manifest:media-type="image/png"/>`).join('\n')}
 </manifest:manifest>` },
     { name: 'content.xml', inhalt: content },
     { name: 'styles.xml', inhalt: styles },
     { name: 'meta.xml', inhalt: meta },
+    ...bilder.map((png, i) => ({ name: `Pictures/zeichnung${i + 1}.png`, inhalt: png })),
   ]);
 }
 

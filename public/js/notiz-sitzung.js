@@ -14,7 +14,7 @@ let _notizSitzung = null;
 // Rückweg in die Übersicht: Scrollposition und aufgeklappte Vorschau von vor dem Öffnen
 let _notizListeZurueck = null;
 
-const NOTIZ_FORMATE = ['bold', 'italic', 'underline', 'strike', 'color', 'size', 'list'];
+const NOTIZ_FORMATE = ['bold', 'italic', 'underline', 'strike', 'color', 'size', 'list', 'zeichnung'];   // zeichnung: notiz-zeichnen.js
 // Schriftfarben und -größen (Alex, 24.11.2026). Feste Auswahl statt freier Farbwahl: Der Server lässt
 // genau diese Namen durch (ERLAUBTE_FORMATE in notiz-dokument.js — tests/notiz-formate.js hält beide
 // Listen gleich), und alle Farben sind auf Weiß gut lesbar (Kontrast ≥ 4,5:1). Die Farbe steckt als
@@ -58,7 +58,15 @@ function notizHtml(deltaJson, klartext) {
   }
   const zeilen = []; let teile = [];
   for (const op of ops) {
-    if (typeof op.insert !== 'string') continue;
+    if (typeof op.insert !== 'string') {
+      // Zeichenfläche (24.11.2026): steht mit Inhalt in body_delta, siehe notiz-dokument.js
+      const z = op.insert && op.insert.zeichnung;
+      if (z && typeof z === 'object' && typeof NotizZeichnung !== 'undefined') {
+        if (teile.length) { zeilen.push({ teile, liste: null }); teile = []; }
+        zeilen.push({ zeichnung: z });
+      }
+      continue;
+    }
     const a = op.attributes || {};
     const stuecke = op.insert.split('\n');
     stuecke.forEach((t, i) => {
@@ -80,6 +88,7 @@ function notizHtml(deltaJson, klartext) {
   let html = '', offen = null;
   const schliessen = () => { if (offen) { html += offen === 'ordered' ? '</ol>' : '</ul>'; offen = null; } };
   for (const z of zeilen) {
+    if (z.zeichnung) { schliessen(); html += nzZeichnungHtml(z.zeichnung); continue; }
     const art = z.liste === 'ordered' ? 'ordered' : z.liste === 'bullet' ? 'bullet'
       : (z.liste === 'checked' || z.liste === 'unchecked') ? 'check' : null;
     if (art !== offen) {
@@ -243,14 +252,14 @@ function notizFeldHtml() {
       <div class="notiz-anwesend" id="notiz-anwesend" aria-label="Gerade in der Notiz"></div>
       <label class="notiz-namen-schalter" for="notiz-namen"><input type="checkbox" id="notiz-namen" ${notizNamenZeigen() ? 'checked' : ''}> Namensschilder anzeigen</label>
       <p class="notiz-nur-lesen" id="notiz-nur-lesen" hidden>&#128065; Du kannst diese Notiz nur lesen — Änderungen der anderen siehst du live.</p>
-      <div class="notiz-leiste" id="notiz-leiste" role="toolbar" aria-label="Formatierung">
-        <span class="ql-formats">
+      <div class="notiz-leiste" id="notiz-leiste" role="toolbar" aria-label="Formatierung">${nzLeisteHtml()}
+        <span class="ql-formats nz-nur-text">
           <button type="button" class="ql-bold" title="Fett" aria-label="Fett"></button>
           <button type="button" class="ql-italic" title="Kursiv" aria-label="Kursiv"></button>
           <button type="button" class="ql-underline" title="Unterstrichen" aria-label="Unterstrichen"></button>
           <button type="button" class="ql-strike" title="Durchgestrichen" aria-label="Durchgestrichen"></button>
         </span>
-        <span class="ql-formats">
+        <span class="ql-formats nz-nur-text">
           <select class="ql-size" title="Schriftgröße" aria-label="Schriftgröße">
             <option value="small">${NOTIZ_GROESSEN.small}</option><option selected>Normal</option>
             <option value="large">${NOTIZ_GROESSEN.large}</option><option value="huge">${NOTIZ_GROESSEN.huge}</option>
@@ -259,7 +268,7 @@ function notizFeldHtml() {
             <option selected>Standard</option>${Object.entries(NOTIZ_FARBEN).map(([k, [name]]) => `<option value="${k}">${name}</option>`).join('')}
           </select>
         </span>
-        <span class="ql-formats">
+        <span class="ql-formats nz-nur-text">
           <button type="button" class="ql-list" value="bullet" title="Aufzählung" aria-label="Aufzählung"></button>
           <button type="button" class="ql-list" value="ordered" title="Nummerierte Liste" aria-label="Nummerierte Liste"></button>
           <button type="button" class="ql-list" value="check" title="Checkliste" aria-label="Checkliste"></button>
@@ -496,11 +505,17 @@ function notizSitzungStarten(id, weg = notizWegeApp(id)) {
 
   // Schreibfeld
   notizFormateAnmelden(K.Quill);
+  notizZeichnungAnmelden(K.Quill);
   s.quill = new K.Quill('#notiz-feld', {
     theme: 'snow', formats: NOTIZ_FORMATE, placeholder: 'Hier schreiben …', readOnly: true,
     modules: { toolbar: '#notiz-leiste', cursors: { transformOnTextChange: true },
       history: { userOnly: true } },   // Rückgängig nimmt nur die EIGENEN Änderungen zurück
   });
+  // Eine kopierte Zeichenfläche wird nicht mit eingefügt: Sie hinge an derselben Kennung wie das Original —
+  // zwei Stellen, eine Zeichnung, und wer an der einen malt, ändert die andere mit.
+  s.quill.clipboard.addMatcher('.notiz-zeichnung', () => new (K.Quill.import('delta'))());
+  // Zeichenflächen (notiz-zeichnen.js) — vor dem Anbinden, damit die Flächen im ersten Stand schon Ansichten bekommen
+  s.zeichnen = nzSteuerung(s);
   // Quills Auswahllisten (Größe, Farbe) sind Spans ohne Namen — für Screenreader und als Tooltip benennen
   for (const liste of document.querySelectorAll('#notiz-leiste .ql-picker')) {
     const lbl = liste.querySelector('.ql-picker-label');
@@ -656,11 +671,12 @@ function notizSitzungStarten(id, weg = notizWegeApp(id)) {
     const vorher = s.zugriff;
     s.zugriff = z;
     const lesen = z === 'read';
-    s.quill.enable(!lesen);
+    s.quill.enable(!lesen && s.zeichnen.modus === 'text');   // im Zeichenmodus bleibt das Schreibfeld gesperrt
     const leiste = $('notiz-leiste'); if (leiste) leiste.hidden = lesen;
     const hinweis = $('notiz-nur-lesen'); if (hinweis) hinweis.hidden = !lesen;
     const titel = $('notiz-titel'); if (titel) titel.disabled = lesen || !weg.kopfSpeichern;   // Gäste: Titel fest
     for (const x of ['notiz-projekt-wahl', 'notiz-projekt-text']) { const f = $(x); if (f) f.disabled = lesen; }
+    s.zeichnen.zugriffGeaendert();
     if (ansage && vorher && vorher !== z) toast(lesen ? 'Du kannst diese Notiz jetzt nur noch lesen.' : 'Du kannst diese Notiz jetzt auch bearbeiten.', 'info');
     statusNachWarteschlange();
   }
@@ -830,7 +846,7 @@ function notizSitzungStarten(id, weg = notizWegeApp(id)) {
     if (!s.offen) return;
     if (wahl === 'gaeste') { if (weg.gaeste) weg.gaeste(); return; }   // braucht keinen gesendeten Stand
     if (wahl === 'drucken') {
-      notizDrucken(($('notiz-titel') || {}).value || 'Notiz', JSON.stringify(s.doc.getText('notiz').toDelta()), () => ausfuehren('pdf'));
+      notizDrucken(($('notiz-titel') || {}).value || 'Notiz', JSON.stringify(nzDeltaMitInhalt(s.doc)), () => ausfuehren('pdf'));
       return;
     }
     if (!(await s.bisGesendet())) {
@@ -867,6 +883,7 @@ function notizSitzungStarten(id, weg = notizWegeApp(id)) {
     }
     if (s.es) { s.es.close(); s.es = null; }
     s.verbindung = null;
+    try { s.zeichnen.beenden(); } catch (_) {}
     try { if (s.binding) s.binding.destroy(); } catch (_) {}
     try { s.aw.destroy(); } catch (_) {}
     try { s.doc.destroy(); } catch (_) {}

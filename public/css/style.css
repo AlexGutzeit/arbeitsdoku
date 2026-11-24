@@ -2202,6 +2202,68 @@ select.such-auswahl-quelle { display: none !important; }
 .notiz-editor .ql-snow .ql-color .ql-picker-label[data-value=blau] .ql-color-label { stroke: #1d4ed8 !important; }
 .notiz-editor .ql-snow .ql-color .ql-picker-label[data-value=lila] .ql-color-label { stroke: #7e22ce !important; }
 .notiz-editor .ql-snow .ql-color .ql-picker-label[data-value=grau] .ql-color-label { stroke: #6b7280 !important; }
+/* --- Zeichenflächen (notiz-zeichnen.js, 24.11.2026) ---
+   Umschalter Text/Zeichnen vorn in der Leiste; im Zeichenmodus sind die Textknöpfe weg und die Werkzeuge da. */
+.notiz-editor .nz-modus { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; align-self: center; }
+.notiz-editor .ql-snow.ql-toolbar .nz-modus-knopf { width: auto; height: 42px; padding: 0 12px; border-radius: 0; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 0.9rem; color: var(--text); float: none; }
+.notiz-editor .ql-snow.ql-toolbar .nz-modus-knopf[aria-pressed="true"] { background: var(--primary); color: #fff; }
+.notiz-editor .ql-snow.ql-toolbar .nz-modus-knopf[aria-pressed="true"]:hover { background: var(--primary-hover); }
+.notiz-editor .notiz-leiste .nz-nur-zeichnen { display: none !important; }
+.notiz-editor .notiz-leiste.nz-im-zeichnen .nz-nur-zeichnen { display: flex !important; }
+.notiz-editor .notiz-leiste.nz-im-zeichnen .nz-nur-text { display: none !important; }
+.notiz-editor .ql-snow.ql-toolbar .nz-knopf { color: var(--text); display: inline-flex; align-items: center; justify-content: center; float: none; }
+.notiz-editor .ql-snow.ql-toolbar .nz-knopf[aria-pressed="true"] { background: var(--primary-light); color: var(--primary-hover); box-shadow: inset 0 0 0 2px var(--primary); }
+.notiz-editor .ql-snow.ql-toolbar .nz-knopf:disabled { opacity: 0.35; cursor: default; background: none; }
+.notiz-editor .ql-snow.ql-toolbar .nz-neu { width: auto; gap: 4px; padding: 0 10px; font: inherit; font-size: 0.9rem; }
+.notiz-editor .nz-stift-gruppe { position: relative; }
+.notiz-editor .nz-stift-punkt { display: inline-block; border-radius: 50%; }
+.notiz-editor .nz-stift-wahl { position: absolute; top: 46px; left: 0; z-index: 7; background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); padding: 8px; display: flex; flex-direction: column; gap: 8px; width: max-content; }
+.notiz-editor .nz-stift-wahl[hidden] { display: none; }
+.notiz-editor .nz-stift-reihe { display: flex; gap: 6px; flex-wrap: wrap; max-width: 286px; }
+.notiz-editor .ql-snow.ql-toolbar .nz-farbe { width: 36px; height: 36px; padding: 0; border-radius: 50%; border: 2px solid var(--border); float: none; }
+.notiz-editor .ql-snow.ql-toolbar .nz-farbe[aria-pressed="true"] { outline: 3px solid var(--primary); outline-offset: 1px; }
+.notiz-editor .ql-snow.ql-toolbar .nz-farbe[data-farbe=schwarz] { background: #1e293b; }
+.notiz-editor .ql-snow.ql-toolbar .nz-farbe[data-farbe=rot] { background: #dc2626; }
+.notiz-editor .ql-snow.ql-toolbar .nz-farbe[data-farbe=orange] { background: #c2410c; }
+.notiz-editor .ql-snow.ql-toolbar .nz-farbe[data-farbe=gruen] { background: #15803d; }
+.notiz-editor .ql-snow.ql-toolbar .nz-farbe[data-farbe=blau] { background: #1d4ed8; }
+.notiz-editor .ql-snow.ql-toolbar .nz-farbe[data-farbe=lila] { background: #7e22ce; }
+.notiz-editor .ql-snow.ql-toolbar .nz-farbe[data-farbe=grau] { background: #6b7280; }
+.notiz-editor .ql-snow.ql-toolbar .nz-dicke { width: 64px; height: 40px; float: none; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); }
+.notiz-editor .ql-snow.ql-toolbar .nz-dicke span { display: block; width: 36px; background: var(--text); border-radius: 4px; }
+.notiz-editor .ql-snow.ql-toolbar .nz-dicke[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--primary); background: var(--primary-light); }
+
+/* Am Handy: Umschalter nur als Symbole (Name steht in title/aria-label), Werkzeuge dürfen umbrechen —
+   die Leiste klebt oben fest und soll höchstens zwei Reihen hoch sein. */
+@media (max-width: 520px) {
+  .notiz-editor .ql-snow.ql-toolbar .nz-modus-knopf { padding: 0 10px; }
+  .notiz-editor .ql-snow.ql-toolbar .nz-modus-knopf span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+  /* Gruppen auflösen, damit jeder Knopf einzeln umbricht (als Ganzes rutschte die Werkzeuggruppe in eine eigene Reihe) */
+  .notiz-editor .notiz-leiste.ql-toolbar.ql-snow.nz-im-zeichnen { column-gap: 2px; }
+  .notiz-editor .notiz-leiste.nz-im-zeichnen .nz-werkzeuge, .notiz-editor .notiz-leiste.nz-im-zeichnen .nz-aktionen { display: contents !important; }
+  .notiz-editor .notiz-leiste.nz-im-zeichnen .nz-modus { margin-right: 6px; }
+}
+/* Die Fläche im Schreibfeld. Breite/Höhe/Einzug setzt notiz-zeichnen.js (verkleinert, wenn die Zeile schmaler ist). */
+.notiz-editor .ql-editor .notiz-zeichnung { margin: 6px 0; padding: 0; user-select: none; -webkit-user-select: none; cursor: default; }
+.notiz-editor .nz-rahmen { white-space: normal; line-height: 0; position: relative; border: 1px dashed #cbd5e1; border-radius: 6px; background: #fff; box-sizing: content-box; }
+.notiz-editor .nz-svg { display: block; width: 100%; height: 100%; overflow: hidden; border-radius: 6px; }
+.notiz-editor .nz-griff { display: none; position: absolute; width: 36px; height: 36px; padding: 6px; border: 1px solid var(--border); border-radius: 50%;
+  background: var(--card); color: var(--text); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); align-items: center; justify-content: center; cursor: pointer; touch-action: none; z-index: 2; }
+.notiz-editor .nz-griff-groesse { right: -14px; bottom: -14px; cursor: nwse-resize; }
+.notiz-editor .nz-griff-schieben { left: -10px; top: -14px; cursor: ew-resize; }
+.notiz-editor .nz-griff-loeschen { right: -10px; top: -14px; color: var(--danger); }
+/* Zeichenmodus: Fläche deutlich umrandet, Griffe da, Finger/Stift malen statt zu scrollen */
+.notiz-editor .nz-zeichnen .nz-rahmen { border: 2px solid var(--primary); }
+.notiz-editor .nz-zeichnen .nz-griff { display: flex; }
+.notiz-editor .nz-zeichnen .nz-svg { touch-action: none; cursor: crosshair; }
+.notiz-editor .nz-zeichnen.nz-hand .nz-svg { touch-action: auto; cursor: grab; }
+.notiz-editor .nz-rahmen.nz-zieht { outline: 2px dashed var(--primary); outline-offset: 2px; }
+/* Gesperrtes Schreibfeld im Zeichenmodus nicht grau/unscharf wirken lassen */
+.notiz-editor .nz-zeichnen .ql-editor { cursor: default; }
+/* Vorschau und Druck: fertige Zeichnung, so breit wie gezeichnet, schrumpft samt Einzug (nzZeichnungHtml) */
+.notiz-zeichnung-bild { margin: 4px 0; }
+.notiz-zeichnung-bild svg { display: block; width: 100%; height: auto; }
 .notiz-editor .ql-container.ql-snow { border: 0; font: inherit; font-size: 16px; }   /* 16 px: iPhone zoomt sonst beim Tippen hinein */
 .notiz-editor .ql-editor { min-height: 50vh; padding: 12px 1rem 1.5rem; line-height: 1.55; color: var(--text); }
 .notiz-editor .ql-editor.ql-blank::before { color: var(--text-lighter); font-style: normal; left: 1rem; }
