@@ -38,8 +38,9 @@ const schriften = () => path.join(path.dirname(require.resolve('dejavu-fonts-ttf
 
 // ─── Gemeinsamer Zwischenschritt ─────────────────────────────────────────────────────────────
 
-/** Delta (JSON-Text) → [{ teile: [{ t, bold, italic, underline, strike, farbe, faktor }], liste: null|'bullet'|'ordered'|'checked'|'unchecked', nr }]
- *  farbe: '#rrggbb' oder null (Standard), faktor: Schriftgröße relativ zur Grundschrift (1 = normal).
+/** Delta (JSON-Text) → [{ teile: [{ t, bold, italic, underline, strike, stellung, farbe, faktor }], liste: null|'bullet'|'ordered'|'checked'|'unchecked', nr }]
+ *  farbe: '#rrggbb' oder null (Standard), faktor: Schriftgröße relativ zur Grundschrift (1 = normal),
+ *  stellung: 'super' (hochgestellt), 'sub' (tiefgestellt) oder null.
  *  Eine Zeichenfläche ist eine eigene Zeile { zeichnung: { b, h, e, s } } — leere Flächen fallen weg. */
 function zeilen(deltaJson, klartext) {
   let ops = null;
@@ -59,6 +60,7 @@ function zeilen(deltaJson, klartext) {
     const a = op.attributes || {};
     op.insert.split('\n').forEach((t, i, alle) => {
       if (t) teile.push({ t, bold: !!a.bold, italic: !!a.italic, underline: !!a.underline, strike: !!a.strike,
+        stellung: a.script === 'super' || a.script === 'sub' ? a.script : null,
         farbe: Object.hasOwn(FARBEN, a.color) ? FARBEN[a.color] : null, faktor: Object.hasOwn(GROESSEN, a.size) ? GROESSEN[a.size] : 1 });
       if (i < alle.length - 1) {
         const liste = ['bullet', 'ordered', 'checked', 'unchecked'].includes(a.list) ? a.list : null;
@@ -119,7 +121,7 @@ function pdf({ titel, deltaJson, klartext, stand }) {
       if (z.zeichnung) { pdfZeichnung(doc, z.zeichnung, links, breite, unten); continue; }
       const einzug = z.liste ? 22 : 0;
       doc.font('R').fontSize(GROESSE);
-      const groesste = Math.max(1, ...z.teile.map(t => t.faktor));
+      const groesste = Math.max(1, ...z.teile.map(t => t.faktor)) * 1.2;   // Luft für Hoch-/Tiefgestelltes
       const zeilenHoehe = doc.currentLineHeight(true) * groesste + 2;
       if (doc.y + zeilenHoehe > unten()) doc.addPage();
       const y = doc.y;
@@ -138,21 +140,26 @@ function pdf({ titel, deltaJson, klartext, stand }) {
         // Schrift hinge dann hochgestellt neben großer, und die nächste Zeile rückte nur um die Höhe des
         // LETZTEN Stücks weiter (lief in die große Schrift hinein). Deshalb jedes Stück so weit nach unten,
         // dass alle auf derselben Grundlinie stehen, und am Ende um die größte Zeilenhöhe weiter.
+        // Hoch-/tiefgestellt (pdfkit kann das nicht selbst): 70 % groß, Grundlinie um ein Drittel bzw. ein
+        // Sechstel der umgebenden Schrift nach oben bzw. unten. `oben` zählt die Anhebung mit, `hoehe` die Absenkung.
         const schriftVon = (t) => t.bold && t.italic ? 'BI' : t.bold ? 'B' : t.italic ? 'I' : 'R';
-        const mass = z.teile.map(t => { doc.font(schriftVon(t)).fontSize(GROESSE * t.faktor);
-          return { oben: doc._font.ascender / 1000 * doc._fontSize, hoehe: doc.currentLineHeight(true) + 2 }; });
-        const grundlinie = Math.max(...mass.map(m => m.oben)), hoechste = Math.max(...mass.map(m => m.hoehe));
+        const groesseVon = (t) => GROESSE * t.faktor * (t.stellung ? 0.7 : 1);
+        const mass = z.teile.map(t => { doc.font(schriftVon(t)).fontSize(groesseVon(t));
+          const hub = t.stellung === 'super' ? GROESSE * t.faktor / 3 : t.stellung === 'sub' ? -GROESSE * t.faktor / 6 : 0;
+          return { oben: doc._font.ascender / 1000 * doc._fontSize + hub, hub, hoehe: doc.currentLineHeight(true) + 2 + Math.max(0, -hub) }; });
+        // Unterkante der Zeile: je Stück Verschiebung + eigene Höhe (ein hochgestelltes Stück schiebt die übrigen nach unten)
+        const grundlinie = Math.max(...mass.map(m => m.oben)), hoechste = Math.max(...mass.map(m => grundlinie - m.oben + m.hoehe));
         let zeilenOben = y;
         z.teile.forEach((teil, i) => {
-          const versatz = grundlinie - mass[i].oben, weiter = i < z.teile.length - 1;
+          const versatz = grundlinie - mass[i].oben, weiter = i < z.teile.length - 1;   // oben enthält den Hub
           const optionen = { width: breite - einzug, lineGap: 2, continued: weiter,
             underline: teil.underline, strike: erledigt || teil.strike };
-          doc.font(schriftVon(teil)).fontSize(GROESSE * teil.faktor).fillColor(erledigt ? LEISE : (teil.farbe || TEXT));
+          doc.font(schriftVon(teil)).fontSize(groesseVon(teil)).fillColor(erledigt ? LEISE : (teil.farbe || TEXT));
           if (i === 0) doc.text(lesbar(teil.t), links + einzug, y + versatz, optionen);
           else { doc.y = zeilenOben + versatz; doc.text(lesbar(teil.t), optionen); }
           // Nach einem Stück mit „continued" steht doc.y oben an der Zeile, in der es endet (ggf. umgebrochen);
           // nach dem letzten unter dessen eigener Zeile.
-          zeilenOben = weiter ? doc.y - versatz : doc.y - mass[i].hoehe - versatz;
+          zeilenOben = weiter ? doc.y - versatz : doc.y - (mass[i].hoehe - Math.max(0, -mass[i].hub)) - versatz;
         });
         doc.y = zeilenOben + hoechste;
       }
@@ -244,13 +251,14 @@ async function docx({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
     if (alle[i].liste === 'ordered' && (i === 0 || alle[i - 1].liste !== 'ordered')) { listen++; nums.push(2 + listen); }
     if (alle[i].liste === 'ordered') alle[i].numId = 2 + listen;
   }
-  // Die Reihenfolge in <w:rPr> schreibt das Format vor (rFonts, b, i, strike, color, sz, u) — Word ist da strenger als LibreOffice
-  const lauf = (text, { bold, italic, underline, strike, farbe, faktor = 1, erledigt, symbol } = {}) => {
+  // Die Reihenfolge in <w:rPr> schreibt das Format vor (rFonts, b, i, strike, color, sz, u, vertAlign) — Word ist da strenger als LibreOffice
+  const lauf = (text, { bold, italic, underline, strike, stellung, farbe, faktor = 1, erledigt, symbol } = {}) => {
     const sz = Math.round(22 * faktor);
     return `<w:r><w:rPr>${symbol ? '<w:rFonts w:ascii="Segoe UI Symbol" w:hAnsi="Segoe UI Symbol" w:eastAsia="Segoe UI Symbol" w:cs="Segoe UI Symbol"/>' : ''}`
       + `${bold ? '<w:b/>' : ''}${italic ? '<w:i/>' : ''}${strike || erledigt ? '<w:strike/>' : ''}`
       + `${erledigt ? '<w:color w:val="6B7280"/>' : farbe ? `<w:color w:val="${farbe.slice(1).toUpperCase()}"/>` : ''}`
       + `${faktor !== 1 ? `<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>` : ''}${underline ? '<w:u w:val="single"/>' : ''}`
+      + `${stellung ? `<w:vertAlign w:val="${stellung === 'super' ? 'superscript' : 'subscript'}"/>` : ''}`
       + `</w:rPr><w:t xml:space="preserve">${xml(text)}</w:t></w:r>`;
   };
   const absaetze = alle.map(z => {
@@ -333,6 +341,7 @@ async function odt({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
   const zeichen = new Map();
   const zeichenStil = (t, erledigt) => {
     const name = 'T_' + (t.bold ? 'b' : '') + (t.italic ? 'i' : '') + (t.underline ? 'u' : '') + (t.strike ? 's' : '') + (erledigt ? 'x' : '')
+      + (t.stellung === 'super' ? 'h' : t.stellung === 'sub' ? 't' : '')
       + (t.farbe && !erledigt ? '_' + t.farbe.slice(1) : '') + (t.faktor && t.faktor !== 1 ? '_g' + String(t.faktor).replace('.', '') : '');
     if (name === 'T_') return null;
     const farbe = erledigt ? '#6b7280' : t.farbe;
@@ -340,7 +349,8 @@ async function odt({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
       + (t.bold ? ' fo:font-weight="bold"' : '') + (t.italic ? ' fo:font-style="italic"' : '')
       + (t.underline ? ' style:text-underline-style="solid" style:text-underline-width="auto" style:text-underline-color="font-color"' : '')
       + (erledigt || t.strike ? ' style:text-line-through-style="solid"' : '') + (farbe ? ` fo:color="${farbe}"` : '')
-      + (t.faktor && t.faktor !== 1 ? ` fo:font-size="${11 * t.faktor}pt"` : '') + '/></style:style>');
+      + (t.faktor && t.faktor !== 1 ? ` fo:font-size="${11 * t.faktor}pt"` : '')
+      + (t.stellung ? ` style:text-position="${t.stellung} 58%"` : '') + '/></style:style>');
     return name;
   };
   const inhalt = (z) => {

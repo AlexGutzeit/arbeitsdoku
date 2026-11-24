@@ -35,7 +35,7 @@ const hatProgramm = (p) => spawnSync('which', [p]).status === 0;
     JSON.stringify([client, dok.FARBEN]));
   ok('Schreibfeld und Server: dieselben Größen', JSON.stringify(Object.keys(ctx.NOTIZ_GROESSEN || {})) === JSON.stringify(Object.keys(dok.GROESSEN)),
     JSON.stringify([ctx.NOTIZ_GROESSEN, dok.GROESSEN]));
-  ok('Schreibfeld lässt strike, color und size zu', ['strike', 'color', 'size'].every(f => (ctx.NOTIZ_FORMATE || []).includes(f)), JSON.stringify(ctx.NOTIZ_FORMATE));
+  ok('Schreibfeld lässt strike, script (hoch/tief), color und size zu', ['strike', 'script', 'color', 'size'].every(f => (ctx.NOTIZ_FORMATE || []).includes(f)), JSON.stringify(ctx.NOTIZ_FORMATE));
   const css = fs.readFileSync(path.join(APP, 'public/css/style.css'), 'utf8');
   const cssFalsch = Object.entries(dok.FARBEN).filter(([k, hex]) =>
     !new RegExp(`\\.notiz-inhalt \\.ql-color-${k} \\{ color: ${hex}; \\}`).test(css)
@@ -46,16 +46,17 @@ const hatProgramm = (p) => spawnSync('which', [p]).status === 0;
   console.log('\nPrüfung des Dokuments (zulaessig)');
   const mitDelta = (delta) => { const d = new dok.Y.Doc(); d.getText(dok.TEXT).applyDelta(delta); const r = dok.zulaessig(d); d.destroy(); return r; };
   ok('Farbe, Größe, Durchstreichen (auch kombiniert und wieder entfernt) gehen durch',
-    mitDelta([{ insert: 'a', attributes: { color: 'rot', size: 'huge', strike: true, bold: true } }, { insert: 'b', attributes: { color: 'grau', size: 'small' } }, { insert: '\n' }])
+    mitDelta([{ insert: 'a', attributes: { color: 'rot', size: 'huge', strike: true, bold: true, script: 'super' } }, { insert: 'b', attributes: { color: 'grau', size: 'small', script: 'sub' } }, { insert: '\n' }])
     && mitDelta([{ insert: 'x', attributes: { color: false, size: false, strike: false } }, { insert: '\n' }]));
-  const abgewiesen = [{ color: '#ff0000' }, { color: 'red' }, { color: 'rgb(1,2,3)' }, { size: '40px' }, { size: 'large ' }, { strike: 'ja' },
+  const abgewiesen = [{ script: 'mitte' }, { script: true }, { color: '#ff0000' }, { color: 'red' }, { color: 'rgb(1,2,3)' }, { size: '40px' }, { size: 'large ' }, { strike: 'ja' },
     { font: 'serif' }, { background: 'gelb' }, { link: 'https://x' }, { constructor: true }];
   const durch = abgewiesen.filter(a => mitDelta([{ insert: 'x', attributes: a }, { insert: '\n' }]));
   ok('freie Farbe, Größe in px, fremde Formate (Schriftart, Hintergrund, Link) werden abgewiesen', durch.length === 0, JSON.stringify(durch));
 
   console.log('\nDateien');
   const DELTA = [
-    { insert: 'Schwarz ' }, { insert: 'ROTWORT', attributes: { color: 'rot' } }, { insert: ' normal' }, { insert: '\n' },
+    { insert: 'Schwarz ' }, { insert: 'ROTWORT', attributes: { color: 'rot' } }, { insert: ' normal' },
+    { insert: ' HOCH', attributes: { script: 'super' } }, { insert: ' TIEF', attributes: { script: 'sub' } }, { insert: '\n' },
     { insert: 'RIESIG', attributes: { size: 'huge' } }, { insert: ' klein', attributes: { size: 'small', color: 'blau' } }, { insert: '\n' },
     { insert: 'Weg damit', attributes: { strike: true } }, { insert: '\n' },
     { insert: 'Erledigt grün', attributes: { color: 'gruen' } }, { insert: '\n', attributes: { list: 'checked' } },
@@ -83,6 +84,11 @@ const hatProgramm = (p) => spawnSync('which', [p]).status === 0;
     const [ri, kl, weg] = [kasten('RIESIG'), kasten('klein'), kasten('Weg')];
     ok('PDF: „klein" steht unten an der Zeile von „RIESIG" (gleiche Grundlinie), die nächste Zeile darunter',
       ri && kl && weg && Math.abs(grundlinie(ri) - grundlinie(kl)) < 1 && weg.oben >= ri.unten, JSON.stringify({ ri, kl, weg, g: ri && kl && [grundlinie(ri), grundlinie(kl)] }));
+    // Hoch-/tiefgestellt (Alex, 24.11.2026): kleiner, und die Grundlinie oberhalb bzw. unterhalb der normalen
+    const [sw, ho, ti] = [kasten('Schwarz'), kasten('HOCH'), kasten('TIEF')];
+    ok('PDF: „HOCH" kleiner und angehoben, „TIEF" kleiner und abgesenkt',
+      sw && ho && ti && ho.unten - ho.oben < 0.8 * (sw.unten - sw.oben) && grundlinie(ho) < grundlinie(sw) - 2 && grundlinie(ti) > grundlinie(sw) + 1
+        && ti.unten - ti.oben < 0.8 * (sw.unten - sw.oben), JSON.stringify({ sw, ho, ti }));
     // Gerendert: rote Bildpunkte nur dort, wo ROTWORT steht
     spawnSync('pdftoppm', ['-r', '100', '-png', '-singlefile', pdfDatei, path.join(ORDNER, 'f')]);
     const { data, info } = await sharp(path.join(ORDNER, 'f.png')).raw().toBuffer({ resolveWithObject: true });
@@ -105,16 +111,17 @@ const hatProgramm = (p) => spawnSync('which', [p]).status === 0;
   ok('Word: Farbe, Größe (Halbpunkte), Durchstreichen am richtigen Wort',
     lauf('ROTWORT') === '<w:color w:val="DC2626"/>' && lauf('RIESIG') === '<w:sz w:val="55"/><w:szCs w:val="55"/>'
     && lauf(' klein') === '<w:color w:val="1D4ED8"/><w:sz w:val="17"/><w:szCs w:val="17"/>' && lauf('Weg damit') === '<w:strike/>'
-    && lauf('Erledigt grün') === '<w:strike/><w:color w:val="6B7280"/>',
-    JSON.stringify(['ROTWORT', 'RIESIG', ' klein', 'Weg damit', 'Erledigt grün'].map(lauf)));
+    && lauf('Erledigt grün') === '<w:strike/><w:color w:val="6B7280"/>'
+    && lauf(' HOCH') === '<w:vertAlign w:val="superscript"/>' && lauf(' TIEF') === '<w:vertAlign w:val="subscript"/>',
+    JSON.stringify(['ROTWORT', 'RIESIG', ' klein', 'Weg damit', 'Erledigt grün', ' HOCH', ' TIEF'].map(lauf)));
   // Reihenfolge laut Schema: b, i, strike, color, sz, u
-  const reihenfolge = ['<w:b/>', '<w:i/>', '<w:strike/>', '<w:color', '<w:sz ', '<w:u '];
+  const reihenfolge = ['<w:b/>', '<w:i/>', '<w:strike/>', '<w:color', '<w:sz ', '<w:u ', '<w:vertAlign'];
   const alleRpr = [...docXml.matchAll(/<w:rPr>(.*?)<\/w:rPr>/g)].map(m => m[1]);
   const falsch = alleRpr.filter(r => { const pos = reihenfolge.map(t => r.indexOf(t)).filter(p => p >= 0); return pos.some((p, i) => i && p < pos[i - 1]); });
-  const voll = await exporte.docx({ ...daten, deltaJson: JSON.stringify([{ insert: 'alles', attributes: { bold: true, italic: true, underline: true, strike: true, color: 'lila', size: 'large' } }, { insert: '\n' }]) });
+  const voll = await exporte.docx({ ...daten, deltaJson: JSON.stringify([{ insert: 'alles', attributes: { bold: true, italic: true, underline: true, strike: true, color: 'lila', size: 'large', script: 'super' } }, { insert: '\n' }]) });
   const vollRpr = (new AdmZip(voll).readAsText('word/document.xml').match(/<w:rPr>(<w:b\/>.*?)<\/w:rPr><w:t xml:space="preserve">alles/) || [])[1] || '';
-  ok('Word: Reihenfolge in <w:rPr> wie vom Format verlangt (b, i, strike, color, sz, u)',
-    falsch.length === 0 && vollRpr === '<w:b/><w:i/><w:strike/><w:color w:val="7E22CE"/><w:sz w:val="33"/><w:szCs w:val="33"/><w:u w:val="single"/>', JSON.stringify([falsch, vollRpr]));
+  ok('Word: Reihenfolge in <w:rPr> wie vom Format verlangt (b, i, strike, color, sz, u, vertAlign)',
+    falsch.length === 0 && vollRpr === '<w:b/><w:i/><w:strike/><w:color w:val="7E22CE"/><w:sz w:val="33"/><w:szCs w:val="33"/><w:u w:val="single"/><w:vertAlign w:val="superscript"/>', JSON.stringify([falsch, vollRpr]));
 
   // ODT
   const odt = await exporte.odt(daten);
@@ -126,6 +133,8 @@ const hatProgramm = (p) => spawnSync('which', [p]).status === 0;
     && /fo:font-size="8.25pt"/.test(stilVon(' klein')) && /fo:color="#1d4ed8"/.test(stilVon(' klein'))
     && /line-through-style="solid"/.test(stilVon('Weg damit')) && /fo:color="#6b7280"/.test(stilVon('Erledigt grün')),
     JSON.stringify(['ROTWORT', 'RIESIG', ' klein', 'Weg damit', 'Erledigt grün'].map(stilVon)));
+  ok('ODT: hoch- und tiefgestellt', /style:text-position="super 58%"/.test(stilVon(' HOCH')) && /style:text-position="sub 58%"/.test(stilVon(' TIEF')),
+    JSON.stringify([stilVon(' HOCH'), stilVon(' TIEF')]));
 
   if (hatProgramm('soffice')) {
     for (const [endung, buf] of [['docx', docx], ['odt', odt]]) {
@@ -135,7 +144,7 @@ const hatProgramm = (p) => spawnSync('which', [p]).status === 0;
       const txt = path.join(aus, 'f.txt');
       const zeilen = fs.existsSync(txt) ? fs.readFileSync(txt, 'utf8').replace(/^﻿/, '').split('\n').map(s => s.trim()).filter(Boolean) : [];
       ok(`${endung}: LibreOffice öffnet die Datei, Text unverändert`,
-        JSON.stringify(zeilen.slice(2)) === JSON.stringify(['Schwarz ROTWORT normal', 'RIESIG klein', 'Weg damit', '☑ Erledigt grün']), JSON.stringify(zeilen));
+        JSON.stringify(zeilen.slice(2)) === JSON.stringify(['Schwarz ROTWORT normal HOCH TIEF', 'RIESIG klein', 'Weg damit', '☑ Erledigt grün']), JSON.stringify(zeilen));
     }
   } else console.log('    (LibreOffice fehlt — Word/ODT nicht geöffnet)');
 

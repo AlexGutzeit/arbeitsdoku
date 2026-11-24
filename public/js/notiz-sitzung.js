@@ -14,7 +14,7 @@ let _notizSitzung = null;
 // Rückweg in die Übersicht: Scrollposition und aufgeklappte Vorschau von vor dem Öffnen
 let _notizListeZurueck = null;
 
-const NOTIZ_FORMATE = ['bold', 'italic', 'underline', 'strike', 'color', 'size', 'list', 'zeichnung'];   // zeichnung: notiz-zeichnen.js
+const NOTIZ_FORMATE = ['bold', 'italic', 'underline', 'strike', 'script', 'color', 'size', 'list', 'zeichnung'];   // zeichnung: notiz-zeichnen.js
 // Schriftfarben und -größen (Alex, 24.11.2026). Feste Auswahl statt freier Farbwahl: Der Server lässt
 // genau diese Namen durch (ERLAUBTE_FORMATE in notiz-dokument.js — tests/notiz-formate.js hält beide
 // Listen gleich), und alle Farben sind auf Weiß gut lesbar (Kontrast ≥ 4,5:1). Die Farbe steckt als
@@ -80,6 +80,8 @@ function notizHtml(deltaJson, klartext) {
     const klassen = [NOTIZ_FARBEN[a.color] ? 'ql-color-' + a.color : '', NOTIZ_GROESSEN[a.size] ? 'ql-size-' + a.size : ''].filter(Boolean);
     if (klassen.length) h = `<span class="${klassen.join(' ')}">${h}</span>`;
     if (a.strike) h = `<s>${h}</s>`;
+    if (a.script === 'super') h = `<sup>${h}</sup>`;
+    else if (a.script === 'sub') h = `<sub>${h}</sub>`;
     if (a.underline) h = `<u>${h}</u>`;
     if (a.italic) h = `<em>${h}</em>`;
     if (a.bold) h = `<strong>${h}</strong>`;
@@ -258,6 +260,8 @@ function notizFeldHtml() {
           <button type="button" class="ql-italic" title="Kursiv" aria-label="Kursiv"></button>
           <button type="button" class="ql-underline" title="Unterstrichen" aria-label="Unterstrichen"></button>
           <button type="button" class="ql-strike" title="Durchgestrichen" aria-label="Durchgestrichen"></button>
+          <button type="button" class="ql-script" value="super" title="Hochgestellt (z. B. m²)" aria-label="Hochgestellt"></button>
+          <button type="button" class="ql-script" value="sub" title="Tiefgestellt (z. B. CO₂)" aria-label="Tiefgestellt"></button>
         </span>
         <span class="ql-formats nz-nur-text">
           <select class="ql-size" title="Schriftgröße" aria-label="Schriftgröße">

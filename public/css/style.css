@@ -2241,7 +2241,8 @@ select.such-auswahl-quelle { display: none !important; }
   .notiz-editor .ql-snow.ql-toolbar .nz-modus-knopf { padding: 0 10px; }
   .notiz-editor .ql-snow.ql-toolbar .nz-modus-knopf span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
   /* Gruppen auflösen, damit jeder Knopf einzeln umbricht (als Ganzes rutschte die Werkzeuggruppe in eine eigene Reihe) */
-  .notiz-editor .notiz-leiste.ql-toolbar.ql-snow.nz-im-zeichnen { column-gap: 2px; }
+  .notiz-editor .notiz-leiste.ql-toolbar.ql-snow { column-gap: 2px; }
+  .notiz-editor .notiz-leiste.ql-toolbar.ql-snow .nz-nur-text { display: contents; }   /* Textknöpfe ebenso (seit hoch-/tiefgestellt sonst drei Reihen) */
   .notiz-editor .notiz-leiste.nz-im-zeichnen .nz-werkzeuge, .notiz-editor .notiz-leiste.nz-im-zeichnen .nz-aktionen { display: contents !important; }
   .notiz-editor .notiz-leiste.nz-im-zeichnen .nz-modus { margin-right: 6px; }
 }

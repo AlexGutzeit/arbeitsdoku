@@ -47,7 +47,7 @@ function req(m, p, t, b) {
         hours_mon: 8, hours_tue: 8, hours_wed: 8, hours_thu: 8, hours_fri: 8 })).body.user.id;
     }
     const tAnna = await tok('anna', 'Test1234!');
-    const note = (await req('POST', '/api/notes', tAnna, { title: 'Baustelle Farben', body: 'Achtung Leitung\nAlt und weg' })).body.note;
+    const note = (await req('POST', '/api/notes', tAnna, { title: 'Baustelle Farben', body: 'Achtung Leitung\nAlt und weg\nFläche 25 m2, CO2' })).body.note;
     await req('PUT', `/api/notes/${note.id}/shares`, tAnna, { shares: [{ user_id: id.tom, permission: 'write' }] });
 
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'shell', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
@@ -88,14 +88,18 @@ function req(m, p, t, b) {
     const leiste = await A.evaluate(() => {
       const r = (s) => { const e = document.querySelector('#notiz-leiste ' + s); if (!e) return null; const b = e.getBoundingClientRect(); return { w: b.width, h: b.height, sichtbar: e.checkVisibility() }; };
       const vorher = (s) => { const e = document.querySelector('#notiz-leiste ' + s); return e ? getComputedStyle(e, '::before').content : null; };
-      return { strike: r('button.ql-strike'), groesse: r('.ql-size .ql-picker-label'), farbe: r('.ql-color .ql-picker-label'),
+      return { hoch: r('button.ql-script[value="super"]'), tief: r('button.ql-script[value="sub"]'),
+        leisteHoch: document.getElementById('notiz-leiste').getBoundingClientRect().height, strike: r('button.ql-strike'), groesse: r('.ql-size .ql-picker-label'), farbe: r('.ql-color .ql-picker-label'),
         groesseText: vorher('.ql-size .ql-picker-label'),
         eintraege: [...document.querySelectorAll('#notiz-leiste .ql-size .ql-picker-item')].map(i => i.getAttribute('aria-label')),
         farben: [...document.querySelectorAll('#notiz-leiste .ql-color .ql-picker-item')].map(i => i.getAttribute('aria-label')),
         namen: [...document.querySelectorAll('#notiz-leiste .ql-picker-label')].map(l => l.getAttribute('aria-label')) };
     });
     const gross = (x) => x && x.sichtbar && x.w >= 44 && x.h >= 44;
-    ok('Durchstreichen, Größe und Farbe sichtbar, je mindestens 44 × 44 px', gross(leiste.strike) && gross(leiste.groesse) && gross(leiste.farbe), JSON.stringify(leiste));
+    ok('Durchstreichen, Hoch-/Tiefgestellt, Größe und Farbe sichtbar, je mindestens 44 × 44 px',
+      gross(leiste.strike) && gross(leiste.hoch) && gross(leiste.tief) && gross(leiste.groesse) && gross(leiste.farbe), JSON.stringify(leiste));
+    // Mit den Knöpfen hoch/tief wären es am Handy drei Reihen geworden — die Leiste klebt oben und nähme zu viel weg
+    ok('… am Handy höchstens zwei Reihen (≤ 110 px)', leiste.leisteHoch <= 110, String(leiste.leisteHoch));
     ok('Größe zeigt „Normal", Auswahl deutsch: Klein, Normal, Groß, Sehr groß',
       leiste.groesseText === '"Normal"' && JSON.stringify(leiste.eintraege) === '["Klein","Normal","Groß","Sehr groß"]', JSON.stringify([leiste.groesseText, leiste.eintraege]));
     ok('Farben: Standard + Rot, Orange, Grün, Blau, Lila, Grau; Listen benannt (Screenreader)',
@@ -121,6 +125,15 @@ function req(m, p, t, b) {
     const groesseJetzt = await A.evaluate(() => getComputedStyle(document.querySelector('#notiz-leiste .ql-size .ql-picker-label'), '::before').content);
     await markiere(A, 'Alt und weg');
     await A.tap('#notiz-leiste button.ql-strike'); await sleep(200);
+    // Hochgestellt: die 2 in „m2", tiefgestellt: die 2 in „CO2" (Alex, 24.11.2026)
+    const zweiBei = (p, wort) => p.evaluate((w) => { const q = _notizSitzung.quill; q.focus(); q.setSelection(q.getText().indexOf(w) + w.length - 1, 1, 'user'); }, wort);
+    await zweiBei(A, 'm2'); await A.tap('#notiz-leiste button.ql-script[value="super"]'); await sleep(200);
+    await zweiBei(A, 'CO2'); await A.tap('#notiz-leiste button.ql-script[value="sub"]'); await sleep(200);
+    const stellung = (p) => p.evaluate(() => [...document.querySelectorAll('.notiz-editor .ql-editor sup, .notiz-editor .ql-editor sub')]
+      .map(e => e.tagName + ':' + e.textContent + ':' + getComputedStyle(e).verticalAlign));
+    ok('bei Anna: „m²" hoch-, „CO₂" tiefgestellt', JSON.stringify(await stellung(A)) === '["SUP:2:super","SUB:2:sub"]', JSON.stringify(await stellung(A)));
+    await T.waitForFunction(() => document.querySelector('.notiz-editor .ql-editor sub'), { timeout: 5000 }).catch(() => {});
+    ok('… live bei Tom', JSON.stringify(await stellung(T)) === '["SUP:2:super","SUB:2:sub"]', JSON.stringify(await stellung(T)));
     const aA = { leitung: await aussehen(A, 'Leitung'), achtung: await aussehen(A, 'Achtung'), alt: await aussehen(A, 'Alt und weg') };
     ok('bei Anna: „Leitung" rot, „Achtung" 2,5-fach groß, „Alt und weg" durchgestrichen; Auswahl zeigt „Sehr groß"',
       aA.leitung.farbe === 'rgb(220, 38, 38)' && aA.achtung.groesse === normal.groesse * 2.5 && aA.alt.durch && !aA.leitung.durch
@@ -162,8 +175,9 @@ function req(m, p, t, b) {
     const gespeichert = ((await req('GET', '/api/notes', tAnna)).body.notes || []).find(n => n.id === note.id);
     const delta = JSON.parse(gespeichert.body_delta);
     const attr = (w) => (delta.find(o => typeof o.insert === 'string' && o.insert.includes(w)) || {}).attributes || {};
-    ok('gespeicherter Stand: Achtung huge, Leitung blau, Alt und weg durchgestrichen',
-      attr('Achtung').size === 'huge' && attr('Leitung').color === 'blau' && attr('Alt und weg').strike === true, gespeichert.body_delta);
+    ok('gespeicherter Stand: Achtung huge, Leitung blau, Alt und weg durchgestrichen, m² hoch, CO₂ tief',
+      attr('Achtung').size === 'huge' && attr('Leitung').color === 'blau' && attr('Alt und weg').strike === true
+        && delta.filter(o => o.insert === '2').map(o => (o.attributes || {}).script).join() === 'super,sub', gespeichert.body_delta);
     await A.tap('#notiz-fertig');
     await A.waitForSelector('.note-card');
     await A.evaluate((t) => { const k = [...document.querySelectorAll('.note-card')].find(c => c.textContent.includes(t)); k.querySelector('.note-title').click(); }, 'Baustelle Farben');
@@ -171,11 +185,12 @@ function req(m, p, t, b) {
     const vorschau = await A.evaluate(() => {
       const box = document.querySelector('.note-body-full .notiz-inhalt'); if (!box) return null;
       const stil = (sel) => { const e = box.querySelector(sel); return e ? { farbe: getComputedStyle(e).color, groesse: parseFloat(getComputedStyle(e).fontSize), text: e.textContent } : null; };
-      return { blau: stil('.ql-color-blau'), riesig: stil('.ql-size-huge'), durch: stil('s'), grund: parseFloat(getComputedStyle(box).fontSize) };
+      return { blau: stil('.ql-color-blau'), riesig: stil('.ql-size-huge'), durch: stil('s'), grund: parseFloat(getComputedStyle(box).fontSize),
+        stellung: [...box.querySelectorAll('sup, sub')].map(e => e.tagName + ':' + e.textContent).join() };
     });
-    ok('Vorschau in der Übersicht: Farbe, Größe und Durchstreichen sichtbar',
+    ok('Vorschau in der Übersicht: Farbe, Größe, Durchstreichen, hoch/tief sichtbar',
       vorschau && vorschau.blau && vorschau.blau.farbe === 'rgb(29, 78, 216)' && vorschau.riesig && vorschau.riesig.groesse === vorschau.grund * 2.5
-        && vorschau.durch && /Alt und weg/.test(vorschau.durch.text), JSON.stringify(vorschau));
+        && vorschau.durch && /Alt und weg/.test(vorschau.durch.text) && vorschau.stellung === 'SUP:2,SUB:2', JSON.stringify(vorschau));
 
     console.log('\nDrucken');
     await A.emulateMediaType('print');

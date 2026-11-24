@@ -140,7 +140,7 @@ function zeileAusKlartext(klartext) {
 // (wie Quills .ql-size-*: 0,75 / 1,5 / 2,5 em).
 const FARBEN = { rot: '#dc2626', orange: '#c2410c', gruen: '#15803d', blau: '#1d4ed8', lila: '#7e22ce', grau: '#6b7280' };
 const GROESSEN = { small: 0.75, large: 1.5, huge: 2.5 };
-const ERLAUBTE_FORMATE = { bold: [true, false], italic: [true, false], underline: [true, false], strike: [true, false],
+const ERLAUBTE_FORMATE = { bold: [true, false], italic: [true, false], underline: [true, false], strike: [true, false], script: ['super', 'sub', false],
   color: [...Object.keys(FARBEN), false], size: [...Object.keys(GROESSEN), false], list: ['bullet', 'ordered', 'checked', 'unchecked', false] };
 function zulaessig(doc) {
   if ([...doc.share.keys()].some(k => k !== TEXT && k !== ZEICHNUNGEN)) return false;
