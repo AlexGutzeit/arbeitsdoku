@@ -2101,6 +2101,19 @@ select.such-auswahl-quelle { display: none !important; }
 .notiz-inhalt ul.notiz-check li { display: flex; gap: 0.4rem; }
 .notiz-inhalt li.erledigt { color: var(--text-lighter); text-decoration: line-through; }
 .notiz-haken { flex-shrink: 0; text-decoration: none; display: inline-block; }
+/* Schriftfarben und -größen (24.11.2026) — gelten im Schreibfeld, in der Vorschau und beim Drucken.
+   Dieselben Namen und Werte wie NOTIZ_FARBEN (notiz-sitzung.js) und FARBEN (notiz-dokument.js). */
+.ql-editor .ql-color-rot, .notiz-inhalt .ql-color-rot { color: #dc2626; }
+.ql-editor .ql-color-orange, .notiz-inhalt .ql-color-orange { color: #c2410c; }
+.ql-editor .ql-color-gruen, .notiz-inhalt .ql-color-gruen { color: #15803d; }
+.ql-editor .ql-color-blau, .notiz-inhalt .ql-color-blau { color: #1d4ed8; }
+.ql-editor .ql-color-lila, .notiz-inhalt .ql-color-lila { color: #7e22ce; }
+.ql-editor .ql-color-grau, .notiz-inhalt .ql-color-grau { color: #6b7280; }
+.notiz-inhalt .ql-size-small { font-size: 0.75em; }
+.notiz-inhalt .ql-size-large { font-size: 1.5em; }
+.notiz-inhalt .ql-size-huge { font-size: 2.5em; }
+/* Abgehakt bleibt abgehakt: grau, auch wenn der Text eine Farbe hat */
+.notiz-inhalt li.erledigt [class*="ql-color-"], .ql-editor li[data-list="checked"] [class*="ql-color-"] { color: inherit; }
 
 /* Nur für Screenreader sichtbar */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -2155,6 +2168,40 @@ select.such-auswahl-quelle { display: none !important; }
 .notiz-editor .ql-snow.ql-toolbar button.ql-active { background: var(--primary-light); }
 .notiz-editor .ql-snow.ql-toolbar button:hover .ql-stroke, .notiz-editor .ql-snow.ql-toolbar button.ql-active .ql-stroke { stroke: var(--primary-hover); }
 .notiz-editor .ql-snow.ql-toolbar button:hover .ql-fill, .notiz-editor .ql-snow.ql-toolbar button.ql-active .ql-fill { fill: var(--primary-hover); }
+/* Auswahllisten Größe und Farbe: so hoch wie die Knöpfe (44 px zum Antippen), Beschriftung deutsch
+   (kommt aus dem Text der <option>, data-label), Farbfelder groß genug für den Finger */
+.notiz-editor .ql-snow .ql-picker { height: 44px; color: var(--text); }
+.notiz-editor .ql-snow .ql-picker-label { display: flex; align-items: center; border-radius: 8px; }
+.notiz-editor .ql-snow .ql-picker.ql-size { width: 104px; }
+.notiz-editor .ql-snow .ql-picker.ql-size .ql-picker-label::before, .notiz-editor .ql-snow .ql-picker.ql-size .ql-picker-item::before { content: attr(data-label); }
+.notiz-editor .ql-snow .ql-picker.ql-size .ql-picker-item[data-value=small]::before { font-size: 12px; }
+.notiz-editor .ql-snow .ql-picker.ql-size .ql-picker-item[data-value=large]::before { font-size: 22px; }
+.notiz-editor .ql-snow .ql-picker.ql-size .ql-picker-item[data-value=huge]::before { font-size: 32px; }
+.notiz-editor .ql-snow .ql-picker-options { background: var(--card); border-radius: 8px; z-index: 6; }
+.notiz-editor .ql-snow .ql-picker.ql-size .ql-picker-item { padding: 8px 4px; }
+.notiz-editor .ql-snow .ql-color-picker { width: 44px; }
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-label { padding: 10px; }
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-label svg { width: 24px; height: 24px; }
+/* max-width: none — eine allgemeine Regel begrenzt sonst auf die 44 px des Knopfs, und die Farben stünden
+   einzeln untereinander. Nach links aufklappen: der Knopf steht am Handy oft am rechten Rand. */
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-options { width: 176px; max-width: none; padding: 6px; left: auto; right: 0; }
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-item { width: 32px; height: 32px; margin: 3px; border-radius: 50%; border: 2px solid var(--border); background-color: var(--text); }
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-item.ql-selected { outline: 3px solid var(--primary); outline-offset: 1px; }
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-item[data-value=rot] { background-color: #dc2626 !important; }
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-item[data-value=orange] { background-color: #c2410c !important; }
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-item[data-value=gruen] { background-color: #15803d !important; }
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-item[data-value=blau] { background-color: #1d4ed8 !important; }
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-item[data-value=lila] { background-color: #7e22ce !important; }
+.notiz-editor .ql-snow .ql-color-picker .ql-picker-item[data-value=grau] { background-color: #6b7280 !important; }
+/* Der Strich unter dem „A" zeigt die gewählte Farbe. !important hier und bei den Farbfeldern: Quill setzt den
+   Namen der Farbe als Inline-Farbe — „orange" ist auch ein CSS-Farbname und schlüge sonst mit Quills Hellorange durch. */
+.notiz-editor .ql-snow .ql-color .ql-color-label { opacity: 1; stroke-width: 3; }
+.notiz-editor .ql-snow .ql-color .ql-picker-label[data-value=rot] .ql-color-label { stroke: #dc2626 !important; }
+.notiz-editor .ql-snow .ql-color .ql-picker-label[data-value=orange] .ql-color-label { stroke: #c2410c !important; }
+.notiz-editor .ql-snow .ql-color .ql-picker-label[data-value=gruen] .ql-color-label { stroke: #15803d !important; }
+.notiz-editor .ql-snow .ql-color .ql-picker-label[data-value=blau] .ql-color-label { stroke: #1d4ed8 !important; }
+.notiz-editor .ql-snow .ql-color .ql-picker-label[data-value=lila] .ql-color-label { stroke: #7e22ce !important; }
+.notiz-editor .ql-snow .ql-color .ql-picker-label[data-value=grau] .ql-color-label { stroke: #6b7280 !important; }
 .notiz-editor .ql-container.ql-snow { border: 0; font: inherit; font-size: 16px; }   /* 16 px: iPhone zoomt sonst beim Tippen hinein */
 .notiz-editor .ql-editor { min-height: 50vh; padding: 12px 1rem 1.5rem; line-height: 1.55; color: var(--text); }
 .notiz-editor .ql-editor.ql-blank::before { color: var(--text-lighter); font-style: normal; left: 1rem; }

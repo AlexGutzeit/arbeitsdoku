@@ -16,6 +16,7 @@ const path = require('path');
 const { ZipArchive } = require('archiver');
 const PDFDocument = require('pdfkit');
 const { ZONE } = require('./zeit');
+const { FARBEN, GROESSEN } = require('./notiz-dokument');
 
 // Erst beim ersten PDF aufgelöst: Fehlt das Schriftpaket, scheitert nur das PDF (mit Meldung) — nicht
 // der Start des Servers, der diese Datei über routes/notes.js schon beim Hochfahren lädt.
@@ -23,7 +24,8 @@ const schriften = () => path.join(path.dirname(require.resolve('dejavu-fonts-ttf
 
 // ─── Gemeinsamer Zwischenschritt ─────────────────────────────────────────────────────────────
 
-/** Delta (JSON-Text) → [{ teile: [{ t, bold, italic, underline }], liste: null|'bullet'|'ordered'|'checked'|'unchecked', nr }] */
+/** Delta (JSON-Text) → [{ teile: [{ t, bold, italic, underline, strike, farbe, faktor }], liste: null|'bullet'|'ordered'|'checked'|'unchecked', nr }]
+ *  farbe: '#rrggbb' oder null (Standard), faktor: Schriftgröße relativ zur Grundschrift (1 = normal) */
 function zeilen(deltaJson, klartext) {
   let ops = null;
   try { ops = JSON.parse(deltaJson || ''); } catch (_) { /* Rückfall auf Klartext */ }
@@ -33,7 +35,8 @@ function zeilen(deltaJson, klartext) {
     if (typeof op.insert !== 'string') continue;
     const a = op.attributes || {};
     op.insert.split('\n').forEach((t, i, alle) => {
-      if (t) teile.push({ t, bold: !!a.bold, italic: !!a.italic, underline: !!a.underline });
+      if (t) teile.push({ t, bold: !!a.bold, italic: !!a.italic, underline: !!a.underline, strike: !!a.strike,
+        farbe: Object.hasOwn(FARBEN, a.color) ? FARBEN[a.color] : null, faktor: Object.hasOwn(GROESSEN, a.size) ? GROESSEN[a.size] : 1 });
       if (i < alle.length - 1) {
         const liste = ['bullet', 'ordered', 'checked', 'unchecked'].includes(a.list) ? a.list : null;
         aus.push({ teile, liste }); teile = [];
@@ -92,7 +95,8 @@ function pdf({ titel, deltaJson, klartext, stand }) {
     for (const z of zeilen(deltaJson, klartext)) {
       const einzug = z.liste ? 22 : 0;
       doc.font('R').fontSize(GROESSE);
-      const zeilenHoehe = doc.currentLineHeight(true) + 2;
+      const groesste = Math.max(1, ...z.teile.map(t => t.faktor));
+      const zeilenHoehe = doc.currentLineHeight(true) * groesste + 2;
       if (doc.y + zeilenHoehe > unten()) doc.addPage();
       const y = doc.y;
       if (z.liste === 'bullet') doc.fillColor(TEXT).text('•', links + 6, y, { lineBreak: false });
@@ -106,14 +110,27 @@ function pdf({ titel, deltaJson, klartext, stand }) {
       if (!z.teile.length) {
         doc.font('R').fillColor(TEXT).text(' ', links + einzug, y, { width: breite - einzug, lineGap: 2 });
       } else {
+        // Verschiedene Schriftgrößen in einer Zeile: pdfkit setzt jedes Stück oben an die Zeile — kleine
+        // Schrift hinge dann hochgestellt neben großer, und die nächste Zeile rückte nur um die Höhe des
+        // LETZTEN Stücks weiter (lief in die große Schrift hinein). Deshalb jedes Stück so weit nach unten,
+        // dass alle auf derselben Grundlinie stehen, und am Ende um die größte Zeilenhöhe weiter.
+        const schriftVon = (t) => t.bold && t.italic ? 'BI' : t.bold ? 'B' : t.italic ? 'I' : 'R';
+        const mass = z.teile.map(t => { doc.font(schriftVon(t)).fontSize(GROESSE * t.faktor);
+          return { oben: doc._font.ascender / 1000 * doc._fontSize, hoehe: doc.currentLineHeight(true) + 2 }; });
+        const grundlinie = Math.max(...mass.map(m => m.oben)), hoechste = Math.max(...mass.map(m => m.hoehe));
+        let zeilenOben = y;
         z.teile.forEach((teil, i) => {
-          const schrift = teil.bold && teil.italic ? 'BI' : teil.bold ? 'B' : teil.italic ? 'I' : 'R';
-          const optionen = { width: breite - einzug, lineGap: 2, continued: i < z.teile.length - 1,
-            underline: teil.underline, strike: erledigt };
-          doc.font(schrift).fontSize(GROESSE).fillColor(erledigt ? LEISE : TEXT);
-          if (i === 0) doc.text(lesbar(teil.t), links + einzug, y, optionen);
-          else doc.text(lesbar(teil.t), optionen);
+          const versatz = grundlinie - mass[i].oben, weiter = i < z.teile.length - 1;
+          const optionen = { width: breite - einzug, lineGap: 2, continued: weiter,
+            underline: teil.underline, strike: erledigt || teil.strike };
+          doc.font(schriftVon(teil)).fontSize(GROESSE * teil.faktor).fillColor(erledigt ? LEISE : (teil.farbe || TEXT));
+          if (i === 0) doc.text(lesbar(teil.t), links + einzug, y + versatz, optionen);
+          else { doc.y = zeilenOben + versatz; doc.text(lesbar(teil.t), optionen); }
+          // Nach einem Stück mit „continued" steht doc.y oben an der Zeile, in der es endet (ggf. umgebrochen);
+          // nach dem letzten unter dessen eigener Zeile.
+          zeilenOben = weiter ? doc.y - versatz : doc.y - mass[i].hoehe - versatz;
         });
+        doc.y = zeilenOben + hoechste;
       }
       doc.moveDown(0.25);
     }
@@ -162,10 +179,15 @@ function docx({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
     if (alle[i].liste === 'ordered' && (i === 0 || alle[i - 1].liste !== 'ordered')) { listen++; nums.push(2 + listen); }
     if (alle[i].liste === 'ordered') alle[i].numId = 2 + listen;
   }
-  const lauf = (text, { bold, italic, underline, erledigt, symbol } = {}) =>
-    `<w:r><w:rPr>${symbol ? '<w:rFonts w:ascii="Segoe UI Symbol" w:hAnsi="Segoe UI Symbol" w:eastAsia="Segoe UI Symbol" w:cs="Segoe UI Symbol"/>' : ''}`
-    + `${bold ? '<w:b/>' : ''}${italic ? '<w:i/>' : ''}${underline ? '<w:u w:val="single"/>' : ''}${erledigt ? '<w:strike/><w:color w:val="6B7280"/>' : ''}`
-    + `</w:rPr><w:t xml:space="preserve">${xml(text)}</w:t></w:r>`;
+  // Die Reihenfolge in <w:rPr> schreibt das Format vor (rFonts, b, i, strike, color, sz, u) — Word ist da strenger als LibreOffice
+  const lauf = (text, { bold, italic, underline, strike, farbe, faktor = 1, erledigt, symbol } = {}) => {
+    const sz = Math.round(22 * faktor);
+    return `<w:r><w:rPr>${symbol ? '<w:rFonts w:ascii="Segoe UI Symbol" w:hAnsi="Segoe UI Symbol" w:eastAsia="Segoe UI Symbol" w:cs="Segoe UI Symbol"/>' : ''}`
+      + `${bold ? '<w:b/>' : ''}${italic ? '<w:i/>' : ''}${strike || erledigt ? '<w:strike/>' : ''}`
+      + `${erledigt ? '<w:color w:val="6B7280"/>' : farbe ? `<w:color w:val="${farbe.slice(1).toUpperCase()}"/>` : ''}`
+      + `${faktor !== 1 ? `<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>` : ''}${underline ? '<w:u w:val="single"/>' : ''}`
+      + `</w:rPr><w:t xml:space="preserve">${xml(text)}</w:t></w:r>`;
+  };
   const absaetze = alle.map(z => {
     const erledigt = z.liste === 'checked';
     let pPr = '';
@@ -235,15 +257,19 @@ function odt({ titel, deltaJson, klartext, stand, jetzt = new Date() }) {
   const NS = 'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" '
     + 'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" '
     + 'xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:dc="http://purl.org/dc/elements/1.1/"';
-  // Zeichenformate nach Bedarf: T_b, T_i, T_u, T_bi … und _x für „erledigt" (durchgestrichen, grau)
+  // Zeichenformate nach Bedarf: T_b, T_i, T_u, T_s, T_bi … und x für „erledigt" (durchgestrichen, grau),
+  // dazu _<Farbwert> und _g<Faktor> (T_bs_dc2626_g15)
   const zeichen = new Map();
   const zeichenStil = (t, erledigt) => {
-    const name = 'T_' + (t.bold ? 'b' : '') + (t.italic ? 'i' : '') + (t.underline ? 'u' : '') + (erledigt ? 'x' : '');
+    const name = 'T_' + (t.bold ? 'b' : '') + (t.italic ? 'i' : '') + (t.underline ? 'u' : '') + (t.strike ? 's' : '') + (erledigt ? 'x' : '')
+      + (t.farbe && !erledigt ? '_' + t.farbe.slice(1) : '') + (t.faktor && t.faktor !== 1 ? '_g' + String(t.faktor).replace('.', '') : '');
     if (name === 'T_') return null;
+    const farbe = erledigt ? '#6b7280' : t.farbe;
     if (!zeichen.has(name)) zeichen.set(name, `<style:style style:name="${name}" style:family="text"><style:text-properties`
       + (t.bold ? ' fo:font-weight="bold"' : '') + (t.italic ? ' fo:font-style="italic"' : '')
       + (t.underline ? ' style:text-underline-style="solid" style:text-underline-width="auto" style:text-underline-color="font-color"' : '')
-      + (erledigt ? ' style:text-line-through-style="solid" fo:color="#6b7280"' : '') + '/></style:style>');
+      + (erledigt || t.strike ? ' style:text-line-through-style="solid"' : '') + (farbe ? ` fo:color="${farbe}"` : '')
+      + (t.faktor && t.faktor !== 1 ? ` fo:font-size="${11 * t.faktor}pt"` : '') + '/></style:style>');
     return name;
   };
   const inhalt = (z) => {

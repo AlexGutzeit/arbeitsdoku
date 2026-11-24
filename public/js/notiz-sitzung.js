@@ -14,7 +14,24 @@ let _notizSitzung = null;
 // Rückweg in die Übersicht: Scrollposition und aufgeklappte Vorschau von vor dem Öffnen
 let _notizListeZurueck = null;
 
-const NOTIZ_FORMATE = ['bold', 'italic', 'underline', 'list'];
+const NOTIZ_FORMATE = ['bold', 'italic', 'underline', 'strike', 'color', 'size', 'list'];
+// Schriftfarben und -größen (Alex, 24.11.2026). Feste Auswahl statt freier Farbwahl: Der Server lässt
+// genau diese Namen durch (ERLAUBTE_FORMATE in notiz-dokument.js — tests/notiz-formate.js hält beide
+// Listen gleich), und alle Farben sind auf Weiß gut lesbar (Kontrast ≥ 4,5:1). Die Farbe steckt als
+// Klasse im Text (ql-color-rot), nicht als freie Farbangabe — so kann beim Einfügen aus einer
+// Webseite keine fremde Farbe mitkommen, die der Server dann abwiese.
+const NOTIZ_FARBEN = { rot: ['Rot', '#dc2626'], orange: ['Orange', '#c2410c'], gruen: ['Grün', '#15803d'],
+  blau: ['Blau', '#1d4ed8'], lila: ['Lila', '#7e22ce'], grau: ['Grau', '#6b7280'] };
+const NOTIZ_GROESSEN = { small: 'Klein', large: 'Groß', huge: 'Sehr groß' };
+
+// Einmal je Seite: Farbe als Klasse mit fester Liste (Quill bringt sie sonst als freie style-Angabe)
+function notizFormateAnmelden(Quill) {
+  if (notizFormateAnmelden.erledigt) return;
+  notizFormateAnmelden.erledigt = true;
+  const P = Quill.import('parchment');
+  Quill.register('formats/color', new P.ClassAttributor('color', 'ql-color',
+    { scope: P.Scope.INLINE, whitelist: Object.keys(NOTIZ_FARBEN) }), true);
+}
 // So lange im Hintergrund, dann aus der Notiz abmelden. Als Objekt, damit ein Test die Minute
 // verkürzen kann (tests/notizen-live-ui.js).
 const notizZeiten = { hintergrundMs: 60 * 1000 };
@@ -52,6 +69,9 @@ function notizHtml(deltaJson, klartext) {
   if (teile.length) zeilen.push({ teile, liste: null });
   const inline = (teile) => teile.map(({ t, a }) => {
     let h = esc(t);
+    const klassen = [NOTIZ_FARBEN[a.color] ? 'ql-color-' + a.color : '', NOTIZ_GROESSEN[a.size] ? 'ql-size-' + a.size : ''].filter(Boolean);
+    if (klassen.length) h = `<span class="${klassen.join(' ')}">${h}</span>`;
+    if (a.strike) h = `<s>${h}</s>`;
     if (a.underline) h = `<u>${h}</u>`;
     if (a.italic) h = `<em>${h}</em>`;
     if (a.bold) h = `<strong>${h}</strong>`;
@@ -228,6 +248,16 @@ function notizFeldHtml() {
           <button type="button" class="ql-bold" title="Fett" aria-label="Fett"></button>
           <button type="button" class="ql-italic" title="Kursiv" aria-label="Kursiv"></button>
           <button type="button" class="ql-underline" title="Unterstrichen" aria-label="Unterstrichen"></button>
+          <button type="button" class="ql-strike" title="Durchgestrichen" aria-label="Durchgestrichen"></button>
+        </span>
+        <span class="ql-formats">
+          <select class="ql-size" title="Schriftgröße" aria-label="Schriftgröße">
+            <option value="small">${NOTIZ_GROESSEN.small}</option><option selected>Normal</option>
+            <option value="large">${NOTIZ_GROESSEN.large}</option><option value="huge">${NOTIZ_GROESSEN.huge}</option>
+          </select>
+          <select class="ql-color" title="Schriftfarbe" aria-label="Schriftfarbe">
+            <option selected>Standard</option>${Object.entries(NOTIZ_FARBEN).map(([k, [name]]) => `<option value="${k}">${name}</option>`).join('')}
+          </select>
         </span>
         <span class="ql-formats">
           <button type="button" class="ql-list" value="bullet" title="Aufzählung" aria-label="Aufzählung"></button>
@@ -465,11 +495,21 @@ function notizSitzungStarten(id, weg = notizWegeApp(id)) {
   } catch (_) {}
 
   // Schreibfeld
+  notizFormateAnmelden(K.Quill);
   s.quill = new K.Quill('#notiz-feld', {
     theme: 'snow', formats: NOTIZ_FORMATE, placeholder: 'Hier schreiben …', readOnly: true,
     modules: { toolbar: '#notiz-leiste', cursors: { transformOnTextChange: true },
       history: { userOnly: true } },   // Rückgängig nimmt nur die EIGENEN Änderungen zurück
   });
+  // Quills Auswahllisten (Größe, Farbe) sind Spans ohne Namen — für Screenreader und als Tooltip benennen
+  for (const liste of document.querySelectorAll('#notiz-leiste .ql-picker')) {
+    const lbl = liste.querySelector('.ql-picker-label');
+    if (lbl) lbl.setAttribute('aria-label', liste.getAttribute('aria-label') || '');
+    for (const p of liste.querySelectorAll('.ql-picker-item')) {
+      p.setAttribute('aria-label', p.dataset.label || '');
+      p.title = p.dataset.label || '';
+    }
+  }
   // Die Verbindung Schreibfeld ↔ Dokument entsteht erst, wenn der Stand des Servers da ist (siehe
   // 'start'). Vorher ist das Dokument leer, Quill hat aber schon sein eigenes Schluss-Zeilenende —
   // kommt der Stand dann hinzu, bleibt dieses zusätzlich stehen: eine Leerzeile zu viel am Ende, in

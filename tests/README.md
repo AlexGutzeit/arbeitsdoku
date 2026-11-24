@@ -38,7 +38,7 @@ Zwei Ausnahmen von „nichts vorbereiten":
 
 <!-- TESTLISTE:START — erzeugt von scripts/generate-test-index.js, nicht von Hand ändern -->
 
-**302 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
+**304 Tests.** Die Beschreibung ist jeweils die erste Kommentarzeile der Datei.
 
 | Test | prüft |
 |---|---|
@@ -199,6 +199,8 @@ Zwei Ausnahmen von „nichts vorbereiten":
 | `note-leave.js` | API-Test „Freigabe verlassen": Empfänger entfernt sich selbst aus einer geteilten Notiz; beim |
 | `notiz-erinnerungen-ui.js` | Persönliche Erinnerungen an Notizen — Oberfläche und echter Zeitplaner (Alex, 02.10.2026). |
 | `notiz-erinnerungen.js` | Persönliche Erinnerungen an Notizen — Server und Zeitplaner (Alex, 02.10.2026). |
+| `notiz-formate-ui.js` | Schriftfarbe, Schriftgröße und Durchstreichen in Notizen — Oberfläche (24.11.2026). |
+| `notiz-formate.js` | Schriftfarbe, Schriftgröße und Durchstreichen in Notizen — Server und Dateien (24.11.2026). |
 | `notiz-freigabe-datum.js` | Neue Freigabe leuchtet nur beim NEUEN Empfänger auf — nicht bei allen bisherigen (27.09.2026). |
 | `notiz-gaeste-ui.js` | Gäste in Notizen — Oberfläche (Etappe C, 27.09.2026). |
 | `notiz-gaeste.js` | Gäste in Notizen — Server (Etappe C, 27.09.2026). |

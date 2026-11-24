@@ -89,16 +89,22 @@ function zeileAusKlartext(klartext) {
 // Links, Überschriften, fremde Datenfelder im Dokument) kann nur ein manipulierter Browser schicken;
 // es brächte das Schreibfeld der anderen durcheinander. Geprüft wird der Stand NACH einer Änderung.
 // `false` heißt „nicht formatiert" und ist harmlos (Quill selbst entfernt mit null, das Yjs gar nicht speichert).
-const ERLAUBTE_FORMATE = { bold: [true, false], italic: [true, false], underline: [true, false], list: ['bullet', 'ordered', 'checked', 'unchecked', false] };
+// Farben und Größen: dieselben Namen wie NOTIZ_FARBEN/NOTIZ_GROESSEN in public/js/notiz-sitzung.js
+// (tests/notiz-formate.js hält beide gleich). Farbwert für PDF/Word/ODT; Größe als Faktor der Grundschrift
+// (wie Quills .ql-size-*: 0,75 / 1,5 / 2,5 em).
+const FARBEN = { rot: '#dc2626', orange: '#c2410c', gruen: '#15803d', blau: '#1d4ed8', lila: '#7e22ce', grau: '#6b7280' };
+const GROESSEN = { small: 0.75, large: 1.5, huge: 2.5 };
+const ERLAUBTE_FORMATE = { bold: [true, false], italic: [true, false], underline: [true, false], strike: [true, false],
+  color: [...Object.keys(FARBEN), false], size: [...Object.keys(GROESSEN), false], list: ['bullet', 'ordered', 'checked', 'unchecked', false] };
 function zulaessig(doc) {
   if ([...doc.share.keys()].some(k => k !== TEXT)) return false;
   for (const op of doc.getText(TEXT).toDelta()) {
     if (typeof op.insert !== 'string') return false;
     for (const [k, v] of Object.entries(op.attributes || {})) {
-      if (!ERLAUBTE_FORMATE[k] || !ERLAUBTE_FORMATE[k].includes(v)) return false;
+      if (!Object.hasOwn(ERLAUBTE_FORMATE, k) || !ERLAUBTE_FORMATE[k].includes(v)) return false;
     }
   }
   return true;
 }
 
-module.exports = { Y, TEXT, ausKlartext, laden, felder, zeileAusKlartext, zeileAusDelta, zeilenendeSichern, zulaessig };
+module.exports = { Y, TEXT, FARBEN, GROESSEN, ausKlartext, laden, felder, zeileAusKlartext, zeileAusDelta, zeilenendeSichern, zulaessig };
