@@ -5534,7 +5534,7 @@ Leiste kann. Im Dokument steht im Text nur `{ zeichnung: '<id>' }`, der Inhalt i
 die Zeile, wird sie samt Einzug verkleinert gezeigt. `body_delta` trägt den Inhalt mit (Vorschau, Kopie, Weitergeben),
 der Klartext „[Zeichnung]". Server: jede Fläche/jeder Strich geprüft, ganze Notiz ≤ 2 MB (Radieren gibt Platz frei).
 PDF als Vektor, Word/ODT als PNG (sharp). Rückgängig im Zeichenmodus: Y.UndoManager mit eigener Herkunft — nur eigene
-Schritte, Toms Strich bleibt, wenn Anna zurücknimmt.
+Schritte; der Strich eines anderen bleibt stehen.
 
 **Was beim Bauen auffiel:**
 - Quill untersucht jede DOM-Änderung im Schreibfeld als mögliche Textänderung (liest das ganze Dokument neu) — bei
