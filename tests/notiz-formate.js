@@ -75,6 +75,14 @@ const hatProgramm = (p) => spawnSync('which', [p]).status === 0;
     ok('PDF: „RIESIG" ist mehr als doppelt so hoch wie normaler Text, „klein" kleiner',
       hoehe('RIESIG') > 2 * hoehe('Schwarz') && hoehe('klein') < hoehe('Schwarz') && hoehe('Schwarz') > 0,
       JSON.stringify({ riesig: hoehe('RIESIG'), normal: hoehe('Schwarz'), klein: hoehe('klein') }));
+    // Gemischte Größen in einer Zeile: gleiche Grundlinie (vorher hing „klein" hochgestellt oben), und die
+    // nächste Zeile beginnt unter der großen Schrift (vorher lief „Weg damit" hinein — am Bild gefunden).
+    const kasten = (w) => { const m = bbox.match(new RegExp(`yMin="([\\d.]+)" xMax="[\\d.]+" yMax="([\\d.]+)">${w}<`)); return m ? { oben: +m[1], unten: +m[2] } : null; };
+    // Der Kasten reicht bis unter die Unterlänge; die Grundlinie liegt bei DejaVu 0,236 / (0,928 + 0,236) der Höhe darüber.
+    const grundlinie = (k) => k.unten - 0.2027 * (k.unten - k.oben);
+    const [ri, kl, weg] = [kasten('RIESIG'), kasten('klein'), kasten('Weg')];
+    ok('PDF: „klein" steht unten an der Zeile von „RIESIG" (gleiche Grundlinie), die nächste Zeile darunter',
+      ri && kl && weg && Math.abs(grundlinie(ri) - grundlinie(kl)) < 1 && weg.oben >= ri.unten, JSON.stringify({ ri, kl, weg, g: ri && kl && [grundlinie(ri), grundlinie(kl)] }));
     // Gerendert: rote Bildpunkte nur dort, wo ROTWORT steht
     spawnSync('pdftoppm', ['-r', '100', '-png', '-singlefile', pdfDatei, path.join(ORDNER, 'f')]);
     const { data, info } = await sharp(path.join(ORDNER, 'f.png')).raw().toBuffer({ resolveWithObject: true });
