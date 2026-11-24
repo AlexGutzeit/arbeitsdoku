@@ -467,6 +467,12 @@ function nzSteuerung(s) {
       const wahl = leiste.querySelector('.nz-stift-wahl');
       wahl.hidden = !wahl.hidden;
       b.setAttribute('aria-expanded', String(!wahl.hidden));
+      if (!wahl.hidden) {
+        // Unter dem Knopf, aber nie über den rechten Rand der Leiste hinaus (am Handy steht der Knopf mittendrin)
+        const lb = leiste.getBoundingClientRect(), kb = b.getBoundingClientRect();
+        wahl.style.top = Math.round(kb.bottom - lb.top + 4) + 'px';
+        wahl.style.left = Math.round(Math.max(8, Math.min(kb.left - lb.left, lb.width - wahl.offsetWidth - 8))) + 'px';
+      }
       return;
     }
     if (b.dataset.farbe) {

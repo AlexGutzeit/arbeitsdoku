@@ -158,6 +158,11 @@ function req(m, p, t, b) {
     await druecke(A, '.nz-stift-knopf');
     ok('Farbe und Dicke: Auswahl öffnet sich (7 Farben, 3 Dicken)', await A.evaluate(() => document.querySelector('.nz-stift-wahl').checkVisibility()
       && document.querySelectorAll('.nz-farbe').length === 7 && document.querySelectorAll('.nz-dicke').length === 3));
+    // Die Auswahl war erst in eine 44-px-Spalte gequetscht (allgemeine max-width) und lief rechts aus dem Bild
+    const wahlLage = await A.evaluate(() => { const w = document.querySelector('.nz-stift-wahl').getBoundingClientRect();
+      const f = [...document.querySelectorAll('.nz-farbe')].map(e => Math.round(e.getBoundingClientRect().top));
+      return { links: w.left, rechts: w.right, breit: innerWidth, ersteReihe: f.filter(t => t === f[0]).length }; });
+    ok('… ganz im Bild, die Farben nebeneinander (nicht untereinander)', wahlLage.links >= 0 && wahlLage.rechts <= wahlLage.breit && wahlLage.ersteReihe >= 5, JSON.stringify(wahlLage));
     await druecke(A, '.nz-farbe[data-farbe="rot"]');
     await druecke(A, '.nz-dicke[data-dicke="8"]');
     ok('… Dicke gewählt schließt die Auswahl; Knopf zeigt Rot', await A.evaluate(() => !document.querySelector('.nz-stift-wahl').checkVisibility()

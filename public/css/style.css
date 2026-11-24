@@ -2215,12 +2215,13 @@ select.such-auswahl-quelle { display: none !important; }
 .notiz-editor .ql-snow.ql-toolbar .nz-knopf[aria-pressed="true"] { background: var(--primary-light); color: var(--primary-hover); box-shadow: inset 0 0 0 2px var(--primary); }
 .notiz-editor .ql-snow.ql-toolbar .nz-knopf:disabled { opacity: 0.35; cursor: default; background: none; }
 .notiz-editor .ql-snow.ql-toolbar .nz-neu { width: auto; gap: 4px; padding: 0 10px; font: inherit; font-size: 0.9rem; }
-.notiz-editor .nz-stift-gruppe { position: relative; }
+.notiz-editor .nz-stift-gruppe { position: static; }   /* Auswahl richtet sich an der Leiste aus (notiz-zeichnen.js setzt left/top) */
 .notiz-editor .nz-stift-punkt { display: inline-block; border-radius: 50%; }
-.notiz-editor .nz-stift-wahl { position: absolute; top: 46px; left: 0; z-index: 7; background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+.notiz-editor .nz-stift-wahl { position: absolute; top: 100%; left: 8px; z-index: 7; max-width: calc(100% - 16px); background: var(--card); border: 1px solid var(--border); border-radius: 10px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); padding: 8px; display: flex; flex-direction: column; gap: 8px; width: max-content; }
 .notiz-editor .nz-stift-wahl[hidden] { display: none; }
-.notiz-editor .nz-stift-reihe { display: flex; gap: 6px; flex-wrap: wrap; max-width: 286px; }
+.notiz-editor .nz-stift-reihe { display: flex; gap: 6px; flex-wrap: wrap; max-width: 300px; }
+.notiz-editor .nz-stift-reihe > * { flex-shrink: 0; }
 .notiz-editor .ql-snow.ql-toolbar .nz-farbe { width: 36px; height: 36px; padding: 0; border-radius: 50%; border: 2px solid var(--border); float: none; }
 .notiz-editor .ql-snow.ql-toolbar .nz-farbe[aria-pressed="true"] { outline: 3px solid var(--primary); outline-offset: 1px; }
 .notiz-editor .ql-snow.ql-toolbar .nz-farbe[data-farbe=schwarz] { background: #1e293b; }
