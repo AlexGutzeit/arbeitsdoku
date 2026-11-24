@@ -5508,3 +5508,48 @@ und schicken ihn zusammengeführt — beide Gegenproben (ohne Zusammenführen) r
 Schemaänderung (nur `mcp_zugriffe` +1 durch die Nachkontrolle). Zwischen beiden Deploys hat Hermes sich angebunden:
 Schlüssel „Hermes" (nur lesen) seit 08:21, Handshake, Werkzeugliste, 12 erfolgreiche Werkzeugaufrufe, regelmäßiger
 `ping`; die 31 abgewiesenen Zugriffe kamen alle aus dem eigenen Freifunk-Netz (Prüfaufrufe, Versuche vor dem Schlüssel).
+
+## Notizen: Schriftformate und Zeichenflächen (24.11.2026)
+
+**Wunsch (Alex):** In Notizen und Projektnotiz ein Umschalter „Zeichnen": Was geschrieben ist, bleibt stehen, man
+zeichnet mit Finger, Stift oder Maus, auch Linie, Pfeil, Kasten, Kreis, mit Farbe. Für die Schrift: Farbe, Größe,
+unterstreichen (gab es schon), durchstreichen, dann noch hoch-/tiefgestellt. **Entschieden:** Variante B — die
+Zeichnung sitzt als eigene Fläche zwischen den Zeilen, nicht über dem Text (auf Handy und Rechner bricht der Text
+anders um; eine Zeichnung über dem Text zeigte dort auf andere Wörter). Wer schreiben darf, darf zeichnen — auch Gäste.
+
+**Schriftformate.** Quill bringt strike/script/size/color mit; Farbe aber als freie `style`-Angabe. Dann käme beim
+Einfügen aus einer Webseite jede beliebige Farbe mit, die der Server abwiese (Notiz neu öffnen, Änderung weg). Deshalb
+Farbe als Klasse mit fester Liste (`ql-color-rot` …, ClassAttributor mit whitelist) — Fremdes fällt beim Einfügen
+still weg. Die Liste steht an drei Stellen (notiz-sitzung.js, notiz-dokument.js mit Farbwerten, CSS);
+`tests/notiz-formate.js` hält sie gleich. Falle: Quills Farbauswahl setzt den Optionsnamen als Inline-Farbe — „orange"
+ist ein CSS-Farbname und schlug mit Quills Hellorange durch → `!important`. PDF: pdfkit setzt verschieden große Stücke
+einer Zeile oben an; kleine Schrift hing hochgestellt, die nächste Zeile lief in große Schrift hinein → jedes Stück auf
+die gemeinsame Grundlinie, weiter um die tatsächliche Unterkante (hoch/tief: 70 %, Grundlinie ±⅓ bzw. ⅙). Word: die
+Reihenfolge in `<w:rPr>` ist vorgeschrieben (b, i, strike, color, sz, u, vertAlign) — vorher stand u vor strike.
+
+**Zeichenflächen.** `public/js/zeichnung.js` ist eine Datei für Browser UND Server (Prüfung, SVG, Abstand für den
+Radierer) — so sieht Schreibfeld, Vorschau, Druck und Datei gleich aus, und der Server lässt genau das durch, was die
+Leiste kann. Im Dokument steht im Text nur `{ zeichnung: '<id>' }`, der Inhalt in der Karte `zeichnungen`
+(`{ b, h, e, s: Y.Array }`, Striche als schlichte Objekte). Gezeichnet wird in Einheiten; ist eine Fläche breiter als
+die Zeile, wird sie samt Einzug verkleinert gezeigt. `body_delta` trägt den Inhalt mit (Vorschau, Kopie, Weitergeben),
+der Klartext „[Zeichnung]". Server: jede Fläche/jeder Strich geprüft, ganze Notiz ≤ 2 MB (Radieren gibt Platz frei).
+PDF als Vektor, Word/ODT als PNG (sharp). Rückgängig im Zeichenmodus: Y.UndoManager mit eigener Herkunft — nur eigene
+Schritte, Toms Strich bleibt, wenn Anna zurücknimmt.
+
+**Was beim Bauen auffiel:**
+- Quill untersucht jede DOM-Änderung im Schreibfeld als mögliche Textänderung (liest das ganze Dokument neu) — bei
+  jedem Fingerzucken. Hat ein Block `updateContent()`, überspringt Quill ihn (`quill/blots/scroll.js`). Test zählt
+  `scroll-update` beim Zeichnen: 0 (Gegenprobe ohne: 32).
+- `.ql-editor` hat `white-space: pre-wrap`: Zwischenraum im HTML-Baustein der Fläche wurde zur Leerzeile, die
+  Zeichenfläche rutschte 52 px unter ihren Rahmen, Striche erschienen außerhalb (am Bildschirmfoto gefunden).
+- **Chrome verschluckt ein Tippen kurz nach einem Zug über `touch-action: none`** (gilt als „Schwung anhalten"):
+  pointerdown/up kommen, click nicht — jeder zweite Werkzeugwechsel nach einem Strich ging verloren. Auf einer nackten
+  Testseite ohne App-Code nachgestellt (1 von 4 Klicks; mit touch-action auto oder 700 ms Pause 4 von 4). Knöpfe neben
+  Flächen reagieren bei Finger/Stift deshalb auf das Loslassen (`nzTippen`), der nachkommende click wird übergangen.
+- Radierer prüfte nur gemeldete Fingerpunkte — ein schneller Wischer sprang über Striche; jetzt wird die Strecke abgetastet.
+- Eine allgemeine `max-width` quetschte Quills Farbauswahl und die Stift-Auswahl auf Knopfbreite (eine Spalte).
+- Kopierte Fläche: beim Einfügen verworfen (sonst zwei Stellen, EINE Zeichnung — Malen an der einen ändert die andere).
+
+Tests: `notiz-formate` 18, `notiz-formate-ui` 17, `notiz-zeichnen` 24 (Prüfung, 21 Manipulationen, Kopie, live,
+2-MB-Grenze, Dateien über LibreOffice gelesen), `notiz-zeichnen-ui` 41 (Handy/Finger, Rechner/Maus, Leserecht).
+Gegenproben je Fix rot.
