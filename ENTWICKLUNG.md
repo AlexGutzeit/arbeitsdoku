@@ -5553,3 +5553,17 @@ Schritte; der Strich eines anderen bleibt stehen.
 Tests: `notiz-formate` 18, `notiz-formate-ui` 17, `notiz-zeichnen` 24 (Prüfung, 21 Manipulationen, Kopie, live,
 2-MB-Grenze, Dateien über LibreOffice gelesen), `notiz-zeichnen-ui` 41 (Handy/Finger, Rechner/Maus, Leserecht).
 Gegenproben je Fix rot.
+
+**Deploy (25.11.2026, 03:18, `e96711e`, Cache 462) — Schriftformate (Farbe, Größe, durch-, hoch-, tiefgestellt) und
+Zeichenflächen.** Suite auf der Kopie von 24.11. 22:57: 304/306; die zwei roten waren nicht die neue Funktion —
+`umlaute-in-texten` fand die Kennung `rueckgaengig` im Zeichen-Code (→ „rückgängig"), `mcp-protokoll` eine Zeitfalle
+(Aushang mit festem Entfernen-Datum 21.11. war schon abgelaufen; auf `main` identisch rot, Gegenprobe per Worktree) →
+Datum relativ zu heute, danach 104/104 und 41/41. Alle 21 Prod-Klon-Tests auf frischer Kopie von 03:03 grün, keiner
+übersprungen (übersprungen in der Suite nur die Vergleichstests mit altem Codestand). Sicherung
+`arbeitsdoku_backup_20261125-031740.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe: 13 Konten, 1871 Einträge, 17
+Notizen, 6 Profilbilder, Integrität ok). Rückkehrpunkt `vor-notizen-zeichnen-deploy` (= `4dacbff`). Danach: IPv4+IPv6
+200, Cache 462 in `sw.js`, `index.html` und `gast.html`, beide laden `zeichnung.js` und `notiz-zeichnen.js`, Protokoll
+ohne Fehler, Zweitanlage Probestart ok; PDF/Word/ODT mit Zeichnung einmal auf dem Server erzeugt (sharp kann dort SVG).
+Datenbank: 62/62 Tabellen, keine Zeile verändert. **Rückweg nur, solange niemand die neuen Formate nutzt:** Der alte
+Server weist ein Dokument mit Farbe, Hochstellung oder Zeichnung als unzulässig ab — solche Notizen wären mit dem alten
+Stand nur noch lesbar. Bei Problemen also nach vorn reparieren.
