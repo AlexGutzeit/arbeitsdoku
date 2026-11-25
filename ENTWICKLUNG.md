@@ -5581,4 +5581,5 @@ noch einmal gründlich." Schnell: alle Notiz-Tests + 21 Prod-Klon-Tests auf Kopi
 übersprungen. Sicherung `arbeitsdoku_backup_20261125-052840.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe: 13
 Konten, 1871 Einträge, 18 Notizen, Integrität ok). Rückkehrpunkt `vor-zeichnen-einfuegestelle-deploy` (= `e96711e`).
 Danach IPv4+IPv6 200, Cache 463 überall, neue Funktion im ausgelieferten Skript, Protokoll ohne Fehler, Zweitanlage
-Probestart ok, Datenbank 62/62, keine Zeile verändert. Die volle Suite läuft danach.
+Probestart ok, Datenbank 62/62, keine Zeile verändert. Volle Suite danach (Kopie 05:30): **306/306 grün** (07:14);
+übersprungen nur die Hilfstests ohne eigenen Server bzw. alten Codestand. Kontrolle 06:23: gesund, kein Neustart, Abholung 06:10 da.
