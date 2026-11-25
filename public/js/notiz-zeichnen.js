@@ -111,7 +111,7 @@ function nzLeisteHtml() {
         <span class="ql-formats nz-nur-zeichnen nz-aktionen">
           <button type="button" class="nz-knopf" data-akt="rückgängig" title="Rückgängig (eigene Zeichenschritte)" aria-label="Rückgängig" disabled>${nzIcon('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>')}</button>
           <button type="button" class="nz-knopf" data-akt="wiederholen" title="Wiederholen" aria-label="Wiederholen" disabled>${nzIcon('<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>')}</button>
-          <button type="button" class="nz-knopf nz-neu" data-akt="neu" title="Neue Zeichenfläche unter der Zeile, in der der Cursor stand">${nzIcon('<path d="M12 5v14M5 12h14"/>')}<span>Fläche</span></button>
+          <button type="button" class="nz-knopf nz-neu" data-akt="neu" title="Neue Zeichenfläche unter der Zeile, in der der Cursor stand — im Zeichenmodus einfach auf den Text tippen, um die Stelle zu wählen">${nzIcon('<path d="M12 5v14M5 12h14"/>')}<span>Fläche</span></button>
         </span>`;
 }
 
@@ -238,6 +238,7 @@ function nzSteuerung(s) {
     if (b === letzteBreite) return;
     letzteBreite = b;
     for (const v of ansichten.values()) zeigen(v, false);
+    markeBald();
   });
   if (editorEl) groesse.observe(editorEl);
 
@@ -373,8 +374,8 @@ function nzSteuerung(s) {
   }
 
   // ─── Neue Fläche ───────────────────────────────────────────────────────────────────────────
-  // Unter der Zeile, in der der Cursor zuletzt stand; steht er in einer leeren Zeile, an ihrer Stelle
-  // (die leere Zeile bleibt darunter zum Weiterschreiben). Ohne Cursor am Ende.
+  // Unter der Zeile, in der der Cursor zuletzt stand (oder die im Zeichenmodus angetippt wurde); steht er in
+  // einer leeren Zeile, an ihrer Stelle (die leere Zeile bleibt darunter zum Weiterschreiben). Ohne Cursor am Ende.
   function einfuegen() {
     if (!darfSchreiben()) return;
     if (karte.size >= Z.MAX_FLAECHEN) { toast(`Mehr als ${Z.MAX_FLAECHEN} Zeichenflächen passen nicht in eine Notiz.`, 'error'); return; }
@@ -400,11 +401,93 @@ function nzSteuerung(s) {
       text.insertEmbed(Math.min(pos, text.length), { zeichnung: id });
       if (ende) text.insert(text.length, '\n');   // das Dokument endet immer mit einem Zeilenende
     }, herkunft);
-    st.letzteStelle = pos + 1;
+    // Die Stelle bleibt AN der neuen Fläche: Ein weiteres „＋ Fläche" setzt die nächste direkt darunter
+    st.letzteStelle = pos;
+    markeZeigen();
     requestAnimationFrame(() => {
       const el = editorEl && editorEl.querySelector(`.notiz-zeichnung[data-id="${id}"]`);
       if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
+  }
+
+  // ─── Einfügestelle im Zeichenmodus (Alex, 25.11.2026) ─────────────────────────────────────
+  // „Wenn ich mit einer Fläche fertig bin und woanders eine weitere setzen will, muss ich erst auf Text, den Cursor
+  // umsetzen und wieder auf Zeichnen." Jetzt setzt im Zeichenmodus ein Tippen auf den Text die Stelle — ohne
+  // Tastatur, das Schreibfeld bleibt gesperrt. Ein blinkender Strich zeigt sie; „＋ Fläche" setzt dort an.
+  const marke = document.createElement('div');
+  marke.className = 'nz-marke';
+  marke.hidden = true;
+  marke.setAttribute('aria-hidden', 'true');
+  s.quill.container.appendChild(marke);   // neben .ql-editor: Quill beobachtet nur das Schreibfeld selbst
+  function markeZeigen() {
+    const q = s.quill;
+    if (st.modus !== 'zeichnen' || st.letzteStelle == null || !darfSchreiben()) { marke.hidden = true; return; }
+    const i = Math.min(st.letzteStelle, q.getLength() - 1);
+    const [zeile] = q.getLine(i);
+    // Steht die Stelle an einer Fläche (gerade eingefügt), gibt es keinen Strich — die Fläche ist ja zu sehen
+    const b = zeile && zeile.statics.blotName !== 'zeichnung' ? q.getBounds(i) : null;
+    if (!b) { marke.hidden = true; return; }
+    marke.style.left = Math.round(b.left) + 'px';
+    marke.style.top = Math.round(b.top) + 'px';
+    marke.style.height = Math.max(16, Math.round(b.height)) + 'px';
+    marke.hidden = false;
+  }
+  let markeGeplant = false;
+  const markeBald = () => { if (markeGeplant) return; markeGeplant = true; requestAnimationFrame(() => { markeGeplant = false; if (st.offen) markeZeigen(); }); };
+  // Ändert jemand davor den Text, wandert die Stelle mit (wie ein Cursor)
+  const textGeaendert = (delta) => {
+    if (st.letzteStelle != null && delta && delta.transformPosition) st.letzteStelle = delta.transformPosition(st.letzteStelle);
+    markeBald();
+  };
+  s.quill.on('text-change', textGeaendert);
+
+  // Getippte Stelle im Text → Position im Dokument (wie ein Cursor, nur ohne Tastatur)
+  function stelleAusPunkt(x, y) {
+    const q = s.quill, Quill = window.Kollab.Quill;
+    let node = null, off = 0;
+    if (document.caretPositionFromPoint) { const p = document.caretPositionFromPoint(x, y); if (p) { node = p.offsetNode; off = p.offset; } }
+    else if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(x, y); if (r) { node = r.startContainer; off = r.startOffset; } }
+    const ende = q.getLength() - 1;
+    if (node && node !== q.root && q.root.contains(node)) {
+      const blot = Quill.find(node, true);
+      if (blot && blot !== q.scroll) {
+        const anfang = q.getIndex(blot);
+        // Textknoten: genaue Stelle; Element (neben dem Text getippt): Anfang oder Ende der Zeile
+        const i = node.nodeType === 3 ? anfang + off : (off === 0 ? anfang : anfang + Math.max(0, blot.length() - 1));
+        return Math.max(0, Math.min(ende, i));
+      }
+    }
+    // Neben den Zeilen (Rand) oder darunter: die Zeile auf dieser Höhe, sonst das Ende
+    for (const el of q.root.children) {
+      const r = el.getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom && !el.classList.contains('notiz-zeichnung')) {
+        const b = Quill.find(el);
+        if (b) return Math.min(ende, q.getIndex(b) + Math.max(0, b.length() - 1));
+      }
+    }
+    return ende;
+  }
+  // Nur ein Tippen zählt: Wer über den Text wischt, um zu scrollen, bekommt pointercancel oder bewegt sich weit
+  let tipp = null;
+  const feldRunter = (e) => {
+    tipp = null;
+    if (!imZeichenmodus() || !e.target.closest || !e.target.closest('.ql-editor') || e.target.closest('.notiz-zeichnung')) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    tipp = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  };
+  const feldHoch = (e) => {
+    if (!tipp || e.pointerId !== tipp.id) return;
+    const weit = Math.hypot(e.clientX - tipp.x, e.clientY - tipp.y);
+    tipp = null;
+    if (weit > 10) return;
+    st.letzteStelle = stelleAusPunkt(e.clientX, e.clientY);
+    markeZeigen();
+  };
+  const feldAbbruch = () => { tipp = null; };
+  if (editorEl) {
+    editorEl.addEventListener('pointerdown', feldRunter);
+    editorEl.addEventListener('pointerup', feldHoch);
+    editorEl.addEventListener('pointercancel', feldAbbruch);
   }
 
   // ─── Knopfleiste ──────────────────────────────────────────────────────────────────────────
@@ -450,6 +533,7 @@ function nzSteuerung(s) {
       s.quill.enable(darfSchreiben());
     }
     leisteZeigen();
+    markeZeigen();
   }
 
   function stiftWahlZu() {
@@ -519,6 +603,13 @@ function nzSteuerung(s) {
       st.offen = false;
       karte.unobserveDeep(beobachter);
       groesse.disconnect();
+      s.quill.off('text-change', textGeaendert);
+      if (editorEl) {
+        editorEl.removeEventListener('pointerdown', feldRunter);
+        editorEl.removeEventListener('pointerup', feldHoch);
+        editorEl.removeEventListener('pointercancel', feldAbbruch);
+      }
+      marke.remove();
       document.removeEventListener('pointerdown', daneben, true);
       document.removeEventListener('keydown', tasten);
       tippenAus();

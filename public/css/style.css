@@ -2263,7 +2263,13 @@ select.such-auswahl-quelle { display: none !important; }
 .notiz-editor .nz-zeichnen.nz-hand .nz-svg { touch-action: auto; cursor: grab; }
 .notiz-editor .nz-rahmen.nz-zieht { outline-style: dashed; box-shadow: 0 0 0 5px var(--primary-light); }
 /* Gesperrtes Schreibfeld im Zeichenmodus nicht grau/unscharf wirken lassen */
-.notiz-editor .nz-zeichnen .ql-editor { cursor: default; }
+/* Einfügestelle im Zeichenmodus: blinkender Strich wie ein Cursor (Tippen auf den Text setzt ihn, „＋ Fläche" setzt dort an) */
+.notiz-editor .nz-marke { position: absolute; width: 3px; margin-left: -1px; border-radius: 2px; background: var(--primary); pointer-events: none; z-index: 3; animation: nz-blinken 1.1s steps(1) infinite; }
+.notiz-editor .nz-marke[hidden] { display: none; }
+@keyframes nz-blinken { 50% { opacity: 0.15; } }
+@media (prefers-reduced-motion: reduce) { .notiz-editor .nz-marke { animation: none; } }
+/* Im Zeichenmodus ist Text antippbar (Stelle wählen) */
+.notiz-editor .nz-zeichnen .ql-editor > :not(.notiz-zeichnung) { cursor: text; }
 /* Vorschau und Druck: fertige Zeichnung, so breit wie gezeichnet, schrumpft samt Einzug (nzZeichnungHtml) */
 .notiz-zeichnung-bild { margin: 4px 0; }
 .notiz-zeichnung-bild svg { display: block; width: 100%; height: auto; }

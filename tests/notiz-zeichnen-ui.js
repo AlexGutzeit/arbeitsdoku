@@ -270,6 +270,40 @@ function req(m, p, t, b) {
     await druecke(A, '[data-akt="rückgängig"]');
     await warteBis(A, () => document.querySelectorAll('.notiz-editor .notiz-zeichnung').length === 2);
     ok('Rückgängig holt die gelöschte Fläche samt Strich zurück', (await flaechen(A)) === 2 && (await formen(A, 0)).length === 1, JSON.stringify(await formen(A, 0)));
+
+    console.log('\nStelle im Zeichenmodus per Tippen wählen');
+    // Alex, 25.11.2026: „Fertig mit einer Fläche, woanders eine weitere — erst auf Text, Cursor setzen, wieder
+    // Zeichnen." Jetzt: im Zeichenmodus auf den Text tippen setzt die Stelle (blinkender Strich), ohne Tastatur.
+    const zeileUnten = await A.evaluate(() => { const p = [...document.querySelectorAll('.notiz-editor .ql-editor > p')].find(e => /Unten weiter/.test(e.textContent));
+      p.scrollIntoView({ block: 'center' }); const r = p.getBoundingClientRect(); const t = document.createRange(); t.selectNodeContents(p); const tr = t.getBoundingClientRect();
+      return { x: tr.left + 10, y: r.top + r.height / 2, oben: r.top, unten: r.bottom }; });
+    const cdpA = A.__cdp || (A.__cdp = await A.target().createCDPSession());
+    // Erst ein Wischer über den Text (scrollen): darf die Stelle nicht setzen
+    const markeVor = await A.evaluate(() => { const m = document.querySelector('.notiz-editor .nz-marke'); return m && !m.hidden ? m.style.top : null; });
+    await cdpA.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: zeileUnten.x, y: zeileUnten.y }] });
+    for (let i = 1; i <= 6; i++) await cdpA.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: zeileUnten.x, y: zeileUnten.y - i * 25 }] });
+    await cdpA.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await sleep(500);
+    const markeNachWisch = await A.evaluate(() => { const m = document.querySelector('.notiz-editor .nz-marke'); return m && !m.hidden ? m.style.top : null; });
+    ok('Wischen über den Text (scrollen) setzt keine Stelle', markeNachWisch === markeVor, JSON.stringify([markeVor, markeNachWisch]));
+    const ziel = await A.evaluate(() => { const p = [...document.querySelectorAll('.notiz-editor .ql-editor > p')].find(e => /Unten weiter/.test(e.textContent));
+      p.scrollIntoView({ block: 'center' }); const r = p.getBoundingClientRect(); return { x: r.left + 30, y: r.top + r.height / 2, oben: r.top, unten: r.bottom }; });
+    await cdpA.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: ziel.x, y: ziel.y }] }); await sleep(80);
+    await cdpA.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await sleep(400);
+    const marke = await A.evaluate(() => { const m = document.querySelector('.notiz-editor .nz-marke'); const r = m.getBoundingClientRect();
+      return { sichtbar: m.checkVisibility(), oben: r.top, unten: r.bottom, tippbar: document.querySelector('.notiz-editor .ql-editor').getAttribute('contenteditable'),
+        fokus: document.activeElement && document.activeElement.className, modus: document.querySelector('.nz-modus-knopf[data-modus="zeichnen"]').getAttribute('aria-pressed') }; });
+    ok('Tippen auf „Unten weiter": blinkender Strich in dieser Zeile, Zeichenmodus bleibt, keine Tastatur',
+      marke.sichtbar && marke.oben >= ziel.oben - 3 && marke.unten <= ziel.unten + 3 && marke.tippbar === 'false' && marke.modus === 'true' && !/ql-editor/.test(marke.fokus || ''),
+      JSON.stringify({ marke, ziel }));
+    await druecke(A, '[data-akt="neu"]');
+    await warteBis(A, () => document.querySelectorAll('.notiz-editor .notiz-zeichnung').length === 3);
+    const r3 = await A.evaluate(() => [...document.querySelector('.notiz-editor .ql-editor').children].map(e => e.classList.contains('notiz-zeichnung') ? '[Fläche]' : e.textContent));
+    // Am Ende der Notiz kommt darunter eine leere Zeile zum Weiterschreiben dazu (das Dokument endet mit Zeilenende)
+    ok('„＋ Fläche" setzt die neue Fläche unter die angetippte Zeile', JSON.stringify(r3) === '["Oben","[Fläche]","[Fläche]","Unten weiter","[Fläche]",""]', JSON.stringify(r3));
+    ok('… danach kein Strich mitten in der neuen Fläche', await A.evaluate(() => document.querySelector('.notiz-editor .nz-marke').hidden));
+    await druecke(A, '[data-akt="rückgängig"]');
+    await warteBis(A, () => document.querySelectorAll('.notiz-editor .notiz-zeichnung').length === 2);
+    ok('Rückgängig nimmt die neue Fläche wieder weg', (await flaechen(A)) === 2);
     await druecke(A, '.nz-modus-knopf[data-modus="text"]');
     await A.evaluate(() => { window.__vorher = _notizSitzung; const q = _notizSitzung.quill; q.focus(); q.setSelection(q.getLength() - 1, 0, 'user');
       const dt = new DataTransfer();
