@@ -5567,3 +5567,18 @@ ohne Fehler, Zweitanlage Probestart ok; PDF/Word/ODT mit Zeichnung einmal auf de
 Datenbank: 62/62 Tabellen, keine Zeile verändert. **Rückweg nur, solange niemand die neuen Formate nutzt:** Der alte
 Server weist ein Dokument mit Farbe, Hochstellung oder Zeichnung als unzulässig ab — solche Notizen wären mit dem alten
 Stand nur noch lesbar. Bei Problemen also nach vorn reparieren.
+
+**Nachtrag 25.11.2026 — Einfügestelle im Zeichenmodus (Alex: „Fertig mit einer Fläche, woanders eine weitere — erst auf
+Text, Cursor setzen, wieder Zeichnen").** Im Zeichenmodus setzt ein Tippen auf den Text die Stelle für „＋ Fläche"; das
+Schreibfeld bleibt gesperrt (keine Tastatur). Die Position kommt aus `caretPositionFromPoint`/`caretRangeFromPoint` →
+`Quill.find` → `getIndex`; daneben getippt (Element statt Textknoten) zählt Anfang bzw. Ende der Zeile. Ein blinkender
+Strich (`.nz-marke`, NEBEN `.ql-editor` im Container — Quill beobachtet nur das Schreibfeld) zeigt sie; fremde Änderungen
+verschieben sie per `delta.transformPosition`. Nur ein Tippen zählt (pointercancel beim Scrollen, > 10 px Weg). Nach dem
+Einfügen steht die Stelle an der neuen Fläche, die nächste kommt direkt darunter. `notiz-zeichnen-ui` 46, Gegenprobe rot.
+
+**Deploy (25.11.2026, 05:28, `8269669`, Cache 463).** Alex: „Mach schnell. Und dann deploy. Danach zur Sicherheit
+noch einmal gründlich." Schnell: alle Notiz-Tests + 21 Prod-Klon-Tests auf Kopie von 05:08, 43/43 grün, keiner
+übersprungen. Sicherung `arbeitsdoku_backup_20261125-052840.adbk` (dreifach, gleiche Prüfsumme, Rückspielprobe: 13
+Konten, 1871 Einträge, 18 Notizen, Integrität ok). Rückkehrpunkt `vor-zeichnen-einfuegestelle-deploy` (= `e96711e`).
+Danach IPv4+IPv6 200, Cache 463 überall, neue Funktion im ausgelieferten Skript, Protokoll ohne Fehler, Zweitanlage
+Probestart ok, Datenbank 62/62, keine Zeile verändert. Die volle Suite läuft danach.
