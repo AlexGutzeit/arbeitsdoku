@@ -12,6 +12,7 @@
 // Werkzeugname im Änderungsprotokoll · kein Lösch-Werkzeug · Zugriffsprotokoll ohne Inhalte · Folgeaufrufe zählen
 // nicht doppelt gegen die Bremse · gefälschte interne Kopfzeilen wirken nicht · Bremse je Schlüssel.
 //   node tests/mcp-protokoll.js
+const kalendertag = require('./hilfen/kalendertag');
 const { spawn } = require('child_process');
 const http = require('http'); const fs = require('fs'); const path = require('path');
 
@@ -223,13 +224,16 @@ const werkzeug = async (schl, name, args) => {
     w = await werkzeug(S.miaSchreiben, 'aushang_anlegen', { titel: 'Grillfest', text: 'Freitag ab 16 Uhr' });
     ok('Mia ohne Recht „Schwarzes Brett" → klarer Hinweis, nichts ausgehängt', /fehlt dir das Recht/.test(w.fehler || '') && (await brettZahl()) === 0, w.fehler);
     await req('PUT', `/api/users/${ids.mia}`, admin, { can_bulletin: true });
-    w = await werkzeug(S.miaSchreiben, 'aushang_anlegen', { titel: 'Grillfest', text: 'Freitag ab 16 Uhr', termin: '2026-11-20', vorschau: true });
+    // Termin und Entfernen-Datum relativ zu heute: Mit festen Daten (20./21.11.2026) war der Aushang ab dem
+    // 22.11. schon abgelaufen, die App nahm ihn sofort wieder ab, und der Test wurde rot (Suite 25.11.2026).
+    const TERMIN = kalendertag(10), ENTFERNEN = kalendertag(11);
+    w = await werkzeug(S.miaSchreiben, 'aushang_anlegen', { titel: 'Grillfest', text: 'Freitag ab 16 Uhr', termin: TERMIN, vorschau: true });
     ok('mit Recht: Vorschau, nichts ausgehängt', w.daten && w.daten.vorschau && (await brettZahl()) === 0, JSON.stringify(w));
-    w = await werkzeug(S.miaSchreiben, 'aushang_anlegen', { titel: 'Grillfest', text: 'Freitag ab 16 Uhr', termin: '2026-11-20', entfernen_am: '2026-11-21' });
+    w = await werkzeug(S.miaSchreiben, 'aushang_anlegen', { titel: 'Grillfest', text: 'Freitag ab 16 Uhr', termin: TERMIN, entfernen_am: ENTFERNEN });
     const aushNr = w.daten && w.daten.aushang && w.daten.aushang.nr;
     let brettLesen = await werkzeug(S.chef, 'aushaenge', {});
     const aush = brettLesen.daten && brettLesen.daten.aushaenge.find(x => x.nr === aushNr);
-    ok('ausgehängt: der Chef liest ihn mit Nummer, Termin, Entfernen-Datum und Autorin', aush && aush.termin === '2026-11-20' && aush.entfernt_am === '2026-11-21' && aush.von === 'Mia Mcp', JSON.stringify(brettLesen.daten));
+    ok('ausgehängt: der Chef liest ihn mit Nummer, Termin, Entfernen-Datum und Autorin', aush && aush.termin === TERMIN && aush.entfernt_am === ENTFERNEN && aush.von === 'Mia Mcp', JSON.stringify(brettLesen.daten));
     w = await werkzeug(S.miaSchreiben, 'aushang_anlegen', { titel: 'x', termin: '20.11.2026' });
     ok('falsches Datumsformat → Eingabefehler (die Route prüft Daten nicht selbst)', /gültiges Datum/.test(w.fehler || ''), w.fehler);
     w = await werkzeug(S.miaSchreiben, 'aushang_aendern', { nr: aushNr, text: 'Freitag ab 17 Uhr, bitte Salat mitbringen' });

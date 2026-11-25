@@ -189,7 +189,7 @@ function req(m, p, t, b) {
     await zug(T, [[0.05, 0.95], [0.95, 0.95]]);
     await warteBis(A, () => document.querySelectorAll('.notiz-editor .nz-striche > *').length === 6);
     ok('Toms Linie (Maus) kommt bei Anna an', (await formen(A)).length === 6);
-    await druecke(A, '[data-akt="rueckgaengig"]');
+    await druecke(A, '[data-akt="rückgängig"]');
     const nachUndo = await formen(A);
     ok('Anna: Rückgängig holt IHR Radieren zurück — Toms Linie bleibt', nachUndo.length === 8 && nachUndo.filter(x => x.startsWith('path')).length === 2, JSON.stringify(nachUndo));
     await druecke(A, '[data-akt="wiederholen"]');
@@ -267,7 +267,7 @@ function req(m, p, t, b) {
     ok('Löschen einer bemalten Fläche fragt nach', /Zeichenfläche/.test(frage), frage);
     await A.evaluate(() => document.querySelector('.modal-overlay [data-act="ok"]').click()); await sleep(500);
     ok('… gelöscht: eine Fläche übrig, bei Tom auch', (await flaechen(A)) === 1 && await T.waitForFunction(() => document.querySelectorAll('.notiz-editor .notiz-zeichnung').length === 1, { timeout: 5000 }).then(() => true, () => false));
-    await druecke(A, '[data-akt="rueckgaengig"]');
+    await druecke(A, '[data-akt="rückgängig"]');
     await warteBis(A, () => document.querySelectorAll('.notiz-editor .notiz-zeichnung').length === 2);
     ok('Rückgängig holt die gelöschte Fläche samt Strich zurück', (await flaechen(A)) === 2 && (await formen(A, 0)).length === 1, JSON.stringify(await formen(A, 0)));
     await druecke(A, '.nz-modus-knopf[data-modus="text"]');

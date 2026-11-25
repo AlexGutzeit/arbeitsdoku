@@ -109,7 +109,7 @@ function nzLeisteHtml() {
           </span>
         </span>
         <span class="ql-formats nz-nur-zeichnen nz-aktionen">
-          <button type="button" class="nz-knopf" data-akt="rueckgaengig" title="Rückgängig (eigene Zeichenschritte)" aria-label="Rückgängig" disabled>${nzIcon('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>')}</button>
+          <button type="button" class="nz-knopf" data-akt="rückgängig" title="Rückgängig (eigene Zeichenschritte)" aria-label="Rückgängig" disabled>${nzIcon('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>')}</button>
           <button type="button" class="nz-knopf" data-akt="wiederholen" title="Wiederholen" aria-label="Wiederholen" disabled>${nzIcon('<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>')}</button>
           <button type="button" class="nz-knopf nz-neu" data-akt="neu" title="Neue Zeichenfläche unter der Zeile, in der der Cursor stand">${nzIcon('<path d="M12 5v14M5 12h14"/>')}<span>Fläche</span></button>
         </span>`;
@@ -427,7 +427,7 @@ function nzSteuerung(s) {
     rueckKnoepfe();
   }
   function rueckKnoepfe() {
-    for (const b of knoepfe('[data-akt="rueckgaengig"]')) b.disabled = !rueck.undoStack.length;
+    for (const b of knoepfe('[data-akt="rückgängig"]')) b.disabled = !rueck.undoStack.length;
     for (const b of knoepfe('[data-akt="wiederholen"]')) b.disabled = !rueck.redoStack.length;
   }
   rueck.on('stack-item-added', rueckKnoepfe);
@@ -485,7 +485,7 @@ function nzSteuerung(s) {
       if (st.werkzeug === 'radierer' || st.werkzeug === 'hand') st.werkzeug = 'frei';
       stiftMerken(); stiftWahlZu(); leisteZeigen(); return;
     }
-    if (b.dataset.akt === 'rueckgaengig') { rueck.undo(); return; }
+    if (b.dataset.akt === 'rückgängig') { rueck.undo(); return; }
     if (b.dataset.akt === 'wiederholen') { rueck.redo(); return; }
     if (b.dataset.akt === 'neu') { einfuegen(); }
   };
